@@ -10,7 +10,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { ProjectStatus } from '@perfil/shared';
-import { User } from './user.entity';
+import { StudentProfile } from './student-profile.entity';
 import { AcademicArea } from './academic-area.entity';
 import { ProjectMember } from './project-member.entity';
 import { ProjectEvidence } from './project-evidence.entity';
@@ -44,18 +44,18 @@ export class Project {
   academicArea: AcademicArea | null;
 
   @Index()
-  @Column({ name: 'owner_id', type: 'uuid' })
-  ownerId: string;
+  @Column({ name: 'created_by_profile_id', type: 'uuid' })
+  createdByProfileId: string;
 
-  @ManyToOne(() => User, { nullable: false, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'owner_id' })
-  owner: User;
+  @ManyToOne(() => StudentProfile, { nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'created_by_profile_id' })
+  createdByProfile: StudentProfile;
 
-  @Column({ name: 'start_date', type: 'date', nullable: true })
-  startDate: string | null;
+  @Column({ name: 'repository_url', type: 'varchar', length: 500, nullable: true })
+  repositoryUrl: string | null;
 
-  @Column({ name: 'end_date', type: 'date', nullable: true })
-  endDate: string | null;
+  @Column({ name: 'demo_url', type: 'varchar', length: 500, nullable: true })
+  demoUrl: string | null;
 
   @OneToMany(() => ProjectMember, (member) => member.project)
   members: ProjectMember[];

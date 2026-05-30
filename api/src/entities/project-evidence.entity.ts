@@ -26,14 +26,17 @@ export class ProjectEvidence {
   @JoinColumn({ name: 'project_id' })
   project: Project;
 
-  @Column({ type: 'enum', enum: EvidenceType })
-  type: EvidenceType;
+  @Column({ name: 'evidence_type', type: 'enum', enum: EvidenceType })
+  evidenceType: EvidenceType;
 
-  @Column({ type: 'varchar', length: 160 })
-  title: string;
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  description: string | null;
 
-  @Column({ type: 'varchar', length: 500 })
-  url: string;
+  @Column({ name: 'file_url', type: 'varchar', length: 500, nullable: true })
+  fileUrl: string | null;
+
+  @Column({ name: 'external_url', type: 'varchar', length: 500, nullable: true })
+  externalUrl: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

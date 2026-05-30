@@ -39,8 +39,11 @@ export class ProjectMember {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'role_in_project', type: 'varchar', length: 80, nullable: true })
-  roleInProject: string | null;
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  role: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  contribution: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

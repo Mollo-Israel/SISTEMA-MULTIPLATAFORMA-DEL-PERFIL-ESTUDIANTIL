@@ -250,7 +250,7 @@ export class ProfilesService {
           relations: { skill: true },
           order: { level: 'DESC' },
         }),
-        this.projects.find({ where: { ownerId: profile.userId } }),
+        this.projects.find({ where: { createdByProfileId: profile.id } }),
         this.projectMembers.find({
           where: { userId: profile.userId },
           relations: { project: true },
@@ -311,9 +311,10 @@ export class ProfilesService {
       })),
       evidences: evidences.map((e) => ({
         id: e.id,
-        title: e.title,
-        type: e.type,
-        url: e.url,
+        description: e.description,
+        evidenceType: e.evidenceType,
+        fileUrl: e.fileUrl,
+        externalUrl: e.externalUrl,
         projectId: e.projectId,
       })),
       activities: registrations.map((r) => ({
