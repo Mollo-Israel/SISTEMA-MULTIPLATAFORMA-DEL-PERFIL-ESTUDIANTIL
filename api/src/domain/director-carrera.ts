@@ -3,7 +3,7 @@ import { Usuario } from './usuario.base';
 
 export class DirectorCarrera extends Usuario {
   get rol(): RolNombre {
-    return RolNombre.DIRECTOR;
+    return RolNombre.CAREER_DIRECTOR;
   }
 
   puedeVerReportesGenerales(): boolean {

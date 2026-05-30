@@ -8,15 +8,15 @@ import { Administrador } from './administrador';
 
 export function crearUsuarioDominio(rol: RolNombre, props: UsuarioProps): Usuario {
   switch (rol) {
-    case RolNombre.ESTUDIANTE:
+    case RolNombre.STUDENT:
       return new Estudiante(props);
-    case RolNombre.DOCENTE:
+    case RolNombre.TEACHER:
       return new Docente(props);
-    case RolNombre.DIRECTOR:
+    case RolNombre.CAREER_DIRECTOR:
       return new DirectorCarrera(props);
-    case RolNombre.SOCIEDAD_CIENTIFICA:
+    case RolNombre.SCIENTIFIC_SOCIETY:
       return new RepresentanteSociedadCientifica(props);
-    case RolNombre.ADMINISTRADOR:
+    case RolNombre.ADMIN:
       return new Administrador(props);
     default:
       throw new Error(`Rol no soportado: ${rol}`);

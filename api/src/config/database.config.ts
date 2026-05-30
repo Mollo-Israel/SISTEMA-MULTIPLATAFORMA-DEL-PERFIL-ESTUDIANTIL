@@ -1,5 +1,6 @@
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
+import * as Entities from '../entities';
 
 export function buildDatabaseConfig(config: ConfigService): TypeOrmModuleOptions {
   return {
@@ -9,7 +10,7 @@ export function buildDatabaseConfig(config: ConfigService): TypeOrmModuleOptions
     username: config.get<string>('POSTGRES_USER', 'perfil_user'),
     password: config.get<string>('POSTGRES_PASSWORD', 'perfil_pass'),
     database: config.get<string>('POSTGRES_DB', 'perfil_estudiantil'),
-    autoLoadEntities: true,
+    entities: Object.values(Entities),
     synchronize: false,
     migrationsRun: false,
   };

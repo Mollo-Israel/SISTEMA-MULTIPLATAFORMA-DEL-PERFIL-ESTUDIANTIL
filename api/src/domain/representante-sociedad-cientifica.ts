@@ -3,7 +3,7 @@ import { Usuario } from './usuario.base';
 
 export class RepresentanteSociedadCientifica extends Usuario {
   get rol(): RolNombre {
-    return RolNombre.SOCIEDAD_CIENTIFICA;
+    return RolNombre.SCIENTIFIC_SOCIETY;
   }
 
   puedePublicarActividadesExtracurriculares(): boolean {

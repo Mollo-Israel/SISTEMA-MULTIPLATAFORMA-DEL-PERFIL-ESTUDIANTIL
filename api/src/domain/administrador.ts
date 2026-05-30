@@ -3,7 +3,7 @@ import { Usuario } from './usuario.base';
 
 export class Administrador extends Usuario {
   get rol(): RolNombre {
-    return RolNombre.ADMINISTRADOR;
+    return RolNombre.ADMIN;
   }
 
   puedeGestionarUsuarios(): boolean {

@@ -2,6 +2,7 @@ import { AppDataSource } from '../data-source';
 import { seedRoles } from './roles.seed';
 import { seedAcademicAreas } from './academic-areas.seed';
 import { seedSkills } from './skills.seed';
+import { seedAdminUser } from './users.seed';
 
 async function run(): Promise<void> {
   const dataSource = await AppDataSource.initialize();
@@ -9,6 +10,7 @@ async function run(): Promise<void> {
     await seedRoles(dataSource);
     await seedAcademicAreas(dataSource);
     await seedSkills(dataSource);
+    await seedAdminUser(dataSource);
     console.log('Seeds aplicados correctamente.');
   } finally {
     await dataSource.destroy();
