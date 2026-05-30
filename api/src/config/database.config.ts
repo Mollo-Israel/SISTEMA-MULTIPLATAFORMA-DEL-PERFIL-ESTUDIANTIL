@@ -10,6 +10,7 @@ export function buildDatabaseConfig(config: ConfigService): TypeOrmModuleOptions
     password: config.get<string>('POSTGRES_PASSWORD', 'perfil_pass'),
     database: config.get<string>('POSTGRES_DB', 'perfil_estudiantil'),
     autoLoadEntities: true,
-    synchronize: config.get<string>('NODE_ENV') === 'development',
+    synchronize: false,
+    migrationsRun: false,
   };
 }
