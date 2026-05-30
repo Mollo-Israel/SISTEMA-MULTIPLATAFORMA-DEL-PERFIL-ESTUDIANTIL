@@ -47,6 +47,9 @@ export class StudentProfile {
   @Column({ name: 'completion_percentage', type: 'smallint', default: 0 })
   completionPercentage: number;
 
+  @Column({ name: 'improvement_area_ids', type: 'uuid', array: true, nullable: true })
+  improvementAreaIds: string[] | null;
+
   @OneToMany(() => StudentSkill, (skill) => skill.studentProfile)
   skills: StudentSkill[];
 
