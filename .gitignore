@@ -1,0 +1,42 @@
+# Dependencias
+node_modules/
+.pnp/
+.pnp.js
+
+# Builds
+dist/
+build/
+.expo/
+web-build/
+
+# Entornos
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# TypeScript
+*.tsbuildinfo
+
+# Cobertura de pruebas
+coverage/
+
+# Datos de PostgreSQL (volúmenes locales)
+docker/pgdata/
+
+# Almacenamiento local de evidencias
+api/uploads/

@@ -1,0 +1,11 @@
+export enum TipoEvidencia {
+  CERTIFICADO_EXTERNO = 'CERTIFICADO_EXTERNO',
+  ENLACE = 'ENLACE',
+  ARCHIVO = 'ARCHIVO',
+}
+
+export enum EstadoProyecto {
+  EN_PROGRESO = 'EN_PROGRESO',
+  FINALIZADO = 'FINALIZADO',
+  PAUSADO = 'PAUSADO',
+}
