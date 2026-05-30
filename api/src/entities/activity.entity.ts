@@ -9,7 +9,12 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ActivityModality, ActivityStatus, ActivityType } from '@perfil/shared';
+import {
+  ActivityCategory,
+  ActivityModality,
+  ActivityStatus,
+  ActivityType,
+} from '@perfil/shared';
 import { User } from './user.entity';
 import { AcademicArea } from './academic-area.entity';
 import { ActivityRegistration } from './activity-registration.entity';
@@ -29,8 +34,21 @@ export class Activity {
   @Column({ type: 'enum', enum: ActivityType })
   type: ActivityType;
 
+  @Index()
+  @Column({ type: 'enum', enum: ActivityCategory })
+  category: ActivityCategory;
+
   @Column({ type: 'enum', enum: ActivityModality, default: ActivityModality.PRESENCIAL })
   modality: ActivityModality;
+
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  location: string | null;
+
+  @Column({ name: 'external_url', type: 'varchar', length: 500, nullable: true })
+  externalUrl: string | null;
+
+  @Column({ name: 'evidence_required', type: 'boolean', default: false })
+  evidenceRequired: boolean;
 
   @Index()
   @Column({ name: 'academic_area_id', type: 'uuid', nullable: true })

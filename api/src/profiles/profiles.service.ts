@@ -27,7 +27,7 @@ import { SkillItemDto } from './dto/set-skills.dto';
 import {
   AFFINITY_RECALCULATION,
   AffinityRecalculationPort,
-} from './affinity/affinity-recalculation.port';
+} from '../affinity-recalc/affinity-recalculation.port';
 
 @Injectable()
 export class ProfilesService {
