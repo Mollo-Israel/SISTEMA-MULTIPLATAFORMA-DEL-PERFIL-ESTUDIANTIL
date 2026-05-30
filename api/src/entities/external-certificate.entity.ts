@@ -25,17 +25,17 @@ export class ExternalCertificate {
   @JoinColumn({ name: 'student_profile_id' })
   studentProfile: StudentProfile;
 
-  @Column({ type: 'varchar', length: 160 })
-  title: string;
+  @Column({ name: 'certificate_name', type: 'varchar', length: 200 })
+  certificateName: string;
 
   @Column({ type: 'varchar', length: 160 })
   issuer: string;
 
-  @Column({ type: 'varchar', length: 500, nullable: true })
-  url: string | null;
+  @Column({ name: 'certificate_url', type: 'varchar', length: 500, nullable: true })
+  certificateUrl: string | null;
 
-  @Column({ name: 'issued_date', type: 'date', nullable: true })
-  issuedDate: string | null;
+  @Column({ name: 'issue_date', type: 'date', nullable: true })
+  issueDate: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

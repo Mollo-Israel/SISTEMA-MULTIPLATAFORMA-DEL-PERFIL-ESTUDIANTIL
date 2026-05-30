@@ -6,3 +6,4 @@ export * from './enums/activity.enum';
 export * from './enums/registration.enum';
 export * from './enums/evidence.enum';
 export * from './enums/affinity.enum';
+export * from './enums/constancy.enum';

@@ -227,7 +227,7 @@ export class ProfilesService {
         status: a.status,
       })),
       externalCertificates: summary.externalCertificates.map((c) => ({
-        title: c.title,
+        certificateName: c.certificateName,
         issuer: c.issuer,
       })),
       affinities: summary.affinities,
@@ -326,9 +326,10 @@ export class ProfilesService {
       })),
       externalCertificates: certificates.map((c) => ({
         id: c.id,
-        title: c.title,
+        certificateName: c.certificateName,
         issuer: c.issuer,
-        url: c.url,
+        certificateUrl: c.certificateUrl,
+        issueDate: c.issueDate,
       })),
       affinities: affinities.map((a) => ({
         academicAreaId: a.academicAreaId,
@@ -336,7 +337,12 @@ export class ProfilesService {
         score: Number(a.score),
         level: a.level,
       })),
-      internalConstancies: [] as Array<{ id: string; title: string; type: string | null }>,
+      internalConstancies: [] as Array<{
+        id: string;
+        description: string;
+        status: string;
+        activityId: string | null;
+      }>,
     };
 
     if (options.includeInternal) {
@@ -345,8 +351,9 @@ export class ProfilesService {
       });
       summary.internalConstancies = constancies.map((c) => ({
         id: c.id,
-        title: c.title,
-        type: c.type,
+        description: c.description,
+        status: c.status,
+        activityId: c.activityId,
       }));
     }
 
