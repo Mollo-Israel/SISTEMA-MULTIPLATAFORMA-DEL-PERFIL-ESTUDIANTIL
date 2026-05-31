@@ -41,3 +41,5 @@ docker/pgdata/
 # Almacenamiento local de evidencias
 api/uploads/
 web/dist/
+mobile/.expo/
+mobile/dist/

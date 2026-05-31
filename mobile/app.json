@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Perfil Estudiantil",
+    "slug": "perfil-estudiantil",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "perfil",
+    "splash": {
+      "backgroundColor": "#6b1220"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": { "supportsTablet": true },
+    "android": {
+      "adaptiveIcon": { "backgroundColor": "#6b1220" }
+    },
+    "extra": {
+      "apiUrl": "http://localhost:3000/api"
+    }
+  }
+}
