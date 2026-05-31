@@ -19,7 +19,8 @@
     "seed:demo": "npm run seed:demo --workspace api",
     "web:dev": "npm run dev --prefix web",
     "mobile:start": "npm run start --prefix mobile",
-    "demo:e2e": "node scripts/e2e-demo.mjs"
+    "demo:e2e": "node scripts/e2e-demo.mjs",
+    "test:api": "node scripts/api-tests.mjs"
   },
   "engines": {
     "node": ">=20"
