@@ -13,6 +13,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { ConstanciesModule } from './constancies/constancies.module';
 import { ReportsModule } from './reports/reports.module';
+import { CatalogsModule } from './catalogs/catalogs.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -35,6 +36,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     CertificatesModule,
     ConstanciesModule,
     ReportsModule,
+    CatalogsModule,
   ],
   controllers: [HealthController],
   providers: [

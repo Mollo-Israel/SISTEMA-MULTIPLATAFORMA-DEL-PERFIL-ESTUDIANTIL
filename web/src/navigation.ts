@@ -1,0 +1,90 @@
+import { RolNombre } from './constants';
+
+export interface NavItem {
+  to: string;
+  label: string;
+  soon?: boolean;
+}
+
+export interface NavGroup {
+  section: string;
+  items: NavItem[];
+}
+
+const comingSoon: NavItem[] = [
+  { to: '#', label: 'Chat', soon: true },
+  { to: '#', label: 'Contactos QR', soon: true },
+  { to: '#', label: 'Equipos', soon: true },
+];
+
+export const NAV: Record<string, NavGroup[]> = {
+  [RolNombre.STUDENT]: [
+    {
+      section: 'Mi espacio',
+      items: [
+        { to: '/student', label: 'Dashboard' },
+        { to: '/student/profile', label: 'Perfil dinámico' },
+        { to: '/student/interests', label: 'Intereses y habilidades' },
+        { to: '/student/projects', label: 'Proyectos y evidencias' },
+        { to: '/student/affinity', label: 'Áreas de afinidad' },
+      ],
+    },
+    {
+      section: 'Comunidad',
+      items: [{ to: '/student/activities', label: 'Actividades' }],
+    },
+    { section: 'Próximamente', items: comingSoon },
+  ],
+  [RolNombre.TEACHER]: [
+    {
+      section: 'Docente',
+      items: [
+        { to: '/teacher', label: 'Dashboard' },
+        { to: '/teacher/activities', label: 'Actividades y participación' },
+        { to: '/teacher/students', label: 'Perfil de estudiante' },
+        { to: '/teacher/reports', label: 'Reportes del curso' },
+      ],
+    },
+    { section: 'Próximamente', items: comingSoon },
+  ],
+  [RolNombre.CAREER_DIRECTOR]: [
+    {
+      section: 'Dirección',
+      items: [
+        { to: '/director', label: 'Dashboard general' },
+        { to: '/director/affinity', label: 'Mapa de afinidad' },
+      ],
+    },
+    { section: 'Próximamente', items: comingSoon },
+  ],
+  [RolNombre.SCIENTIFIC_SOCIETY]: [
+    {
+      section: 'Sociedad científica',
+      items: [
+        { to: '/society', label: 'Dashboard' },
+        { to: '/society/activities', label: 'Actividades extracurriculares' },
+      ],
+    },
+    { section: 'Próximamente', items: comingSoon },
+  ],
+  [RolNombre.ADMIN]: [
+    {
+      section: 'Administración',
+      items: [
+        { to: '/admin', label: 'Usuarios' },
+        { to: '/admin/roles', label: 'Roles' },
+        { to: '/admin/areas', label: 'Áreas académicas' },
+        { to: '/admin/skills', label: 'Catálogo de habilidades' },
+      ],
+    },
+    { section: 'Próximamente', items: comingSoon },
+  ],
+};
+
+export const HOME_BY_ROLE: Record<string, string> = {
+  [RolNombre.STUDENT]: '/student',
+  [RolNombre.TEACHER]: '/teacher',
+  [RolNombre.CAREER_DIRECTOR]: '/director',
+  [RolNombre.SCIENTIFIC_SOCIETY]: '/society',
+  [RolNombre.ADMIN]: '/admin',
+};
