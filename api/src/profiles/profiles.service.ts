@@ -365,6 +365,10 @@ export class ProfilesService {
     await this.requestAffinity(profileId);
   }
 
+  recomputeCompletion(profileId: string): Promise<void> {
+    return this.refreshCompletion(profileId);
+  }
+
   private async refreshCompletion(profileId: string): Promise<void> {
     const profile = await this.profiles.findOne({ where: { id: profileId } });
     if (!profile) return;

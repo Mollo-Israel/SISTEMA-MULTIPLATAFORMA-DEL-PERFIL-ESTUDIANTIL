@@ -80,6 +80,28 @@ participación confirmada, un proyecto con evidencia y áreas de afinidad calcul
 Cuentas de demo (contraseña `Demo123*`): `demo.docente@`, `demo.sociedad@`,
 `demo.director@`, `demo.est1@`, `demo.est2@` (`@univalle.edu`).
 
+### Datos de demo para defensa (`seed:demo`)
+
+Genera un conjunto realista con **nombres neutros** (sin datos reales) pensado para
+la sustentación. Reutiliza el **motor de afinidad real** (no inventa puntajes):
+
+```bash
+npm run seed:demo        # requiere BD arriba y migraciones aplicadas
+```
+
+Crea: usuarios por rol (Estudiante 1/2, Docente 1, Director, Sociedad Científica;
+Administrador del seed base), las 8 áreas, 9 habilidades, 4 actividades (taller web,
+clase espejo de IA, reto de BD, actividad de sociedad científica), 3 proyectos con
+evidencias (repositorio y demo ficticios), certificados externos ficticios,
+participaciones confirmadas, y afinidades calculadas con niveles **alto/medio/bajo**.
+
+Cuentas (contraseña `Demo123*`): `estudiante1@demo.univalle.edu`,
+`estudiante2@demo.univalle.edu`, `docente1@demo.univalle.edu`,
+`director@demo.univalle.edu`, `sociedad@demo.univalle.edu`.
+
+Para la defensa se puede mostrar: perfil del estudiante, actividades, proyectos,
+evidencias, afinidad alta/media/baja, reporte docente y reporte de director.
+
 ## Flujo principal (end-to-end)
 
 1. Admin confirma roles y áreas académicas (y puede crear áreas/habilidades).
@@ -105,6 +127,7 @@ Cuentas de demo (contraseña `Demo123*`): `demo.docente@`, `demo.sociedad@`,
 | `npm run api:build` / `api:dev` | Compila / ejecuta la API |
 | `npm run api:migrate` | Aplica migraciones TypeORM |
 | `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
+| `npm run seed:demo` | Datos de demo realistas para defensa (afinidad alta/media/baja) |
 | `npm run demo:e2e` | Flujo e2e del 30% + datos de demo |
 | `npm run web:dev` | Servidor de desarrollo web |
 | `npm run mobile:start` | Inicia Expo |
