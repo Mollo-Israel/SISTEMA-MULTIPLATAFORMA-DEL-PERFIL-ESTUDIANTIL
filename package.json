@@ -12,7 +12,13 @@
     "db:down": "docker compose -f docker/docker-compose.yml down",
     "db:logs": "docker compose -f docker/docker-compose.yml logs -f postgres",
     "shared:build": "npm run build --workspace shared",
-    "api:dev": "npm run start:dev --workspace api"
+    "api:build": "npm run build --workspace api",
+    "api:dev": "npm run start:dev --workspace api",
+    "api:migrate": "npm run migration:run --workspace api",
+    "seed": "npm run seed --workspace api",
+    "web:dev": "npm run dev --prefix web",
+    "mobile:start": "npm run start --prefix mobile",
+    "demo:e2e": "node scripts/e2e-demo.mjs"
   },
   "engines": {
     "node": ">=20"

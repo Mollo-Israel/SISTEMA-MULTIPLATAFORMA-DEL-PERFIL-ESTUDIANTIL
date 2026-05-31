@@ -33,19 +33,81 @@ Estudiante · Docente · Director de carrera · Representante de sociedad cient�
 
 ## Puesta en marcha (desarrollo)
 
+Requisitos: Node 18+, Docker. Los tres clientes (API, web, móvil) consumen la **misma API** con el **mismo JWT**.
+
 ```bash
 # 1. Variables de entorno
 cp .env.example .env
 
-# 2. Base de datos
+# 2. Base de datos (PostgreSQL en Docker)
 npm run db:up
 
-# 3. Dependencias
+# 3. Dependencias del backend (workspaces: shared + api)
 npm install
 
-# 4. API en modo desarrollo
-npm run api:dev
+# 4. Migraciones + seeds base (roles, áreas, habilidades, admin inicial)
+npm run shared:build
+npm run api:migrate
+npm run seed
+
+# 5. API
+npm run api:dev          # http://localhost:3000/api  ·  Swagger: /api/docs
+
+# 6. Web (otra terminal)
+npm install --prefix web
+npm run web:dev          # http://localhost:5173
+
+# 7. Móvil (otra terminal)
+npm install --prefix mobile
+npm run mobile:start     # Expo Go / emulador  (ver mobile/README.md)
 ```
+
+Admin inicial (seed): `admin@univalle.edu` / `Admin123*`.
+
+## Verificación e2e + datos de demo
+
+Con la API corriendo, ejecuta el flujo completo del 30% (14 pasos) de punta a punta.
+Crea datos de demo reales y verifica roles, participación, afinidad y reportes:
+
+```bash
+npm run demo:e2e
+```
+
+Deja en la base: docente, sociedad científica y director de demo, dos estudiantes
+con perfil/intereses/habilidades, actividades académica y extracurricular,
+participación confirmada, un proyecto con evidencia y áreas de afinidad calculadas.
+
+Cuentas de demo (contraseña `Demo123*`): `demo.docente@`, `demo.sociedad@`,
+`demo.director@`, `demo.est1@`, `demo.est2@` (`@univalle.edu`).
+
+## Flujo principal (end-to-end)
+
+1. Admin confirma roles y áreas académicas (y puede crear áreas/habilidades).
+2. Estudiante se registra e inicia sesión.
+3. Estudiante crea su perfil dinámico.
+4. Estudiante registra intereses (por área) y habilidades (con nivel).
+5. Docente publica actividad académica; sociedad científica, extracurricular.
+6. Estudiante consulta actividades (web o móvil).
+7. Estudiante registra interés o inscripción.
+8. Docente/sociedad confirma participación (el estudiante no puede confirmar la suya).
+9. Estudiante registra proyecto académico.
+10. Estudiante adjunta evidencia (enlace o archivo).
+11. El motor de afinidad recalcula tras cada cambio relevante (backend).
+12. Estudiante visualiza sus áreas de afinidad.
+13. Docente consulta el perfil permitido (sin datos sensibles ni notas).
+14. Director consulta reportes básicos y mapa de afinidad.
+
+## Scripts útiles (raíz)
+
+| Script | Descripción |
+|--------|-------------|
+| `npm run db:up` / `db:down` | Levanta/apaga PostgreSQL (Docker) |
+| `npm run api:build` / `api:dev` | Compila / ejecuta la API |
+| `npm run api:migrate` | Aplica migraciones TypeORM |
+| `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
+| `npm run demo:e2e` | Flujo e2e del 30% + datos de demo |
+| `npm run web:dev` | Servidor de desarrollo web |
+| `npm run mobile:start` | Inicia Expo |
 
 ## Alcance del 30% inicial
 
