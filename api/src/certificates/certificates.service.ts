@@ -1,12 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { CreateExternalCertificateDto } from './dto/create-external-certificate.dto';
@@ -28,6 +29,12 @@ export class CertificatesService {
 
   async create(userId: string, dto: CreateExternalCertificateDto): Promise<ExternalCertificate> {
     const profile = await this.requireProfile(userId);
+    const duplicate = await this.certificates.findOne({
+      where: { studentProfileId: profile.id, certificateName: ILike(dto.certificateName) },
+    });
+    if (duplicate) {
+      throw new ConflictException('Ya registraste un certificado con ese nombre.');
+    }
     const certificate = this.certificates.create({
       studentProfileId: profile.id,
       certificateName: dto.certificateName,

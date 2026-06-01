@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsInt, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, ArrayUnique, IsArray, IsInt, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 
 export class SkillItemDto {
   @ApiProperty({ description: 'ID de la habilidad (catálogo)' })
@@ -8,16 +8,17 @@ export class SkillItemDto {
   skillId: string;
 
   @ApiProperty({ example: 3, minimum: 1, maximum: 5, description: 'Nivel declarado' })
-  @IsInt()
-  @Min(1)
-  @Max(5)
+  @IsInt({ message: 'El nivel debe ser un número.' })
+  @Min(1, { message: 'El nivel mínimo es 1.' })
+  @Max(5, { message: 'El nivel máximo es 5.' })
   level: number;
 }
 
 export class SetSkillsDto {
   @ApiProperty({ type: [SkillItemDto] })
   @IsArray()
-  @ArrayMinSize(1)
+  @ArrayMinSize(1, { message: 'Debes indicar al menos una habilidad.' })
+  @ArrayUnique((s: SkillItemDto) => s.skillId, { message: 'No se permiten habilidades duplicadas.' })
   @ValidateNested({ each: true })
   @Type(() => SkillItemDto)
   items: SkillItemDto[];
@@ -26,6 +27,7 @@ export class SetSkillsDto {
 export class ReplaceSkillsDto {
   @ApiProperty({ type: [SkillItemDto], description: 'Reemplaza el conjunto completo (puede ir vacío)' })
   @IsArray()
+  @ArrayUnique((s: SkillItemDto) => s.skillId, { message: 'No se permiten habilidades duplicadas.' })
   @ValidateNested({ each: true })
   @Type(() => SkillItemDto)
   items: SkillItemDto[];

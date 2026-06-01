@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { CreateAcademicAreaDto } from './dto/create-academic-area.dto';
@@ -18,7 +18,7 @@ export class CatalogsService {
   }
 
   async createArea(dto: CreateAcademicAreaDto): Promise<AcademicArea> {
-    const exists = await this.areas.findOne({ where: { name: dto.name } });
+    const exists = await this.areas.findOne({ where: { name: ILike(dto.name) } });
     if (exists) {
       throw new ConflictException('El área académica ya existe.');
     }
@@ -36,7 +36,7 @@ export class CatalogsService {
   }
 
   async createSkill(dto: CreateSkillDto): Promise<Skill> {
-    const exists = await this.skills.findOne({ where: { name: dto.name } });
+    const exists = await this.skills.findOne({ where: { name: ILike(dto.name) } });
     if (exists) {
       throw new ConflictException('La habilidad ya existe en el catálogo.');
     }

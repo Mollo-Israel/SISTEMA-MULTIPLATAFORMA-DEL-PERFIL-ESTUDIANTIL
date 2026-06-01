@@ -1,14 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
   IsISO8601,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
   IsUUID,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -18,17 +23,21 @@ import {
   ActivityStatus,
   ActivityType,
 } from '@perfil/shared';
+import { trim, trimUniqueArray } from '../../common/validation';
 
 export class CreateActivityDto {
   @ApiProperty({ example: 'Taller de NestJS' })
+  @Transform(trim)
   @IsString()
-  @MaxLength(160)
+  @IsNotEmpty({ message: 'El título es obligatorio.' })
+  @MaxLength(160, { message: 'El título no puede superar 160 caracteres.' })
   title: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @Transform(trim)
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(2000, { message: 'La descripción no puede superar 2000 caracteres.' })
   description?: string;
 
   @ApiProperty({ enum: ActivityType })
@@ -51,14 +60,16 @@ export class CreateActivityDto {
 
   @ApiProperty({ required: false, example: 'Aula 301' })
   @IsOptional()
+  @Transform(trim)
   @IsString()
-  @MaxLength(200)
+  @MaxLength(200, { message: 'La ubicación no puede superar 200 caracteres.' })
   location?: string;
 
-  @ApiProperty({ required: false, example: 30, minimum: 1 })
+  @ApiProperty({ required: false, example: 30, minimum: 1, maximum: 1000 })
   @IsOptional()
-  @IsInt()
-  @Min(1)
+  @IsInt({ message: 'El cupo debe ser un número entero.' })
+  @Min(1, { message: 'El cupo mínimo es 1.' })
+  @Max(1000, { message: 'El cupo máximo es 1000.' })
   capacity?: number;
 
   @ApiProperty({ required: false, description: 'ID del área académica' })
@@ -68,8 +79,12 @@ export class CreateActivityDto {
 
   @ApiProperty({ required: false, type: [String] })
   @IsOptional()
+  @Transform(trimUniqueArray)
   @IsArray()
+  @ArrayMaxSize(15, { message: 'Máximo 15 etiquetas.' })
+  @ArrayUnique({ message: 'No se permiten etiquetas duplicadas.' })
   @IsString({ each: true })
+  @MaxLength(40, { each: true, message: 'Cada etiqueta es demasiado larga.' })
   tags?: string[];
 
   @ApiProperty({ required: false, example: 'https://evento.example.com' })

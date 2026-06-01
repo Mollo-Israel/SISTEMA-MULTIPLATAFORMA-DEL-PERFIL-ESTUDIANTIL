@@ -1,28 +1,38 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { RolNombre, UserStatus } from '@perfil/shared';
+import { EMAIL_MSG, NAME_MSG, NAME_RE, PASSWORD_MSG, PASSWORD_RE, trim, trimLower, UNIVALLE_RE } from '../../common/validation';
 
 export class CreateUserDto {
-  @ApiProperty({ example: 'Docente' })
+  @ApiProperty({ example: 'Carlos' })
+  @Transform(trim)
   @IsString()
-  @MinLength(2)
-  @MaxLength(100)
+  @MinLength(2, { message: 'El nombre debe tener al menos 2 caracteres.' })
+  @MaxLength(50, { message: 'El nombre no puede superar 50 caracteres.' })
+  @Matches(NAME_RE, { message: `El nombre. ${NAME_MSG}` })
   firstName: string;
 
-  @ApiProperty({ example: 'Univalle' })
+  @ApiProperty({ example: 'Pérez' })
+  @Transform(trim)
   @IsString()
-  @MinLength(2)
-  @MaxLength(100)
+  @MinLength(2, { message: 'El apellido debe tener al menos 2 caracteres.' })
+  @MaxLength(50, { message: 'El apellido no puede superar 50 caracteres.' })
+  @Matches(NAME_RE, { message: `El apellido. ${NAME_MSG}` })
   lastName: string;
 
-  @ApiProperty({ example: 'docente@univalle.edu' })
-  @IsEmail()
+  @ApiProperty({ example: 'carlos.perez@univalle.edu' })
+  @Transform(trimLower)
+  @IsEmail({}, { message: 'El correo no tiene un formato válido.' })
+  @MaxLength(160, { message: 'El correo es demasiado largo.' })
+  @Matches(UNIVALLE_RE, { message: EMAIL_MSG })
   email: string;
 
-  @ApiProperty({ example: 'Clave123*', minLength: 6 })
+  @ApiProperty({ example: 'Clave123*', minLength: 8 })
   @IsString()
-  @MinLength(6)
-  @MaxLength(72)
+  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres.' })
+  @MaxLength(72, { message: 'La contraseña es demasiado larga.' })
+  @Matches(PASSWORD_RE, { message: PASSWORD_MSG })
   password: string;
 
   @ApiProperty({ enum: RolNombre, example: RolNombre.TEACHER })

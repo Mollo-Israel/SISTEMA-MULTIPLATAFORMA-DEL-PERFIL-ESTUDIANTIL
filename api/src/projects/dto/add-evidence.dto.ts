@@ -1,27 +1,32 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 import { EvidenceType } from '@perfil/shared';
+import { trim } from '../../common/validation';
 
 export class AddEvidenceDto {
   @ApiProperty({ enum: EvidenceType })
-  @IsEnum(EvidenceType)
+  @IsEnum(EvidenceType, { message: 'Tipo de evidencia inválido.' })
   evidenceType: EvidenceType;
 
   @ApiProperty({ required: false, example: 'Capturas del despliegue' })
   @IsOptional()
+  @Transform(trim)
   @IsString()
-  @MaxLength(300)
+  @MaxLength(300, { message: 'La descripción no puede superar 300 caracteres.' })
   description?: string;
 
   @ApiProperty({ required: false, description: 'Ruta del archivo (cuando evidenceType=file)' })
   @IsOptional()
+  @Transform(trim)
   @IsString()
   @MaxLength(500)
   fileUrl?: string;
 
   @ApiProperty({ required: false, description: 'Enlace externo (cuando evidenceType=link)' })
   @IsOptional()
-  @IsUrl()
+  @Transform(trim)
+  @IsUrl({}, { message: 'El enlace debe ser una URL válida.' })
   @MaxLength(500)
   externalUrl?: string;
 }

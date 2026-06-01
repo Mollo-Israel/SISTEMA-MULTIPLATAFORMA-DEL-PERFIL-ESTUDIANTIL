@@ -1,7 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
@@ -9,17 +13,21 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ProjectStatus } from '@perfil/shared';
+import { trim, trimUniqueArray } from '../../common/validation';
 
 export class CreateProjectDto {
   @ApiProperty({ example: 'Plataforma de tutorías' })
+  @Transform(trim)
   @IsString()
-  @MaxLength(160)
+  @IsNotEmpty({ message: 'El título es obligatorio.' })
+  @MaxLength(160, { message: 'El título no puede superar 160 caracteres.' })
   title: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @Transform(trim)
   @IsString()
-  @MaxLength(2000)
+  @MaxLength(2000, { message: 'La descripción no puede superar 2000 caracteres.' })
   description?: string;
 
   @ApiProperty({ required: false, description: 'ID del área académica' })
@@ -29,8 +37,12 @@ export class CreateProjectDto {
 
   @ApiProperty({ required: false, type: [String], example: ['React', 'Node.js'] })
   @IsOptional()
+  @Transform(trimUniqueArray)
   @IsArray()
+  @ArrayMaxSize(20, { message: 'Máximo 20 tecnologías.' })
+  @ArrayUnique({ message: 'No se permiten tecnologías duplicadas.' })
   @IsString({ each: true })
+  @MaxLength(40, { each: true, message: 'Cada tecnología es demasiado larga.' })
   technologies?: string[];
 
   @ApiProperty({ enum: ProjectStatus, required: false, default: ProjectStatus.DRAFT })
@@ -40,13 +52,15 @@ export class CreateProjectDto {
 
   @ApiProperty({ required: false, example: 'https://github.com/usuario/proyecto' })
   @IsOptional()
-  @IsUrl()
+  @Transform(trim)
+  @IsUrl({}, { message: 'El repositorio debe ser una URL válida.' })
   @MaxLength(500)
   repositoryUrl?: string;
 
   @ApiProperty({ required: false, example: 'https://demo.example.com' })
   @IsOptional()
-  @IsUrl()
+  @Transform(trim)
+  @IsUrl({}, { message: 'La demo debe ser una URL válida.' })
   @MaxLength(500)
   demoUrl?: string;
 }
