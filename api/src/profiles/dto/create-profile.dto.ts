@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { ArrayUnique, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
-import { trim } from '../../common/validation';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { cleanText } from '../../common/validation';
 
 export class CreateProfileDto {
   @ApiProperty({ required: false, example: 5, minimum: 1, maximum: 8 })
@@ -13,7 +13,7 @@ export class CreateProfileDto {
 
   @ApiProperty({ required: false, example: 'Interesado en desarrollo web y datos.' })
   @IsOptional()
-  @Transform(trim)
+  @Transform(cleanText)
   @IsString()
   @MaxLength(1000, { message: 'La descripción no puede superar 1000 caracteres.' })
   bio?: string;
@@ -21,6 +21,7 @@ export class CreateProfileDto {
   @ApiProperty({ required: false, type: [String], description: 'IDs de áreas académicas donde desea mejorar' })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20, { message: 'Máximo 20 áreas a mejorar.' })
   @ArrayUnique({ message: 'No se permiten áreas duplicadas.' })
   @IsUUID('4', { each: true })
   improvementAreaIds?: string[];

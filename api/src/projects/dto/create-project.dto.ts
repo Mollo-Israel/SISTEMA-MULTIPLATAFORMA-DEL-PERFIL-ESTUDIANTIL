@@ -11,21 +11,23 @@ import {
   IsUrl,
   IsUUID,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 import { ProjectStatus } from '@perfil/shared';
-import { trim, trimUniqueArray } from '../../common/validation';
+import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
 export class CreateProjectDto {
   @ApiProperty({ example: 'Plataforma de tutorías' })
-  @Transform(trim)
+  @Transform(cleanLine)
   @IsString()
   @IsNotEmpty({ message: 'El título es obligatorio.' })
+  @MinLength(3, { message: 'El título debe tener al menos 3 caracteres.' })
   @MaxLength(160, { message: 'El título no puede superar 160 caracteres.' })
   title: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @Transform(trim)
+  @Transform(cleanText)
   @IsString()
   @MaxLength(2000, { message: 'La descripción no puede superar 2000 caracteres.' })
   description?: string;

@@ -2,11 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { RolNombre, UserStatus } from '@perfil/shared';
-import { EMAIL_MSG, NAME_MSG, NAME_RE, PASSWORD_MSG, PASSWORD_RE, trim, trimLower, UNIVALLE_RE } from '../../common/validation';
+import { cleanLine, EMAIL_MSG, NAME_MSG, NAME_RE, PASSWORD_MSG, PASSWORD_RE, trimLower, UNIVALLE_RE } from '../../common/validation';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Carlos' })
-  @Transform(trim)
+  @Transform(cleanLine)
   @IsString()
   @MinLength(2, { message: 'El nombre debe tener al menos 2 caracteres.' })
   @MaxLength(50, { message: 'El nombre no puede superar 50 caracteres.' })
@@ -14,7 +14,7 @@ export class CreateUserDto {
   firstName: string;
 
   @ApiProperty({ example: 'Pérez' })
-  @Transform(trim)
+  @Transform(cleanLine)
   @IsString()
   @MinLength(2, { message: 'El apellido debe tener al menos 2 caracteres.' })
   @MaxLength(50, { message: 'El apellido no puede superar 50 caracteres.' })

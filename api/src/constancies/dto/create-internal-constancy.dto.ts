@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { ConstancyStatus } from '@perfil/shared';
-import { trim } from '../../common/validation';
+import { cleanText } from '../../common/validation';
 
 export class CreateInternalConstancyDto {
   @ApiProperty({ description: 'ID del perfil del estudiante' })
@@ -20,9 +20,10 @@ export class CreateInternalConstancyDto {
   activityRegistrationId?: string;
 
   @ApiProperty({ example: 'Participó como ponente en el seminario interno.' })
-  @Transform(trim)
+  @Transform(cleanText)
   @IsString()
   @IsNotEmpty({ message: 'La descripción es obligatoria.' })
+  @MinLength(5, { message: 'La descripción debe tener al menos 5 caracteres.' })
   @MaxLength(300, { message: 'La descripción no puede superar 300 caracteres.' })
   description: string;
 

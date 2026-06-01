@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, ArrayUnique, IsArray, IsInt, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsInt, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 
 export class InterestItemDto {
   @ApiProperty({ description: 'ID del área académica' })
@@ -18,6 +18,7 @@ export class SetInterestsDto {
   @ApiProperty({ type: [InterestItemDto] })
   @IsArray()
   @ArrayMinSize(1, { message: 'Debes indicar al menos un interés.' })
+  @ArrayMaxSize(30, { message: 'Máximo 30 intereses.' })
   @ArrayUnique((i: InterestItemDto) => i.academicAreaId, { message: 'No se permiten áreas de interés duplicadas.' })
   @ValidateNested({ each: true })
   @Type(() => InterestItemDto)
@@ -27,6 +28,7 @@ export class SetInterestsDto {
 export class ReplaceInterestsDto {
   @ApiProperty({ type: [InterestItemDto], description: 'Reemplaza el conjunto completo (puede ir vacío)' })
   @IsArray()
+  @ArrayMaxSize(30, { message: 'Máximo 30 intereses.' })
   @ArrayUnique((i: InterestItemDto) => i.academicAreaId, { message: 'No se permiten áreas de interés duplicadas.' })
   @ValidateNested({ each: true })
   @Type(() => InterestItemDto)

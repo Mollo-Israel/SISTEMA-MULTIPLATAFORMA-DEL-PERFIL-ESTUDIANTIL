@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, ArrayUnique, IsArray, IsInt, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsInt, IsUUID, Max, Min, ValidateNested } from 'class-validator';
 
 export class SkillItemDto {
   @ApiProperty({ description: 'ID de la habilidad (catálogo)' })
@@ -18,6 +18,7 @@ export class SetSkillsDto {
   @ApiProperty({ type: [SkillItemDto] })
   @IsArray()
   @ArrayMinSize(1, { message: 'Debes indicar al menos una habilidad.' })
+  @ArrayMaxSize(40, { message: 'Máximo 40 habilidades.' })
   @ArrayUnique((s: SkillItemDto) => s.skillId, { message: 'No se permiten habilidades duplicadas.' })
   @ValidateNested({ each: true })
   @Type(() => SkillItemDto)
@@ -27,6 +28,7 @@ export class SetSkillsDto {
 export class ReplaceSkillsDto {
   @ApiProperty({ type: [SkillItemDto], description: 'Reemplaza el conjunto completo (puede ir vacío)' })
   @IsArray()
+  @ArrayMaxSize(40, { message: 'Máximo 40 habilidades.' })
   @ArrayUnique((s: SkillItemDto) => s.skillId, { message: 'No se permiten habilidades duplicadas.' })
   @ValidateNested({ each: true })
   @Type(() => SkillItemDto)

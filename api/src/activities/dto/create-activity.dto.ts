@@ -16,6 +16,7 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 import {
   ActivityCategory,
@@ -23,19 +24,20 @@ import {
   ActivityStatus,
   ActivityType,
 } from '@perfil/shared';
-import { trim, trimUniqueArray } from '../../common/validation';
+import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
 export class CreateActivityDto {
   @ApiProperty({ example: 'Taller de NestJS' })
-  @Transform(trim)
+  @Transform(cleanLine)
   @IsString()
   @IsNotEmpty({ message: 'El título es obligatorio.' })
+  @MinLength(3, { message: 'El título debe tener al menos 3 caracteres.' })
   @MaxLength(160, { message: 'El título no puede superar 160 caracteres.' })
   title: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
-  @Transform(trim)
+  @Transform(cleanText)
   @IsString()
   @MaxLength(2000, { message: 'La descripción no puede superar 2000 caracteres.' })
   description?: string;
@@ -60,7 +62,7 @@ export class CreateActivityDto {
 
   @ApiProperty({ required: false, example: 'Aula 301' })
   @IsOptional()
-  @Transform(trim)
+  @Transform(cleanLine)
   @IsString()
   @MaxLength(200, { message: 'La ubicación no puede superar 200 caracteres.' })
   location?: string;
@@ -89,8 +91,9 @@ export class CreateActivityDto {
 
   @ApiProperty({ required: false, example: 'https://evento.example.com' })
   @IsOptional()
-  @IsUrl()
-  @MaxLength(500)
+  @Transform(trim)
+  @IsUrl({}, { message: 'El enlace externo debe ser una URL válida.' })
+  @MaxLength(500, { message: 'El enlace externo es demasiado largo.' })
   externalUrl?: string;
 
   @ApiProperty({ required: false, default: false })

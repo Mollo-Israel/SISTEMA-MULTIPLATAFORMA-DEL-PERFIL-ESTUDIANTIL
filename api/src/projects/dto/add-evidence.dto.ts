@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 import { EvidenceType } from '@perfil/shared';
-import { trim } from '../../common/validation';
+import { cleanText, trim } from '../../common/validation';
 
 export class AddEvidenceDto {
   @ApiProperty({ enum: EvidenceType })
@@ -11,7 +11,7 @@ export class AddEvidenceDto {
 
   @ApiProperty({ required: false, example: 'Capturas del despliegue' })
   @IsOptional()
-  @Transform(trim)
+  @Transform(cleanText)
   @IsString()
   @MaxLength(300, { message: 'La descripción no puede superar 300 caracteres.' })
   description?: string;
