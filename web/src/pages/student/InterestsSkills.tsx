@@ -4,6 +4,24 @@ import { catalogService, profileService } from '../../services';
 import type { AcademicArea, Skill } from '../../services/types';
 import { Card, Loading } from '../../components/ui';
 
+// Etiquetas legibles para el usuario; el valor interno sigue siendo 1–5.
+const PRIORITY_LABELS: Record<number, string> = {
+  0: 'Sin interés',
+  1: 'Muy bajo',
+  2: 'Bajo',
+  3: 'Moderado',
+  4: 'Alto',
+  5: 'Muy alto',
+};
+const LEVEL_LABELS: Record<number, string> = {
+  0: 'Sin experiencia',
+  1: 'Principiante',
+  2: 'Básico',
+  3: 'Intermedio',
+  4: 'Avanzado',
+  5: 'Experto',
+};
+
 export default function InterestsSkillsPage() {
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -55,17 +73,18 @@ export default function InterestsSkillsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-success">{msg}</div>}
 
-      <Card title="Intereses por área (prioridad 1–5)" actions={<button className="btn btn-primary btn-sm" onClick={saveInterests}>Guardar intereses</button>}>
+      <Card title="Intereses por área" actions={<button className="btn btn-primary btn-sm" onClick={saveInterests}>Guardar intereses</button>}>
+        <p className="muted" style={{ marginTop: '-0.3rem', marginBottom: '0.8rem' }}>Indica qué tanto te interesa cada área.</p>
         <table>
-          <thead><tr><th>Área</th><th style={{ width: 120 }}>Prioridad</th></tr></thead>
+          <thead><tr><th>Área</th><th style={{ width: 180 }}>Nivel de interés</th></tr></thead>
           <tbody>
             {areas.map((a) => (
               <tr key={a.id}>
                 <td>{a.name}</td>
                 <td>
                   <select value={interests[a.id] ?? 0} onChange={(e) => setInterests({ ...interests, [a.id]: Number(e.target.value) })}>
-                    <option value={0}>—</option>
-                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                    <option value={0}>{PRIORITY_LABELS[0]}</option>
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{PRIORITY_LABELS[n]}</option>)}
                   </select>
                 </td>
               </tr>
@@ -74,9 +93,10 @@ export default function InterestsSkillsPage() {
         </table>
       </Card>
 
-      <Card title="Habilidades declaradas (nivel 1–5)" actions={<button className="btn btn-primary btn-sm" onClick={saveSkills}>Guardar habilidades</button>}>
+      <Card title="Habilidades declaradas" actions={<button className="btn btn-primary btn-sm" onClick={saveSkills}>Guardar habilidades</button>}>
+        <p className="muted" style={{ marginTop: '-0.3rem', marginBottom: '0.8rem' }}>Indica tu nivel de dominio en cada habilidad.</p>
         <table>
-          <thead><tr><th>Habilidad</th><th>Área</th><th style={{ width: 120 }}>Nivel</th></tr></thead>
+          <thead><tr><th>Habilidad</th><th>Área</th><th style={{ width: 180 }}>Nivel de dominio</th></tr></thead>
           <tbody>
             {skills.map((s) => (
               <tr key={s.id}>
@@ -84,8 +104,8 @@ export default function InterestsSkillsPage() {
                 <td className="muted">{s.academicArea?.name ?? '—'}</td>
                 <td>
                   <select value={skillLevels[s.id] ?? 0} onChange={(e) => setSkillLevels({ ...skillLevels, [s.id]: Number(e.target.value) })}>
-                    <option value={0}>—</option>
-                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                    <option value={0}>{LEVEL_LABELS[0]}</option>
+                    {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{LEVEL_LABELS[n]}</option>)}
                   </select>
                 </td>
               </tr>

@@ -2,11 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 
 export class UpdateProfileDto {
-  @ApiProperty({ required: false, example: 6, minimum: 1, maximum: 12 })
+  @ApiProperty({ required: false, example: 6, minimum: 1, maximum: 8 })
   @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(12)
+  @Max(8)
   semester?: number;
 
   @ApiProperty({ required: false, example: 'Enfocado en backend y bases de datos.' })

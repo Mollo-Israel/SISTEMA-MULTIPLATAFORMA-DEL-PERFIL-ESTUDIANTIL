@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
@@ -24,6 +25,12 @@ import { ReplaceSkillsDto, SetSkillsDto } from './dto/set-skills.dto';
 @Controller('profiles')
 export class ProfilesController {
   constructor(private readonly profilesService: ProfilesService) {}
+
+  @Get('students')
+  @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  listStudents(@Query('search') search?: string) {
+    return this.profilesService.listStudents(search);
+  }
 
   @Post('me')
   @Roles(RolNombre.STUDENT)

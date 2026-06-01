@@ -103,8 +103,8 @@ async function main() {
   (s1 && s2) ? ok('2. Estudiantes registrados e inician sesión') : bad('2. Estudiantes', 'faltan tokens');
 
   // 3) Estudiante crea perfil
-  const p1 = await ensureProfile(s1, { universityCode: 'SIS-DEMO-1', semester: 5, bio: 'Interés en desarrollo web', improvementAreaIds: web ? [web.id] : [] });
-  const p2 = await ensureProfile(s2, { universityCode: 'SIS-DEMO-2', semester: 7, bio: 'Interés en datos e IA', improvementAreaIds: ia ? [ia.id] : [] });
+  const p1 = await ensureProfile(s1, { semester: 5, bio: 'Interés en desarrollo web', improvementAreaIds: web ? [web.id] : [] });
+  const p2 = await ensureProfile(s2, { semester: 7, bio: 'Interés en datos e IA', improvementAreaIds: ia ? [ia.id] : [] });
   (p1 && p2) ? ok(`3. Perfiles creados (p1=${p1.slice(0, 8)}…)`) : bad('3. Perfiles', 'sin id');
 
   // 4) Intereses y habilidades

@@ -70,7 +70,7 @@ async function main() {
 
   // ---------- 3. Crear perfil ----------
   await section('3. Perfil');
-  const createProfile = await req('POST', '/profiles/me', { token: est1, body: { universityCode: `T-${TS}`, semester: 5, bio: 'demo', improvementAreaIds: web ? [web.id] : [] } });
+  const createProfile = await req('POST', '/profiles/me', { token: est1, body: { semester: 5, bio: 'demo', improvementAreaIds: web ? [web.id] : [] } });
   check(createProfile.status === 201, '3. Crear perfil (201)', `status ${createProfile.status}`);
   const p1 = createProfile.data?.id;
   check((await req('POST', '/profiles/me', { token: est1, body: { semester: 5 } })).status === 409, '3. Perfil duplicado -> 409');

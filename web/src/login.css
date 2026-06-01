@@ -1,0 +1,115 @@
+.li {
+  --li-bordo: #6b1220;
+  --li-bordo-600: #8f1d2f;
+  --li-rose: #d24b60;
+  --li-ink: #2a1116;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: #f3e9eb;
+  font-family: var(--font, 'Segoe UI', system-ui, sans-serif);
+}
+
+.li-card {
+  width: 100%;
+  max-width: 940px;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  background: #fff;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(107, 18, 32, 0.28);
+}
+@media (max-width: 820px) {
+  .li-card { grid-template-columns: 1fr; max-width: 440px; }
+  .li-aside { display: none; }
+}
+
+/* Aside de marca */
+.li-aside {
+  position: relative;
+  background: linear-gradient(150deg, #4d0c17 0%, #6b1220 50%, #a52a3a 100%);
+  color: #fff;
+  padding: 2.6rem 2.2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.li-aside .blob { position: absolute; border-radius: 50%; filter: blur(55px); opacity: 0.5; }
+.li-aside .blob.a { width: 300px; height: 300px; background: #d24b60; top: -90px; right: -70px; animation: lifloat 13s ease-in-out infinite; }
+.li-aside .blob.b { width: 240px; height: 240px; background: #ff7a8a; bottom: -80px; left: -60px; animation: lifloat 17s ease-in-out infinite reverse; }
+.li-aside .grid { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px); background-size: 24px 24px; mask-image: radial-gradient(circle at 40% 30%, black, transparent 72%); }
+@keyframes lifloat { 0%,100% { transform: translate(0,0) scale(1);} 50% { transform: translate(-20px,26px) scale(1.1);} }
+
+.li-aside-top { position: relative; z-index: 2; }
+.li-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.05rem; }
+.li-brand .dot { width: 38px; height: 38px; border-radius: 11px; background: rgba(255,255,255,0.16); display: grid; place-items: center; font-size: 1.1rem; }
+.li-aside h2 { font-size: 1.9rem; line-height: 1.15; margin: 2rem 0 0.8rem; font-weight: 800; letter-spacing: -0.01em; position: relative; z-index: 2; color: #fff; }
+.li-brand, .li-aside .li-brand { color: #fff; }
+.li-aside p.t { opacity: 0.9; font-size: 0.96rem; position: relative; z-index: 2; }
+.li-feat { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1.6rem; }
+.li-feat div { display: flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; opacity: 0.95; }
+.li-feat .ic { background: rgba(255,255,255,0.18); width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; }
+.li-quote { position: relative; z-index: 2; font-size: 0.85rem; opacity: 0.85; border-left: 3px solid rgba(255,255,255,0.4); padding-left: 0.8rem; }
+
+/* Formulario */
+.li-form { padding: 2.6rem 2.4rem; display: flex; flex-direction: column; justify-content: center; }
+.li-form .head h1 { font-size: 1.6rem; font-weight: 800; color: var(--li-ink); margin: 0 0 0.25rem; }
+.li-form .head p { color: #8a7a80; font-size: 0.9rem; margin: 0 0 1.4rem; }
+
+.li-field { margin-bottom: 0.95rem; }
+.li-field label { display: block; font-size: 0.8rem; font-weight: 600; color: #5f4f55; margin-bottom: 0.35rem; }
+.li-input-wrap { position: relative; display: flex; align-items: center; }
+.li-input-wrap .ic { position: absolute; left: 0.85rem; color: #b89aa0; font-size: 1.05rem; pointer-events: none; transition: color 0.2s; }
+.li-input-wrap input {
+  width: 100%; padding: 0.8rem 0.9rem 0.8rem 2.5rem; border: 1.5px solid #e7d7db; border-radius: 12px;
+  font-size: 0.95rem; background: #fcf8f9; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.li-input-wrap input:focus { outline: none; border-color: var(--li-rose); background: #fff; box-shadow: 0 0 0 4px rgba(210,75,96,0.13); }
+.li-input-wrap input:focus + .ic, .li-input-wrap:focus-within .ic { color: var(--li-rose); }
+.li-eye { position: absolute; right: 0.6rem; background: none; border: none; color: #b89aa0; cursor: pointer; padding: 0.3rem; display: grid; place-items: center; font-size: 1.1rem; }
+.li-eye:hover { color: var(--li-bordo); }
+
+.li-btn {
+  width: 100%; border: none; border-radius: 12px; padding: 0.85rem; font-size: 0.98rem; font-weight: 700; cursor: pointer;
+  background: linear-gradient(120deg, var(--li-bordo), var(--li-rose)); color: #fff; margin-top: 0.4rem;
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 10px 26px rgba(107,18,32,0.28);
+  transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+}
+.li-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(107,18,32,0.34); }
+.li-btn:disabled { opacity: 0.75; cursor: not-allowed; }
+.li-spin { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.45); border-top-color: #fff; border-radius: 50%; animation: lispin 0.7s linear infinite; }
+@keyframes lispin { to { transform: rotate(360deg); } }
+
+.li-alert { background: #fae3e1; color: #b3261e; padding: 0.6rem 0.8rem; border-radius: 10px; font-size: 0.82rem; margin-bottom: 0.9rem; border: 1px solid #f3c9c5; }
+
+.li-row { display: flex; gap: 0.7rem; }
+.li-row > * { flex: 1; }
+
+.li-switch { text-align: center; margin-top: 1.2rem; font-size: 0.88rem; color: #8a7a80; }
+.li-switch button { background: none; border: none; color: var(--li-bordo); font-weight: 700; cursor: pointer; }
+
+.li-demo { margin-top: 1.3rem; border-top: 1px dashed #ecd5da; padding-top: 1rem; }
+.li-demo .lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: #b08a92; text-align: center; margin-bottom: 0.55rem; }
+.li-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+.li-chip { background: #fcf0f2; border: 1px solid #f0d8dc; color: var(--li-bordo); border-radius: 999px; padding: 0.35rem 0.75rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: background 0.15s, transform 0.15s; }
+.li-chip:hover { background: var(--li-bordo); color: #fff; transform: translateY(-1px); }
+
+.li-back { text-align: center; margin-top: 1rem; }
+.li-back a { color: #a08a90; font-size: 0.8rem; }
+
+/* Logo Afinia en login */
+.li-logo-img { height: 34px; width: auto; border-radius: 8px; }
+
+/* Logo Afinia (versión fondo oscuro) más grande en el login */
+.li-brand { font-size: 1.25rem; gap: 0.7rem; }
+.li-logo-img { height: 52px; width: auto; border-radius: 0; }
+
+/* Validaciones del formulario */
+.li-input-wrap.bad input { border-color: #e0524c; background: #fdf3f2; }
+.li-err { color: #b3261e; font-size: 0.74rem; margin-top: 0.28rem; display: flex; align-items: center; gap: 0.3rem; }
+.li-reqs { list-style: none; padding: 0; margin: 0.4rem 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem 0.6rem; }
+.li-reqs li { font-size: 0.72rem; color: #9a8a8f; display: flex; align-items: center; gap: 0.3rem; }
+.li-reqs li.ok { color: #1f7a4d; }

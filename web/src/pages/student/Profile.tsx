@@ -1,8 +1,23 @@
 import { useEffect, useState } from 'react';
+import {
+  FiCheck, FiCode, FiSmartphone, FiCpu, FiDatabase, FiWifi, FiShield, FiGitBranch, FiTrello, FiTarget,
+} from 'react-icons/fi';
+import type { IconType } from 'react-icons';
 import { apiError } from '../../api/client';
 import { catalogService, profileService } from '../../services';
 import type { AcademicArea, StudentProfile } from '../../services/types';
-import { Card, Loading, ErrorState } from '../../components/ui';
+import { Card, Loading } from '../../components/ui';
+
+const AREA_ICON: Record<string, IconType> = {
+  'Desarrollo Web': FiCode,
+  'Desarrollo Móvil': FiSmartphone,
+  'Inteligencia Artificial': FiCpu,
+  'Bases de Datos': FiDatabase,
+  Redes: FiWifi,
+  Ciberseguridad: FiShield,
+  'Ingeniería de Software': FiGitBranch,
+  'Gestión de Proyectos': FiTrello,
+};
 
 export default function StudentProfilePage() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -11,7 +26,7 @@ export default function StudentProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [exists, setExists] = useState(false);
-  const [form, setForm] = useState({ universityCode: '', semester: '', bio: '', improvementAreaIds: [] as string[] });
+  const [form, setForm] = useState({ semester: '', bio: '', improvementAreaIds: [] as string[] });
 
   useEffect(() => {
     Promise.all([catalogService.areas(), profileService.getMine().catch(() => null)])
@@ -21,7 +36,6 @@ export default function StudentProfilePage() {
           setProfile(p);
           setExists(true);
           setForm({
-            universityCode: p.universityCode ?? '',
             semester: p.semester ? String(p.semester) : '',
             bio: p.bio ?? '',
             improvementAreaIds: p.improvementAreaIds ?? [],
@@ -40,7 +54,6 @@ export default function StudentProfilePage() {
       semester: form.semester ? Number(form.semester) : undefined,
       bio: form.bio || undefined,
       improvementAreaIds: form.improvementAreaIds,
-      ...(exists ? {} : { universityCode: form.universityCode || undefined }),
     };
     try {
       const result = exists ? await profileService.update(payload) : await profileService.create(payload);
@@ -80,34 +93,40 @@ export default function StudentProfilePage() {
         {msg && <div className="alert alert-success">{msg}</div>}
         <form onSubmit={save}>
           <div className="row">
-            {!exists && (
-              <div className="field">
-                <label>Código universitario</label>
-                <input value={form.universityCode} onChange={(e) => setForm({ ...form, universityCode: e.target.value })} />
-              </div>
-            )}
             <div className="field">
               <label>Semestre</label>
-              <input type="number" min={1} max={12} value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })} />
+              <select value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })}>
+                <option value="">Selecciona…</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                  <option key={n} value={n}>{n}º semestre</option>
+                ))}
+              </select>
             </div>
+            <div className="field" style={{ flex: 2 }} />
           </div>
           <div className="field">
-            <label>Descripción / bio</label>
-            <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} />
+            <label>Descripción</label>
+            <textarea
+              value={form.bio}
+              onChange={(e) => setForm({ ...form, bio: e.target.value })}
+              placeholder="Cuéntanos brevemente tus intereses y metas académicas…"
+              maxLength={1000}
+            />
           </div>
           <div className="field">
             <label>Áreas donde deseas mejorar</label>
-            <div className="tag-list">
-              {areas.map((a) => (
-                <button
-                  type="button"
-                  key={a.id}
-                  className={`btn btn-sm ${form.improvementAreaIds.includes(a.id) ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => toggleArea(a.id)}
-                >
-                  {a.name}
-                </button>
-              ))}
+            <div className="area-grid">
+              {areas.map((a) => {
+                const Icon = AREA_ICON[a.name] ?? FiTarget;
+                const on = form.improvementAreaIds.includes(a.id);
+                return (
+                  <button type="button" key={a.id} className={`area-opt ${on ? 'on' : ''}`} onClick={() => toggleArea(a.id)}>
+                    <span className="ico"><Icon /></span>
+                    <span className="nm">{a.name}</span>
+                    <span className="chk">{on && <FiCheck size={12} />}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           <button className="btn btn-primary">{exists ? 'Guardar cambios' : 'Crear perfil'}</button>

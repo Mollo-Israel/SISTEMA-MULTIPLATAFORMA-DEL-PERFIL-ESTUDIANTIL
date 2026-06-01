@@ -3,23 +3,34 @@ import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
 import type { AcademicArea, Activity, Registration } from '../services/types';
 import { Card, Loading, EmptyState, Badge } from './ui';
-import { ACTIVITY_CATEGORIES, ACTIVITY_MODALITIES, ACTIVITY_STATUSES, REGISTRATION_BADGE } from '../constants';
+import {
+  ACTIVITY_CATEGORIES, ACTIVITY_MODALITIES, ACTIVITY_STATUS_LABEL, ACTIVITY_STATUSES,
+  REGISTRATION_BADGE, REGISTRATION_STATUS_LABEL, lbl,
+} from '../constants';
+
+const catLabel = (v: string) => ACTIVITY_CATEGORIES.find((c) => c.value === v)?.label ?? v;
 
 export default function ActivityManager({ activityType }: { activityType: 'academica' | 'extracurricular' }) {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [parts, setParts] = useState<Record<string, Registration[]>>({});
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [participants, setParticipants] = useState<Registration[]>([]);
   const [form, setForm] = useState({ title: '', description: '', category: ACTIVITY_CATEGORIES[0].value, modality: 'presencial', areaId: '', capacity: '', status: 'open' });
 
-  const load = () => activityService.list({ type: activityType }).then(setActivities);
+  const loadAll = async () => {
+    const list = await activityService.list({ type: activityType });
+    setActivities(list);
+    const entries = await Promise.all(
+      list.map(async (a) => [a.id, await activityService.participants(a.id).catch(() => [])] as const),
+    );
+    setParts(Object.fromEntries(entries));
+  };
 
   useEffect(() => {
-    Promise.all([activityService.list({ type: activityType }), catalogService.areas()])
-      .then(([a, ar]) => { setActivities(a); setAreas(ar); })
+    Promise.all([loadAll(), catalogService.areas().then(setAreas)])
       .catch((e) => setError(apiError(e)))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -41,24 +52,32 @@ export default function ActivityManager({ activityType }: { activityType: 'acade
       } as never);
       setForm({ ...form, title: '', description: '', capacity: '' });
       setMsg('Actividad publicada.');
-      await load();
+      await loadAll();
     } catch (err) { setError(apiError(err)); }
   };
 
-  const openParticipants = async (id: string) => {
-    setSelected(id);
-    setParticipants([]);
-    try { setParticipants(await activityService.participants(id)); } catch (e) { setError(apiError(e)); }
-  };
-
-  const confirm = async (activityId: string, studentProfileId: string, status: string) => {
+  const decide = async (activityId: string, studentProfileId: string, status: 'confirmed' | 'absent') => {
+    setError(null); setMsg(null);
     try {
       await activityService.confirm(activityId, studentProfileId, status);
-      setParticipants(await activityService.participants(activityId));
+      const updated = await activityService.participants(activityId);
+      setParts((p) => ({ ...p, [activityId]: updated }));
+      setMsg(status === 'confirmed' ? 'Solicitud aprobada.' : 'Solicitud rechazada.');
     } catch (e) { setError(apiError(e)); }
   };
 
+  const countOf = (id: string, st: string) => (parts[id] ?? []).filter((r) => r.status === st).length;
+
   if (loading) return <Loading />;
+
+  const selectedActivity = activities.find((a) => a.id === selected);
+  const selParts = selected ? parts[selected] ?? [] : [];
+  const pending = selParts.filter((r) => r.status === 'registered');
+  const confirmedList = selParts.filter((r) => r.status === 'confirmed');
+  const others = selParts.filter((r) => r.status === 'interested' || r.status === 'absent');
+  const confirmedCount = selected ? countOf(selected, 'confirmed') : 0;
+  const full = !!(selectedActivity?.capacity && confirmedCount >= selectedActivity.capacity);
+  const name = (r: Registration) => (r.studentProfile?.user ? `${r.studentProfile.user.firstName} ${r.studentProfile.user.lastName}` : r.studentProfileId);
 
   return (
     <div>
@@ -88,10 +107,10 @@ export default function ActivityManager({ activityType }: { activityType: 'acade
                 {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
-            <div className="field"><label>Cupo</label><input type="number" min={1} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} /></div>
+            <div className="field"><label>Cupo</label><input type="number" min={1} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} placeholder="Sin límite" /></div>
             <div className="field"><label>Estado</label>
               <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                {ACTIVITY_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {ACTIVITY_STATUSES.map((s) => <option key={s} value={s}>{lbl(ACTIVITY_STATUS_LABEL, s)}</option>)}
               </select>
             </div>
           </div>
@@ -103,40 +122,81 @@ export default function ActivityManager({ activityType }: { activityType: 'acade
       {activities.length === 0 ? <EmptyState message="Sin actividades." /> : (
         <Card>
           <table>
-            <thead><tr><th>Título</th><th>Categoría</th><th>Estado</th><th>Cupo</th><th></th></tr></thead>
+            <thead><tr><th>Título</th><th>Categoría</th><th>Estado</th><th>Cupo (aprobados)</th><th>Solicitudes</th><th></th></tr></thead>
             <tbody>
-              {activities.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.title}</td>
-                  <td className="muted">{a.category}</td>
-                  <td><Badge tone="bordo">{a.status}</Badge></td>
-                  <td>{a.capacity ?? '—'}</td>
-                  <td><button className="btn btn-secondary btn-sm" onClick={() => openParticipants(a.id)}>Participantes</button></td>
-                </tr>
-              ))}
+              {activities.map((a) => {
+                const pend = countOf(a.id, 'registered');
+                const conf = countOf(a.id, 'confirmed');
+                return (
+                  <tr key={a.id}>
+                    <td>{a.title}</td>
+                    <td className="muted">{catLabel(a.category)}</td>
+                    <td><Badge tone="bordo">{lbl(ACTIVITY_STATUS_LABEL, a.status)}</Badge></td>
+                    <td>{conf} / {a.capacity ?? '∞'}</td>
+                    <td>{pend > 0 ? <Badge tone="amber">{pend} pendiente(s)</Badge> : <span className="muted">—</span>}</td>
+                    <td><button className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setSelected(a.id)}>Gestionar</button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </Card>
       )}
 
-      {selected && (
-        <Card title="Participantes y confirmación">
-          {participants.length === 0 ? <EmptyState message="Sin inscritos todavía." /> : (
+      {selectedActivity && (
+        <Card title={`Solicitudes · ${selectedActivity.title}`}>
+          <p className="muted">
+            Aprobados: <strong>{confirmedCount}</strong> / {selectedActivity.capacity ?? '∞'}
+            {full && ' · cupo lleno'}
+          </p>
+
+          <h3 style={{ marginTop: '1rem' }}>Pendientes de aprobación ({pending.length})</h3>
+          {pending.length === 0 ? <p className="muted">No hay solicitudes pendientes.</p> : (
             <table>
-              <thead><tr><th>Estudiante</th><th>Estado</th><th>Acciones</th></tr></thead>
               <tbody>
-                {participants.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.studentProfile?.user ? `${p.studentProfile.user.firstName} ${p.studentProfile.user.lastName}` : p.studentProfileId}</td>
-                    <td><Badge tone={(REGISTRATION_BADGE[p.status] ?? 'badge-gray').replace('badge-', '')}>{p.status}</Badge></td>
-                    <td className="flex">
-                      <button className="btn btn-primary btn-sm" onClick={() => confirm(selected, p.studentProfileId, 'confirmed')}>Confirmar</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => confirm(selected, p.studentProfileId, 'absent')}>Ausente</button>
+                {pending.map((r) => (
+                  <tr key={r.id}>
+                    <td>{name(r)}</td>
+                    <td style={{ width: 90 }}><Badge tone="amber">Pendiente</Badge></td>
+                    <td className="flex" style={{ width: 230 }}>
+                      <button className="btn btn-primary btn-sm" disabled={full} title={full ? 'Cupo lleno' : ''} onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}>Aprobar</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}>Rechazar</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          )}
+
+          <h3 style={{ marginTop: '1.2rem' }}>Confirmados ({confirmedList.length})</h3>
+          {confirmedList.length === 0 ? <p className="muted">Aún no hay confirmados.</p> : (
+            <table>
+              <tbody>
+                {confirmedList.map((r) => (
+                  <tr key={r.id}>
+                    <td>{name(r)}</td>
+                    <td style={{ width: 110 }}><Badge tone="green">Confirmado</Badge></td>
+                    <td style={{ width: 120 }}><button className="btn btn-secondary btn-sm" onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}>Quitar</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {others.length > 0 && (
+            <>
+              <h3 style={{ marginTop: '1.2rem' }}>Otros</h3>
+              <table>
+                <tbody>
+                  {others.map((r) => (
+                    <tr key={r.id}>
+                      <td>{name(r)}</td>
+                      <td><Badge tone={(REGISTRATION_BADGE[r.status] ?? 'badge-gray').replace('badge-', '')}>{lbl(REGISTRATION_STATUS_LABEL, r.status)}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </Card>
       )}

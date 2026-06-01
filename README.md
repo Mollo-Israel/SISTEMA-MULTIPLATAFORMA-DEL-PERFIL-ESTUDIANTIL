@@ -31,76 +31,78 @@ Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficia
 
 Estudiante · Docente · Director de carrera · Representante de sociedad científica · Administrador.
 
-## Puesta en marcha (desarrollo)
+## Guía rápida para colaboradores
 
-Requisitos: Node 18+, Docker. Los tres clientes (API, web, móvil) consumen la **misma API** con el **mismo JWT**.
+Requisitos previos:
+- **Node 18+** y **npm**
+- **Docker Desktop** (para PostgreSQL) — debe estar abierto
+- Para la app móvil: **Expo Go** (Play Store / App Store) o un emulador
 
-```bash
-# 1. Variables de entorno
-cp .env.example .env
+Los tres clientes (API, web, móvil) consumen la **misma API** con el **mismo JWT**.
 
-# 2. Base de datos (PostgreSQL en Docker)
-npm run db:up
-
-# 3. Dependencias del backend (workspaces: shared + api)
-npm install
-
-# 4. Migraciones + seeds base (roles, áreas, habilidades, admin inicial)
-npm run shared:build
-npm run api:migrate
-npm run seed
-
-# 5. API
-npm run api:dev          # http://localhost:3000/api  ·  Swagger: /api/docs
-
-# 6. Web (otra terminal)
-npm install --prefix web
-npm run web:dev          # http://localhost:5173
-
-# 7. Móvil (otra terminal)
-npm install --prefix mobile
-npm run mobile:start     # Expo Go / emulador  (ver mobile/README.md)
-```
-
-Admin inicial (seed): `admin@univalle.edu` / `Admin123*`.
-
-## Verificación e2e + datos de demo
-
-Con la API corriendo, ejecuta el flujo completo del 30% (14 pasos) de punta a punta.
-Crea datos de demo reales y verifica roles, participación, afinidad y reportes:
+### Paso 1 — Preparación (una sola vez)
 
 ```bash
-npm run demo:e2e
+# En la raíz del proyecto:
+cp .env.example .env          # variables de entorno (valores por defecto sirven)
+
+npm install                   # dependencias backend (workspaces: shared + api)
+npm install --prefix web      # dependencias web
+npm install --prefix mobile   # dependencias móvil (Expo)
+
+npm run db:up                 # levanta PostgreSQL en Docker
+npm run shared:build          # compila tipos compartidos
+npm run api:migrate           # crea las tablas (migraciones)
+npm run seed:populate         # POBLA la base con datos institucionales realistas
 ```
 
-Deja en la base: docente, sociedad científica y director de demo, dos estudiantes
-con perfil/intereses/habilidades, actividades académica y extracurricular,
-participación confirmada, un proyecto con evidencia y áreas de afinidad calculadas.
+`seed:populate` deja la base lista con **21 usuarios** (1 administrador, 2 docentes,
+1 director, 1 sociedad científica y 16 estudiantes), 9 actividades, 8 proyectos con
+evidencias, 6 certificados externos, constancias internas, participaciones en sus tres
+estados y **áreas de afinidad calculadas** con el motor real.
 
-Cuentas de demo (contraseña `Demo123*`): `demo.docente@`, `demo.sociedad@`,
-`demo.director@`, `demo.est1@`, `demo.est2@` (`@univalle.edu`).
-
-### Datos de demo para defensa (`seed:demo`)
-
-Genera un conjunto realista con **nombres neutros** (sin datos reales) pensado para
-la sustentación. Reutiliza el **motor de afinidad real** (no inventa puntajes):
+### Paso 2 — Levantar los 3 servicios (una terminal cada uno)
 
 ```bash
-npm run seed:demo        # requiere BD arriba y migraciones aplicadas
+# Terminal 1 — API (backend)
+npm run api:dev        # http://localhost:3000/api   ·   Swagger: http://localhost:3000/api/docs
+
+# Terminal 2 — Web
+npm run web:dev        # http://localhost:5173
+
+# Terminal 3 — Móvil (Expo)
+npm run mobile:start   # abre Expo; escanea el QR con Expo Go
 ```
 
-Crea: usuarios por rol (Estudiante 1/2, Docente 1, Director, Sociedad Científica;
-Administrador del seed base), las 8 áreas, 9 habilidades, 4 actividades (taller web,
-clase espejo de IA, reto de BD, actividad de sociedad científica), 3 proyectos con
-evidencias (repositorio y demo ficticios), certificados externos ficticios,
-participaciones confirmadas, y afinidades calculadas con niveles **alto/medio/bajo**.
+> **Móvil:** la app necesita alcanzar la API por red. Edita `mobile/.env`:
+> - Emulador Android: `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api`
+> - Celular físico (misma Wi‑Fi): `EXPO_PUBLIC_API_URL=http://TU_IP_LAN:3000/api` (averígua tu IP con `ipconfig`)
+> Si el celular no conecta por firewall, usa `cd mobile && npx expo start --tunnel`.
 
-Cuentas (contraseña `Demo123*`): `estudiante1@demo.univalle.edu`,
-`estudiante2@demo.univalle.edu`, `docente1@demo.univalle.edu`,
-`director@demo.univalle.edu`, `sociedad@demo.univalle.edu`.
+### Cuentas para iniciar sesión
 
-Para la defensa se puede mostrar: perfil del estudiante, actividades, proyectos,
-evidencias, afinidad alta/media/baja, reporte docente y reporte de director.
+| Rol | Correo | Contraseña |
+|-----|--------|-----------|
+| Administrador (único) | `admin@univalle.edu` | `Admin123*` |
+| Docente | `carlos.perez@univalle.edu` | `Univalle2026*` |
+| Docente | `maria.gutierrez@univalle.edu` | `Univalle2026*` |
+| Director de carrera | `jorge.vargas@univalle.edu` | `Univalle2026*` |
+| Sociedad científica | `lucia.fernandez@univalle.edu` | `Univalle2026*` |
+| Estudiante (ejemplo) | `ana.quispe@est.univalle.edu` | `Univalle2026*` |
+
+Hay 16 estudiantes con el patrón `nombre.apellido@est.univalle.edu` y contraseña
+`Univalle2026*`. Los estudiantes nuevos también pueden **registrarse** desde la web
+(requieren correo terminado en `univalle.edu`).
+
+> Si reinicias el PC, basta con `npm run db:up` para recuperar la base (los datos persisten).
+> Para reconstruir la base desde cero: `npm run db:reset && npm run api:migrate && npm run seed:populate`.
+
+## Pruebas automáticas (opcional)
+
+```bash
+npm run api:dev      # en una terminal
+npm run test:api     # en otra: 39 validaciones de backend (deben dar 0 fallos)
+```
 
 ## Flujo principal (end-to-end)
 
@@ -124,13 +126,14 @@ evidencias, afinidad alta/media/baja, reporte docente y reporte de director.
 | Script | Descripción |
 |--------|-------------|
 | `npm run db:up` / `db:down` | Levanta/apaga PostgreSQL (Docker) |
+| `npm run db:reset` | Reinicia PostgreSQL desde cero (borra el volumen) |
 | `npm run api:build` / `api:dev` | Compila / ejecuta la API |
 | `npm run api:migrate` | Aplica migraciones TypeORM |
 | `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
-| `npm run seed:demo` | Datos de demo realistas para defensa (afinidad alta/media/baja) |
-| `npm run demo:e2e` | Flujo e2e del 30% + datos de demo |
+| `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
+| `npm run test:api` | 39 validaciones de backend contra la API |
 | `npm run web:dev` | Servidor de desarrollo web |
-| `npm run mobile:start` | Inicia Expo |
+| `npm run mobile:start` | Inicia Expo (app móvil) |
 
 ## Alcance del 30% inicial
 

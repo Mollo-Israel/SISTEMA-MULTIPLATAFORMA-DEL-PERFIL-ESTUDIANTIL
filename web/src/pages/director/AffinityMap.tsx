@@ -1,6 +1,7 @@
 import { useAsync } from '../../hooks/useAsync';
 import { reportService } from '../../services';
 import { AsyncView, Card, Badge } from '../../components/ui';
+import { LevelStackBars } from '../../components/charts';
 
 export default function DirectorAffinityMap() {
   const map = useAsync(() => reportService.directorAffinityMap(), []);
@@ -14,6 +15,10 @@ export default function DirectorAffinityMap() {
       <Card title="Áreas de afinidad (agregado)">
         <AsyncView loading={map.loading} error={map.error} data={map.data} isEmpty={(d: any) => d.length === 0} emptyMessage="Aún no hay afinidades calculadas.">
           {(rows: any) => (
+            <>
+            <div style={{ marginBottom: '1rem' }}>
+              <LevelStackBars data={rows.map((a: any) => ({ area: a.area, low: a.byLevel.low, medium: a.byLevel.medium, high: a.byLevel.high }))} />
+            </div>
             <table>
               <thead><tr><th>Área</th><th>Estudiantes</th><th>Promedio</th><th>Bajo</th><th>Medio</th><th>Alto</th></tr></thead>
               <tbody>
@@ -27,6 +32,7 @@ export default function DirectorAffinityMap() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </AsyncView>
       </Card>

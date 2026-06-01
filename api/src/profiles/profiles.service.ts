@@ -60,7 +60,6 @@ export class ProfilesService {
 
     const profile = this.profiles.create({
       userId,
-      universityCode: dto.universityCode ?? null,
       semester: dto.semester ?? null,
       bio: dto.bio ?? null,
       improvementAreaIds: dto.improvementAreaIds ?? null,
@@ -79,6 +78,39 @@ export class ProfilesService {
       throw new NotFoundException('Aún no has creado tu perfil estudiantil.');
     }
     return profile;
+  }
+
+  // Directorio de estudiantes para docente/director/admin (con búsqueda por nombre o correo).
+  async listStudents(search?: string) {
+    const qb = this.profiles
+      .createQueryBuilder('p')
+      .leftJoin('p.user', 'u')
+      .select('p.id', 'profileId')
+      .addSelect('p.semester', 'semester')
+      .addSelect('p.status', 'status')
+      .addSelect('p.completion_percentage', 'completionPercentage')
+      .addSelect("CONCAT(u.first_name, ' ', u.last_name)", 'studentName')
+      .addSelect('u.email', 'email')
+      .orderBy('u.first_name', 'ASC')
+      .addOrderBy('u.last_name', 'ASC');
+
+    const term = search?.trim();
+    if (term) {
+      qb.where(
+        "u.first_name ILIKE :s OR u.last_name ILIKE :s OR u.email ILIKE :s OR CONCAT(u.first_name, ' ', u.last_name) ILIKE :s",
+        { s: `%${term}%` },
+      );
+    }
+
+    const rows = await qb.getRawMany();
+    return rows.map((r) => ({
+      profileId: r.profileId,
+      studentName: r.studentName,
+      email: r.email,
+      semester: r.semester,
+      status: r.status,
+      completionPercentage: Number(r.completionPercentage),
+    }));
   }
 
   async updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<StudentProfile> {

@@ -148,8 +148,14 @@ export class ActivitiesService {
       where: { activityId: activity.id, studentProfileId },
     });
     if (!registration) {
-      throw new NotFoundException('El estudiante no tiene registro en esta actividad.');
+      throw new NotFoundException('El estudiante no tiene una solicitud en esta actividad.');
     }
+
+    // Al aprobar (confirmar) se valida el cupo: solo cuentan los confirmados.
+    if (status === RegistrationStatus.CONFIRMED && registration.status !== RegistrationStatus.CONFIRMED) {
+      await this.assertConfirmCapacity(activity);
+    }
+
     registration.status = status;
     registration.confirmedById = confirmer.userId;
     const saved = await this.registrations.save(registration);
@@ -187,9 +193,8 @@ export class ActivitiesService {
       where: { activityId: activity.id, studentProfileId: profile.id },
     });
 
-    if (target === RegistrationStatus.REGISTERED) {
-      await this.assertCapacity(activity, registration);
-    }
+    // Inscribirse (REGISTERED) solo crea una SOLICITUD pendiente; el cupo se
+    // controla al aprobar (confirmar). No se bloquea por cupo al solicitar.
 
     if (!registration) {
       registration = this.registrations.create({
@@ -208,26 +213,14 @@ export class ActivitiesService {
     return this.registrations.save(registration);
   }
 
-  private async assertCapacity(
-    activity: Activity,
-    current: ActivityRegistration | null,
-  ): Promise<void> {
+  // El cupo se controla por participantes CONFIRMADOS (aprobados).
+  private async assertConfirmCapacity(activity: Activity): Promise<void> {
     if (!activity.capacity) return;
-    if (
-      current &&
-      (current.status === RegistrationStatus.REGISTERED ||
-        current.status === RegistrationStatus.CONFIRMED)
-    ) {
-      return;
-    }
-    const taken = await this.registrations.count({
-      where: [
-        { activityId: activity.id, status: RegistrationStatus.REGISTERED },
-        { activityId: activity.id, status: RegistrationStatus.CONFIRMED },
-      ],
+    const confirmed = await this.registrations.count({
+      where: { activityId: activity.id, status: RegistrationStatus.CONFIRMED },
     });
-    if (taken >= activity.capacity) {
-      throw new BadRequestException('La actividad alcanzó su cupo máximo.');
+    if (confirmed >= activity.capacity) {
+      throw new BadRequestException('La actividad alcanzó su cupo máximo de confirmados.');
     }
   }
 

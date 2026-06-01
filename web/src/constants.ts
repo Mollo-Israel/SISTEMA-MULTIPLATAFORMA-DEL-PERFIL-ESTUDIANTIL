@@ -60,3 +60,44 @@ export const REGISTRATION_BADGE: Record<string, string> = {
 
 // Módulos del sistema completo que aún no entran en el 30%.
 export const COMING_SOON = ['Chat', 'Contactos QR', 'Equipos avanzados'];
+
+// Etiquetas en español para valores internos
+export const ACTIVITY_TYPE_LABEL: Record<string, string> = {
+  academica: 'Académica',
+  extracurricular: 'Extracurricular',
+};
+export const ACTIVITY_STATUS_LABEL: Record<string, string> = {
+  draft: 'Borrador',
+  published: 'Publicada',
+  open: 'Abierta',
+  closed: 'Cerrada',
+  finished: 'Finalizada',
+  cancelled: 'Cancelada',
+};
+export const REGISTRATION_STATUS_LABEL: Record<string, string> = {
+  interested: 'Interesado',
+  registered: 'Pendiente',
+  confirmed: 'Confirmado',
+  absent: 'Rechazado',
+};
+export const AFFINITY_LEVEL_LABEL: Record<string, string> = {
+  low: 'Baja',
+  medium: 'Media',
+  high: 'Alta',
+};
+export const PROJECT_STATUS_LABEL: Record<string, string> = {
+  draft: 'Borrador',
+  active: 'Activo',
+  archived: 'Archivado',
+};
+export const PROFILE_STATUS_LABEL: Record<string, string> = {
+  incomplete: 'Incompleto',
+  active: 'Activo',
+  updated: 'Actualizado',
+};
+export const CONSTANCY_STATUS_LABEL: Record<string, string> = {
+  pending: 'Pendiente',
+  authorized: 'Autorizada',
+  rejected: 'Rechazada',
+};
+export const lbl = (map: Record<string, string>, v: string) => map[v] ?? v;

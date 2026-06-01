@@ -51,7 +51,9 @@ npm run android
 npm run ios
 ```
 
-Credenciales de prueba (seed): `admin@univalle.edu` / `Admin123*`. Los estudiantes pueden registrarse desde la pantalla de login.
+Credenciales (tras `npm run seed:populate`): administrador `admin@univalle.edu` / `Admin123*`;
+demás cuentas (docentes, director, sociedad y estudiantes `@est.univalle.edu`) con contraseña
+`Univalle2026*` (ej. `ana.quispe@est.univalle.edu`). Los estudiantes también pueden registrarse desde el login.
 
 ## Alcance (30%)
 

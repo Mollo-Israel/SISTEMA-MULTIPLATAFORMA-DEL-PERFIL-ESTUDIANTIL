@@ -3,7 +3,8 @@ import { apiError } from '../../api/client';
 import { affinityService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { AsyncView, Card, Badge } from '../../components/ui';
-import { AFFINITY_BADGE } from '../../constants';
+import { AffinityBars } from '../../components/charts';
+import { AFFINITY_BADGE, AFFINITY_LEVEL_LABEL, lbl } from '../../constants';
 
 export default function StudentAffinityPage() {
   const { data, loading, error, reload, setData } = useAsync(() => affinityService.mine(), []);
@@ -27,6 +28,10 @@ export default function StudentAffinityPage() {
       <Card>
         <AsyncView loading={loading} error={error} data={data} isEmpty={(d) => d.length === 0} emptyMessage="Sin afinidades. Agrega intereses, habilidades y proyectos, luego recalcula.">
           {(items) => (
+            <>
+            <div style={{ marginBottom: '1rem' }}>
+              <AffinityBars data={items.map((a) => ({ area: a.academicArea?.name ?? '—', score: Number(a.score), level: a.level }))} />
+            </div>
             <table>
               <thead><tr><th>Área académica</th><th>Puntuación</th><th>Nivel</th></tr></thead>
               <tbody>
@@ -34,11 +39,12 @@ export default function StudentAffinityPage() {
                   <tr key={a.id}>
                     <td>{a.academicArea?.name ?? a.academicAreaId}</td>
                     <td>{a.score}</td>
-                    <td><Badge tone={(AFFINITY_BADGE[a.level] ?? 'badge-gray').replace('badge-', '')}>{a.level}</Badge></td>
+                    <td><Badge tone={(AFFINITY_BADGE[a.level] ?? 'badge-gray').replace('badge-', '')}>{lbl(AFFINITY_LEVEL_LABEL, a.level)}</Badge></td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </AsyncView>
       </Card>

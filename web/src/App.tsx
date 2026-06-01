@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Loading } from './components/ui';
 import LoginPage from './pages/LoginPage';
+import LandingPage from './pages/LandingPage';
 
 import StudentDashboard from './pages/student/Dashboard';
 import StudentProfilePage from './pages/student/Profile';
@@ -57,7 +58,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<RootRedirect />} />
+          <Route path="/" element={<LandingPage />} />
 
           <Route element={guarded([S], <Layout />)}>
             <Route path="/student" element={<StudentDashboard />} />

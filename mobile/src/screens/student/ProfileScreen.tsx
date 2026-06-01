@@ -48,7 +48,6 @@ export default function ProfileScreen({ navigation }: any) {
       bio: form.bio || undefined,
       improvementAreaIds: form.improvementAreaIds,
     };
-    if (!exists) payload.universityCode = form.universityCode || undefined;
     try {
       const r = exists ? await profileService.update(payload) : await profileService.create(payload);
       setExists(true);
@@ -68,10 +67,7 @@ export default function ProfileScreen({ navigation }: any) {
       <Card>
         {error && <ErrorText message={error} />}
         {msg && <Success message={msg} />}
-        {!exists && (
-          <Field label="Código universitario" value={form.universityCode} onChangeText={(t) => setForm({ ...form, universityCode: t })} />
-        )}
-        <Field label="Semestre" value={form.semester} onChangeText={(t) => setForm({ ...form, semester: t })} keyboardType="numeric" />
+        <Field label="Semestre (1–8)" value={form.semester} onChangeText={(t) => setForm({ ...form, semester: t })} keyboardType="numeric" />
         <Field label="Descripción / bio" value={form.bio} onChangeText={(t) => setForm({ ...form, bio: t })} multiline />
         <Text style={styles.label}>Áreas donde deseas mejorar</Text>
         <View style={styles.chips}>

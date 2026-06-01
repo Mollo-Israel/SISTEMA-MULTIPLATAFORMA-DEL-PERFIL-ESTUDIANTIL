@@ -19,8 +19,7 @@ npm install --prefix mobile
 # 3) Esquema + datos
 npm run shared:build
 npm run api:migrate         # crea las 15 tablas
-npm run seed                # roles, áreas, habilidades, admin inicial
-npm run seed:demo           # datos de demo con nombres neutros (afinidad alta/media/baja)
+npm run seed:populate       # pobla con cuentas institucionales y datos amplios (afinidad alta/media/baja)
 
 # 4) Levantar servicios
 npm run api:dev             # API:   http://localhost:3000/api  (Swagger /api/docs)
@@ -108,19 +107,19 @@ Documentación interactiva: **Swagger en `/api/docs`**.
 
 ---
 
-## 7. Usuarios demo
+## 7. Cuentas para iniciar sesión (tras `seed:populate`)
 
 | Rol | Correo | Contraseña |
 |---|---|---|
-| Administrador | `admin@univalle.edu` | `Admin123*` |
-| Estudiante 1 | `estudiante1@demo.univalle.edu` | `Demo123*` |
-| Estudiante 2 | `estudiante2@demo.univalle.edu` | `Demo123*` |
-| Docente 1 | `docente1@demo.univalle.edu` | `Demo123*` |
-| Director | `director@demo.univalle.edu` | `Demo123*` |
-| Sociedad Científica | `sociedad@demo.univalle.edu` | `Demo123*` |
+| Administrador (único) | `admin@univalle.edu` | `Admin123*` |
+| Docente | `carlos.perez@univalle.edu` | `Univalle2026*` |
+| Docente | `maria.gutierrez@univalle.edu` | `Univalle2026*` |
+| Director de carrera | `jorge.vargas@univalle.edu` | `Univalle2026*` |
+| Sociedad científica | `lucia.fernandez@univalle.edu` | `Univalle2026*` |
+| Estudiante (ejemplo) | `ana.quispe@est.univalle.edu` | `Univalle2026*` |
 
-Afinidades de demo (motor real): **Estudiante 1** → Desarrollo Web 31 (alta), Móvil 9 (media), IA 2 (baja);
-**Estudiante 2** → Bases de Datos 16 (alta), IA 13 (alta).
+Hay **16 estudiantes** `nombre.apellido@est.univalle.edu` (contraseña `Univalle2026*`).
+Las afinidades se calculan con el motor real y muestran niveles **alta/media/baja**.
 
 ---
 
@@ -132,8 +131,8 @@ Afinidades de demo (motor real): **Estudiante 1** → Desarrollo Web 31 (alta), 
   `PATCH /users/:id/status` (desactivar), no DELETE.
 - **Vista "perfil permitido" por `studentId`:** el parámetro es el `studentProfileId` (no el userId).
 - **Reporte de curso/grupo:** no hay entidad de curso en el 30%; el reporte docente usa la cohorte completa.
-- **Datos de demo y pruebas acumulan filas:** `test:api` crea cuentas efímeras y `seed:demo`/`demo:e2e`
-  agregan datos; para un estado limpio: `npm run db:down` y volver a levantar + migrar + seed.
+- **Las pruebas acumulan filas:** `test:api` crea cuentas efímeras; para un estado limpio:
+  `npm run db:reset && npm run api:migrate && npm run seed:populate`.
 - **`npm audit`:** hay vulnerabilidades transitivas del toolchain (no bloqueantes en desarrollo);
   revisar antes de desplegar.
 - **Web/Móvil:** validados por build/typecheck e integración de datos; el QA de interacción
