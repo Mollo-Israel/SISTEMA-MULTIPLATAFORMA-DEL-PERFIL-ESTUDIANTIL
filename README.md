@@ -1,6 +1,7 @@
 # Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
 
-Ingeniería en Sistemas Informáticos – Univalle. Implementación del **30% inicial**.
+Ingeniería en Sistemas Informáticos – Univalle. Implementación del **40 %**:
+los cuatro primeros objetivos específicos, completos de extremo a extremo.
 
 Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficiales) que construye un perfil estudiantil dinámico a partir de intereses, habilidades, proyectos, actividades, participación, evidencias, constancias y áreas de afinidad.
 
@@ -27,9 +28,15 @@ Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficia
 └── docs/     Documentación y diagnóstico técnico
 ```
 
-## Roles
+## Roles y responsabilidades
 
-Estudiante · Docente · Director de carrera · Representante de sociedad científica · Administrador.
+| Rol | Qué hace en el sistema |
+|-----|------------------------|
+| **Estudiante** | Se registra, construye su perfil dinámico, se inscribe en actividades, registra proyectos, evidencias y certificados externos |
+| **Docente** | Consulta la oferta de actividades y los perfiles de **los semestres que el administrador le habilita** |
+| **Director de carrera** | Gestiona las **actividades académicas**, registra participación y emite las **constancias internas** |
+| **Sociedad científica** | Gestiona las **actividades extracurriculares** y registra participación |
+| **Administrador** | Usuarios institucionales, roles y estados, semestres habilitados, catálogos y criterios de gamificación |
 
 ## Guía rápida para colaboradores
 
@@ -44,7 +51,7 @@ Los tres clientes (API, web, móvil) consumen la **misma API** con el **mismo JW
 
 ```bash
 # En la raíz del proyecto:
-cp .env.example .env          # variables de entorno (valores por defecto sirven)
+cp .env.example .env          # variables de entorno (valores por defecto sirven en desarrollo)
 
 npm install                   # dependencias backend (workspaces: shared + api)
 npm install --prefix web      # dependencias web
@@ -84,8 +91,8 @@ npm run mobile:start   # abre Expo; escanea el QR con Expo Go
 | Rol | Correo | Contraseña |
 |-----|--------|-----------|
 | Administrador (único) | `admin@univalle.edu` | `Admin123*` |
-| Docente | `carlos.perez@univalle.edu` | `Univalle2026*` |
-| Docente | `maria.gutierrez@univalle.edu` | `Univalle2026*` |
+| Docente (semestres 1–4) | `carlos.perez@univalle.edu` | `Univalle2026*` |
+| Docente (semestres 5–8) | `maria.gutierrez@univalle.edu` | `Univalle2026*` |
 | Director de carrera | `jorge.vargas@univalle.edu` | `Univalle2026*` |
 | Sociedad científica | `lucia.fernandez@univalle.edu` | `Univalle2026*` |
 | Estudiante (ejemplo) | `ana.quispe@est.univalle.edu` | `Univalle2026*` |
@@ -101,8 +108,14 @@ Hay 16 estudiantes con el patrón `nombre.apellido@est.univalle.edu` y contrase�
 
 ```bash
 npm run api:dev      # en una terminal
-npm run test:api     # en otra: 39 validaciones de backend (deben dar 0 fallos)
+
+# en otra terminal:
+npm run test:40      # 179 verificaciones de los 4 objetivos  -> 0 fallos
+npm run test:api     # 42 validaciones de backend             -> 0 fallos
+npm run demo:e2e     # flujo completo de 14 pasos             -> 0 fallos
 ```
+
+En total **246 verificaciones** contra la API real, sobre una base recreada desde cero.
 
 ## Flujo principal (end-to-end)
 
@@ -131,17 +144,41 @@ npm run test:api     # en otra: 39 validaciones de backend (deben dar 0 fallos)
 | `npm run api:migrate` | Aplica migraciones TypeORM |
 | `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
 | `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
-| `npm run test:api` | 39 validaciones de backend contra la API |
+| `npm run test:40` | **179 verificaciones de los 4 objetivos del 40 %** |
+| `npm run test:api` | 42 validaciones de backend contra la API |
+| `npm run demo:e2e` | Flujo completo de 14 pasos |
 | `npm run web:dev` | Servidor de desarrollo web |
 | `npm run mobile:start` | Inicia Expo (app móvil) |
 
-## Alcance del 30% inicial
+## Alcance del 40 %
 
-Incluye: autenticación con roles, perfil dinámico, intereses/habilidades/áreas,
-proyectos con evidencias, actividades y participación, certificados externos y
-constancias internas básicas, motor de afinidad inicial, reportes básicos, y
-clientes web + móvil sobre la misma API.
+Los cuatro primeros objetivos específicos están implementados de extremo a extremo:
 
-No incluye todavía: chat, QR de contactos, equipos avanzados, recomendación
-completa, gamificación completa, analítica avanzada, predicción de rendimiento,
-certificados oficiales, ni integración real con SIU/Teams.
+1. **Usuarios, autenticación, roles y control de acceso.** Registro de estudiante
+   con rol asignado por el servidor, sesión por rol, alta de usuarios
+   institucionales, activación y desactivación efectiva (un usuario desactivado
+   pierde acceso de inmediato, aunque su token siga vigente), **semestres
+   habilitados por docente**, y catálogos con estado.
+2. **Perfil estudiantil dinámico.** Semestre, áreas de interés con prioridad,
+   habilidades con nivel, áreas de mejora, completitud automática y un resumen que
+   integra la trayectoria real. El docente solo consulta los semestres que tiene
+   habilitados.
+3. **Actividades académicas y extracurriculares.** El director de carrera gestiona
+   las académicas y la sociedad científica las extracurriculares, con estados,
+   cupos, filtros, detalle e inscripción desde la app móvil.
+4. **Participación, evidencias y certificados.** Registro de asistencia por el
+   responsable, **subida real de archivos** (PDF/PNG/JPG/WEBP, hasta 5 MB),
+   evidencias asociadas a proyecto, actividad o área, certificados externos con
+   archivo, y constancia interna emitida solo por el director sobre participación
+   confirmada y sin duplicados.
+
+Documentación del avance:
+
+- [`docs/MATRIZ_TRAZABILIDAD_40.md`](docs/MATRIZ_TRAZABILIDAD_40.md) — requisito por requisito
+- [`docs/AVANCE_40_PORCIENTO.md`](docs/AVANCE_40_PORCIENTO.md) — qué se corrigió y qué se agregó
+- [`docs/DEMO_40_PORCIENTO.md`](docs/DEMO_40_PORCIENTO.md) — guion de demostración de 10–15 minutos
+
+**Fuera del 40 %:** chat, contactos por QR, equipos avanzados, recomendación
+completa, motor de gamificación (los criterios ya se administran, pero todavía no
+se aplican), analítica avanzada, predicción de rendimiento, certificados oficiales
+e integración real con SIU y Teams.

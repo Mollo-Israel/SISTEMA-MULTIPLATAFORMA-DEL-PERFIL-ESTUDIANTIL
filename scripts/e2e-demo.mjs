@@ -117,7 +117,7 @@ async function main() {
   ok('4. Intereses y habilidades registrados');
 
   // 5) Docente y sociedad publican actividad
-  const actAcad = await findOrCreateActivity(teacherToken, 'Taller de Desarrollo Web (demo)', {
+  const actAcad = await findOrCreateActivity(directorToken, 'Taller de Desarrollo Web (demo)', {
     type: 'academica', category: 'taller_academico', modality: 'presencial', areaId: web?.id, capacity: 30, status: 'open',
   });
   const actExtra = await findOrCreateActivity(societyToken, 'Hackathon de IA (demo)', {
@@ -126,8 +126,8 @@ async function main() {
   (actAcad && actExtra) ? ok('5. Actividad académica y extracurricular publicadas') : bad('5. Actividades', `acad=${actAcad} extra=${actExtra}`);
 
   // verificar regla de rol: docente NO publica extracurricular
-  const forbiddenPub = await req('POST', '/activities', { token: teacherToken, body: { title: 'x', type: 'extracurricular', category: 'hackathon' } });
-  forbiddenPub.status === 403 ? ok('5. Regla de rol: docente no publica extracurricular (403)') : bad('5. Regla rol publicación', `status ${forbiddenPub.status}`);
+  const forbiddenPub = await req('POST', '/activities', { token: teacherToken, body: { title: 'Intento del docente (demo)', type: 'academica', category: 'charla' } });
+  forbiddenPub.status === 403 ? ok('5. Regla de rol: el docente no publica actividades (403)') : bad('5. Regla rol publicación', `status ${forbiddenPub.status}`);
 
   // 6) Estudiante consulta actividades
   const visible = await req('GET', '/activities', { token: s1 });
@@ -139,8 +139,8 @@ async function main() {
   [200, 201].includes(reg.status) ? ok('7. Estudiante registra interés e inscripción') : bad('7. Inscripción', `status ${reg.status}`);
 
   // 8) Docente confirma participación
-  const confirm = await req('PATCH', `/activities/${actAcad}/confirm-participation`, { token: teacherToken, body: { studentProfileId: p1, status: 'confirmed' } });
-  confirm.status === 200 && confirm.data.status === 'confirmed' ? ok('8. Docente confirma participación') : bad('8. Confirmación', JSON.stringify(confirm.data));
+  const confirm = await req('PATCH', `/activities/${actAcad}/confirm-participation`, { token: directorToken, body: { studentProfileId: p1, status: 'confirmed' } });
+  confirm.status === 200 && confirm.data.status === 'confirmed' ? ok('8. El director registra la participación') : bad('8. Confirmación', JSON.stringify(confirm.data));
 
   // regla: estudiante no confirma
   const selfConfirm = await req('PATCH', `/activities/${actAcad}/confirm-participation`, { token: s1, body: { studentProfileId: p1, status: 'confirmed' } });
@@ -165,6 +165,12 @@ async function main() {
   topWeb ? ok(`12. Estudiante visualiza afinidades (Desarrollo Web = ${topWeb.score}, ${topWeb.level})`) : bad('12. Afinidades', JSON.stringify(affinity.data));
 
   // 13) Docente consulta perfil permitido
+  // El docente solo consulta los semestres que el administrador le habilita (RF3).
+  const teacherId = (await req('GET', '/users?search=demo.docente', { token: adminToken })).data?.[0]?.id;
+  if (teacherId) {
+    await req('PUT', `/users/${teacherId}/semesters`, { token: adminToken, body: { semesters: [5, 7] } });
+    ok('13. Admin habilita los semestres 5 y 7 al docente');
+  }
   const allowed = await req('GET', `/profiles/${p1}/allowed`, { token: teacherToken });
   const noEmail = allowed.data && !('email' in allowed.data) && !('internalConstancies' in allowed.data);
   allowed.status === 200 && noEmail ? ok('13. Docente consulta perfil permitido (sin datos sensibles)') : bad('13. Perfil permitido', JSON.stringify(allowed.data));

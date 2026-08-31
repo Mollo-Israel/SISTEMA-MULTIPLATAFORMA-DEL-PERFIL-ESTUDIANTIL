@@ -25,6 +25,7 @@ import SocietyActivities from '../screens/society/SocietyActivities';
 
 import DirectorDashboard from '../screens/director/DirectorDashboard';
 import DirectorActivities from '../screens/director/DirectorActivities';
+import ConstanciesScreen from '../screens/director/ConstanciesScreen';
 import AffinityMapScreen from '../screens/director/AffinityMapScreen';
 import ParticipationScreen from '../screens/director/ParticipationScreen';
 
@@ -110,6 +111,7 @@ function DirectorTabs() {
     <Tab.Navigator screenOptions={screenOptions}>
       <Tab.Screen name="Dashboard" component={DirectorDashboard} options={withLogout} />
       <Tab.Screen name="Actividades" component={DirectorActivities} options={withLogout} />
+      <Tab.Screen name="Constancias" component={ConstanciesScreen} options={withLogout} />
       <Tab.Screen name="Afinidad" component={AffinityMapScreen} options={withLogout} />
       <Tab.Screen name="Semestre" component={ParticipationScreen} options={withLogout} />
     </Tab.Navigator>

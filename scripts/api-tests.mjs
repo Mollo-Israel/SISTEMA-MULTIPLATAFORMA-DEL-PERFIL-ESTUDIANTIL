@@ -1,5 +1,7 @@
 // Pruebas de validación del backend del 30% inicial (contra la API real).
 // Cubre los 13 puntos solicitados + reglas de roles/permisos.
+// Actualizado al documento vigente: las actividades academicas las publica el
+// director de carrera y las extracurriculares la sociedad cientifica.
 // Usa cuentas efímeras (sufijo de tiempo) para poder ejecutarse de forma repetida.
 // Uso: node scripts/api-tests.mjs   (requiere API corriendo + seeds base)
 
@@ -58,8 +60,9 @@ async function main() {
   check((await req('GET', '/reports/teacher/overview', { token: est1 })).status === 403, '2. Estudiante NO ve reporte docente (403)');
   check((await req('GET', '/auth/me')).status === 401, '2. Sin token -> 401');
   // crear staff
+  const LAST_NAME = { TEACHER: 'Docente', SCIENTIFIC_SOCIETY: 'Sociedad', CAREER_DIRECTOR: 'Director' };
   const mkStaff = async (role, n) => {
-    const r = await req('POST', '/users', { token: admin, body: { firstName: 'Test', lastName: role, email: email(n), password: PWD, role } });
+    const r = await req('POST', '/users', { token: admin, body: { firstName: 'Test', lastName: LAST_NAME[role] ?? 'Staff', email: email(n), password: PWD, role } });
     if (r.status !== 201) return null;
     return (await req('POST', '/auth/login', { body: { email: email(n), password: PWD } })).data.accessToken;
   };
@@ -92,12 +95,14 @@ async function main() {
 
   // ---------- 6. Crear actividad ----------
   await section('6. Actividad');
-  const actAcad = await req('POST', '/activities', { token: teacher, body: { title: `Taller ${TS}`, type: 'academica', category: 'taller_academico', areaId: web?.id, capacity: 10, status: 'open' } });
-  check(actAcad.status === 201, '6. Docente crea actividad académica (201)', `status ${actAcad.status}`);
+  const actAcad = await req('POST', '/activities', { token: director, body: { title: `Taller ${TS}`, type: 'academica', category: 'taller_academico', areaId: web?.id, capacity: 10, status: 'open' } });
+  check(actAcad.status === 201, '6. Director crea actividad académica (201)', `status ${actAcad.status}`);
   const actId = actAcad.data?.id;
-  check((await req('POST', '/activities', { token: teacher, body: { title: 'x', type: 'extracurricular', category: 'hackathon' } })).status === 403, '6. Docente NO publica extracurricular -> 403');
+  check((await req('POST', '/activities', { token: director, body: { title: `Intento extracurricular ${TS}`, type: 'extracurricular', category: 'hackathon' } })).status === 403, '6. Director NO publica extracurricular -> 403');
   check((await req('POST', '/activities', { token: society, body: { title: `Hack ${TS}`, type: 'extracurricular', category: 'hackathon', status: 'open' } })).status === 201, '6. Sociedad crea extracurricular (201)');
-  check((await req('POST', '/activities', { token: est1, body: { title: 'x', type: 'academica', category: 'charla' } })).status === 403, '6. Estudiante NO publica -> 403');
+  check((await req('POST', '/activities', { token: society, body: { title: `Intento academica ${TS}`, type: 'academica', category: 'charla' } })).status === 403, '6. Sociedad NO publica académica -> 403');
+  check((await req('POST', '/activities', { token: teacher, body: { title: `Intento docente ${TS}`, type: 'academica', category: 'charla' } })).status === 403, '6. Docente NO publica actividades -> 403');
+  check((await req('POST', '/activities', { token: est1, body: { title: `Intento estudiante ${TS}`, type: 'academica', category: 'charla' } })).status === 403, '6. Estudiante NO publica -> 403');
 
   // ---------- 7. Inscripción / interés ----------
   await section('7. Inscripción / interés');
@@ -107,8 +112,9 @@ async function main() {
 
   // ---------- 8. Confirmar participación ----------
   await section('8. Confirmar participación');
-  const confirm = await req('PATCH', `/activities/${actId}/confirm-participation`, { token: teacher, body: { studentProfileId: p1, status: 'confirmed' } });
-  check(confirm.status === 200 && confirm.data.status === 'confirmed', '8. Docente confirma participación');
+  const confirm = await req('PATCH', `/activities/${actId}/confirm-participation`, { token: director, body: { studentProfileId: p1, status: 'confirmed' } });
+  check(confirm.status === 200 && confirm.data.status === 'confirmed', '8. Director registra la participación');
+  check((await req('PATCH', `/activities/${actId}/confirm-participation`, { token: teacher, body: { studentProfileId: p1, status: 'confirmed' } })).status === 403, '8. Docente NO registra participación -> 403');
   check((await req('PATCH', `/activities/${actId}/confirm-participation`, { token: est1, body: { studentProfileId: p1, status: 'confirmed' } })).status === 403, '8. Estudiante NO confirma su participación -> 403');
 
   // ---------- 9. Crear proyecto ----------
@@ -143,6 +149,7 @@ async function main() {
   // ---------- 13. Reportes ----------
   await section('13. Reportes');
   const tOver = await req('GET', '/reports/teacher/overview', { token: teacher });
+  // El reporte del docente no depende del alcance por semestre: es agregado.
   check(tOver.status === 200 && tOver.data.students.total > 0, '13. Reporte docente (overview)');
   check((await req('GET', '/reports/teacher/affinity-summary', { token: teacher })).status === 200, '13. Reporte docente (afinidad del grupo)');
   check((await req('GET', '/reports/director/overview', { token: director })).status === 200, '13. Reporte director (overview)');

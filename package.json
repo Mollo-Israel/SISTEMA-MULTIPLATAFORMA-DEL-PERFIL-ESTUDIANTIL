@@ -21,7 +21,10 @@
     "web:dev": "npm run dev --prefix web",
     "mobile:start": "npm run start --prefix mobile",
     "demo:e2e": "node scripts/e2e-demo.mjs",
-    "test:api": "node scripts/api-tests.mjs"
+    "test:api": "node scripts/api-tests.mjs",
+    "test:40": "node scripts/e2e-objectives-40.mjs",
+    "mobile:typecheck": "npm run typecheck --prefix mobile",
+    "web:build": "npm run build --prefix web"
   },
   "engines": {
     "node": ">=20"

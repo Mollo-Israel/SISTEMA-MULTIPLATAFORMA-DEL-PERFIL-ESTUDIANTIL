@@ -25,7 +25,8 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/student', label: 'Inicio' },
         { to: '/student/profile', label: 'Perfil dinámico' },
         { to: '/student/interests', label: 'Intereses y habilidades' },
-        { to: '/student/projects', label: 'Proyectos y evidencias' },
+        { to: '/student/projects', label: 'Proyectos' },
+        { to: '/student/evidences', label: 'Evidencias y certificados' },
         { to: '/student/affinity', label: 'Áreas de afinidad' },
       ],
     },
@@ -53,6 +54,7 @@ export const NAV: Record<string, NavGroup[]> = {
       items: [
         { to: '/director', label: 'Panel general' },
         { to: '/director/activities', label: 'Actividades académicas' },
+        { to: '/director/constancies', label: 'Constancias internas' },
         { to: '/director/affinity', label: 'Mapa de afinidad' },
       ],
     },

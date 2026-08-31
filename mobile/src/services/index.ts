@@ -1,4 +1,5 @@
 import { api } from '../api/client';
+import { API_URL } from '../config';
 
 export interface PublicUser {
   id: string;
@@ -67,8 +68,55 @@ export const projectService = {
   create: (data: any) => api.post<any>('/projects', data).then((r) => r.data),
 };
 
+/** Subida de archivos de evidencia. Devuelve la referencia a persistir. */
+export interface StoredFile {
+  id: string;
+  url: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+}
+
+export const uploadService = {
+  /**
+   * En React Native el archivo se envia por su uri; no se lee a memoria.
+   * El objeto { uri, name, type } es la forma que FormData espera aqui.
+   */
+  upload: (file: { uri: string; name: string; mimeType: string }) => {
+    const form = new FormData();
+    form.append('file', {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType,
+    } as unknown as Blob);
+    return api
+      .post<StoredFile>('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      .then((r) => r.data);
+  },
+  fileUrl: (relative: string) => `${API_URL.replace(/\/api$/, '')}${relative}`,
+};
+
 export const evidenceService = {
+  create: (data: any) => api.post<any>('/evidences', data).then((r) => r.data),
+  mine: () => api.get<any[]>('/evidences/my').then((r) => r.data),
+  remove: (id: string) => api.delete(`/evidences/${id}`).then((r) => r.data),
   add: (projectId: string, data: any) => api.post(`/projects/${projectId}/evidences`, data).then((r) => r.data),
+};
+
+export const certificateService = {
+  mine: () => api.get<any[]>('/certificates/external/my').then((r) => r.data),
+  create: (data: any) => api.post<any>('/certificates/external', data).then((r) => r.data),
+  remove: (id: string) => api.delete(`/certificates/external/${id}`).then((r) => r.data),
+};
+
+export const constancyService = {
+  mine: () => api.get<any[]>('/constancies/internal/my').then((r) => r.data),
+  eligible: (activityId: string) =>
+    api.get<any[]>(`/constancies/internal/eligible/${activityId}`).then((r) => r.data),
+  byActivity: (activityId: string) =>
+    api.get<any[]>(`/constancies/internal/activity/${activityId}`).then((r) => r.data),
+  create: (data: { profileId: string; activityId: string; description: string }) =>
+    api.post<any>('/constancies/internal', data).then((r) => r.data),
 };
 
 export const affinityService = {

@@ -14,6 +14,7 @@ import InterestsSkillsPage from './pages/student/InterestsSkills';
 import StudentProjectsPage from './pages/student/Projects';
 import StudentActivitiesPage from './pages/student/Activities';
 import StudentAffinityPage from './pages/student/Affinity';
+import StudentEvidencesPage from './pages/student/Evidences';
 
 import TeacherDashboard from './pages/teacher/Dashboard';
 import TeacherActivitiesPage from './pages/teacher/Activities';
@@ -23,6 +24,7 @@ import TeacherReportsPage from './pages/teacher/Reports';
 import DirectorDashboard from './pages/director/Dashboard';
 import DirectorAffinityMap from './pages/director/AffinityMap';
 import DirectorActivitiesPage from './pages/director/Activities';
+import DirectorConstanciesPage from './pages/director/Constancies';
 
 import SocietyDashboard from './pages/society/Dashboard';
 import SocietyActivitiesPage from './pages/society/Activities';
@@ -68,6 +70,7 @@ export default function App() {
             <Route path="/student/interests" element={<InterestsSkillsPage />} />
             <Route path="/student/projects" element={<StudentProjectsPage />} />
             <Route path="/student/activities" element={<StudentActivitiesPage />} />
+            <Route path="/student/evidences" element={<StudentEvidencesPage />} />
             <Route path="/student/affinity" element={<StudentAffinityPage />} />
           </Route>
 
@@ -81,6 +84,7 @@ export default function App() {
           <Route element={guarded([D], <Layout />)}>
             <Route path="/director" element={<DirectorDashboard />} />
             <Route path="/director/activities" element={<DirectorActivitiesPage />} />
+            <Route path="/director/constancies" element={<DirectorConstanciesPage />} />
             <Route path="/director/affinity" element={<DirectorAffinityMap />} />
           </Route>
 

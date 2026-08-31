@@ -161,3 +161,65 @@ export interface ProfileSummary {
   internalConstancies: { id: string; description: string; status: string }[];
   affinities: { academicAreaId: string; area: string | null; score: number; level: string }[];
 }
+
+/** Referencia devuelta por POST /uploads. */
+export interface StoredFile {
+  id: string;
+  url: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface Evidence {
+  id: string;
+  evidenceType: 'file' | 'link';
+  description: string | null;
+  fileUrl: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  fileSize: number | null;
+  externalUrl: string | null;
+  projectId: string | null;
+  project?: { id: string; title: string } | null;
+  activityId: string | null;
+  activity?: { id: string; title: string } | null;
+  academicAreaId: string | null;
+  academicArea?: AcademicArea | null;
+  createdAt: string;
+}
+
+export interface ExternalCertificate {
+  id: string;
+  certificateName: string;
+  issuer: string;
+  certificateUrl: string | null;
+  issueDate: string | null;
+  description: string | null;
+  academicAreaId: string | null;
+  academicArea?: AcademicArea | null;
+  fileUrl: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  fileSize: number | null;
+  createdAt: string;
+}
+
+export interface EligibleParticipant {
+  studentProfileId: string;
+  studentName: string | null;
+  semester: number | null;
+  registrationId: string;
+  hasConstancy: boolean;
+}
+
+export interface InternalConstancy {
+  id: string;
+  studentProfileId: string;
+  activityId: string | null;
+  activity?: { id: string; title: string } | null;
+  studentProfile?: { id: string; user?: { firstName: string; lastName: string } } | null;
+  description: string;
+  status: string;
+  createdAt: string;
+}

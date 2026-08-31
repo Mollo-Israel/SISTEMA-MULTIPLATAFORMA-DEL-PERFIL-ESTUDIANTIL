@@ -1,7 +1,12 @@
 import { api } from '../api/client';
 import type {
   AcademicArea,
+  EligibleParticipant,
+  Evidence,
+  ExternalCertificate,
   GamificationCriterion,
+  InternalConstancy,
+  StoredFile,
   StudentDirectory,
   Activity,
   AffinityResult,
@@ -74,11 +79,52 @@ export const projectService = {
     api.post(`/projects/${id}/members`, data).then((r) => r.data),
 };
 
+/** Subida de archivos de evidencia. Devuelve la referencia a persistir. */
+export const uploadService = {
+  upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api
+      .post<StoredFile>('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      .then((r) => r.data);
+  },
+  /** URL absoluta para abrir o descargar un archivo ya subido. */
+  fileUrl: (relative: string) => {
+    const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/api$/, '');
+    return `${base}${relative}`;
+  },
+};
+
 export const evidenceService = {
-  add: (projectId: string, data: { evidenceType: string; description?: string; fileUrl?: string; externalUrl?: string }) =>
+  /** Evidencia autonoma: se asocia a proyecto, actividad o area segun corresponda. */
+  create: (data: Record<string, unknown>) => api.post<Evidence>('/evidences', data).then((r) => r.data),
+  mine: () => api.get<Evidence[]>('/evidences/my').then((r) => r.data),
+  remove: (id: string) => api.delete(`/evidences/${id}`).then((r) => r.data),
+  /** Alta desde el detalle de un proyecto (ruta historica, sigue vigente). */
+  add: (projectId: string, data: Record<string, unknown>) =>
     api.post(`/projects/${projectId}/evidences`, data).then((r) => r.data),
-  remove: (projectId: string, evidenceId: string) =>
+  removeFromProject: (projectId: string, evidenceId: string) =>
     api.delete(`/projects/${projectId}/evidences/${evidenceId}`).then((r) => r.data),
+};
+
+export const certificateService = {
+  mine: () => api.get<ExternalCertificate[]>('/certificates/external/my').then((r) => r.data),
+  create: (data: Record<string, unknown>) =>
+    api.post<ExternalCertificate>('/certificates/external', data).then((r) => r.data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch<ExternalCertificate>(`/certificates/external/${id}`, data).then((r) => r.data),
+  remove: (id: string) => api.delete(`/certificates/external/${id}`).then((r) => r.data),
+};
+
+export const constancyService = {
+  /** Participantes confirmados de una actividad, marcando quien ya tiene constancia. */
+  eligible: (activityId: string) =>
+    api.get<EligibleParticipant[]>(`/constancies/internal/eligible/${activityId}`).then((r) => r.data),
+  byActivity: (activityId: string) =>
+    api.get<InternalConstancy[]>(`/constancies/internal/activity/${activityId}`).then((r) => r.data),
+  create: (data: { profileId: string; activityId: string; description: string }) =>
+    api.post<InternalConstancy>('/constancies/internal', data).then((r) => r.data),
+  mine: () => api.get<InternalConstancy[]>('/constancies/internal/my').then((r) => r.data),
 };
 
 export const affinityService = {

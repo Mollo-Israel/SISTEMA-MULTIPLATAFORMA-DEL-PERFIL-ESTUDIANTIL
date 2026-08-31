@@ -8,7 +8,7 @@ import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import {
   ActivityCategory, ActivityModality, ActivityStatus, ActivityType,
-  ConstancyStatus, EvidenceType, ProjectStatus, RegistrationStatus, RolNombre, UserStatus,
+  ConstancyStatus, EvidenceType, GamificationTrigger, ProjectStatus, RegistrationStatus, RolNombre, UserStatus,
 } from '@perfil/shared';
 import { AppModule } from '../../app.module';
 import { AffinityEngineService } from '../../affinity-recalc/affinity.engine';
@@ -26,6 +26,8 @@ import { Project } from '../../entities/project.entity';
 import { ProjectEvidence } from '../../entities/project-evidence.entity';
 import { ExternalCertificate } from '../../entities/external-certificate.entity';
 import { InternalConstancy } from '../../entities/internal-constancy.entity';
+import { TeacherSemesterAccess } from '../../entities/teacher-semester-access.entity';
+import { GamificationCriterion } from '../../entities/gamification-criterion.entity';
 import { seedRoles } from './roles.seed';
 import { seedAcademicAreas } from './academic-areas.seed';
 import { seedSkills } from './skills.seed';
@@ -71,12 +73,12 @@ const PROJECTS = [
 ];
 
 const CERTS = [
-  { name: 'Certified JavaScript Developer', issuer: 'freeCodeCamp' },
-  { name: 'AWS Cloud Practitioner', issuer: 'Amazon Web Services' },
-  { name: 'Python for Data Science', issuer: 'Coursera' },
-  { name: 'Scrum Fundamentals Certified', issuer: 'Scrum.org' },
-  { name: 'Cisco CCNA: Introduction to Networks', issuer: 'Cisco Networking Academy' },
-  { name: 'Fundamentos de UX', issuer: 'Google' },
+  { name: 'Certified JavaScript Developer', issuer: 'freeCodeCamp', area: 'Desarrollo Web', description: 'Curso de 300 horas con proyectos evaluados.' },
+  { name: 'AWS Cloud Practitioner', issuer: 'Amazon Web Services', area: 'Redes', description: 'Fundamentos de infraestructura en la nube.' },
+  { name: 'Python for Data Science', issuer: 'Coursera', area: 'Inteligencia Artificial', description: 'Análisis de datos con Python y pandas.' },
+  { name: 'Scrum Fundamentals Certified', issuer: 'Scrum.org', area: 'Gestión de Proyectos', description: 'Marco de trabajo Scrum y roles del equipo.' },
+  { name: 'Cisco CCNA: Introduction to Networks', issuer: 'Cisco Networking Academy', area: 'Redes', description: 'Fundamentos de redes y direccionamiento IP.' },
+  { name: 'Fundamentos de UX', issuer: 'Google', area: 'Desarrollo Web', description: 'Investigación de usuarios y prototipado.' },
 ];
 
 async function run() {
@@ -130,6 +132,7 @@ async function run() {
   }
   const docentes = staffUsers.filter((u) => u.roleId === roles[RolNombre.TEACHER].id);
   const sociedad = staffUsers.find((u) => u.roleId === roles[RolNombre.SCIENTIFIC_SOCIETY].id)!;
+  const director = staffUsers.find((u) => u.roleId === roles[RolNombre.CAREER_DIRECTOR].id)!;
 
   // ---- Estudiantes (est.univalle.edu) con perfil, intereses y habilidades ----
   const skillByName = new Map<string, Skill>();
@@ -172,13 +175,15 @@ async function run() {
   }
 
   // ---- Actividades (académicas por docentes, extracurriculares por sociedad) ----
+  // Responsables segun el documento vigente: el director de carrera publica las
+  // actividades academicas y la sociedad cientifica las extracurriculares.
   const activityDefs: { title: string; type: ActivityType; cat: ActivityCategory; area: string; cap: number; creator: User }[] = [
-    { title: 'Taller de Desarrollo Web', type: ActivityType.ACADEMICA, cat: ActivityCategory.TALLER_ACADEMICO, area: 'Desarrollo Web', cap: 20, creator: docentes[0] },
-    { title: 'Seminario de Inteligencia Artificial', type: ActivityType.ACADEMICA, cat: ActivityCategory.SEMINARIO, area: 'Inteligencia Artificial', cap: 30, creator: docentes[0] },
-    { title: 'Reto de Bases de Datos', type: ActivityType.ACADEMICA, cat: ActivityCategory.RETO, area: 'Bases de Datos', cap: 15, creator: docentes[1] },
-    { title: 'Clase espejo de Ingeniería de Software', type: ActivityType.ACADEMICA, cat: ActivityCategory.CLASE_ESPEJO, area: 'Ingeniería de Software', cap: 25, creator: docentes[1] },
-    { title: 'Charla de Ciberseguridad', type: ActivityType.ACADEMICA, cat: ActivityCategory.CHARLA, area: 'Ciberseguridad', cap: 40, creator: docentes[0] },
-    { title: 'Tutoría de Redes', type: ActivityType.ACADEMICA, cat: ActivityCategory.TUTORIA, area: 'Redes', cap: 12, creator: docentes[1] },
+    { title: 'Taller de Desarrollo Web', type: ActivityType.ACADEMICA, cat: ActivityCategory.TALLER_ACADEMICO, area: 'Desarrollo Web', cap: 20, creator: director },
+    { title: 'Seminario de Inteligencia Artificial', type: ActivityType.ACADEMICA, cat: ActivityCategory.SEMINARIO, area: 'Inteligencia Artificial', cap: 30, creator: director },
+    { title: 'Reto de Bases de Datos', type: ActivityType.ACADEMICA, cat: ActivityCategory.RETO, area: 'Bases de Datos', cap: 15, creator: director },
+    { title: 'Clase espejo de Ingeniería de Software', type: ActivityType.ACADEMICA, cat: ActivityCategory.CLASE_ESPEJO, area: 'Ingeniería de Software', cap: 25, creator: director },
+    { title: 'Charla de Ciberseguridad', type: ActivityType.ACADEMICA, cat: ActivityCategory.CHARLA, area: 'Ciberseguridad', cap: 40, creator: director },
+    { title: 'Tutoría de Redes', type: ActivityType.ACADEMICA, cat: ActivityCategory.TUTORIA, area: 'Redes', cap: 12, creator: director },
     { title: 'Hackathon de Innovación', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategory.HACKATHON, area: 'Inteligencia Artificial', cap: 50, creator: sociedad },
     { title: 'Club de Estudio de Desarrollo Móvil', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategory.CLUB_ESTUDIO, area: 'Desarrollo Móvil', cap: 20, creator: sociedad },
     { title: 'Actividad de Responsabilidad Social', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategory.RESPONSABILIDAD_SOCIAL, area: 'Gestión de Proyectos', cap: 30, creator: sociedad },
@@ -233,8 +238,14 @@ async function run() {
     pr = await projectRepo.save(pr);
     if ((await evidenceRepo.count({ where: { projectId: pr.id } })) === 0) {
       await evidenceRepo.save([
-        evidenceRepo.create({ projectId: pr.id, evidenceType: EvidenceType.LINK, description: 'Repositorio', externalUrl: pr.repositoryUrl }),
-        evidenceRepo.create({ projectId: pr.id, evidenceType: EvidenceType.LINK, description: 'Demostración', externalUrl: pr.demoUrl }),
+        evidenceRepo.create({
+          projectId: pr.id, studentProfileId: profile.id, academicAreaId: area.id,
+          evidenceType: EvidenceType.LINK, description: 'Repositorio del proyecto', externalUrl: pr.repositoryUrl,
+        }),
+        evidenceRepo.create({
+          projectId: pr.id, studentProfileId: profile.id, academicAreaId: area.id,
+          evidenceType: EvidenceType.LINK, description: 'Demostración desplegada', externalUrl: pr.demoUrl,
+        }),
       ]);
     }
   }
@@ -250,24 +261,71 @@ async function run() {
         studentProfileId: profile.id, certificateName: c.name, issuer: c.issuer,
         certificateUrl: `https://certificados.${ascii(c.issuer).replace(/[^a-z0-9]+/g, '')}.org/${profile.id.slice(0, 8)}`,
         issueDate: `2026-0${(i % 9) + 1}-15`,
+        description: c.description,
+        academicAreaId: areaByName(c.area).id,
       }));
     }
   }
 
-  // ---- Constancias internas (autorizadas por docente) ----
-  for (let i = 0; i < 4; i++) {
+  // ---- Semestres habilitados para los docentes (RF3) ----
+  // Carlos acompana los primeros semestres; Maria, los ultimos.
+  const semesterAccessRepo = ds.getRepository(TeacherSemesterAccess);
+  const grantSemesters = async (teacher: User, semesters: number[]) => {
+    await semesterAccessRepo.delete({ teacherId: teacher.id });
+    await semesterAccessRepo.save(
+      semesters.map((semester) =>
+        semesterAccessRepo.create({ teacherId: teacher.id, semester, grantedById: director.id }),
+      ),
+    );
+  };
+  await grantSemesters(docentes[0], [1, 2, 3, 4]);
+  await grantSemesters(docentes[1], [5, 6, 7, 8]);
+
+  // ---- Constancias internas (RF12) ----
+  // Las emite el director de carrera y solo sobre participacion CONFIRMADA,
+  // una unica vez por estudiante y actividad.
+  let constanciesIssued = 0;
+  for (let i = 0; i < 6; i++) {
     const p = studentProfiles[i];
-    const act = activities[i % activities.length];
-    const reg = await regRepo.findOne({ where: { activityId: act.id, studentProfileId: p.id } });
-    const exists = await constancyRepo.findOne({ where: { studentProfileId: p.id, activityId: act.id } });
+    if (!p) continue;
+    const reg = await regRepo.findOne({
+      where: { studentProfileId: p.id, status: RegistrationStatus.CONFIRMED },
+      relations: { activity: true },
+    });
+    if (!reg?.activity) continue;
+    const exists = await constancyRepo.findOne({
+      where: { studentProfileId: p.id, activityId: reg.activityId },
+    });
     if (!exists) {
       await constancyRepo.save(constancyRepo.create({
         studentProfileId: p.id,
-        activityId: act.id,
-        activityRegistrationId: reg ? reg.id : null,
-        description: `Participación confirmada en ${act.title}.`,
+        activityId: reg.activityId,
+        activityRegistrationId: reg.id,
+        description: `Participo en la actividad "${reg.activity.title}" organizada por la carrera.`,
         status: ConstancyStatus.AUTHORIZED,
-        authorizedById: act.creatorId,
+        authorizedById: director.id,
+      }));
+      constanciesIssued++;
+    }
+  }
+
+  // ---- Criterios de gamificacion (administrables; sin motor que los consuma) ----
+  const criterionRepo = ds.getRepository(GamificationCriterion);
+  const CRITERIA = [
+    { code: 'participacion_confirmada', name: 'Participacion confirmada en actividad', trigger: GamificationTrigger.PARTICIPACION_CONFIRMADA, points: 15 },
+    { code: 'proyecto_registrado', name: 'Proyecto academico registrado', trigger: GamificationTrigger.PROYECTO_REGISTRADO, points: 25 },
+    { code: 'evidencia_adjunta', name: 'Evidencia adjunta a un proyecto o actividad', trigger: GamificationTrigger.EVIDENCIA_ADJUNTA, points: 10 },
+    { code: 'certificado_externo', name: 'Certificado externo registrado', trigger: GamificationTrigger.CERTIFICADO_EXTERNO, points: 20 },
+    { code: 'constancia_interna', name: 'Constancia interna recibida', trigger: GamificationTrigger.CONSTANCIA_INTERNA, points: 15 },
+    { code: 'perfil_completo', name: 'Perfil dinamico al 100%', trigger: GamificationTrigger.PERFIL_COMPLETO, points: 30 },
+  ];
+  for (const c of CRITERIA) {
+    const exists = await criterionRepo.findOne({ where: { code: c.code } });
+    if (!exists) {
+      await criterionRepo.save(criterionRepo.create({
+        ...c,
+        description: 'Criterio definido para la fase de gamificacion; todavia no se aplica.',
+        isActive: true,
       }));
     }
   }
@@ -282,6 +340,9 @@ async function run() {
   console.log('\nBase poblada con cuentas institucionales:');
   console.log(`  Usuarios totales: ${totalUsers}  (1 administrador único + ${STAFF.length} administrativos/docentes + ${STUDENT_NAMES.length} estudiantes)`);
   console.log(`  Actividades: ${activities.length}  ·  Proyectos: ${PROJECTS.length}  ·  Certificados: ${CERTS.length}`);
+  console.log(`  Constancias internas emitidas por el director: ${constanciesIssued}`);
+  console.log('  Semestres habilitados: Carlos Perez 1-4 · Maria Gutierrez 5-8');
+  console.log(`  Criterios de gamificacion definidos: ${CRITERIA.length} (aun no se aplican)`);
   console.log('\n  Contraseña de todas las cuentas pobladas: ' + PWD);
   console.log('  Administrador: admin@univalle.edu / Admin123*');
   console.log('  Ejemplos:  carlos.perez@univalle.edu (docente) · jorge.vargas@univalle.edu (director)');
