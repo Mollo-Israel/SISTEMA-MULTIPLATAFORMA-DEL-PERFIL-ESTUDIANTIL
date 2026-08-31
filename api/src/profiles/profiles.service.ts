@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { ProfileStatus } from '@perfil/shared';
+import { ProfileStatus, RolNombre } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentSkill } from '../entities/student-skill.entity';
@@ -20,6 +20,8 @@ import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
+import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { TeacherScopeService } from '../access/teacher-scope.service';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { InterestItemDto } from './dto/set-interests.dto';
@@ -28,6 +30,15 @@ import {
   AFFINITY_RECALCULATION,
   AffinityRecalculationPort,
 } from '../affinity-recalc/affinity-recalculation.port';
+
+interface StudentDirectoryRow {
+  profileId: string;
+  studentName: string;
+  email: string;
+  semester: number | null;
+  status: string;
+  completionPercentage: number;
+}
 
 @Injectable()
 export class ProfilesService {
@@ -49,6 +60,7 @@ export class ProfilesService {
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
     @Inject(AFFINITY_RECALCULATION)
     private readonly affinityRecalculation: AffinityRecalculationPort,
+    private readonly teacherScope: TeacherScopeService,
   ) {}
 
   async createMyProfile(userId: string, dto: CreateProfileDto): Promise<StudentProfile> {
@@ -80,8 +92,25 @@ export class ProfilesService {
     return profile;
   }
 
-  // Directorio de estudiantes para docente/director/admin (con búsqueda por nombre o correo).
-  async listStudents(search?: string) {
+  /**
+   * Directorio de estudiantes para docente, director y administrador.
+   *
+   * El docente solo ve los semestres que el administrador le habilito (RF3);
+   * director y administrador ven la cohorte completa. La respuesta indica el
+   * alcance aplicado para que la interfaz pueda explicarlo al usuario en vez de
+   * mostrar una lista vacia sin motivo.
+   */
+  async listStudents(user: AuthenticatedUser, search?: string) {
+    const scope = await this.teacherScope.scopeFor(user);
+    const restricted = scope !== null;
+
+    if (restricted && scope.length === 0) {
+      return {
+        scope: { restricted: true, semesters: [] as number[] },
+        students: [] as StudentDirectoryRow[],
+      };
+    }
+
     const qb = this.profiles
       .createQueryBuilder('p')
       .leftJoin('p.user', 'u')
@@ -91,26 +120,34 @@ export class ProfilesService {
       .addSelect('p.completion_percentage', 'completionPercentage')
       .addSelect("CONCAT(u.first_name, ' ', u.last_name)", 'studentName')
       .addSelect('u.email', 'email')
-      .orderBy('u.first_name', 'ASC')
+      .orderBy('p.semester', 'ASC')
+      .addOrderBy('u.first_name', 'ASC')
       .addOrderBy('u.last_name', 'ASC');
+
+    if (restricted) {
+      qb.andWhere('p.semester IN (:...semesters)', { semesters: scope });
+    }
 
     const term = search?.trim();
     if (term) {
-      qb.where(
-        "u.first_name ILIKE :s OR u.last_name ILIKE :s OR u.email ILIKE :s OR CONCAT(u.first_name, ' ', u.last_name) ILIKE :s",
+      qb.andWhere(
+        "(u.first_name ILIKE :s OR u.last_name ILIKE :s OR u.email ILIKE :s OR CONCAT(u.first_name, ' ', u.last_name) ILIKE :s)",
         { s: `%${term}%` },
       );
     }
 
     const rows = await qb.getRawMany();
-    return rows.map((r) => ({
-      profileId: r.profileId,
-      studentName: r.studentName,
-      email: r.email,
-      semester: r.semester,
-      status: r.status,
-      completionPercentage: Number(r.completionPercentage),
-    }));
+    return {
+      scope: { restricted, semesters: scope ?? [] },
+      students: rows.map((r) => ({
+        profileId: r.profileId,
+        studentName: r.studentName,
+        email: r.email,
+        semester: r.semester,
+        status: r.status,
+        completionPercentage: Number(r.completionPercentage),
+      })),
+    };
   }
 
   async updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<StudentProfile> {
@@ -230,14 +267,15 @@ export class ProfilesService {
     return this.buildSummary(profile, { includeInternal: true });
   }
 
-  async getAllowedView(profileId: string) {
-    const profile = await this.profiles.findOne({
-      where: { id: profileId },
-      relations: { user: true },
-    });
-    if (!profile) {
-      throw new NotFoundException('Perfil no encontrado.');
-    }
+  /**
+   * Vista permitida de un perfil para roles institucionales.
+   *
+   * Aplica el alcance por semestre del docente y recorta la informacion: no se
+   * exponen identificadores internos de proyectos y actividades, ni el correo,
+   * ni las constancias internas, que solo ve el propio estudiante.
+   */
+  async getAllowedView(user: AuthenticatedUser, profileId: string) {
+    const profile = await this.teacherScope.assertCanAccessProfile(user, profileId);
     const summary = await this.buildSummary(profile, { includeInternal: false });
     return {
       profileId: profile.id,

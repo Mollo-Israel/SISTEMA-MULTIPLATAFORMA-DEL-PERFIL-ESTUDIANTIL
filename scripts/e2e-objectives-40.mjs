@@ -361,8 +361,212 @@ async function objective1(ctx) {
     ?.accessToken;
 }
 
-// Los bloques 2, 3 y 4 se agregan a continuacion.
-async function objective2() {}
+// ===========================================================================
+//  OBJETIVO 2 — Perfil estudiantil dinamico
+// ===========================================================================
+async function objective2(ctx) {
+  objective('OBJETIVO 2 — Gestion del perfil estudiantil dinamico');
+
+  const { student, admin, webArea, dataArea, reactSkill, sqlSkill } = ctx;
+
+  // --- Creacion y datos declarativos ---
+  section('Creacion y datos declarativos del perfil');
+  const created = await req('POST', '/profiles/me', {
+    token: student,
+    body: {
+      semester: 4,
+      bio: 'Estudiante de cuarto semestre interesada en desarrollo web y datos.',
+      improvementAreaIds: [dataArea.id],
+    },
+  });
+  check(created.status === 201, '2.1 El estudiante crea su perfil', `status ${created.status} ${msgOf(created)}`);
+  check(created.data?.semester === 4, '2.2 El semestre queda registrado');
+  const profileId = created.data?.id;
+  ctx.studentProfileId = profileId;
+
+  const dupProfile = await req('POST', '/profiles/me', { token: student, body: { semester: 4 } });
+  check(dupProfile.status === 409, '2.3 Perfil duplicado -> 409', `status ${dupProfile.status}`);
+
+  const badSemester = await req('PATCH', '/profiles/me', { token: student, body: { semester: 12 } });
+  check(badSemester.status === 400, '2.4 Semestre fuera de rango (1-8) -> 400', `status ${badSemester.status}`);
+
+  // Areas de interes / preferencia (area academica + prioridad 1-5)
+  const interests = await req('PUT', '/profiles/me/interests', {
+    token: student,
+    body: {
+      items: [
+        { academicAreaId: webArea.id, priority: 5 },
+        { academicAreaId: dataArea.id, priority: 3 },
+      ],
+    },
+  });
+  check(interests.status === 200 && interests.data.length === 2, '2.5 Registra areas de interes con prioridad', msgOf(interests));
+  check(
+    (await req('PUT', '/profiles/me/interests', {
+      token: student,
+      body: { items: [{ academicAreaId: webArea.id, priority: 9 }] },
+    })).status === 400,
+    '2.6 Prioridad fuera de rango -> 400',
+  );
+  check(
+    (await req('PUT', '/profiles/me/interests', {
+      token: student,
+      body: { items: [{ academicAreaId: '00000000-0000-0000-0000-000000000000', priority: 3 }] },
+    })).status === 400,
+    '2.7 Area inexistente -> 400',
+  );
+
+  const skillItems = sqlSkill && sqlSkill.id !== reactSkill.id
+    ? [{ skillId: reactSkill.id, level: 4 }, { skillId: sqlSkill.id, level: 3 }]
+    : [{ skillId: reactSkill.id, level: 4 }];
+  const skillsRes = await req('PUT', '/profiles/me/skills', { token: student, body: { items: skillItems } });
+  check(skillsRes.status === 200, '2.8 Registra habilidades con nivel', msgOf(skillsRes));
+  check(
+    (await req('PUT', '/profiles/me/skills', {
+      token: student,
+      body: { items: [{ skillId: reactSkill.id, level: 9 }] },
+    })).status === 400,
+    '2.9 Nivel de habilidad fuera de rango -> 400',
+  );
+  // Se restauran las habilidades validas tras el intento invalido.
+  await req('PUT', '/profiles/me/skills', { token: student, body: { items: skillItems } });
+
+  // --- Consulta, edicion y persistencia ---
+  section('Consulta, edicion y persistencia');
+  const read = await req('GET', '/profiles/me', { token: student });
+  check(read.status === 200 && read.data.semester === 4, '2.10 El estudiante consulta su perfil');
+
+  const updated = await req('PATCH', '/profiles/me', {
+    token: student,
+    body: {
+      semester: 5,
+      bio: 'Ahora enfocada en backend y bases de datos.',
+      improvementAreaIds: [webArea.id, dataArea.id],
+    },
+  });
+  check(updated.status === 200, '2.11 El estudiante edita su perfil', msgOf(updated));
+
+  const reread = await req('GET', '/profiles/me', { token: student });
+  check(
+    reread.data?.semester === 5 && reread.data?.bio?.includes('backend'),
+    '2.12 Los cambios persisten tras releer',
+  );
+  check(
+    (reread.data?.improvementAreaIds ?? []).length === 2,
+    '2.13 Las areas donde desea mejorar persisten',
+  );
+
+  // --- Completitud ---
+  section('Completitud del perfil');
+  check(
+    reread.data?.completionPercentage === 100,
+    '2.14 La completitud llega a 100% con los cinco elementos',
+    `valor ${reread.data?.completionPercentage}`,
+  );
+  check(reread.data?.status !== 'incomplete', '2.15 El perfil deja de estar incompleto');
+
+  // --- Resumen dinamico ---
+  section('Resumen dinamico integrado');
+  const summary = await req('GET', '/profiles/me/summary', { token: student });
+  check(summary.status === 200, '2.16 El estudiante consulta su resumen dinamico');
+  const sd = summary.data ?? {};
+  check(sd.interests?.length === 2, '2.17 El resumen integra las areas de interes');
+  check(sd.skills?.length >= 1, '2.18 El resumen integra las habilidades');
+  check(sd.improvementAreas?.length === 2, '2.19 El resumen integra las areas de mejora');
+  check(Array.isArray(sd.projects), '2.20 El resumen incluye la seccion de proyectos');
+  check(Array.isArray(sd.activities), '2.21 El resumen incluye la seccion de actividades');
+  check(Array.isArray(sd.externalCertificates), '2.22 El resumen incluye certificados externos');
+  check(Array.isArray(sd.internalConstancies), '2.23 El resumen incluye constancias internas');
+  check(Array.isArray(sd.affinities), '2.24 El resumen incluye areas de afinidad');
+  check(
+    sd.projects.length === 0 && sd.activities.length === 0,
+    '2.25 Las secciones sin datos llegan vacias (sin informacion inventada)',
+  );
+  check(sd.affinities.length > 0, '2.26 La afinidad ya se calculo con lo declarado');
+
+  // --- Privacidad y alcance ---
+  section('Privacidad y alcance de consulta');
+  const raw = JSON.stringify(summary.data ?? {});
+  check(!raw.includes('passwordHash') && !raw.includes('password_hash'), '2.27 El resumen no expone credenciales');
+
+  // Segundo estudiante, en un semestre fuera del alcance del docente (3, 4, 5)
+  const other = await req('POST', '/auth/register', {
+    body: { firstName: 'Diego', lastName: 'Rocha', email: studentEmail('est2'), password: PWD },
+  });
+  const otherToken = other.data?.accessToken;
+  const otherProfile = await req('POST', '/profiles/me', { token: otherToken, body: { semester: 7 } });
+  const otherProfileId = otherProfile.data?.id;
+  ctx.otherStudentToken = otherToken;
+  ctx.otherStudentProfileId = otherProfileId;
+
+  const dir = await req('GET', '/profiles/students', { token: ctx.teacherToken });
+  check(dir.status === 200, '2.28 El docente consulta el directorio de estudiantes', msgOf(dir));
+  check(dir.data?.scope?.restricted === true, '2.29 El directorio informa que el alcance esta restringido');
+  check(
+    JSON.stringify(dir.data?.scope?.semesters) === '[3,4,5]',
+    '2.30 El alcance corresponde a los semestres habilitados',
+  );
+  check(
+    dir.data?.students?.every((s) => [3, 4, 5].includes(s.semester)),
+    '2.31 El directorio solo trae estudiantes de los semestres habilitados',
+  );
+  check(
+    dir.data?.students?.some((s) => s.profileId === profileId),
+    '2.32 El estudiante del 5o semestre si aparece para el docente',
+  );
+  check(
+    !dir.data?.students?.some((s) => s.profileId === otherProfileId),
+    '2.33 El estudiante del 7o semestre NO aparece para el docente',
+  );
+
+  const allowedIn = await req('GET', `/profiles/${profileId}/allowed`, { token: ctx.teacherToken });
+  check(allowedIn.status === 200, '2.34 El docente abre el perfil permitido dentro de su alcance', msgOf(allowedIn));
+  check(
+    allowedIn.data?.internalConstancies === undefined,
+    '2.35 La vista permitida NO incluye constancias internas',
+  );
+  check(allowedIn.data?.email === undefined, '2.36 La vista permitida NO expone el correo');
+
+  const allowedOut = await req('GET', `/profiles/${otherProfileId}/allowed`, { token: ctx.teacherToken });
+  check(
+    allowedOut.status === 403,
+    '2.37 El docente NO abre un perfil fuera de sus semestres -> 403',
+    `status ${allowedOut.status}`,
+  );
+  check(
+    (await req('GET', `/affinity/student/${otherProfileId}`, { token: ctx.teacherToken })).status === 403,
+    '2.38 Tampoco accede a la afinidad de ese estudiante -> 403',
+  );
+
+  const dirAll = await req('GET', '/profiles/students', { token: ctx.directorToken });
+  check(dirAll.data?.scope?.restricted === false, '2.39 El director ve la cohorte completa (sin restriccion)');
+  check(
+    (await req('GET', `/profiles/${otherProfileId}/allowed`, { token: ctx.directorToken })).status === 200,
+    '2.40 El director si accede a cualquier perfil',
+  );
+
+  check(
+    (await req('GET', `/profiles/${profileId}/allowed`, { token: student })).status === 403,
+    '2.41 Un estudiante NO consulta el perfil de otro -> 403',
+  );
+
+  // Docente sin semestres habilitados
+  await req('POST', '/users', {
+    token: admin,
+    body: { firstName: 'Ines', lastName: 'Moreno', email: email('docente2'), password: PWD, role: 'TEACHER' },
+  });
+  const lonelyToken = (await req('POST', '/auth/login', { body: { email: email('docente2'), password: PWD } }))
+    .data?.accessToken;
+  const lonelyDir = await req('GET', '/profiles/students', { token: lonelyToken });
+  check(
+    lonelyDir.data?.students?.length === 0 && lonelyDir.data?.scope?.semesters?.length === 0,
+    '2.42 Un docente sin semestres habilitados no ve ningun estudiante',
+  );
+  check(
+    (await req('GET', `/profiles/${profileId}/allowed`, { token: lonelyToken })).status === 403,
+    '2.43 Y tampoco puede abrir un perfil -> 403',
+  );
+}
 async function objective3() {}
 async function objective4() {}
 

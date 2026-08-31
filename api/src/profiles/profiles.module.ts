@@ -13,6 +13,7 @@ import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { AccessModule } from '../access/access.module';
 import { ProfilesService } from './profiles.service';
 import { ProfilesController } from './profiles.controller';
 
@@ -33,6 +34,7 @@ import { ProfilesController } from './profiles.controller';
       AffinityResult,
     ]),
     AffinityRecalcModule,
+    AccessModule,
   ],
   controllers: [ProfilesController],
   providers: [ProfilesService],

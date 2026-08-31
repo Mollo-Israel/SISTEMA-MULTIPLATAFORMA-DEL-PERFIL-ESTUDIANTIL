@@ -2,6 +2,7 @@ import { api } from '../api/client';
 import type {
   AcademicArea,
   GamificationCriterion,
+  StudentDirectory,
   Activity,
   AffinityResult,
   AuthResult,
@@ -27,7 +28,10 @@ export const profileService = {
   update: (data: Partial<StudentProfile>) => api.patch<StudentProfile>('/profiles/me', data).then((r) => r.data),
   summary: () => api.get<ProfileSummary>('/profiles/me/summary').then((r) => r.data),
   allowedView: (studentId: string) => api.get(`/profiles/${studentId}/allowed`).then((r) => r.data),
-  listStudents: () => api.get<any[]>('/profiles/students').then((r) => r.data),
+  listStudents: (search?: string) =>
+    api
+      .get<StudentDirectory>('/profiles/students', { params: search ? { search } : undefined })
+      .then((r) => r.data),
   setInterests: (items: { academicAreaId: string; priority: number }[]) =>
     api.put('/profiles/me/interests', { items }).then((r) => r.data),
   setSkills: (items: { skillId: string; level: number }[]) =>

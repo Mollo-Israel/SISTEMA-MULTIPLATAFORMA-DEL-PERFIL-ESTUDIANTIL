@@ -276,3 +276,18 @@ table { border-radius: 10px; overflow: hidden; }
 
 /* ===== Fila de estado inactivo en tablas de catálogo ===== */
 tr.is-inactive td { opacity: 0.55; }
+
+
+/* ===== Aviso de alcance (semestres habilitados del docente) ===== */
+.scope-note {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: var(--bordo-100); border: 1px solid #e7c9cf; color: var(--bordo);
+  border-radius: 10px; padding: 0.65rem 0.9rem; font-size: 0.83rem; margin-bottom: 1rem;
+}
+.scope-note svg { flex-shrink: 0; }
+.scope-note strong { font-weight: 700; }
+
+/* ===== Listas simples dentro de tarjetas ===== */
+.plain-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+.plain-list li { padding: 0.28rem 0; font-size: 0.86rem; border-bottom: 1px solid var(--gray-100); }
+.plain-list li:last-child { border-bottom: 0; }

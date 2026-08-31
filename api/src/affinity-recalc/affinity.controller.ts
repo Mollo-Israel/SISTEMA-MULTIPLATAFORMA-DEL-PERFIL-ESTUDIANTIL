@@ -4,13 +4,17 @@ import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { TeacherScopeService } from '../access/teacher-scope.service';
 import { AffinityEngineService } from './affinity.engine';
 
 @ApiTags('affinity')
 @ApiBearerAuth()
 @Controller('affinity')
 export class AffinityController {
-  constructor(private readonly engine: AffinityEngineService) {}
+  constructor(
+    private readonly engine: AffinityEngineService,
+    private readonly teacherScope: TeacherScopeService,
+  ) {}
 
   @Post('recalculate/me')
   @Roles(RolNombre.STUDENT)
@@ -23,7 +27,11 @@ export class AffinityController {
   @Post('recalculate/:studentId')
   @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   @HttpCode(200)
-  async recalculateStudent(@Param('studentId', ParseUUIDPipe) studentId: string) {
+  async recalculateStudent(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    await this.teacherScope.assertCanAccessProfile(user, studentId);
     return this.engine.recalculate(studentId);
   }
 
@@ -36,8 +44,11 @@ export class AffinityController {
 
   @Get('student/:studentId')
   @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
-  async getStudent(@Param('studentId', ParseUUIDPipe) studentId: string) {
-    await this.engine.assertProfileExists(studentId);
+  async getStudent(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    await this.teacherScope.assertCanAccessProfile(user, studentId);
     return this.engine.getForProfile(studentId);
   }
 

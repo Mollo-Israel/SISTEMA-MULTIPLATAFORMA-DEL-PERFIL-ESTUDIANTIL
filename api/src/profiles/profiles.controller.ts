@@ -28,8 +28,8 @@ export class ProfilesController {
 
   @Get('students')
   @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
-  listStudents(@Query('search') search?: string) {
-    return this.profilesService.listStudents(search);
+  listStudents(@CurrentUser() user: AuthenticatedUser, @Query('search') search?: string) {
+    return this.profilesService.listStudents(user, search);
   }
 
   @Post('me')
@@ -82,7 +82,10 @@ export class ProfilesController {
 
   @Get(':studentId/allowed')
   @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
-  getAllowedView(@Param('studentId', ParseUUIDPipe) studentId: string) {
-    return this.profilesService.getAllowedView(studentId);
+  getAllowedView(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.profilesService.getAllowedView(user, studentId);
   }
 }

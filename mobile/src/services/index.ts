@@ -33,6 +33,13 @@ export const profileService = {
   update: (data: any) => api.patch('/profiles/me', data).then((r) => r.data),
   summary: () => api.get<any>('/profiles/me/summary').then((r) => r.data),
   allowedView: (studentId: string) => api.get(`/profiles/${studentId}/allowed`).then((r) => r.data),
+  /** Directorio con el alcance aplicado: { scope, students }. */
+  listStudents: (search?: string) =>
+    api
+      .get<{ scope: { restricted: boolean; semesters: number[] }; students: any[] }>('/profiles/students', {
+        params: search ? { search } : undefined,
+      })
+      .then((r) => r.data),
   setInterests: (items: { academicAreaId: string; priority: number }[]) =>
     api.put('/profiles/me/interests', { items }).then((r) => r.data),
   setSkills: (items: { skillId: string; level: number }[]) =>

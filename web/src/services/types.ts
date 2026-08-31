@@ -119,6 +119,21 @@ export interface AffinityResult {
   level: 'low' | 'medium' | 'high';
 }
 
+export interface StudentDirectoryRow {
+  profileId: string;
+  studentName: string;
+  email: string;
+  semester: number | null;
+  status: string;
+  completionPercentage: number;
+}
+
+export interface StudentDirectory {
+  /** restricted=true cuando el rol solo ve ciertos semestres (docente). */
+  scope: { restricted: boolean; semesters: number[] };
+  students: StudentDirectoryRow[];
+}
+
 export interface ProfileSummary {
   profile: { id: string; semester: number | null; bio: string | null; status: string; completionPercentage: number };
   improvementAreas: { id: string; name: string }[];

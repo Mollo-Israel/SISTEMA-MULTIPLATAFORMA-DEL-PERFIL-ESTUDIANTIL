@@ -10,6 +10,7 @@ import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
+import { AccessModule } from '../access/access.module';
 import { AFFINITY_RECALCULATION } from './affinity-recalculation.port';
 import { AffinityEngineService } from './affinity.engine';
 import { AffinityController } from './affinity.controller';
@@ -28,6 +29,7 @@ import { AffinityController } from './affinity.controller';
       InternalConstancy,
       AffinityResult,
     ]),
+    AccessModule,
   ],
   controllers: [AffinityController],
   providers: [
