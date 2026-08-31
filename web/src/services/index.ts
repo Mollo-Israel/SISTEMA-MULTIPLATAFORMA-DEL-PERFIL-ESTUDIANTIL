@@ -9,6 +9,7 @@ import type {
   ProfileSummary,
   Project,
   PublicUser,
+  Participant,
   Registration,
   Skill,
   StudentProfile,
@@ -55,7 +56,12 @@ export const activityService = {
   register: (id: string) => api.post(`/activities/${id}/register`).then((r) => r.data),
   confirm: (id: string, studentProfileId: string, status: string) =>
     api.patch(`/activities/${id}/confirm-participation`, { studentProfileId, status }).then((r) => r.data),
-  participants: (id: string) => api.get<Registration[]>(`/activities/${id}/participants`).then((r) => r.data),
+  participants: (id: string) => api.get<Participant[]>(`/activities/${id}/participants`).then((r) => r.data),
+  /** Actividades que el usuario gestiona, incluidos sus borradores. */
+  managed: () => api.get<Activity[]>('/activities/managed').then((r) => r.data),
+  myRegistrations: () =>
+    api.get<{ registrationId: string; status: string; activity: Activity }[]>('/activities/my-registrations')
+      .then((r) => r.data),
 };
 
 export const projectService = {

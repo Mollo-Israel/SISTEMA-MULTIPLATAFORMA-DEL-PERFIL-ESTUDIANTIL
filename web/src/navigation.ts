@@ -40,7 +40,7 @@ export const NAV: Record<string, NavGroup[]> = {
       section: 'Docente',
       items: [
         { to: '/teacher', label: 'Panel' },
-        { to: '/teacher/activities', label: 'Actividades y participación' },
+        { to: '/teacher/activities', label: 'Actividades del programa' },
         { to: '/teacher/students', label: 'Perfil de estudiante' },
         { to: '/teacher/reports', label: 'Reportes del curso' },
       ],
@@ -52,6 +52,7 @@ export const NAV: Record<string, NavGroup[]> = {
       section: 'Dirección',
       items: [
         { to: '/director', label: 'Panel general' },
+        { to: '/director/activities', label: 'Actividades académicas' },
         { to: '/director/affinity', label: 'Mapa de afinidad' },
       ],
     },

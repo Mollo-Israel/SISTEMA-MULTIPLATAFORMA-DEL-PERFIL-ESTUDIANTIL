@@ -48,7 +48,13 @@ export const profileService = {
 
 export const activityService = {
   list: (params?: Record<string, string>) => api.get<any[]>('/activities', { params }).then((r) => r.data),
+  /** Detalle: para el estudiante incluye su propio estado y si puede inscribirse. */
+  get: (id: string) => api.get<any>(`/activities/${id}`).then((r) => r.data),
+  /** Actividades que el usuario gestiona, incluidos sus borradores. */
+  managed: () => api.get<any[]>('/activities/managed').then((r) => r.data),
+  myRegistrations: () => api.get<any[]>('/activities/my-registrations').then((r) => r.data),
   create: (data: any) => api.post('/activities', data).then((r) => r.data),
+  update: (id: string, data: any) => api.patch(`/activities/${id}`, data).then((r) => r.data),
   registerInterest: (id: string) => api.post(`/activities/${id}/register-interest`).then((r) => r.data),
   register: (id: string) => api.post(`/activities/${id}/register`).then((r) => r.data),
   confirm: (id: string, studentProfileId: string, status: string) =>

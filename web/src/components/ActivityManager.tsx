@@ -1,204 +1,621 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { FiCalendar, FiEdit2, FiUsers, FiPlus } from 'react-icons/fi';
 import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
-import type { AcademicArea, Activity, Registration } from '../services/types';
+import type { AcademicArea, Activity, Participant } from '../services/types';
 import { Card, Loading, EmptyState, Badge } from './ui';
 import {
-  ACTIVITY_CATEGORIES, ACTIVITY_MODALITIES, ACTIVITY_STATUS_LABEL, ACTIVITY_STATUSES,
-  REGISTRATION_BADGE, REGISTRATION_STATUS_LABEL, lbl,
+  ACTIVITY_CATEGORIES,
+  ACTIVITY_MODALITIES,
+  ACTIVITY_STATUS_LABEL,
+  ACTIVITY_STATUSES,
+  REGISTRATION_BADGE,
+  REGISTRATION_STATUS_LABEL,
+  lbl,
 } from '../constants';
 
 const catLabel = (v: string) => ACTIVITY_CATEGORIES.find((c) => c.value === v)?.label ?? v;
 
-export default function ActivityManager({ activityType }: { activityType: 'academica' | 'extracurricular' }) {
+/** Categorías sugeridas para cada tipo, según el documento del proyecto. */
+const CATEGORIES_BY_TYPE: Record<string, string[]> = {
+  academica: [
+    'taller_academico',
+    'clase_espejo',
+    'seminario',
+    'charla',
+    'curso_externo_recomendado',
+    'tutoria',
+    'investigacion',
+  ],
+  extracurricular: [
+    'hackathon',
+    'reto',
+    'convocatoria',
+    'actividad_sociedad_cientifica',
+    'club_estudio',
+    'responsabilidad_social',
+    'integracion',
+  ],
+};
+
+const emptyForm = {
+  title: '',
+  description: '',
+  category: '',
+  modality: 'presencial',
+  areaId: '',
+  activityDate: '',
+  location: '',
+  externalUrl: '',
+  capacity: '',
+  tags: '',
+  status: 'draft',
+};
+
+export default function ActivityManager({
+  activityType,
+}: {
+  activityType: 'academica' | 'extracurricular';
+}) {
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [parts, setParts] = useState<Record<string, Registration[]>>({});
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: '', description: '', category: ACTIVITY_CATEGORIES[0].value, modality: 'presencial', areaId: '', capacity: '', status: 'open' });
+  const [saving, setSaving] = useState(false);
 
-  const loadAll = async () => {
-    const list = await activityService.list({ type: activityType });
-    setActivities(list);
-    const entries = await Promise.all(
-      list.map(async (a) => [a.id, await activityService.participants(a.id).catch(() => [])] as const),
-    );
-    setParts(Object.fromEntries(entries));
+  const [editing, setEditing] = useState<Activity | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    ...emptyForm,
+    category: CATEGORIES_BY_TYPE[activityType][0],
+  });
+
+  const [selected, setSelected] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [partLoading, setPartLoading] = useState(false);
+
+  const categories = ACTIVITY_CATEGORIES.filter((c) =>
+    CATEGORIES_BY_TYPE[activityType].includes(c.value),
+  );
+
+  const notify = (t: string) => {
+    setMsg(t);
+    setError(null);
+    window.setTimeout(() => setMsg(null), 4000);
   };
 
-  useEffect(() => {
-    Promise.all([loadAll(), catalogService.areas().then(setAreas)])
-      .catch((e) => setError(apiError(e)))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const load = useCallback(async () => {
+    const list = await activityService.managed();
+    setActivities(list.filter((a) => a.type === activityType));
   }, [activityType]);
 
-  const publish = async (e: React.FormEvent) => {
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([load(), catalogService.areas().then(setAreas)])
+      .catch((e) => setError(apiError(e)))
+      .finally(() => setLoading(false));
+  }, [load]);
+
+  const resetForm = () => {
+    setForm({ ...emptyForm, category: CATEGORIES_BY_TYPE[activityType][0] });
+    setEditing(null);
+    setShowForm(false);
+  };
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null); setMsg(null);
+    setError(null);
+    setSaving(true);
+    const payload: Record<string, unknown> = {
+      title: form.title,
+      description: form.description || undefined,
+      type: activityType,
+      category: form.category,
+      modality: form.modality,
+      areaId: form.areaId || undefined,
+      activityDate: form.activityDate ? new Date(form.activityDate).toISOString() : undefined,
+      location: form.location || undefined,
+      externalUrl: form.externalUrl || undefined,
+      capacity: form.capacity ? Number(form.capacity) : undefined,
+      tags: form.tags
+        ? form.tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : undefined,
+      status: form.status,
+    };
     try {
-      await activityService.create({
-        title: form.title,
-        description: form.description || undefined,
-        type: activityType,
-        category: form.category,
-        modality: form.modality,
-        areaId: form.areaId || undefined,
-        capacity: form.capacity ? Number(form.capacity) : undefined,
-        status: form.status,
-      } as never);
-      setForm({ ...form, title: '', description: '', capacity: '' });
-      setMsg('Actividad publicada.');
-      await loadAll();
-    } catch (err) { setError(apiError(err)); }
+      if (editing) {
+        delete payload.type;
+        await activityService.update(editing.id, payload);
+        notify('Actividad actualizada.');
+      } else {
+        await activityService.create(payload as never);
+        notify(
+          form.status === 'draft'
+            ? 'Actividad guardada como borrador.'
+            : 'Actividad publicada.',
+        );
+      }
+      resetForm();
+      await load();
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEdit = (a: Activity) => {
+    setEditing(a);
+    setShowForm(true);
+    setForm({
+      title: a.title,
+      description: a.description ?? '',
+      category: a.category,
+      modality: a.modality,
+      areaId: a.academicAreaId ?? '',
+      activityDate: a.eventDate ? a.eventDate.slice(0, 16) : '',
+      location: a.location ?? '',
+      externalUrl: a.externalUrl ?? '',
+      capacity: a.capacity ? String(a.capacity) : '',
+      tags: (a.tags ?? []).join(', '),
+      status: a.status,
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const changeStatus = async (a: Activity, status: string) => {
+    setError(null);
+    try {
+      await activityService.update(a.id, { status });
+      notify(`Estado actualizado a “${lbl(ACTIVITY_STATUS_LABEL, status)}”.`);
+      await load();
+    } catch (e) {
+      setError(apiError(e));
+    }
+  };
+
+  const openParticipants = async (activityId: string) => {
+    setSelected(activityId);
+    setPartLoading(true);
+    setError(null);
+    try {
+      setParticipants(await activityService.participants(activityId));
+    } catch (e) {
+      setError(apiError(e));
+      setParticipants([]);
+    } finally {
+      setPartLoading(false);
+    }
   };
 
   const decide = async (activityId: string, studentProfileId: string, status: 'confirmed' | 'absent') => {
-    setError(null); setMsg(null);
+    setError(null);
     try {
       await activityService.confirm(activityId, studentProfileId, status);
-      const updated = await activityService.participants(activityId);
-      setParts((p) => ({ ...p, [activityId]: updated }));
-      setMsg(status === 'confirmed' ? 'Solicitud aprobada.' : 'Solicitud rechazada.');
-    } catch (e) { setError(apiError(e)); }
+      setParticipants(await activityService.participants(activityId));
+      await load();
+      notify(status === 'confirmed' ? 'Participación confirmada.' : 'Registrado como ausente.');
+    } catch (e) {
+      setError(apiError(e));
+    }
   };
 
-  const countOf = (id: string, st: string) => (parts[id] ?? []).filter((r) => r.status === st).length;
-
-  if (loading) return <Loading />;
+  if (loading) return <Loading label="Cargando actividades…" />;
 
   const selectedActivity = activities.find((a) => a.id === selected);
-  const selParts = selected ? parts[selected] ?? [] : [];
-  const pending = selParts.filter((r) => r.status === 'registered');
-  const confirmedList = selParts.filter((r) => r.status === 'confirmed');
-  const others = selParts.filter((r) => r.status === 'interested' || r.status === 'absent');
-  const confirmedCount = selected ? countOf(selected, 'confirmed') : 0;
-  const full = !!(selectedActivity?.capacity && confirmedCount >= selectedActivity.capacity);
-  const name = (r: Registration) => (r.studentProfile?.user ? `${r.studentProfile.user.firstName} ${r.studentProfile.user.lastName}` : r.studentProfileId);
+  const pending = participants.filter((r) => r.status === 'registered');
+  const interested = participants.filter((r) => r.status === 'interested');
+  const confirmed = participants.filter((r) => r.status === 'confirmed');
+  const absent = participants.filter((r) => r.status === 'absent');
+  const full = !!(selectedActivity?.capacity && confirmed.length >= selectedActivity.capacity);
+  const tipo = activityType === 'academica' ? 'académica' : 'extracurricular';
 
   return (
     <div>
       {error && <div className="alert alert-error">{error}</div>}
       {msg && <div className="alert alert-success">{msg}</div>}
 
-      <Card title={`Publicar actividad ${activityType === 'academica' ? 'académica' : 'extracurricular'}`}>
-        <form onSubmit={publish}>
-          <div className="row">
-            <div className="field"><label>Título</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>
-            <div className="field"><label>Categoría</label>
-              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {ACTIVITY_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="field"><label>Descripción</label><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div className="row">
-            <div className="field"><label>Modalidad</label>
-              <select value={form.modality} onChange={(e) => setForm({ ...form, modality: e.target.value })}>
-                {ACTIVITY_MODALITIES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-            </div>
-            <div className="field"><label>Área</label>
-              <select value={form.areaId} onChange={(e) => setForm({ ...form, areaId: e.target.value })}>
-                <option value="">Sin área</option>
-                {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            </div>
-            <div className="field"><label>Cupo</label><input type="number" min={1} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} placeholder="Sin límite" /></div>
-            <div className="field"><label>Estado</label>
-              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                {ACTIVITY_STATUSES.map((s) => <option key={s} value={s}>{lbl(ACTIVITY_STATUS_LABEL, s)}</option>)}
-              </select>
-            </div>
-          </div>
-          <button className="btn btn-primary">Publicar</button>
-        </form>
-      </Card>
+      {!showForm && (
+        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+          <FiPlus /> Nueva actividad {tipo}
+        </button>
+      )}
 
-      <div className="section-title"><h2>Actividades publicadas</h2></div>
-      {activities.length === 0 ? <EmptyState message="Sin actividades." /> : (
+      {showForm && (
+        <Card
+          title={editing ? `Editar “${editing.title}”` : `Nueva actividad ${tipo}`}
+          actions={
+            <button className="btn btn-ghost btn-sm" onClick={resetForm}>
+              Cancelar
+            </button>
+          }
+        >
+          <form onSubmit={submit}>
+            <div className="row">
+              <div className="field">
+                <label>Título</label>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder={
+                    activityType === 'academica'
+                      ? 'Taller de arquitectura de software'
+                      : 'Hackathon interna de innovación'
+                  }
+                  required
+                />
+              </div>
+              <div className="field">
+                <label>Categoría</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                >
+                  {categories.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Descripción</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Objetivo de la actividad, a quién está dirigida y qué se espera del participante."
+              />
+            </div>
+
+            <div className="row">
+              <div className="field">
+                <label>Fecha y hora</label>
+                <input
+                  type="datetime-local"
+                  value={form.activityDate}
+                  onChange={(e) => setForm({ ...form, activityDate: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label>Modalidad</label>
+                <select
+                  value={form.modality}
+                  onChange={(e) => setForm({ ...form, modality: e.target.value })}
+                >
+                  {ACTIVITY_MODALITIES.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label>Área académica</label>
+                <select
+                  value={form.areaId}
+                  onChange={(e) => setForm({ ...form, areaId: e.target.value })}
+                >
+                  <option value="">Sin área</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="row">
+              <div className="field">
+                <label>Ubicación</label>
+                <input
+                  value={form.location}
+                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  placeholder="Aula 301, Bloque B"
+                />
+              </div>
+              <div className="field">
+                <label>Enlace externo</label>
+                <input
+                  type="url"
+                  value={form.externalUrl}
+                  onChange={(e) => setForm({ ...form, externalUrl: e.target.value })}
+                  placeholder="https://…"
+                />
+              </div>
+              <div className="field">
+                <label>Cupo</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={form.capacity}
+                  onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                  placeholder="Sin límite"
+                />
+              </div>
+            </div>
+
+            <div className="row">
+              <div className="field">
+                <label>Etiquetas (separadas por coma)</label>
+                <input
+                  value={form.tags}
+                  onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                  placeholder="react, arquitectura, backend"
+                />
+              </div>
+              <div className="field">
+                <label>Estado</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
+                  {ACTIVITY_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {lbl(ACTIVITY_STATUS_LABEL, s)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <p className="muted" style={{ fontSize: '0.78rem', marginBottom: '0.7rem' }}>
+              En <strong>borrador</strong> la actividad no es visible para los estudiantes. Para que
+              puedan inscribirse debe estar <strong>publicada</strong> o <strong>abierta</strong>.
+            </p>
+
+            <button className="btn btn-primary" disabled={saving}>
+              {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar actividad'}
+            </button>
+          </form>
+        </Card>
+      )}
+
+      <div className="section-title">
+        <h2>Actividades que gestiona</h2>
+      </div>
+
+      {activities.length === 0 ? (
         <Card>
-          <table>
-            <thead><tr><th>Título</th><th>Categoría</th><th>Estado</th><th>Cupo (aprobados)</th><th>Solicitudes</th><th></th></tr></thead>
-            <tbody>
-              {activities.map((a) => {
-                const pend = countOf(a.id, 'registered');
-                const conf = countOf(a.id, 'confirmed');
-                return (
-                  <tr key={a.id}>
-                    <td>{a.title}</td>
-                    <td className="muted">{catLabel(a.category)}</td>
-                    <td><Badge tone="bordo">{lbl(ACTIVITY_STATUS_LABEL, a.status)}</Badge></td>
-                    <td>{conf} / {a.capacity ?? '∞'}</td>
-                    <td>{pend > 0 ? <Badge tone="amber">{pend} pendiente(s)</Badge> : <span className="muted">—</span>}</td>
-                    <td><button className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setSelected(a.id)}>Gestionar</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <EmptyState
+            message={`Todavía no ha publicado ninguna actividad ${tipo}. Use el botón “Nueva actividad” para crear la primera.`}
+          />
+        </Card>
+      ) : (
+        <Card>
+          <div className="scroll-x">
+            <table>
+              <thead>
+                <tr>
+                  <th>Título</th>
+                  <th>Categoría</th>
+                  <th>Fecha</th>
+                  <th>Estado</th>
+                  <th>Confirmados</th>
+                  <th>Pendientes</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {activities.map((a) => {
+                  const pend = (a.registrationCount ?? 0) - (a.confirmedCount ?? 0);
+                  return (
+                    <tr key={a.id}>
+                      <td>
+                        <strong>{a.title}</strong>
+                        {a.location && <div className="muted">{a.location}</div>}
+                      </td>
+                      <td className="muted">{catLabel(a.category)}</td>
+                      <td className="muted">
+                        {a.eventDate ? (
+                          new Date(a.eventDate).toLocaleString('es-BO', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        ) : (
+                          <span>Sin fecha</span>
+                        )}
+                      </td>
+                      <td>
+                        <select
+                          className="status-select"
+                          value={a.status}
+                          onChange={(e) => changeStatus(a, e.target.value)}
+                          aria-label={`Estado de ${a.title}`}
+                        >
+                          {ACTIVITY_STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {lbl(ACTIVITY_STATUS_LABEL, s)}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        {a.confirmedCount ?? 0} / {a.capacity ?? '∞'}
+                      </td>
+                      <td>
+                        {pend > 0 ? (
+                          <Badge tone="amber">{pend}</Badge>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="flex" style={{ gap: '0.35rem' }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => startEdit(a)}
+                            title="Editar"
+                          >
+                            <FiEdit2 />
+                          </button>
+                          <button
+                            className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => openParticipants(a.id)}
+                          >
+                            <FiUsers /> Participación
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 
       {selectedActivity && (
-        <Card title={`Solicitudes · ${selectedActivity.title}`}>
+        <Card title={`Participación · ${selectedActivity.title}`}>
           <p className="muted">
-            Aprobados: <strong>{confirmedCount}</strong> / {selectedActivity.capacity ?? '∞'}
-            {full && ' · cupo lleno'}
+            Confirmados: <strong>{confirmed.length}</strong> de{' '}
+            {selectedActivity.capacity ?? 'cupo ilimitado'}
+            {full && ' · el cupo está lleno'}
           </p>
 
-          <h3 style={{ marginTop: '1rem' }}>Pendientes de aprobación ({pending.length})</h3>
-          {pending.length === 0 ? <p className="muted">No hay solicitudes pendientes.</p> : (
-            <table>
-              <tbody>
-                {pending.map((r) => (
-                  <tr key={r.id}>
-                    <td>{name(r)}</td>
-                    <td style={{ width: 90 }}><Badge tone="amber">Pendiente</Badge></td>
-                    <td className="flex" style={{ width: 230 }}>
-                      <button className="btn btn-primary btn-sm" disabled={full} title={full ? 'Cupo lleno' : ''} onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}>Aprobar</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}>Rechazar</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          <h3 style={{ marginTop: '1.2rem' }}>Confirmados ({confirmedList.length})</h3>
-          {confirmedList.length === 0 ? <p className="muted">Aún no hay confirmados.</p> : (
-            <table>
-              <tbody>
-                {confirmedList.map((r) => (
-                  <tr key={r.id}>
-                    <td>{name(r)}</td>
-                    <td style={{ width: 110 }}><Badge tone="green">Confirmado</Badge></td>
-                    <td style={{ width: 120 }}><button className="btn btn-secondary btn-sm" onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}>Quitar</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {others.length > 0 && (
+          {partLoading ? (
+            <Loading label="Cargando participantes…" />
+          ) : participants.length === 0 ? (
+            <EmptyState message="Todavía nadie manifestó interés ni se inscribió en esta actividad." />
+          ) : (
             <>
-              <h3 style={{ marginTop: '1.2rem' }}>Otros</h3>
-              <table>
-                <tbody>
-                  {others.map((r) => (
-                    <tr key={r.id}>
-                      <td>{name(r)}</td>
-                      <td><Badge tone={(REGISTRATION_BADGE[r.status] ?? 'badge-gray').replace('badge-', '')}>{lbl(REGISTRATION_STATUS_LABEL, r.status)}</Badge></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ParticipantGroup
+                title={`Inscritos pendientes de registro (${pending.length})`}
+                rows={pending}
+                empty="No hay inscripciones pendientes."
+                render={(r) => (
+                  <div className="flex" style={{ gap: '0.35rem' }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      disabled={full}
+                      title={full ? 'El cupo está lleno' : 'Registrar asistencia'}
+                      onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}
+                    >
+                      Confirmar participación
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}
+                    >
+                      Ausente
+                    </button>
+                  </div>
+                )}
+              />
+
+              <ParticipantGroup
+                title={`Solo interesados (${interested.length})`}
+                rows={interested}
+                empty="Nadie marcó únicamente interés."
+                render={(r) => (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={full}
+                    onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}
+                  >
+                    Confirmar participación
+                  </button>
+                )}
+              />
+
+              <ParticipantGroup
+                title={`Participación confirmada (${confirmed.length})`}
+                rows={confirmed}
+                empty="Todavía no hay participación confirmada."
+                render={(r) => (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}
+                  >
+                    Marcar ausente
+                  </button>
+                )}
+              />
+
+              {absent.length > 0 && (
+                <ParticipantGroup
+                  title={`Ausentes (${absent.length})`}
+                  rows={absent}
+                  empty=""
+                  render={(r) => (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      disabled={full}
+                      onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}
+                    >
+                      Confirmar participación
+                    </button>
+                  )}
+                />
+              )}
             </>
           )}
         </Card>
+      )}
+
+      {!selectedActivity && activities.length > 0 && (
+        <div className="state">
+          <FiCalendar size={24} style={{ opacity: 0.4 }} />
+          <p className="muted">
+            Seleccione “Participación” en una actividad para registrar la asistencia.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ParticipantGroup({
+  title,
+  rows,
+  empty,
+  render,
+}: {
+  title: string;
+  rows: Participant[];
+  empty: string;
+  render: (r: Participant) => React.ReactNode;
+}) {
+  if (rows.length === 0 && !empty) return null;
+  return (
+    <div className="mt">
+      <h3>{title}</h3>
+      {rows.length === 0 ? (
+        <p className="muted">{empty}</p>
+      ) : (
+        <div className="scroll-x">
+          <table>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <strong>{r.studentName ?? 'Estudiante'}</strong>
+                    <div className="muted">
+                      {r.semester ? `${r.semester}º semestre` : 'Semestre no declarado'}
+                    </div>
+                  </td>
+                  <td style={{ width: 130 }}>
+                    <Badge tone={(REGISTRATION_BADGE[r.status] ?? 'badge-gray').replace('badge-', '')}>
+                      {lbl(REGISTRATION_STATUS_LABEL, r.status)}
+                    </Badge>
+                  </td>
+                  <td style={{ width: 300 }}>{render(r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

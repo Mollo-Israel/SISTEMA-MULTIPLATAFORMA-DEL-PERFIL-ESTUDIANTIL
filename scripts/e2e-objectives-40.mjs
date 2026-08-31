@@ -567,7 +567,244 @@ async function objective2(ctx) {
     '2.43 Y tampoco puede abrir un perfil -> 403',
   );
 }
-async function objective3() {}
+// ===========================================================================
+//  OBJETIVO 3 — Actividades academicas y extracurriculares
+// ===========================================================================
+async function objective3(ctx) {
+  objective('OBJETIVO 3 — Gestion de actividades academicas y extracurriculares');
+
+  const { student, directorToken, societyToken, teacherToken, webArea } = ctx;
+  const future = new Date(Date.now() + 21 * 24 * 3600 * 1000).toISOString();
+
+  // --- Responsables de cada tipo ---
+  section('Responsable de cada tipo de actividad');
+  const academic = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Taller de arquitectura de software ${TS}`,
+      description: 'Patrones, capas y decisiones de diseño en proyectos de la carrera.',
+      type: 'academica',
+      category: 'taller_academico',
+      modality: 'presencial',
+      areaId: webArea.id,
+      activityDate: future,
+      location: 'Aula 301, Bloque B',
+      capacity: 3,
+      tags: ['arquitectura', 'patrones'],
+      status: 'draft',
+    },
+  });
+  check(academic.status === 201, '3.1 El director crea una actividad academica', `status ${academic.status} ${msgOf(academic)}`);
+  const academicId = academic.data?.id;
+  ctx.academicActivityId = academicId;
+  check(academic.data?.status === 'draft', '3.2 La actividad nace como borrador');
+
+  const societyAcademic = await req('POST', '/activities', {
+    token: societyToken,
+    body: { title: `Intento academico ${TS}`, type: 'academica', category: 'charla' },
+  });
+  check(
+    societyAcademic.status === 403,
+    '3.3 La sociedad cientifica NO publica actividades academicas -> 403',
+    `status ${societyAcademic.status}`,
+  );
+
+  const extracurricular = await req('POST', '/activities', {
+    token: societyToken,
+    body: {
+      title: `Hackathon de innovacion ${TS}`,
+      description: 'Reto de 24 horas para equipos de la carrera.',
+      type: 'extracurricular',
+      category: 'hackathon',
+      modality: 'presencial',
+      areaId: webArea.id,
+      activityDate: future,
+      capacity: 20,
+      status: 'open',
+    },
+  });
+  check(extracurricular.status === 201, '3.4 La sociedad cientifica crea una extracurricular', msgOf(extracurricular));
+  const extraId = extracurricular.data?.id;
+  ctx.extraActivityId = extraId;
+
+  const directorExtra = await req('POST', '/activities', {
+    token: directorToken,
+    body: { title: `Intento extra ${TS}`, type: 'extracurricular', category: 'hackathon' },
+  });
+  check(
+    directorExtra.status === 403,
+    '3.5 El director NO publica actividades extracurriculares -> 403',
+    `status ${directorExtra.status}`,
+  );
+
+  const teacherPublish = await req('POST', '/activities', {
+    token: teacherToken,
+    body: { title: `Intento docente ${TS}`, type: 'academica', category: 'charla' },
+  });
+  check(
+    teacherPublish.status === 403,
+    '3.6 El docente NO publica actividades -> 403',
+    `status ${teacherPublish.status}`,
+  );
+
+  const studentPublish = await req('POST', '/activities', {
+    token: student,
+    body: { title: `Intento estudiante ${TS}`, type: 'academica', category: 'charla' },
+  });
+  check(studentPublish.status === 403, '3.7 El estudiante NO publica actividades -> 403');
+
+  // --- Edicion y publicacion ---
+  section('Edicion, publicacion y estados');
+  const edited = await req('PATCH', `/activities/${academicId}`, {
+    token: directorToken,
+    body: { description: 'Patrones, capas y decisiones de diseño aplicadas a proyectos reales.', capacity: 2 },
+  });
+  check(edited.status === 200 && edited.data.capacity === 2, '3.8 El director edita su actividad', msgOf(edited));
+
+  const draftForStudent = await req('GET', '/activities', { token: student });
+  check(
+    !draftForStudent.data?.some((a) => a.id === academicId),
+    '3.9 El estudiante NO ve la actividad en borrador',
+  );
+
+  const earlyRegister = await req('POST', `/activities/${academicId}/register`, { token: student });
+  check(
+    earlyRegister.status === 400 || earlyRegister.status === 404,
+    '3.10 No se puede inscribir en un borrador',
+    `status ${earlyRegister.status}`,
+  );
+
+  const published = await req('PATCH', `/activities/${academicId}`, {
+    token: directorToken,
+    body: { status: 'open' },
+  });
+  check(published.status === 200 && published.data.status === 'open', '3.11 El director publica la actividad');
+
+  const managed = await req('GET', '/activities/managed', { token: directorToken });
+  check(
+    managed.status === 200 && managed.data.some((a) => a.id === academicId),
+    '3.12 El panel del responsable lista sus actividades',
+  );
+  check(
+    !managed.data.some((a) => a.type === 'extracurricular' && a.creatorId !== undefined && a.id === extraId),
+    '3.13 El panel del director no incluye las extracurriculares ajenas',
+  );
+
+  const societyOnAcademic = await req('PATCH', `/activities/${academicId}`, {
+    token: societyToken,
+    body: { title: 'Secuestro de actividad' },
+  });
+  check(
+    societyOnAcademic.status === 403,
+    '3.14 La sociedad NO edita una actividad academica -> 403',
+    `status ${societyOnAcademic.status}`,
+  );
+
+  // --- Consulta del estudiante ---
+  section('Consulta, filtros e inscripcion del estudiante');
+  const list = await req('GET', '/activities', { token: student });
+  check(list.status === 200 && list.data.some((a) => a.id === academicId), '3.15 El estudiante ve la actividad publicada');
+
+  const byType = await req('GET', '/activities?type=extracurricular', { token: student });
+  check(
+    byType.status === 200 && byType.data.every((a) => a.type === 'extracurricular'),
+    '3.16 Filtro por tipo de actividad',
+  );
+  const byCategory = await req('GET', '/activities?category=hackathon', { token: student });
+  check(
+    byCategory.status === 200 && byCategory.data.every((a) => a.category === 'hackathon'),
+    '3.17 Filtro por categoria',
+  );
+  const byArea = await req('GET', `/activities?areaId=${webArea.id}`, { token: student });
+  check(
+    byArea.status === 200 && byArea.data.every((a) => a.academicAreaId === webArea.id),
+    '3.18 Filtro por area academica',
+  );
+
+  const detail = await req('GET', `/activities/${academicId}`, { token: student });
+  check(detail.status === 200, '3.19 El estudiante abre el detalle de la actividad');
+  check(detail.data?.myRegistration === null, '3.20 El detalle indica que aun no esta inscrito');
+  check(detail.data?.isOpenForRegistration === true, '3.21 El detalle indica que admite inscripcion');
+  check(detail.data?.seatsLeft === 2, '3.22 El detalle informa los cupos disponibles');
+
+  const interest = await req('POST', `/activities/${academicId}/register-interest`, { token: student });
+  check(interest.status === 201, '3.23 El estudiante marca interes', msgOf(interest));
+  const dupInterest = await req('POST', `/activities/${academicId}/register-interest`, { token: student });
+  check(dupInterest.status === 400, '3.24 Interes duplicado -> 400', `status ${dupInterest.status}`);
+
+  const enroll = await req('POST', `/activities/${academicId}/register`, { token: student });
+  check(
+    [200, 201].includes(enroll.status) && enroll.data.status === 'registered',
+    '3.25 El estudiante se inscribe (solicitud pendiente)',
+    msgOf(enroll),
+  );
+  const dupEnroll = await req('POST', `/activities/${academicId}/register`, { token: student });
+  check(dupEnroll.status === 400, '3.26 Inscripcion duplicada -> 400', `status ${dupEnroll.status}`);
+
+  const afterEnroll = await req('GET', `/activities/${academicId}`, { token: student });
+  check(
+    afterEnroll.data?.myRegistration?.status === 'registered',
+    '3.27 El detalle refleja el estado de inscripcion del estudiante',
+  );
+
+  const mine = await req('GET', '/activities/my-registrations', { token: student });
+  check(
+    mine.status === 200 && mine.data.some((r) => r.activity?.id === academicId),
+    '3.28 "Mis actividades" lista la inscripcion',
+  );
+
+  // --- Estados que bloquean la inscripcion ---
+  section('Estados que bloquean la inscripcion');
+  const closed = await req('POST', '/activities', {
+    token: societyToken,
+    body: {
+      title: `Convocatoria cerrada ${TS}`,
+      type: 'extracurricular',
+      category: 'convocatoria',
+      status: 'closed',
+    },
+  });
+  const closedTry = await req('POST', `/activities/${closed.data?.id}/register`, { token: student });
+  check(closedTry.status === 400, '3.29 Actividad cerrada -> 400 al inscribirse', `status ${closedTry.status}`);
+  check(
+    String(closedTry.data?.message ?? '').toLowerCase().includes('cerrad'),
+    '3.30 El mensaje explica que las inscripciones estan cerradas',
+    msgOf(closedTry),
+  );
+
+  const past = await req('POST', '/activities', {
+    token: societyToken,
+    body: {
+      title: `Reto pasado ${TS}`,
+      type: 'extracurricular',
+      category: 'reto',
+      status: 'open',
+      activityDate: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),
+    },
+  });
+  const pastTry = await req('POST', `/activities/${past.data?.id}/register`, { token: student });
+  check(pastTry.status === 400, '3.31 Actividad con fecha pasada -> 400', `status ${pastTry.status}`);
+
+  const cancelled = await req('POST', '/activities', {
+    token: societyToken,
+    body: {
+      title: `Club cancelado ${TS}`,
+      type: 'extracurricular',
+      category: 'club_estudio',
+      status: 'cancelled',
+    },
+  });
+  check(
+    (await req('POST', `/activities/${cancelled.data?.id}/register`, { token: student })).status === 400,
+    '3.32 Actividad cancelada -> 400',
+  );
+
+  check(
+    (await req('POST', '/activities/00000000-0000-0000-0000-000000000000/register', { token: student }))
+      .status === 404,
+    '3.33 Actividad inexistente -> 404',
+  );
+}
 async function objective4() {}
 
 main().catch((e) => {

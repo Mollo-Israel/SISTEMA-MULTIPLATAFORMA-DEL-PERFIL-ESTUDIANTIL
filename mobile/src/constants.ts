@@ -25,3 +25,34 @@ export const ACTIVITY_CATEGORIES = [
 
 export const categoryLabel = (v: string) =>
   ACTIVITY_CATEGORIES.find((c) => c.value === v)?.label ?? v;
+
+export const ACTIVITY_STATUS_LABEL: Record<string, string> = {
+  draft: 'Borrador',
+  published: 'Publicada',
+  open: 'Abierta',
+  closed: 'Cerrada',
+  finished: 'Finalizada',
+  cancelled: 'Cancelada',
+};
+
+export const REGISTRATION_STATUS_LABEL: Record<string, string> = {
+  interested: 'Interesado',
+  registered: 'Inscrito',
+  confirmed: 'Participación confirmada',
+  absent: 'Ausente',
+};
+
+export const ACTIVITY_TYPE_LABEL: Record<string, string> = {
+  academica: 'Académica',
+  extracurricular: 'Extracurricular',
+};
+
+export const ACTIVITY_STATUSES = ['draft', 'published', 'open', 'closed', 'finished', 'cancelled'];
+
+/** Categorías propias de cada tipo, según el documento del proyecto. */
+export const CATEGORIES_BY_TYPE: Record<string, string[]> = {
+  academica: ['taller_academico', 'clase_espejo', 'seminario', 'charla', 'curso_externo_recomendado', 'tutoria', 'investigacion'],
+  extracurricular: ['hackathon', 'reto', 'convocatoria', 'actividad_sociedad_cientifica', 'club_estudio', 'responsabilidad_social', 'integracion'],
+};
+
+export const lbl = (map: Record<string, string>, v: string) => map[v] ?? v;

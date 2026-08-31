@@ -72,6 +72,21 @@ export interface Activity {
   tags: string[] | null;
   externalUrl: string | null;
   evidenceRequired: boolean;
+  creator?: { id: string; firstName: string; lastName: string } | null;
+  /** Presentes en los listados; el detalle del estudiante trae los suyos. */
+  registrationCount?: number;
+  confirmedCount?: number;
+  seatsLeft?: number | null;
+  registrationBlockReason?: string | null;
+}
+
+export interface Participant {
+  id: string;
+  studentProfileId: string;
+  status: string;
+  studentName: string | null;
+  semester: number | null;
+  createdAt: string;
 }
 
 export interface Registration {

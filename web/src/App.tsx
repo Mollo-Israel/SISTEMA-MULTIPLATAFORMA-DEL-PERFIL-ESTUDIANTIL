@@ -22,6 +22,7 @@ import TeacherReportsPage from './pages/teacher/Reports';
 
 import DirectorDashboard from './pages/director/Dashboard';
 import DirectorAffinityMap from './pages/director/AffinityMap';
+import DirectorActivitiesPage from './pages/director/Activities';
 
 import SocietyDashboard from './pages/society/Dashboard';
 import SocietyActivitiesPage from './pages/society/Activities';
@@ -79,6 +80,7 @@ export default function App() {
 
           <Route element={guarded([D], <Layout />)}>
             <Route path="/director" element={<DirectorDashboard />} />
+            <Route path="/director/activities" element={<DirectorActivitiesPage />} />
             <Route path="/director/affinity" element={<DirectorAffinityMap />} />
           </Route>
 

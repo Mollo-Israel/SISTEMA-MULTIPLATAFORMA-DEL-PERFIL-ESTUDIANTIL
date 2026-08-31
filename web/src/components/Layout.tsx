@@ -32,6 +32,7 @@ const ICONS: Record<string, IconType> = {
   '/teacher/students': FiUser,
   '/teacher/reports': FiBarChart2,
   '/director': FiGrid,
+  '/director/activities': FiCalendar,
   '/director/affinity': FiTarget,
   '/society': FiGrid,
   '/society/activities': FiCalendar,
