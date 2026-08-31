@@ -134,9 +134,20 @@ async function main() {
   (visible.data ?? []).some((a) => a.id === actAcad) ? ok(`6. Estudiante consulta actividades (${visible.data.length})`) : bad('6. Consulta actividades', 'no ve la actividad');
 
   // 7) Estudiante registra interés / inscripción
+  // El guion es idempotente: si una corrida anterior ya dejó la participación
+  // confirmada, el sistema rechaza volver a inscribirse (regla correcta) y aquí
+  // se toma como paso ya cumplido en lugar de como fallo.
   await req('POST', `/activities/${actExtra}/register-interest`, { token: s1 });
-  const reg = await req('POST', `/activities/${actAcad}/register`, { token: s1 });
-  [200, 201].includes(reg.status) ? ok('7. Estudiante registra interés e inscripción') : bad('7. Inscripción', `status ${reg.status}`);
+  const already = (await req('GET', '/activities/my-registrations', { token: s1 })).data ?? [];
+  const prev = already.find((r) => r.activity?.id === actAcad);
+  if (prev && ['confirmed', 'absent'].includes(prev.status)) {
+    ok(`7. Estudiante ya tiene participación registrada (${prev.status}) de una corrida anterior`);
+  } else {
+    const reg = await req('POST', `/activities/${actAcad}/register`, { token: s1 });
+    [200, 201].includes(reg.status)
+      ? ok('7. Estudiante registra interés e inscripción')
+      : bad('7. Inscripción', `status ${reg.status} ${JSON.stringify(reg.data?.message ?? '')}`);
+  }
 
   // 8) Docente confirma participación
   const confirm = await req('PATCH', `/activities/${actAcad}/confirm-participation`, { token: directorToken, body: { studentProfileId: p1, status: 'confirmed' } });
