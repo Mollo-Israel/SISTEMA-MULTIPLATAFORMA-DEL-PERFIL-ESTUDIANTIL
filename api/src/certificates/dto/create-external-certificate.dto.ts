@@ -1,7 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsDateString, IsNotEmpty, IsOptional, IsString, IsUrl, MaxLength, MinLength } from 'class-validator';
-import { cleanLine, IsNotFutureDate, trim } from '../../common/validation';
+import {
+  IsDateString,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
+import { cleanLine, cleanText, IsNotFutureDate, trim } from '../../common/validation';
 
 export class CreateExternalCertificateDto {
   @ApiProperty({ example: 'Certified JavaScript Developer' })
@@ -32,4 +44,47 @@ export class CreateExternalCertificateDto {
   @IsDateString({}, { message: 'La fecha de emisión no es válida.' })
   @IsNotFutureDate({ message: 'La fecha de emisión no puede ser futura.' })
   issueDate?: string;
+
+  @ApiProperty({ required: false, example: 'Curso de 40 horas sobre pruebas automatizadas.' })
+  @IsOptional()
+  @Transform(cleanText)
+  @IsString()
+  @MaxLength(300, { message: 'La descripción no puede superar 300 caracteres.' })
+  description?: string;
+
+  @ApiProperty({ required: false, description: 'Área académica a la que corresponde' })
+  @IsOptional()
+  @IsUUID('4')
+  academicAreaId?: string;
+
+  @ApiProperty({
+    required: false,
+    description: 'Referencia del archivo devuelta por POST /uploads',
+  })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(500)
+  fileUrl?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(cleanLine)
+  @IsString()
+  @MaxLength(160)
+  fileName?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(120)
+  mimeType?: string;
+
+  @ApiProperty({ required: false, description: 'Tamaño en bytes' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5 * 1024 * 1024, { message: 'El archivo supera el máximo de 5 MB.' })
+  fileSize?: number;
 }

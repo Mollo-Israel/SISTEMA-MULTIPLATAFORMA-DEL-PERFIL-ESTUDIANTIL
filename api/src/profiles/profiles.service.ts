@@ -341,15 +341,20 @@ export class ProfilesService {
     const projects = [...projectsMap.values()];
     const projectIds = projects.map((p) => p.id);
 
+    // Las evidencias pertenecen al perfil, no al proyecto: una evidencia puede
+    // respaldar una actividad o un area sin estar ligada a ningun proyecto.
     const [evidences, registrations] = await Promise.all([
-      projectIds.length
-        ? this.evidences.find({ where: { projectId: In(projectIds) } })
-        : Promise.resolve([]),
+      this.evidences.find({
+        where: { studentProfileId: profile.id },
+        relations: { activity: true, academicArea: true },
+        order: { createdAt: 'DESC' },
+      }),
       this.registrations.find({
         where: { studentProfileId: profile.id },
         relations: { activity: true },
       }),
     ]);
+    void projectIds;
 
     const improvementAreas = await this.resolveAreas(profile.improvementAreaIds);
 
@@ -384,8 +389,16 @@ export class ProfilesService {
         description: e.description,
         evidenceType: e.evidenceType,
         fileUrl: e.fileUrl,
+        fileName: e.fileName,
+        mimeType: e.mimeType,
+        fileSize: e.fileSize,
         externalUrl: e.externalUrl,
         projectId: e.projectId,
+        activityId: e.activityId,
+        activity: e.activity?.title ?? null,
+        academicAreaId: e.academicAreaId,
+        area: e.academicArea?.name ?? null,
+        createdAt: e.createdAt,
       })),
       activities: registrations.map((r) => ({
         registrationId: r.id,

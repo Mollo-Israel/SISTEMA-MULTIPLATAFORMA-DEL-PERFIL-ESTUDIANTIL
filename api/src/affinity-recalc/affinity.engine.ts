@@ -105,19 +105,42 @@ export class AffinityEngineService implements AffinityRecalculationPort {
 
     // 7-9. Proyectos, tecnologias y evidencias
     const projects = await this.projects.find({ where: { createdByProfileId: studentProfileId } });
+    const areasByProject = new Map<string, string[]>();
     for (const project of projects) {
       const projectAreas = project.academicAreaId
         ? [project.academicAreaId]
         : this.inferAreasByTech(project.technologies, areas);
+      areasByProject.set(project.id, projectAreas);
       projectAreas.forEach((areaId) => add(areaId, POINTS.PROJECT));
-
-      const projectEvidences = await this.evidences.find({ where: { projectId: project.id } });
-      projectEvidences.forEach(() => projectAreas.forEach((areaId) => add(areaId, POINTS.EVIDENCE)));
     }
 
-    // 10. Certificados externos (por coincidencia de texto)
+    // Todas las evidencias del estudiante en una sola consulta (antes se
+    // consultaba una vez por proyecto). Una evidencia puntua en el area que
+    // declara, o en la de la actividad, o en las del proyecto que respalda.
+    const evidences = await this.evidences.find({
+      where: { studentProfileId },
+      relations: { activity: true },
+    });
+    for (const evidence of evidences) {
+      if (evidence.academicAreaId) {
+        add(evidence.academicAreaId, POINTS.EVIDENCE);
+      } else if (evidence.activity?.academicAreaId) {
+        add(evidence.activity.academicAreaId, POINTS.EVIDENCE);
+      } else if (evidence.projectId) {
+        (areasByProject.get(evidence.projectId) ?? []).forEach((areaId) =>
+          add(areaId, POINTS.EVIDENCE),
+        );
+      }
+    }
+
+    // 10. Certificados externos: el area declarada manda; si no hay, se infiere
+    // por coincidencia de texto con el nombre y las etiquetas del area.
     const certs = await this.certificates.find({ where: { studentProfileId } });
     certs.forEach((c) => {
+      if (c.academicAreaId) {
+        add(c.academicAreaId, POINTS.CERTIFICATE);
+        return;
+      }
       const matched = this.matchAreasByText(`${c.certificateName} ${c.issuer}`, areas);
       matched.forEach((areaId) => add(areaId, POINTS.CERTIFICATE));
     });

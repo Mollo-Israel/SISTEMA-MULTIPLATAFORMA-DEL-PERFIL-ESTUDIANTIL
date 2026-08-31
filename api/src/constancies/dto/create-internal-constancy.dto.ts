@@ -9,15 +9,12 @@ export class CreateInternalConstancyDto {
   @IsUUID('4', { message: 'Estudiante inválido.' })
   profileId: string;
 
-  @ApiProperty({ required: false, description: 'Actividad relacionada (opcional)' })
-  @IsOptional()
-  @IsUUID('4')
-  activityId?: string;
-
-  @ApiProperty({ required: false, description: 'Registro de participación (recomendado si existe)' })
-  @IsOptional()
-  @IsUUID('4')
-  activityRegistrationId?: string;
+  @ApiProperty({
+    description:
+      'Actividad que respalda la constancia. El estudiante debe tener participación confirmada en ella.',
+  })
+  @IsUUID('4', { message: 'Actividad inválida.' })
+  activityId: string;
 
   @ApiProperty({ example: 'Participó como ponente en el seminario interno.' })
   @Transform(cleanText)

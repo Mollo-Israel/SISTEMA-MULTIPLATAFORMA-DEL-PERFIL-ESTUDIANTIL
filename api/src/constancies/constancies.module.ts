@@ -5,6 +5,7 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { AccessModule } from '../access/access.module';
 import { ConstanciesService } from './constancies.service';
 import { ConstanciesController } from './constancies.controller';
 
@@ -17,6 +18,7 @@ import { ConstanciesController } from './constancies.controller';
       ActivityRegistration,
     ]),
     AffinityRecalcModule,
+    AccessModule,
   ],
   controllers: [ConstanciesController],
   providers: [ConstanciesService],

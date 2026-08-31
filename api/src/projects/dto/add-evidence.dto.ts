@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'class-validator';
 import { EvidenceType } from '@perfil/shared';
-import { cleanText, trim } from '../../common/validation';
+import { cleanLine, cleanText, trim } from '../../common/validation';
 
 export class AddEvidenceDto {
   @ApiProperty({ enum: EvidenceType })
@@ -29,4 +29,25 @@ export class AddEvidenceDto {
   @IsUrl({}, { message: 'El enlace debe ser una URL válida.' })
   @MaxLength(500)
   externalUrl?: string;
+
+  @ApiProperty({ required: false, description: 'Nombre original del archivo subido' })
+  @IsOptional()
+  @Transform(cleanLine)
+  @IsString()
+  @MaxLength(160)
+  fileName?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(120)
+  mimeType?: string;
+
+  @ApiProperty({ required: false, description: 'Tamaño en bytes' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5 * 1024 * 1024, { message: 'El archivo supera el máximo de 5 MB.' })
+  fileSize?: number;
 }

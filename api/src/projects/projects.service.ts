@@ -149,12 +149,20 @@ export class ProjectsService {
     if (dto.evidenceType === EvidenceType.LINK && !dto.externalUrl) {
       throw new BadRequestException('Debe indicar externalUrl para una evidencia de tipo link.');
     }
+    // La evidencia queda a nombre de quien la adjunta; si es un integrante sin
+    // perfil propio, se atribuye al dueno del proyecto.
+    const ownProfile = await this.profiles.findOne({ where: { userId: user.userId } });
     const evidence = this.evidences.create({
       projectId: project.id,
+      studentProfileId: ownProfile?.id ?? project.createdByProfileId,
+      academicAreaId: project.academicAreaId,
       evidenceType: dto.evidenceType,
       description: dto.description ?? null,
       fileUrl: dto.fileUrl ?? null,
       externalUrl: dto.externalUrl ?? null,
+      fileName: dto.fileName ?? null,
+      mimeType: dto.mimeType ?? null,
+      fileSize: dto.fileSize ?? null,
     });
     const saved = await this.evidences.save(evidence);
     await this.affinityRecalculation.requestRecalculation(project.createdByProfileId);

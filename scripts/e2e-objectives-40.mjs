@@ -805,7 +805,417 @@ async function objective3(ctx) {
     '3.33 Actividad inexistente -> 404',
   );
 }
-async function objective4() {}
+// ===========================================================================
+//  OBJETIVO 4 — Participacion, evidencias y constancias
+// ===========================================================================
+async function objective4(ctx) {
+  objective('OBJETIVO 4 — Gestion de participacion y evidencias');
+
+  const {
+    student,
+    admin,
+    directorToken,
+    societyToken,
+    teacherToken,
+    academicActivityId,
+    extraActivityId,
+    studentProfileId,
+    webArea,
+  } = ctx;
+
+  // --- RF10: asistencia y participacion ---
+  section('RF10 · Registro de asistencia y participacion');
+  const parts = await req('GET', `/activities/${academicActivityId}/participants`, {
+    token: directorToken,
+  });
+  check(parts.status === 200, '4.1 El responsable consulta los participantes', msgOf(parts));
+  check(
+    parts.data?.some((p) => p.studentProfileId === studentProfileId),
+    '4.2 El estudiante inscrito aparece en la lista',
+  );
+  check(
+    parts.data?.[0]?.studentName !== undefined,
+    '4.3 La lista trae el nombre del estudiante, no solo su identificador',
+  );
+
+  check(
+    (await req('GET', `/activities/${academicActivityId}/participants`, { token: teacherToken }))
+      .status === 403,
+    '4.4 El docente NO consulta participantes -> 403',
+  );
+  check(
+    (await req('GET', `/activities/${academicActivityId}/participants`, { token: student }))
+      .status === 403,
+    '4.5 El estudiante NO consulta participantes -> 403',
+  );
+
+  const teacherConfirm = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
+    token: teacherToken,
+    body: { studentProfileId, status: 'confirmed' },
+  });
+  check(
+    teacherConfirm.status === 403,
+    '4.6 El docente NO registra participacion -> 403',
+    `status ${teacherConfirm.status}`,
+  );
+
+  const societyOnAcademic = await req(
+    'PATCH',
+    `/activities/${academicActivityId}/confirm-participation`,
+    { token: societyToken, body: { studentProfileId, status: 'confirmed' } },
+  );
+  check(
+    societyOnAcademic.status === 403,
+    '4.7 La sociedad NO registra participacion en una actividad academica -> 403',
+    `status ${societyOnAcademic.status}`,
+  );
+
+  const selfConfirm = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
+    token: student,
+    body: { studentProfileId, status: 'confirmed' },
+  });
+  check(selfConfirm.status === 403, '4.8 El estudiante NO confirma su propia participacion -> 403');
+
+  const confirmed = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
+    token: directorToken,
+    body: { studentProfileId, status: 'confirmed' },
+  });
+  check(
+    confirmed.status === 200 && confirmed.data.status === 'confirmed',
+    '4.9 El director registra la participacion como CONFIRMADA',
+    msgOf(confirmed),
+  );
+
+  const notEnrolled = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
+    token: directorToken,
+    body: { studentProfileId: ctx.otherStudentProfileId, status: 'confirmed' },
+  });
+  check(
+    notEnrolled.status === 404,
+    '4.10 No se registra participacion de quien no se inscribio -> 404',
+    `status ${notEnrolled.status}`,
+  );
+
+  // El perfil dinamico y la afinidad recogen la participacion confirmada
+  const summaryAfter = await req('GET', '/profiles/me/summary', { token: student });
+  check(
+    summaryAfter.data?.activities?.some(
+      (a) => a.activityId === academicActivityId && a.status === 'confirmed',
+    ),
+    '4.11 El perfil dinamico refleja la participacion confirmada',
+  );
+  const affinityAfter = await req('GET', '/affinity/me', { token: student });
+  check(
+    affinityAfter.data?.some((a) => a.academicAreaId === webArea.id),
+    '4.12 La afinidad se recalculo con la participacion confirmada',
+  );
+
+  // Cupo: la actividad admite 2 confirmados
+  const s3 = await req('POST', '/auth/register', {
+    body: { firstName: 'Camila', lastName: 'Ortiz', email: studentEmail('est3'), password: PWD },
+  });
+  const s3Token = s3.data?.accessToken;
+  const s3Profile = (await req('POST', '/profiles/me', { token: s3Token, body: { semester: 4 } })).data;
+  await req('POST', `/activities/${academicActivityId}/register`, { token: s3Token });
+  const s4 = await req('POST', '/auth/register', {
+    body: { firstName: 'Bruno', lastName: 'Aguilar', email: studentEmail('est4'), password: PWD },
+  });
+  const s4Token = s4.data?.accessToken;
+  const s4Profile = (await req('POST', '/profiles/me', { token: s4Token, body: { semester: 4 } })).data;
+  await req('POST', `/activities/${academicActivityId}/register`, { token: s4Token });
+
+  const second = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
+    token: directorToken,
+    body: { studentProfileId: s3Profile.id, status: 'confirmed' },
+  });
+  check(second.status === 200, '4.13 Se confirma un segundo participante (cupo 2)');
+  const overCapacity = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
+    token: directorToken,
+    body: { studentProfileId: s4Profile.id, status: 'confirmed' },
+  });
+  check(
+    overCapacity.status === 400,
+    '4.14 Al superar el cupo de confirmados -> 400',
+    `status ${overCapacity.status}`,
+  );
+
+  const absent = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
+    token: directorToken,
+    body: { studentProfileId: s4Profile.id, status: 'absent' },
+  });
+  check(absent.status === 200 && absent.data.status === 'absent', '4.15 Se registra una ausencia');
+
+  // --- RF11: evidencias con archivo real ---
+  section('RF11 · Evidencias con subida real de archivos');
+  const pdfBytes = Buffer.from(
+    '%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
+    'utf8',
+  );
+
+  const uploadForm = new FormData();
+  uploadForm.append('file', new Blob([pdfBytes], { type: 'application/pdf' }), 'constancia.pdf');
+  const upload = await req('POST', '/uploads', { token: student, raw: uploadForm });
+  check(upload.status === 201, '4.16 El estudiante sube un archivo real (PDF)', `status ${upload.status} ${msgOf(upload)}`);
+  check(!!upload.data?.url && upload.data.url.startsWith('/api/files/'), '4.17 La subida devuelve una URL servible');
+  check(upload.data?.mimeType === 'application/pdf', '4.18 Se conserva el tipo MIME');
+  check(upload.data?.size === pdfBytes.length, '4.19 Se conserva el tamano del archivo');
+  check(
+    !String(upload.data?.id ?? '').includes('constancia'),
+    '4.20 El nombre en disco lo genera el sistema, no el cliente',
+  );
+
+  const fileRes = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`);
+  const downloaded = Buffer.from(await fileRes.arrayBuffer());
+  check(fileRes.status === 200, '4.21 El archivo queda accesible por su URL', `status ${fileRes.status}`);
+  check(downloaded.length === pdfBytes.length, '4.22 El archivo descargado coincide con el subido');
+
+  const badType = new FormData();
+  badType.append('file', new Blob([Buffer.from('MZ ejecutable')], { type: 'application/x-msdownload' }), 'virus.exe');
+  const badTypeRes = await req('POST', '/uploads', { token: student, raw: badType });
+  check(badTypeRes.status === 400, '4.23 Formato no permitido -> 400', `status ${badTypeRes.status}`);
+
+  const tooBig = new FormData();
+  tooBig.append('file', new Blob([Buffer.alloc(6 * 1024 * 1024)], { type: 'application/pdf' }), 'grande.pdf');
+  const tooBigRes = await req('POST', '/uploads', { token: student, raw: tooBig });
+  check(
+    tooBigRes.status === 400 || tooBigRes.status === 413,
+    '4.24 Archivo mayor a 5 MB -> rechazado',
+    `status ${tooBigRes.status}`,
+  );
+  check((await req('POST', '/uploads', { raw: new FormData() })).status === 401, '4.25 Subida sin sesion -> 401');
+
+  // Evidencia de archivo asociada a la actividad
+  const fileEvidence = await req('POST', '/evidences', {
+    token: student,
+    body: {
+      evidenceType: 'file',
+      description: 'Constancia de asistencia al taller.',
+      fileUrl: upload.data?.url,
+      fileName: upload.data?.originalName,
+      mimeType: upload.data?.mimeType,
+      fileSize: upload.data?.size,
+      activityId: academicActivityId,
+    },
+  });
+  check(fileEvidence.status === 201, '4.26 Evidencia de archivo asociada a la actividad', msgOf(fileEvidence));
+  check(fileEvidence.data?.fileUrl === upload.data?.url, '4.27 La referencia del archivo queda persistida');
+
+  const linkEvidence = await req('POST', '/evidences', {
+    token: student,
+    body: {
+      evidenceType: 'link',
+      description: 'Repositorio del proyecto',
+      externalUrl: 'https://github.com/afinia/demo',
+      academicAreaId: webArea.id,
+    },
+  });
+  check(linkEvidence.status === 201, '4.28 Evidencia de enlace asociada a un area', msgOf(linkEvidence));
+
+  const fileWithoutUrl = await req('POST', '/evidences', {
+    token: student,
+    body: { evidenceType: 'file', description: 'Sin archivo' },
+  });
+  check(fileWithoutUrl.status === 400, '4.29 Evidencia de tipo archivo sin fileUrl -> 400');
+  const linkWithoutUrl = await req('POST', '/evidences', {
+    token: student,
+    body: { evidenceType: 'link', description: 'Sin enlace' },
+  });
+  check(linkWithoutUrl.status === 400, '4.30 Evidencia de tipo enlace sin externalUrl -> 400');
+
+  const foreignActivity = await req('POST', '/evidences', {
+    token: ctx.otherStudentToken,
+    body: {
+      evidenceType: 'link',
+      externalUrl: 'https://example.com/ajeno',
+      activityId: academicActivityId,
+    },
+  });
+  check(
+    foreignActivity.status === 400,
+    '4.31 No se adjunta evidencia de una actividad ajena -> 400',
+    `status ${foreignActivity.status}`,
+  );
+
+  const myEvidences = await req('GET', '/evidences/my', { token: student });
+  check(
+    myEvidences.status === 200 && myEvidences.data.length >= 2,
+    '4.32 El estudiante lista sus evidencias',
+  );
+
+  const foreignDelete = await req('DELETE', `/evidences/${linkEvidence.data?.id}`, {
+    token: ctx.otherStudentToken,
+  });
+  check(foreignDelete.status === 403, '4.33 No se elimina la evidencia de otro estudiante -> 403');
+
+  // --- Certificados externos ---
+  section('Certificados externos');
+  const certUpload = new FormData();
+  certUpload.append('file', new Blob([pdfBytes], { type: 'application/pdf' }), 'certificado.pdf');
+  const certFile = await req('POST', '/uploads', { token: student, raw: certUpload });
+
+  const cert = await req('POST', '/certificates/external', {
+    token: student,
+    body: {
+      certificateName: `Fundamentos de pruebas automatizadas ${TS}`,
+      issuer: 'Plataforma externa de formacion',
+      issueDate: '2026-03-10',
+      description: 'Curso de 40 horas con evaluacion final.',
+      academicAreaId: webArea.id,
+      fileUrl: certFile.data?.url,
+      fileName: certFile.data?.originalName,
+      mimeType: certFile.data?.mimeType,
+      fileSize: certFile.data?.size,
+    },
+  });
+  check(cert.status === 201, '4.34 El estudiante registra un certificado externo con archivo', msgOf(cert));
+  check(cert.data?.fileUrl === certFile.data?.url, '4.35 El archivo del certificado queda vinculado');
+  check(cert.data?.academicAreaId === webArea.id, '4.36 El certificado guarda su area academica');
+
+  const futureCert = await req('POST', '/certificates/external', {
+    token: student,
+    body: { certificateName: `Futuro ${TS}`, issuer: 'Externa', issueDate: '2030-01-01' },
+  });
+  check(futureCert.status === 400, '4.37 Fecha de emision futura -> 400');
+
+  const editCert = await req('PATCH', `/certificates/external/${cert.data?.id}`, {
+    token: student,
+    body: { description: 'Curso de 40 horas, con proyecto final.' },
+  });
+  check(editCert.status === 200, '4.38 El estudiante edita su certificado');
+  check(
+    (await req('GET', '/certificates/external/my', { token: student })).data.length >= 1,
+    '4.39 El estudiante lista sus certificados',
+  );
+  check(
+    (await req('POST', '/certificates/external', {
+      token: directorToken,
+      body: { certificateName: 'x', issuer: 'y' },
+    })).status === 403,
+    '4.40 Otro rol NO registra certificados del estudiante -> 403',
+  );
+
+  // --- RF12: constancias internas ---
+  section('RF12 · Constancia interna autorizada');
+  const eligible = await req('GET', `/constancies/internal/eligible/${academicActivityId}`, {
+    token: directorToken,
+  });
+  check(eligible.status === 200, '4.41 El director consulta los participantes elegibles', msgOf(eligible));
+  check(
+    eligible.data?.every((e) => e.hasConstancy === false),
+    '4.42 Todavia ninguno tiene constancia emitida',
+  );
+
+  const societyConstancy = await req('POST', '/constancies/internal', {
+    token: societyToken,
+    body: { profileId: studentProfileId, activityId: academicActivityId, description: 'Intento' },
+  });
+  check(
+    societyConstancy.status === 403,
+    '4.43 La sociedad cientifica NO emite constancias -> 403',
+    `status ${societyConstancy.status}`,
+  );
+  check(
+    (await req('POST', '/constancies/internal', {
+      token: teacherToken,
+      body: { profileId: studentProfileId, activityId: academicActivityId, description: 'Intento' },
+    })).status === 403,
+    '4.44 El docente NO emite constancias -> 403',
+  );
+  check(
+    (await req('POST', '/constancies/internal', {
+      token: student,
+      body: { profileId: studentProfileId, activityId: academicActivityId, description: 'Intento' },
+    })).status === 403,
+    '4.45 El estudiante NO emite constancias -> 403',
+  );
+
+  // Sin participacion confirmada no hay constancia
+  const notConfirmed = await req('POST', '/constancies/internal', {
+    token: directorToken,
+    body: {
+      profileId: s4Profile.id,
+      activityId: academicActivityId,
+      description: 'Participo en el taller de arquitectura de software.',
+    },
+  });
+  check(
+    notConfirmed.status === 400,
+    '4.46 Sin participacion confirmada NO se emite constancia -> 400',
+    `status ${notConfirmed.status}`,
+  );
+
+  const noParticipation = await req('POST', '/constancies/internal', {
+    token: directorToken,
+    body: {
+      profileId: ctx.otherStudentProfileId,
+      activityId: academicActivityId,
+      description: 'Sin registro en la actividad.',
+    },
+  });
+  check(noParticipation.status === 400, '4.47 Sin registro en la actividad -> 400');
+
+  const constancy = await req('POST', '/constancies/internal', {
+    token: directorToken,
+    body: {
+      profileId: studentProfileId,
+      activityId: academicActivityId,
+      description: 'Participo como asistente en el taller de arquitectura de software.',
+    },
+  });
+  check(constancy.status === 201, '4.48 El director emite la constancia interna', msgOf(constancy));
+  check(
+    constancy.data?.activityRegistrationId,
+    '4.49 La constancia queda vinculada a la participacion concreta',
+  );
+
+  const duplicate = await req('POST', '/constancies/internal', {
+    token: directorToken,
+    body: {
+      profileId: studentProfileId,
+      activityId: academicActivityId,
+      description: 'Segunda constancia por la misma actividad.',
+    },
+  });
+  check(duplicate.status === 409, '4.50 Constancia duplicada -> 409', `status ${duplicate.status}`);
+
+  const eligibleAfter = await req('GET', `/constancies/internal/eligible/${academicActivityId}`, {
+    token: directorToken,
+  });
+  check(
+    eligibleAfter.data?.find((e) => e.studentProfileId === studentProfileId)?.hasConstancy === true,
+    '4.51 El listado marca al estudiante que ya tiene constancia',
+  );
+
+  const mineConstancies = await req('GET', '/constancies/internal/my', { token: student });
+  check(
+    mineConstancies.status === 200 && mineConstancies.data.length >= 1,
+    '4.52 El estudiante consulta sus constancias',
+  );
+
+  // --- Integracion final en el perfil dinamico ---
+  section('Integracion final en el perfil dinamico');
+  const finalSummary = await req('GET', '/profiles/me/summary', { token: student });
+  const fs = finalSummary.data ?? {};
+  check(fs.internalConstancies?.length >= 1, '4.53 El perfil dinamico muestra la constancia interna');
+  check(fs.externalCertificates?.length >= 1, '4.54 El perfil dinamico muestra el certificado externo');
+  check(fs.evidences?.length >= 1, '4.55 El perfil dinamico muestra las evidencias');
+  check(
+    fs.activities?.some((a) => a.status === 'confirmed'),
+    '4.56 El perfil dinamico muestra la participacion confirmada',
+  );
+  check(fs.affinities?.length > 0, '4.57 Las areas de afinidad integran toda la trayectoria');
+
+  const allowedForDirector = await req('GET', `/profiles/${studentProfileId}/allowed`, {
+    token: directorToken,
+  });
+  check(
+    allowedForDirector.data?.internalConstancies === undefined,
+    '4.58 La vista permitida sigue sin exponer las constancias internas',
+  );
+
+  void admin;
+  void extraActivityId;
+}
 
 main().catch((e) => {
   console.error('\n[31mError inesperado:[0m', e);

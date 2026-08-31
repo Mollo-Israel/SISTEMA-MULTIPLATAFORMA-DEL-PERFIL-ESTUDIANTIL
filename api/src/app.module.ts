@@ -14,6 +14,8 @@ import { CertificatesModule } from './certificates/certificates.module';
 import { ConstanciesModule } from './constancies/constancies.module';
 import { ReportsModule } from './reports/reports.module';
 import { CatalogsModule } from './catalogs/catalogs.module';
+import { StorageModule } from './storage/storage.module';
+import { EvidencesModule } from './evidences/evidences.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -37,6 +39,8 @@ import { RolesGuard } from './auth/guards/roles.guard';
     ConstanciesModule,
     ReportsModule,
     CatalogsModule,
+    StorageModule,
+    EvidencesModule,
   ],
   controllers: [HealthController],
   providers: [
