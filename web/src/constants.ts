@@ -6,6 +6,25 @@ export enum RolNombre {
   ADMIN = 'ADMIN',
 }
 
+/** Roles que el administrador puede dar de alta (RF3). */
+export const INSTITUTIONAL_ROLES = [
+  RolNombre.TEACHER,
+  RolNombre.CAREER_DIRECTOR,
+  RolNombre.SCIENTIFIC_SOCIETY,
+];
+
+/** Semestres de la carrera. */
+export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+export const GAMIFICATION_TRIGGERS = [
+  { value: 'participacion_confirmada', label: 'Participación confirmada' },
+  { value: 'proyecto_registrado', label: 'Proyecto registrado' },
+  { value: 'evidencia_adjunta', label: 'Evidencia adjunta' },
+  { value: 'certificado_externo', label: 'Certificado externo' },
+  { value: 'constancia_interna', label: 'Constancia interna' },
+  { value: 'perfil_completo', label: 'Perfil completo' },
+];
+
 export const ROLE_LABEL: Record<string, string> = {
   STUDENT: 'Estudiante',
   TEACHER: 'Docente',

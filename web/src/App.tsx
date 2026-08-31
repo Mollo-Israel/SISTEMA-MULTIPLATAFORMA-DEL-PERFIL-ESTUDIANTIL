@@ -30,6 +30,7 @@ import AdminUsersPage from './pages/admin/Users';
 import AdminRolesPage from './pages/admin/Roles';
 import AdminAreasPage from './pages/admin/Areas';
 import AdminSkillsPage from './pages/admin/Skills';
+import AdminGamificationPage from './pages/admin/Gamification';
 
 const S = RolNombre.STUDENT;
 const T = RolNombre.TEACHER;
@@ -91,6 +92,7 @@ export default function App() {
             <Route path="/admin/roles" element={<AdminRolesPage />} />
             <Route path="/admin/areas" element={<AdminAreasPage />} />
             <Route path="/admin/skills" element={<AdminSkillsPage />} />
+            <Route path="/admin/gamification" element={<AdminGamificationPage />} />
           </Route>
 
           <Route path="*" element={<RootRedirect />} />

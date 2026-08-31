@@ -7,6 +7,8 @@ export interface PublicUser {
   role: string;
   createdAt: string;
   updatedAt: string;
+  /** Solo para usuarios con rol docente. */
+  semesters?: number[];
 }
 
 export interface AuthResult {
@@ -19,6 +21,19 @@ export interface AcademicArea {
   name: string;
   description: string | null;
   tags: string[] | null;
+  isActive: boolean;
+}
+
+export interface GamificationCriterion {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  trigger: string;
+  points: number;
+  academicAreaId: string | null;
+  academicArea?: AcademicArea | null;
+  isActive: boolean;
 }
 
 export interface Skill {
@@ -26,6 +41,7 @@ export interface Skill {
   name: string;
   academicAreaId: string | null;
   academicArea?: AcademicArea | null;
+  isActive: boolean;
 }
 
 export interface StudentProfile {

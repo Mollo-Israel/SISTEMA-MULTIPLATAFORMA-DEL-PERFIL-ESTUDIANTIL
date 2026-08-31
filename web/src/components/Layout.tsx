@@ -10,6 +10,7 @@ import {
   FiLayers,
   FiShield,
   FiSliders,
+  FiStar,
   FiTarget,
   FiUser,
   FiUsers,
@@ -38,6 +39,7 @@ const ICONS: Record<string, IconType> = {
   '/admin/roles': FiShield,
   '/admin/areas': FiLayers,
   '/admin/skills': FiAward,
+  '/admin/gamification': FiStar,
 };
 
 export default function Layout() {

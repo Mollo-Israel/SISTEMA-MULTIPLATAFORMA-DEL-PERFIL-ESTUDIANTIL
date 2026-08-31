@@ -32,6 +32,9 @@ export class Skill {
   @JoinColumn({ name: 'academic_area_id' })
   academicArea: AcademicArea | null;
 
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
+
   @OneToMany(() => StudentSkill, (studentSkill) => studentSkill.skill)
   studentSkills: StudentSkill[];
 

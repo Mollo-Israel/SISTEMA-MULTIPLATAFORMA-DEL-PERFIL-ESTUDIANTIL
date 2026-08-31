@@ -1,0 +1,601 @@
+================================================================================
+ AFINIA - EJEMPLOS DE ENTRADAS DEL SISTEMA (DATOS DE PRUEBA VALIDOS)
+ Sistema Multiplataforma del Perfil Estudiantil - Ingenieria en Sistemas
+================================================================================
+
+Este archivo contiene 3 ejemplos VALIDOS para cada campo de cada entrada del
+sistema, agrupados en 3 FLUJOS segun el rol que ejecuta la accion:
+
+   FLUJO 1 - ESTUDIANTE        (registro, perfil, intereses, habilidades,
+                                proyectos, certificados, inscripciones)
+   FLUJO 2 - DOCENTE           (actividades, confirmacion de asistencia,
+                                constancias internas)
+   FLUJO 3 - DIRECTOR / ADMIN  (alta de usuarios, catalogos)
+
+Todos los ejemplos respetan las reglas de validacion vigentes:
+   - Sin espacios al inicio/fin (se recortan) ni dobles espacios internos.
+   - Sin caracteres invisibles ni de control (se eliminan).
+   - Acentos y la enie SI estan permitidos en nombres y textos.
+   - Correo SIEMPRE institucional (termina en univalle.edu).
+   - Contrasena: mayuscula + minuscula + numero + simbolo, sin espacios, 8-72.
+   - Rangos: semestre 1-8 | prioridad de interes 1-5 | nivel de habilidad 1-5.
+   - Sin duplicados en arreglos (intereses, habilidades, tecnologias, tags).
+   - Fechas de emision de certificado NO pueden ser futuras.
+
+Convencion de cada bloque:  CAMPO  ->  tipo / regla
+                            1) ejemplo
+                            2) ejemplo
+                            3) ejemplo
+
+================================================================================
+ FLUJO 1 - ESTUDIANTE
+================================================================================
+
+--------------------------------------------------------------------------------
+ 1.1  REGISTRO DE ESTUDIANTE   (POST /api/auth/register)
+--------------------------------------------------------------------------------
+
+firstName  -> letras/acentos, 2-50
+   1) Ana
+   2) Maria Jose
+   3) Nicolas
+
+lastName  -> letras/acentos, 2-50
+   1) Quispe
+   2) Fernandez Rojas
+   3) Nunez
+
+email  -> institucional de estudiante, termina en est.univalle.edu, <=160
+   1) ana.quispe@est.univalle.edu
+   2) maria.fernandez@est.univalle.edu
+   3) nicolas.nunez@est.univalle.edu
+
+password  -> mayus+minus+numero+simbolo, sin espacios, 8-72
+   1) Univalle2026*
+   2) Afinia$2026ok
+   3) Sistemas#90zX
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "firstName": "Ana",
+     "lastName": "Quispe",
+     "email": "ana.quispe@est.univalle.edu",
+     "password": "Univalle2026*"
+   }
+
+--------------------------------------------------------------------------------
+ 1.2  INICIO DE SESION   (POST /api/auth/login)
+--------------------------------------------------------------------------------
+
+email  -> institucional, se normaliza a minusculas
+   1) ana.quispe@est.univalle.edu
+   2) maria.fernandez@est.univalle.edu
+   3) nicolas.nunez@est.univalle.edu
+
+password  -> la registrada
+   1) Univalle2026*
+   2) Afinia$2026ok
+   3) Sistemas#90zX
+
+--------------------------------------------------------------------------------
+ 1.3  PERFIL ESTUDIANTIL   (POST /api/profiles  |  PATCH /api/profiles/me)
+--------------------------------------------------------------------------------
+
+semester  -> entero 1-8
+   1) 1
+   2) 5
+   3) 8
+
+bio  -> texto largo, <=1000, conserva saltos de linea, sin caracteres raros
+   1) Estudiante de Ingenieria en Sistemas con interes en desarrollo web.
+   2) Me enfoco en bases de datos y analisis de datos; busco practicas reales.
+   3) Apasionado por la ciberseguridad y el desarrollo de aplicaciones moviles.
+
+improvementAreaIds  -> arreglo de UUID v4, sin duplicados, maximo 20
+   1) ["384708fd-ef77-4314-ab32-2cd66b60f682"]
+   2) ["384708fd-ef77-4314-ab32-2cd66b60f682", "9b1c3a52-1f44-4d8e-9c10-2a7b6e5d4c31"]
+   3) []   (vacio = sin areas a mejorar)
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "semester": 5,
+     "bio": "Me enfoco en bases de datos y analisis de datos; busco practicas reales.",
+     "improvementAreaIds": ["384708fd-ef77-4314-ab32-2cd66b60f682"]
+   }
+
+--------------------------------------------------------------------------------
+ 1.4  INTERESES ACADEMICOS   (PUT /api/profiles/me/interests)
+--------------------------------------------------------------------------------
+
+items[].academicAreaId  -> UUID v4 del area (no se repite el area en la lista)
+   1) 384708fd-ef77-4314-ab32-2cd66b60f682
+   2) 9b1c3a52-1f44-4d8e-9c10-2a7b6e5d4c31
+   3) c7d2e9f0-3b6a-4f12-8e45-1d9a0b2c3e44
+
+items[].priority  -> entero 1-5 (5 = maximo interes)
+   1) 5
+   2) 3
+   3) 1
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "items": [
+       { "academicAreaId": "384708fd-ef77-4314-ab32-2cd66b60f682", "priority": 5 },
+       { "academicAreaId": "9b1c3a52-1f44-4d8e-9c10-2a7b6e5d4c31", "priority": 3 }
+     ]
+   }
+   (maximo 30 intereses, sin areas duplicadas)
+
+--------------------------------------------------------------------------------
+ 1.5  HABILIDADES   (PUT /api/profiles/me/skills)
+--------------------------------------------------------------------------------
+
+items[].skillId  -> UUID v4 de la habilidad (no se repite en la lista)
+   1) 1a2b3c4d-5e6f-4789-90ab-cdef01234567
+   2) 22223333-4444-4555-8666-777788889999
+   3) aaaa1111-bbbb-4ccc-8ddd-eeeeffff0000
+
+items[].level  -> entero 1-5 (5 = experto)
+   1) 4
+   2) 2
+   3) 5
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "items": [
+       { "skillId": "1a2b3c4d-5e6f-4789-90ab-cdef01234567", "level": 4 },
+       { "skillId": "22223333-4444-4555-8666-777788889999", "level": 2 }
+     ]
+   }
+   (maximo 40 habilidades, sin habilidades duplicadas)
+
+--------------------------------------------------------------------------------
+ 1.6  PROYECTO   (POST /api/projects)
+--------------------------------------------------------------------------------
+
+title  -> una linea, 3-160
+   1) Plataforma de tutorias entre pares
+   2) Sistema de reservas para laboratorios
+   3) App movil de seguimiento academico
+
+description  -> texto largo, <=2000 (opcional)
+   1) Aplicacion web para agendar tutorias y registrar asistencia.
+   2) Permite reservar equipos y salas con control de cupos por horario.
+   3) Notifica al estudiante sus avances y entregas pendientes.
+
+areaId  -> UUID v4 del area academica (opcional)
+   1) 384708fd-ef77-4314-ab32-2cd66b60f682
+   2) 9b1c3a52-1f44-4d8e-9c10-2a7b6e5d4c31
+   3) (se omite el campo)
+
+technologies  -> arreglo de strings, sin duplicados, max 20, c/u <=40
+   1) ["React", "Node.js", "PostgreSQL"]
+   2) ["TypeScript", "NestJS", "Docker"]
+   3) ["React Native", "Expo"]
+
+status  -> enum: draft | active | archived (opcional, por defecto draft)
+   1) draft
+   2) active
+   3) archived
+
+repositoryUrl  -> URL valida (opcional), <=500
+   1) https://github.com/afinia/tutorias-pares
+   2) https://gitlab.com/equipo/reservas-lab
+   3) https://github.com/usuario/seguimiento-academico
+
+demoUrl  -> URL valida (opcional), <=500
+   1) https://tutorias.afinia.app
+   2) https://reservas-demo.example.com
+   3) https://expo.dev/@usuario/seguimiento
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "title": "Plataforma de tutorias entre pares",
+     "description": "Aplicacion web para agendar tutorias y registrar asistencia.",
+     "technologies": ["React", "Node.js", "PostgreSQL"],
+     "status": "active",
+     "repositoryUrl": "https://github.com/afinia/tutorias-pares"
+   }
+
+--------------------------------------------------------------------------------
+ 1.7  INTEGRANTE DE PROYECTO   (POST /api/projects/:id/members)
+--------------------------------------------------------------------------------
+
+userId  -> UUID v4 del integrante
+   1) fb4744bb-2a3a-4888-ae81-6e565001d581
+   2) 7e7fbca6-aa27-455a-87e1-24c0b4567b69
+   3) 11112222-3333-4444-8555-666677778888
+
+role  -> una linea, <=80 (opcional)
+   1) Desarrollador backend
+   2) Disenadora UX
+   3) Lider de proyecto
+
+contribution  -> texto, <=500 (opcional)
+   1) Implemento la API REST y el modelo de datos.
+   2) Diseno las pantallas y el flujo de usuario.
+   3) Coordino al equipo y definio el alcance.
+
+--------------------------------------------------------------------------------
+ 1.8  EVIDENCIA DE PROYECTO   (POST /api/projects/:id/evidences)
+--------------------------------------------------------------------------------
+
+evidenceType  -> enum: link | file
+   1) link
+   2) file
+   3) link
+
+description  -> texto, <=300 (opcional)
+   1) Capturas del despliegue en produccion.
+   2) Documento PDF con el informe final.
+   3) Enlace al video demostrativo del proyecto.
+
+fileUrl  -> ruta del archivo cuando evidenceType=file (opcional), <=500
+   1) /uploads/evidencias/informe-final.pdf
+   2) /uploads/evidencias/manual-usuario.pdf
+   3) /uploads/evidencias/diagrama-arquitectura.png
+
+externalUrl  -> URL valida cuando evidenceType=link (opcional), <=500
+   1) https://youtu.be/demo-proyecto
+   2) https://drive.google.com/file/d/abc123/view
+   3) https://github.com/afinia/tutorias-pares/releases/tag/v1.0
+
+--------------------------------------------------------------------------------
+ 1.9  CERTIFICADO EXTERNO   (POST /api/certificates/external)
+--------------------------------------------------------------------------------
+
+certificateName  -> una linea, 3-200 (no se repite por estudiante)
+   1) Certified JavaScript Developer
+   2) Fundamentos de Ciencia de Datos
+   3) Scrum Fundamentals Certified
+
+issuer  -> una linea, 2-160
+   1) Coursera
+   2) Platzi
+   3) freeCodeCamp
+
+certificateUrl  -> URL valida (opcional), <=500
+   1) https://coursera.org/verify/ABC123
+   2) https://platzi.com/p/usuario/diploma/xyz
+   3) https://freecodecamp.org/certification/usuario/data-science
+
+issueDate  -> fecha yyyy-mm-dd, NO futura (opcional)
+   1) 2025-03-10
+   2) 2024-11-22
+   3) 2026-01-15
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "certificateName": "Certified JavaScript Developer",
+     "issuer": "Coursera",
+     "certificateUrl": "https://coursera.org/verify/ABC123",
+     "issueDate": "2025-03-10"
+   }
+
+--------------------------------------------------------------------------------
+ 1.10  INSCRIPCION A UNA ACTIVIDAD   (POST /api/activities/:id/register)
+--------------------------------------------------------------------------------
+
+   No requiere cuerpo: el estudiante autenticado queda en estado "registered"
+   (Pendiente) a la espera de que el docente confirme. Ejemplos de actividad
+   a la que se inscribe (por su UUID):
+   1) e1a2b3c4-d5e6-4789-9012-3456789abcde
+   2) f0e1d2c3-b4a5-4678-9123-456789abcdef
+   3) 0a1b2c3d-4e5f-4678-8912-3456789abcde
+
+================================================================================
+ FLUJO 2 - DOCENTE
+================================================================================
+
+--------------------------------------------------------------------------------
+ 2.1  INICIO DE SESION   (POST /api/auth/login)
+--------------------------------------------------------------------------------
+
+email  -> institucional de docente (univalle.edu)
+   1) carlos.perez@univalle.edu
+   2) maria.gutierrez@univalle.edu
+   3) jorge.salinas@univalle.edu
+
+password
+   1) Univalle2026*
+   2) Docente$2026ok
+   3) Afinia#Clase7
+
+--------------------------------------------------------------------------------
+ 2.2  CREAR ACTIVIDAD   (POST /api/activities)
+--------------------------------------------------------------------------------
+
+title  -> una linea, 3-160
+   1) Taller de NestJS desde cero
+   2) Seminario de Inteligencia Artificial aplicada
+   3) Clase espejo con la Universidad de Sevilla
+
+description  -> texto largo, <=2000 (opcional)
+   1) Taller practico para construir una API REST con NestJS y PostgreSQL.
+   2) Charlas sobre IA aplicada a la industria con casos reales.
+   3) Sesion conjunta con estudiantes de otra universidad sobre arquitectura.
+
+type  -> enum: academica | extracurricular
+   1) academica
+   2) extracurricular
+   3) academica
+
+category  -> enum (taller_academico, clase_espejo, seminario, charla,
+            curso_externo_recomendado, reto, hackathon, convocatoria,
+            actividad_sociedad_cientifica, club_estudio, tutoria,
+            investigacion, responsabilidad_social, integracion)
+   1) taller_academico
+   2) seminario
+   3) clase_espejo
+
+modality  -> enum: presencial | virtual | hibrida (opcional)
+   1) presencial
+   2) virtual
+   3) hibrida
+
+activityDate  -> fecha/hora ISO 8601 (opcional)
+   1) 2026-06-15T15:00:00.000Z
+   2) 2026-07-01T18:30:00.000Z
+   3) 2026-08-20T14:00:00.000Z
+
+location  -> una linea, <=200 (opcional)
+   1) Aula 301 - Bloque de Sistemas
+   2) Plataforma Zoom (enlace por correo)
+   3) Auditorio principal del campus
+
+capacity  -> entero 1-1000 (opcional)
+   1) 30
+   2) 120
+   3) 1
+
+areaId  -> UUID v4 del area academica (opcional)
+   1) 384708fd-ef77-4314-ab32-2cd66b60f682
+   2) 9b1c3a52-1f44-4d8e-9c10-2a7b6e5d4c31
+   3) (se omite)
+
+tags  -> arreglo de strings, sin duplicados, max 15, c/u <=40
+   1) ["backend", "nestjs", "api"]
+   2) ["ia", "machine-learning"]
+   3) ["internacional", "arquitectura"]
+
+externalUrl  -> URL valida (opcional), <=500
+   1) https://evento.univalle.edu/taller-nestjs
+   2) https://zoom.us/j/123456789
+   3) https://sevilla.es/clase-espejo
+
+evidenceRequired  -> booleano (opcional, por defecto false)
+   1) true
+   2) false
+   3) true
+
+status  -> enum: draft | published | open | closed | finished | cancelled
+   1) draft
+   2) published
+   3) open
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "title": "Taller de NestJS desde cero",
+     "description": "Taller practico para construir una API REST con NestJS y PostgreSQL.",
+     "type": "academica",
+     "category": "taller_academico",
+     "modality": "presencial",
+     "activityDate": "2026-06-15T15:00:00.000Z",
+     "location": "Aula 301 - Bloque de Sistemas",
+     "capacity": 30,
+     "tags": ["backend", "nestjs", "api"],
+     "evidenceRequired": true,
+     "status": "open"
+   }
+
+--------------------------------------------------------------------------------
+ 2.3  CONFIRMAR / RECHAZAR PARTICIPACION   (PATCH /api/activities/:id/confirm)
+--------------------------------------------------------------------------------
+
+studentProfileId  -> UUID v4 del perfil del estudiante a evaluar
+   1) 7e7fbca6-aa27-455a-87e1-24c0b4567b69
+   2) 11112222-3333-4444-8555-666677778888
+   3) aaaabbbb-cccc-4ddd-8eee-ffff00001111
+
+status  -> enum SOLO: confirmed | absent  (confirmed = asistio/aceptado;
+           absent = rechazado/no asistio)
+   1) confirmed
+   2) absent
+   3) confirmed
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "studentProfileId": "7e7fbca6-aa27-455a-87e1-24c0b4567b69",
+     "status": "confirmed"
+   }
+
+--------------------------------------------------------------------------------
+ 2.4  CONSTANCIA INTERNA   (POST /api/constancies/internal)
+--------------------------------------------------------------------------------
+
+profileId  -> UUID v4 del perfil del estudiante
+   1) 7e7fbca6-aa27-455a-87e1-24c0b4567b69
+   2) 11112222-3333-4444-8555-666677778888
+   3) aaaabbbb-cccc-4ddd-8eee-ffff00001111
+
+activityId  -> UUID v4 de la actividad relacionada (opcional)
+   1) e1a2b3c4-d5e6-4789-9012-3456789abcde
+   2) f0e1d2c3-b4a5-4678-9123-456789abcdef
+   3) (se omite)
+
+activityRegistrationId  -> UUID v4 del registro de participacion (opcional)
+   1) 0a1b2c3d-4e5f-4678-8912-3456789abcde
+   2) 1b2c3d4e-5f60-4789-9123-456789abcdef
+   3) (se omite)
+
+description  -> texto, 5-300
+   1) Participo como ponente en el seminario interno de IA.
+   2) Asistio y completo el taller de NestJS con aprovechamiento.
+   3) Colaboro en la organizacion de la clase espejo internacional.
+
+status  -> enum: pending | authorized | rejected (opcional, def. authorized)
+   1) authorized
+   2) pending
+   3) rejected
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "profileId": "7e7fbca6-aa27-455a-87e1-24c0b4567b69",
+     "activityId": "e1a2b3c4-d5e6-4789-9012-3456789abcde",
+     "description": "Asistio y completo el taller de NestJS con aprovechamiento.",
+     "status": "authorized"
+   }
+
+================================================================================
+ FLUJO 3 - DIRECTOR / ADMINISTRADOR
+================================================================================
+
+--------------------------------------------------------------------------------
+ 3.1  INICIO DE SESION   (POST /api/auth/login)
+--------------------------------------------------------------------------------
+
+email  -> institucional (univalle.edu)
+   1) admin@univalle.edu
+   2) jorge.vargas@univalle.edu          (director de carrera)
+   3) lucia.fernandez@univalle.edu       (sociedad cientifica)
+
+password
+   1) Admin123*
+   2) Director$2026
+   3) Sociedad#2026
+
+--------------------------------------------------------------------------------
+ 3.2  ALTA DE USUARIO   (POST /api/users)
+--------------------------------------------------------------------------------
+
+firstName  -> letras/acentos, 2-50
+   1) Carlos
+   2) Maria
+   3) Jorge
+
+lastName  -> letras/acentos, 2-50
+   1) Perez
+   2) Gutierrez
+   3) Salinas Nunez
+
+email  -> institucional, <=160
+   1) carlos.perez@univalle.edu
+   2) maria.gutierrez@univalle.edu
+   3) jorge.salinas@univalle.edu
+
+password  -> mayus+minus+numero+simbolo, sin espacios, 8-72
+   1) Docente2026*
+   2) Afinia$Staff9
+   3) Univalle#2026x
+
+role  -> enum: STUDENT | TEACHER | CAREER_DIRECTOR | SCIENTIFIC_SOCIETY | ADMIN
+   1) TEACHER
+   2) CAREER_DIRECTOR
+   3) SCIENTIFIC_SOCIETY
+
+status  -> enum: active | inactive (opcional, por defecto active)
+   1) active
+   2) active
+   3) inactive
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "firstName": "Carlos",
+     "lastName": "Perez",
+     "email": "carlos.perez@univalle.edu",
+     "password": "Docente2026*",
+     "role": "TEACHER",
+     "status": "active"
+   }
+
+--------------------------------------------------------------------------------
+ 3.3  ACTIVAR / DESACTIVAR USUARIO   (PATCH /api/users/:id/active)
+--------------------------------------------------------------------------------
+
+active  -> booleano (true = activar, false = desactivar)
+   1) true
+   2) false
+   3) true
+
+--------------------------------------------------------------------------------
+ 3.4  CREAR AREA ACADEMICA   (POST /api/catalogs/areas)
+--------------------------------------------------------------------------------
+
+name  -> una linea, 2-120 (unico, sin distinguir mayus/minus)
+   1) Computacion en la Nube
+   2) Ciencia de Datos
+   3) Ciberseguridad
+
+description  -> texto, <=255 (opcional)
+   1) Servicios cloud, contenedores y despliegue escalable.
+   2) Analisis, visualizacion y aprendizaje automatico de datos.
+   3) Proteccion de sistemas, redes y datos frente a amenazas.
+
+tags  -> arreglo de strings, sin duplicados, max 20, c/u <=40 (opcional)
+   1) ["aws", "azure", "docker"]
+   2) ["python", "estadistica", "ml"]
+   3) ["redes", "criptografia"]
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "name": "Ciencia de Datos",
+     "description": "Analisis, visualizacion y aprendizaje automatico de datos.",
+     "tags": ["python", "estadistica", "ml"]
+   }
+
+--------------------------------------------------------------------------------
+ 3.5  CREAR HABILIDAD   (POST /api/catalogs/skills)
+--------------------------------------------------------------------------------
+
+name  -> una linea, 2-120 (unico, sin distinguir mayus/minus)
+   1) GraphQL
+   2) Docker
+   3) Pandas
+
+academicAreaId  -> UUID v4 del area asociada (opcional)
+   1) 384708fd-ef77-4314-ab32-2cd66b60f682
+   2) 9b1c3a52-1f44-4d8e-9c10-2a7b6e5d4c31
+   3) (se omite)
+
+EJEMPLO COMPLETO (JSON):
+   {
+     "name": "Docker",
+     "academicAreaId": "384708fd-ef77-4314-ab32-2cd66b60f682"
+   }
+
+================================================================================
+ ANEXO - EJEMPLOS QUE EL SISTEMA RECHAZA (PARA PROBAR LAS VALIDACIONES)
+================================================================================
+
+NOMBRE invalido:
+   "Ana123"            -> tiene numeros
+   "  "                -> vacio tras recortar
+   "Jose@Maria"        -> simbolo no permitido
+
+CORREO invalido:
+   "ana@gmail.com"             -> no es institucional
+   "ana.perez@univalle.com"    -> no termina en univalle.edu
+   "ana perez@univalle.edu"    -> tiene espacio
+
+CONTRASENA invalida:
+   "clave123"          -> sin mayuscula ni simbolo
+   "Clave 123*"        -> contiene espacio
+   "Ab1*"              -> menos de 8 caracteres
+
+SEMESTRE invalido:   0 (menor a 1) | 9 (mayor a 8) | "tres" (no numerico)
+PRIORIDAD / NIVEL invalido:   0 | 6 | 3.5 (debe ser entero 1-5)
+
+ARREGLOS con duplicados (se rechazan o se deduplican):
+   intereses con la misma area dos veces        -> 400 area duplicada
+   technologies: ["React","react","REACT"]      -> se guarda solo ["React"]
+
+FECHA de certificado futura:
+   "2030-01-01"        -> 400 la fecha de emision no puede ser futura
+
+CARACTERES RAROS (se limpian automaticamente):
+   "  Ana   Maria  "        -> "Ana Maria"     (recorta y colapsa espacios)
+   "Hola<caracter invisible>Mundo" -> "HolaMundo"  (elimina invisibles/zero-width)
+
+================================================================================
+ FIN DEL ARCHIVO
+================================================================================

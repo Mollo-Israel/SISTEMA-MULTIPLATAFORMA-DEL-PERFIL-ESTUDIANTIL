@@ -1,13 +1,15 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { RolNombre, UserStatus } from '@perfil/shared';
 import { User } from '../entities/user.entity';
+import { TeacherSemesterAccess } from '../entities/teacher-semester-access.entity';
 import { RolesService } from '../roles/roles.service';
 import { PublicUser, toPublicUser } from './types/public-user';
 
@@ -28,11 +30,21 @@ interface UpdateUserParams {
   status?: UserStatus;
 }
 
+/** Contexto minimo que los guards necesitan en cada peticion. */
+export interface AuthContext {
+  id: string;
+  email: string;
+  role: RolNombre;
+  status: UserStatus;
+}
+
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    @InjectRepository(TeacherSemesterAccess)
+    private readonly semesterAccess: Repository<TeacherSemesterAccess>,
     private readonly rolesService: RolesService,
   ) {}
 
@@ -56,16 +68,52 @@ export class UsersService {
     return toPublicUser(saved);
   }
 
-  async findAll(): Promise<PublicUser[]> {
-    const users = await this.usersRepository.find({
-      relations: { role: true },
-      order: { createdAt: 'DESC' },
-    });
-    return users.map(toPublicUser);
+  /** Listado administrativo con busqueda por nombre, apellido o correo. */
+  async findAll(search?: string, role?: RolNombre): Promise<PublicUser[]> {
+    const qb = this.usersRepository
+      .createQueryBuilder('u')
+      .leftJoinAndSelect('u.role', 'r')
+      .orderBy('u.createdAt', 'DESC');
+
+    const term = search?.trim();
+    if (term) {
+      qb.andWhere(
+        "(u.firstName ILIKE :s OR u.lastName ILIKE :s OR u.email ILIKE :s OR CONCAT(u.firstName, ' ', u.lastName) ILIKE :s)",
+        { s: `%${term}%` },
+      );
+    }
+    if (role) {
+      qb.andWhere('r.name = :role', { role });
+    }
+    const users = await qb.getMany();
+    const result = users.map(toPublicUser);
+
+    // Los semestres habilitados se resuelven en lote (sin consultas dentro del bucle).
+    const teacherIds = result.filter((u) => u.role === RolNombre.TEACHER).map((u) => u.id);
+    if (teacherIds.length > 0) {
+      const byTeacher = await this.getSemestersForTeachers(teacherIds);
+      for (const user of result) {
+        if (user.role === RolNombre.TEACHER) user.semesters = byTeacher.get(user.id) ?? [];
+      }
+    }
+    return result;
   }
 
   async findOne(id: string): Promise<PublicUser> {
     return toPublicUser(await this.findEntityOrFail(id));
+  }
+
+  /**
+   * Rol y estado actuales, leidos en cada peticion autenticada.
+   * Devuelve null si el usuario ya no existe.
+   */
+  async findAuthContext(id: string): Promise<AuthContext | null> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: { role: true },
+    });
+    if (!user || !user.role) return null;
+    return { id: user.id, email: user.email, role: user.role.name, status: user.status };
   }
 
   async update(id: string, params: UpdateUserParams): Promise<PublicUser> {
@@ -79,10 +127,14 @@ export class UsersService {
     if (params.firstName !== undefined) user.firstName = params.firstName;
     if (params.lastName !== undefined) user.lastName = params.lastName;
     if (params.status !== undefined) user.status = params.status;
-    if (params.role !== undefined) {
+    if (params.role !== undefined && params.role !== user.role.name) {
       const role = await this.rolesService.findByName(params.role);
       user.roleId = role.id;
       user.role = role;
+      // Los semestres habilitados solo aplican al rol docente.
+      if (params.role !== RolNombre.TEACHER) {
+        await this.semesterAccess.delete({ teacherId: user.id });
+      }
     }
 
     const saved = await this.usersRepository.save(user);
@@ -107,6 +159,59 @@ export class UsersService {
       where: { email: email.toLowerCase().trim() },
       relations: { role: true },
     });
+  }
+
+  // ---------------------------------------------------------------------
+  // Semestres habilitados para el docente (RF3)
+  // ---------------------------------------------------------------------
+
+  /** Semestres que un docente tiene habilitados, ordenados. */
+  async getTeacherSemesters(teacherId: string): Promise<number[]> {
+    const rows = await this.semesterAccess.find({
+      where: { teacherId },
+      order: { semester: 'ASC' },
+    });
+    return rows.map((r) => r.semester);
+  }
+
+  /** Igual que el anterior, en lote, para no consultar dentro de un bucle. */
+  async getSemestersForTeachers(teacherIds: string[]): Promise<Map<string, number[]>> {
+    const map = new Map<string, number[]>();
+    if (teacherIds.length === 0) return map;
+    const rows = await this.semesterAccess.find({
+      where: { teacherId: In(teacherIds) },
+      order: { semester: 'ASC' },
+    });
+    for (const row of rows) {
+      const list = map.get(row.teacherId) ?? [];
+      list.push(row.semester);
+      map.set(row.teacherId, list);
+    }
+    return map;
+  }
+
+  /** Reemplaza el conjunto completo de semestres habilitados de un docente. */
+  async setTeacherSemesters(
+    teacherId: string,
+    semesters: number[],
+    grantedById: string,
+  ): Promise<number[]> {
+    const teacher = await this.findEntityOrFail(teacherId);
+    if (teacher.role.name !== RolNombre.TEACHER) {
+      throw new BadRequestException(
+        'Los semestres habilitados solo aplican a usuarios con rol docente.',
+      );
+    }
+    const unique = [...new Set(semesters)].sort((a, b) => a - b);
+    await this.semesterAccess.delete({ teacherId });
+    if (unique.length > 0) {
+      await this.semesterAccess.save(
+        unique.map((semester) =>
+          this.semesterAccess.create({ teacherId, semester, grantedById }),
+        ),
+      );
+    }
+    return unique;
   }
 
   private async findEntityOrFail(id: string): Promise<User> {

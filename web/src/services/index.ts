@@ -1,6 +1,7 @@
 import { api } from '../api/client';
 import type {
   AcademicArea,
+  GamificationCriterion,
   Activity,
   AffinityResult,
   AuthResult,
@@ -88,12 +89,34 @@ export const reportService = {
 };
 
 export const adminService = {
-  listUsers: () => api.get<PublicUser[]>('/users').then((r) => r.data),
+  listUsers: (search?: string) =>
+    api.get<PublicUser[]>('/users', { params: search ? { search } : undefined }).then((r) => r.data),
   createUser: (data: Record<string, unknown>) => api.post<PublicUser>('/users', data).then((r) => r.data),
+  updateUser: (id: string, data: Record<string, unknown>) =>
+    api.patch<PublicUser>(`/users/${id}`, data).then((r) => r.data),
   setActive: (id: string, active: boolean) =>
     api.patch<PublicUser>(`/users/${id}/status`, { active }).then((r) => r.data),
   deleteUser: (id: string) => api.delete(`/users/${id}`).then((r) => r.data),
   roles: () => api.get('/roles').then((r) => r.data),
+
+  // Semestres habilitados para un docente (RF3)
+  getSemesters: (teacherId: string) =>
+    api.get<number[]>(`/users/${teacherId}/semesters`).then((r) => r.data),
+  setSemesters: (teacherId: string, semesters: number[]) =>
+    api.put<number[]>(`/users/${teacherId}/semesters`, { semesters }).then((r) => r.data),
+
+  // Catalogos (RF4)
   createArea: (data: Record<string, unknown>) => api.post('/academic-areas', data).then((r) => r.data),
+  updateArea: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/academic-areas/${id}`, data).then((r) => r.data),
   createSkill: (data: Record<string, unknown>) => api.post('/skills', data).then((r) => r.data),
+  updateSkill: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/skills/${id}`, data).then((r) => r.data),
+
+  // Criterios de gamificacion: se administran ahora, los consumira una fase posterior
+  listCriteria: () => api.get<GamificationCriterion[]>('/gamification-criteria').then((r) => r.data),
+  createCriterion: (data: Record<string, unknown>) =>
+    api.post<GamificationCriterion>('/gamification-criteria', data).then((r) => r.data),
+  updateCriterion: (id: string, data: Record<string, unknown>) =>
+    api.patch<GamificationCriterion>(`/gamification-criteria/${id}`, data).then((r) => r.data),
 };

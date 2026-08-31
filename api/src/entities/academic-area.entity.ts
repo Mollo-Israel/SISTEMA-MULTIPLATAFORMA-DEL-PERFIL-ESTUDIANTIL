@@ -28,6 +28,9 @@ export class AcademicArea {
   @Column({ type: 'text', array: true, nullable: true })
   tags: string[] | null;
 
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean;
+
   @OneToMany(() => Skill, (skill) => skill.academicArea)
   skills: Skill[];
 

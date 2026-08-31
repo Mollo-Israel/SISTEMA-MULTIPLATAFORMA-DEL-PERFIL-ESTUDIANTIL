@@ -10,6 +10,8 @@ export interface PublicUser {
   role: RolNombre;
   createdAt: Date;
   updatedAt: Date;
+  /** Semestres habilitados. Solo se completa para usuarios con rol docente. */
+  semesters?: number[];
 }
 
 export function toPublicUser(user: User): PublicUser {

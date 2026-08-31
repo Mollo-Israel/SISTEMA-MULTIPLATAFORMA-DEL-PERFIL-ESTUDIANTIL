@@ -233,3 +233,46 @@ table { border-radius: 10px; overflow: hidden; }
 .area-opt.on { border-color: var(--bordo); background: var(--bordo-100); }
 .area-opt.on .ico { background: linear-gradient(135deg, var(--bordo), #d24b60); color: #fff; }
 .area-opt.on .chk { background: var(--bordo); border-color: var(--bordo); }
+
+
+/* ===== Diálogos modales (administración) ===== */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(27, 20, 22, 0.45);
+  display: grid; place-items: center; padding: 1rem; z-index: 50;
+  animation: fadeIn 0.18s ease;
+}
+.modal {
+  background: var(--white); border-radius: 16px; width: 100%; max-width: 520px;
+  padding: 1.3rem 1.4rem; box-shadow: 0 24px 60px rgba(0,0,0,0.28);
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.modal-head h3 { margin: 0; }
+.modal-head .muted { font-size: 0.78rem; }
+
+/* ===== Selector de semestres habilitados ===== */
+.semester-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
+@media (max-width: 520px) { .semester-grid { grid-template-columns: repeat(2, 1fr); } }
+.semester-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.7rem 0.8rem; border: 1.5px solid var(--gray-200); border-radius: 12px;
+  background: var(--white); cursor: pointer; font-family: var(--font);
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+.semester-opt:hover { border-color: #e7c9cf; transform: translateY(-2px); }
+.semester-opt .n { font-size: 0.95rem; font-weight: 700; color: var(--gray-900); }
+.semester-opt .chk {
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--gray-300);
+  display: grid; place-items: center; color: #fff; flex-shrink: 0;
+}
+.semester-opt.on { border-color: var(--bordo); background: var(--bordo-100); }
+.semester-opt.on .n { color: var(--bordo); }
+.semester-opt.on .chk { background: var(--bordo); border-color: var(--bordo); }
+
+/* ===== Barra de filtros ===== */
+.filters { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; margin-bottom: 1rem; }
+.filters .field { margin-bottom: 0; min-width: 160px; }
+.filters .field label { font-size: 0.72rem; }
+
+/* ===== Fila de estado inactivo en tablas de catálogo ===== */
+tr.is-inactive td { opacity: 0.55; }

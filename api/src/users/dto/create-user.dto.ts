@@ -1,8 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { RolNombre, UserStatus } from '@perfil/shared';
 import { cleanLine, EMAIL_MSG, NAME_MSG, NAME_RE, PASSWORD_MSG, PASSWORD_RE, trimLower, UNIVALLE_RE } from '../../common/validation';
+
+/**
+ * Roles que el administrador puede dar de alta (RF3).
+ * El estudiante se registra por si mismo y siempre obtiene STUDENT; la cuenta
+ * de administrador es unica y se crea por seed, no por este endpoint.
+ */
+export const INSTITUTIONAL_ROLES = [
+  RolNombre.TEACHER,
+  RolNombre.CAREER_DIRECTOR,
+  RolNombre.SCIENTIFIC_SOCIETY,
+] as const;
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Carlos' })
@@ -35,8 +46,16 @@ export class CreateUserDto {
   @Matches(PASSWORD_RE, { message: PASSWORD_MSG })
   password: string;
 
-  @ApiProperty({ enum: RolNombre, example: RolNombre.TEACHER })
+  @ApiProperty({
+    enum: INSTITUTIONAL_ROLES,
+    example: RolNombre.TEACHER,
+    description: 'Solo roles institucionales: docente, director de carrera o sociedad científica.',
+  })
   @IsEnum(RolNombre)
+  @IsIn(INSTITUTIONAL_ROLES as unknown as RolNombre[], {
+    message:
+      'Solo se pueden crear usuarios institucionales (docente, director de carrera o sociedad científica). El estudiante se registra por su cuenta.',
+  })
   role: RolNombre;
 
   @ApiProperty({ enum: UserStatus, required: false, default: UserStatus.ACTIVE })
