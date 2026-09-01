@@ -192,10 +192,14 @@ Todas contra la API real, sobre una base **recreada desde cero**
 
 | Suite | Comando | Resultado |
 |---|---|---|
-| Objetivos del 40 % | `npm run test:40` | **179 OK · 0 fallos** |
+| Objetivos del 40 % | `npm run test:40` | **235 OK · 0 fallos** |
 | Validaciones de backend | `npm run test:api` | **42 OK · 0 fallos** |
 | Flujo de 14 pasos | `npm run demo:e2e` | **25 OK · 0 fallos** |
-| **Total** | | **246 verificaciones, 0 fallos** |
+| **Total** | | **302 verificaciones, 0 fallos** |
+
+> Cifras del pase de alineación final. El cierre completo, con el detalle de los
+> cuatro huecos cerrados contra el documento, está en
+> [`AUDITORIA_FINAL_40_PORCIENTO.md`](AUDITORIA_FINAL_40_PORCIENTO.md).
 
 `scripts/e2e-objectives-40.mjs` cubre los cuatro flujos pedidos, incluidos los
 rechazos: 403 por rol, 400 por regla de negocio, 409 por duplicado, 404 por
@@ -254,6 +258,27 @@ Estos módulos siguen apareciendo como **«Próximamente»** en la navegación, 
 ningún placeholder.
 
 ---
+
+## 9 bis. Cierre de alineación final
+
+Tras recibir el documento de Proyecto de Grado se ejecutó un pase de alineación
+final que cerró los cuatro huecos reales detectados: **RF4** (categorías de
+actividad administrables), **RF5** (intereses en texto libre separados de las
+áreas de preferencia), **RF8** (filtros de modalidad y fecha) y **RF12** (regla
+de actividad autorizada). Ver
+[`AUDITORIA_FINAL_40_PORCIENTO.md`](AUDITORIA_FINAL_40_PORCIENTO.md) y
+[`CORRECCIONES_DOCUMENTO_FINAL_40.md`](CORRECCIONES_DOCUMENTO_FINAL_40.md).
+
+Las cuatro interpretaciones que este informe señalaba como pendientes de
+confirmar quedaron resueltas contra el documento:
+
+1. **Intereses y áreas de preferencia son conceptos distintos.** El documento lo
+   confirma y el software ahora los separa.
+2. **«Actividades que gestionan»** se mantiene como estaba: creador, rol
+   responsable del tipo o administrador.
+3. **Rol de soporte del administrador:** confirmado por el documento.
+4. **Criterios de gamificación:** se administran pero no se aplican, y el
+   documento sitúa el motor en el Objetivo 9.
 
 ## 10. Puntos a confirmar contra el documento
 

@@ -59,7 +59,7 @@ npm install --prefix mobile   # dependencias móvil (Expo)
 
 npm run db:up                 # levanta PostgreSQL en Docker
 npm run shared:build          # compila tipos compartidos
-npm run api:migrate           # crea las tablas (migraciones)
+npm run api:migrate           # crea las 19 tablas (9 migraciones)
 npm run seed:populate         # POBLA la base con datos institucionales realistas
 ```
 
@@ -110,12 +110,12 @@ Hay 16 estudiantes con el patrón `nombre.apellido@est.univalle.edu` y contrase�
 npm run api:dev      # en una terminal
 
 # en otra terminal:
-npm run test:40      # 179 verificaciones de los 4 objetivos  -> 0 fallos
+npm run test:40      # 235 verificaciones de los 4 objetivos  -> 0 fallos
 npm run test:api     # 42 validaciones de backend             -> 0 fallos
 npm run demo:e2e     # flujo completo de 14 pasos             -> 0 fallos
 ```
 
-En total **246 verificaciones** contra la API real, sobre una base recreada desde cero.
+En total **302 verificaciones** contra la API real, sobre una base recreada desde cero.
 
 ## Flujo principal (end-to-end)
 
@@ -144,7 +144,7 @@ En total **246 verificaciones** contra la API real, sobre una base recreada desd
 | `npm run api:migrate` | Aplica migraciones TypeORM |
 | `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
 | `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
-| `npm run test:40` | **179 verificaciones de los 4 objetivos del 40 %** |
+| `npm run test:40` | **235 verificaciones de los 4 objetivos del 40 %** |
 | `npm run test:api` | 42 validaciones de backend contra la API |
 | `npm run demo:e2e` | Flujo completo de 14 pasos |
 | `npm run web:dev` | Servidor de desarrollo web |
@@ -164,8 +164,9 @@ Los cuatro primeros objetivos específicos están implementados de extremo a ext
    integra la trayectoria real. El docente solo consulta los semestres que tiene
    habilitados.
 3. **Actividades académicas y extracurriculares.** El director de carrera gestiona
-   las académicas y la sociedad científica las extracurriculares, con estados,
-   cupos, filtros, detalle e inscripción desde la app móvil.
+   las académicas y la sociedad científica las extracurriculares, sobre un
+   **catálogo de categorías administrable**, con estados, cupos, filtros por
+   categoría, área, modalidad y fecha, detalle e inscripción desde la app móvil.
 4. **Participación, evidencias y certificados.** Registro de asistencia por el
    responsable, **subida real de archivos** (PDF/PNG/JPG/WEBP, hasta 5 MB),
    evidencias asociadas a proyecto, actividad o área, certificados externos con
@@ -177,6 +178,8 @@ Documentación del avance:
 - [`docs/MATRIZ_TRAZABILIDAD_40.md`](docs/MATRIZ_TRAZABILIDAD_40.md) — requisito por requisito
 - [`docs/AVANCE_40_PORCIENTO.md`](docs/AVANCE_40_PORCIENTO.md) — qué se corrigió y qué se agregó
 - [`docs/DEMO_40_PORCIENTO.md`](docs/DEMO_40_PORCIENTO.md) — guion de demostración de 10–15 minutos
+- [`docs/AUDITORIA_FINAL_40_PORCIENTO.md`](docs/AUDITORIA_FINAL_40_PORCIENTO.md) — auditoría de cierre contra el documento
+- [`docs/CORRECCIONES_DOCUMENTO_FINAL_40.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_40.md) — correcciones pendientes en el Word
 
 **Fuera del 40 %:** chat, contactos por QR, equipos avanzados, recomendación
 completa, motor de gamificación (los criterios ya se administran, pero todavía no

@@ -11,7 +11,7 @@ resultado esperado → objetivo que demuestra**.
 ```bash
 npm run db:up            # PostgreSQL en Docker (Docker Desktop debe estar abierto)
 npm run shared:build     # tipos compartidos — va primero
-npm run api:migrate      # 8 migraciones, 17 tablas
+npm run api:migrate      # 9 migraciones, 19 tablas
 npm run seed:populate    # 21 usuarios y datos institucionales
 ```
 
@@ -30,7 +30,7 @@ npm run mobile:start     # Expo — escanear el QR con Expo Go
 **Comprobación rápida antes de la defensa** (API corriendo, en otra terminal):
 
 ```bash
-npm run test:40          # 179 verificaciones de los 4 objetivos → 0 fallos
+npm run test:40          # 235 verificaciones de los 4 objetivos → 0 fallos
 ```
 
 ### Cuentas
@@ -55,6 +55,8 @@ npm run test:40          # 179 verificaciones de los 4 objetivos → 0 fallos
 | 1.3 | Admin | Gestión de usuarios | En el docente recién creado, pulsar **Configurar** en «Semestres habilitados» y marcar 3.º y 4.º | La tabla muestra las etiquetas `3º 4º` |
 | 1.4 | Admin | Gestión de usuarios | Buscar por apellido | La lista se filtra en el servidor |
 | 1.5 | Admin | Áreas académicas | Dar de baja un área | Queda como **De baja** y en gris; deja de ofrecerse al resto de roles pero conserva su historial |
+| 1.5b | Admin | **Categorías de actividad** | Crear «Mesa redonda», aplicable solo a académicas | Aparece en la lista. **Decir en voz alta:** antes las categorías estaban fijas en el código; ahora son un catálogo administrable, como exige RF4 |
+| 1.5c | Admin | Categorías de actividad | Dar de baja una categoría en uso | Avisa cuántas actividades la usan; las existentes la conservan, pero deja de ofrecerse para nuevas |
 | 1.6 | Admin | Criterios de gamificación | Abrir la pantalla | Se ven los 6 criterios administrables. **Decir en voz alta:** están definidos y persistidos, pero el motor que los aplica es de una fase posterior; el sistema no inventa puntos |
 
 ### El punto fuerte del Objetivo 1
@@ -74,7 +76,8 @@ npm run test:40          # 179 verificaciones de los 4 objetivos → 0 fallos
 |---|---|---|---|---|
 | 2.1 | **Estudiante** (móvil) | Login → «¿Eres estudiante nuevo?» | Registrarse con un correo `@est.univalle.edu` | Entra directamente; **el rol STUDENT lo asigna el servidor**, no se puede elegir |
 | 2.2 | Estudiante | Perfil | Semestre, biografía y áreas donde desea mejorar → Guardar | La barra de completitud sube en tramos de 20 % |
-| 2.3 | Estudiante | Perfil → Intereses | Elegir dos áreas con prioridad | Se guardan; la completitud avanza |
+| 2.3 | Estudiante | Perfil → Intereses | Escribir dos **intereses en texto libre** («Desarrollo de videojuegos», «Automatización de procesos») | Se guardan tal como se escriben. **Decir en voz alta:** el documento distingue los intereses de las áreas de preferencia, y el software los trata como conceptos distintos (RF5) |
+| 2.3b | Estudiante | Perfil → Intereses | En la misma pantalla, elegir dos **áreas de preferencia** del catálogo con prioridad | Se guardan aparte de los intereses; la completitud avanza |
 | 2.4 | Estudiante | Perfil → Habilidades | Elegir habilidades con nivel 1–5 | La completitud llega a **100 %** |
 | 2.5 | Estudiante | Inicio | Mirar el resumen | Muestra afinidades ya calculadas y contadores reales. Las secciones sin datos dicen «sin registros», **no muestran datos inventados** |
 
@@ -95,7 +98,8 @@ npm run test:40          # 179 verificaciones de los 4 objetivos → 0 fallos
 | 3.1 | **Director** (web) | Actividades académicas | «Nueva actividad»: título, categoría, fecha futura, área, ubicación, **cupo 2**, estado **Borrador** | Se guarda como borrador |
 | 3.2 | **Estudiante** (móvil) | Actividades | Refrescar | **La actividad en borrador no aparece** |
 | 3.3 | Director | Actividades académicas | Cambiar el estado a **Abierta** en el selector de la tabla | Cambia en el acto |
-| 3.4 | Estudiante | Actividades | Refrescar, filtrar por *Académicas*, abrir el detalle | Ve fecha, lugar, responsable, cupos restantes y el botón habilitado |
+| 3.4 | Estudiante | Actividades | Refrescar y aplicar los **cuatro filtros del RF8**: categoría, área, modalidad y rango de fechas | La lista se reduce en el servidor. «Limpiar filtros» devuelve la oferta completa. Con un rango invertido, el sistema lo rechaza con un mensaje claro |
+| 3.4b | Estudiante | Actividades → detalle | Abrir el detalle | Ve fecha, lugar, responsable, cupos restantes y el botón habilitado |
 | 3.5 | Estudiante | Actividades → detalle | «Inscribirme» | «Inscripción enviada». El estado propio pasa a **inscrito, pendiente de registro** |
 | 3.6 | Estudiante | Actividades → detalle | Pulsar «Inscribirme» otra vez | **Rechazo con mensaje claro**: ya está inscrito |
 | 3.7 | **Sociedad científica** (web) | Actividades extracurriculares | Crear un hackathon en estado **Abierta** | Se publica |
@@ -129,6 +133,7 @@ npm run test:40          # 179 verificaciones de los 4 objetivos → 0 fallos
 | 4.9 | **Director** (web) | Constancias internas | Elegir la actividad | Lista **solo a los participantes confirmados** |
 | 4.10 | Director | Constancias internas | «Emitir constancia», revisar el texto y confirmar | Se emite y pasa a «Constancias emitidas» |
 | 4.11 | Director | Constancias internas | Intentar emitirla otra vez al mismo estudiante | Ya no aparece en la lista de pendientes. *(En Swagger devuelve **409**: constancia duplicada.)* |
+| 4.11b | Director | Constancias internas | Elegir una actividad que quedó **en borrador** | El sistema responde que **no está autorizada** para emitir constancias. **Decir en voz alta:** RN-11 exige actividad autorizada; aquí «autorizada» significa publicada y gestionada por el actor institucional de su tipo (RF12) |
 | 4.12 | **Sociedad científica** | — | Intentar emitir una constancia | **403.** Según el documento vigente, **solo el director de carrera** las emite |
 | 4.13 | **Estudiante** (móvil) | Evidencias y certificados | Bajar a «Constancias internas» | Ve su constancia como **Autorizada**, con la aclaración de que no sustituye a un certificado oficial |
 
