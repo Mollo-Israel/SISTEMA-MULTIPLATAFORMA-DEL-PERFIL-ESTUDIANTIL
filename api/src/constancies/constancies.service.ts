@@ -7,7 +7,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
-import { ConstancyStatus, RegistrationStatus } from '@perfil/shared';
+import {
+  ActivityStatus,
+  ActivityType,
+  ConstancyStatus,
+  RegistrationStatus,
+  RolNombre,
+} from '@perfil/shared';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { Activity } from '../entities/activity.entity';
@@ -19,6 +25,12 @@ import {
   AFFINITY_RECALCULATION,
   AffinityRecalculationPort,
 } from '../affinity-recalc/affinity-recalculation.port';
+
+/** Actor institucional responsable de cada tipo de actividad. */
+const OWNER_ROLE_BY_TYPE: Record<ActivityType, RolNombre> = {
+  [ActivityType.ACADEMICA]: RolNombre.CAREER_DIRECTOR,
+  [ActivityType.EXTRACURRICULAR]: RolNombre.SCIENTIFIC_SOCIETY,
+};
 
 @Injectable()
 export class ConstanciesService {
@@ -53,10 +65,14 @@ export class ConstanciesService {
       throw new BadRequestException('El perfil del estudiante no existe.');
     }
 
-    const activity = await this.activities.findOne({ where: { id: dto.activityId } });
+    const activity = await this.activities.findOne({
+      where: { id: dto.activityId },
+      relations: { creator: { role: true } },
+    });
     if (!activity) {
       throw new BadRequestException('La actividad indicada no existe.');
     }
+    this.assertActivityAuthorized(activity);
 
     const registration = await this.registrations.findOne({
       where: { activityId: dto.activityId, studentProfileId: dto.profileId },
@@ -95,12 +111,66 @@ export class ConstanciesService {
     return this.findOneOrFail(saved.id);
   }
 
+  /**
+   * "Actividad autorizada por la carrera" (RN-11, Tabla 2.21, Figura 2.24).
+   *
+   * El documento exige que la constancia solo se emita sobre una actividad
+   * autorizada, pero no define un tramite de autorizacion aparte ni un actor que
+   * la conceda. Para este proyecto una actividad esta autorizada cuando:
+   *
+   *   1. fue publicada, es decir salio de borrador y no esta cancelada; y
+   *   2. la gestiona el actor institucional que corresponde a su tipo:
+   *      academica -> director de carrera, extracurricular -> sociedad
+   *      cientifica, o el administrador como soporte.
+   *
+   * Es una condicion derivada de datos que ya existen, no un modulo nuevo:
+   * publicar una actividad siendo el responsable de su tipo ES el acto de
+   * autorizacion dentro del alcance del sistema.
+   */
+  private assertActivityAuthorized(activity: Activity): void {
+    if (activity.status === ActivityStatus.DRAFT) {
+      throw new BadRequestException(
+        'La actividad está en borrador: no está autorizada para emitir constancias.',
+      );
+    }
+    if (activity.status === ActivityStatus.CANCELLED) {
+      throw new BadRequestException(
+        'La actividad fue cancelada: no está autorizada para emitir constancias.',
+      );
+    }
+
+    const creatorRole = activity.creator?.role?.name;
+    if (!creatorRole) {
+      throw new BadRequestException(
+        'No se pudo determinar el responsable de la actividad; no está autorizada.',
+      );
+    }
+    const expected = OWNER_ROLE_BY_TYPE[activity.type];
+    if (creatorRole !== expected && creatorRole !== RolNombre.ADMIN) {
+      const quien =
+        expected === RolNombre.CAREER_DIRECTOR
+          ? 'el director de carrera'
+          : 'la sociedad científica';
+      throw new BadRequestException(
+        `La actividad no sigue el flujo institucional que le corresponde: las actividades ${
+          activity.type === ActivityType.ACADEMICA ? 'académicas' : 'extracurriculares'
+        } las gestiona ${quien}.`,
+      );
+    }
+  }
+
   /** Candidatos a constancia: participaciones confirmadas sin constancia previa. */
   async findEligible(activityId: string) {
-    const activity = await this.activities.findOne({ where: { id: activityId } });
+    const activity = await this.activities.findOne({
+      where: { id: activityId },
+      relations: { creator: { role: true } },
+    });
     if (!activity) {
       throw new NotFoundException('Actividad no encontrada.');
     }
+    // Si la actividad no esta autorizada, no se ofrecen candidatos: la interfaz
+    // recibe el motivo en lugar de una lista que luego seria rechazada.
+    this.assertActivityAuthorized(activity);
     const confirmed = await this.registrations.find({
       where: { activityId, status: RegistrationStatus.CONFIRMED },
       relations: { studentProfile: { user: true } },

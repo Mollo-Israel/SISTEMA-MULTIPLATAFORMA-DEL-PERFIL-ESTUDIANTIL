@@ -4,13 +4,20 @@ import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
+import { ActivityCategory } from '../entities/activity-category.entity';
 import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
 import { ActivitiesService } from './activities.service';
 import { ActivitiesController } from './activities.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Activity, ActivityRegistration, StudentProfile, AcademicArea]),
+    TypeOrmModule.forFeature([
+      Activity,
+      ActivityRegistration,
+      StudentProfile,
+      AcademicArea,
+      ActivityCategory,
+    ]),
     AffinityRecalcModule,
   ],
   controllers: [ActivitiesController],

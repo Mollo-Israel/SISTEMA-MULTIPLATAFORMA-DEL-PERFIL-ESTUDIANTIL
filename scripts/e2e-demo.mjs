@@ -92,6 +92,9 @@ async function main() {
   react ? ok('1. Catálogo de habilidades disponible') : bad('1. Skills', 'sin React');
 
   // crear staff
+  const cats = (await req('GET', '/activity-categories', { token: adminToken })).data ?? [];
+  const catId = (code) => cats.find((c) => c.code === code)?.id;
+
   const teacherToken = await ensureUser(adminToken, 'TEACHER', 'demo.docente@univalle.edu', 'Docente');
   const societyToken = await ensureUser(adminToken, 'SCIENTIFIC_SOCIETY', 'demo.sociedad@univalle.edu', 'Sociedad');
   const directorToken = await ensureUser(adminToken, 'CAREER_DIRECTOR', 'demo.director@univalle.edu', 'Director');
@@ -118,15 +121,15 @@ async function main() {
 
   // 5) Docente y sociedad publican actividad
   const actAcad = await findOrCreateActivity(directorToken, 'Taller de Desarrollo Web (demo)', {
-    type: 'academica', category: 'taller_academico', modality: 'presencial', areaId: web?.id, capacity: 30, status: 'open',
+    type: 'academica', categoryId: catId('taller_academico'), modality: 'presencial', areaId: web?.id, capacity: 30, status: 'open',
   });
   const actExtra = await findOrCreateActivity(societyToken, 'Hackathon de IA (demo)', {
-    type: 'extracurricular', category: 'hackathon', modality: 'hibrida', areaId: ia?.id, capacity: 50, status: 'open',
+    type: 'extracurricular', categoryId: catId('hackathon'), modality: 'hibrida', areaId: ia?.id, capacity: 50, status: 'open',
   });
   (actAcad && actExtra) ? ok('5. Actividad académica y extracurricular publicadas') : bad('5. Actividades', `acad=${actAcad} extra=${actExtra}`);
 
   // verificar regla de rol: docente NO publica extracurricular
-  const forbiddenPub = await req('POST', '/activities', { token: teacherToken, body: { title: 'Intento del docente (demo)', type: 'academica', category: 'charla' } });
+  const forbiddenPub = await req('POST', '/activities', { token: teacherToken, body: { title: 'Intento del docente (demo)', type: 'academica', categoryId: catId('charla') } });
   forbiddenPub.status === 403 ? ok('5. Regla de rol: el docente no publica actividades (403)') : bad('5. Regla rol publicación', `status ${forbiddenPub.status}`);
 
   // 6) Estudiante consulta actividades

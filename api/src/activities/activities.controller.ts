@@ -52,15 +52,12 @@ export class ActivitiesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar actividades con filtros. El estudiante no ve borradores.' })
+  @ApiOperation({
+    summary:
+      'Listar actividades. Filtros opcionales por categoría, área, modalidad y fecha (RF8), más tipo y estado.',
+  })
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryActivitiesDto) {
-    const { type, category, status, areaId } = query;
-    return this.activitiesService.findAll(user, {
-      ...(type ? { type } : {}),
-      ...(category ? { category } : {}),
-      ...(status ? { status } : {}),
-      ...(areaId ? { academicAreaId: areaId } : {}),
-    });
+    return this.activitiesService.findAll(user, query);
   }
 
   @Get('managed')

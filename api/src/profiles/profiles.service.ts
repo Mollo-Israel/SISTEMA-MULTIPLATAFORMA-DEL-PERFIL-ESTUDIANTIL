@@ -1,15 +1,17 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { ILike, In, Not, Repository } from 'typeorm';
 import { ProfileStatus, RolNombre } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
+import { StudentFreeInterest } from '../entities/student-free-interest.entity';
 import { StudentSkill } from '../entities/student-skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
@@ -22,6 +24,7 @@ import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { TeacherScopeService } from '../access/teacher-scope.service';
+import { CreateFreeInterestDto, UpdateFreeInterestDto } from './dto/free-interest.dto';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { InterestItemDto } from './dto/set-interests.dto';
@@ -45,6 +48,8 @@ export class ProfilesService {
   constructor(
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(StudentInterest) private readonly interests: Repository<StudentInterest>,
+    @InjectRepository(StudentFreeInterest)
+    private readonly freeInterests: Repository<StudentFreeInterest>,
     @InjectRepository(StudentSkill) private readonly skills: Repository<StudentSkill>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(Skill) private readonly skillCatalog: Repository<Skill>,
@@ -262,6 +267,94 @@ export class ProfilesService {
     });
   }
 
+  // ---------------------------------------------------------------------
+  // Intereses en texto libre (RF5)
+  //
+  // Distintos de las areas de preferencia: son temas escritos por el propio
+  // estudiante, sin depender del catalogo de areas academicas.
+  // ---------------------------------------------------------------------
+
+  async listFreeInterests(userId: string): Promise<StudentFreeInterest[]> {
+    const profile = await this.getOwnProfile(userId);
+    return this.freeInterests.find({
+      where: { studentProfileId: profile.id },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async addFreeInterest(
+    userId: string,
+    dto: CreateFreeInterestDto,
+  ): Promise<StudentFreeInterest> {
+    const profile = await this.getOwnProfile(userId);
+    await this.assertFreeInterestNameFree(profile.id, dto.name);
+    if ((await this.freeInterests.count({ where: { studentProfileId: profile.id } })) >= 30) {
+      throw new BadRequestException('Puedes registrar como máximo 30 intereses.');
+    }
+    const saved = await this.freeInterests.save(
+      this.freeInterests.create({
+        studentProfileId: profile.id,
+        name: dto.name,
+        description: dto.description ?? null,
+      }),
+    );
+    await this.afterProfileChange(profile.id);
+    return saved;
+  }
+
+  async updateFreeInterest(
+    userId: string,
+    id: string,
+    dto: UpdateFreeInterestDto,
+  ): Promise<StudentFreeInterest> {
+    const profile = await this.getOwnProfile(userId);
+    const interest = await this.requireOwnFreeInterest(profile.id, id);
+    if (dto.name !== undefined && dto.name.toLowerCase() !== interest.name.toLowerCase()) {
+      await this.assertFreeInterestNameFree(profile.id, dto.name, id);
+      interest.name = dto.name;
+    }
+    if (dto.description !== undefined) interest.description = dto.description ?? null;
+    const saved = await this.freeInterests.save(interest);
+    await this.afterProfileChange(profile.id);
+    return saved;
+  }
+
+  async removeFreeInterest(userId: string, id: string): Promise<void> {
+    const profile = await this.getOwnProfile(userId);
+    const interest = await this.requireOwnFreeInterest(profile.id, id);
+    await this.freeInterests.delete(interest.id);
+    await this.afterProfileChange(profile.id);
+  }
+
+  private async requireOwnFreeInterest(
+    profileId: string,
+    id: string,
+  ): Promise<StudentFreeInterest> {
+    const interest = await this.freeInterests.findOne({ where: { id } });
+    if (!interest) {
+      throw new NotFoundException('Interés no encontrado.');
+    }
+    if (interest.studentProfileId !== profileId) {
+      throw new ForbiddenException('Solo puedes gestionar tus propios intereses.');
+    }
+    return interest;
+  }
+
+  private async assertFreeInterestNameFree(
+    profileId: string,
+    name: string,
+    exceptId?: string,
+  ): Promise<void> {
+    const existing = await this.freeInterests.findOne({
+      where: exceptId
+        ? { studentProfileId: profileId, name: ILike(name), id: Not(exceptId) }
+        : { studentProfileId: profileId, name: ILike(name) },
+    });
+    if (existing) {
+      throw new ConflictException('Ya registraste ese interés.');
+    }
+  }
+
   async getSummary(userId: string) {
     const profile = await this.getOwnProfile(userId);
     return this.buildSummary(profile, { includeInternal: true });
@@ -284,6 +377,8 @@ export class ProfilesService {
       status: profile.status,
       bio: profile.bio,
       improvementAreas: summary.improvementAreas,
+      freeInterests: summary.freeInterests,
+      preferredAreas: summary.preferredAreas,
       interests: summary.interests,
       skills: summary.skills,
       projects: summary.projects.map((p) => ({
@@ -308,12 +403,16 @@ export class ProfilesService {
     profile: StudentProfile,
     options: { includeInternal: boolean },
   ) {
-    const [interests, skills, ownedProjects, memberships, certificates, affinities] =
+    const [interests, freeInterests, skills, ownedProjects, memberships, certificates, affinities] =
       await Promise.all([
         this.interests.find({
           where: { studentProfileId: profile.id },
           relations: { academicArea: true },
           order: { priority: 'DESC' },
+        }),
+        this.freeInterests.find({
+          where: { studentProfileId: profile.id },
+          order: { createdAt: 'ASC' },
         }),
         this.skills.find({
           where: { studentProfileId: profile.id },
@@ -368,6 +467,22 @@ export class ProfilesService {
         completionPercentage: profile.completionPercentage,
       },
       improvementAreas,
+      /** Intereses en texto libre declarados por el estudiante (RF5). */
+      freeInterests: freeInterests.map((i) => ({
+        id: i.id,
+        name: i.name,
+        description: i.description,
+      })),
+      /**
+       * Areas de preferencia: seleccion del catalogo de areas academicas con
+       * prioridad. Se expone tambien como `interests` por compatibilidad con
+       * los clientes anteriores.
+       */
+      preferredAreas: interests.map((i) => ({
+        academicAreaId: i.academicAreaId,
+        area: i.academicArea?.name ?? null,
+        priority: i.priority,
+      })),
       interests: interests.map((i) => ({
         academicAreaId: i.academicAreaId,
         area: i.academicArea?.name ?? null,

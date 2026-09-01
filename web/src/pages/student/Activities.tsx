@@ -29,7 +29,7 @@ export default function StudentActivitiesPage() {
           <div className="grid cols-2">
             {items.map((a) => (
               <Card key={a.id} title={a.title} actions={<Badge tone="bordo">{lbl(ACTIVITY_TYPE_LABEL, a.type)}</Badge>}>
-                <p className="muted">{catLabel(a.category)} · {a.modality} · {lbl(ACTIVITY_STATUS_LABEL, a.status)}</p>
+                <p className="muted">{(a.category?.name ?? '—')} · {a.modality} · {lbl(ACTIVITY_STATUS_LABEL, a.status)}</p>
                 {a.description && <p>{a.description}</p>}
                 {a.academicArea && <p className="muted">Área: {a.academicArea.name}</p>}
                 <div className="flex mt">

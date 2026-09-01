@@ -15,3 +15,5 @@ export * from './internal-constancy.entity';
 export * from './affinity-result.entity';
 export * from './teacher-semester-access.entity';
 export * from './gamification-criterion.entity';
+export * from './activity-category.entity';
+export * from './student-free-interest.entity';

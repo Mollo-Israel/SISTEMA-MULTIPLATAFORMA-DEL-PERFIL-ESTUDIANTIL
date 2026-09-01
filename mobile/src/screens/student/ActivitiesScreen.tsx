@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
-import { activityService } from '../../services';
+import { activityService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
   Screen,
@@ -14,14 +14,9 @@ import {
   EmptyState,
   Success,
   Badge,
+  Field,
 } from '../../components/ui';
-import {
-  ACTIVITY_CATEGORIES,
-  ACTIVITY_STATUS_LABEL,
-  ACTIVITY_TYPE_LABEL,
-  categoryLabel,
-  lbl,
-} from '../../constants';
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
 import { colors } from '../../theme';
 
 const TYPE_FILTERS = [
@@ -30,28 +25,66 @@ const TYPE_FILTERS = [
   { value: 'extracurricular', label: 'Extracurriculares' },
 ];
 
+const MODALITY_FILTERS = [
+  { value: '', label: 'Todas' },
+  { value: 'presencial', label: 'Presencial' },
+  { value: 'virtual', label: 'Virtual' },
+  { value: 'hibrida', label: 'Híbrida' },
+];
+
 export default function ActivitiesScreen({ navigation }: any) {
-  const { data, loading, error, reload } = useAsync(() => activityService.list(), []);
+  // Filtros del RF8: categoría, área, modalidad y fecha. Se aplican en el
+  // servidor para que el resultado sea el mismo desde cualquier cliente.
   const [type, setType] = useState('');
-  const [category, setCategory] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [areaId, setAreaId] = useState('');
+  const [modality, setModality] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [applied, setApplied] = useState(0);
+
+  const params = useMemo(() => {
+    const p: Record<string, string> = {};
+    if (type) p.type = type;
+    if (categoryId) p.categoryId = categoryId;
+    if (areaId) p.areaId = areaId;
+    if (modality) p.modality = modality;
+    if (fromDate) p.fromDate = fromDate;
+    if (toDate) p.toDate = toDate;
+    return p;
+  }, [type, categoryId, areaId, modality, fromDate, toDate, applied]);
+
+  const { data, loading, error, reload } = useAsync(() => activityService.list(params), [params]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [areas, setAreas] = useState<any[]>([]);
+
+  useEffect(() => {
+    catalogService.activityCategories().then(setCategories).catch(() => {});
+    catalogService.areas().then(setAreas).catch(() => {});
+  }, []);
+
+  const hasFilters = !!(type || categoryId || areaId || modality || fromDate || toDate);
+  const clearFilters = () => {
+    setType('');
+    setCategoryId('');
+    setAreaId('');
+    setModality('');
+    setFromDate('');
+    setToDate('');
+    setApplied((n) => n + 1);
+  };
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [detailBusy, setDetailBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    let list = data ?? [];
-    if (type) list = list.filter((a: any) => a.type === type);
-    if (category) list = list.filter((a: any) => a.category === category);
-    return list;
-  }, [data, type, category]);
+  const filtered = data ?? [];
 
-  // Solo se ofrecen las categorías realmente presentes en la oferta actual.
-  const availableCategories = useMemo(() => {
-    const present = new Set((data ?? []).map((a: any) => a.category));
-    return ACTIVITY_CATEGORIES.filter((c) => present.has(c.value));
-  }, [data]);
+  // Categorías del catálogo que aplican al tipo elegido (RF4).
+  const usableCategories = categories.filter(
+    (c: any) => c.isActive && (!c.appliesTo || !type || c.appliesTo === type),
+  );
 
   const open = async (id: string) => {
     if (expanded === id) {
@@ -114,37 +147,92 @@ export default function ActivitiesScreen({ navigation }: any) {
         ))}
       </View>
 
-      {availableCategories.length > 1 && (
-        <View style={styles.filterRow}>
+      {usableCategories.length > 0 && (
+        <>
+          <Text style={styles.filterLabel}>Categoría</Text>
+          <View style={styles.filterRow}>
+            <Pressable
+              onPress={() => setCategoryId('')}
+              style={[styles.filter, categoryId === '' && styles.filterOn]}
+            >
+              <Text style={categoryId === '' ? styles.filterOnText : styles.filterText}>Todas</Text>
+            </Pressable>
+            {usableCategories.map((c: any) => (
+              <Pressable
+                key={c.id}
+                onPress={() => setCategoryId(categoryId === c.id ? '' : c.id)}
+                style={[styles.filter, categoryId === c.id && styles.filterOn]}
+              >
+                <Text style={categoryId === c.id ? styles.filterOnText : styles.filterText}>
+                  {c.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      )}
+
+      {areas.length > 0 && (
+        <>
+          <Text style={styles.filterLabel}>Área académica</Text>
+          <View style={styles.filterRow}>
+            <Pressable
+              onPress={() => setAreaId('')}
+              style={[styles.filter, areaId === '' && styles.filterOn]}
+            >
+              <Text style={areaId === '' ? styles.filterOnText : styles.filterText}>Todas</Text>
+            </Pressable>
+            {areas.map((a: any) => (
+              <Pressable
+                key={a.id}
+                onPress={() => setAreaId(areaId === a.id ? '' : a.id)}
+                style={[styles.filter, areaId === a.id && styles.filterOn]}
+              >
+                <Text style={areaId === a.id ? styles.filterOnText : styles.filterText}>
+                  {a.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      )}
+
+      <Text style={styles.filterLabel}>Modalidad</Text>
+      <View style={styles.filterRow}>
+        {MODALITY_FILTERS.map((m) => (
           <Pressable
-            onPress={() => setCategory('')}
-            style={[styles.filter, category === '' && styles.filterOn]}
+            key={m.value || 'all'}
+            onPress={() => setModality(m.value)}
+            style={[styles.filter, modality === m.value && styles.filterOn]}
           >
-            <Text style={category === '' ? styles.filterOnText : styles.filterText}>
-              Toda categoría
+            <Text style={modality === m.value ? styles.filterOnText : styles.filterText}>
+              {m.label}
             </Text>
           </Pressable>
-          {availableCategories.map((c) => (
-            <Pressable
-              key={c.value}
-              onPress={() => setCategory(category === c.value ? '' : c.value)}
-              style={[styles.filter, category === c.value && styles.filterOn]}
-            >
-              <Text style={category === c.value ? styles.filterOnText : styles.filterText}>
-                {c.label}
-              </Text>
-            </Pressable>
-          ))}
+        ))}
+      </View>
+
+      <Text style={styles.filterLabel}>Fecha (aaaa-mm-dd)</Text>
+      <View style={styles.dateRow}>
+        <View style={{ flex: 1 }}>
+          <Field label="Desde" value={fromDate} onChangeText={setFromDate} placeholder="2026-09-01" />
         </View>
+        <View style={{ flex: 1 }}>
+          <Field label="Hasta" value={toDate} onChangeText={setToDate} placeholder="2026-12-31" />
+        </View>
+      </View>
+
+      {hasFilters && (
+        <Button title="Limpiar filtros" variant="secondary" onPress={clearFilters} />
       )}
 
       {loading && <Loading />}
       {error && <ErrorText message={error} />}
 
-      {!loading && filtered.length === 0 && (
+      {!loading && !error && filtered.length === 0 && (
         <EmptyState
           message={
-            type || category
+            hasFilters
               ? 'Ninguna actividad coincide con los filtros elegidos.'
               : 'Todavía no hay actividades publicadas.'
           }
@@ -163,7 +251,7 @@ export default function ActivitiesScreen({ navigation }: any) {
                 <Badge color={a.type === 'academica' ? colors.bordo : colors.amber}>
                   {lbl(ACTIVITY_TYPE_LABEL, a.type)}
                 </Badge>
-                <Badge>{categoryLabel(a.category)}</Badge>
+                <Badge>{a.category?.name ?? '—'}</Badge>
                 <Badge color={colors.green}>{lbl(ACTIVITY_STATUS_LABEL, a.status)}</Badge>
               </View>
               <Text style={styles.title}>{a.title}</Text>
@@ -277,7 +365,16 @@ export default function ActivitiesScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10, marginBottom: 4 },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4, marginBottom: 8 },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gray700,
+    marginTop: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  dateRow: { flexDirection: 'row', gap: 10 },
   filter: {
     borderWidth: 1,
     borderColor: colors.gray200,

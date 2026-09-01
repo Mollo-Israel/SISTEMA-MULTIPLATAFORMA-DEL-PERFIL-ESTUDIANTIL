@@ -58,6 +58,10 @@ async function req(method, path, { token, body, raw } = {}) {
   return { status: res.status, data };
 }
 
+/** Categorias del catalogo, resueltas por codigo (RF4). */
+let CATEGORIES = [];
+const catId = (code) => CATEGORIES.find((c) => c.code === code)?.id;
+
 const msgOf = (r) => {
   const m = r?.data?.message;
   return Array.isArray(m) ? m.join(' | ') : (m ?? JSON.stringify(r?.data ?? '').slice(0, 120));
@@ -82,6 +86,7 @@ async function main() {
 
   const areas = (await req('GET', '/academic-areas', { token: admin })).data ?? [];
   const skills = (await req('GET', '/skills', { token: admin })).data ?? [];
+  CATEGORIES = (await req('GET', '/activity-categories', { token: admin })).data ?? [];
   const webArea = areas.find((a) => a.name === 'Desarrollo Web') ?? areas[0];
   const dataArea = areas.find((a) => a.name === 'Bases de Datos') ?? areas[1] ?? areas[0];
   const reactSkill = skills.find((s) => s.name === 'React') ?? skills[0];
@@ -93,6 +98,7 @@ async function main() {
   await objective2(ctx);
   await objective3(ctx);
   await objective4(ctx);
+  await cierreFinal(ctx);
 
   console.log(`\n${'─'.repeat(78)}`);
   if (fail === 0) {
@@ -584,7 +590,7 @@ async function objective3(ctx) {
       title: `Taller de arquitectura de software ${TS}`,
       description: 'Patrones, capas y decisiones de diseño en proyectos de la carrera.',
       type: 'academica',
-      category: 'taller_academico',
+      categoryId: catId('taller_academico'),
       modality: 'presencial',
       areaId: webArea.id,
       activityDate: future,
@@ -601,7 +607,7 @@ async function objective3(ctx) {
 
   const societyAcademic = await req('POST', '/activities', {
     token: societyToken,
-    body: { title: `Intento academico ${TS}`, type: 'academica', category: 'charla' },
+    body: { title: `Intento academico ${TS}`, type: 'academica', categoryId: catId('charla') },
   });
   check(
     societyAcademic.status === 403,
@@ -615,7 +621,7 @@ async function objective3(ctx) {
       title: `Hackathon de innovacion ${TS}`,
       description: 'Reto de 24 horas para equipos de la carrera.',
       type: 'extracurricular',
-      category: 'hackathon',
+      categoryId: catId('hackathon'),
       modality: 'presencial',
       areaId: webArea.id,
       activityDate: future,
@@ -629,7 +635,7 @@ async function objective3(ctx) {
 
   const directorExtra = await req('POST', '/activities', {
     token: directorToken,
-    body: { title: `Intento extra ${TS}`, type: 'extracurricular', category: 'hackathon' },
+    body: { title: `Intento extra ${TS}`, type: 'extracurricular', categoryId: catId('hackathon') },
   });
   check(
     directorExtra.status === 403,
@@ -639,7 +645,7 @@ async function objective3(ctx) {
 
   const teacherPublish = await req('POST', '/activities', {
     token: teacherToken,
-    body: { title: `Intento docente ${TS}`, type: 'academica', category: 'charla' },
+    body: { title: `Intento docente ${TS}`, type: 'academica', categoryId: catId('charla') },
   });
   check(
     teacherPublish.status === 403,
@@ -649,7 +655,7 @@ async function objective3(ctx) {
 
   const studentPublish = await req('POST', '/activities', {
     token: student,
-    body: { title: `Intento estudiante ${TS}`, type: 'academica', category: 'charla' },
+    body: { title: `Intento estudiante ${TS}`, type: 'academica', categoryId: catId('charla') },
   });
   check(studentPublish.status === 403, '3.7 El estudiante NO publica actividades -> 403');
 
@@ -710,10 +716,12 @@ async function objective3(ctx) {
     byType.status === 200 && byType.data.every((a) => a.type === 'extracurricular'),
     '3.16 Filtro por tipo de actividad',
   );
-  const byCategory = await req('GET', '/activities?category=hackathon', { token: student });
+  const byCategory = await req('GET', `/activities?categoryId=${catId('hackathon')}`, {
+    token: student,
+  });
   check(
-    byCategory.status === 200 && byCategory.data.every((a) => a.category === 'hackathon'),
-    '3.17 Filtro por categoria',
+    byCategory.status === 200 && byCategory.data.every((a) => a.category?.code === 'hackathon'),
+    '3.17 Filtro por categoria (del catalogo administrable)',
   );
   const byArea = await req('GET', `/activities?areaId=${webArea.id}`, { token: student });
   check(
@@ -760,7 +768,7 @@ async function objective3(ctx) {
     body: {
       title: `Convocatoria cerrada ${TS}`,
       type: 'extracurricular',
-      category: 'convocatoria',
+      categoryId: catId('convocatoria'),
       status: 'closed',
     },
   });
@@ -777,7 +785,7 @@ async function objective3(ctx) {
     body: {
       title: `Reto pasado ${TS}`,
       type: 'extracurricular',
-      category: 'reto',
+      categoryId: catId('reto'),
       status: 'open',
       activityDate: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(),
     },
@@ -790,7 +798,7 @@ async function objective3(ctx) {
     body: {
       title: `Club cancelado ${TS}`,
       type: 'extracurricular',
-      category: 'club_estudio',
+      categoryId: catId('club_estudio'),
       status: 'cancelled',
     },
   });
@@ -1215,6 +1223,487 @@ async function objective4(ctx) {
 
   void admin;
   void extraActivityId;
+}
+
+// ===========================================================================
+//  CIERRE FINAL — RF4, RF5, RF8 y RF12
+//  Regresion de los cuatro huecos cerrados en el pase de alineacion final.
+// ===========================================================================
+async function cierreFinal(ctx) {
+  objective('CIERRE FINAL — RF4 · RF5 · RF8 · RF12');
+
+  const { admin, student, directorToken, societyToken, webArea, dataArea } = ctx;
+
+  // -------------------------------------------------------------------
+  // RF4 · Categorias de actividad administrables
+  // -------------------------------------------------------------------
+  section('RF4 · Catálogo administrable de categorías de actividad');
+
+  const catalog = await req('GET', '/activity-categories', { token: admin });
+  check(catalog.status === 200, '5.1 El catálogo de categorías es consultable', msgOf(catalog));
+  check(catalog.data.length >= 14, '5.2 La migración conservó las 14 categorías originales');
+  check(
+    catalog.data.some((c) => c.code === 'taller_academico' && c.appliesTo === 'academica'),
+    '5.3 Las categorías conservan su código y su tipo aplicable',
+  );
+
+  const newCat = await req('POST', '/activity-categories', {
+    token: admin,
+    body: {
+      code: `mesa_redonda_${TS}`,
+      name: `Mesa redonda ${TS}`,
+      description: 'Debate abierto entre varios ponentes.',
+      appliesTo: 'academica',
+    },
+  });
+  check(newCat.status === 201, '5.4 El administrador crea una categoría', msgOf(newCat));
+  const newCatId = newCat.data?.id;
+
+  const dupCode = await req('POST', '/activity-categories', {
+    token: admin,
+    body: { code: `mesa_redonda_${TS}`, name: `Otra ${TS}` },
+  });
+  check(dupCode.status === 409, '5.5 Código de categoría duplicado -> 409', `status ${dupCode.status}`);
+
+  const dupName = await req('POST', '/activity-categories', {
+    token: admin,
+    body: { code: `otro_codigo_${TS}`, name: `Mesa redonda ${TS}` },
+  });
+  check(dupName.status === 409, '5.6 Nombre de categoría duplicado -> 409', `status ${dupName.status}`);
+
+  const badCode = await req('POST', '/activity-categories', {
+    token: admin,
+    body: { code: 'Mesa Redonda!', name: `Inválida ${TS}` },
+  });
+  check(badCode.status === 400, '5.7 Código con formato inválido -> 400', `status ${badCode.status}`);
+
+  const editCat = await req('PATCH', `/activity-categories/${newCatId}`, {
+    token: admin,
+    body: { description: 'Debate abierto moderado por un docente.' },
+  });
+  check(editCat.status === 200, '5.8 El administrador edita la categoría', msgOf(editCat));
+
+  check(
+    (await req('POST', '/activity-categories', {
+      token: student,
+      body: { code: `x_${TS}`, name: `X ${TS}` },
+    })).status === 403,
+    '5.9 El estudiante NO administra categorías -> 403',
+  );
+
+  const withNewCat = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Mesa redonda de arquitectura ${TS}`,
+      type: 'academica',
+      categoryId: newCatId,
+      status: 'open',
+    },
+  });
+  check(withNewCat.status === 201, '5.10 Se publica una actividad con la categoría nueva', msgOf(withNewCat));
+  check(
+    withNewCat.data?.category?.id === newCatId,
+    '5.11 La actividad devuelve la categoría del catálogo, no un enum',
+  );
+
+  const wrongScope = await req('POST', '/activities', {
+    token: societyToken,
+    body: {
+      title: `Extra con categoría académica ${TS}`,
+      type: 'extracurricular',
+      categoryId: newCatId,
+      status: 'open',
+    },
+  });
+  check(
+    wrongScope.status === 400,
+    '5.12 Categoría que no aplica al tipo de actividad -> 400',
+    `status ${wrongScope.status}`,
+  );
+
+  const inexistente = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Categoría inexistente ${TS}`,
+      type: 'academica',
+      categoryId: '00000000-0000-0000-0000-000000000000',
+      status: 'open',
+    },
+  });
+  check(inexistente.status === 400, '5.13 Categoría inexistente -> 400', `status ${inexistente.status}`);
+
+  const offCat = await req('PATCH', `/activity-categories/${newCatId}`, {
+    token: admin,
+    body: { isActive: false },
+  });
+  check(offCat.status === 200 && offCat.data.isActive === false, '5.14 El administrador da de baja la categoría');
+  const usage = await req('GET', `/activity-categories/${newCatId}/usage`, { token: admin });
+  check(usage.data?.activities >= 1, '5.15 El sistema informa cuántas actividades la usan');
+  const stillThere = await req('GET', `/activities/${withNewCat.data?.id}`, { token: directorToken });
+  check(
+    stillThere.status === 200 && stillThere.data?.category?.id === newCatId,
+    '5.16 La actividad existente conserva su categoría dada de baja',
+  );
+  const withInactive = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Con categoría de baja ${TS}`,
+      type: 'academica',
+      categoryId: newCatId,
+      status: 'open',
+    },
+  });
+  check(
+    withInactive.status === 400,
+    '5.17 No se publica una actividad nueva con categoría dada de baja -> 400',
+    `status ${withInactive.status}`,
+  );
+  const studentCatalog = await req('GET', '/activity-categories', { token: student });
+  check(
+    !studentCatalog.data.some((c) => c.id === newCatId),
+    '5.18 La categoría dada de baja deja de ofrecerse a los demás roles',
+  );
+  await req('PATCH', `/activity-categories/${newCatId}`, { token: admin, body: { isActive: true } });
+
+  // -------------------------------------------------------------------
+  // RF5 · Intereses en texto libre, distintos de las areas de preferencia
+  // -------------------------------------------------------------------
+  section('RF5 · Intereses en texto libre y áreas de preferencia');
+
+  const emptyList = await req('GET', '/profiles/me/free-interests', { token: student });
+  check(emptyList.status === 200 && Array.isArray(emptyList.data), '5.19 El estudiante consulta sus intereses');
+
+  const int1 = await req('POST', '/profiles/me/free-interests', {
+    token: student,
+    body: {
+      name: 'Desarrollo de videojuegos',
+      description: 'Motores 2D, diseño de niveles y mecánicas.',
+    },
+  });
+  check(int1.status === 201, '5.20 El estudiante agrega un interés en texto libre', msgOf(int1));
+  check(int1.data?.name === 'Desarrollo de videojuegos', '5.21 El interés se guarda tal como se escribió');
+
+  const int2 = await req('POST', '/profiles/me/free-interests', {
+    token: student,
+    body: { name: 'Automatización de procesos' },
+  });
+  check(int2.status === 201, '5.22 Un segundo interés, sin descripción, también se acepta');
+
+  const dupInt = await req('POST', '/profiles/me/free-interests', {
+    token: student,
+    body: { name: 'desarrollo de videojuegos' },
+  });
+  check(
+    dupInt.status === 409,
+    '5.23 Interés duplicado (sin distinguir mayúsculas) -> 409',
+    `status ${dupInt.status}`,
+  );
+
+  const emptyInt = await req('POST', '/profiles/me/free-interests', {
+    token: student,
+    body: { name: '  ' },
+  });
+  check(emptyInt.status === 400, '5.24 Interés vacío -> 400', `status ${emptyInt.status}`);
+
+  const longInt = await req('POST', '/profiles/me/free-interests', {
+    token: student,
+    body: { name: 'x'.repeat(130) },
+  });
+  check(longInt.status === 400, '5.25 Interés demasiado largo -> 400', `status ${longInt.status}`);
+
+  const editInt = await req('PATCH', `/profiles/me/free-interests/${int1.data?.id}`, {
+    token: student,
+    body: { description: 'Motores 2D y 3D, diseño de niveles y físicas.' },
+  });
+  check(editInt.status === 200, '5.26 El estudiante edita su interés', msgOf(editInt));
+
+  const foreignEdit = await req('PATCH', `/profiles/me/free-interests/${int1.data?.id}`, {
+    token: ctx.otherStudentToken,
+    body: { name: 'Secuestrado' },
+  });
+  check(
+    [403, 404].includes(foreignEdit.status),
+    '5.27 No se edita el interés de otro estudiante',
+    `status ${foreignEdit.status}`,
+  );
+
+  const listInt = await req('GET', '/profiles/me/free-interests', { token: student });
+  check(listInt.data?.length === 2, '5.28 El listado devuelve los dos intereses vigentes');
+
+  const prefs = await req('PUT', '/profiles/me/preferred-areas', {
+    token: student,
+    body: {
+      items: [
+        { academicAreaId: webArea.id, priority: 5 },
+        { academicAreaId: dataArea.id, priority: 3 },
+      ],
+    },
+  });
+  check(prefs.status === 200 && prefs.data.length === 2, '5.29 Las áreas de preferencia se registran aparte', msgOf(prefs));
+
+  const summary = await req('GET', '/profiles/me/summary', { token: student });
+  check(
+    summary.data?.freeInterests?.length === 2,
+    '5.30 El perfil dinámico muestra los intereses en texto libre',
+  );
+  check(
+    summary.data?.preferredAreas?.length === 2,
+    '5.31 El perfil dinámico muestra las áreas de preferencia por separado',
+  );
+  check(
+    summary.data.freeInterests[0].name !== undefined &&
+      summary.data.preferredAreas[0].academicAreaId !== undefined,
+    '5.32 Son dos estructuras distintas: texto libre frente a área con prioridad',
+  );
+
+  const delInt = await req('DELETE', `/profiles/me/free-interests/${int2.data?.id}`, {
+    token: student,
+  });
+  check(delInt.status === 204, '5.33 El estudiante elimina un interés', `status ${delInt.status}`);
+  check(
+    (await req('GET', '/profiles/me/free-interests', { token: student })).data.length === 1,
+    '5.34 El interés eliminado desaparece del listado',
+  );
+
+  // -------------------------------------------------------------------
+  // RF8 · Filtros de modalidad y fecha
+  // -------------------------------------------------------------------
+  section('RF8 · Filtros por categoría, área, modalidad y fecha');
+
+  const soon = new Date(Date.now() + 10 * 24 * 3600 * 1000);
+  const later = new Date(Date.now() + 60 * 24 * 3600 * 1000);
+  const iso = (d) => d.toISOString().slice(0, 10);
+
+  const virtual = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Seminario virtual ${TS}`,
+      type: 'academica',
+      categoryId: catId('seminario'),
+      modality: 'virtual',
+      areaId: dataArea.id,
+      activityDate: soon.toISOString(),
+      status: 'open',
+    },
+  });
+  check(virtual.status === 201, '5.35 Actividad virtual de referencia creada', msgOf(virtual));
+
+  const presencialLejana = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Taller presencial lejano ${TS}`,
+      type: 'academica',
+      categoryId: catId('taller_academico'),
+      modality: 'presencial',
+      areaId: webArea.id,
+      activityDate: later.toISOString(),
+      status: 'open',
+    },
+  });
+  check(presencialLejana.status === 201, '5.36 Actividad presencial de referencia creada');
+
+  const byModality = await req('GET', '/activities?modality=virtual', { token: student });
+  check(
+    byModality.status === 200 && byModality.data.every((a) => a.modality === 'virtual'),
+    '5.37 Filtro por modalidad',
+  );
+  check(
+    byModality.data.some((a) => a.id === virtual.data?.id),
+    '5.38 El filtro de modalidad devuelve la actividad esperada',
+  );
+
+  const fromOnly = await req(
+    'GET',
+    `/activities?fromDate=${iso(new Date(later.getTime() - 24 * 3600 * 1000))}`,
+    { token: student },
+  );
+  check(
+    fromOnly.status === 200 && fromOnly.data.some((a) => a.id === presencialLejana.data?.id),
+    '5.39 Filtro por fecha desde',
+  );
+  check(
+    !fromOnly.data.some((a) => a.id === virtual.data?.id),
+    '5.40 El filtro desde excluye lo anterior al rango',
+  );
+
+  const toOnly = await req(
+    'GET',
+    `/activities?toDate=${iso(new Date(soon.getTime() + 24 * 3600 * 1000))}`,
+    { token: student },
+  );
+  check(
+    toOnly.status === 200 && !toOnly.data.some((a) => a.id === presencialLejana.data?.id),
+    '5.41 Filtro por fecha hasta',
+  );
+
+  const range = await req('GET', `/activities?fromDate=${iso(soon)}&toDate=${iso(soon)}`, {
+    token: student,
+  });
+  check(
+    range.status === 200 && range.data.some((a) => a.id === virtual.data?.id),
+    '5.42 Rango de un solo día incluye la actividad de ese día',
+  );
+
+  const combined = await req(
+    'GET',
+    `/activities?modality=virtual&areaId=${dataArea.id}&categoryId=${catId('seminario')}&fromDate=${iso(soon)}`,
+    { token: student },
+  );
+  check(
+    combined.status === 200 && combined.data.some((a) => a.id === virtual.data?.id),
+    '5.43 Filtros combinados (categoría + área + modalidad + fecha)',
+  );
+
+  const badRange = await req('GET', `/activities?fromDate=${iso(later)}&toDate=${iso(soon)}`, {
+    token: student,
+  });
+  check(badRange.status === 400, '5.44 Rango de fechas invertido -> 400', `status ${badRange.status}`);
+
+  const badDate = await req('GET', '/activities?fromDate=no-es-fecha', { token: student });
+  check(badDate.status === 400, '5.45 Fecha con formato inválido -> 400', `status ${badDate.status}`);
+
+  const badModality = await req('GET', '/activities?modality=telepatica', { token: student });
+  check(badModality.status === 400, '5.46 Modalidad inexistente -> 400', `status ${badModality.status}`);
+
+  const noResults = await req('GET', '/activities?modality=hibrida&fromDate=2099-01-01', {
+    token: student,
+  });
+  check(
+    noResults.status === 200 && noResults.data.length === 0,
+    '5.47 Una combinación sin coincidencias devuelve lista vacía, no error',
+  );
+
+  const cleared = await req('GET', '/activities', { token: student });
+  check(cleared.data.length > noResults.data.length, '5.48 Al limpiar los filtros vuelve la oferta completa');
+
+  // -------------------------------------------------------------------
+  // RF12 · Actividad autorizada
+  // -------------------------------------------------------------------
+  section('RF12 · Regla de actividad autorizada');
+
+  const draft = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Borrador para constancia ${TS}`,
+      type: 'academica',
+      categoryId: catId('charla'),
+      status: 'draft',
+    },
+  });
+  const draftConstancy = await req('POST', '/constancies/internal', {
+    token: directorToken,
+    body: {
+      profileId: ctx.studentProfileId,
+      activityId: draft.data?.id,
+      description: 'Intento sobre una actividad en borrador.',
+    },
+  });
+  check(
+    draftConstancy.status === 400 &&
+      String(msgOf(draftConstancy)).toLowerCase().includes('borrador'),
+    '5.49 Actividad en borrador -> no autorizada -> 400',
+    msgOf(draftConstancy),
+  );
+
+  const cancelled = await req('POST', '/activities', {
+    token: directorToken,
+    body: {
+      title: `Cancelada para constancia ${TS}`,
+      type: 'academica',
+      categoryId: catId('charla'),
+      status: 'open',
+    },
+  });
+  await req('PATCH', `/activities/${cancelled.data?.id}`, {
+    token: directorToken,
+    body: { status: 'cancelled' },
+  });
+  const cancelledConstancy = await req('POST', '/constancies/internal', {
+    token: directorToken,
+    body: {
+      profileId: ctx.studentProfileId,
+      activityId: cancelled.data?.id,
+      description: 'Intento sobre una actividad cancelada.',
+    },
+  });
+  check(
+    cancelledConstancy.status === 400 &&
+      String(msgOf(cancelledConstancy)).toLowerCase().includes('cancel'),
+    '5.50 Actividad cancelada -> no autorizada -> 400',
+    msgOf(cancelledConstancy),
+  );
+
+  const eligibleDraft = await req('GET', `/constancies/internal/eligible/${draft.data?.id}`, {
+    token: directorToken,
+  });
+  check(
+    eligibleDraft.status === 400,
+    '5.51 Los elegibles de una actividad no autorizada -> 400 con el motivo',
+    `status ${eligibleDraft.status}`,
+  );
+
+  // Camino completo sobre una extracurricular publicada por la sociedad: el
+  // director si emite la constancia, porque la actividad sigue su flujo
+  // institucional y la participacion esta confirmada.
+  const extraOk = await req('POST', '/activities', {
+    token: societyToken,
+    body: {
+      title: `Club de estudio con constancia ${TS}`,
+      type: 'extracurricular',
+      categoryId: catId('club_estudio'),
+      status: 'open',
+    },
+  });
+  await req('POST', `/activities/${extraOk.data?.id}/register`, { token: student });
+  const confirmExtra = await req('PATCH', `/activities/${extraOk.data?.id}/confirm-participation`, {
+    token: societyToken,
+    body: { studentProfileId: ctx.studentProfileId, status: 'confirmed' },
+  });
+  check(confirmExtra.status === 200, '5.52 La sociedad confirma la participación en su actividad', msgOf(confirmExtra));
+
+  const extraConstancy = await req('POST', '/constancies/internal', {
+    token: directorToken,
+    body: {
+      profileId: ctx.studentProfileId,
+      activityId: extraOk.data?.id,
+      description: 'Participó en el club de estudio organizado por la sociedad científica.',
+    },
+  });
+  check(
+    extraConstancy.status === 201,
+    '5.53 El director emite constancia sobre una extracurricular autorizada',
+    msgOf(extraConstancy),
+  );
+
+  check(
+    (await req('POST', '/constancies/internal', {
+      token: directorToken,
+      body: {
+        profileId: ctx.studentProfileId,
+        activityId: extraOk.data?.id,
+        description: 'Segunda constancia para la misma actividad.',
+      },
+    })).status === 409,
+    '5.54 Constancia duplicada sobre la extracurricular -> 409',
+  );
+
+  check(
+    (await req('POST', '/constancies/internal', {
+      token: societyToken,
+      body: {
+        profileId: ctx.studentProfileId,
+        activityId: extraOk.data?.id,
+        description: 'Intento de la sociedad.',
+      },
+    })).status === 403,
+    '5.55 La sociedad sigue sin poder emitir constancias -> 403',
+  );
+
+  const finalSummary = await req('GET', '/profiles/me/summary', { token: student });
+  check(
+    finalSummary.data?.internalConstancies?.length >= 2,
+    '5.56 El perfil dinámico integra las constancias emitidas',
+  );
 }
 
 main().catch((e) => {

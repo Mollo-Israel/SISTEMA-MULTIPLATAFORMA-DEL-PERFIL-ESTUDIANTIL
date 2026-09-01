@@ -12,6 +12,7 @@ import {
   FiShield,
   FiSliders,
   FiStar,
+  FiTag,
   FiTarget,
   FiUser,
   FiUsers,
@@ -43,6 +44,7 @@ const ICONS: Record<string, IconType> = {
   '/admin/roles': FiShield,
   '/admin/areas': FiLayers,
   '/admin/skills': FiAward,
+  '/admin/activity-categories': FiTag,
   '/admin/gamification': FiStar,
 };
 

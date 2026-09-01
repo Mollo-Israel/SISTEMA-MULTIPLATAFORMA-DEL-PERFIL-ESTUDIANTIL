@@ -7,7 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import {
-  ActivityCategory, ActivityModality, ActivityStatus, ActivityType,
+  ActivityCategory as ActivityCategoryCode, ActivityModality, ActivityStatus, ActivityType,
   ConstancyStatus, EvidenceType, GamificationTrigger, ProjectStatus, RegistrationStatus, RolNombre, UserStatus,
 } from '@perfil/shared';
 import { AppModule } from '../../app.module';
@@ -28,6 +28,8 @@ import { ExternalCertificate } from '../../entities/external-certificate.entity'
 import { InternalConstancy } from '../../entities/internal-constancy.entity';
 import { TeacherSemesterAccess } from '../../entities/teacher-semester-access.entity';
 import { GamificationCriterion } from '../../entities/gamification-criterion.entity';
+import { ActivityCategory } from '../../entities/activity-category.entity';
+import { StudentFreeInterest } from '../../entities/student-free-interest.entity';
 import { seedRoles } from './roles.seed';
 import { seedAcademicAreas } from './academic-areas.seed';
 import { seedSkills } from './skills.seed';
@@ -175,18 +177,28 @@ async function run() {
   }
 
   // ---- Actividades (académicas por docentes, extracurriculares por sociedad) ----
+  // Categorias del catalogo (RF4): la migracion las creo con el mismo codigo que
+  // tenia el enum anterior, asi que la semilla las resuelve por codigo.
+  const activityCategoryRepo = ds.getRepository(ActivityCategory);
+  const categoryRows = await activityCategoryRepo.find();
+  const categoryByCode = (code: string): ActivityCategory => {
+    const found = categoryRows.find((c) => c.code === code);
+    if (!found) throw new Error(`Categoría de actividad no encontrada en el catálogo: ${code}`);
+    return found;
+  };
+
   // Responsables segun el documento vigente: el director de carrera publica las
   // actividades academicas y la sociedad cientifica las extracurriculares.
-  const activityDefs: { title: string; type: ActivityType; cat: ActivityCategory; area: string; cap: number; creator: User }[] = [
-    { title: 'Taller de Desarrollo Web', type: ActivityType.ACADEMICA, cat: ActivityCategory.TALLER_ACADEMICO, area: 'Desarrollo Web', cap: 20, creator: director },
-    { title: 'Seminario de Inteligencia Artificial', type: ActivityType.ACADEMICA, cat: ActivityCategory.SEMINARIO, area: 'Inteligencia Artificial', cap: 30, creator: director },
-    { title: 'Reto de Bases de Datos', type: ActivityType.ACADEMICA, cat: ActivityCategory.RETO, area: 'Bases de Datos', cap: 15, creator: director },
-    { title: 'Clase espejo de Ingeniería de Software', type: ActivityType.ACADEMICA, cat: ActivityCategory.CLASE_ESPEJO, area: 'Ingeniería de Software', cap: 25, creator: director },
-    { title: 'Charla de Ciberseguridad', type: ActivityType.ACADEMICA, cat: ActivityCategory.CHARLA, area: 'Ciberseguridad', cap: 40, creator: director },
-    { title: 'Tutoría de Redes', type: ActivityType.ACADEMICA, cat: ActivityCategory.TUTORIA, area: 'Redes', cap: 12, creator: director },
-    { title: 'Hackathon de Innovación', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategory.HACKATHON, area: 'Inteligencia Artificial', cap: 50, creator: sociedad },
-    { title: 'Club de Estudio de Desarrollo Móvil', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategory.CLUB_ESTUDIO, area: 'Desarrollo Móvil', cap: 20, creator: sociedad },
-    { title: 'Actividad de Responsabilidad Social', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategory.RESPONSABILIDAD_SOCIAL, area: 'Gestión de Proyectos', cap: 30, creator: sociedad },
+  const activityDefs: { title: string; type: ActivityType; cat: ActivityCategoryCode; area: string; cap: number; creator: User }[] = [
+    { title: 'Taller de Desarrollo Web', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.TALLER_ACADEMICO, area: 'Desarrollo Web', cap: 20, creator: director },
+    { title: 'Seminario de Inteligencia Artificial', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.SEMINARIO, area: 'Inteligencia Artificial', cap: 30, creator: director },
+    { title: 'Reto de Bases de Datos', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.RETO, area: 'Bases de Datos', cap: 15, creator: director },
+    { title: 'Clase espejo de Ingeniería de Software', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CLASE_ESPEJO, area: 'Ingeniería de Software', cap: 25, creator: director },
+    { title: 'Charla de Ciberseguridad', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CHARLA, area: 'Ciberseguridad', cap: 40, creator: director },
+    { title: 'Tutoría de Redes', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.TUTORIA, area: 'Redes', cap: 12, creator: director },
+    { title: 'Hackathon de Innovación', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.HACKATHON, area: 'Inteligencia Artificial', cap: 50, creator: sociedad },
+    { title: 'Club de Estudio de Desarrollo Móvil', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.CLUB_ESTUDIO, area: 'Desarrollo Móvil', cap: 20, creator: sociedad },
+    { title: 'Actividad de Responsabilidad Social', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.RESPONSABILIDAD_SOCIAL, area: 'Gestión de Proyectos', cap: 30, creator: sociedad },
   ];
   const activities: Activity[] = [];
   for (const d of activityDefs) {
@@ -194,7 +206,7 @@ async function run() {
     if (!a) a = activityRepo.create({ title: d.title });
     a.description = `${d.title} para estudiantes de Ingeniería en Sistemas.`;
     a.type = d.type;
-    a.category = d.cat;
+    a.categoryId = categoryByCode(d.cat).id;
     a.modality = ActivityModality.PRESENCIAL;
     a.academicAreaId = areaByName(d.area).id;
     a.creatorId = d.creator.id;
@@ -264,6 +276,41 @@ async function run() {
         description: c.description,
         academicAreaId: areaByName(c.area).id,
       }));
+    }
+  }
+
+  // ---- Intereses en texto libre (RF5) ----
+  // Distintos de las areas de preferencia: son temas escritos por el estudiante.
+  const freeInterestRepo = ds.getRepository(StudentFreeInterest);
+  const FREE_INTERESTS = [
+    { name: 'Desarrollo de videojuegos', description: 'Motores 2D, diseño de niveles y mecánicas.' },
+    { name: 'Automatización de procesos', description: 'Scripts y flujos que ahorran trabajo repetitivo.' },
+    { name: 'Ciberseguridad ofensiva', description: 'Pruebas de intrusión y análisis de vulnerabilidades.' },
+    { name: 'Inteligencia artificial aplicada a salud', description: 'Modelos de apoyo al diagnóstico.' },
+    { name: 'Desarrollo móvil multiplataforma', description: 'Aplicaciones para Android e iOS con una sola base.' },
+    { name: 'Computación en la nube', description: 'Despliegue y escalado de servicios.' },
+    { name: 'Análisis de datos deportivos', description: 'Estadística aplicada al rendimiento.' },
+    { name: 'Robótica educativa', description: 'Proyectos de robótica para enseñanza.' },
+  ];
+  let freeInterestsCreated = 0;
+  for (let i = 0; i < studentProfiles.length; i++) {
+    const p = studentProfiles[i];
+    // Dos intereses por estudiante, rotando la lista para que no se repitan.
+    const picks = [FREE_INTERESTS[i % FREE_INTERESTS.length], FREE_INTERESTS[(i + 3) % FREE_INTERESTS.length]];
+    for (const pick of picks) {
+      const exists = await freeInterestRepo.findOne({
+        where: { studentProfileId: p.id, name: pick.name },
+      });
+      if (!exists) {
+        await freeInterestRepo.save(
+          freeInterestRepo.create({
+            studentProfileId: p.id,
+            name: pick.name,
+            description: pick.description,
+          }),
+        );
+        freeInterestsCreated++;
+      }
     }
   }
 
@@ -343,6 +390,8 @@ async function run() {
   console.log(`  Constancias internas emitidas por el director: ${constanciesIssued}`);
   console.log('  Semestres habilitados: Carlos Perez 1-4 · Maria Gutierrez 5-8');
   console.log(`  Criterios de gamificacion definidos: ${CRITERIA.length} (aun no se aplican)`);
+  console.log(`  Categorias de actividad en el catalogo: ${categoryRows.length}`);
+  console.log(`  Intereses en texto libre creados: ${freeInterestsCreated}`);
   console.log('\n  Contraseña de todas las cuentas pobladas: ' + PWD);
   console.log('  Administrador: admin@univalle.edu / Admin123*');
   console.log('  Ejemplos:  carlos.perez@univalle.edu (docente) · jorge.vargas@univalle.edu (director)');

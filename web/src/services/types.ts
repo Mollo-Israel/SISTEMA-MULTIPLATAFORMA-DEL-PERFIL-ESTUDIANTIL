@@ -24,6 +24,24 @@ export interface AcademicArea {
   isActive: boolean;
 }
 
+/** Categoría del catálogo administrable de actividades (RF4). */
+export interface ActivityCategoryItem {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  /** null = la categoría sirve para ambos tipos de actividad. */
+  appliesTo: 'academica' | 'extracurricular' | null;
+  isActive: boolean;
+}
+
+/** Interés declarado en texto libre por el estudiante (RF5). */
+export interface FreeInterest {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 export interface GamificationCriterion {
   id: string;
   code: string;
@@ -60,7 +78,9 @@ export interface Activity {
   title: string;
   description: string | null;
   type: string;
-  category: string;
+  /** Categoría del catálogo (RF4). */
+  category: ActivityCategoryItem;
+  categoryId: string;
   modality: string;
   academicAreaId: string | null;
   academicArea?: AcademicArea | null;

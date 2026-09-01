@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
+import { StudentFreeInterest } from '../entities/student-free-interest.entity';
 import { StudentSkill } from '../entities/student-skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
@@ -22,6 +23,7 @@ import { ProfilesController } from './profiles.controller';
     TypeOrmModule.forFeature([
       StudentProfile,
       StudentInterest,
+      StudentFreeInterest,
       StudentSkill,
       AcademicArea,
       Skill,

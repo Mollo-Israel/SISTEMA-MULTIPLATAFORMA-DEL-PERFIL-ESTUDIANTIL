@@ -48,7 +48,7 @@ export default function InterestsSkillsPage() {
   const saveInterests = async () => {
     setMsg(null); setError(null);
     try {
-      await profileService.setInterests(
+      await profileService.setPreferredAreas(
         Object.entries(interests).filter(([, p]) => p > 0).map(([academicAreaId, priority]) => ({ academicAreaId, priority })),
       );
       setMsg('Intereses actualizados.');

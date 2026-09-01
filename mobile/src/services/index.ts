@@ -26,6 +26,8 @@ export const authService = {
 export const catalogService = {
   areas: () => api.get<any[]>('/academic-areas').then((r) => r.data),
   skills: () => api.get<any[]>('/skills').then((r) => r.data),
+  /** Catálogo administrable de categorías de actividad (RF4). */
+  activityCategories: () => api.get<any[]>('/activity-categories').then((r) => r.data),
 };
 
 export const profileService = {
@@ -41,8 +43,17 @@ export const profileService = {
         params: search ? { search } : undefined,
       })
       .then((r) => r.data),
-  setInterests: (items: { academicAreaId: string; priority: number }[]) =>
-    api.put('/profiles/me/interests', { items }).then((r) => r.data),
+  /** Áreas de preferencia: selección del catálogo con prioridad 1-5 (RF5). */
+  setPreferredAreas: (items: { academicAreaId: string; priority: number }[]) =>
+    api.put('/profiles/me/preferred-areas', { items }).then((r) => r.data),
+  /** Intereses en texto libre, distintos de las áreas de preferencia (RF5). */
+  freeInterests: () => api.get<any[]>('/profiles/me/free-interests').then((r) => r.data),
+  addFreeInterest: (data: { name: string; description?: string }) =>
+    api.post<any>('/profiles/me/free-interests', data).then((r) => r.data),
+  updateFreeInterest: (id: string, data: { name?: string; description?: string }) =>
+    api.patch<any>(`/profiles/me/free-interests/${id}`, data).then((r) => r.data),
+  removeFreeInterest: (id: string) =>
+    api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
   setSkills: (items: { skillId: string; level: number }[]) =>
     api.put('/profiles/me/skills', { items }).then((r) => r.data),
 };

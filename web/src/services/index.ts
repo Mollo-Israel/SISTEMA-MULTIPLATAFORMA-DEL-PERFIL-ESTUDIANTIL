@@ -1,6 +1,8 @@
 import { api } from '../api/client';
 import type {
   AcademicArea,
+  ActivityCategoryItem,
+  FreeInterest,
   EligibleParticipant,
   Evidence,
   ExternalCertificate,
@@ -38,8 +40,17 @@ export const profileService = {
     api
       .get<StudentDirectory>('/profiles/students', { params: search ? { search } : undefined })
       .then((r) => r.data),
-  setInterests: (items: { academicAreaId: string; priority: number }[]) =>
-    api.put('/profiles/me/interests', { items }).then((r) => r.data),
+  /** Áreas de preferencia: selección del catálogo con prioridad 1-5 (RF5). */
+  setPreferredAreas: (items: { academicAreaId: string; priority: number }[]) =>
+    api.put('/profiles/me/preferred-areas', { items }).then((r) => r.data),
+  /** Intereses en texto libre, distintos de las áreas de preferencia (RF5). */
+  freeInterests: () => api.get<FreeInterest[]>('/profiles/me/free-interests').then((r) => r.data),
+  addFreeInterest: (data: { name: string; description?: string }) =>
+    api.post<FreeInterest>('/profiles/me/free-interests', data).then((r) => r.data),
+  updateFreeInterest: (id: string, data: { name?: string; description?: string }) =>
+    api.patch<FreeInterest>(`/profiles/me/free-interests/${id}`, data).then((r) => r.data),
+  removeFreeInterest: (id: string) =>
+    api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
   setSkills: (items: { skillId: string; level: number }[]) =>
     api.put('/profiles/me/skills', { items }).then((r) => r.data),
 };
@@ -47,6 +58,9 @@ export const profileService = {
 export const catalogService = {
   areas: () => api.get<AcademicArea[]>('/academic-areas').then((r) => r.data),
   skills: () => api.get<Skill[]>('/skills').then((r) => r.data),
+  /** Catálogo administrable de categorías de actividad (RF4). */
+  activityCategories: () =>
+    api.get<ActivityCategoryItem[]>('/activity-categories').then((r) => r.data),
 };
 
 export const activityService = {
@@ -166,6 +180,14 @@ export const adminService = {
   updateArea: (id: string, data: Record<string, unknown>) =>
     api.patch(`/academic-areas/${id}`, data).then((r) => r.data),
   createSkill: (data: Record<string, unknown>) => api.post('/skills', data).then((r) => r.data),
+
+  // Categorias de actividad (RF4)
+  createActivityCategory: (data: Record<string, unknown>) =>
+    api.post<ActivityCategoryItem>('/activity-categories', data).then((r) => r.data),
+  updateActivityCategory: (id: string, data: Record<string, unknown>) =>
+    api.patch<ActivityCategoryItem>(`/activity-categories/${id}`, data).then((r) => r.data),
+  activityCategoryUsage: (id: string) =>
+    api.get<{ activities: number }>(`/activity-categories/${id}/usage`).then((r) => r.data),
   updateSkill: (id: string, data: Record<string, unknown>) =>
     api.patch(`/skills/${id}`, data).then((r) => r.data),
 

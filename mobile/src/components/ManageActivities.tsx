@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../api/client';
-import { activityService } from '../services';
+import { activityService, catalogService } from '../services';
 import {
   Screen,
   Card,
@@ -16,12 +16,9 @@ import {
   Badge,
 } from './ui';
 import {
-  ACTIVITY_CATEGORIES,
   ACTIVITY_STATUSES,
   ACTIVITY_STATUS_LABEL,
-  CATEGORIES_BY_TYPE,
   REGISTRATION_STATUS_LABEL,
-  categoryLabel,
   lbl,
 } from '../constants';
 import { colors, registrationColor } from '../theme';
@@ -37,8 +34,10 @@ export default function ManageActivities({
 }: {
   activityType: 'academica' | 'extracurricular';
 }) {
-  const categories = ACTIVITY_CATEGORIES.filter((c) =>
-    CATEGORIES_BY_TYPE[activityType].includes(c.value),
+  const [categories, setCategories] = useState<any[]>([]);
+  // Del catálogo administrable (RF4): las que aplican a este tipo o a ambos.
+  const usableCategories = categories.filter(
+    (c: any) => c.isActive && (!c.appliesTo || c.appliesTo === activityType),
   );
 
   const [loading, setLoading] = useState(true);
@@ -50,7 +49,7 @@ export default function ManageActivities({
   const [form, setForm] = useState({
     title: '',
     description: '',
-    category: categories[0].value,
+    categoryId: '',
     capacity: '',
     location: '',
     status: 'open',
@@ -69,7 +68,7 @@ export default function ManageActivities({
 
   useEffect(() => {
     setLoading(true);
-    load()
+    Promise.all([load(), catalogService.activityCategories().then(setCategories)])
       .catch((e) => setError(apiError(e)))
       .finally(() => setLoading(false));
   }, [load]);
@@ -80,6 +79,10 @@ export default function ManageActivities({
   };
 
   const publish = async () => {
+    if (!form.categoryId) {
+      setError('Seleccione una categoría antes de guardar.');
+      return;
+    }
     setError(null);
     setMsg(null);
     setSaving(true);
@@ -88,7 +91,7 @@ export default function ManageActivities({
         title: form.title,
         description: form.description || undefined,
         type: activityType,
-        category: form.category,
+        categoryId: form.categoryId,
         location: form.location || undefined,
         capacity: form.capacity ? Number(form.capacity) : undefined,
         status: form.status,
@@ -178,15 +181,15 @@ export default function ManageActivities({
           />
           <Text style={styles.label}>Categoría</Text>
           <View style={styles.chips}>
-            {categories.map((c) => {
-              const on = form.category === c.value;
+            {usableCategories.map((c: any) => {
+              const on = form.categoryId === c.id;
               return (
                 <Pressable
-                  key={c.value}
-                  onPress={() => setForm({ ...form, category: c.value })}
+                  key={c.id}
+                  onPress={() => setForm({ ...form, categoryId: c.id })}
                   style={[styles.chip, on && styles.chipOn]}
                 >
-                  <Text style={on ? styles.chipOnText : styles.chipText}>{c.label}</Text>
+                  <Text style={on ? styles.chipOnText : styles.chipText}>{c.name}</Text>
                 </Pressable>
               );
             })}
@@ -240,7 +243,7 @@ export default function ManageActivities({
             <Text style={styles.title}>{a.title}</Text>
             <View style={styles.badges}>
               <Badge color={colors.bordo}>{lbl(ACTIVITY_STATUS_LABEL, a.status)}</Badge>
-              <Badge>{categoryLabel(a.category)}</Badge>
+              <Badge>{a.category?.name ?? '—'}</Badge>
             </View>
             <Muted>
               Confirmados: {a.confirmedCount ?? 0}

@@ -85,6 +85,38 @@ export const EMAIL_MSG = 'El correo debe ser institucional (terminar en univalle
 export const PASSWORD_MSG =
   'La contraseña debe incluir mayúscula, minúscula, número y símbolo, sin espacios.';
 
+/**
+ * Valida que una fecha no sea anterior a la de otro campo del mismo DTO.
+ * Se usa para rangos: la fecha "hasta" nunca antes que la fecha "desde".
+ */
+export function IsNotBeforeField(otherField: string, validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isNotBeforeField',
+      target: object.constructor,
+      propertyName,
+      constraints: [otherField],
+      options: validationOptions,
+      validator: {
+        validate(value: unknown, args?: { object: object; constraints: unknown[] }) {
+          if (value === undefined || value === null || value === '') return true;
+          if (!args) return true;
+          const other = (args.object as Record<string, unknown>)[args.constraints[0] as string];
+          if (other === undefined || other === null || other === '') return true;
+          if (typeof value !== 'string' || typeof other !== 'string') return false;
+          const end = new Date(value).getTime();
+          const start = new Date(other).getTime();
+          if (Number.isNaN(end) || Number.isNaN(start)) return false;
+          return end >= start;
+        },
+        defaultMessage() {
+          return 'La fecha no puede ser anterior a la fecha inicial.';
+        },
+      },
+    });
+  };
+}
+
 // Valida que una fecha (ISO o yyyy-mm-dd) no sea futura. Util para emisiones.
 export function IsNotFutureDate(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {

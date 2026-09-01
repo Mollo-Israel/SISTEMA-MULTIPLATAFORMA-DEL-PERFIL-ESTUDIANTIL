@@ -43,3 +43,7 @@ api/uploads/
 web/dist/
 mobile/.expo/
 mobile/dist/
+
+# Respaldo del documento de grado (no versionar: 22 MB)
+docs/respaldo-documento/
+*.docx

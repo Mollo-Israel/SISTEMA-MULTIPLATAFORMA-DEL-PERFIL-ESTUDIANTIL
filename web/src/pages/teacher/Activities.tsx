@@ -1,17 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FiExternalLink, FiMapPin, FiCalendar } from 'react-icons/fi';
-import { activityService } from '../../services';
+import { activityService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { AsyncView, Card, Badge } from '../../components/ui';
-import {
-  ACTIVITY_CATEGORIES,
-  ACTIVITY_STATUS_LABEL,
-  ACTIVITY_TYPE_LABEL,
-  lbl,
-} from '../../constants';
-import type { Activity } from '../../services/types';
-
-const catLabel = (v: string) => ACTIVITY_CATEGORIES.find((c) => c.value === v)?.label ?? v;
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
+import type { Activity, ActivityCategoryItem } from '../../services/types';
 
 /**
  * Vista de consulta para el docente.
@@ -23,14 +16,19 @@ const catLabel = (v: string) => ACTIVITY_CATEGORIES.find((c) => c.value === v)?.
 export default function TeacherActivitiesPage() {
   const { data, loading, error } = useAsync<Activity[]>(() => activityService.list(), []);
   const [type, setType] = useState('');
-  const [category, setCategory] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [categories, setCategories] = useState<ActivityCategoryItem[]>([]);
+
+  useEffect(() => {
+    catalogService.activityCategories().then(setCategories).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     let list = data ?? [];
     if (type) list = list.filter((a) => a.type === type);
-    if (category) list = list.filter((a) => a.category === category);
+    if (categoryId) list = list.filter((a) => a.category?.id === categoryId);
     return list;
-  }, [data, type, category]);
+  }, [data, type, categoryId]);
 
   return (
     <div>
@@ -52,21 +50,21 @@ export default function TeacherActivitiesPage() {
           </div>
           <div className="field">
             <label>Categoría</label>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               <option value="">Todas</option>
-              {ACTIVITY_CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </select>
           </div>
-          {(type || category) && (
+          {(type || categoryId) && (
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => {
                 setType('');
-                setCategory('');
+                setCategoryId('');
               }}
             >
               Limpiar filtros
@@ -80,7 +78,7 @@ export default function TeacherActivitiesPage() {
           data={data}
           isEmpty={() => filtered.length === 0}
           emptyMessage={
-            type || category
+            type || categoryId
               ? 'Ninguna actividad coincide con los filtros aplicados.'
               : 'Todavía no hay actividades publicadas.'
           }
@@ -94,7 +92,7 @@ export default function TeacherActivitiesPage() {
                       <Badge tone={a.type === 'academica' ? 'bordo' : 'amber'}>
                         {lbl(ACTIVITY_TYPE_LABEL, a.type)}
                       </Badge>
-                      <Badge tone="gray">{catLabel(a.category)}</Badge>
+                      <Badge tone="gray">{a.category?.name ?? '—'}</Badge>
                       <Badge tone="green">{lbl(ACTIVITY_STATUS_LABEL, a.status)}</Badge>
                     </div>
                     <h3 style={{ margin: '0.5rem 0 0.2rem' }}>{a.title}</h3>

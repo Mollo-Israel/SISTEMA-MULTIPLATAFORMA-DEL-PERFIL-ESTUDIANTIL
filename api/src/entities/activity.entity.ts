@@ -9,14 +9,10 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import {
-  ActivityCategory,
-  ActivityModality,
-  ActivityStatus,
-  ActivityType,
-} from '@perfil/shared';
+import { ActivityModality, ActivityStatus, ActivityType } from '@perfil/shared';
 import { User } from './user.entity';
 import { AcademicArea } from './academic-area.entity';
+import { ActivityCategory } from './activity-category.entity';
 import { ActivityRegistration } from './activity-registration.entity';
 
 @Entity('activities')
@@ -34,8 +30,16 @@ export class Activity {
   @Column({ type: 'enum', enum: ActivityType })
   type: ActivityType;
 
+  /** Categoria del catalogo administrable (RF4). */
   @Index()
-  @Column({ type: 'enum', enum: ActivityCategory })
+  @Column({ name: 'category_id', type: 'uuid' })
+  categoryId: string;
+
+  @ManyToOne(() => ActivityCategory, (category) => category.activities, {
+    nullable: false,
+    onDelete: 'RESTRICT',
+  })
+  @JoinColumn({ name: 'category_id' })
   category: ActivityCategory;
 
   @Column({ type: 'enum', enum: ActivityModality, default: ActivityModality.PRESENCIAL })

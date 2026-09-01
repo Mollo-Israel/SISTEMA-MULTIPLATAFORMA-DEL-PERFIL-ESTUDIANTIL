@@ -34,6 +34,7 @@ import AdminRolesPage from './pages/admin/Roles';
 import AdminAreasPage from './pages/admin/Areas';
 import AdminSkillsPage from './pages/admin/Skills';
 import AdminGamificationPage from './pages/admin/Gamification';
+import AdminActivityCategoriesPage from './pages/admin/ActivityCategories';
 
 const S = RolNombre.STUDENT;
 const T = RolNombre.TEACHER;
@@ -98,6 +99,7 @@ export default function App() {
             <Route path="/admin/roles" element={<AdminRolesPage />} />
             <Route path="/admin/areas" element={<AdminAreasPage />} />
             <Route path="/admin/skills" element={<AdminSkillsPage />} />
+            <Route path="/admin/activity-categories" element={<AdminActivityCategoriesPage />} />
             <Route path="/admin/gamification" element={<AdminGamificationPage />} />
           </Route>
 

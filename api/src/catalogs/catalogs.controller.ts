@@ -13,12 +13,50 @@ import {
   CreateGamificationCriterionDto,
   UpdateGamificationCriterionDto,
 } from './dto/gamification-criterion.dto';
+import {
+  CreateActivityCategoryDto,
+  UpdateActivityCategoryDto,
+} from './dto/activity-category.dto';
 
 @ApiTags('catalogs')
 @ApiBearerAuth()
 @Controller()
 export class CatalogsController {
   constructor(private readonly catalogsService: CatalogsService) {}
+
+  // ---------------- Categorias de actividad (RF4) ----------------
+
+  @Get('activity-categories')
+  @ApiOperation({
+    summary: 'Categorías de actividad vigentes. El administrador ve también las dadas de baja.',
+  })
+  findActivityCategories(@CurrentUser() user: AuthenticatedUser) {
+    return this.catalogsService.findActivityCategories(user.role === RolNombre.ADMIN);
+  }
+
+  @Post('activity-categories')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Registrar una categoría de actividad.' })
+  createActivityCategory(@Body() dto: CreateActivityCategoryDto) {
+    return this.catalogsService.createActivityCategory(dto);
+  }
+
+  @Patch('activity-categories/:id')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Editar una categoría de actividad o cambiar su estado.' })
+  updateActivityCategory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateActivityCategoryDto,
+  ) {
+    return this.catalogsService.updateActivityCategory(id, dto);
+  }
+
+  @Get('activity-categories/:id/usage')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Cuántas actividades usan la categoría.' })
+  async activityCategoryUsage(@Param('id', ParseUUIDPipe) id: string) {
+    return { activities: await this.catalogsService.countActivitiesByCategory(id) };
+  }
 
   // ---------------- Areas academicas ----------------
 

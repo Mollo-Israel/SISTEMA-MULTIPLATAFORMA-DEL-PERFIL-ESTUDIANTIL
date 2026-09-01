@@ -18,12 +18,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import {
-  ActivityCategory,
-  ActivityModality,
-  ActivityStatus,
-  ActivityType,
-} from '@perfil/shared';
+import { ActivityModality, ActivityStatus, ActivityType } from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
 export class CreateActivityDto {
@@ -46,9 +41,12 @@ export class CreateActivityDto {
   @IsEnum(ActivityType)
   type: ActivityType;
 
-  @ApiProperty({ enum: ActivityCategory })
-  @IsEnum(ActivityCategory)
-  category: ActivityCategory;
+  @ApiProperty({
+    description: 'ID de la categoría del catálogo administrable (RF4).',
+    example: '9e3f1c2a-0000-4000-8000-000000000000',
+  })
+  @IsUUID('4', { message: 'Debe seleccionar una categoría del catálogo.' })
+  categoryId: string;
 
   @ApiProperty({ enum: ActivityModality, required: false, default: ActivityModality.PRESENCIAL })
   @IsOptional()

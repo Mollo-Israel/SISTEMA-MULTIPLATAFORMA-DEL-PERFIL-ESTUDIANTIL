@@ -4,6 +4,8 @@ import { ILike, Not, Repository } from 'typeorm';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
+import { ActivityCategory } from '../entities/activity-category.entity';
+import { Activity } from '../entities/activity.entity';
 import { CreateAcademicAreaDto } from './dto/create-academic-area.dto';
 import { UpdateAcademicAreaDto } from './dto/update-academic-area.dto';
 import { CreateSkillDto } from './dto/create-skill.dto';
@@ -12,6 +14,10 @@ import {
   CreateGamificationCriterionDto,
   UpdateGamificationCriterionDto,
 } from './dto/gamification-criterion.dto';
+import {
+  CreateActivityCategoryDto,
+  UpdateActivityCategoryDto,
+} from './dto/activity-category.dto';
 
 @Injectable()
 export class CatalogsService {
@@ -20,7 +26,85 @@ export class CatalogsService {
     @InjectRepository(Skill) private readonly skills: Repository<Skill>,
     @InjectRepository(GamificationCriterion)
     private readonly criteria: Repository<GamificationCriterion>,
+    @InjectRepository(ActivityCategory)
+    private readonly activityCategories: Repository<ActivityCategory>,
+    @InjectRepository(Activity) private readonly activities: Repository<Activity>,
   ) {}
+
+  // ------------------------------------------------------------------
+  // Categorias de actividad (RF4)
+  // ------------------------------------------------------------------
+
+  /**
+   * Solo el administrador ve las categorias dadas de baja; el resto trabaja con
+   * el catalogo vigente, para no ofrecer opciones retiradas.
+   */
+  findActivityCategories(includeInactive = false): Promise<ActivityCategory[]> {
+    return this.activityCategories.find({
+      where: includeInactive ? {} : { isActive: true },
+      order: { name: 'ASC' },
+    });
+  }
+
+  async createActivityCategory(dto: CreateActivityCategoryDto): Promise<ActivityCategory> {
+    await this.assertCategoryCodeFree(dto.code);
+    await this.assertCategoryNameFree(dto.name);
+    return this.activityCategories.save(
+      this.activityCategories.create({
+        code: dto.code,
+        name: dto.name,
+        description: dto.description ?? null,
+        appliesTo: dto.appliesTo ?? null,
+        isActive: dto.isActive ?? true,
+      }),
+    );
+  }
+
+  async updateActivityCategory(
+    id: string,
+    dto: UpdateActivityCategoryDto,
+  ): Promise<ActivityCategory> {
+    const category = await this.activityCategories.findOne({ where: { id } });
+    if (!category) {
+      throw new NotFoundException('Categoría de actividad no encontrada.');
+    }
+    if (dto.code !== undefined && dto.code.toLowerCase() !== category.code.toLowerCase()) {
+      await this.assertCategoryCodeFree(dto.code, id);
+      category.code = dto.code;
+    }
+    if (dto.name !== undefined && dto.name.toLowerCase() !== category.name.toLowerCase()) {
+      await this.assertCategoryNameFree(dto.name, id);
+      category.name = dto.name;
+    }
+    if (dto.description !== undefined) category.description = dto.description ?? null;
+    if (dto.appliesTo !== undefined) category.appliesTo = dto.appliesTo ?? null;
+
+    if (dto.isActive !== undefined) {
+      // Dar de baja una categoria no borra nada: las actividades que ya la usan
+      // la conservan. Solo deja de ofrecerse para nuevas actividades.
+      category.isActive = dto.isActive;
+    }
+    return this.activityCategories.save(category);
+  }
+
+  /** Cuantas actividades usan la categoria: la interfaz lo muestra al dar de baja. */
+  async countActivitiesByCategory(id: string): Promise<number> {
+    return this.activities.count({ where: { categoryId: id } });
+  }
+
+  private async assertCategoryCodeFree(code: string, exceptId?: string): Promise<void> {
+    const where = exceptId ? { code: ILike(code), id: Not(exceptId) } : { code: ILike(code) };
+    if (await this.activityCategories.findOne({ where })) {
+      throw new ConflictException('Ya existe una categoría con ese código.');
+    }
+  }
+
+  private async assertCategoryNameFree(name: string, exceptId?: string): Promise<void> {
+    const where = exceptId ? { name: ILike(name), id: Not(exceptId) } : { name: ILike(name) };
+    if (await this.activityCategories.findOne({ where })) {
+      throw new ConflictException('Ya existe una categoría con ese nombre.');
+    }
+  }
 
   // ------------------------------------------------------------------
   // Areas academicas

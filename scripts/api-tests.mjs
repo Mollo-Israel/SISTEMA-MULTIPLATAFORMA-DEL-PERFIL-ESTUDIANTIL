@@ -36,6 +36,8 @@ async function main() {
   if (!admin) { console.error('No se pudo iniciar sesión como admin. ¿Corriste los seeds base?'); process.exit(1); }
 
   const areas = (await req('GET', '/academic-areas', { token: admin })).data ?? [];
+  const cats = (await req('GET', '/activity-categories', { token: admin })).data ?? [];
+  const catId = (code) => cats.find((c) => c.code === code)?.id;
   const skills = (await req('GET', '/skills', { token: admin })).data ?? [];
   const web = areas.find((a) => a.name === 'Desarrollo Web') ?? areas[0];
   const react = skills.find((s) => s.name === 'React') ?? skills[0];
@@ -95,14 +97,14 @@ async function main() {
 
   // ---------- 6. Crear actividad ----------
   await section('6. Actividad');
-  const actAcad = await req('POST', '/activities', { token: director, body: { title: `Taller ${TS}`, type: 'academica', category: 'taller_academico', areaId: web?.id, capacity: 10, status: 'open' } });
+  const actAcad = await req('POST', '/activities', { token: director, body: { title: `Taller ${TS}`, type: 'academica', categoryId: catId('taller_academico'), areaId: web?.id, capacity: 10, status: 'open' } });
   check(actAcad.status === 201, '6. Director crea actividad académica (201)', `status ${actAcad.status}`);
   const actId = actAcad.data?.id;
-  check((await req('POST', '/activities', { token: director, body: { title: `Intento extracurricular ${TS}`, type: 'extracurricular', category: 'hackathon' } })).status === 403, '6. Director NO publica extracurricular -> 403');
-  check((await req('POST', '/activities', { token: society, body: { title: `Hack ${TS}`, type: 'extracurricular', category: 'hackathon', status: 'open' } })).status === 201, '6. Sociedad crea extracurricular (201)');
-  check((await req('POST', '/activities', { token: society, body: { title: `Intento academica ${TS}`, type: 'academica', category: 'charla' } })).status === 403, '6. Sociedad NO publica académica -> 403');
-  check((await req('POST', '/activities', { token: teacher, body: { title: `Intento docente ${TS}`, type: 'academica', category: 'charla' } })).status === 403, '6. Docente NO publica actividades -> 403');
-  check((await req('POST', '/activities', { token: est1, body: { title: `Intento estudiante ${TS}`, type: 'academica', category: 'charla' } })).status === 403, '6. Estudiante NO publica -> 403');
+  check((await req('POST', '/activities', { token: director, body: { title: `Intento extracurricular ${TS}`, type: 'extracurricular', categoryId: catId('hackathon') } })).status === 403, '6. Director NO publica extracurricular -> 403');
+  check((await req('POST', '/activities', { token: society, body: { title: `Hack ${TS}`, type: 'extracurricular', categoryId: catId('hackathon'), status: 'open' } })).status === 201, '6. Sociedad crea extracurricular (201)');
+  check((await req('POST', '/activities', { token: society, body: { title: `Intento academica ${TS}`, type: 'academica', categoryId: catId('charla') } })).status === 403, '6. Sociedad NO publica académica -> 403');
+  check((await req('POST', '/activities', { token: teacher, body: { title: `Intento docente ${TS}`, type: 'academica', categoryId: catId('charla') } })).status === 403, '6. Docente NO publica actividades -> 403');
+  check((await req('POST', '/activities', { token: est1, body: { title: `Intento estudiante ${TS}`, type: 'academica', categoryId: catId('charla') } })).status === 403, '6. Estudiante NO publica -> 403');
 
   // ---------- 7. Inscripción / interés ----------
   await section('7. Inscripción / interés');

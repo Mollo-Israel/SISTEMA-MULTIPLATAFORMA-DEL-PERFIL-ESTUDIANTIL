@@ -78,6 +78,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/roles', label: 'Roles' },
         { to: '/admin/areas', label: 'Áreas académicas' },
         { to: '/admin/skills', label: 'Catálogo de habilidades' },
+        { to: '/admin/activity-categories', label: 'Categorías de actividad' },
         { to: '/admin/gamification', label: 'Criterios de gamificación' },
       ],
     },

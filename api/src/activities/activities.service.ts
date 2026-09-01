@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { Between, FindOptionsWhere, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import {
   ActivityStatus,
   ActivityType,
@@ -17,9 +17,11 @@ import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
+import { ActivityCategory } from '../entities/activity-category.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
+import { QueryActivitiesDto } from './dto/query-activities.dto';
 import {
   AFFINITY_RECALCULATION,
   AffinityRecalculationPort,
@@ -39,6 +41,20 @@ const OWNER_ROLE_BY_TYPE: Record<ActivityType, RolNombre> = {
   [ActivityType.EXTRACURRICULAR]: RolNombre.SCIENTIFIC_SOCIETY,
 };
 
+/** Inicio del dia local de una fecha ISO o yyyy-mm-dd. */
+const startOfDay = (value: string): Date => {
+  const d = new Date(value);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/** Fin del dia local, para que el limite "hasta" incluya toda la jornada. */
+const endOfDay = (value: string): Date => {
+  const d = new Date(value);
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
 export interface ActivityWithCounts extends Activity {
   registrationCount: number;
   confirmedCount: number;
@@ -54,6 +70,8 @@ export class ActivitiesService {
     private readonly registrations: Repository<ActivityRegistration>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
+    @InjectRepository(ActivityCategory)
+    private readonly categories: Repository<ActivityCategory>,
     @Inject(AFFINITY_RECALCULATION)
     private readonly affinityRecalculation: AffinityRecalculationPort,
   ) {}
@@ -63,11 +81,12 @@ export class ActivitiesService {
     if (dto.areaId) {
       await this.assertAreaExists(dto.areaId);
     }
+    await this.assertCategoryUsable(dto.categoryId, dto.type);
     const activity = this.activities.create({
       title: dto.title,
       description: dto.description ?? null,
       type: dto.type,
-      category: dto.category,
+      categoryId: dto.categoryId,
       modality: dto.modality,
       academicAreaId: dto.areaId ?? null,
       creatorId: user.userId,
@@ -90,11 +109,29 @@ export class ActivitiesService {
    */
   async findAll(
     user: AuthenticatedUser,
-    filters: FindOptionsWhere<Activity>,
+    filters: QueryActivitiesDto,
   ): Promise<ActivityWithCounts[]> {
+    const where: FindOptionsWhere<Activity> = {};
+    if (filters.type) where.type = filters.type;
+    if (filters.categoryId) where.categoryId = filters.categoryId;
+    if (filters.status) where.status = filters.status;
+    if (filters.modality) where.modality = filters.modality;
+    if (filters.areaId) where.academicAreaId = filters.areaId;
+
+    // Rango de fechas (RF8). Una actividad sin fecha declarada queda fuera
+    // cuando se filtra por fecha: no hay forma de ubicarla en el rango.
+    const { fromDate, toDate } = filters;
+    if (fromDate && toDate) {
+      where.eventDate = Between(startOfDay(fromDate), endOfDay(toDate));
+    } else if (fromDate) {
+      where.eventDate = MoreThanOrEqual(startOfDay(fromDate));
+    } else if (toDate) {
+      where.eventDate = LessThanOrEqual(endOfDay(toDate));
+    }
+
     const activities = await this.activities.find({
-      where: { ...filters },
-      relations: { academicArea: true, creator: true },
+      where,
+      relations: { academicArea: true, creator: true, category: true },
       order: { eventDate: 'DESC', createdAt: 'DESC' },
     });
 
@@ -111,7 +148,7 @@ export class ActivitiesService {
   /** Actividades cuyo responsable es el usuario (panel de gestion). */
   async findManagedBy(user: AuthenticatedUser): Promise<ActivityWithCounts[]> {
     const activities = await this.activities.find({
-      relations: { academicArea: true, creator: true },
+      relations: { academicArea: true, creator: true, category: true },
       order: { createdAt: 'DESC' },
     });
     return this.attachCounts(activities.filter((a) => this.canManage(user, a)));
@@ -120,7 +157,7 @@ export class ActivitiesService {
   async findOne(id: string): Promise<Activity> {
     const activity = await this.activities.findOne({
       where: { id },
-      relations: { academicArea: true, creator: true },
+      relations: { academicArea: true, creator: true, category: true },
     });
     if (!activity) {
       throw new NotFoundException('Actividad no encontrada.');
@@ -170,9 +207,12 @@ export class ActivitiesService {
       if (dto.areaId) await this.assertAreaExists(dto.areaId);
       activity.academicAreaId = dto.areaId ?? null;
     }
+    if (dto.categoryId !== undefined) {
+      await this.assertCategoryUsable(dto.categoryId, dto.type ?? activity.type);
+      activity.categoryId = dto.categoryId;
+    }
     if (dto.title !== undefined) activity.title = dto.title;
     if (dto.description !== undefined) activity.description = dto.description;
-    if (dto.category !== undefined) activity.category = dto.category;
     if (dto.modality !== undefined) activity.modality = dto.modality;
     if (dto.activityDate !== undefined) {
       activity.eventDate = dto.activityDate ? new Date(dto.activityDate) : null;
@@ -468,6 +508,27 @@ export class ActivitiesService {
         registrationBlockReason: this.registrationBlockReason(a),
       };
     });
+  }
+
+  /**
+   * La categoria debe existir, estar vigente y admitir el tipo de actividad.
+   * Una categoria con applies_to nulo sirve para ambos tipos.
+   */
+  private async assertCategoryUsable(categoryId: string, type: ActivityType): Promise<void> {
+    const category = await this.categories.findOne({ where: { id: categoryId } });
+    if (!category) {
+      throw new BadRequestException('La categoría indicada no existe.');
+    }
+    if (!category.isActive) {
+      throw new BadRequestException(`La categoría "${category.name}" está dada de baja.`);
+    }
+    if (category.appliesTo && category.appliesTo !== type) {
+      const destino =
+        category.appliesTo === ActivityType.ACADEMICA ? 'académicas' : 'extracurriculares';
+      throw new BadRequestException(
+        `La categoría "${category.name}" solo aplica a actividades ${destino}.`,
+      );
+    }
   }
 
   private async assertAreaExists(areaId: string): Promise<void> {

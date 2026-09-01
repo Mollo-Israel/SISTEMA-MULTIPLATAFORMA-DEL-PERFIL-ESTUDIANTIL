@@ -2,10 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { FiCalendar, FiEdit2, FiUsers, FiPlus } from 'react-icons/fi';
 import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
-import type { AcademicArea, Activity, Participant } from '../services/types';
+import type { AcademicArea, Activity, ActivityCategoryItem, Participant } from '../services/types';
 import { Card, Loading, EmptyState, Badge } from './ui';
 import {
-  ACTIVITY_CATEGORIES,
   ACTIVITY_MODALITIES,
   ACTIVITY_STATUS_LABEL,
   ACTIVITY_STATUSES,
@@ -14,34 +13,10 @@ import {
   lbl,
 } from '../constants';
 
-const catLabel = (v: string) => ACTIVITY_CATEGORIES.find((c) => c.value === v)?.label ?? v;
-
-/** Categorías sugeridas para cada tipo, según el documento del proyecto. */
-const CATEGORIES_BY_TYPE: Record<string, string[]> = {
-  academica: [
-    'taller_academico',
-    'clase_espejo',
-    'seminario',
-    'charla',
-    'curso_externo_recomendado',
-    'tutoria',
-    'investigacion',
-  ],
-  extracurricular: [
-    'hackathon',
-    'reto',
-    'convocatoria',
-    'actividad_sociedad_cientifica',
-    'club_estudio',
-    'responsabilidad_social',
-    'integracion',
-  ],
-};
-
 const emptyForm = {
   title: '',
   description: '',
-  category: '',
+  categoryId: '',
   modality: 'presencial',
   areaId: '',
   activityDate: '',
@@ -64,19 +39,18 @@ export default function ActivityManager({
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [categories, setCategories] = useState<ActivityCategoryItem[]>([]);
   const [editing, setEditing] = useState<Activity | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    ...emptyForm,
-    category: CATEGORIES_BY_TYPE[activityType][0],
-  });
+  const [form, setForm] = useState(emptyForm);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [partLoading, setPartLoading] = useState(false);
 
-  const categories = ACTIVITY_CATEGORIES.filter((c) =>
-    CATEGORIES_BY_TYPE[activityType].includes(c.value),
+  // Del catálogo administrable: las que aplican a este tipo o a ambos (RF4).
+  const usableCategories = categories.filter(
+    (c) => c.isActive && (!c.appliesTo || c.appliesTo === activityType),
   );
 
   const notify = (t: string) => {
@@ -92,13 +66,17 @@ export default function ActivityManager({
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([load(), catalogService.areas().then(setAreas)])
+    Promise.all([
+      load(),
+      catalogService.areas().then(setAreas),
+      catalogService.activityCategories().then(setCategories),
+    ])
       .catch((e) => setError(apiError(e)))
       .finally(() => setLoading(false));
   }, [load]);
 
   const resetForm = () => {
-    setForm({ ...emptyForm, category: CATEGORIES_BY_TYPE[activityType][0] });
+    setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
     setEditing(null);
     setShowForm(false);
   };
@@ -111,7 +89,7 @@ export default function ActivityManager({
       title: form.title,
       description: form.description || undefined,
       type: activityType,
-      category: form.category,
+      categoryId: form.categoryId,
       modality: form.modality,
       areaId: form.areaId || undefined,
       activityDate: form.activityDate ? new Date(form.activityDate).toISOString() : undefined,
@@ -154,7 +132,7 @@ export default function ActivityManager({
     setForm({
       title: a.title,
       description: a.description ?? '',
-      category: a.category,
+      categoryId: a.categoryId,
       modality: a.modality,
       areaId: a.academicAreaId ?? '',
       activityDate: a.eventDate ? a.eventDate.slice(0, 16) : '',
@@ -220,7 +198,13 @@ export default function ActivityManager({
       {msg && <div className="alert alert-success">{msg}</div>}
 
       {!showForm && (
-        <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
+            setShowForm(true);
+          }}
+        >
           <FiPlus /> Nueva actividad {tipo}
         </button>
       )}
@@ -252,12 +236,14 @@ export default function ActivityManager({
               <div className="field">
                 <label>Categoría</label>
                 <select
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  value={form.categoryId}
+                  onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+                  required
                 >
-                  {categories.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
+                  <option value="">Seleccione una categoría…</option>
+                  {usableCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
@@ -412,7 +398,7 @@ export default function ActivityManager({
                         <strong>{a.title}</strong>
                         {a.location && <div className="muted">{a.location}</div>}
                       </td>
-                      <td className="muted">{catLabel(a.category)}</td>
+                      <td className="muted">{a.category?.name ?? '—'}</td>
                       <td className="muted">
                         {a.eventDate ? (
                           new Date(a.eventDate).toLocaleString('es-BO', {
