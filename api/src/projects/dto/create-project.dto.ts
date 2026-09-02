@@ -13,7 +13,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { ProjectStatus } from '@perfil/shared';
+import { ProjectStatus, ProjectVisibility } from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
 export class CreateProjectDto {
@@ -65,4 +65,15 @@ export class CreateProjectDto {
   @IsUrl({}, { message: 'La demo debe ser una URL válida.' })
   @MaxLength(500)
   demoUrl?: string;
+
+  @ApiProperty({
+    enum: ProjectVisibility,
+    required: false,
+    default: ProjectVisibility.PROFILE,
+    description:
+      'private = solo tú y tus integrantes · profile = visible en tu perfil · teachers = además consultable por tus docentes',
+  })
+  @IsOptional()
+  @IsEnum(ProjectVisibility, { message: 'El nivel de visibilidad no es válido.' })
+  visibility?: ProjectVisibility;
 }

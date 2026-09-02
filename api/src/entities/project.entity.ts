@@ -9,11 +9,13 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ProjectStatus } from '@perfil/shared';
+import { ProjectStatus, ProjectVisibility } from '@perfil/shared';
 import { StudentProfile } from './student-profile.entity';
 import { AcademicArea } from './academic-area.entity';
 import { ProjectMember } from './project-member.entity';
 import { ProjectEvidence } from './project-evidence.entity';
+import { ProjectInvitation } from './project-invitation.entity';
+import { ProjectFeedback } from './project-feedback.entity';
 
 @Entity('projects')
 export class Project {
@@ -28,6 +30,14 @@ export class Project {
 
   @Column({ type: 'enum', enum: ProjectStatus, default: ProjectStatus.DRAFT })
   status: ProjectStatus;
+
+  /**
+   * Nivel de visibilidad del proyecto (RF13).
+   * Determina quien puede verlo mas alla del responsable y sus integrantes.
+   */
+  @Index()
+  @Column({ type: 'enum', enum: ProjectVisibility, default: ProjectVisibility.PROFILE })
+  visibility: ProjectVisibility;
 
   @Column({ type: 'text', array: true, nullable: true })
   technologies: string[] | null;
@@ -62,6 +72,12 @@ export class Project {
 
   @OneToMany(() => ProjectEvidence, (evidence) => evidence.project)
   evidences: ProjectEvidence[];
+
+  @OneToMany(() => ProjectInvitation, (invitation) => invitation.project)
+  invitations: ProjectInvitation[];
+
+  @OneToMany(() => ProjectFeedback, (feedback) => feedback.project)
+  feedback: ProjectFeedback[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

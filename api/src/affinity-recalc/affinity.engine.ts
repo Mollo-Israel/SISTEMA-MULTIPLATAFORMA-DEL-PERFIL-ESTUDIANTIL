@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AffinityLevel, RegistrationStatus } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
@@ -8,6 +8,7 @@ import { StudentSkill } from '../entities/student-skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { Project } from '../entities/project.entity';
+import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
@@ -42,6 +43,8 @@ export class AffinityEngineService implements AffinityRecalculationPort {
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
+    @InjectRepository(ProjectMember)
+    private readonly projectMembers: Repository<ProjectMember>,
     @InjectRepository(ProjectEvidence) private readonly evidences: Repository<ProjectEvidence>,
     @InjectRepository(ExternalCertificate)
     private readonly certificates: Repository<ExternalCertificate>,
@@ -104,7 +107,23 @@ export class AffinityEngineService implements AffinityRecalculationPort {
     });
 
     // 7-9. Proyectos, tecnologias y evidencias
-    const projects = await this.projects.find({ where: { createdByProfileId: studentProfileId } });
+    //
+    // Cuentan tanto los proyectos de los que el estudiante es responsable como
+    // aquellos en los que participa por haber ACEPTADO una invitacion (RF14).
+    // Las invitaciones pendientes o rechazadas no generan pertenencia y, por
+    // tanto, no influyen en la afinidad.
+    const owned = await this.projects.find({ where: { createdByProfileId: studentProfileId } });
+
+    const memberships = await this.projectMembers.find({ where: { userId: profile.userId } });
+    const ownedIds = new Set(owned.map((p) => p.id));
+    const collaborativeIds = memberships
+      .map((m) => m.projectId)
+      .filter((id) => !ownedIds.has(id));
+    const collaborative = collaborativeIds.length
+      ? await this.projects.find({ where: { id: In(collaborativeIds) } })
+      : [];
+
+    const projects = [...owned, ...collaborative];
     const areasByProject = new Map<string, string[]>();
     for (const project of projects) {
       const projectAreas = project.academicAreaId

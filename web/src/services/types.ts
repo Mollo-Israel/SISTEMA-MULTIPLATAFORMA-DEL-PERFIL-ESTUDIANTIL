@@ -243,3 +243,46 @@ export interface InternalConstancy {
   status: string;
   createdAt: string;
 }
+
+/** Integrante aceptado de un proyecto (RF14). */
+export interface ProjectMemberItem {
+  id: string;
+  userId: string;
+  name: string | null;
+  role: string | null;
+  contribution: string | null;
+  joinedAt: string;
+}
+
+/** Retroalimentación académica sobre un proyecto (RF16). */
+export interface ProjectFeedbackItem {
+  id: string;
+  comment: string;
+  teacher: string | null;
+  teacherUserId: string;
+  createdAt: string;
+  editedAt: string | null;
+  /** true solo para el docente que la escribió. */
+  canEdit: boolean;
+}
+
+/** Fila del portafolio institucional que consulta el docente (RF15). */
+export interface InstitutionalProject {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  technologies: string[] | null;
+  area: string | null;
+  academicAreaId: string | null;
+  repositoryUrl: string | null;
+  demoUrl: string | null;
+  updatedAt: string;
+  student: string | null;
+  semester: number | null;
+}
+
+export interface InstitutionalPortfolio {
+  scope: { restricted: boolean; semesters: number[] };
+  projects: InstitutionalProject[];
+}

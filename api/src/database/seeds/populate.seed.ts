@@ -8,7 +8,8 @@ import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import {
   ActivityCategory as ActivityCategoryCode, ActivityModality, ActivityStatus, ActivityType,
-  ConstancyStatus, EvidenceType, GamificationTrigger, ProjectStatus, RegistrationStatus, RolNombre, UserStatus,
+  ConstancyStatus, EvidenceType, GamificationTrigger, ProjectInvitationStatus,
+  ProjectStatus, ProjectVisibility, RegistrationStatus, RolNombre, UserStatus,
 } from '@perfil/shared';
 import { AppModule } from '../../app.module';
 import { AffinityEngineService } from '../../affinity-recalc/affinity.engine';
@@ -29,6 +30,9 @@ import { InternalConstancy } from '../../entities/internal-constancy.entity';
 import { TeacherSemesterAccess } from '../../entities/teacher-semester-access.entity';
 import { GamificationCriterion } from '../../entities/gamification-criterion.entity';
 import { ActivityCategory } from '../../entities/activity-category.entity';
+import { ProjectInvitation } from '../../entities/project-invitation.entity';
+import { ProjectFeedback } from '../../entities/project-feedback.entity';
+import { ProjectMember } from '../../entities/project-member.entity';
 import { StudentFreeInterest } from '../../entities/student-free-interest.entity';
 import { seedRoles } from './roles.seed';
 import { seedAcademicAreas } from './academic-areas.seed';
@@ -63,15 +67,20 @@ const AREA_SKILLS: Record<string, string[]> = {
   'Gestión de Proyectos': ['Scrum', 'Kanban', 'Comunicación'],
 };
 
-const PROJECTS = [
-  { title: 'Sistema académico web', techs: ['React', 'NestJS', 'PostgreSQL'] },
-  { title: 'App móvil de seguimiento', techs: ['React Native', 'Expo'] },
-  { title: 'Dashboard de reportes', techs: ['React', 'PostgreSQL'] },
-  { title: 'API de gestión de proyectos', techs: ['NestJS', 'TypeScript'] },
-  { title: 'Plataforma de tutorías', techs: ['React', 'Node.js'] },
-  { title: 'Portal de evidencias académicas', techs: ['Next.js', 'PostgreSQL'] },
-  { title: 'Visualizador de afinidades', techs: ['React', 'D3.js'] },
-  { title: 'Asistente de estudio con IA', techs: ['Python', 'Machine Learning'] },
+const PROJECTS: {
+  title: string;
+  techs: string[];
+  status: ProjectStatus;
+  visibility: ProjectVisibility;
+}[] = [
+  { title: 'Sistema de monitoreo IoT para laboratorios', techs: ['Python', 'Docker', 'PostgreSQL'], status: ProjectStatus.ACTIVE, visibility: ProjectVisibility.TEACHERS },
+  { title: 'Aplicación móvil de orientación universitaria', techs: ['React Native', 'Expo', 'TypeScript'], status: ProjectStatus.ACTIVE, visibility: ProjectVisibility.TEACHERS },
+  { title: 'Plataforma web de gestión de proyectos', techs: ['React', 'NestJS', 'PostgreSQL'], status: ProjectStatus.ACTIVE, visibility: ProjectVisibility.TEACHERS },
+  { title: 'Videojuego educativo en Unity', techs: ['Unity', 'C#'], status: ProjectStatus.ACTIVE, visibility: ProjectVisibility.TEACHERS },
+  { title: 'Sistema de análisis de redes', techs: ['Python', 'Docker'], status: ProjectStatus.DRAFT, visibility: ProjectVisibility.PROFILE },
+  { title: 'Aplicación de visión computacional', techs: ['Python', 'Machine Learning'], status: ProjectStatus.ACTIVE, visibility: ProjectVisibility.TEACHERS },
+  { title: 'Portal de evidencias académicas', techs: ['React', 'NestJS'], status: ProjectStatus.ARCHIVED, visibility: ProjectVisibility.PROFILE },
+  { title: 'Prototipo personal de asistente de estudio', techs: ['Python', 'TypeScript'], status: ProjectStatus.DRAFT, visibility: ProjectVisibility.PRIVATE },
 ];
 
 const CERTS = [
@@ -244,7 +253,8 @@ async function run() {
     pr.createdByProfileId = profile.id;
     pr.academicAreaId = area.id;
     pr.technologies = def.techs;
-    pr.status = ProjectStatus.ACTIVE;
+    pr.status = def.status;
+    pr.visibility = def.visibility;
     pr.repositoryUrl = `https://github.com/univalle-isi/${ascii(def.title).replace(/[^a-z0-9]+/g, '-')}`;
     pr.demoUrl = `https://isi.univalle.edu/proyectos/${ascii(def.title).replace(/[^a-z0-9]+/g, '-')}`;
     pr = await projectRepo.save(pr);
@@ -259,6 +269,127 @@ async function run() {
           evidenceType: EvidenceType.LINK, description: 'Demostración desplegada', externalUrl: pr.demoUrl,
         }),
       ]);
+    }
+  }
+
+  // ---- Portafolio: integrantes, invitaciones y retroalimentacion (Objetivo 5) ----
+  const invitationRepo = ds.getRepository(ProjectInvitation);
+  const memberRepo = ds.getRepository(ProjectMember);
+  const feedbackRepo = ds.getRepository(ProjectFeedback);
+
+  const ROLES = [
+    'Desarrollador Backend',
+    'Desarrollador Frontend',
+    'Analista de datos',
+    'Diseñador UX',
+    'Tester',
+  ];
+
+  const savedProjects = await projectRepo.find({ order: { createdAt: 'ASC' } });
+  let acceptedMembers = 0;
+  let pendingInvites = 0;
+  let rejectedInvites = 0;
+
+  for (let i = 0; i < savedProjects.length; i++) {
+    const pr = savedProjects[i];
+    // El responsable es un estudiante par; se invita a impares para no chocar.
+    const invitedA = studentProfiles[(i * 2 + 1) % studentProfiles.length];
+    const invitedB = studentProfiles[(i * 2 + 3) % studentProfiles.length];
+    const invitedC = studentProfiles[(i * 2 + 5) % studentProfiles.length];
+
+    // a) Invitacion ACEPTADA -> genera integrante real
+    if (invitedA && invitedA.id !== pr.createdByProfileId) {
+      const exists = await invitationRepo.findOne({
+        where: { projectId: pr.id, invitedProfileId: invitedA.id },
+      });
+      if (!exists) {
+        const role = ROLES[i % ROLES.length];
+        await invitationRepo.save(invitationRepo.create({
+          projectId: pr.id,
+          invitedProfileId: invitedA.id,
+          proposedRole: role,
+          status: ProjectInvitationStatus.ACCEPTED,
+          invitedById: pr.createdByProfileId ? undefined : undefined,
+          respondedAt: new Date(),
+        }));
+        const already = await memberRepo.findOne({
+          where: { projectId: pr.id, userId: invitedA.userId },
+        });
+        if (!already) {
+          await memberRepo.save(memberRepo.create({
+            projectId: pr.id,
+            userId: invitedA.userId,
+            role,
+          }));
+          acceptedMembers++;
+        }
+      }
+    }
+
+    // b) Invitacion PENDIENTE -> no genera integrante
+    if (invitedB && invitedB.id !== pr.createdByProfileId && invitedB.id !== invitedA?.id) {
+      const exists = await invitationRepo.findOne({
+        where: { projectId: pr.id, invitedProfileId: invitedB.id },
+      });
+      if (!exists) {
+        await invitationRepo.save(invitationRepo.create({
+          projectId: pr.id,
+          invitedProfileId: invitedB.id,
+          proposedRole: ROLES[(i + 1) % ROLES.length],
+          status: ProjectInvitationStatus.PENDING,
+        }));
+        pendingInvites++;
+      }
+    }
+
+    // c) Invitacion RECHAZADA en algunos proyectos -> tampoco genera integrante
+    if (i % 3 === 0 && invitedC && invitedC.id !== pr.createdByProfileId
+        && invitedC.id !== invitedA?.id && invitedC.id !== invitedB?.id) {
+      const exists = await invitationRepo.findOne({
+        where: { projectId: pr.id, invitedProfileId: invitedC.id },
+      });
+      if (!exists) {
+        await invitationRepo.save(invitationRepo.create({
+          projectId: pr.id,
+          invitedProfileId: invitedC.id,
+          proposedRole: ROLES[(i + 2) % ROLES.length],
+          status: ProjectInvitationStatus.REJECTED,
+          respondedAt: new Date(),
+        }));
+        rejectedInvites++;
+      }
+    }
+  }
+
+  // Retroalimentacion docente solo sobre proyectos habilitados para docentes y
+  // de estudiantes dentro del alcance del docente que la escribe (RF16).
+  const FEEDBACK = [
+    'Buen avance en la arquitectura. Sugiero documentar el modelo entidad-relación y agregar pruebas al módulo principal.',
+    'El planteamiento es sólido. Recomiendo incorporar evidencia del despliegue y describir el rol de cada integrante.',
+    'Trabajo bien enfocado. Convendría comparar la solución con alternativas existentes y justificar las tecnologías elegidas.',
+  ];
+  let feedbackCreated = 0;
+  const teacherSemesters: Record<string, number[]> = {
+    [docentes[0].id]: [1, 2, 3, 4],
+    [docentes[1].id]: [5, 6, 7, 8],
+  };
+  for (let i = 0; i < savedProjects.length; i++) {
+    const pr = savedProjects[i];
+    if (pr.visibility !== ProjectVisibility.TEACHERS) continue;
+    const ownerProfile = studentProfiles.find((sp) => sp.id === pr.createdByProfileId);
+    if (!ownerProfile?.semester) continue;
+    const teacher = docentes.find((d) => teacherSemesters[d.id]?.includes(ownerProfile.semester!));
+    if (!teacher) continue;
+    const exists = await feedbackRepo.findOne({
+      where: { projectId: pr.id, teacherUserId: teacher.id },
+    });
+    if (!exists) {
+      await feedbackRepo.save(feedbackRepo.create({
+        projectId: pr.id,
+        teacherUserId: teacher.id,
+        comment: FEEDBACK[i % FEEDBACK.length],
+      }));
+      feedbackCreated++;
     }
   }
 
@@ -392,6 +523,8 @@ async function run() {
   console.log(`  Criterios de gamificacion definidos: ${CRITERIA.length} (aun no se aplican)`);
   console.log(`  Categorias de actividad en el catalogo: ${categoryRows.length}`);
   console.log(`  Intereses en texto libre creados: ${freeInterestsCreated}`);
+  console.log(`  Portafolio: ${acceptedMembers} integrantes aceptados · ${pendingInvites} invitaciones pendientes · ${rejectedInvites} rechazadas`);
+  console.log(`  Retroalimentacion docente registrada: ${feedbackCreated}`);
   console.log('\n  Contraseña de todas las cuentas pobladas: ' + PWD);
   console.log('  Administrador: admin@univalle.edu / Admin123*');
   console.log('  Ejemplos:  carlos.perez@univalle.edu (docente) · jorge.vargas@univalle.edu (director)');

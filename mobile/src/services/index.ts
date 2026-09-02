@@ -75,8 +75,39 @@ export const activityService = {
 };
 
 export const projectService = {
+  /** Portafolio del estudiante: propios y aquellos donde es integrante aceptado. */
   mine: () => api.get<any[]>('/projects/my').then((r) => r.data),
+  get: (id: string) => api.get<any>(`/projects/${id}`).then((r) => r.data),
   create: (data: any) => api.post<any>('/projects', data).then((r) => r.data),
+  update: (id: string, data: any) => api.patch<any>(`/projects/${id}`, data).then((r) => r.data),
+  members: (id: string) => api.get<any[]>(`/projects/${id}/members`).then((r) => r.data),
+  removeMember: (id: string, memberId: string) =>
+    api.delete(`/projects/${id}/members/${memberId}`).then((r) => r.data),
+};
+
+/** Invitaciones a integrar proyectos (RF14). */
+export const projectInvitationService = {
+  /** Invitaciones enviadas desde un proyecto propio. */
+  ofProject: (projectId: string) =>
+    api.get<any[]>(`/projects/${projectId}/invitations`).then((r) => r.data),
+  invite: (projectId: string, data: { invitedProfileId: string; proposedRole: string }) =>
+    api.post<any>(`/projects/${projectId}/invitations`, data).then((r) => r.data),
+  cancel: (projectId: string, invitationId: string) =>
+    api.patch<any>(`/projects/${projectId}/invitations/${invitationId}/cancel`).then((r) => r.data),
+  /** Invitaciones recibidas por el estudiante. */
+  mine: (onlyPending = false) =>
+    api
+      .get<any[]>('/projects/invitations/mine', {
+        params: onlyPending ? { pending: 'true' } : undefined,
+      })
+      .then((r) => r.data),
+  respond: (invitationId: string, decision: 'accept' | 'reject') =>
+    api.patch<any>(`/projects/invitations/${invitationId}`, { decision }).then((r) => r.data),
+};
+
+/** Retroalimentación académica del docente sobre un proyecto (RF16). */
+export const projectFeedbackService = {
+  list: (projectId: string) => api.get<any[]>(`/projects/${projectId}/feedback`).then((r) => r.data),
 };
 
 /** Subida de archivos de evidencia. Devuelve la referencia a persistir. */

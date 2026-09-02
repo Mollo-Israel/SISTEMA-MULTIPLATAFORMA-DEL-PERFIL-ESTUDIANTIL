@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Not, Repository } from 'typeorm';
-import { ProfileStatus, RolNombre } from '@perfil/shared';
+import { ProfileStatus, ProjectVisibility, RolNombre } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentFreeInterest } from '../entities/student-free-interest.entity';
@@ -381,11 +381,17 @@ export class ProfilesService {
       preferredAreas: summary.preferredAreas,
       interests: summary.interests,
       skills: summary.skills,
-      projects: summary.projects.map((p) => ({
-        title: p.title,
-        status: p.status,
-        technologies: p.technologies,
-      })),
+      // Un proyecto privado no sale del circulo del estudiante y sus
+      // integrantes: no aparece en la vista que consultan los roles
+      // institucionales (RF13, nivel de visibilidad).
+      projects: summary.projects
+        .filter((p) => p.visibility !== ProjectVisibility.PRIVATE)
+        .map((p) => ({
+          title: p.title,
+          status: p.status,
+          technologies: p.technologies,
+          visibility: p.visibility,
+        })),
       activities: summary.activities.map((a) => ({
         title: a.title,
         type: a.type,
@@ -498,6 +504,9 @@ export class ProfilesService {
         title: p.title,
         status: p.status,
         technologies: p.technologies,
+        visibility: p.visibility,
+        /** true si el estudiante es el responsable; false si participa como integrante aceptado. */
+        isOwner: p.createdByProfileId === profile.id,
       })),
       evidences: evidences.map((e) => ({
         id: e.id,

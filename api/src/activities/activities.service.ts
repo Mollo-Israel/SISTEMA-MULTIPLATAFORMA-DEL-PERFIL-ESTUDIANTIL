@@ -41,16 +41,31 @@ const OWNER_ROLE_BY_TYPE: Record<ActivityType, RolNombre> = {
   [ActivityType.EXTRACURRICULAR]: RolNombre.SCIENTIFIC_SOCIETY,
 };
 
+/**
+ * Convierte el valor del filtro a una fecha local.
+ *
+ * Ojo: JavaScript parsea "2026-09-12" como medianoche UTC, no local. En una
+ * zona con desfase negativo eso cae en el dia anterior y el rango se corre un
+ * dia. Por eso una fecha sin hora se construye componente a componente.
+ */
+const toLocalDate = (value: string): Date => {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (dateOnly) {
+    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+  }
+  return new Date(value);
+};
+
 /** Inicio del dia local de una fecha ISO o yyyy-mm-dd. */
 const startOfDay = (value: string): Date => {
-  const d = new Date(value);
+  const d = toLocalDate(value);
   d.setHours(0, 0, 0, 0);
   return d;
 };
 
 /** Fin del dia local, para que el limite "hasta" incluya toda la jornada. */
 const endOfDay = (value: string): Date => {
-  const d = new Date(value);
+  const d = toLocalDate(value);
   d.setHours(23, 59, 59, 999);
   return d;
 };

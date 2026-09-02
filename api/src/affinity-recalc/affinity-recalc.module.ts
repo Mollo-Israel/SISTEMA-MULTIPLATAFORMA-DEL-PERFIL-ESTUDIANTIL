@@ -6,6 +6,7 @@ import { StudentSkill } from '../entities/student-skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { Project } from '../entities/project.entity';
+import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
@@ -24,6 +25,7 @@ import { AffinityController } from './affinity.controller';
       AcademicArea,
       ActivityRegistration,
       Project,
+      ProjectMember,
       ProjectEvidence,
       ExternalCertificate,
       InternalConstancy,

@@ -1472,7 +1472,12 @@ async function cierreFinal(ctx) {
 
   const soon = new Date(Date.now() + 10 * 24 * 3600 * 1000);
   const later = new Date(Date.now() + 60 * 24 * 3600 * 1000);
-  const iso = (d) => d.toISOString().slice(0, 10);
+  // Fecha de calendario LOCAL: el filtro del backend trabaja con dias locales,
+  // asi que derivarla en UTC desfasa el limite en las zonas negativas.
+  const iso = (d) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
 
   const virtual = await req('POST', '/activities', {
     token: directorToken,

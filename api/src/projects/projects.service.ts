@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { EvidenceType, RolNombre } from '@perfil/shared';
+import { EvidenceType, ProjectVisibility, RolNombre } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
@@ -17,14 +17,14 @@ import { User } from '../entities/user.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
-import { AddMemberDto } from './dto/add-member.dto';
 import { AddEvidenceDto } from './dto/add-evidence.dto';
+import { QueryProjectsDto } from './dto/query-projects.dto';
+import { TeacherScopeService } from '../access/teacher-scope.service';
 import {
   AFFINITY_RECALCULATION,
   AffinityRecalculationPort,
 } from '../affinity-recalc/affinity-recalculation.port';
 
-const VIEWER_ROLES = [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN];
 
 @Injectable()
 export class ProjectsService {
@@ -35,6 +35,7 @@ export class ProjectsService {
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(User) private readonly users: Repository<User>,
+    private readonly teacherScope: TeacherScopeService,
     @Inject(AFFINITY_RECALCULATION)
     private readonly affinityRecalculation: AffinityRecalculationPort,
   ) {}
@@ -52,6 +53,7 @@ export class ProjectsService {
       status: dto.status,
       repositoryUrl: dto.repositoryUrl ?? null,
       demoUrl: dto.demoUrl ?? null,
+      visibility: dto.visibility ?? ProjectVisibility.PROFILE,
       createdByProfileId: profile.id,
     });
     const saved = await this.projects.save(project);
@@ -60,7 +62,17 @@ export class ProjectsService {
   }
 
   async update(user: AuthenticatedUser, id: string, dto: UpdateProjectDto): Promise<Project> {
-    const project = await this.findOneOrFail(id);
+    // Se carga SIN la relacion academicArea a proposito: si la relacion viene
+    // cargada, TypeORM la prioriza sobre la clave foranea al guardar y el
+    // cambio de area se pierde en silencio. Solo se necesita createdByProfile
+    // para verificar la propiedad.
+    const project = await this.projects.findOne({
+      where: { id },
+      relations: { createdByProfile: true },
+    });
+    if (!project) {
+      throw new NotFoundException('Proyecto no encontrado.');
+    }
     await this.assertIsOwner(user, project);
     if (dto.areaId !== undefined) {
       if (dto.areaId) await this.assertAreaExists(dto.areaId);
@@ -72,13 +84,14 @@ export class ProjectsService {
     if (dto.status !== undefined) project.status = dto.status;
     if (dto.repositoryUrl !== undefined) project.repositoryUrl = dto.repositoryUrl;
     if (dto.demoUrl !== undefined) project.demoUrl = dto.demoUrl;
+    if (dto.visibility !== undefined) project.visibility = dto.visibility;
 
     await this.projects.save(project);
     await this.affinityRecalculation.requestRecalculation(project.createdByProfileId);
     return this.findOneOrFail(id);
   }
 
-  async findMine(userId: string): Promise<Project[]> {
+  async findMine(userId: string) {
     const profile = await this.requireProfile(userId);
     const memberships = await this.members.find({ where: { userId } });
     const memberProjectIds = memberships.map((m) => m.projectId);
@@ -94,49 +107,141 @@ export class ProjectsService {
       ? await this.projects.find({
           where: { id: In(extraIds) },
           relations: { academicArea: true, members: true, evidences: true },
+          order: { createdAt: 'DESC' },
         })
       : [];
-    return [...owned, ...memberProjects];
+
+    // La interfaz necesita distinguir de que proyectos es responsable y en
+    // cuales participa como integrante aceptado (RF15).
+    const roleOf = (projectId: string) =>
+      memberships.find((m) => m.projectId === projectId)?.role ?? null;
+
+    return [
+      ...owned.map((p) => ({ ...p, isOwner: true, myRole: null as string | null })),
+      ...memberProjects.map((p) => ({ ...p, isOwner: false, myRole: roleOf(p.id) })),
+    ];
   }
 
   async findOneForUser(user: AuthenticatedUser, id: string): Promise<Project> {
     const project = await this.findOneOrFail(id);
-    if (VIEWER_ROLES.includes(user.role)) {
-      return project;
-    }
-    const isOwner = project.createdByProfile?.userId === user.userId;
-    const isMember = project.members?.some((m) => m.userId === user.userId);
-    if (!isOwner && !isMember) {
-      throw new ForbiddenException('No tiene acceso a este proyecto.');
-    }
+    await this.assertCanView(user, project);
     return project;
   }
 
-  async addMember(user: AuthenticatedUser, id: string, dto: AddMemberDto): Promise<ProjectMember> {
-    const project = await this.findOneOrFail(id);
-    await this.assertIsOwner(user, project);
+  /**
+   * Quien puede ver un proyecto (RF15, Tabla 2.24).
+   *
+   *  - Estudiante: solo si es el responsable o un integrante aceptado.
+   *  - Docente: solo si el proyecto esta habilitado para consulta docente Y el
+   *    estudiante responsable pertenece a un semestre de su alcance (RF3).
+   *  - Administrador: acceso de soporte, como en el resto del sistema.
+   *
+   * El director de carrera no accede al detalle individual: ningun RF se lo
+   * concede. Sus reportes agregados siguen disponibles en /reports/director.
+   */
+  private async assertCanView(user: AuthenticatedUser, project: Project): Promise<void> {
+    if (user.role === RolNombre.ADMIN) return;
 
-    const exists = await this.users.exists({ where: { id: dto.userId } });
-    if (!exists) {
-      throw new BadRequestException('El usuario integrante no existe.');
+    if (user.role === RolNombre.STUDENT) {
+      const isOwner = project.createdByProfile?.userId === user.userId;
+      const isMember = project.members?.some((m) => m.userId === user.userId);
+      if (!isOwner && !isMember) {
+        throw new ForbiddenException('No tiene acceso a este proyecto.');
+      }
+      return;
     }
-    let member = await this.members.findOne({
-      where: { projectId: project.id, userId: dto.userId },
-    });
-    if (member) {
-      member.role = dto.role ?? member.role;
-      member.contribution = dto.contribution ?? member.contribution;
-    } else {
-      member = this.members.create({
-        projectId: project.id,
-        userId: dto.userId,
-        role: dto.role ?? null,
-        contribution: dto.contribution ?? null,
-      });
+
+    if (user.role === RolNombre.TEACHER) {
+      if (project.visibility !== ProjectVisibility.TEACHERS) {
+        throw new ForbiddenException(
+          'El estudiante no habilitó este proyecto para consulta docente.',
+        );
+      }
+      // Una sola fuente de verdad para el alcance academico del docente.
+      await this.teacherScope.assertCanAccessProfile(user, project.createdByProfileId);
+      return;
     }
-    const saved = await this.members.save(member);
-    await this.affinityRecalculation.requestRecalculation(project.createdByProfileId);
-    return saved;
+
+    throw new ForbiddenException('Su rol no puede consultar proyectos estudiantiles.');
+  }
+
+  /** true si el usuario puede ver el proyecto, sin lanzar excepcion. */
+  async canView(user: AuthenticatedUser, project: Project): Promise<boolean> {
+    try {
+      await this.assertCanView(user, project);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Portafolio institucional que consulta el docente (RF15).
+   * Solo proyectos habilitados para docentes y de estudiantes dentro de su
+   * alcance; nunca la totalidad de los proyectos del sistema.
+   */
+  async findForTeacher(user: AuthenticatedUser, filters: QueryProjectsDto) {
+    const scope = await this.teacherScope.scopeFor(user);
+    const restricted = scope !== null;
+
+    if (restricted && scope.length === 0) {
+      return { scope: { restricted: true, semesters: [] as number[] }, projects: [] };
+    }
+
+    const qb = this.projects
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.academicArea', 'area')
+      .leftJoinAndSelect('p.createdByProfile', 'prof')
+      .leftJoinAndSelect('prof.user', 'u')
+      .where('p.visibility = :visibility', { visibility: ProjectVisibility.TEACHERS })
+      .orderBy('p.updated_at', 'DESC');
+
+    if (restricted) {
+      qb.andWhere('prof.semester IN (:...semesters)', { semesters: scope });
+    }
+    if (filters.semester) {
+      qb.andWhere('prof.semester = :semester', { semester: filters.semester });
+    }
+    if (filters.status) {
+      qb.andWhere('p.status = :status', { status: filters.status });
+    }
+    if (filters.areaId) {
+      qb.andWhere('p.academic_area_id = :areaId', { areaId: filters.areaId });
+    }
+    if (filters.technology) {
+      // Coincidencia sin distinguir mayusculas dentro del arreglo de tecnologias.
+      qb.andWhere(
+        'EXISTS (SELECT 1 FROM unnest(p.technologies) AS t WHERE t ILIKE :tech)',
+        { tech: '%' + filters.technology + '%' },
+      );
+    }
+    if (filters.search) {
+      qb.andWhere(
+        "(p.title ILIKE :s OR CONCAT(u.first_name, ' ', u.last_name) ILIKE :s)",
+        { s: '%' + filters.search + '%' },
+      );
+    }
+
+    const rows = await qb.getMany();
+    return {
+      scope: { restricted, semesters: scope ?? [] },
+      projects: rows.map((p) => ({
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        status: p.status,
+        technologies: p.technologies,
+        area: p.academicArea?.name ?? null,
+        academicAreaId: p.academicAreaId,
+        repositoryUrl: p.repositoryUrl,
+        demoUrl: p.demoUrl,
+        updatedAt: p.updatedAt,
+        student: p.createdByProfile?.user
+          ? p.createdByProfile.user.firstName + ' ' + p.createdByProfile.user.lastName
+          : null,
+        semester: p.createdByProfile?.semester ?? null,
+      })),
+    };
   }
 
   async addEvidence(user: AuthenticatedUser, id: string, dto: AddEvidenceDto): Promise<ProjectEvidence> {

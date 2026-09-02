@@ -1,6 +1,9 @@
 import { api } from '../api/client';
 import type {
   AcademicArea,
+  InstitutionalPortfolio,
+  ProjectFeedbackItem,
+  ProjectMemberItem,
   ActivityCategoryItem,
   FreeInterest,
   EligibleParticipant,
@@ -89,8 +92,22 @@ export const projectService = {
   create: (data: Record<string, unknown>) => api.post<Project>('/projects', data).then((r) => r.data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch<Project>(`/projects/${id}`, data).then((r) => r.data),
-  addMember: (id: string, data: { userId: string; role?: string; contribution?: string }) =>
-    api.post(`/projects/${id}/members`, data).then((r) => r.data),
+  /** Portafolio institucional que consulta el docente (RF15). */
+  institutional: (params?: Record<string, string>) =>
+    api.get<InstitutionalPortfolio>('/projects/institutional', { params }).then((r) => r.data),
+  members: (id: string) => api.get<ProjectMemberItem[]>(`/projects/${id}/members`).then((r) => r.data),
+};
+
+/** Retroalimentación académica del docente sobre un proyecto (RF16). */
+export const projectFeedbackService = {
+  list: (projectId: string) =>
+    api.get<ProjectFeedbackItem[]>(`/projects/${projectId}/feedback`).then((r) => r.data),
+  create: (projectId: string, comment: string) =>
+    api.post<ProjectFeedbackItem>(`/projects/${projectId}/feedback`, { comment }).then((r) => r.data),
+  update: (projectId: string, feedbackId: string, comment: string) =>
+    api
+      .patch<ProjectFeedbackItem>(`/projects/${projectId}/feedback/${feedbackId}`, { comment })
+      .then((r) => r.data),
 };
 
 /** Subida de archivos de evidencia. Devuelve la referencia a persistir. */

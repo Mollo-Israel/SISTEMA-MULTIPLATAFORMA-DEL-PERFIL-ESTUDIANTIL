@@ -15,6 +15,7 @@ import EvidencesScreen from '../screens/student/EvidencesScreen';
 import ActivitiesScreen from '../screens/student/ActivitiesScreen';
 import MyActivitiesScreen from '../screens/student/MyActivitiesScreen';
 import ProjectsScreen from '../screens/student/ProjectsScreen';
+import ProjectDetailScreen from '../screens/student/ProjectDetailScreen';
 import AffinityScreen from '../screens/student/AffinityScreen';
 
 import TeacherActivities from '../screens/teacher/TeacherActivities';
@@ -65,6 +66,23 @@ function PerfilStack() {
   );
 }
 
+function ProyectosStack() {
+  return (
+    <Stack.Navigator screenOptions={screenOptions}>
+      <Stack.Screen
+        name="MiPortafolio"
+        component={ProjectsScreen}
+        options={{ title: 'Portafolio', ...withLogout }}
+      />
+      <Stack.Screen
+        name="DetalleProyecto"
+        component={ProjectDetailScreen}
+        options={{ title: 'Proyecto' }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 function ActividadesStack() {
   return (
     <Stack.Navigator screenOptions={screenOptions}>
@@ -80,7 +98,7 @@ function StudentTabs() {
       <Tab.Screen name="Inicio" component={HomeScreen} options={withLogout} />
       <Tab.Screen name="Perfil" component={PerfilStack} options={{ headerShown: false }} />
       <Tab.Screen name="Actividades" component={ActividadesStack} options={{ headerShown: false }} />
-      <Tab.Screen name="Proyectos" component={ProjectsScreen} options={withLogout} />
+      <Tab.Screen name="Proyectos" component={ProyectosStack} options={{ headerShown: false }} />
       <Tab.Screen name="Afinidad" component={AffinityScreen} options={withLogout} />
     </Tab.Navigator>
   );

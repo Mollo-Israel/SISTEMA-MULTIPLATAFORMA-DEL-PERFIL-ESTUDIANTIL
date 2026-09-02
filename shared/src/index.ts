@@ -8,3 +8,4 @@ export * from './enums/evidence.enum';
 export * from './enums/affinity.enum';
 export * from './enums/constancy.enum';
 export * from './enums/gamification.enum';
+export * from './enums/portfolio.enum';

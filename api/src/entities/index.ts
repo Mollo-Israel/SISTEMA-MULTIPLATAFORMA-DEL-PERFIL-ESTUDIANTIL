@@ -17,3 +17,5 @@ export * from './teacher-semester-access.entity';
 export * from './gamification-criterion.entity';
 export * from './activity-category.entity';
 export * from './student-free-interest.entity';
+export * from './project-invitation.entity';
+export * from './project-feedback.entity';
