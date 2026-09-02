@@ -1,7 +1,7 @@
 # Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
 
-Ingeniería en Sistemas Informáticos – Univalle. Implementación del **40 %**:
-los cuatro primeros objetivos específicos, completos de extremo a extremo.
+Ingeniería en Sistemas Informáticos – Univalle. Implementación del **50 %**:
+los cinco primeros objetivos específicos, completos de extremo a extremo.
 
 Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficiales) que construye un perfil estudiantil dinámico a partir de intereses, habilidades, proyectos, actividades, participación, evidencias, constancias y áreas de afinidad.
 
@@ -110,12 +110,13 @@ Hay 16 estudiantes con el patrón `nombre.apellido@est.univalle.edu` y contrase�
 npm run api:dev      # en una terminal
 
 # en otra terminal:
-npm run test:40      # 235 verificaciones de los 4 objetivos  -> 0 fallos
-npm run test:api     # 42 validaciones de backend             -> 0 fallos
-npm run demo:e2e     # flujo completo de 14 pasos             -> 0 fallos
+npm run test:40      # 235 verificaciones de los objetivos 1-4  -> 0 fallos
+npm run test:50      # 109 verificaciones del objetivo 5        -> 0 fallos
+npm run test:api     # 42 validaciones de backend               -> 0 fallos
+npm run demo:e2e     # flujo completo de 14 pasos               -> 0 fallos
 ```
 
-En total **302 verificaciones** contra la API real, sobre una base recreada desde cero.
+En total **411 verificaciones** contra la API real, sobre una base recreada desde cero.
 
 ## Flujo principal (end-to-end)
 
@@ -144,15 +145,16 @@ En total **302 verificaciones** contra la API real, sobre una base recreada desd
 | `npm run api:migrate` | Aplica migraciones TypeORM |
 | `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
 | `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
-| `npm run test:40` | **235 verificaciones de los 4 objetivos del 40 %** |
+| `npm run test:40` | **235 verificaciones de los objetivos 1 a 4** |
+| `npm run test:50` | **109 verificaciones del objetivo 5 (portafolio)** |
 | `npm run test:api` | 42 validaciones de backend contra la API |
 | `npm run demo:e2e` | Flujo completo de 14 pasos |
 | `npm run web:dev` | Servidor de desarrollo web |
 | `npm run mobile:start` | Inicia Expo (app móvil) |
 
-## Alcance del 40 %
+## Alcance del 50 %
 
-Los cuatro primeros objetivos específicos están implementados de extremo a extremo:
+Los cinco primeros objetivos específicos están implementados de extremo a extremo:
 
 1. **Usuarios, autenticación, roles y control de acceso.** Registro de estudiante
    con rol asignado por el servidor, sesión por rol, alta de usuarios
@@ -172,6 +174,12 @@ Los cuatro primeros objetivos específicos están implementados de extremo a ext
    evidencias asociadas a proyecto, actividad o área, certificados externos con
    archivo, y constancia interna emitida solo por el director sobre participación
    confirmada y sin duplicados.
+5. **Portafolio de proyectos estudiantiles.** El estudiante registra proyectos con
+   área, tecnologías, enlaces, evidencias y **nivel de visibilidad** (privado, en
+   el perfil, o disponible para docentes); invita integrantes y **la pertenencia
+   se crea solo cuando el invitado acepta**; el docente consulta el portafolio de
+   sus semestres habilitados y registra retroalimentación orientativa, sin nota
+   ni aprobación.
 
 Documentación del avance:
 
@@ -181,7 +189,15 @@ Documentación del avance:
 - [`docs/AUDITORIA_FINAL_40_PORCIENTO.md`](docs/AUDITORIA_FINAL_40_PORCIENTO.md) — auditoría de cierre contra el documento
 - [`docs/CORRECCIONES_DOCUMENTO_FINAL_40.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_40.md) — correcciones pendientes en el Word
 
-**Fuera del 40 %:** chat, contactos por QR, equipos avanzados, recomendación
+Objetivo 5 (50 %):
+
+- [`docs/MATRIZ_TRAZABILIDAD_50.md`](docs/MATRIZ_TRAZABILIDAD_50.md) — RF1 a RF16, requisito por requisito
+- [`docs/AVANCE_50_PORCIENTO.md`](docs/AVANCE_50_PORCIENTO.md) — qué se corrigió y qué se agregó
+- [`docs/DEMO_50_PORCIENTO.md`](docs/DEMO_50_PORCIENTO.md) — guion de demostración de 8–10 minutos
+- [`docs/AUDITORIA_FINAL_50_PORCIENTO.md`](docs/AUDITORIA_FINAL_50_PORCIENTO.md) — auditoría de cierre de los 5 objetivos
+- [`docs/CORRECCIONES_DOCUMENTO_FINAL_50.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_50.md) — 6 correcciones pendientes en el Word
+
+**Fuera del 50 %:** chat, contactos por QR, equipos avanzados, recomendación
 completa, motor de gamificación (los criterios ya se administran, pero todavía no
 se aplican), analítica avanzada, predicción de rendimiento, certificados oficiales
 e integración real con SIU y Teams.
