@@ -11,6 +11,10 @@ import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
+import { AffinityWeight } from '../entities/affinity-weight.entity';
+import { AffinityContribution } from '../entities/affinity-contribution.entity';
+import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
+import { AffinitySnapshotItem } from '../entities/affinity-snapshot-item.entity';
 import { AccessModule } from '../access/access.module';
 import { AFFINITY_RECALCULATION } from './affinity-recalculation.port';
 import { AffinityEngineService } from './affinity.engine';
@@ -30,6 +34,10 @@ import { AffinityController } from './affinity.controller';
       ExternalCertificate,
       InternalConstancy,
       AffinityResult,
+      AffinityWeight,
+      AffinityContribution,
+      AffinitySnapshot,
+      AffinitySnapshotItem,
     ]),
     AccessModule,
   ],

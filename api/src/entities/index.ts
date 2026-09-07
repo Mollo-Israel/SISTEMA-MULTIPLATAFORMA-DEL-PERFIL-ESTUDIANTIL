@@ -19,3 +19,7 @@ export * from './activity-category.entity';
 export * from './student-free-interest.entity';
 export * from './project-invitation.entity';
 export * from './project-feedback.entity';
+export * from './affinity-weight.entity';
+export * from './affinity-contribution.entity';
+export * from './affinity-snapshot.entity';
+export * from './affinity-snapshot-item.entity';
