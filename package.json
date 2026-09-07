@@ -25,7 +25,8 @@
     "test:40": "node scripts/e2e-objectives-40.mjs",
     "mobile:typecheck": "npm run typecheck --prefix mobile",
     "web:build": "npm run build --prefix web",
-    "test:50": "node scripts/e2e-objective-5.mjs"
+    "test:50": "node scripts/e2e-objective-5.mjs",
+    "test:60": "node scripts/e2e-objective-6.mjs"
   },
   "engines": {
     "node": ">=20"

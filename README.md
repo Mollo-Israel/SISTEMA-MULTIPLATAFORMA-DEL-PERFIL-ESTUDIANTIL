@@ -1,7 +1,7 @@
 # Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
 
-Ingeniería en Sistemas Informáticos – Univalle. Implementación del **50 %**:
-los cinco primeros objetivos específicos, completos de extremo a extremo.
+Ingeniería en Sistemas Informáticos – Univalle. Implementación del **60 %**:
+los seis primeros objetivos específicos, completos de extremo a extremo.
 
 Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficiales) que construye un perfil estudiantil dinámico a partir de intereses, habilidades, proyectos, actividades, participación, evidencias, constancias y áreas de afinidad.
 
@@ -112,11 +112,12 @@ npm run api:dev      # en una terminal
 # en otra terminal:
 npm run test:40      # 235 verificaciones de los objetivos 1-4  -> 0 fallos
 npm run test:50      # 109 verificaciones del objetivo 5        -> 0 fallos
+npm run test:60      # 82 verificaciones del objetivo 6         -> 0 fallos
 npm run test:api     # 42 validaciones de backend               -> 0 fallos
 npm run demo:e2e     # flujo completo de 14 pasos               -> 0 fallos
 ```
 
-En total **411 verificaciones** contra la API real, sobre una base recreada desde cero.
+En total **493 verificaciones** contra la API real, sobre una base recreada desde cero.
 
 ## Flujo principal (end-to-end)
 
@@ -147,14 +148,15 @@ En total **411 verificaciones** contra la API real, sobre una base recreada desd
 | `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
 | `npm run test:40` | **235 verificaciones de los objetivos 1 a 4** |
 | `npm run test:50` | **109 verificaciones del objetivo 5 (portafolio)** |
+| `npm run test:60` | **82 verificaciones del objetivo 6 (motor de afinidad)** |
 | `npm run test:api` | 42 validaciones de backend contra la API |
 | `npm run demo:e2e` | Flujo completo de 14 pasos |
 | `npm run web:dev` | Servidor de desarrollo web |
 | `npm run mobile:start` | Inicia Expo (app móvil) |
 
-## Alcance del 50 %
+## Alcance del 60 %
 
-Los cinco primeros objetivos específicos están implementados de extremo a extremo:
+Los seis primeros objetivos específicos están implementados de extremo a extremo:
 
 1. **Usuarios, autenticación, roles y control de acceso.** Registro de estudiante
    con rol asignado por el servidor, sesión por rol, alta de usuarios
@@ -180,6 +182,14 @@ Los cinco primeros objetivos específicos están implementados de extremo a extr
    se crea solo cuando el invitado acepta**; el docente consulta el portafolio de
    sus semestres habilitados y registra retroalimentación orientativa, sin nota
    ni aprobación.
+6. **Motor de afinidad estudiantil.** Calcula niveles de afinidad por área a
+   partir de intereses, habilidades, participación, proyectos, evidencias,
+   certificados y constancias, con **ponderaciones configuradas y auditables**.
+   Cada puntaje se puede abrir para ver **de dónde sale**, línea por línea, y la
+   suma del desglose es exactamente el puntaje. El nivel es relativo al propio
+   perfil del estudiante. Cuando no hay información suficiente el sistema lo
+   informa en lugar de mostrar una lista vacía, y cada cálculo queda registrado
+   en un historial. Es orientación, no evaluación: no hay nota ni aprobación.
 
 Documentación del avance:
 
@@ -197,7 +207,15 @@ Objetivo 5 (50 %):
 - [`docs/AUDITORIA_FINAL_50_PORCIENTO.md`](docs/AUDITORIA_FINAL_50_PORCIENTO.md) — auditoría de cierre de los 5 objetivos
 - [`docs/CORRECCIONES_DOCUMENTO_FINAL_50.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_50.md) — 6 correcciones pendientes en el Word
 
-**Fuera del 50 %:** chat, contactos por QR, equipos avanzados, recomendación
+Objetivo 6 (60 %):
+
+- [`docs/MATRIZ_TRAZABILIDAD_60.md`](docs/MATRIZ_TRAZABILIDAD_60.md) — RF1 a RF17, requisito por requisito
+- [`docs/AVANCE_60_PORCIENTO.md`](docs/AVANCE_60_PORCIENTO.md) — qué se corrigió y qué se agregó
+- [`docs/DEMO_60_PORCIENTO.md`](docs/DEMO_60_PORCIENTO.md) — guion de demostración de 9–11 minutos
+- [`docs/AUDITORIA_FINAL_60_PORCIENTO.md`](docs/AUDITORIA_FINAL_60_PORCIENTO.md) — auditoría de cierre de los 6 objetivos
+- [`docs/CORRECCIONES_DOCUMENTO_FINAL_60.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_60.md) — 5 correcciones pendientes en el Word
+
+**Fuera del 60 %:** chat, contactos por QR, equipos avanzados, recomendación
 completa, motor de gamificación (los criterios ya se administran, pero todavía no
 se aplican), analítica avanzada, predicción de rendimiento, certificados oficiales
 e integración real con SIU y Teams.
