@@ -1,10 +1,16 @@
 import { useMemo, useState } from 'react';
 import { FiSearch, FiUser, FiInfo } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { affinityService, profileService } from '../../services';
+import { affinityService, profileService, AffinitySummary } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { AsyncView, Card, Badge, Loading } from '../../components/ui';
-import { AFFINITY_BADGE, AFFINITY_LEVEL_LABEL, PROFILE_STATUS_LABEL, lbl } from '../../constants';
+import {
+  AffinityDisclaimer,
+  AffinityInsufficient,
+  AffinityRanking,
+  formatDateTime,
+} from '../../components/affinity';
+import { PROFILE_STATUS_LABEL, lbl } from '../../constants';
 import type { StudentDirectory } from '../../services/types';
 
 export default function TeacherStudentsPage() {
@@ -12,7 +18,7 @@ export default function TeacherStudentsPage() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<any>(null);
-  const [affinity, setAffinity] = useState<any[]>([]);
+  const [affinity, setAffinity] = useState<AffinitySummary | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -34,14 +40,16 @@ export default function TeacherStudentsPage() {
     setDetailLoading(true);
     setDetailError(null);
     setView(null);
-    setAffinity([]);
+    setAffinity(null);
     try {
       const [v, a] = await Promise.all([
         profileService.allowedView(profileId),
-        affinityService.student(profileId).catch(() => []),
+        // El backend aplica el alcance academico; si lo niega, el resto del
+        // perfil permitido se sigue mostrando sin la seccion de afinidad.
+        affinityService.studentSummary(profileId).catch(() => null),
       ]);
       setView(v);
-      setAffinity(a as any[]);
+      setAffinity(a);
     } catch (e) {
       setDetailError(apiError(e, 'No se pudo cargar el perfil.'));
     } finally {
@@ -250,18 +258,32 @@ export default function TeacherStudentsPage() {
             )}
           </div>
 
+          {/* Afinidades del estudiante (RF17).
+              El documento dice que el docente consulta afinidades para orientar
+              actividades y conformar equipos. Para eso no basta el numero: hace
+              falta poder abrir de donde sale, o la conversacion con el
+              estudiante se apoya en un dato que nadie puede justificar. */}
           <div className="mt">
             <strong>Áreas de afinidad</strong>
-            {affinity.length === 0 ? (
+            <div className="mt">
+              <AffinityDisclaimer forTeacher />
+            </div>
+
+            {!affinity ? (
               <p className="muted">Todavía no hay afinidades calculadas para este estudiante.</p>
+            ) : affinity.status === 'insufficient_data' ? (
+              <AffinityInsufficient message={affinity.message} forTeacher />
             ) : (
-              <div className="tag-list mt">
-                {affinity.map((a) => (
-                  <Badge key={a.id} tone={(AFFINITY_BADGE[a.level] ?? 'badge-gray').replace('badge-', '')}>
-                    {a.academicArea?.name}: {a.score} · {lbl(AFFINITY_LEVEL_LABEL, a.level)}
-                  </Badge>
-                ))}
-              </div>
+              <>
+                <p className="muted" style={{ fontSize: '0.8rem' }}>
+                  {affinity.areas.length} áreas · {affinity.signalsCount} señales · último cálculo{' '}
+                  {formatDateTime(affinity.calculatedAt)}
+                </p>
+                <AffinityRanking
+                  summary={affinity}
+                  loadBreakdown={(areaId) => affinityService.studentBreakdown(selected!, areaId)}
+                />
+              </>
             )}
           </div>
         </Card>

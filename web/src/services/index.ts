@@ -158,11 +158,88 @@ export const constancyService = {
   mine: () => api.get<InternalConstancy[]>('/constancies/internal/my').then((r) => r.data),
 };
 
+/** Un area dentro del resumen de afinidad (RF17). */
+export interface AffinityArea {
+  academicAreaId: string;
+  area: string | null;
+  score: number;
+  level: 'low' | 'medium' | 'high';
+  rank: number;
+  /** Peso relativo respecto al area mas fuerte del propio estudiante. */
+  share: number;
+}
+
+/**
+ * RF17 define dos salidas distintas: mostrar las afinidades, o informar que
+ * todavia no hay informacion suficiente. El estado viaja explicito para que la
+ * interfaz no tenga que deducirlo de una lista vacia.
+ */
+export interface AffinitySummary {
+  status: 'calculated' | 'insufficient_data';
+  message: string;
+  calculatedAt: string | null;
+  rulesVersion: string | null;
+  signalsCount: number;
+  totalScore: number;
+  areas: AffinityArea[];
+}
+
+export interface AffinityContributionRow {
+  signalType: string;
+  weightCode: string;
+  matchType: 'declared' | 'tag' | 'text' | 'inherited';
+  points: number;
+  sourceLabel: string;
+  sourceId: string | null;
+}
+
+export interface AffinityBreakdown {
+  academicAreaId: string;
+  area: string;
+  score: number;
+  level: 'low' | 'medium' | 'high' | null;
+  contributions: AffinityContributionRow[];
+}
+
+export interface AffinitySnapshotView {
+  id: string;
+  calculatedAt: string;
+  status: 'calculated' | 'insufficient_data';
+  totalScore: number;
+  areasCount: number;
+  signalsCount: number;
+  rulesVersion: string;
+  areas: { academicAreaId: string; area: string | null; score: number; level: string; rank: number }[];
+}
+
+export interface AffinityWeightRow {
+  code: string;
+  signalType: string;
+  points: number;
+  label: string;
+  description: string;
+}
+
 export const affinityService = {
   mine: () => api.get<AffinityResult[]>('/affinity/me').then((r) => r.data),
   recalculateMine: () => api.post<AffinityResult[]>('/affinity/recalculate/me').then((r) => r.data),
   student: (studentId: string) => api.get<AffinityResult[]>(`/affinity/student/${studentId}`).then((r) => r.data),
   basicMap: () => api.get('/affinity/map/basic').then((r) => r.data),
+
+  summary: () => api.get<AffinitySummary>('/affinity/me/summary').then((r) => r.data),
+  breakdown: (areaId: string) =>
+    api.get<AffinityBreakdown>(`/affinity/me/areas/${areaId}/breakdown`).then((r) => r.data),
+  history: (limit = 10) =>
+    api.get<AffinitySnapshotView[]>(`/affinity/me/history?limit=${limit}`).then((r) => r.data),
+  weights: () => api.get<AffinityWeightRow[]>('/affinity/weights').then((r) => r.data),
+
+  /** Consulta institucional: el backend aplica el alcance academico (RN-23). */
+  studentSummary: (studentId: string) =>
+    api.get<AffinitySummary>(`/affinity/student/${studentId}/summary`).then((r) => r.data),
+  studentBreakdown: (studentId: string, areaId: string) =>
+    api
+      .get<AffinityBreakdown>(`/affinity/student/${studentId}/areas/${areaId}/breakdown`)
+      .then((r) => r.data),
 };
 
 export const reportService = {
