@@ -93,6 +93,35 @@ const SIGNAL_OF: Record<AffinityWeightCode, AffinitySignalType> = {
   [AffinityWeightCode.CONSTANCY]: AffinitySignalType.CONSTANCY,
 };
 
+/**
+ * Reglas de clasificacion del nivel de afinidad (RF17).
+ *
+ * El nivel se calculaba con umbrales absolutos: menos de 5 puntos bajo, hasta
+ * 10 medio, y alto por encima. Eso no discrimina. Un estudiante de octavo
+ * semestre acumula puntos en todo y termina con TODAS sus areas en "alto",
+ * momento en el que el nivel deja de orientar: si todo es alto, nada lo es. Al
+ * de primer semestre le pasa lo contrario y todo le sale bajo.
+ *
+ * La afinidad responde a "hacia donde se inclina este estudiante", y esa
+ * pregunta es relativa al propio estudiante, no a una escala fija de la
+ * carrera. Por eso el nivel compara cada area con el area mas fuerte del mismo
+ * perfil.
+ *
+ * El piso absoluto evita el efecto contrario: sin el, un estudiante que solo
+ * declaro un interes de 2 puntos tendria un area "alta" sin ninguna
+ * trayectoria detras. Hacen falta las dos condiciones.
+ */
+const LEVEL_RULES = {
+  /** Proporcion respecto al area mas fuerte para considerarse alta. */
+  HIGH_SHARE: 0.6,
+  /** Piso absoluto para nivel alto: sin sustancia propia no hay afinidad alta. */
+  HIGH_MIN_SCORE: 6,
+  /** Proporcion respecto al area mas fuerte para considerarse media. */
+  MEDIUM_SHARE: 0.3,
+  /** Piso absoluto para nivel medio. */
+  MEDIUM_MIN_SCORE: 3,
+};
+
 /** Cuantas instantaneas se conservan por estudiante. */
 const SNAPSHOT_RETENTION = 30;
 
@@ -376,41 +405,183 @@ export class AffinityEngineService implements AffinityRecalculationPort {
     }
   }
 
-  async basicMap() {
-    const rows = await this.results.find({ relations: { academicArea: true } });
-    const map = new Map<
-      string,
-      { areaId: string; area: string; students: number; totalScore: number; low: number; medium: number; high: number }
-    >();
-    for (const r of rows) {
-      const key = r.academicAreaId;
-      const entry =
-        map.get(key) ??
-        {
-          areaId: key,
-          area: r.academicArea?.name ?? '',
-          students: 0,
-          totalScore: 0,
-          low: 0,
-          medium: 0,
-          high: 0,
-        };
-      entry.students += 1;
-      entry.totalScore += Number(r.score);
-      if (r.level === AffinityLevel.LOW) entry.low += 1;
-      else if (r.level === AffinityLevel.MEDIUM) entry.medium += 1;
-      else entry.high += 1;
-      map.set(key, entry);
+  /**
+   * Vista completa de la afinidad de un estudiante (RF17).
+   *
+   * RF17 define dos salidas y son distintas entre si: mostrar las areas y sus
+   * niveles, o informar que todavia no hay informacion suficiente. Una lista
+   * vacia no comunica lo segundo, y por eso la respuesta lleva un estado
+   * explicito y un mensaje que dice que hacer al respecto.
+   */
+  async getSummary(studentProfileId: string) {
+    const [results, snapshot] = await Promise.all([
+      this.getForProfile(studentProfileId),
+      this.snapshots.findOne({
+        where: { studentProfileId },
+        order: { calculatedAt: 'DESC' },
+      }),
+    ]);
+
+    const topScore = results.length ? Number(results[0].score) : 0;
+    const status =
+      results.length > 0
+        ? AffinityCalculationStatus.CALCULATED
+        : AffinityCalculationStatus.INSUFFICIENT_DATA;
+
+    return {
+      status,
+      message:
+        status === AffinityCalculationStatus.CALCULATED
+          ? 'Afinidades calculadas a partir de la informacion de tu perfil.'
+          : 'Todavia no hay informacion suficiente para orientarte. Declara intereses y ' +
+            'habilidades, registra proyectos o participa en actividades y vuelve a consultar.',
+      calculatedAt: snapshot?.calculatedAt ?? null,
+      rulesVersion: snapshot?.rulesVersion ?? null,
+      signalsCount: snapshot?.signalsCount ?? 0,
+      totalScore: Number(results.reduce((sum, r) => sum + Number(r.score), 0).toFixed(2)),
+      areas: results.map((r, index) => ({
+        academicAreaId: r.academicAreaId,
+        area: r.academicArea?.name ?? null,
+        score: Number(r.score),
+        level: r.level,
+        rank: index + 1,
+        /** Peso relativo respecto al area mas fuerte, que es como se clasifica. */
+        share: topScore > 0 ? Number((Number(r.score) / topScore).toFixed(4)) : 0,
+      })),
+    };
+  }
+
+  /**
+   * Desglose de un area concreta: por que el estudiante tiene ese puntaje.
+   *
+   * Es la respuesta a la pregunta que un tribunal hace siempre ante un motor de
+   * puntuacion. La suma de las lineas es exactamente el puntaje del area.
+   */
+  async getBreakdown(studentProfileId: string, academicAreaId: string) {
+    const [area, result, rows] = await Promise.all([
+      this.areas.findOne({ where: { id: academicAreaId } }),
+      this.results.findOne({ where: { studentProfileId, academicAreaId } }),
+      this.contributions.find({
+        where: { studentProfileId, academicAreaId },
+        order: { points: 'DESC', createdAt: 'ASC' },
+      }),
+    ]);
+
+    if (!area) {
+      throw new NotFoundException('Area academica no encontrada.');
     }
-    return [...map.values()]
-      .map((e) => ({
-        areaId: e.areaId,
-        area: e.area,
-        students: e.students,
-        averageScore: e.students ? Number((e.totalScore / e.students).toFixed(2)) : 0,
-        byLevel: { low: e.low, medium: e.medium, high: e.high },
-      }))
-      .sort((a, b) => b.students - a.students);
+
+    return {
+      academicAreaId,
+      area: area.name,
+      score: result ? Number(result.score) : 0,
+      level: result?.level ?? null,
+      contributions: rows.map((c) => ({
+        signalType: c.signalType,
+        weightCode: c.weightCode,
+        matchType: c.matchType,
+        points: Number(c.points),
+        sourceLabel: c.sourceLabel,
+        sourceId: c.sourceId,
+      })),
+    };
+  }
+
+  /**
+   * Historial de calculos, del mas reciente al mas antiguo (RF17).
+   *
+   * Permite ver como evoluciono la orientacion del estudiante. NO es una
+   * prediccion: RN-15 prohibe usar estos datos para anticipar resultados
+   * academicos, y las estimaciones de tendencias son el decimo objetivo.
+   */
+  async getHistory(studentProfileId: string, limit = 10) {
+    const rows = await this.snapshots.find({
+      where: { studentProfileId },
+      relations: { items: { academicArea: true } },
+      order: { calculatedAt: 'DESC' },
+      take: Math.min(Math.max(limit, 1), SNAPSHOT_RETENTION),
+    });
+
+    return rows.map((snapshot) => ({
+      id: snapshot.id,
+      calculatedAt: snapshot.calculatedAt,
+      status: snapshot.status,
+      totalScore: Number(snapshot.totalScore),
+      areasCount: snapshot.areasCount,
+      signalsCount: snapshot.signalsCount,
+      rulesVersion: snapshot.rulesVersion,
+      areas: [...(snapshot.items ?? [])]
+        .sort((a, b) => a.rank - b.rank)
+        .map((item) => ({
+          academicAreaId: item.academicAreaId,
+          area: item.academicArea?.name ?? null,
+          score: Number(item.score),
+          level: item.level,
+          rank: item.rank,
+        })),
+    }));
+  }
+
+  /**
+   * Las ponderaciones vigentes, para que la explicacion sea completa.
+   *
+   * RN-14 exige que el calculo use ponderaciones definidas para el sistema.
+   * Exponerlas de solo lectura permite que el estudiante -y el tribunal- vean
+   * la regla, no solo su resultado.
+   */
+  async getWeights() {
+    const rows = await this.weights.find({
+      where: { isActive: true },
+      order: { signalType: 'ASC', points: 'DESC' },
+    });
+    return rows.map((w) => ({
+      code: w.code,
+      signalType: w.signalType,
+      points: Number(w.points),
+      label: w.label,
+      description: w.description,
+    }));
+  }
+
+  /**
+   * Conteo agregado de afinidades por area, para el mapa del director.
+   *
+   * La agregacion se hace en la base. Antes se traian todas las filas de
+   * affinity_results a memoria para contarlas en JavaScript: con un estudiante
+   * por semestre daba igual, pero crece con el numero de estudiantes por el de
+   * areas y no hay razon para pagarlo.
+   */
+  async basicMap() {
+    const rows = await this.results
+      .createQueryBuilder('result')
+      .innerJoin('result.academicArea', 'area')
+      .select('result.academic_area_id', 'areaId')
+      .addSelect('area.name', 'area')
+      .addSelect('COUNT(*)::int', 'students')
+      .addSelect('COALESCE(AVG(result.score), 0)', 'averageScore')
+      .addSelect(`COUNT(*) FILTER (WHERE result.level = 'low')::int`, 'low')
+      .addSelect(`COUNT(*) FILTER (WHERE result.level = 'medium')::int`, 'medium')
+      .addSelect(`COUNT(*) FILTER (WHERE result.level = 'high')::int`, 'high')
+      .groupBy('result.academic_area_id')
+      .addGroupBy('area.name')
+      .orderBy('students', 'DESC')
+      .getRawMany<{
+        areaId: string;
+        area: string;
+        students: number;
+        averageScore: string;
+        low: number;
+        medium: number;
+        high: number;
+      }>();
+
+    return rows.map((r) => ({
+      areaId: r.areaId,
+      area: r.area,
+      students: r.students,
+      averageScore: Number(Number(r.averageScore).toFixed(2)),
+      byLevel: { low: r.low, medium: r.medium, high: r.high },
+    }));
   }
 
   /**
@@ -433,10 +604,16 @@ export class AffinityEngineService implements AffinityRecalculationPort {
       if (!points.has(code)) points.set(code, DEFAULT_WEIGHTS[code]);
     });
 
-    const fingerprint = [...points.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([code, value]) => `${code}=${value}`)
-      .join('|');
+    // La huella incluye tambien los umbrales de clasificacion: si cambian, el
+    // nivel de un area puede moverse sin que el estudiante haya hecho nada, y
+    // el historial debe permitir distinguir esos dos casos.
+    const fingerprint = [
+      ...[...points.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([code, value]) => `${code}=${value}`),
+      `levels=${LEVEL_RULES.HIGH_SHARE}/${LEVEL_RULES.HIGH_MIN_SCORE}` +
+        `/${LEVEL_RULES.MEDIUM_SHARE}/${LEVEL_RULES.MEDIUM_MIN_SCORE}`,
+    ].join('|');
 
     return {
       points,
@@ -461,14 +638,18 @@ export class AffinityEngineService implements AffinityRecalculationPort {
       totals.set(c.areaId, (totals.get(c.areaId) ?? 0) + c.points);
     });
 
-    const ranked = [...totals.entries()]
+    // El nivel es relativo al area mas fuerte del propio estudiante, asi que
+    // primero hay que conocer el maximo y solo despues clasificar.
+    const scored = [...totals.entries()]
       .filter(([, score]) => score > 0)
-      .map(([academicAreaId, score]) => ({
-        academicAreaId,
-        score: Number(score.toFixed(2)),
-        level: this.levelFor(score),
-      }))
+      .map(([academicAreaId, score]) => ({ academicAreaId, score: Number(score.toFixed(2)) }))
       .sort((a, b) => b.score - a.score);
+
+    const topScore = scored.length ? scored[0].score : 0;
+    const ranked = scored.map((entry) => ({
+      ...entry,
+      level: this.classify(entry.score, topScore),
+    }));
 
     await this.dataSource.transaction(async (manager) => {
       await manager.delete(AffinityResult, { studentProfileId });
@@ -579,10 +760,21 @@ export class AffinityEngineService implements AffinityRecalculationPort {
     return 'Participacion confirmada';
   }
 
-  private levelFor(score: number): AffinityLevel {
-    if (score <= 4) return AffinityLevel.LOW;
-    if (score <= 10) return AffinityLevel.MEDIUM;
-    return AffinityLevel.HIGH;
+  /**
+   * Clasifica un area comparandola con la mas fuerte del mismo estudiante.
+   *
+   * Exige las dos condiciones a la vez: peso relativo dentro del perfil y una
+   * sustancia absoluta minima. Ver LEVEL_RULES.
+   */
+  private classify(score: number, topScore: number): AffinityLevel {
+    const share = topScore > 0 ? score / topScore : 0;
+    if (share >= LEVEL_RULES.HIGH_SHARE && score >= LEVEL_RULES.HIGH_MIN_SCORE) {
+      return AffinityLevel.HIGH;
+    }
+    if (share >= LEVEL_RULES.MEDIUM_SHARE && score >= LEVEL_RULES.MEDIUM_MIN_SCORE) {
+      return AffinityLevel.MEDIUM;
+    }
+    return AffinityLevel.LOW;
   }
 
   private inferAreasByTech(technologies: string[] | null, areas: AreaInfo[]): string[] {
