@@ -161,10 +161,78 @@ export const constancyService = {
     api.post<any>('/constancies/internal', data).then((r) => r.data),
 };
 
+/** Un area dentro del resumen de afinidad (RF17). */
+export interface AffinityArea {
+  academicAreaId: string;
+  area: string | null;
+  score: number;
+  level: 'low' | 'medium' | 'high';
+  rank: number;
+  /** Peso relativo respecto al area mas fuerte del propio estudiante. */
+  share: number;
+}
+
+/**
+ * RF17 define dos salidas distintas: mostrar las afinidades, o informar que
+ * todavia no hay informacion suficiente. Por eso el estado viaja explicito.
+ */
+export interface AffinitySummary {
+  status: 'calculated' | 'insufficient_data';
+  message: string;
+  calculatedAt: string | null;
+  rulesVersion: string | null;
+  signalsCount: number;
+  totalScore: number;
+  areas: AffinityArea[];
+}
+
+/** Una linea del desglose: que sumo y por que. */
+export interface AffinityContribution {
+  signalType: string;
+  weightCode: string;
+  matchType: 'declared' | 'tag' | 'text' | 'inherited';
+  points: number;
+  sourceLabel: string;
+  sourceId: string | null;
+}
+
+export interface AffinityBreakdown {
+  academicAreaId: string;
+  area: string;
+  score: number;
+  level: 'low' | 'medium' | 'high' | null;
+  contributions: AffinityContribution[];
+}
+
+export interface AffinitySnapshot {
+  id: string;
+  calculatedAt: string;
+  status: 'calculated' | 'insufficient_data';
+  totalScore: number;
+  areasCount: number;
+  signalsCount: number;
+  rulesVersion: string;
+  areas: { academicAreaId: string; area: string | null; score: number; level: string; rank: number }[];
+}
+
+export interface AffinityWeight {
+  code: string;
+  signalType: string;
+  points: number;
+  label: string;
+  description: string;
+}
+
 export const affinityService = {
   mine: () => api.get<any[]>('/affinity/me').then((r) => r.data),
   recalculateMine: () => api.post<any[]>('/affinity/recalculate/me').then((r) => r.data),
   student: (studentId: string) => api.get<any[]>(`/affinity/student/${studentId}`).then((r) => r.data),
+  summary: () => api.get<AffinitySummary>('/affinity/me/summary').then((r) => r.data),
+  breakdown: (areaId: string) =>
+    api.get<AffinityBreakdown>(`/affinity/me/areas/${areaId}/breakdown`).then((r) => r.data),
+  history: (limit = 10) =>
+    api.get<AffinitySnapshot[]>(`/affinity/me/history?limit=${limit}`).then((r) => r.data),
+  weights: () => api.get<AffinityWeight[]>('/affinity/weights').then((r) => r.data),
 };
 
 export const reportService = {

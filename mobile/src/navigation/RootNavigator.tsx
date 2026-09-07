@@ -99,7 +99,13 @@ function StudentTabs() {
       <Tab.Screen name="Perfil" component={PerfilStack} options={{ headerShown: false }} />
       <Tab.Screen name="Actividades" component={ActividadesStack} options={{ headerShown: false }} />
       <Tab.Screen name="Proyectos" component={ProyectosStack} options={{ headerShown: false }} />
-      <Tab.Screen name="Afinidad" component={AffinityScreen} options={withLogout} />
+      {/* RF17 nombra la pantalla "Mis afinidades". La pestana conserva la
+          etiqueta corta porque son cinco en la barra inferior. */}
+      <Tab.Screen
+        name="Afinidad"
+        component={AffinityScreen}
+        options={{ title: 'Mis afinidades', ...withLogout }}
+      />
     </Tab.Navigator>
   );
 }
