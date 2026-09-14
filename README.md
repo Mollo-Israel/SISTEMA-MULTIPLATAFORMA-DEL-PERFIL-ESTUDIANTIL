@@ -232,6 +232,11 @@ Objetivo 7 (70 %):
 - [`docs/AUDITORIA_FINAL_70_PORCIENTO.md`](docs/AUDITORIA_FINAL_70_PORCIENTO.md) — auditoría de cierre de los 7 objetivos
 - [`docs/CORRECCIONES_DOCUMENTO_FINAL_70.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_70.md) — 6 correcciones pendientes en el Word
 
+Transversal:
+
+- [`docs/MEJORAS_UX.md`](docs/MEJORAS_UX.md) — buscadores, modales de confirmación, avisos
+  flotantes y animaciones en el panel web y la aplicación móvil, sin cambiar ninguna regla
+
 **Fuera del 70 %:** chat, contactos por QR, equipos avanzados, gamificación
 completa, motor de gamificación (los criterios ya se administran, pero todavía no
 se aplican), analítica avanzada, predicción de rendimiento, certificados oficiales
