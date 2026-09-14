@@ -1,20 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  FiChevronDown,
+  FiChevronRight,
   FiFolder,
   FiGithub,
   FiLink,
+  FiMessageSquare,
   FiPaperclip,
   FiPlus,
   FiUsers,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { catalogService, evidenceService, projectService } from '../../services';
-import type { AcademicArea, Project } from '../../services/types';
+import {
+  catalogService,
+  evidenceService,
+  projectFeedbackService,
+  projectService,
+} from '../../services';
+import type {
+  AcademicArea,
+  Project,
+  ProjectFeedbackItem,
+} from '../../services/types';
 import {
   Badge,
   Button,
   Card,
   EmptyState,
+  Loading,
   PageHeader,
   ResultCount,
   SearchInput,
@@ -40,6 +53,12 @@ export default function StudentProjectsPage() {
   const [evForm, setEvForm] = useState<Record<string, { externalUrl: string; description: string }>>({});
   const toast = useToast();
 
+  // Retroalimentacion docente (RF16). Se pide solo del proyecto que el
+  // estudiante abre: el listado ya trae cuantos comentarios tiene cada uno.
+  const [openFeedback, setOpenFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Record<string, ProjectFeedbackItem[]>>({});
+  const [loadingFeedback, setLoadingFeedback] = useState<string | null>(null);
+
   const load = () => projectService.mine().then(setProjects);
 
   useEffect(() => {
@@ -61,6 +80,25 @@ export default function StudentProjectsPage() {
         .some((field) => normalize(field).includes(q)),
     );
   }, [projects, query]);
+
+  const toggleFeedback = async (projectId: string) => {
+    if (openFeedback === projectId) {
+      setOpenFeedback(null);
+      return;
+    }
+    setOpenFeedback(projectId);
+    if (feedback[projectId]) return;
+    setLoadingFeedback(projectId);
+    try {
+      const rows = await projectFeedbackService.list(projectId);
+      setFeedback((prev) => ({ ...prev, [projectId]: rows }));
+    } catch (err) {
+      toast.error(apiError(err, 'No se pudo cargar la retroalimentación.'));
+      setOpenFeedback(null);
+    } finally {
+      setLoadingFeedback(null);
+    }
+  };
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,6 +250,9 @@ export default function StudentProjectsPage() {
               <div className="activity-meta">
                 <span><FiFolder size={13} /> {p.academicArea?.name ?? 'Sin área'}</span>
                 <span><FiUsers size={13} /> {p.members?.length ?? 0} integrante{(p.members?.length ?? 0) === 1 ? '' : 's'}</span>
+                {(p.feedbackCount ?? 0) > 0 && (
+                  <span><FiMessageSquare size={13} /> {p.feedbackCount} comentario{p.feedbackCount === 1 ? '' : 's'}</span>
+                )}
                 {p.repositoryUrl && (
                   <a href={p.repositoryUrl} target="_blank" rel="noreferrer">
                     <FiGithub size={13} /> Repositorio
@@ -226,6 +267,60 @@ export default function StudentProjectsPage() {
                   ))}
                 </div>
               )}
+
+              {/* Retroalimentación docente (RF16). El estudiante vinculado al
+                  proyecto puede leerla; el backend ya lo permitía, pero el
+                  panel web no la pedía en ninguna pantalla. */}
+              <div className="mt feedback-block">
+                <button
+                  type="button"
+                  className="feedback-toggle"
+                  onClick={() => toggleFeedback(p.id)}
+                  aria-expanded={openFeedback === p.id}
+                >
+                  {openFeedback === p.id ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                  <FiMessageSquare size={14} />
+                  <span>
+                    Retroalimentación docente
+                    {(p.feedbackCount ?? 0) > 0 ? ` (${p.feedbackCount})` : ''}
+                  </span>
+                  {(p.feedbackCount ?? 0) > 0 && <Badge tone="green">Nueva</Badge>}
+                </button>
+
+                {openFeedback === p.id && (
+                  <div className="feedback-list">
+                    {loadingFeedback === p.id ? (
+                      <Loading label="Cargando retroalimentación…" />
+                    ) : (feedback[p.id] ?? []).length === 0 ? (
+                      <p className="muted">
+                        Todavía no recibes retroalimentación en este proyecto. Para que un
+                        docente pueda comentarlo debe estar marcado como visible para docentes.
+                      </p>
+                    ) : (
+                      (feedback[p.id] ?? []).map((f) => (
+                        <article key={f.id} className="feedback-item">
+                          <p>{f.comment}</p>
+                          <div className="activity-meta">
+                            <span>{f.teacher ?? 'Docente'}</span>
+                            <span>
+                              {new Date(f.createdAt).toLocaleDateString('es-BO', {
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric',
+                              })}
+                            </span>
+                            {f.editedAt && <span>editada</span>}
+                          </div>
+                        </article>
+                      ))
+                    )}
+                    <p className="muted" style={{ fontSize: '0.76rem', marginTop: '0.5rem' }}>
+                      Orientación académica complementaria. No es una nota ni una evaluación
+                      oficial.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               <div className="mt">
                 <strong className="flex" style={{ gap: '0.4rem' }}>

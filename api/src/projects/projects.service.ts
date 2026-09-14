@@ -11,6 +11,7 @@ import { EvidenceType, ProjectVisibility, RolNombre } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
+import { ProjectFeedback } from '../entities/project-feedback.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { User } from '../entities/user.entity';
@@ -32,6 +33,8 @@ export class ProjectsService {
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     @InjectRepository(ProjectMember) private readonly members: Repository<ProjectMember>,
     @InjectRepository(ProjectEvidence) private readonly evidences: Repository<ProjectEvidence>,
+    @InjectRepository(ProjectFeedback)
+    private readonly feedback: Repository<ProjectFeedback>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(User) private readonly users: Repository<User>,
@@ -116,10 +119,43 @@ export class ProjectsService {
     const roleOf = (projectId: string) =>
       memberships.find((m) => m.projectId === projectId)?.role ?? null;
 
+    // Cuanta retroalimentacion docente tiene cada proyecto (RF16). Sin este
+    // dato el estudiante no tiene forma de saber que un docente le comento:
+    // tendria que abrir los proyectos uno por uno para descubrirlo.
+    const counts = await this.feedbackCounts([
+      ...owned.map((p) => p.id),
+      ...memberProjects.map((p) => p.id),
+    ]);
+
     return [
-      ...owned.map((p) => ({ ...p, isOwner: true, myRole: null as string | null })),
-      ...memberProjects.map((p) => ({ ...p, isOwner: false, myRole: roleOf(p.id) })),
+      ...owned.map((p) => ({
+        ...p,
+        isOwner: true,
+        myRole: null as string | null,
+        feedbackCount: counts.get(p.id) ?? 0,
+      })),
+      ...memberProjects.map((p) => ({
+        ...p,
+        isOwner: false,
+        myRole: roleOf(p.id),
+        feedbackCount: counts.get(p.id) ?? 0,
+      })),
     ];
+  }
+
+  /** Comentarios docentes por proyecto, en una sola consulta. */
+  private async feedbackCounts(projectIds: string[]): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    if (projectIds.length === 0) return map;
+    const rows = await this.feedback
+      .createQueryBuilder('f')
+      .select('f.project_id', 'projectId')
+      .addSelect('COUNT(*)', 'total')
+      .where('f.project_id IN (:...ids)', { ids: projectIds })
+      .groupBy('f.project_id')
+      .getRawMany<{ projectId: string; total: string }>();
+    for (const r of rows) map.set(r.projectId, Number(r.total));
+    return map;
   }
 
   async findOneForUser(user: AuthenticatedUser, id: string): Promise<Project> {

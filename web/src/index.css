@@ -690,3 +690,27 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
   .section-title .search-input { min-width: 0; width: 100%; }
   .filters .search-input { width: 100%; }
 }
+
+/* =========================================================================
+   RETROALIMENTACION DOCENTE en el portafolio del estudiante (RF16)
+   ========================================================================= */
+
+.feedback-block {
+  border-top: 1px solid var(--gray-100);
+  padding-top: 0.7rem;
+}
+.feedback-toggle {
+  display: flex; align-items: center; gap: 0.45rem;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--font); font-size: 0.86rem; font-weight: 700;
+  color: var(--bordo);
+}
+.feedback-toggle:hover { text-decoration: underline; }
+.feedback-list { margin-top: 0.7rem; display: grid; gap: 0.6rem; }
+.feedback-item {
+  background: rgba(107, 18, 32, 0.035);
+  border-left: 3px solid var(--bordo);
+  border-radius: 0 9px 9px 0;
+  padding: 0.7rem 0.85rem;
+}
+.feedback-item p { margin: 0 0 0.35rem; color: var(--gray-700); line-height: 1.5; }

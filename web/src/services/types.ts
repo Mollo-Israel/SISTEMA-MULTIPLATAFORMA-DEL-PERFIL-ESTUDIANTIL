@@ -129,6 +129,8 @@ export interface Project {
   demoUrl: string | null;
   members?: ProjectMember[];
   evidences?: ProjectEvidence[];
+  /** Comentarios docentes recibidos (RF16). Lo calcula GET /projects/mine. */
+  feedbackCount?: number;
 }
 
 export interface ProjectMember {

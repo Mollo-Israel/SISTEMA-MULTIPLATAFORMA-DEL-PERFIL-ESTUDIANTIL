@@ -4,6 +4,7 @@ import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectInvitation } from '../entities/project-invitation.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
+import { ProjectFeedback } from '../entities/project-feedback.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { User } from '../entities/user.entity';
@@ -25,6 +26,7 @@ import { ProjectsController } from './projects.controller';
       ProjectMember,
       ProjectInvitation,
       ProjectEvidence,
+      ProjectFeedback,
       StudentProfile,
       AcademicArea,
       User,

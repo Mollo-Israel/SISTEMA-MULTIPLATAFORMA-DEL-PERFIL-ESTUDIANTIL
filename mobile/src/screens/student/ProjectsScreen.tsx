@@ -449,6 +449,13 @@ function ProjectCard({ project, onOpen }: { project: any; onOpen: () => void }) 
         <Text style={styles.title}>{project.title}</Text>
         <View style={styles.tags}>
           <Badge color={colors.bordo}>{STATUS_LABEL[project.status] ?? project.status}</Badge>
+          {/* Sin esto el estudiante tendria que abrir cada proyecto para
+              descubrir que un docente le dejo un comentario (RF16). */}
+          {(project.feedbackCount ?? 0) > 0 && (
+            <Badge color={colors.green}>
+              {project.feedbackCount} comentario{project.feedbackCount === 1 ? '' : 's'}
+            </Badge>
+          )}
           {visibility && (
             <Badge color={project.visibility === 'teachers' ? colors.green : colors.gray500}>
               {visibility.label}

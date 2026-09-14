@@ -798,6 +798,33 @@ async function rf16(ctx) {
     finalList.data.every((f) => f.canEdit === false),
     '16.21 El estudiante sigue sin poder editar ninguna',
   );
+
+  // Poder leer la retroalimentacion no sirve de nada si el estudiante no
+  // sabe que existe: tendria que abrir sus proyectos uno por uno. El
+  // listado del portafolio la anuncia.
+  section('El estudiante se entera sin abrir cada proyecto');
+  const portafolioA = await req('GET', '/projects/my', { token: A.token });
+  const comentado = (portafolioA.data ?? []).find((p) => p.id === projectId);
+  check(
+    comentado?.feedbackCount === 2,
+    '16.22 El portafolio informa cuanta retroalimentacion tiene cada proyecto',
+    `feedbackCount=${comentado?.feedbackCount}`,
+  );
+  const sinComentar = (portafolioA.data ?? []).find(
+    (p) => p.id === ctx.privateProjectId,
+  );
+  check(
+    sinComentar?.feedbackCount === 0,
+    '16.23 Un proyecto sin comentarios informa cero, no undefined',
+    `feedbackCount=${sinComentar?.feedbackCount}`,
+  );
+  const portafolioB = await req('GET', '/projects/my', { token: B.token });
+  const comentadoB = (portafolioB.data ?? []).find((p) => p.id === projectId);
+  check(
+    comentadoB?.feedbackCount === 2,
+    '16.24 El integrante aceptado tambien lo ve anunciado en su portafolio',
+    `feedbackCount=${comentadoB?.feedbackCount}`,
+  );
 }
 
 main().catch((e) => {

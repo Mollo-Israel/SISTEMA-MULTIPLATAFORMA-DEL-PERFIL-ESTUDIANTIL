@@ -101,21 +101,6 @@ export class ProjectFeedbackService {
     return this.findOneOrFail(id);
   }
 
-  /** Retroalimentación recibida por los proyectos de un estudiante. */
-  async countForProjects(projectIds: string[]): Promise<Map<string, number>> {
-    const map = new Map<string, number>();
-    if (projectIds.length === 0) return map;
-    const rows = await this.feedback
-      .createQueryBuilder('f')
-      .select('f.project_id', 'projectId')
-      .addSelect('COUNT(*)', 'total')
-      .where('f.project_id IN (:...ids)', { ids: projectIds })
-      .groupBy('f.project_id')
-      .getRawMany<{ projectId: string; total: string }>();
-    for (const r of rows) map.set(r.projectId, Number(r.total));
-    return map;
-  }
-
   private async findOneOrFail(id: string): Promise<ProjectFeedback> {
     const row = await this.feedback.findOne({
       where: { id },
