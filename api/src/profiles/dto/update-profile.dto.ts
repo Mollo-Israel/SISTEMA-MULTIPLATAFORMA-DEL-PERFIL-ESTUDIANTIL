@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { cleanText } from '../../common/validation';
 
 export class UpdateProfileDto {
@@ -25,4 +25,13 @@ export class UpdateProfileDto {
   @ArrayUnique({ message: 'No se permiten áreas duplicadas.' })
   @IsUUID('4', { each: true })
   improvementAreaIds?: string[];
+
+  @ApiProperty({
+    required: false,
+    example: true,
+    description: 'Aparecer como posible compañero de equipo en las recomendaciones de otros estudiantes',
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'La preferencia de aparecer en sugerencias debe ser verdadero o falso.' })
+  peerDiscoverable?: boolean;
 }

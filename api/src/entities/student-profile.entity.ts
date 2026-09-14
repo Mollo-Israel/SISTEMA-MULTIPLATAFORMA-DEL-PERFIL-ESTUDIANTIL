@@ -50,6 +50,18 @@ export class StudentProfile {
   @Column({ name: 'improvement_area_ids', type: 'uuid', array: true, nullable: true })
   improvementAreaIds: string[] | null;
 
+  /**
+   * Si el estudiante acepta aparecer como posible companero de equipo en las
+   * recomendaciones de otros estudiantes (RF18, RN-16).
+   *
+   * Es la forma concreta del visibilityLevel que el diagrama de clases pone en
+   * StudentProfile. Activo por defecto y desactivable por el propio
+   * estudiante. No cambia lo que ven docentes ni director: su acceso lo
+   * gobierna el alcance academico (RN-23), no esta preferencia.
+   */
+  @Column({ name: 'peer_discoverable', type: 'boolean', default: true })
+  peerDiscoverable: boolean;
+
   @OneToMany(() => StudentSkill, (skill) => skill.studentProfile)
   skills: StudentSkill[];
 

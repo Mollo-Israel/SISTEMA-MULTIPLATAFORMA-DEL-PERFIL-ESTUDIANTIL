@@ -22,6 +22,7 @@ import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ReplaceInterestsDto, SetInterestsDto } from './dto/set-interests.dto';
 import { ReplaceSkillsDto, SetSkillsDto } from './dto/set-skills.dto';
+import { SearchPeersDto } from './dto/search-peers.dto';
 
 @ApiTags('profiles')
 @ApiBearerAuth()
@@ -33,6 +34,18 @@ export class ProfilesController {
   @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   listStudents(@CurrentUser() user: AuthenticatedUser, @Query('search') search?: string) {
     return this.profilesService.listStudents(user, search);
+  }
+
+  @Get('peers')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Buscar compañeros por nombre para invitarlos a un proyecto (RF14).',
+    description:
+      'Tarjeta mínima: nombre y semestre, sin correo. Requiere al menos 2 caracteres ' +
+      'y devuelve como máximo 20 resultados. Excluye al propio estudiante y las cuentas inactivas.',
+  })
+  searchPeers(@CurrentUser() user: AuthenticatedUser, @Query() query: SearchPeersDto) {
+    return this.profilesService.searchPeers(user, query.search);
   }
 
   @Post('me')

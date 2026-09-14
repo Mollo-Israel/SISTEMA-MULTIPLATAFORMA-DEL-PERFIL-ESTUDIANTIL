@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Not, Repository } from 'typeorm';
-import { ProfileStatus, ProjectVisibility, RolNombre } from '@perfil/shared';
+import { ProfileStatus, ProjectVisibility, RolNombre, UserStatus } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentFreeInterest } from '../entities/student-free-interest.entity';
@@ -42,6 +42,9 @@ interface StudentDirectoryRow {
   status: string;
   completionPercentage: number;
 }
+
+/** Resultados maximos de la busqueda de companeros entre estudiantes. */
+const PEER_SEARCH_LIMIT = 20;
 
 @Injectable()
 export class ProfilesService {
@@ -155,6 +158,50 @@ export class ProfilesService {
     };
   }
 
+  /**
+   * Busqueda de companeros entre estudiantes (RF14, y base de RF18).
+   *
+   * Corrige un defecto del Objetivo 5: la pantalla de invitar integrantes usaba
+   * el directorio institucional, reservado a docente, director y administrador.
+   * Un estudiante recibia 403 y la lista de candidatos salia siempre vacia.
+   *
+   * Devuelve una tarjeta minima: nombre y semestre. Sin correo, sin puntajes y
+   * sin proyectos. Excluye al propio estudiante y a las cuentas inactivas, y
+   * limita el resultado para que no sirva como listado masivo.
+   *
+   * La preferencia peerDiscoverable NO se aplica aqui. Gobierna las sugerencias
+   * que el sistema hace por su cuenta; una invitacion es una accion dirigida y
+   * sigue requiriendo que el invitado acepte (RF14).
+   */
+  async searchPeers(user: AuthenticatedUser, search: string) {
+    // Se escapan los comodines de ILIKE: sin esto, buscar "%%" cumpliria el
+    // minimo de dos caracteres y devolveria a cualquier estudiante.
+    const term = `%${search.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+
+    const rows = await this.profiles
+      .createQueryBuilder('p')
+      .innerJoin('p.user', 'u')
+      .select('p.id', 'profileId')
+      .addSelect("CONCAT(u.first_name, ' ', u.last_name)", 'studentName')
+      .addSelect('p.semester', 'semester')
+      .where('u.id <> :me', { me: user.userId })
+      .andWhere('u.status = :active', { active: UserStatus.ACTIVE })
+      .andWhere(
+        "(u.first_name ILIKE :term OR u.last_name ILIKE :term OR CONCAT(u.first_name, ' ', u.last_name) ILIKE :term)",
+        { term },
+      )
+      .orderBy('u.first_name', 'ASC')
+      .addOrderBy('u.last_name', 'ASC')
+      .limit(PEER_SEARCH_LIMIT)
+      .getRawMany<{ profileId: string; studentName: string; semester: number | null }>();
+
+    return rows.map((r) => ({
+      profileId: r.profileId,
+      studentName: r.studentName,
+      semester: r.semester === null ? null : Number(r.semester),
+    }));
+  }
+
   async updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<StudentProfile> {
     const profile = await this.getOwnProfile(userId);
     if (dto.improvementAreaIds !== undefined) {
@@ -163,6 +210,7 @@ export class ProfilesService {
     }
     if (dto.semester !== undefined) profile.semester = dto.semester;
     if (dto.bio !== undefined) profile.bio = dto.bio;
+    if (dto.peerDiscoverable !== undefined) profile.peerDiscoverable = dto.peerDiscoverable;
     await this.profiles.save(profile);
     await this.refreshCompletion(profile.id);
     await this.requestAffinity(profile.id);

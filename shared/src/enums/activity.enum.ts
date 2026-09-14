@@ -18,6 +18,8 @@ export enum ActivityCategory {
   INVESTIGACION = 'investigacion',
   RESPONSABILIDAD_SOCIAL = 'responsabilidad_social',
   INTEGRACION = 'integracion',
+  /** Guia, documentacion o material de consulta (Objetivo 7, RN-16). */
+  RECURSO_DE_APOYO = 'recurso_de_apoyo',
 }
 
 export enum ActivityModality {

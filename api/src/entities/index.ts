@@ -23,3 +23,4 @@ export * from './affinity-weight.entity';
 export * from './affinity-contribution.entity';
 export * from './affinity-snapshot.entity';
 export * from './affinity-snapshot-item.entity';
+export * from './recommendation.entity';

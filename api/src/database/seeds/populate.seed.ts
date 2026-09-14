@@ -163,6 +163,9 @@ async function run() {
     profile.semester = (i % 8) + 1;
     profile.bio = `Estudiante de Ingeniería en Sistemas con interés en ${primary.name.toLowerCase()}.`;
     profile.improvementAreaIds = [secondary.id];
+    // El ultimo estudiante no aparece en sugerencias de companeros, para poder
+    // demostrar que el sistema respeta esa preferencia (RF18).
+    profile.peerDiscoverable = i !== STUDENT_NAMES.length - 1;
     profile = await profileRepo.save(profile);
     studentProfiles.push(profile);
 
@@ -222,6 +225,56 @@ async function run() {
     a.capacity = d.cap;
     a.status = ActivityStatus.OPEN;
     activities.push(await activityRepo.save(a));
+  }
+
+  // ---- Cursos externos, recursos de apoyo y oportunidades (Objetivo 7) ----
+  //
+  // RF18 recomienda "actividades, oportunidades o enlaces a cursos externos,
+  // recursos, areas de fortalecimiento y posibles companeros de equipo". Los
+  // cursos externos ya forman parte de la gestion de actividades (Objetivo 3) y
+  // los recursos de apoyo son una categoria mas del catalogo (RF4): se publican
+  // como actividades con su enlace, sin cupo.
+  //
+  // Van en un arreglo aparte a proposito. Las participaciones de abajo se
+  // reparten sobre `activities`; mezclarlos cambiaria los datos que ya usan los
+  // guiones de demostracion de los avances anteriores.
+  const orientationDefs: {
+    title: string;
+    description: string;
+    type: ActivityType;
+    cat: ActivityCategoryCode;
+    area: string;
+    url: string | null;
+    modality: ActivityModality;
+    creator: User;
+    daysAhead?: number;
+  }[] = [
+    { title: 'Curso externo: Fundamentos de React', description: 'Tutorial oficial para construir interfaces con componentes, estado y efectos.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CURSO_EXTERNO_RECOMENDADO, area: 'Desarrollo Web', url: 'https://react.dev/learn', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Curso externo: Desarrollo móvil con React Native', description: 'Guía oficial para crear aplicaciones móviles multiplataforma con React Native.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CURSO_EXTERNO_RECOMENDADO, area: 'Desarrollo Móvil', url: 'https://reactnative.dev/docs/getting-started', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Curso externo: Introducción al aprendizaje automático', description: 'Curso intensivo de conceptos de aprendizaje automático con ejercicios prácticos.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CURSO_EXTERNO_RECOMENDADO, area: 'Inteligencia Artificial', url: 'https://developers.google.com/machine-learning/crash-course', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Curso externo: Tutorial de SQL con PostgreSQL', description: 'Tutorial oficial de consultas, uniones, agregaciones y transacciones.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CURSO_EXTERNO_RECOMENDADO, area: 'Bases de Datos', url: 'https://www.postgresql.org/docs/current/tutorial.html', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Curso externo: Fundamentos de redes', description: 'Ruta de formación en redes de computadoras, direccionamiento y conectividad.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CURSO_EXTERNO_RECOMENDADO, area: 'Redes', url: 'https://www.netacad.com/', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Recurso de apoyo: Catálogo de patrones de diseño', description: 'Explicación ilustrada de los patrones de diseño clásicos, con ejemplos de código.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.RECURSO_DE_APOYO, area: 'Ingeniería de Software', url: 'https://refactoring.guru/es/design-patterns', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Recurso de apoyo: OWASP Top 10', description: 'Referencia de los riesgos de seguridad más críticos en aplicaciones web.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.RECURSO_DE_APOYO, area: 'Ciberseguridad', url: 'https://owasp.org/www-project-top-ten/', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Recurso de apoyo: Guía oficial de Scrum', description: 'Definición del marco de trabajo Scrum: roles, eventos y artefactos.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.RECURSO_DE_APOYO, area: 'Gestión de Proyectos', url: 'https://scrumguides.org/', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Recurso de apoyo: Documentación de PostgreSQL', description: 'Manual de referencia del motor de base de datos usado en la carrera.', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.RECURSO_DE_APOYO, area: 'Bases de Datos', url: 'https://www.postgresql.org/docs/', modality: ActivityModality.VIRTUAL, creator: director },
+    { title: 'Convocatoria: Feria de proyectos de la carrera', description: 'Llamado abierto a presentar proyectos académicos en la feria anual de la carrera.', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.CONVOCATORIA, area: 'Ingeniería de Software', url: null, modality: ActivityModality.PRESENCIAL, creator: sociedad, daysAhead: 30 },
+  ];
+  const orientationItems: Activity[] = [];
+  for (const d of orientationDefs) {
+    let a = await activityRepo.findOne({ where: { title: d.title } });
+    if (!a) a = activityRepo.create({ title: d.title });
+    a.description = d.description;
+    a.type = d.type;
+    a.categoryId = categoryByCode(d.cat).id;
+    a.modality = d.modality;
+    a.academicAreaId = areaByName(d.area).id;
+    a.creatorId = d.creator.id;
+    a.externalUrl = d.url;
+    a.capacity = null;
+    a.eventDate = d.daysAhead ? new Date(Date.now() + d.daysAhead * 24 * 60 * 60 * 1000) : null;
+    a.status = ActivityStatus.OPEN;
+    orientationItems.push(await activityRepo.save(a));
   }
 
   // ---- Participaciones (mezcla de confirmado / pendiente / interés) ----
@@ -525,6 +578,8 @@ async function run() {
   console.log(`  Intereses en texto libre creados: ${freeInterestsCreated}`);
   console.log(`  Portafolio: ${acceptedMembers} integrantes aceptados · ${pendingInvites} invitaciones pendientes · ${rejectedInvites} rechazadas`);
   console.log(`  Retroalimentacion docente registrada: ${feedbackCreated}`);
+  console.log(`  Orientacion: ${orientationItems.length} cursos externos, recursos de apoyo y oportunidades`);
+  console.log('  Sin aparecer en sugerencias de companeros: tomas.suarez@est.univalle.edu');
   console.log('\n  Contraseña de todas las cuentas pobladas: ' + PWD);
   console.log('  Administrador: admin@univalle.edu / Admin123*');
   console.log('  Ejemplos:  carlos.perez@univalle.edu (docente) · jorge.vargas@univalle.edu (director)');
