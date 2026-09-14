@@ -5,6 +5,7 @@ import { HOME_BY_ROLE } from './navigation';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Loading } from './components/ui';
+import { ConfirmProvider, ToastProvider } from './components/feedback';
 import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 
@@ -62,7 +63,9 @@ function guarded(roles: string[], element: JSX.Element) {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <ToastProvider>
+        <ConfirmProvider>
+          <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<LandingPage />} />
@@ -109,7 +112,9 @@ export default function App() {
 
           <Route path="*" element={<RootRedirect />} />
         </Routes>
-      </BrowserRouter>
+          </BrowserRouter>
+        </ConfirmProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 }

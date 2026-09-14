@@ -1,13 +1,17 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiAward,
   FiBarChart2,
   FiCalendar,
   FiClock,
+  FiCompass,
   FiFolder,
   FiGrid,
   FiLayers,
+  FiLogOut,
+  FiMenu,
   FiPaperclip,
   FiShield,
   FiSliders,
@@ -16,11 +20,13 @@ import {
   FiTarget,
   FiUser,
   FiUsers,
+  FiX,
 } from 'react-icons/fi';
 import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthContext';
 import { ROLE_LABEL } from '../constants';
 import { NAV } from '../navigation';
+import { TopProgress } from './feedback';
 
 const ICONS: Record<string, IconType> = {
   '/student': FiGrid,
@@ -29,6 +35,7 @@ const ICONS: Record<string, IconType> = {
   '/student/projects': FiFolder,
   '/student/evidences': FiPaperclip,
   '/student/affinity': FiTarget,
+  '/student/recommendations': FiCompass,
   '/student/activities': FiCalendar,
   '/teacher': FiGrid,
   '/teacher/activities': FiCalendar,
@@ -52,16 +59,57 @@ const ICONS: Record<string, IconType> = {
 export default function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  // En pantallas angostas el menu lateral se abre sobre el contenido. En
+  // escritorio siempre esta visible y este estado no interviene.
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   if (!user) return null;
   const groups = NAV[user.role] ?? [];
   const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`}>
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.button
+            type="button"
+            className="sidebar-backdrop"
+            aria-label="Cerrar menú"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMenuOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
       <aside className="sidebar">
         <div className="brand">
-          <strong><img src="/afiniaapp2Login.png" alt="Afinia" className="brand-logo" />Afinia</strong>
+          <strong>
+            <img src="/afiniaapp2Login.png" alt="Afinia" className="brand-logo" />
+            Afinia
+          </strong>
           <span>Perfil estudiantil dinámico</span>
+          <button
+            type="button"
+            className="sidebar-close"
+            onClick={() => setMenuOpen(false)}
+            aria-label="Cerrar menú"
+          >
+            <FiX size={18} />
+          </button>
         </div>
         <nav>
           {groups.map((group) => (
@@ -91,14 +139,31 @@ export default function Layout() {
         <div className="user-box">
           <div>{user.firstName} {user.lastName}</div>
           <div className="role">{ROLE_LABEL[user.role] ?? user.role}</div>
-          <button className="btn btn-secondary btn-sm" style={{ marginTop: '0.6rem', width: '100%' }} onClick={logout}>
-            Cerrar sesión
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ marginTop: '0.6rem', width: '100%' }}
+            onClick={logout}
+          >
+            <FiLogOut size={14} /> Cerrar sesión
           </button>
         </div>
       </aside>
+
       <div className="main">
+        <TopProgress />
         <header className="topbar">
-          <span className="page-title">{currentTitle(user.role, location.pathname)}</span>
+          <div className="flex" style={{ gap: '0.7rem', minWidth: 0 }}>
+            <button
+              type="button"
+              className="menu-toggle"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Abrir menú"
+              aria-expanded={menuOpen}
+            >
+              <FiMenu size={18} />
+            </button>
+            <span className="page-title">{currentTitle(user.role, location.pathname)}</span>
+          </div>
           <div className="user-mini">
             <div className="meta">
               <b>{user.firstName} {user.lastName}</b>

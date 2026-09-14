@@ -12,13 +12,48 @@ export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api',
 });
 
-api.interceptors.request.use((config) => {
-  const token = tokenStore.get();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+/**
+ * Peticiones en curso. La barra de progreso superior se suscribe aqui, de modo
+ * que refleja actividad real de red y no una animacion decorativa.
+ */
+type ActivityListener = (pending: number) => void;
+let pendingRequests = 0;
+const activityListeners = new Set<ActivityListener>();
+const notifyActivity = () => activityListeners.forEach((listener) => listener(pendingRequests));
+
+export const requestActivity = {
+  subscribe(listener: ActivityListener) {
+    activityListeners.add(listener);
+    listener(pendingRequests);
+    return () => {
+      activityListeners.delete(listener);
+    };
+  },
+};
+
+const startRequest = () => {
+  pendingRequests += 1;
+  notifyActivity();
+};
+const endRequest = () => {
+  pendingRequests = Math.max(0, pendingRequests - 1);
+  notifyActivity();
+};
+
+api.interceptors.request.use(
+  (config) => {
+    startRequest();
+    const token = tokenStore.get();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    endRequest();
+    return Promise.reject(error);
+  },
+);
 
 let onUnauthorized: (() => void) | null = null;
 export const setUnauthorizedHandler = (handler: () => void) => {
@@ -26,8 +61,12 @@ export const setUnauthorizedHandler = (handler: () => void) => {
 };
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    endRequest();
+    return response;
+  },
   (error) => {
+    endRequest();
     if (error.response?.status === 401 && onUnauthorized) {
       onUnauthorized();
     }
