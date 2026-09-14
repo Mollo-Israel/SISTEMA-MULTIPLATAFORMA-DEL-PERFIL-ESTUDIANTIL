@@ -2,7 +2,9 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useAsync } from '../../hooks/useAsync';
 import { profileService } from '../../services';
 import { useAuth } from '../../auth/AuthContext';
-import { Screen, Card, H1, Muted, Loading, ErrorText, Badge, Button } from '../../components/ui';
+import {
+  Screen, Card, H1, Muted, ErrorText, Badge, Button, FadeIn, ProgressBar, SkeletonCards,
+} from '../../components/ui';
 import { colors, affinityColor } from '../../theme';
 
 export default function HomeScreen({ navigation }: any) {
@@ -14,7 +16,7 @@ export default function HomeScreen({ navigation }: any) {
       <H1>Hola, {user?.firstName}</H1>
       <Muted>Tu perfil se construye con lo que declaras y tu actividad académica.</Muted>
 
-      {loading && <Loading />}
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
 
       {!loading && !data && (
@@ -26,6 +28,20 @@ export default function HomeScreen({ navigation }: any) {
 
       {data && (
         <>
+          <Card>
+            <ProgressBar
+              value={data.profile.completionPercentage}
+              label="Avance de tu perfil"
+              tone={
+                data.profile.completionPercentage >= 80
+                  ? colors.green
+                  : data.profile.completionPercentage >= 40
+                    ? colors.amber
+                    : colors.bordo
+              }
+            />
+          </Card>
+
           <View style={styles.stats}>
             <Stat value={`${data.profile.completionPercentage}%`} label="Perfil" />
             <Stat value={data.projects.length} label="Proyectos" />
@@ -37,11 +53,13 @@ export default function HomeScreen({ navigation }: any) {
             {data.affinities.length === 0 ? (
               <Muted>Sin afinidades aún. Agrega intereses, habilidades y proyectos.</Muted>
             ) : (
-              data.affinities.slice(0, 4).map((a: any) => (
-                <View key={a.academicAreaId} style={styles.rowBetween}>
-                  <Text>{a.area}</Text>
-                  <Badge color={affinityColor(a.level)}>{a.score} · {a.level}</Badge>
-                </View>
+              data.affinities.slice(0, 4).map((a: any, index: number) => (
+                <FadeIn key={a.academicAreaId} index={index}>
+                  <View style={styles.rowBetween}>
+                    <Text>{a.area}</Text>
+                    <Badge color={affinityColor(a.level)}>{a.score} · {a.level}</Badge>
+                  </View>
+                </FadeIn>
               ))
             )}
           </Card>

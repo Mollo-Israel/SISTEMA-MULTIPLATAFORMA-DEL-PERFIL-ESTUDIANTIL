@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
-import { Pressable, Text, View, StyleSheet } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Text, View, StyleSheet } from 'react-native';
 import { apiError } from '../../api/client';
 import { catalogService, profileService } from '../../services';
-import { Screen, Card, H1, Muted, Field, Button, Loading, ErrorText, Success } from '../../components/ui';
+import {
+  Screen, Card, Muted, Field, Button, Chip, EmptyState, PageHeader, ProgressBar,
+  ResultCount, SearchInput, SkeletonCards,
+} from '../../components/ui';
+import { useToast } from '../../components/feedback';
 import { colors } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 export default function ProfileScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
@@ -11,8 +18,9 @@ export default function ProfileScreen({ navigation }: any) {
   const [areas, setAreas] = useState<any[]>([]);
   const [completion, setCompletion] = useState(0);
   const [form, setForm] = useState({ universityCode: '', semester: '', bio: '', improvementAreaIds: [] as string[] });
-  const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [areaQuery, setAreaQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     Promise.all([catalogService.areas(), profileService.getMine().catch(() => null)])
@@ -29,9 +37,16 @@ export default function ProfileScreen({ navigation }: any) {
           });
         }
       })
-      .catch((e) => setError(apiError(e)))
+      .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const visibleAreas = useMemo(() => {
+    const q = normalize(areaQuery.trim());
+    if (!q) return areas;
+    return areas.filter((a) => normalize(a.name ?? '').includes(q));
+  }, [areas, areaQuery]);
 
   const toggle = (id: string) =>
     setForm((f) => ({
@@ -42,7 +57,7 @@ export default function ProfileScreen({ navigation }: any) {
     }));
 
   const save = async () => {
-    setError(null); setMsg(null);
+    setSaving(true);
     const payload: any = {
       semester: form.semester ? Number(form.semester) : undefined,
       bio: form.bio || undefined,
@@ -52,35 +67,84 @@ export default function ProfileScreen({ navigation }: any) {
       const r = exists ? await profileService.update(payload) : await profileService.create(payload);
       setExists(true);
       setCompletion(r.completionPercentage);
-      setMsg('Perfil guardado.');
-    } catch (e) { setError(apiError(e)); }
+      toast.success(
+        exists ? 'Perfil actualizado.' : 'Perfil creado.',
+        `Tu completitud ahora es del ${r.completionPercentage}%.`,
+      );
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return (
+      <Screen>
+        <SkeletonCards count={3} />
+      </Screen>
+    );
+  }
+
+  const chosen = form.improvementAreaIds.length;
 
   return (
     <Screen>
-      <H1>Completar perfil</H1>
-      <Muted>Completitud actual: {completion}%</Muted>
-      <View style={styles.bar}><View style={[styles.barFill, { width: `${completion}%` }]} /></View>
+      <PageHeader
+        title="Completar perfil"
+        description="Lo que declaras aquí, junto a tu actividad, alimenta tus áreas de afinidad."
+      />
 
       <Card>
-        {error && <ErrorText message={error} />}
-        {msg && <Success message={msg} />}
+        <ProgressBar
+          value={completion}
+          label="Avance de tu perfil"
+          tone={completion >= 80 ? colors.green : completion >= 40 ? colors.amber : colors.bordo}
+        />
+      </Card>
+
+      <Card>
         <Field label="Semestre (1–8)" value={form.semester} onChangeText={(t) => setForm({ ...form, semester: t })} keyboardType="numeric" />
         <Field label="Descripción / bio" value={form.bio} onChangeText={(t) => setForm({ ...form, bio: t })} multiline />
-        <Text style={styles.label}>Áreas donde deseas mejorar</Text>
-        <View style={styles.chips}>
-          {areas.map((a) => {
-            const on = form.improvementAreaIds.includes(a.id);
-            return (
-              <Pressable key={a.id} onPress={() => toggle(a.id)} style={[styles.chip, on && styles.chipOn]}>
-                <Text style={on ? styles.chipOnText : styles.chipText}>{a.name}</Text>
-              </Pressable>
-            );
-          })}
+
+        <View style={styles.areaHead}>
+          <Text style={styles.label}>Áreas donde deseas mejorar</Text>
+          <Muted>{chosen} seleccionada{chosen === 1 ? '' : 's'}</Muted>
         </View>
-        <Button title={exists ? 'Guardar cambios' : 'Crear perfil'} onPress={save} />
+        <SearchInput value={areaQuery} onChangeText={setAreaQuery} placeholder="Buscar área…" />
+        <ResultCount shown={visibleAreas.length} total={areas.length} noun="áreas" />
+
+        {visibleAreas.length === 0 ? (
+          <EmptyState
+            icon="⌕"
+            message={`Ningún área coincide con “${areaQuery}”.`}
+            action={
+              <Button
+                title="Limpiar búsqueda"
+                variant="secondary"
+                small
+                onPress={() => setAreaQuery('')}
+              />
+            }
+          />
+        ) : (
+          <View style={styles.chips}>
+            {visibleAreas.map((a) => (
+              <Chip
+                key={a.id}
+                label={a.name}
+                on={form.improvementAreaIds.includes(a.id)}
+                onPress={() => toggle(a.id)}
+              />
+            ))}
+          </View>
+        )}
+
+        <Button
+          title={exists ? 'Guardar cambios' : 'Crear perfil'}
+          onPress={save}
+          loading={saving}
+        />
       </Card>
 
       <Button title="Registrar intereses" variant="secondary" onPress={() => navigation.navigate('Intereses')} />
@@ -91,12 +155,7 @@ export default function ProfileScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  bar: { height: 8, backgroundColor: colors.gray200, borderRadius: 6, marginVertical: 10, overflow: 'hidden' },
-  barFill: { height: 8, backgroundColor: colors.bordo },
+  areaHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   label: { fontSize: 13, color: colors.gray700, marginBottom: 6, fontWeight: '500' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  chip: { borderWidth: 1, borderColor: colors.gray200, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.white },
-  chipOn: { backgroundColor: colors.bordo, borderColor: colors.bordo },
-  chipText: { color: colors.gray700, fontSize: 13 },
-  chipOnText: { color: colors.white, fontSize: 13 },
 });

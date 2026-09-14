@@ -1,9 +1,16 @@
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { activityService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { Screen, Card, H1, Muted, Loading, ErrorText, EmptyState, Badge } from '../../components/ui';
+import {
+  Screen, Card, Muted, ErrorText, EmptyState, Badge, Button, FadeIn, PageHeader,
+  ResultCount, SearchInput, SkeletonCards,
+} from '../../components/ui';
 import { REGISTRATION_STATUS_LABEL, categoryLabel, lbl } from '../../constants';
 import { colors, registrationColor } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const EXPLANATION: Record<string, string> = {
   interested: 'Marcaste interés. Inscríbete para que el responsable pueda registrar tu asistencia.',
@@ -14,6 +21,17 @@ const EXPLANATION: Record<string, string> = {
 
 export default function MyActivitiesScreen() {
   const { data, loading, error, reload } = useAsync(() => activityService.myRegistrations(), []);
+  const [query, setQuery] = useState('');
+
+  const rows = useMemo(() => {
+    const all = data ?? [];
+    const q = normalize(query.trim());
+    if (!q) return all;
+    return all.filter((r: any) =>
+      [r.activity?.title ?? '', r.activity?.academicArea?.name ?? '', r.activity?.location ?? '']
+        .some((f: string) => normalize(f).includes(q)),
+    );
+  }, [data, query]);
 
   const groups = [
     { key: 'confirmed', title: 'Participación confirmada' },
@@ -24,27 +42,59 @@ export default function MyActivitiesScreen() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Mis actividades</H1>
-      <Muted>Estado de tu participación en cada actividad.</Muted>
+      <PageHeader
+        title="Mis actividades"
+        description="Estado de tu participación en cada actividad."
+      />
 
-      {loading && <Loading />}
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
 
+      {data && data.length > 0 && (
+        <>
+          <SearchInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar por título, área o lugar…"
+          />
+          <ResultCount shown={rows.length} total={data.length} noun="actividades" />
+        </>
+      )}
+
       {data && data.length === 0 && (
-        <EmptyState message="Todavía no te has inscrito ni has marcado interés en ninguna actividad." />
+        <EmptyState
+          icon="☷"
+          message="Todavía no te has inscrito ni has marcado interés en ninguna actividad."
+        />
+      )}
+
+      {data && data.length > 0 && rows.length === 0 && (
+        <EmptyState
+          icon="⌕"
+          message={`Ninguna actividad coincide con “${query}”.`}
+          action={
+            <Button
+              title="Limpiar búsqueda"
+              variant="secondary"
+              small
+              onPress={() => setQuery('')}
+            />
+          }
+        />
       )}
 
       {data &&
         groups.map(({ key, title }) => {
-          const rows = data.filter((r: any) => r.status === key);
-          if (rows.length === 0) return null;
+          const group = rows.filter((r: any) => r.status === key);
+          if (group.length === 0) return null;
           return (
             <View key={key}>
               <Text style={styles.group}>
-                {title} ({rows.length})
+                {title} ({group.length})
               </Text>
-              {rows.map((r: any) => (
-                <Card key={r.registrationId}>
+              {group.map((r: any, index: number) => (
+                <FadeIn key={r.registrationId} index={index}>
+                <Card>
                   <Text style={styles.title}>{r.activity?.title ?? 'Actividad'}</Text>
                   <Muted>
                     {categoryLabel(r.activity?.category ?? '')}
@@ -64,6 +114,7 @@ export default function MyActivitiesScreen() {
                   </View>
                   <Text style={styles.hint}>{EXPLANATION[r.status]}</Text>
                 </Card>
+                </FadeIn>
               ))}
             </View>
           );

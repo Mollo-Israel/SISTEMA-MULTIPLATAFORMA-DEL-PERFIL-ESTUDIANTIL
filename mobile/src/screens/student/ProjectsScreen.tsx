@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import {
@@ -9,17 +9,23 @@ import {
 import {
   Screen,
   Card,
-  H1,
   Muted,
   Field,
   Button,
-  Loading,
-  ErrorText,
+  Chip,
   EmptyState,
-  Success,
+  FadeIn,
   Badge,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { colors } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Borrador',
@@ -55,8 +61,9 @@ export default function ProjectsScreen({ navigation }: any) {
   const [projects, setProjects] = useState<any[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [tab, setTab] = useState<'mine' | 'shared' | 'invites'>('mine');
   const [showForm, setShowForm] = useState(false);
@@ -75,8 +82,9 @@ export default function ProjectsScreen({ navigation }: any) {
 
   useEffect(() => {
     Promise.all([load(), catalogService.areas().then(setAreas)])
-      .catch((e) => setError(apiError(e)))
+      .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   // Al volver del detalle, el portafolio se refresca.
@@ -87,14 +95,9 @@ export default function ProjectsScreen({ navigation }: any) {
     return unsubscribe;
   }, [navigation, load]);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setError(null);
-  };
+  const notify = (t: string, detail?: string) => toast.success(t, detail);
 
   const create = async () => {
-    setError(null);
-    setMsg(null);
     setSaving(true);
     try {
       await projectService.create({
@@ -111,55 +114,76 @@ export default function ProjectsScreen({ navigation }: any) {
       });
       setForm(emptyForm);
       setShowForm(false);
-      notify('Proyecto registrado en tu portafolio.');
+      notify('Proyecto registrado en tu portafolio.', 'Ya suma a tu perfil y a tu afinidad.');
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setSaving(false);
     }
   };
 
-  const respond = async (invitationId: string, decision: 'accept' | 'reject') => {
-    setError(null);
-    setRespondingId(invitationId);
-    try {
-      await projectInvitationService.respond(invitationId, decision);
-      notify(
+  const respond = async (invitation: any, decision: 'accept' | 'reject') => {
+    const title = invitation.project?.title ?? 'el proyecto';
+    const ok = await confirm({
+      title: decision === 'accept' ? 'Aceptar la invitación' : 'Rechazar la invitación',
+      message:
         decision === 'accept'
-          ? 'Invitación aceptada. El proyecto ya forma parte de tu portafolio.'
-          : 'Invitación rechazada.',
+          ? `Pasarás a integrar “${title}” y aparecerá en tu portafolio.`
+          : `Rechazar “${title}” no deja ningún registro en tu portafolio.`,
+      confirmLabel: decision === 'accept' ? 'Aceptar' : 'Rechazar',
+      tone: decision === 'accept' ? 'default' : 'danger',
+    });
+    if (!ok) return;
+    setRespondingId(invitation.id);
+    try {
+      await projectInvitationService.respond(invitation.id, decision);
+      notify(
+        decision === 'accept' ? 'Invitación aceptada.' : 'Invitación rechazada.',
+        decision === 'accept' ? `“${title}” ya forma parte de tu portafolio.` : undefined,
       );
       await load();
       if (decision === 'accept') setTab('shared');
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setRespondingId(null);
     }
   };
 
-  if (loading) return <Loading />;
+  const match = (p: any) => {
+    const q = normalize(query.trim());
+    if (!q) return true;
+    return [p.title ?? '', p.description ?? '', p.academicArea?.name ?? '',
+      (p.technologies ?? []).join(' ')]
+      .some((f: string) => normalize(f).includes(q));
+  };
 
-  const owned = projects.filter((p) => p.isOwner);
-  const shared = projects.filter((p) => !p.isOwner);
+  const allOwned = projects.filter((p) => p.isOwner);
+  const allShared = projects.filter((p) => !p.isOwner);
+  const owned = allOwned.filter(match);
+  const shared = allShared.filter(match);
 
   const TABS = [
-    { key: 'mine' as const, label: `Mis proyectos (${owned.length})` },
-    { key: 'shared' as const, label: `Participo (${shared.length})` },
+    { key: 'mine' as const, label: `Mis proyectos (${allOwned.length})` },
+    { key: 'shared' as const, label: `Participo (${allShared.length})` },
     { key: 'invites' as const, label: `Invitaciones (${invitations.length})` },
   ];
 
+  if (loading) {
+    return (
+      <Screen>
+        <SkeletonCards count={3} />
+      </Screen>
+    );
+  }
+
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <H1>Portafolio</H1>
-      <Muted>
-        Registra tus proyectos académicos, invita integrantes y comparte tu trabajo con tus
-        docentes.
-      </Muted>
-
-      {error && <ErrorText message={error} />}
-      {msg && <Success message={msg} />}
+      <PageHeader
+        title="Portafolio"
+        description="Registra tus proyectos académicos, invita integrantes y comparte tu trabajo con tus docentes."
+      />
 
       <View style={styles.tabs}>
         {TABS.map((t) => (
@@ -172,6 +196,21 @@ export default function ProjectsScreen({ navigation }: any) {
           </Pressable>
         ))}
       </View>
+
+      {tab !== 'invites' && (allOwned.length > 0 || allShared.length > 0) && (
+        <>
+          <SearchInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar por título, área o tecnología…"
+          />
+          <ResultCount
+            shown={tab === 'mine' ? owned.length : shared.length}
+            total={tab === 'mine' ? allOwned.length : allShared.length}
+            noun="proyectos"
+          />
+        </>
+      )}
 
       {/* ---------------- Mis proyectos ---------------- */}
       {tab === 'mine' && (
@@ -202,54 +241,42 @@ export default function ProjectsScreen({ navigation }: any) {
 
               <Text style={styles.label}>Área académica</Text>
               <View style={styles.chips}>
-                <Pressable
+                <Chip
+                  label="Sin área"
+                  on={form.areaId === ''}
                   onPress={() => setForm({ ...form, areaId: '' })}
-                  style={[styles.chip, form.areaId === '' && styles.chipOn]}
-                >
-                  <Text style={form.areaId === '' ? styles.chipOnText : styles.chipText}>
-                    Sin área
-                  </Text>
-                </Pressable>
+                />
                 {areas.map((a: any) => (
-                  <Pressable
+                  <Chip
                     key={a.id}
+                    label={a.name}
+                    on={form.areaId === a.id}
                     onPress={() => setForm({ ...form, areaId: a.id })}
-                    style={[styles.chip, form.areaId === a.id && styles.chipOn]}
-                  >
-                    <Text style={form.areaId === a.id ? styles.chipOnText : styles.chipText}>
-                      {a.name}
-                    </Text>
-                  </Pressable>
+                  />
                 ))}
               </View>
 
               <Text style={styles.label}>Estado</Text>
               <View style={styles.chips}>
                 {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                  <Pressable
+                  <Chip
                     key={value}
+                    label={label}
+                    on={form.status === value}
                     onPress={() => setForm({ ...form, status: value })}
-                    style={[styles.chip, form.status === value && styles.chipOn]}
-                  >
-                    <Text style={form.status === value ? styles.chipOnText : styles.chipText}>
-                      {label}
-                    </Text>
-                  </Pressable>
+                  />
                 ))}
               </View>
 
               <Text style={styles.label}>Visibilidad</Text>
               <View style={styles.chips}>
                 {VISIBILITY_OPTIONS.map((v) => (
-                  <Pressable
+                  <Chip
                     key={v.value}
+                    label={v.label}
+                    on={form.visibility === v.value}
                     onPress={() => setForm({ ...form, visibility: v.value })}
-                    style={[styles.chip, form.visibility === v.value && styles.chipOn]}
-                  >
-                    <Text style={form.visibility === v.value ? styles.chipOnText : styles.chipText}>
-                      {v.label}
-                    </Text>
-                  </Pressable>
+                  />
                 ))}
               </View>
               <Muted>{VISIBILITY_OPTIONS.find((v) => v.value === form.visibility)?.hint}</Muted>
@@ -268,9 +295,10 @@ export default function ProjectsScreen({ navigation }: any) {
               />
 
               <Button
-                title={saving ? 'Guardando…' : 'Crear proyecto'}
+                title="Crear proyecto"
                 onPress={create}
-                disabled={saving || form.title.trim().length < 3}
+                loading={saving}
+                disabled={form.title.trim().length < 3}
               />
               <Button
                 title="Cancelar"
@@ -284,14 +312,32 @@ export default function ProjectsScreen({ navigation }: any) {
           )}
 
           {owned.length === 0 ? (
-            <EmptyState message="Todavía no registras proyectos. Crea el primero con el botón de arriba." />
+            <EmptyState
+              icon={query ? '⌕' : '☰'}
+              message={
+                query
+                  ? `Ningún proyecto tuyo coincide con “${query}”.`
+                  : 'Todavía no registras proyectos. Crea el primero con el botón de arriba.'
+              }
+              action={
+                query ? (
+                  <Button
+                    title="Limpiar búsqueda"
+                    variant="secondary"
+                    small
+                    onPress={() => setQuery('')}
+                  />
+                ) : undefined
+              }
+            />
           ) : (
-            owned.map((p) => (
-              <ProjectCard
-                key={p.id}
-                project={p}
-                onOpen={() => navigation.navigate('DetalleProyecto', { projectId: p.id })}
-              />
+            owned.map((p, index) => (
+              <FadeIn key={p.id} index={index}>
+                <ProjectCard
+                  project={p}
+                  onOpen={() => navigation.navigate('DetalleProyecto', { projectId: p.id })}
+                />
+              </FadeIn>
             ))
           )}
         </>
@@ -304,14 +350,32 @@ export default function ProjectsScreen({ navigation }: any) {
             Proyectos de otros estudiantes en los que participas por haber aceptado su invitación.
           </Muted>
           {shared.length === 0 ? (
-            <EmptyState message="Todavía no participas en proyectos de otros estudiantes." />
+            <EmptyState
+              icon={query ? '⌕' : '☰'}
+              message={
+                query
+                  ? `Ningún proyecto compartido coincide con “${query}”.`
+                  : 'Todavía no participas en proyectos de otros estudiantes.'
+              }
+              action={
+                query ? (
+                  <Button
+                    title="Limpiar búsqueda"
+                    variant="secondary"
+                    small
+                    onPress={() => setQuery('')}
+                  />
+                ) : undefined
+              }
+            />
           ) : (
-            shared.map((p) => (
-              <ProjectCard
-                key={p.id}
-                project={p}
-                onOpen={() => navigation.navigate('DetalleProyecto', { projectId: p.id })}
-              />
+            shared.map((p, index) => (
+              <FadeIn key={p.id} index={index}>
+                <ProjectCard
+                  project={p}
+                  onOpen={() => navigation.navigate('DetalleProyecto', { projectId: p.id })}
+                />
+              </FadeIn>
             ))
           )}
         </>
@@ -325,10 +389,11 @@ export default function ProjectsScreen({ navigation }: any) {
             tu portafolio.
           </Muted>
           {invitations.length === 0 ? (
-            <EmptyState message="No tienes invitaciones pendientes." />
+            <EmptyState icon="✉" message="No tienes invitaciones pendientes." />
           ) : (
-            invitations.map((inv) => (
-              <Card key={inv.id}>
+            invitations.map((inv, index) => (
+              <FadeIn key={inv.id} index={index}>
+              <Card>
                 <Text style={styles.title}>{inv.project?.title ?? 'Proyecto'}</Text>
                 <Muted>
                   Te invita {inv.invitedBy ?? inv.project?.owner ?? 'otro estudiante'}
@@ -350,21 +415,22 @@ export default function ProjectsScreen({ navigation }: any) {
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
                   <View style={{ flex: 1 }}>
                     <Button
-                      title={respondingId === inv.id ? 'Procesando…' : 'Aceptar'}
-                      onPress={() => respond(inv.id, 'accept')}
-                      disabled={respondingId === inv.id}
+                      title="Aceptar"
+                      onPress={() => respond(inv, 'accept')}
+                      loading={respondingId === inv.id}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Button
                       title="Rechazar"
                       variant="secondary"
-                      onPress={() => respond(inv.id, 'reject')}
-                      disabled={respondingId === inv.id}
+                      onPress={() => respond(inv, 'reject')}
+                      loading={respondingId === inv.id}
                     />
                   </View>
                 </View>
               </Card>
+              </FadeIn>
             ))
           )}
         </>
@@ -430,17 +496,6 @@ const styles = StyleSheet.create({
   tabOnText: { color: colors.white, fontSize: 12, fontWeight: '700' },
   label: { fontSize: 13, color: colors.gray700, marginTop: 8, marginBottom: 6, fontWeight: '500' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 20,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    backgroundColor: colors.white,
-  },
-  chipOn: { backgroundColor: colors.bordo, borderColor: colors.bordo },
-  chipText: { color: colors.gray700, fontSize: 12.5 },
-  chipOnText: { color: colors.white, fontSize: 12.5, fontWeight: '600' },
   title: { fontSize: 15.5, fontWeight: '700', color: colors.gray900, marginBottom: 6 },
   desc: { fontSize: 13.5, color: colors.gray700, marginVertical: 6 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },

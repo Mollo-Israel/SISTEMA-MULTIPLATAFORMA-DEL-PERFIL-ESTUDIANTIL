@@ -1,21 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import { catalogService, profileService } from '../../services';
 import {
   Screen,
   Card,
-  H1,
   Muted,
   Field,
   Button,
-  Loading,
-  ErrorText,
   EmptyState,
-  Success,
+  FadeIn,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { LevelPicker } from '../../components/LevelPicker';
 import { colors } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
  * Datos declarativos del perfil relacionados con intereses (RF5).
@@ -29,9 +34,11 @@ export default function InterestsScreen() {
   const [areas, setAreas] = useState<any[]>([]);
   const [values, setValues] = useState<Record<string, number>>({});
   const [freeInterests, setFreeInterests] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
   const [savingAreas, setSavingAreas] = useState(false);
+  const [areaQuery, setAreaQuery] = useState('');
+  const [removing, setRemoving] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   // Alta / edición de un interés en texto libre
   const [newName, setNewName] = useState('');
@@ -56,18 +63,22 @@ export default function InterestsScreen() {
         .catch(() => {}),
       loadFree().catch(() => {}),
     ])
-      .catch((e) => setError(apiError(e)))
+      .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadFree]);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setError(null);
-  };
+  const notify = (t: string, detail?: string) => toast.success(t, detail);
+
+  const visibleAreas = useMemo(() => {
+    const q = normalize(areaQuery.trim());
+    if (!q) return areas;
+    return areas.filter((a) => normalize(a.name ?? '').includes(q));
+  }, [areas, areaQuery]);
+
+  const chosenAreas = Object.values(values).filter((p) => p > 0).length;
 
   const saveAreas = async () => {
-    setError(null);
-    setMsg(null);
     setSavingAreas(true);
     try {
       await profileService.setPreferredAreas(
@@ -75,17 +86,18 @@ export default function InterestsScreen() {
           .filter(([, p]) => p > 0)
           .map(([academicAreaId, priority]) => ({ academicAreaId, priority })),
       );
-      notify('Áreas de preferencia guardadas.');
+      notify(
+        'Áreas de preferencia guardadas.',
+        `${chosenAreas} área${chosenAreas === 1 ? '' : 's'} con prioridad.`,
+      );
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setSavingAreas(false);
     }
   };
 
   const submitInterest = async () => {
-    setError(null);
-    setMsg(null);
     setSavingInterest(true);
     try {
       if (editingId) {
@@ -106,7 +118,7 @@ export default function InterestsScreen() {
       setEditingId(null);
       await loadFree();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setSavingInterest(false);
     }
@@ -118,34 +130,45 @@ export default function InterestsScreen() {
     setNewDescription(i.description ?? '');
   };
 
-  const removeInterest = async (id: string) => {
-    setError(null);
+  const removeInterest = async (interest: any) => {
+    const ok = await confirm({
+      title: 'Quitar interés',
+      message: `Se eliminará “${interest.name}” de tu perfil. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Quitar',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setRemoving(interest.id);
     try {
-      await profileService.removeFreeInterest(id);
+      await profileService.removeFreeInterest(interest.id);
       notify('Interés eliminado.');
-      if (editingId === id) {
+      if (editingId === interest.id) {
         setEditingId(null);
         setNewName('');
         setNewDescription('');
       }
       await loadFree();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
+    } finally {
+      setRemoving(null);
     }
   };
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return (
+      <Screen>
+        <SkeletonCards count={3} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
-      <H1>Intereses y áreas de preferencia</H1>
-      <Muted>
-        Los intereses los escribes con tus palabras. Las áreas de preferencia salen del catálogo de
-        la carrera y llevan una prioridad.
-      </Muted>
-
-      {error && <ErrorText message={error} />}
-      {msg && <Success message={msg} />}
+      <PageHeader
+        title="Intereses y áreas de preferencia"
+        description="Los intereses los escribes con tus palabras. Las áreas de preferencia salen del catálogo de la carrera y llevan una prioridad."
+      />
 
       <Card title={editingId ? 'Editar interés' : 'Agregar un interés'}>
         <Field
@@ -162,9 +185,10 @@ export default function InterestsScreen() {
           multiline
         />
         <Button
-          title={savingInterest ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Agregar interés'}
+          title={editingId ? 'Guardar cambios' : 'Agregar interés'}
           onPress={submitInterest}
-          disabled={savingInterest || newName.trim().length < 3}
+          loading={savingInterest}
+          disabled={newName.trim().length < 3}
         />
         {editingId && (
           <Button
@@ -181,44 +205,80 @@ export default function InterestsScreen() {
 
       <Card title={`Mis intereses (${freeInterests.length})`}>
         {freeInterests.length === 0 ? (
-          <EmptyState message="Todavía no registras intereses. Agrega el primero arriba." />
+          <EmptyState
+            icon="✎"
+            message="Todavía no registras intereses. Agrega el primero arriba."
+          />
         ) : (
-          freeInterests.map((i) => (
-            <View key={i.id} style={styles.interestRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.interestName}>{i.name}</Text>
-                {i.description ? <Text style={styles.interestDesc}>{i.description}</Text> : null}
+          freeInterests.map((i, index) => (
+            <FadeIn key={i.id} index={index}>
+              <View style={styles.interestRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.interestName}>{i.name}</Text>
+                  {i.description ? <Text style={styles.interestDesc}>{i.description}</Text> : null}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <Pressable onPress={() => startEdit(i)} hitSlop={8}>
+                    <Text style={styles.action}>Editar</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => removeInterest(i)}
+                    hitSlop={8}
+                    disabled={removing === i.id}
+                  >
+                    <Text style={[styles.action, { color: colors.red }]}>
+                      {removing === i.id ? 'Quitando…' : 'Quitar'}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                <Pressable onPress={() => startEdit(i)} hitSlop={8}>
-                  <Text style={styles.action}>Editar</Text>
-                </Pressable>
-                <Pressable onPress={() => removeInterest(i.id)} hitSlop={8}>
-                  <Text style={[styles.action, { color: colors.red }]}>Quitar</Text>
-                </Pressable>
-              </View>
-            </View>
+            </FadeIn>
           ))
         )}
       </Card>
 
-      <Card title="Áreas de preferencia">
+      <Card title={`Áreas de preferencia (${chosenAreas} con prioridad)`}>
         <Muted>Prioridad de 1 a 5 (— para ninguna).</Muted>
+
         <View style={{ marginTop: 10 }}>
-          {areas.map((a) => (
-            <View key={a.id} style={styles.row}>
-              <Text style={styles.name}>{a.name}</Text>
-              <LevelPicker
-                value={values[a.id] ?? 0}
-                onChange={(v) => setValues({ ...values, [a.id]: v })}
-              />
-            </View>
-          ))}
+          <SearchInput
+            value={areaQuery}
+            onChangeText={setAreaQuery}
+            placeholder="Buscar área…"
+          />
+          <ResultCount shown={visibleAreas.length} total={areas.length} noun="áreas" />
+        </View>
+
+        <View>
+          {visibleAreas.length === 0 ? (
+            <EmptyState
+              icon="⌕"
+              message={`Ningún área coincide con “${areaQuery}”.`}
+              action={
+                <Button
+                  title="Limpiar búsqueda"
+                  variant="secondary"
+                  small
+                  onPress={() => setAreaQuery('')}
+                />
+              }
+            />
+          ) : (
+            visibleAreas.map((a) => (
+              <View key={a.id} style={styles.row}>
+                <Text style={styles.name}>{a.name}</Text>
+                <LevelPicker
+                  value={values[a.id] ?? 0}
+                  onChange={(v) => setValues({ ...values, [a.id]: v })}
+                />
+              </View>
+            ))
+          )}
         </View>
         <Button
-          title={savingAreas ? 'Guardando…' : 'Guardar áreas de preferencia'}
+          title="Guardar áreas de preferencia"
           onPress={saveAreas}
-          disabled={savingAreas}
+          loading={savingAreas}
         />
       </Card>
     </Screen>

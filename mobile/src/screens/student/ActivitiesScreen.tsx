@@ -6,18 +6,25 @@ import { useAsync } from '../../hooks/useAsync';
 import {
   Screen,
   Card,
-  H1,
   Muted,
   Button,
-  Loading,
+  Chip,
   ErrorText,
   EmptyState,
-  Success,
+  FadeIn,
   Badge,
   Field,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
 import { colors } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const TYPE_FILTERS = [
   { value: '', label: 'Todas' },
@@ -76,10 +83,23 @@ export default function ActivitiesScreen({ navigation }: any) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [detailBusy, setDetailBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
-  const filtered = data ?? [];
+  // Los filtros del RF8 los aplica el servidor; la busqueda por texto es
+  // local, sobre lo que ya vino, para que responda a cada tecla.
+  const all = data ?? [];
+  const filtered = useMemo(() => {
+    const q = normalize(query.trim());
+    if (!q) return all;
+    return all.filter((a: any) =>
+      [a.title, a.description ?? '', a.location ?? '', a.category?.name ?? '',
+        a.academicArea?.name ?? '']
+        .some((f: string) => normalize(f).includes(q)),
+    );
+  }, [all, query]);
 
   // Categorías del catálogo que aplican al tipo elegido (RF4).
   const usableCategories = categories.filter(
@@ -95,36 +115,57 @@ export default function ActivitiesScreen({ navigation }: any) {
     setExpanded(id);
     setDetail(null);
     setDetailBusy(true);
-    setErr(null);
     try {
       setDetail(await activityService.get(id));
     } catch (e) {
-      setErr(apiError(e, 'No se pudo cargar el detalle.'));
+      toast.error(apiError(e, 'No se pudo cargar el detalle.'));
+      setExpanded(null);
     } finally {
       setDetailBusy(false);
     }
   };
 
-  const act = async (fn: () => Promise<unknown>, okMsg: string, id: string) => {
-    setMsg(null);
-    setErr(null);
+  const act = async (
+    fn: () => Promise<unknown>,
+    okMsg: string,
+    id: string,
+    detailText?: string,
+  ) => {
+    setBusy(id);
     try {
       await fn();
-      setMsg(okMsg);
+      toast.success(okMsg, detailText);
       setDetail(await activityService.get(id));
       reload();
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
+    } finally {
+      setBusy(null);
     }
+  };
+
+  /** Inscribirse compromete un cupo: se confirma antes de enviarlo. */
+  const enrol = async (a: any) => {
+    const ok = await confirm({
+      title: 'Solicitar inscripción',
+      message: `Vas a solicitar un lugar en “${a.title}”. El responsable debe aprobarlo, y tu participación solo cuenta cuando te la confirmen.`,
+      confirmLabel: 'Solicitar inscripción',
+    });
+    if (!ok) return;
+    act(
+      () => activityService.register(a.id),
+      'Inscripción enviada.',
+      a.id,
+      'Queda pendiente de aprobación del responsable.',
+    );
   };
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Actividades</H1>
-      <Muted>
-        Marca interés o inscríbete. Tu participación la confirma el responsable de la actividad y
-        alimenta tu perfil dinámico.
-      </Muted>
+      <PageHeader
+        title="Actividades"
+        description="Marca interés o inscríbete. Tu participación la confirma el responsable de la actividad y alimenta tu perfil dinámico."
+      />
 
       <Button
         title="Ver mis actividades"
@@ -132,18 +173,22 @@ export default function ActivitiesScreen({ navigation }: any) {
         onPress={() => navigation.navigate('MisActividades')}
       />
 
-      {msg && <Success message={msg} />}
-      {err && <ErrorText message={err} />}
+      <View style={{ marginTop: 12 }}>
+        <SearchInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Buscar por título, lugar, categoría o área…"
+        />
+      </View>
 
       <View style={styles.filterRow}>
         {TYPE_FILTERS.map((f) => (
-          <Pressable
+          <Chip
             key={f.value || 'all'}
+            label={f.label}
+            on={type === f.value}
             onPress={() => setType(f.value)}
-            style={[styles.filter, type === f.value && styles.filterOn]}
-          >
-            <Text style={type === f.value ? styles.filterOnText : styles.filterText}>{f.label}</Text>
-          </Pressable>
+          />
         ))}
       </View>
 
@@ -151,22 +196,14 @@ export default function ActivitiesScreen({ navigation }: any) {
         <>
           <Text style={styles.filterLabel}>Categoría</Text>
           <View style={styles.filterRow}>
-            <Pressable
-              onPress={() => setCategoryId('')}
-              style={[styles.filter, categoryId === '' && styles.filterOn]}
-            >
-              <Text style={categoryId === '' ? styles.filterOnText : styles.filterText}>Todas</Text>
-            </Pressable>
+            <Chip label="Todas" on={categoryId === ''} onPress={() => setCategoryId('')} />
             {usableCategories.map((c: any) => (
-              <Pressable
+              <Chip
                 key={c.id}
+                label={c.name}
+                on={categoryId === c.id}
                 onPress={() => setCategoryId(categoryId === c.id ? '' : c.id)}
-                style={[styles.filter, categoryId === c.id && styles.filterOn]}
-              >
-                <Text style={categoryId === c.id ? styles.filterOnText : styles.filterText}>
-                  {c.name}
-                </Text>
-              </Pressable>
+              />
             ))}
           </View>
         </>
@@ -176,22 +213,14 @@ export default function ActivitiesScreen({ navigation }: any) {
         <>
           <Text style={styles.filterLabel}>Área académica</Text>
           <View style={styles.filterRow}>
-            <Pressable
-              onPress={() => setAreaId('')}
-              style={[styles.filter, areaId === '' && styles.filterOn]}
-            >
-              <Text style={areaId === '' ? styles.filterOnText : styles.filterText}>Todas</Text>
-            </Pressable>
+            <Chip label="Todas" on={areaId === ''} onPress={() => setAreaId('')} />
             {areas.map((a: any) => (
-              <Pressable
+              <Chip
                 key={a.id}
+                label={a.name}
+                on={areaId === a.id}
                 onPress={() => setAreaId(areaId === a.id ? '' : a.id)}
-                style={[styles.filter, areaId === a.id && styles.filterOn]}
-              >
-                <Text style={areaId === a.id ? styles.filterOnText : styles.filterText}>
-                  {a.name}
-                </Text>
-              </Pressable>
+              />
             ))}
           </View>
         </>
@@ -200,15 +229,12 @@ export default function ActivitiesScreen({ navigation }: any) {
       <Text style={styles.filterLabel}>Modalidad</Text>
       <View style={styles.filterRow}>
         {MODALITY_FILTERS.map((m) => (
-          <Pressable
+          <Chip
             key={m.value || 'all'}
+            label={m.label}
+            on={modality === m.value}
             onPress={() => setModality(m.value)}
-            style={[styles.filter, modality === m.value && styles.filterOn]}
-          >
-            <Text style={modality === m.value ? styles.filterOnText : styles.filterText}>
-              {m.label}
-            </Text>
-          </Pressable>
+          />
         ))}
       </View>
 
@@ -226,26 +252,49 @@ export default function ActivitiesScreen({ navigation }: any) {
         <Button title="Limpiar filtros" variant="secondary" onPress={clearFilters} />
       )}
 
-      {loading && <Loading />}
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
+
+      {!loading && !error && all.length > 0 && (
+        <View style={{ marginTop: 10 }}>
+          <ResultCount shown={filtered.length} total={all.length} noun="actividades" />
+        </View>
+      )}
 
       {!loading && !error && filtered.length === 0 && (
         <EmptyState
+          icon={query || hasFilters ? '⌕' : '☷'}
           message={
-            hasFilters
-              ? 'Ninguna actividad coincide con los filtros elegidos.'
-              : 'Todavía no hay actividades publicadas.'
+            query
+              ? `Ninguna actividad coincide con “${query}”.`
+              : hasFilters
+                ? 'Ninguna actividad coincide con los filtros elegidos.'
+                : 'Todavía no hay actividades publicadas.'
+          }
+          action={
+            query || hasFilters ? (
+              <Button
+                title="Quitar filtros"
+                variant="secondary"
+                small
+                onPress={() => {
+                  setQuery('');
+                  clearFilters();
+                }}
+              />
+            ) : undefined
           }
         />
       )}
 
-      {filtered.map((a: any) => {
+      {filtered.map((a: any, index: number) => {
         const isOpen = expanded === a.id;
         const d = isOpen ? detail : null;
         const blocked = d?.registrationBlockReason ?? a.registrationBlockReason;
         const mine = d?.myRegistration;
         return (
-          <Card key={a.id}>
+          <FadeIn key={a.id} index={index}>
+          <Card>
             <Pressable onPress={() => open(a.id)}>
               <View style={styles.badges}>
                 <Badge color={a.type === 'academica' ? colors.bordo : colors.amber}>
@@ -268,7 +317,7 @@ export default function ActivitiesScreen({ navigation }: any) {
               <Text style={styles.toggle}>{isOpen ? 'Ocultar detalle ▲' : 'Ver detalle ▼'}</Text>
             </Pressable>
 
-            {isOpen && detailBusy && <Loading />}
+            {isOpen && detailBusy && <SkeletonCards count={1} />}
 
             {isOpen && d && (
               <View style={styles.detail}>
@@ -338,19 +387,24 @@ export default function ActivitiesScreen({ navigation }: any) {
                       <Button
                         title="Me interesa"
                         variant="secondary"
+                        loading={busy === a.id}
                         disabled={mine?.status === 'interested'}
                         onPress={() =>
-                          act(() => activityService.registerInterest(a.id), 'Interés registrado.', a.id)
+                          act(
+                            () => activityService.registerInterest(a.id),
+                            'Interés registrado.',
+                            a.id,
+                            `“${a.title}” quedó marcada como de tu interés.`,
+                          )
                         }
                       />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Button
                         title="Inscribirme"
+                        loading={busy === a.id}
                         disabled={mine?.status === 'registered'}
-                        onPress={() =>
-                          act(() => activityService.register(a.id), 'Inscripción enviada.', a.id)
-                        }
+                        onPress={() => enrol(a)}
                       />
                     </View>
                   </View>
@@ -358,6 +412,7 @@ export default function ActivitiesScreen({ navigation }: any) {
               </View>
             )}
           </Card>
+          </FadeIn>
         );
       })}
     </Screen>
@@ -375,17 +430,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   dateRow: { flexDirection: 'row', gap: 10 },
-  filter: {
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.white,
-  },
-  filterOn: { backgroundColor: colors.bordo, borderColor: colors.bordo },
-  filterText: { color: colors.gray700, fontSize: 12.5 },
-  filterOnText: { color: colors.white, fontSize: 12.5, fontWeight: '600' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   title: { fontSize: 15.5, fontWeight: '700', color: colors.gray900, marginBottom: 3 },
   toggle: { color: colors.bordo, fontSize: 12.5, fontWeight: '600', marginTop: 8 },
