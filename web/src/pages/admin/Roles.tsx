@@ -1,16 +1,24 @@
 import { useAsync } from '../../hooks/useAsync';
 import { adminService } from '../../services';
-import { AsyncView, Card } from '../../components/ui';
+import { AsyncView, Card, PageHeader, SkeletonTable } from '../../components/ui';
 import { ROLE_LABEL } from '../../constants';
 
 export default function AdminRolesPage() {
   const { data, loading, error } = useAsync(() => adminService.roles(), []);
   return (
     <div>
-      <h1>Roles del sistema</h1>
-      <p className="muted">Catálogo de roles. La asignación se realiza al crear o editar usuarios.</p>
+      <PageHeader
+        title="Roles del sistema"
+        description="Catálogo de roles. La asignación se realiza al crear o editar usuarios."
+      />
       <Card>
-        <AsyncView loading={loading} error={error} data={data} isEmpty={(d: any) => d.length === 0}>
+        <AsyncView
+          loading={loading}
+          error={error}
+          data={data}
+          skeleton={<SkeletonTable rows={5} columns={2} />}
+          isEmpty={(d: any) => d.length === 0}
+        >
           {(roles: any) => (
             <table>
               <thead><tr><th>Rol</th><th>Descripción</th></tr></thead>

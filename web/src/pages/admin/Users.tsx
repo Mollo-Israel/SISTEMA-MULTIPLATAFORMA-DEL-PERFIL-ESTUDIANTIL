@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { FiSearch, FiEdit2, FiX, FiCheck } from 'react-icons/fi';
+import { FiCheck, FiEdit2, FiPlus, FiSearch, FiSliders, FiUserPlus, FiUsers } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { adminService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { AsyncView, Card, Badge } from '../../components/ui';
-import { useConfirm } from '../../components/feedback';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
+  SkeletonTable,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, SEMESTERS } from '../../constants';
 import type { PublicUser } from '../../services/types';
 
@@ -28,27 +31,20 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PublicUser | null>(null);
   const [semesterTarget, setSemesterTarget] = useState<PublicUser | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
 
-  const notify = (text: string) => {
-    setMsg(text);
-    setErr(null);
-    window.setTimeout(() => setMsg(null), 4000);
-  };
+  const notify = (text: string, detail?: string) => toast.success(text, detail);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMsg(null);
-    setErr(null);
     setCreating(true);
     try {
       await adminService.createUser(form);
       setForm(emptyForm);
-      notify('Usuario institucional creado.');
+      notify('Usuario institucional creado.', `${form.email} ya puede iniciar sesión.`);
       reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setCreating(false);
     }
@@ -69,26 +65,24 @@ export default function AdminUsersPage() {
       });
       if (!ok) return;
     }
-    setErr(null);
     try {
       await adminService.setActive(user.id, activate);
-      notify(activate ? 'Cuenta activada.' : 'Cuenta desactivada.');
+      notify(
+        activate ? 'Cuenta activada.' : 'Cuenta desactivada.',
+        `${user.firstName} ${user.lastName}`,
+      );
       reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     }
   };
 
   return (
     <div>
-      <h1>Gestión de usuarios</h1>
-      <p className="muted">
-        Alta y control de acceso de los usuarios institucionales. Los estudiantes se registran
-        por su cuenta desde la aplicación móvil.
-      </p>
-
-      {msg && <div className="alert alert-success">{msg}</div>}
-      {err && <div className="alert alert-error">{err}</div>}
+      <PageHeader
+        title="Gestión de usuarios"
+        description="Alta y control de acceso de los usuarios institucionales. Los estudiantes se registran por su cuenta desde la aplicación móvil."
+      />
 
       <Card title="Crear usuario institucional">
         <form onSubmit={create}>
@@ -144,9 +138,9 @@ export default function AdminUsersPage() {
               </select>
             </div>
           </div>
-          <button className="btn btn-primary" disabled={creating}>
-            {creating ? 'Creando…' : 'Crear usuario'}
-          </button>
+          <Button type="submit" loading={creating} icon={<FiUserPlus size={15} />}>
+            Crear usuario
+          </Button>
         </form>
       </Card>
 
@@ -160,26 +154,26 @@ export default function AdminUsersPage() {
               setApplied(search);
             }}
           >
-            <input
+            <SearchInput
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o correo"
-              style={{ minWidth: 240 }}
+              onChange={setSearch}
+              placeholder="Buscar por nombre o correo…"
             />
-            <button className="btn btn-secondary btn-sm" type="submit">
-              <FiSearch /> Buscar
-            </button>
+            <Button type="submit" variant="secondary" size="sm" icon={<FiSearch size={14} />}>
+              Buscar
+            </Button>
             {applied && (
-              <button
+              <Button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setSearch('');
                   setApplied('');
                 }}
               >
                 Limpiar
-              </button>
+              </Button>
             )}
           </form>
         }
@@ -188,14 +182,35 @@ export default function AdminUsersPage() {
           loading={loading}
           error={error}
           data={data}
+          skeleton={<SkeletonTable rows={6} columns={6} />}
           isEmpty={(d) => d.length === 0}
-          emptyMessage={
-            applied
-              ? `Ningún usuario coincide con “${applied}”.`
-              : 'Todavía no hay usuarios registrados.'
+          empty={
+            applied ? (
+              <EmptyState
+                icon={<FiSearch size={22} />}
+                message={`Ningún usuario coincide con “${applied}”.`}
+                action={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setSearch('');
+                      setApplied('');
+                    }}
+                  >
+                    Limpiar búsqueda
+                  </Button>
+                }
+              />
+            ) : undefined
           }
+          emptyMessage="Todavía no hay usuarios registrados."
         >
           {(users) => (
+            <>
+            <div style={{ marginBottom: '0.6rem' }}>
+              <ResultCount shown={users.length} total={users.length} noun="usuarios" />
+            </div>
             <table>
               <thead>
                 <tr>
@@ -227,12 +242,14 @@ export default function AdminUsersPage() {
                           ) : (
                             <span className="muted">Sin semestres</span>
                           )}
-                          <button
-                            className="btn btn-ghost btn-sm"
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setSemesterTarget(u)}
+                            icon={<FiSliders size={13} />}
                           >
                             Configurar
-                          </button>
+                          </Button>
                         </div>
                       ) : (
                         <span className="muted">—</span>
@@ -252,15 +269,20 @@ export default function AdminUsersPage() {
                         >
                           <FiEdit2 />
                         </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => toggle(u)}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => toggle(u)}
+                        >
                           {u.status === 'active' ? 'Desactivar' : 'Activar'}
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </AsyncView>
       </Card>
@@ -274,7 +296,7 @@ export default function AdminUsersPage() {
             notify('Usuario actualizado.');
             reload();
           }}
-          onError={setErr}
+          onError={(m) => toast.error(m)}
         />
       )}
 
@@ -291,7 +313,7 @@ export default function AdminUsersPage() {
             );
             reload();
           }}
-          onError={setErr}
+          onError={(m) => toast.error(m)}
         />
       )}
     </div>
@@ -299,49 +321,6 @@ export default function AdminUsersPage() {
 }
 
 /* ------------------------------------------------------------------ */
-
-function Dialog({
-  title,
-  subtitle,
-  onClose,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
-      <div
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
-        <div className="modal-head">
-          <div>
-            <h3>{title}</h3>
-            {subtitle && <span className="muted">{subtitle}</span>}
-          </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Cerrar">
-            <FiX />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function EditUserDialog({
   user,
@@ -377,7 +356,7 @@ function EditUserDialog({
   const canChangeRole = INSTITUTIONAL_ROLES.includes(user.role as RolNombre);
 
   return (
-    <Dialog title="Editar usuario" subtitle={user.email} onClose={onClose}>
+    <Modal title="Editar usuario" subtitle={user.email} onClose={onClose}>
       <form onSubmit={submit}>
         <div className="row">
           <div className="field">
@@ -426,15 +405,15 @@ function EditUserDialog({
           )}
         </div>
         <div className="flex" style={{ justifyContent: 'flex-end', gap: '0.5rem' }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose}>
             Cancelar
-          </button>
-          <button className="btn btn-primary" disabled={saving}>
-            {saving ? 'Guardando…' : 'Guardar cambios'}
-          </button>
+          </Button>
+          <Button type="submit" loading={saving}>
+            Guardar cambios
+          </Button>
         </div>
       </form>
-    </Dialog>
+    </Modal>
   );
 }
 
@@ -476,7 +455,7 @@ function SemesterDialog({
   };
 
   return (
-    <Dialog
+    <Modal
       title="Semestres habilitados"
       subtitle={`${teacher.firstName} ${teacher.lastName} · Docente`}
       onClose={onClose}
@@ -487,7 +466,7 @@ function SemesterDialog({
       </p>
 
       {loading ? (
-        <div className="state">Cargando…</div>
+        <SkeletonTable rows={2} columns={4} />
       ) : (
         <div className="semester-grid">
           {SEMESTERS.map((s) => {
@@ -509,22 +488,24 @@ function SemesterDialog({
       )}
 
       <div className="flex between mt">
-        <button
+        <Button
           type="button"
-          className="btn btn-ghost btn-sm"
+          variant="ghost"
+          size="sm"
           onClick={() => setSelected(selected.length === SEMESTERS.length ? [] : [...SEMESTERS])}
+          icon={selected.length === SEMESTERS.length ? undefined : <FiPlus size={13} />}
         >
           {selected.length === SEMESTERS.length ? 'Quitar todos' : 'Seleccionar todos'}
-        </button>
+        </Button>
         <div className="flex" style={{ gap: '0.5rem' }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose}>
             Cancelar
-          </button>
-          <button className="btn btn-primary" onClick={submit} disabled={saving || loading}>
-            {saving ? 'Guardando…' : 'Guardar'}
-          </button>
+          </Button>
+          <Button onClick={submit} loading={saving} disabled={loading} icon={<FiUsers size={15} />}>
+            Guardar
+          </Button>
         </div>
       </div>
-    </Dialog>
+    </Modal>
   );
 }

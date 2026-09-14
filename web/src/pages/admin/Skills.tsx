@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { FiPlus, FiSave, FiSearch, FiTool, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill } from '../../services/types';
-import { AsyncView, Card, Badge } from '../../components/ui';
-import { useConfirm } from '../../components/feedback';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
+  SkeletonTable,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const emptyForm = { name: '', academicAreaId: '' };
 
@@ -14,22 +21,26 @@ export default function AdminSkillsPage() {
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<Skill | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const toast = useToast();
 
   useEffect(() => {
     catalogService.areas().then(setAreas).catch(() => {});
   }, []);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setErr(null);
-    window.setTimeout(() => setMsg(null), 4000);
-  };
+  const notify = (t: string) => toast.success(t);
+
+  const visible = useMemo(() => {
+    const q = normalize(query.trim());
+    const rows = data ?? [];
+    if (!q) return rows;
+    return rows.filter((s) =>
+      [s.name, s.academicArea?.name ?? ''].some((field) => normalize(field).includes(q)),
+    );
+  }, [data, query]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErr(null);
     setSaving(true);
     const payload = { name: form.name, academicAreaId: form.academicAreaId || undefined };
     try {
@@ -44,7 +55,7 @@ export default function AdminSkillsPage() {
       setEditing(null);
       reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setSaving(false);
     }
@@ -69,40 +80,37 @@ export default function AdminSkillsPage() {
       });
       if (!ok) return;
     }
-    setErr(null);
     try {
       await adminService.updateSkill(skill.id, { isActive: !skill.isActive });
       notify(skill.isActive ? 'Habilidad dada de baja.' : 'Habilidad reactivada.');
       reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     }
   };
 
   return (
     <div>
-      <h1>Catálogo de habilidades</h1>
-      <p className="muted">
-        Habilidades que los estudiantes pueden declarar con un nivel de 1 a 5. El área asociada es
-        la que recibe puntaje en el motor de afinidad.
-      </p>
-
-      {msg && <div className="alert alert-success">{msg}</div>}
-      {err && <div className="alert alert-error">{err}</div>}
+      <PageHeader
+        title="Catálogo de habilidades"
+        description="Habilidades que los estudiantes pueden declarar con un nivel de 1 a 5. El área asociada es la que recibe puntaje en el motor de afinidad."
+      />
 
       <Card
         title={editing ? `Editar “${editing.name}”` : 'Agregar habilidad'}
         actions={
           editing && (
-            <button
-              className="btn btn-ghost btn-sm"
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<FiX size={14} />}
               onClick={() => {
                 setEditing(null);
                 setForm(emptyForm);
               }}
             >
               Cancelar edición
-            </button>
+            </Button>
           )
         }
       >
@@ -132,21 +140,57 @@ export default function AdminSkillsPage() {
               </select>
             </div>
           </div>
-          <button className="btn btn-primary" disabled={saving}>
-            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear habilidad'}
-          </button>
+          <Button type="submit" loading={saving} icon={editing ? <FiSave size={15} /> : <FiPlus size={15} />}>
+            {editing ? 'Guardar cambios' : 'Crear habilidad'}
+          </Button>
         </form>
       </Card>
 
-      <Card title="Habilidades registradas">
+      <Card
+        title="Habilidades registradas"
+        actions={
+          (data ?? []).length > 0 ? (
+            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              <SearchInput
+                value={query}
+                onChange={setQuery}
+                placeholder="Buscar habilidad o área…"
+              />
+              <ResultCount
+                shown={visible.length}
+                total={(data ?? []).length}
+                noun="habilidades"
+              />
+            </div>
+          ) : undefined
+        }
+      >
         <AsyncView
           loading={loading}
           error={error}
           data={data}
+          skeleton={<SkeletonTable rows={5} columns={4} />}
           isEmpty={(d) => d.length === 0}
+          empty={
+            <EmptyState
+              icon={<FiTool size={22} />}
+              message="Todavía no hay habilidades en el catálogo."
+            />
+          }
           emptyMessage="Todavía no hay habilidades en el catálogo."
         >
-          {(skills) => (
+          {() =>
+            visible.length === 0 ? (
+              <EmptyState
+                icon={<FiSearch size={22} />}
+                message={`Ninguna habilidad coincide con “${query}”.`}
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
+                    Limpiar búsqueda
+                  </Button>
+                }
+              />
+            ) : (
             <table>
               <thead>
                 <tr>
@@ -157,7 +201,7 @@ export default function AdminSkillsPage() {
                 </tr>
               </thead>
               <tbody>
-                {skills.map((s) => (
+                {visible.map((s) => (
                   <tr key={s.id} className={s.isActive ? '' : 'is-inactive'}>
                     <td>{s.name}</td>
                     <td className="muted">{s.academicArea?.name ?? '—'}</td>
@@ -168,19 +212,20 @@ export default function AdminSkillsPage() {
                     </td>
                     <td>
                       <div className="flex" style={{ gap: '0.35rem' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => startEdit(s)}>
+                        <Button variant="secondary" size="sm" onClick={() => startEdit(s)}>
                           Editar
-                        </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(s)}>
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => toggleActive(s)}>
                           {s.isActive ? 'Dar de baja' : 'Reactivar'}
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
+            )
+          }
         </AsyncView>
       </Card>
     </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { FiInbox, FiSearch, FiX } from 'react-icons/fi';
 
 /**
@@ -164,6 +164,73 @@ export function AsyncView<T>({
   if (!data) return <>{nothing}</>;
   if (isEmpty && isEmpty(data)) return <>{nothing}</>;
   return <>{children(data)}</>;
+}
+
+// ===========================================================================
+//  Modal
+// ===========================================================================
+
+/**
+ * Dialogo centrado, con la misma entrada que el modal de confirmacion para que
+ * todas las ventanas del sistema se sientan iguales. Escape y el fondo cierran.
+ */
+export function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  width,
+}: {
+  title: string;
+  subtitle?: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+  width?: number;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="modal-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        role="presentation"
+      >
+        <motion.div
+          className="modal"
+          style={width ? { maxWidth: width } : undefined}
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label={title}
+          initial={{ opacity: 0, y: 12, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.98 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        >
+          <div className="modal-head">
+            <div>
+              <h3>{title}</h3>
+              {subtitle && <span className="muted">{subtitle}</span>}
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Cerrar">
+              <FiX />
+            </button>
+          </div>
+          {children}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {

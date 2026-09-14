@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { FiAward, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, GamificationCriterion } from '../../services/types';
-import { AsyncView, Card, Badge } from '../../components/ui';
-import { useConfirm } from '../../components/feedback';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
+  SkeletonTable,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { GAMIFICATION_TRIGGERS, lbl } from '../../constants';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const TRIGGER_LABEL: Record<string, string> = Object.fromEntries(
   GAMIFICATION_TRIGGERS.map((t) => [t.value, t.label]),
@@ -26,22 +33,28 @@ export default function AdminGamificationPage() {
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<GamificationCriterion | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const toast = useToast();
 
   useEffect(() => {
     catalogService.areas().then(setAreas).catch(() => {});
   }, []);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setErr(null);
-    window.setTimeout(() => setMsg(null), 4000);
-  };
+  const notify = (t: string) => toast.success(t);
+
+  const visible = useMemo(() => {
+    const q = normalize(query.trim());
+    const rows = data ?? [];
+    if (!q) return rows;
+    return rows.filter((c) =>
+      [c.code, c.name, c.description ?? '', lbl(TRIGGER_LABEL, c.trigger),
+        c.academicArea?.name ?? '']
+        .some((field) => normalize(field).includes(q)),
+    );
+  }, [data, query]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErr(null);
     setSaving(true);
     const payload = {
       code: form.code,
@@ -63,7 +76,7 @@ export default function AdminGamificationPage() {
       setEditing(null);
       reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setSaving(false);
     }
@@ -94,41 +107,37 @@ export default function AdminGamificationPage() {
       });
       if (!ok) return;
     }
-    setErr(null);
     try {
       await adminService.updateCriterion(c.id, { isActive: !c.isActive });
       notify(c.isActive ? 'Criterio desactivado.' : 'Criterio activado.');
       reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     }
   };
 
   return (
     <div>
-      <h1>Criterios de gamificación</h1>
-      <p className="muted">
-        Define qué hechos del sistema otorgan puntos y cuántos. Los criterios se guardan y se
-        administran aquí; el motor que los aplica a los estudiantes forma parte de una fase
-        posterior del proyecto, así que todavía no se generan puntos ni insignias.
-      </p>
-
-      {msg && <div className="alert alert-success">{msg}</div>}
-      {err && <div className="alert alert-error">{err}</div>}
+      <PageHeader
+        title="Criterios de gamificación"
+        description="Qué hechos del sistema otorgan puntos y cuántos. Los criterios se guardan y se administran aquí; el motor que los aplica a los estudiantes forma parte de una fase posterior del proyecto, así que todavía no se generan puntos ni insignias."
+      />
 
       <Card
         title={editing ? `Editar “${editing.name}”` : 'Nuevo criterio'}
         actions={
           editing && (
-            <button
-              className="btn btn-ghost btn-sm"
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<FiX size={14} />}
               onClick={() => {
                 setEditing(null);
                 setForm(emptyForm);
               }}
             >
               Cancelar edición
-            </button>
+            </Button>
           )
         }
       >
@@ -201,21 +210,57 @@ export default function AdminGamificationPage() {
               placeholder="Cuándo se otorga y con qué propósito."
             />
           </div>
-          <button className="btn btn-primary" disabled={saving}>
-            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear criterio'}
-          </button>
+          <Button type="submit" loading={saving} icon={editing ? <FiSave size={15} /> : <FiPlus size={15} />}>
+            {editing ? 'Guardar cambios' : 'Crear criterio'}
+          </Button>
         </form>
       </Card>
 
-      <Card title="Criterios definidos">
+      <Card
+        title="Criterios definidos"
+        actions={
+          (data ?? []).length > 0 ? (
+            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              <SearchInput
+                value={query}
+                onChange={setQuery}
+                placeholder="Buscar criterio, código o hecho…"
+              />
+              <ResultCount
+                shown={visible.length}
+                total={(data ?? []).length}
+                noun="criterios"
+              />
+            </div>
+          ) : undefined
+        }
+      >
         <AsyncView
           loading={loading}
           error={error}
           data={data}
+          skeleton={<SkeletonTable rows={5} columns={7} />}
           isEmpty={(d) => d.length === 0}
+          empty={
+            <EmptyState
+              icon={<FiAward size={22} />}
+              message="Todavía no hay criterios definidos."
+            />
+          }
           emptyMessage="Todavía no hay criterios definidos."
         >
-          {(criteria) => (
+          {() =>
+            visible.length === 0 ? (
+              <EmptyState
+                icon={<FiSearch size={22} />}
+                message={`Ningún criterio coincide con “${query}”.`}
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
+                    Limpiar búsqueda
+                  </Button>
+                }
+              />
+            ) : (
             <table>
               <thead>
                 <tr>
@@ -229,7 +274,7 @@ export default function AdminGamificationPage() {
                 </tr>
               </thead>
               <tbody>
-                {criteria.map((c) => (
+                {visible.map((c) => (
                   <tr key={c.id} className={c.isActive ? '' : 'is-inactive'}>
                     <td>
                       <code>{c.code}</code>
@@ -245,19 +290,20 @@ export default function AdminGamificationPage() {
                     </td>
                     <td>
                       <div className="flex" style={{ gap: '0.35rem' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => startEdit(c)}>
+                        <Button variant="secondary" size="sm" onClick={() => startEdit(c)}>
                           Editar
-                        </button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(c)}>
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => toggleActive(c)}>
                           {c.isActive ? 'Desactivar' : 'Activar'}
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
+            )
+          }
         </AsyncView>
       </Card>
     </div>
