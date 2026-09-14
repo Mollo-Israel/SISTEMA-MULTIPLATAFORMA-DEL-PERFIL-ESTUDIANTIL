@@ -1,7 +1,7 @@
 # Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
 
-Ingeniería en Sistemas Informáticos – Univalle. Implementación del **60 %**:
-los seis primeros objetivos específicos, completos de extremo a extremo.
+Ingeniería en Sistemas Informáticos – Univalle. Implementación del **70 %**:
+los siete primeros objetivos específicos, completos de extremo a extremo.
 
 Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficiales) que construye un perfil estudiantil dinámico a partir de intereses, habilidades, proyectos, actividades, participación, evidencias, constancias y áreas de afinidad.
 
@@ -59,7 +59,7 @@ npm install --prefix mobile   # dependencias móvil (Expo)
 
 npm run db:up                 # levanta PostgreSQL en Docker
 npm run shared:build          # compila tipos compartidos
-npm run api:migrate           # crea las 19 tablas (9 migraciones)
+npm run api:migrate           # crea las 26 tablas (12 migraciones)
 npm run seed:populate         # POBLA la base con datos institucionales realistas
 ```
 
@@ -113,11 +113,12 @@ npm run api:dev      # en una terminal
 npm run test:40      # 235 verificaciones de los objetivos 1-4  -> 0 fallos
 npm run test:50      # 109 verificaciones del objetivo 5        -> 0 fallos
 npm run test:60      # 82 verificaciones del objetivo 6         -> 0 fallos
+npm run test:70      # 84 verificaciones del objetivo 7         -> 0 fallos
 npm run test:api     # 42 validaciones de backend               -> 0 fallos
 npm run demo:e2e     # flujo completo de 14 pasos               -> 0 fallos
 ```
 
-En total **493 verificaciones** contra la API real, sobre una base recreada desde cero.
+En total **577 verificaciones** contra la API real, sobre una base recreada desde cero.
 
 ## Flujo principal (end-to-end)
 
@@ -149,14 +150,15 @@ En total **493 verificaciones** contra la API real, sobre una base recreada desd
 | `npm run test:40` | **235 verificaciones de los objetivos 1 a 4** |
 | `npm run test:50` | **109 verificaciones del objetivo 5 (portafolio)** |
 | `npm run test:60` | **82 verificaciones del objetivo 6 (motor de afinidad)** |
+| `npm run test:70` | **84 verificaciones del objetivo 7 (recomendaciones)** |
 | `npm run test:api` | 42 validaciones de backend contra la API |
 | `npm run demo:e2e` | Flujo completo de 14 pasos |
 | `npm run web:dev` | Servidor de desarrollo web |
 | `npm run mobile:start` | Inicia Expo (app móvil) |
 
-## Alcance del 60 %
+## Alcance del 70 %
 
-Los seis primeros objetivos específicos están implementados de extremo a extremo:
+Los siete primeros objetivos específicos están implementados de extremo a extremo:
 
 1. **Usuarios, autenticación, roles y control de acceso.** Registro de estudiante
    con rol asignado por el servidor, sesión por rol, alta de usuarios
@@ -190,6 +192,13 @@ Los seis primeros objetivos específicos están implementados de extremo a extre
    perfil del estudiante. Cuando no hay información suficiente el sistema lo
    informa en lugar de mostrar una lista vacía, y cada cálculo queda registrado
    en un historial. Es orientación, no evaluación: no hay nota ni aprobación.
+7. **Recomendaciones académicas ligeras.** A partir del perfil y de las afinidades,
+   el sistema sugiere actividades, oportunidades, cursos externos, recursos de
+   apoyo, áreas de fortalecimiento y posibles compañeros de equipo. **Cada
+   sugerencia explica por qué**, y su puntaje es exactamente la suma de sus
+   motivos. No son obligatorias: el estudiante guarda o descarta, y lo descartado
+   no vuelve. Cuando no hay con qué recomendar, el sistema distingue si falta
+   información en el perfil o si no hay nada disponible que coincida.
 
 Documentación del avance:
 
@@ -215,7 +224,15 @@ Objetivo 6 (60 %):
 - [`docs/AUDITORIA_FINAL_60_PORCIENTO.md`](docs/AUDITORIA_FINAL_60_PORCIENTO.md) — auditoría de cierre de los 6 objetivos
 - [`docs/CORRECCIONES_DOCUMENTO_FINAL_60.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_60.md) — 5 correcciones pendientes en el Word
 
-**Fuera del 60 %:** chat, contactos por QR, equipos avanzados, recomendación
+Objetivo 7 (70 %):
+
+- [`docs/MATRIZ_TRAZABILIDAD_70.md`](docs/MATRIZ_TRAZABILIDAD_70.md) — RF1 a RF18, requisito por requisito
+- [`docs/AVANCE_70_PORCIENTO.md`](docs/AVANCE_70_PORCIENTO.md) — qué se corrigió y qué se agregó
+- [`docs/DEMO_70_PORCIENTO.md`](docs/DEMO_70_PORCIENTO.md) — guion de demostración de 9–11 minutos
+- [`docs/AUDITORIA_FINAL_70_PORCIENTO.md`](docs/AUDITORIA_FINAL_70_PORCIENTO.md) — auditoría de cierre de los 7 objetivos
+- [`docs/CORRECCIONES_DOCUMENTO_FINAL_70.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_70.md) — 6 correcciones pendientes en el Word
+
+**Fuera del 70 %:** chat, contactos por QR, equipos avanzados, gamificación
 completa, motor de gamificación (los criterios ya se administran, pero todavía no
 se aplican), analítica avanzada, predicción de rendimiento, certificados oficiales
 e integración real con SIU y Teams.

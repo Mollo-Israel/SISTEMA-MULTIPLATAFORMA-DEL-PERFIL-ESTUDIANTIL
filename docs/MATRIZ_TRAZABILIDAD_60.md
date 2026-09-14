@@ -3,6 +3,10 @@
 Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico (Afinia)
 Ingeniería en Sistemas Informáticos — Univalle
 
+> **Vigente.** El avance del 70 % la continúa en
+> [`MATRIZ_TRAZABILIDAD_70.md`](MATRIZ_TRAZABILIDAD_70.md), que cubre RF1 – RF18.
+> Las 493 verificaciones de este documento siguen pasando sin regresiones.
+
 **Alcance del 60 %:** los seis primeros objetivos específicos del documento, que
 corresponden a **RF1 – RF17**. El documento define 10 objetivos específicos y 25
 requerimientos funcionales.
