@@ -1,20 +1,23 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
 import {
   Screen,
   Card,
-  H1,
   Muted,
   Field,
   Button,
-  Loading,
-  ErrorText,
+  Chip,
   EmptyState,
-  Success,
+  FadeIn,
   Badge,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from './ui';
+import { useConfirm, useToast } from './feedback';
 import {
   ACTIVITY_STATUSES,
   ACTIVITY_STATUS_LABEL,
@@ -22,6 +25,9 @@ import {
   lbl,
 } from '../constants';
 import { colors, registrationColor } from '../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
  * Panel de gestion de actividades para el responsable:
@@ -42,9 +48,11 @@ export default function ManageActivities({
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
+  const [busyRow, setBusyRow] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     title: '',
@@ -69,22 +77,27 @@ export default function ManageActivities({
   useEffect(() => {
     setLoading(true);
     Promise.all([load(), catalogService.activityCategories().then(setCategories)])
-      .catch((e) => setError(apiError(e)))
+      .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setError(null);
-  };
+  const notify = (t: string, detail?: string) => toast.success(t, detail);
+
+  const visible = useMemo(() => {
+    const q = normalize(query.trim());
+    if (!q) return items;
+    return items.filter((a: any) =>
+      [a.title, a.description ?? '', a.location ?? '', a.category?.name ?? '']
+        .some((f: string) => normalize(f).includes(q)),
+    );
+  }, [items, query]);
 
   const publish = async () => {
     if (!form.categoryId) {
-      setError('Seleccione una categoría antes de guardar.');
+      toast.info('Seleccione una categoría antes de guardar.');
       return;
     }
-    setError(null);
-    setMsg(null);
     setSaving(true);
     try {
       await activityService.create({
@@ -98,23 +111,39 @@ export default function ManageActivities({
       });
       setForm({ ...form, title: '', description: '', capacity: '', location: '' });
       setShowForm(false);
-      notify(form.status === 'draft' ? 'Guardada como borrador.' : 'Actividad publicada.');
+      notify(
+        form.status === 'draft' ? 'Guardada como borrador.' : 'Actividad publicada.',
+        form.status === 'draft' ? 'Todavía no es visible para los estudiantes.' : undefined,
+      );
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setSaving(false);
     }
   };
 
-  const changeStatus = async (id: string, status: string) => {
-    setError(null);
+  const changeStatus = async (activity: any, status: string) => {
+    if (status === 'cancelled' || status === 'draft') {
+      const ok = await confirm({
+        title: status === 'cancelled' ? 'Cancelar la actividad' : 'Devolver a borrador',
+        message:
+          `“${activity.title}” dejará de estar disponible para los estudiantes`
+          + ((activity.registrationCount ?? 0) > 0
+            ? ` y ya tiene ${activity.registrationCount} inscripción(es) registrada(s).`
+            : '.'),
+        confirmLabel: status === 'cancelled' ? 'Cancelar actividad' : 'Devolver a borrador',
+        cancelLabel: 'Dejar como está',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
     try {
-      await activityService.update(id, { status });
+      await activityService.update(activity.id, { status });
       notify(`Estado: ${lbl(ACTIVITY_STATUS_LABEL, status)}.`);
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     }
   };
 
@@ -126,40 +155,63 @@ export default function ManageActivities({
     }
     setOpenId(id);
     setPartBusy(true);
-    setError(null);
     try {
       setParticipants(await activityService.participants(id));
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
       setParticipants([]);
     } finally {
       setPartBusy(false);
     }
   };
 
-  const decide = async (activityId: string, studentProfileId: string, status: string) => {
-    setError(null);
+  const decide = async (activityId: string, row: any, status: string) => {
+    const who = row.studentName ?? 'el estudiante';
+    if (status === 'absent') {
+      const ok = await confirm({
+        title: 'Registrar ausencia',
+        message:
+          `Se registrará a ${who} como ausente.`
+          + (row.status === 'confirmed'
+            ? ' Su participación estaba confirmada y dejará de contar en su perfil.'
+            : ''),
+        confirmLabel: 'Registrar ausente',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    setBusyRow(row.id);
     try {
-      await activityService.confirm(activityId, studentProfileId, status);
+      await activityService.confirm(activityId, row.studentProfileId, status);
       setParticipants(await activityService.participants(activityId));
       await load();
-      notify(status === 'confirmed' ? 'Participación confirmada.' : 'Registrado como ausente.');
+      notify(
+        status === 'confirmed' ? 'Participación confirmada.' : 'Registrado como ausente.',
+        who,
+      );
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
+    } finally {
+      setBusyRow(null);
     }
   };
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return (
+      <Screen>
+        <SkeletonCards count={3} />
+      </Screen>
+    );
+  }
 
   const tipo = activityType === 'academica' ? 'académicas' : 'extracurriculares';
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <H1>Actividades {tipo}</H1>
-      <Muted>Publique, gestione el estado y registre la participación de los estudiantes.</Muted>
-
-      {error && <ErrorText message={error} />}
-      {msg && <Success message={msg} />}
+      <PageHeader
+        title={`Actividades ${tipo}`}
+        description="Publique, gestione el estado y registre la participación de los estudiantes."
+      />
 
       {!showForm ? (
         <Button title="Nueva actividad" onPress={() => setShowForm(true)} />
@@ -181,18 +233,14 @@ export default function ManageActivities({
           />
           <Text style={styles.label}>Categoría</Text>
           <View style={styles.chips}>
-            {usableCategories.map((c: any) => {
-              const on = form.categoryId === c.id;
-              return (
-                <Pressable
-                  key={c.id}
-                  onPress={() => setForm({ ...form, categoryId: c.id })}
-                  style={[styles.chip, on && styles.chipOn]}
-                >
-                  <Text style={on ? styles.chipOnText : styles.chipText}>{c.name}</Text>
-                </Pressable>
-              );
-            })}
+            {usableCategories.map((c: any) => (
+              <Chip
+                key={c.id}
+                label={c.name}
+                on={form.categoryId === c.id}
+                onPress={() => setForm({ ...form, categoryId: c.id })}
+              />
+            ))}
           </View>
           <Field
             label="Ubicación"
@@ -209,37 +257,61 @@ export default function ManageActivities({
           />
           <Text style={styles.label}>Estado inicial</Text>
           <View style={styles.chips}>
-            {ACTIVITY_STATUSES.filter((s) => ['draft', 'published', 'open'].includes(s)).map((s) => {
-              const on = form.status === s;
-              return (
-                <Pressable
-                  key={s}
-                  onPress={() => setForm({ ...form, status: s })}
-                  style={[styles.chip, on && styles.chipOn]}
-                >
-                  <Text style={on ? styles.chipOnText : styles.chipText}>
-                    {lbl(ACTIVITY_STATUS_LABEL, s)}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {ACTIVITY_STATUSES.filter((s) => ['draft', 'published', 'open'].includes(s)).map((s) => (
+              <Chip
+                key={s}
+                label={lbl(ACTIVITY_STATUS_LABEL, s)}
+                on={form.status === s}
+                onPress={() => setForm({ ...form, status: s })}
+              />
+            ))}
           </View>
           <Muted>En borrador la actividad no es visible para los estudiantes.</Muted>
-          <Button title={saving ? 'Guardando…' : 'Guardar'} onPress={publish} disabled={saving} />
+          <Button title="Guardar" onPress={publish} loading={saving} />
           <Button title="Cancelar" variant="secondary" onPress={() => setShowForm(false)} />
         </Card>
       )}
 
-      {items.length === 0 && (
-        <EmptyState message={`Todavía no ha publicado actividades ${tipo}.`} />
+      {items.length > 0 && (
+        <>
+          <SearchInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar por título, lugar o categoría…"
+          />
+          <ResultCount shown={visible.length} total={items.length} noun="actividades" />
+        </>
       )}
 
-      {items.map((a: any) => {
+      {items.length === 0 && (
+        <EmptyState
+          icon="☷"
+          message={`Todavía no ha publicado actividades ${tipo}.`}
+        />
+      )}
+
+      {items.length > 0 && visible.length === 0 && (
+        <EmptyState
+          icon="⌕"
+          message={`Ninguna actividad coincide con “${query}”.`}
+          action={
+            <Button
+              title="Limpiar búsqueda"
+              variant="secondary"
+              small
+              onPress={() => setQuery('')}
+            />
+          }
+        />
+      )}
+
+      {visible.map((a: any, index: number) => {
         const pending = (a.registrationCount ?? 0) - (a.confirmedCount ?? 0);
         const isOpen = openId === a.id;
         const full = !!(a.capacity && (a.confirmedCount ?? 0) >= a.capacity);
         return (
-          <Card key={a.id}>
+          <FadeIn key={a.id} index={index}>
+          <Card>
             <Text style={styles.title}>{a.title}</Text>
             <View style={styles.badges}>
               <Badge color={colors.bordo}>{lbl(ACTIVITY_STATUS_LABEL, a.status)}</Badge>
@@ -253,20 +325,14 @@ export default function ManageActivities({
 
             <Text style={styles.label}>Cambiar estado</Text>
             <View style={styles.chips}>
-              {ACTIVITY_STATUSES.map((s) => {
-                const on = a.status === s;
-                return (
-                  <Pressable
-                    key={s}
-                    onPress={() => !on && changeStatus(a.id, s)}
-                    style={[styles.chipSm, on && styles.chipOn]}
-                  >
-                    <Text style={on ? styles.chipOnText : styles.chipText}>
-                      {lbl(ACTIVITY_STATUS_LABEL, s)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {ACTIVITY_STATUSES.map((s) => (
+                <Chip
+                  key={s}
+                  label={lbl(ACTIVITY_STATUS_LABEL, s)}
+                  on={a.status === s}
+                  onPress={() => a.status !== s && changeStatus(a, s)}
+                />
+              ))}
             </View>
 
             <Button
@@ -275,9 +341,12 @@ export default function ManageActivities({
               onPress={() => openParticipants(a.id)}
             />
 
-            {isOpen && partBusy && <Loading />}
+            {isOpen && partBusy && <SkeletonCards count={2} />}
             {isOpen && !partBusy && participants.length === 0 && (
-              <EmptyState message="Todavía nadie se inscribió ni marcó interés." />
+              <EmptyState
+                icon="☺"
+                message="Todavía nadie se inscribió ni marcó interés."
+              />
             )}
             {isOpen &&
               !partBusy &&
@@ -299,20 +368,25 @@ export default function ManageActivities({
                       <Button
                         title={full ? 'Cupo lleno' : 'Confirmar'}
                         disabled={full}
-                        onPress={() => decide(a.id, p.studentProfileId, 'confirmed')}
+                        loading={busyRow === p.id}
+                        small
+                        onPress={() => decide(a.id, p, 'confirmed')}
                       />
                     )}
                     {p.status !== 'absent' && (
                       <Button
                         title="Ausente"
                         variant="secondary"
-                        onPress={() => decide(a.id, p.studentProfileId, 'absent')}
+                        loading={busyRow === p.id}
+                        small
+                        onPress={() => decide(a.id, p, 'absent')}
                       />
                     )}
                   </View>
                 </View>
               ))}
           </Card>
+          </FadeIn>
         );
       })}
     </Screen>
@@ -322,25 +396,6 @@ export default function ManageActivities({
 const styles = StyleSheet.create({
   label: { fontSize: 13, color: colors.gray700, marginTop: 10, marginBottom: 6, fontWeight: '500' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: colors.white,
-  },
-  chipSm: {
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 16,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    backgroundColor: colors.white,
-  },
-  chipOn: { backgroundColor: colors.bordo, borderColor: colors.bordo },
-  chipText: { color: colors.gray700, fontSize: 12 },
-  chipOnText: { color: colors.white, fontSize: 12, fontWeight: '600' },
   title: { fontSize: 15.5, fontWeight: '700', color: colors.gray900, marginBottom: 6 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 },
   partRow: {

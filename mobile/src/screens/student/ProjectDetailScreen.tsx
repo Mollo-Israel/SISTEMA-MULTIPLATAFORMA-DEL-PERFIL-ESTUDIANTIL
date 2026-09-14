@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import {
   catalogService,
@@ -17,12 +17,12 @@ import {
   Muted,
   Field,
   Button,
-  Loading,
   ErrorText,
   EmptyState,
-  Success,
+  SkeletonCards,
   Badge,
 } from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { colors } from '../../theme';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -71,7 +71,8 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
   const [areas, setAreas] = useState<any[]>([]);
   const [me, setMe] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>(null);
@@ -137,13 +138,9 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
       .finally(() => setLoading(false));
   }, [load, loadInvitations]);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setError(null);
-  };
+  const notify = (t: string, detail?: string) => toast.success(t, detail);
 
   const save = async () => {
-    setError(null);
     setSaving(true);
     try {
       await projectService.update(projectId, {
@@ -162,7 +159,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
       setEditing(false);
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setSaving(false);
     }
@@ -170,7 +167,6 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
 
   const openInvite = () => {
     setShowInvite(true);
-    setError(null);
     setCandidates([]);
     setPeerQuery('');
     setSearched(false);
@@ -188,13 +184,12 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
     const termino = peerQuery.trim();
     if (termino.length < 2) return;
     setSearching(true);
-    setError(null);
     try {
       const encontrados = await profileService.searchPeers(termino);
       setCandidates(encontrados.filter((c) => c.profileId !== project?.createdByProfileId));
       setSearched(true);
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setSearching(false);
     }
@@ -202,7 +197,6 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
 
   const sendInvite = async () => {
     if (!invitee || role.trim().length < 3) return;
-    setError(null);
     setInviting(true);
     try {
       await projectInvitationService.invite(projectId, {
@@ -215,45 +209,41 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
       setShowInvite(false);
       await loadInvitations();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setInviting(false);
     }
   };
 
   const cancelInvitation = async (invitationId: string) => {
-    setError(null);
     try {
       await projectInvitationService.cancel(projectId, invitationId);
       notify('Invitación cancelada.');
       await loadInvitations();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     }
   };
 
-  const removeMember = (memberId: string, name: string) => {
-    Alert.alert('Retirar integrante', `¿Retirar a ${name} del proyecto?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Retirar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await projectService.removeMember(projectId, memberId);
-            notify('Integrante retirado.');
-            setMembers(await projectService.members(projectId));
-          } catch (e) {
-            setError(apiError(e));
-          }
-        },
-      },
-    ]);
+  const removeMember = async (memberId: string, name: string) => {
+    const ok = await confirm({
+      title: 'Retirar integrante',
+      message: `${name} dejará de formar parte del proyecto. Puedes volver a invitarlo después.`,
+      confirmLabel: 'Retirar',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await projectService.removeMember(projectId, memberId);
+      notify('Integrante retirado.', name);
+      setMembers(await projectService.members(projectId));
+    } catch (e) {
+      toast.error(apiError(e));
+    }
   };
 
   const addLinkEvidence = async () => {
     if (!evidenceUrl) return;
-    setError(null);
     setAddingEvidence(true);
     try {
       await evidenceService.create({
@@ -267,13 +257,19 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
       notify('Evidencia adjuntada.');
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setAddingEvidence(false);
     }
   };
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return (
+      <Screen>
+        <SkeletonCards count={3} />
+      </Screen>
+    );
+  }
   if (!project) {
     return (
       <Screen>
@@ -302,8 +298,6 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
         </Badge>
       </View>
 
-      {error && <ErrorText message={error} />}
-      {msg && <Success message={msg} />}
 
       {/* ---------------- Datos del proyecto ---------------- */}
       {!editing ? (

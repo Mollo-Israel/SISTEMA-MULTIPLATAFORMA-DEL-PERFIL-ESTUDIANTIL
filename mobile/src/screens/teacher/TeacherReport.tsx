@@ -1,15 +1,17 @@
 import { Text, View } from 'react-native';
 import { reportService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { Screen, Card, H1, Muted, Loading, ErrorText } from '../../components/ui';
+import { Screen, Card, Muted, ErrorText, PageHeader, SkeletonCards } from '../../components/ui';
 
 export default function TeacherReport() {
   const { data, loading, error, reload } = useAsync(() => reportService.teacherOverview(), []);
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Reporte del curso</H1>
-      <Muted>Descriptivo. No genera ranking ni evalúa rendimiento.</Muted>
-      {loading && <Loading />}
+      <PageHeader
+        title="Reporte del curso"
+        description="Descriptivo. No genera ranking ni evalúa rendimiento."
+      />
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
       {data && (
         <>

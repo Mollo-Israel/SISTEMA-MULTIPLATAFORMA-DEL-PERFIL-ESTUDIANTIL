@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native';
 import { adminService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { Screen, Card, H1, Muted, Loading, ErrorText, Badge } from '../../components/ui';
+import { Screen, Card, Muted, ErrorText, Badge, PageHeader, SkeletonCards } from '../../components/ui';
 import { ROLE_LABEL } from '../../constants';
 import { colors } from '../../theme';
 
@@ -9,9 +9,11 @@ export default function AdminUsers() {
   const { data, loading, error, reload } = useAsync(() => adminService.listUsers(), []);
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Usuarios</H1>
-      <Muted>Vista básica. La gestión completa se realiza en la web.</Muted>
-      {loading && <Loading />}
+      <PageHeader
+        title="Usuarios"
+        description="Vista básica. La gestión completa se realiza en la web."
+      />
+      {loading && <SkeletonCards count={4} />}
       {error && <ErrorText message={error} />}
       {data?.map((u) => (
         <Card key={u.id}>

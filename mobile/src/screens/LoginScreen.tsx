@@ -34,7 +34,11 @@ export default function LoginScreen() {
         )}
         <Field label="Correo" value={form.email} onChangeText={(t) => setForm({ ...form, email: t })} keyboardType="email-address" />
         <Field label="Contraseña" value={form.password} onChangeText={(t) => setForm({ ...form, password: t })} secureTextEntry />
-        <Button title={busy ? 'Procesando…' : mode === 'login' ? 'Ingresar' : 'Registrarme como estudiante'} onPress={submit} disabled={busy} />
+        <Button
+          title={mode === 'login' ? 'Ingresar' : 'Registrarme como estudiante'}
+          onPress={submit}
+          loading={busy}
+        />
         <Text style={styles.switch} onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>
           {mode === 'login' ? '¿Eres estudiante nuevo? Crear cuenta' : '¿Ya tienes cuenta? Iniciar sesión'}
         </Text>

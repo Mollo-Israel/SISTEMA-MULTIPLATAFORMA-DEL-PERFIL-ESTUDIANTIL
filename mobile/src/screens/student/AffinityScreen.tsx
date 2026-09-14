@@ -12,13 +12,17 @@ import { useAsync } from '../../hooks/useAsync';
 import {
   Screen,
   Card,
-  H1,
   Muted,
   Button,
-  Loading,
+  Chip,
+  EmptyState,
   ErrorText,
+  FadeIn,
   Badge,
+  PageHeader,
+  SkeletonCards,
 } from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { affinityColor, colors } from '../../theme';
 
 /**
@@ -68,7 +72,8 @@ const formatDate = (value: string | null) => {
 export default function AffinityScreen() {
   const [tab, setTab] = useState<'areas' | 'history'>('areas');
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [openArea, setOpenArea] = useState<string | null>(null);
   const [breakdown, setBreakdown] = useState<Record<string, AffinityBreakdown>>({});
@@ -95,13 +100,21 @@ export default function AffinityScreen() {
   }, [reloadSummary, reloadHistory]);
 
   const recalc = async () => {
+    const ok = await confirm({
+      title: 'Recalcular afinidad',
+      message:
+        'Se volverán a calcular tus áreas con la información que tienes registrada hoy. '
+        + 'El resultado anterior queda guardado en «Evolución».',
+      confirmLabel: 'Recalcular',
+    });
+    if (!ok) return;
     setBusy(true);
-    setErr(null);
     try {
       await affinityService.recalculateMine();
       reloadAll();
+      toast.success('Afinidad recalculada.', 'Tus áreas reflejan tu información más reciente.');
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setBusy(false);
     }
@@ -120,7 +133,7 @@ export default function AffinityScreen() {
       const data = await affinityService.breakdown(areaId);
       setBreakdown((prev) => ({ ...prev, [areaId]: data }));
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
       setOpenArea(null);
     } finally {
       setLoadingArea(null);
@@ -134,7 +147,7 @@ export default function AffinityScreen() {
       try {
         setWeights(await affinityService.weights());
       } catch (e) {
-        setErr(apiError(e));
+        toast.error(apiError(e));
       }
     }
   };
@@ -143,38 +156,35 @@ export default function AffinityScreen() {
 
   return (
     <Screen refreshing={summaryState.loading && !!summary} onRefresh={reloadAll}>
-      <H1>Mis afinidades</H1>
-      <Muted>
-        Orientacion calculada con reglas y puntuacion sobre la informacion de tu perfil.
-        No es una nota ni una evaluacion academica.
-      </Muted>
+      <PageHeader
+        title="Mis afinidades"
+        description="Orientación calculada con reglas y puntuación sobre la información de tu perfil. No es una nota ni una evaluación académica."
+      />
 
       <View style={styles.tabs}>
         {([
-          { key: 'areas', label: 'Areas' },
-          { key: 'history', label: 'Evolucion' },
+          { key: 'areas', label: 'Áreas' },
+          { key: 'history', label: 'Evolución' },
         ] as const).map((t) => (
-          <TouchableOpacity
+          <Chip
             key={t.key}
+            label={t.label}
+            on={tab === t.key}
             onPress={() => setTab(t.key)}
-            style={[styles.tab, tab === t.key && styles.tabOn]}
-          >
-            <Text style={tab === t.key ? styles.tabOnText : styles.tabText}>{t.label}</Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
 
-      {err && <ErrorText message={err} />}
       {summaryState.error && <ErrorText message={summaryState.error} />}
-      {summaryState.loading && !summary && <Loading />}
+      {summaryState.loading && !summary && <SkeletonCards count={3} />}
 
       {/* ---------------- Areas ---------------- */}
       {tab === 'areas' && summary && (
         <>
           <Button
-            title={busy ? 'Recalculando…' : 'Recalcular mis afinidades'}
+            title="Recalcular mis afinidades"
             onPress={recalc}
-            disabled={busy}
+            loading={busy}
           />
 
           {insufficient ? (
@@ -206,11 +216,12 @@ export default function AffinityScreen() {
                 </View>
               </Card>
 
-              {summary.areas.map((a) => {
+              {summary.areas.map((a, index) => {
                 const open = openArea === a.academicAreaId;
                 const detail = breakdown[a.academicAreaId];
                 return (
-                  <Card key={a.academicAreaId}>
+                  <FadeIn key={a.academicAreaId} index={index}>
+                  <Card>
                     <TouchableOpacity
                       onPress={() => toggleArea(a.academicAreaId)}
                       activeOpacity={0.7}
@@ -245,7 +256,7 @@ export default function AffinityScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {open && loadingArea === a.academicAreaId && <Loading />}
+                    {open && loadingArea === a.academicAreaId && <SkeletonCards count={1} />}
 
                     {open && detail && (
                       <View style={styles.breakdown}>
@@ -269,6 +280,7 @@ export default function AffinityScreen() {
                       </View>
                     )}
                   </Card>
+                  </FadeIn>
                 );
               })}
             </>
@@ -307,15 +319,14 @@ export default function AffinityScreen() {
             prediccion de resultados academicos.
           </Muted>
 
-          {historyState.loading && <Loading />}
+          {historyState.loading && <SkeletonCards count={2} />}
           {historyState.error && <ErrorText message={historyState.error} />}
 
           {historyState.data && historyState.data.length === 0 && (
-            <Card>
-              <Text style={styles.body}>
-                Todavia no hay calculos registrados. Se guarda uno cada vez que tu perfil cambia.
-              </Text>
-            </Card>
+            <EmptyState
+              icon="↗"
+              message="Todavía no hay cálculos registrados. Se guarda uno cada vez que tu perfil cambia."
+            />
           )}
 
           {historyState.data?.map((snapshot, index) => {
@@ -358,16 +369,7 @@ export default function AffinityScreen() {
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexDirection: 'row', gap: 8, marginVertical: 12 },
-  tab: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    backgroundColor: colors.gray100,
-  },
-  tabOn: { backgroundColor: colors.bordo },
-  tabText: { color: colors.gray700, fontWeight: '600' },
-  tabOnText: { color: colors.white, fontWeight: '600' },
+  tabs: { flexDirection: 'row', gap: 8, marginVertical: 12, flexWrap: 'wrap' },
 
   body: { color: colors.gray700, lineHeight: 20 },
   strong: { fontWeight: '700', color: colors.gray900 },

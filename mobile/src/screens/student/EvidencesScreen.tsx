@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiError } from '../../api/client';
@@ -15,17 +15,22 @@ import {
 import {
   Screen,
   Card,
-  H1,
   Muted,
   Field,
   Button,
-  Loading,
-  ErrorText,
   EmptyState,
-  Success,
+  FadeIn,
   Badge,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { colors } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
@@ -45,8 +50,10 @@ export default function EvidencesScreen() {
   const [areas, setAreas] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [removing, setRemoving] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [tab, setTab] = useState<'evidencia' | 'certificado'>('evidencia');
 
@@ -71,49 +78,90 @@ export default function EvidencesScreen() {
         .then((rows: any[]) => setActivities(rows.map((r) => r.activity).filter(Boolean)))
         .catch(() => {}),
     ])
-      .catch((e) => setError(apiError(e)))
+      .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setError(null);
-  };
+  const notify = (t: string) => toast.success(t);
 
-  const removeEvidence = async (id: string) => {
-    setError(null);
+  const needle = normalize(query.trim());
+  const visibleEvidences = useMemo(
+    () =>
+      !needle
+        ? evidences
+        : evidences.filter((e: any) =>
+            [e.description ?? '', e.fileName ?? '', e.project?.title ?? '',
+              e.activity?.title ?? '', e.academicArea?.name ?? '']
+              .some((f: string) => normalize(f).includes(needle)),
+          ),
+    [evidences, needle],
+  );
+  const visibleCertificates = useMemo(
+    () =>
+      !needle
+        ? certificates
+        : certificates.filter((c: any) =>
+            [c.certificateName ?? '', c.issuer ?? '', c.academicArea?.name ?? '']
+              .some((f: string) => normalize(f).includes(needle)),
+          ),
+    [certificates, needle],
+  );
+
+  const removeEvidence = async (evidence: any) => {
+    const ok = await confirm({
+      title: 'Eliminar evidencia',
+      message: 'Se eliminará la evidencia y su archivo. Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setRemoving(evidence.id);
     try {
-      await evidenceService.remove(id);
+      await evidenceService.remove(evidence.id);
       notify('Evidencia eliminada.');
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
+    } finally {
+      setRemoving(null);
     }
   };
 
-  const removeCertificate = async (id: string) => {
-    setError(null);
+  const removeCertificate = async (certificate: any) => {
+    const ok = await confirm({
+      title: 'Eliminar certificado',
+      message: `Se eliminará “${certificate.certificateName}” y su archivo. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setRemoving(certificate.id);
     try {
-      await certificateService.remove(id);
+      await certificateService.remove(certificate.id);
       notify('Certificado eliminado.');
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
+    } finally {
+      setRemoving(null);
     }
   };
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return (
+      <Screen>
+        <SkeletonCards count={3} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <H1>Evidencias y certificados</H1>
-      <Muted>
-        Respalda tu trayectoria con enlaces o archivos. Los certificados externos se registran como
-        evidencia: el sistema no los certifica oficialmente.
-      </Muted>
-
-      {error && <ErrorText message={error} />}
-      {msg && <Success message={msg} />}
+      <PageHeader
+        title="Evidencias y certificados"
+        description="Respalda tu trayectoria con enlaces o archivos. Los certificados externos se registran como evidencia: el sistema no los certifica oficialmente."
+      />
 
       <View style={styles.tabs}>
         <Pressable
@@ -135,7 +183,7 @@ export default function EvidencesScreen() {
           areas={areas}
           projects={projects}
           activities={activities}
-          onError={setError}
+          onError={(m: string) => toast.error(m)}
           onSaved={async () => {
             notify('Evidencia registrada.');
             await load();
@@ -144,7 +192,7 @@ export default function EvidencesScreen() {
       ) : (
         <CertificateForm
           areas={areas}
-          onError={setError}
+          onError={(m: string) => toast.error(m)}
           onSaved={async () => {
             notify('Certificado registrado.');
             await load();
@@ -152,12 +200,43 @@ export default function EvidencesScreen() {
         />
       )}
 
+      {(evidences.length > 0 || certificates.length > 0) && (
+        <View style={{ marginTop: 14 }}>
+          <SearchInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar evidencia, certificado o emisor…"
+          />
+        </View>
+      )}
+
       <Card title={`Mis evidencias (${evidences.length})`}>
+        {evidences.length > 0 && (
+          <ResultCount
+            shown={visibleEvidences.length}
+            total={evidences.length}
+            noun="evidencias"
+          />
+        )}
         {evidences.length === 0 ? (
-          <EmptyState message="Todavía no registras evidencias." />
+          <EmptyState icon="⎘" message="Todavía no registras evidencias." />
+        ) : visibleEvidences.length === 0 ? (
+          <EmptyState
+            icon="⌕"
+            message={`Ninguna evidencia coincide con “${query}”.`}
+            action={
+              <Button
+                title="Limpiar búsqueda"
+                variant="secondary"
+                small
+                onPress={() => setQuery('')}
+              />
+            }
+          />
         ) : (
-          evidences.map((e) => (
-            <View key={e.id} style={styles.row}>
+          visibleEvidences.map((e, index) => (
+            <FadeIn key={e.id} index={index}>
+            <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>
                   {e.description || e.fileName || 'Evidencia'}
@@ -183,21 +262,48 @@ export default function EvidencesScreen() {
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Button title="Eliminar" variant="secondary" onPress={() => removeEvidence(e.id)} />
+                    <Button
+                      title="Eliminar"
+                      variant="secondary"
+                      loading={removing === e.id}
+                      onPress={() => removeEvidence(e)}
+                    />
                   </View>
                 </View>
               </View>
             </View>
+            </FadeIn>
           ))
         )}
       </Card>
 
       <Card title={`Certificados externos (${certificates.length})`}>
+        {certificates.length > 0 && (
+          <ResultCount
+            shown={visibleCertificates.length}
+            total={certificates.length}
+            noun="certificados"
+          />
+        )}
         {certificates.length === 0 ? (
-          <EmptyState message="Todavía no registras certificados externos." />
+          <EmptyState icon="✦" message="Todavía no registras certificados externos." />
+        ) : visibleCertificates.length === 0 ? (
+          <EmptyState
+            icon="⌕"
+            message={`Ningún certificado coincide con “${query}”.`}
+            action={
+              <Button
+                title="Limpiar búsqueda"
+                variant="secondary"
+                small
+                onPress={() => setQuery('')}
+              />
+            }
+          />
         ) : (
-          certificates.map((c) => (
-            <View key={c.id} style={styles.row}>
+          visibleCertificates.map((c, index) => (
+            <FadeIn key={c.id} index={index}>
+            <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{c.certificateName}</Text>
                 <Text style={styles.rowMeta}>
@@ -223,12 +329,14 @@ export default function EvidencesScreen() {
                     <Button
                       title="Eliminar"
                       variant="secondary"
-                      onPress={() => removeCertificate(c.id)}
+                      loading={removing === c.id}
+                      onPress={() => removeCertificate(c)}
                     />
                   </View>
                 </View>
               </View>
             </View>
+            </FadeIn>
           ))
         )}
       </Card>
@@ -239,9 +347,9 @@ export default function EvidencesScreen() {
           a un certificado oficial de la universidad.
         </Muted>
         {constancies.length === 0 ? (
-          <EmptyState message="Todavía no recibes constancias internas." />
+          <EmptyState icon="✓" message="Todavía no recibes constancias internas." />
         ) : (
-          constancies.map((c) => (
+          constancies.map((c: any) => (
             <View key={c.id} style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{c.description}</Text>
@@ -457,7 +565,7 @@ function EvidenceForm({
         options={areas.map((a) => ({ id: a.id, label: a.name }))}
       />
 
-      <Button title={saving ? 'Guardando…' : 'Registrar evidencia'} onPress={submit} disabled={saving || busy} />
+      <Button title="Registrar evidencia" onPress={submit} loading={saving} disabled={busy} />
     </Card>
   );
 }
@@ -555,9 +663,10 @@ function CertificateForm({
         )}
       </View>
       <Button
-        title={saving ? 'Guardando…' : 'Registrar certificado'}
+        title="Registrar certificado"
         onPress={submit}
-        disabled={saving || busy}
+        loading={saving}
+        disabled={busy}
       />
     </Card>
   );

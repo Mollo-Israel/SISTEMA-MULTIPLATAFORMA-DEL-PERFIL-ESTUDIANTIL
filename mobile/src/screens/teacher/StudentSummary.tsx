@@ -6,14 +6,18 @@ import { useAsync } from '../../hooks/useAsync';
 import {
   Screen,
   Card,
-  H1,
   Muted,
-  Field,
-  Loading,
+  Button,
   ErrorText,
   EmptyState,
+  FadeIn,
   Badge,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from '../../components/ui';
+import { useToast } from '../../components/feedback';
 import { affinityColor, colors } from '../../theme';
 
 export default function StudentSummary() {
@@ -22,8 +26,8 @@ export default function StudentSummary() {
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<any>(null);
   const [affinity, setAffinity] = useState<any[]>([]);
-  const [detailError, setDetailError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   const scope = data?.scope;
   const students = (data?.students ?? []).filter((s: any) => {
@@ -38,7 +42,6 @@ export default function StudentSummary() {
   const open = async (profileId: string) => {
     setSelected(profileId);
     setBusy(true);
-    setDetailError(null);
     setView(null);
     setAffinity([]);
     try {
@@ -49,7 +52,8 @@ export default function StudentSummary() {
       setView(v);
       setAffinity(a as any[]);
     } catch (e) {
-      setDetailError(apiError(e, 'No se pudo cargar el perfil.'));
+      toast.error(apiError(e, 'No se pudo cargar el perfil.'));
+      setSelected(null);
     } finally {
       setBusy(false);
     }
@@ -59,10 +63,12 @@ export default function StudentSummary() {
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Perfil del estudiante</H1>
-      <Muted>Vista permitida: sin notas, datos sensibles ni constancias internas.</Muted>
+      <PageHeader
+        title="Perfil del estudiante"
+        description="Vista permitida: sin notas, datos sensibles ni constancias internas."
+      />
 
-      {loading && <Loading />}
+      {loading && <SkeletonCards count={2} />}
       {error && <ErrorText message={error} />}
 
       {scope?.restricted && !noScope && (
@@ -83,41 +89,62 @@ export default function StudentSummary() {
       )}
 
       {!noScope && data && (
-        <Card title={`Estudiantes (${students.length})`}>
-          <Field label="Buscar" value={search} onChangeText={setSearch} placeholder="Nombre o correo" />
+        <Card title={`Estudiantes (${data.students?.length ?? 0})`}>
+          <SearchInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Buscar por nombre o correo…"
+          />
+          <ResultCount
+            shown={students.length}
+            total={data.students?.length ?? 0}
+            noun="estudiantes"
+          />
           {students.length === 0 ? (
             <EmptyState
+              icon={search ? '⌕' : '☰'}
               message={
                 search
                   ? `Ningún estudiante coincide con “${search}”.`
                   : 'No hay estudiantes en los semestres habilitados.'
               }
+              action={
+                search ? (
+                  <Button
+                    title="Limpiar búsqueda"
+                    variant="secondary"
+                    small
+                    onPress={() => setSearch('')}
+                  />
+                ) : undefined
+              }
             />
           ) : (
-            students.map((s: any) => (
-              <Pressable
-                key={s.profileId}
-                onPress={() => open(s.profileId)}
-                style={[styles.row, selected === s.profileId && styles.rowOn]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{s.studentName}</Text>
-                  <Text style={styles.meta}>
-                    {s.semester ? `${s.semester}º semestre` : 'Sin semestre'} · perfil{' '}
-                    {s.completionPercentage}%
-                  </Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
+            students.map((s: any, index: number) => (
+              <FadeIn key={s.profileId} index={index}>
+                <Pressable
+                  onPress={() => open(s.profileId)}
+                  style={[styles.row, selected === s.profileId && styles.rowOn]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>{s.studentName}</Text>
+                    <Text style={styles.meta}>
+                      {s.semester ? `${s.semester}º semestre` : 'Sin semestre'} · perfil{' '}
+                      {s.completionPercentage}%
+                    </Text>
+                  </View>
+                  <Text style={styles.chevron}>›</Text>
+                </Pressable>
+              </FadeIn>
             ))
           )}
         </Card>
       )}
 
-      {busy && <Loading />}
-      {detailError && <ErrorText message={detailError} />}
+      {busy && <SkeletonCards count={1} />}
 
-      {view && (
+      {view && !busy && (
+        <FadeIn>
         <Card title={view.studentName ?? 'Estudiante'}>
           <Text style={styles.line}>
             Semestre: {view.semester ? `${view.semester}º` : '—'} · Perfil {view.status}
@@ -170,6 +197,7 @@ export default function StudentSummary() {
             </View>
           )}
         </Card>
+        </FadeIn>
       )}
     </Screen>
   );

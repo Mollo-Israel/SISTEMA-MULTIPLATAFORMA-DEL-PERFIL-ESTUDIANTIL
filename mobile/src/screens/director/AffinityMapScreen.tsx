@@ -1,16 +1,18 @@
 import { Text, View } from 'react-native';
 import { reportService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { Screen, Card, H1, Muted, Loading, ErrorText, EmptyState, Badge } from '../../components/ui';
+import { Screen, Card, ErrorText, EmptyState, Badge, PageHeader, SkeletonCards } from '../../components/ui';
 import { colors } from '../../theme';
 
 export default function AffinityMapScreen() {
   const { data, loading, error, reload } = useAsync(() => reportService.directorAffinityMap(), []);
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Mapa de afinidad</H1>
-      <Muted>Distribución agregada por área académica.</Muted>
-      {loading && <Loading />}
+      <PageHeader
+        title="Mapa de afinidad"
+        description="Distribución agregada por área académica."
+      />
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
       {data && data.length === 0 && <EmptyState message="Aún no hay afinidades calculadas." />}
       {data?.map((a: any) => (

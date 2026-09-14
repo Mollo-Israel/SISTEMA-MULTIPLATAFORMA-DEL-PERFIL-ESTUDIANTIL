@@ -5,12 +5,17 @@ import { useAsync } from '../../hooks/useAsync';
 import {
   Screen,
   Card,
-  H1,
   Muted,
-  Loading,
+  Button,
+  Chip,
   ErrorText,
   EmptyState,
+  FadeIn,
   Badge,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from '../../components/ui';
 import {
   ACTIVITY_STATUS_LABEL,
@@ -19,6 +24,9 @@ import {
   lbl,
 } from '../../constants';
 import { colors } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 const FILTERS = [
   { value: '', label: 'Todas' },
@@ -33,40 +41,83 @@ const FILTERS = [
 export default function TeacherActivities() {
   const { data, loading, error, reload } = useAsync(() => activityService.list(), []);
   const [type, setType] = useState('');
+  const [query, setQuery] = useState('');
 
-  const filtered = useMemo(
-    () => (type ? (data ?? []).filter((a: any) => a.type === type) : (data ?? [])),
-    [data, type],
-  );
+  const filtered = useMemo(() => {
+    const q = normalize(query.trim());
+    let list = data ?? [];
+    if (type) list = list.filter((a: any) => a.type === type);
+    if (q) {
+      list = list.filter((a: any) =>
+        [a.title, a.description ?? '', a.location ?? '', a.academicArea?.name ?? '']
+          .some((f: string) => normalize(f).includes(q)),
+      );
+    }
+    return list;
+  }, [data, type, query]);
 
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Actividades del programa</H1>
-      <Muted>
-        Oferta vigente para orientar a sus estudiantes. Las académicas las publica el director de
-        carrera; las extracurriculares, la sociedad científica.
-      </Muted>
+      <PageHeader
+        title="Actividades del programa"
+        description="Oferta vigente para orientar a sus estudiantes. Las académicas las publica el director de carrera; las extracurriculares, la sociedad científica."
+      />
+
+      <SearchInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Buscar por título, lugar o área…"
+      />
 
       <View style={styles.filterRow}>
         {FILTERS.map((f) => (
-          <Pressable
+          <Chip
             key={f.value || 'all'}
+            label={f.label}
+            on={type === f.value}
             onPress={() => setType(f.value)}
-            style={[styles.filter, type === f.value && styles.filterOn]}
-          >
-            <Text style={type === f.value ? styles.filterOnText : styles.filterText}>{f.label}</Text>
-          </Pressable>
+          />
         ))}
       </View>
 
-      {loading && <Loading />}
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
-      {!loading && filtered.length === 0 && (
-        <EmptyState message="Todavía no hay actividades publicadas." />
+
+      {!loading && (data ?? []).length > 0 && (
+        <ResultCount
+          shown={filtered.length}
+          total={(data ?? []).length}
+          noun="actividades"
+        />
       )}
 
-      {filtered.map((a: any) => (
-        <Card key={a.id}>
+      {!loading && filtered.length === 0 && (
+        <EmptyState
+          icon={query || type ? '⌕' : '☷'}
+          message={
+            query || type
+              ? 'Ninguna actividad coincide con los filtros aplicados.'
+              : 'Todavía no hay actividades publicadas.'
+          }
+          action={
+            query || type ? (
+              <Button
+                title="Quitar filtros"
+                variant="secondary"
+                small
+                onPress={() => {
+                  setQuery('');
+                  setType('');
+                }}
+              />
+            ) : undefined
+          }
+        />
+      )}
+
+      {filtered.map((a: any, index: number) => (
+        <FadeIn key={a.id} index={index}>
+        <Card>
           <View style={styles.badges}>
             <Badge color={a.type === 'academica' ? colors.bordo : colors.amber}>
               {lbl(ACTIVITY_TYPE_LABEL, a.type)}
@@ -88,6 +139,7 @@ export default function TeacherActivities() {
               : ''}
           </Muted>
         </Card>
+        </FadeIn>
       ))}
     </Screen>
   );
@@ -95,17 +147,6 @@ export default function TeacherActivities() {
 
 const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10, marginBottom: 4 },
-  filter: {
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.white,
-  },
-  filterOn: { backgroundColor: colors.bordo, borderColor: colors.bordo },
-  filterText: { color: colors.gray700, fontSize: 12.5 },
-  filterOnText: { color: colors.white, fontSize: 12.5, fontWeight: '600' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   title: { fontSize: 15.5, fontWeight: '700', color: colors.gray900, marginBottom: 4 },
   desc: { fontSize: 13.5, color: colors.gray700, marginBottom: 6 },

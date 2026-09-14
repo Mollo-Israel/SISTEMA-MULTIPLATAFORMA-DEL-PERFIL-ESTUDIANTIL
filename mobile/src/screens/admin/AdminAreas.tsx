@@ -1,15 +1,17 @@
 import { Text } from 'react-native';
 import { catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { Screen, Card, H1, Muted, Loading, ErrorText } from '../../components/ui';
+import { Screen, Card, Muted, ErrorText, PageHeader, SkeletonCards } from '../../components/ui';
 
 export default function AdminAreas() {
   const { data, loading, error, reload } = useAsync(() => catalogService.areas(), []);
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Áreas académicas</H1>
-      <Muted>Vista básica. La creación se realiza en la web.</Muted>
-      {loading && <Loading />}
+      <PageHeader
+        title="Áreas académicas"
+        description="Vista básica. La creación se realiza en la web."
+      />
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
       {data?.map((a: any) => (
         <Card key={a.id} title={a.name}>

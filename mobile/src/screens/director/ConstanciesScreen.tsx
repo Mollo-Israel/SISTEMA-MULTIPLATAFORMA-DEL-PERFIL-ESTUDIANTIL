@@ -1,21 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import { activityService, constancyService } from '../../services';
 import {
   Screen,
   Card,
-  H1,
   Muted,
   Field,
   Button,
-  Loading,
-  ErrorText,
   EmptyState,
-  Success,
+  FadeIn,
   Badge,
+  PageHeader,
+  ResultCount,
+  SearchInput,
+  SkeletonCards,
 } from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { colors } from '../../theme';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
  * Emision de constancias internas (RF12).
@@ -31,16 +36,24 @@ export default function ConstanciesScreen() {
   const [target, setTarget] = useState<any>(null);
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const toast = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     activityService
       .managed()
       .then(setActivities)
-      .catch((e) => setError(apiError(e)))
+      .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const visible = useMemo(() => {
+    const q = normalize(query.trim());
+    if (!q) return activities;
+    return activities.filter((a: any) => normalize(a.title ?? '').includes(q));
+  }, [activities, query]);
 
   const openActivity = async (activity: any) => {
     if (selected?.id === activity.id) {
@@ -51,7 +64,6 @@ export default function ConstanciesScreen() {
     setSelected(activity);
     setTarget(null);
     setListBusy(true);
-    setError(null);
     try {
       const [e, i] = await Promise.all([
         constancyService.eligible(activity.id),
@@ -60,7 +72,7 @@ export default function ConstanciesScreen() {
       setEligible(e);
       setIssued(i);
     } catch (e2) {
-      setError(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setListBusy(false);
     }
@@ -68,15 +80,21 @@ export default function ConstanciesScreen() {
 
   const issue = async () => {
     if (!target || !selected) return;
+    const who = target.studentName ?? 'el estudiante';
+    const ok = await confirm({
+      title: 'Emitir la constancia',
+      message: `Se emitirá la constancia interna de ${who}. Solo puede emitirse una vez por estudiante y actividad, y el estudiante la verá en sus evidencias.`,
+      confirmLabel: 'Emitir constancia',
+    });
+    if (!ok) return;
     setSaving(true);
-    setError(null);
     try {
       await constancyService.create({
         profileId: target.studentProfileId,
         activityId: selected.id,
         description,
       });
-      setMsg(`Constancia emitida para ${target.studentName ?? 'el estudiante'}.`);
+      toast.success('Constancia emitida.', `${who} ya puede verla en sus evidencias.`);
       setTarget(null);
       setDescription('');
       const [e, i] = await Promise.all([
@@ -86,33 +104,65 @@ export default function ConstanciesScreen() {
       setEligible(e);
       setIssued(i);
     } catch (e2) {
-      setError(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <Loading />;
+  if (loading) {
+    return (
+      <Screen>
+        <SkeletonCards count={3} />
+      </Screen>
+    );
+  }
 
   const pending = eligible.filter((e) => !e.hasConstancy);
 
   return (
     <Screen>
-      <H1>Constancias internas</H1>
-      <Muted>
-        Solo sobre participación confirmada y una sola vez por estudiante y actividad. No sustituyen
-        a un certificado oficial de la universidad.
-      </Muted>
+      <PageHeader
+        title="Constancias internas"
+        description="Solo sobre participación confirmada y una sola vez por estudiante y actividad. No sustituyen a un certificado oficial de la universidad."
+      />
 
-      {error && <ErrorText message={error} />}
-      {msg && <Success message={msg} />}
-
-      {activities.length === 0 && (
-        <EmptyState message="Todavía no gestiona ninguna actividad académica." />
+      {activities.length > 0 && (
+        <>
+          <SearchInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar actividad…"
+          />
+          <ResultCount shown={visible.length} total={activities.length} noun="actividades" />
+        </>
       )}
 
-      {activities.map((a) => (
-        <Card key={a.id}>
+      {activities.length === 0 && (
+        <EmptyState
+          icon="☷"
+          message="Todavía no gestiona ninguna actividad académica."
+        />
+      )}
+
+      {activities.length > 0 && visible.length === 0 && (
+        <EmptyState
+          icon="⌕"
+          message={`Ninguna actividad coincide con “${query}”.`}
+          action={
+            <Button
+              title="Limpiar búsqueda"
+              variant="secondary"
+              small
+              onPress={() => setQuery('')}
+            />
+          }
+        />
+      )}
+
+      {visible.map((a, index) => (
+        <FadeIn key={a.id} index={index}>
+        <Card>
           <Pressable onPress={() => openActivity(a)}>
             <Text style={styles.title}>{a.title}</Text>
             <Muted>
@@ -124,7 +174,7 @@ export default function ConstanciesScreen() {
             </Text>
           </Pressable>
 
-          {selected?.id === a.id && listBusy && <Loading />}
+          {selected?.id === a.id && listBusy && <SkeletonCards count={2} />}
 
           {selected?.id === a.id && !listBusy && (
             <View style={styles.detail}>
@@ -136,8 +186,9 @@ export default function ConstanciesScreen() {
                     : 'Todos los confirmados ya tienen su constancia.'}
                 </Muted>
               ) : (
-                pending.map((p) => (
-                  <View key={p.studentProfileId} style={styles.row}>
+                pending.map((p, i) => (
+                  <FadeIn key={p.studentProfileId} index={i}>
+                  <View style={styles.row}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.name}>{p.studentName ?? 'Estudiante'}</Text>
                       <Text style={styles.meta}>
@@ -147,6 +198,7 @@ export default function ConstanciesScreen() {
                     <View style={{ width: 110 }}>
                       <Button
                         title="Emitir"
+                        small
                         onPress={() => {
                           setTarget(p);
                           setDescription(`Participó en la actividad “${a.title}”.`);
@@ -154,6 +206,7 @@ export default function ConstanciesScreen() {
                       />
                     </View>
                   </View>
+                  </FadeIn>
                 ))
               )}
 
@@ -169,9 +222,10 @@ export default function ConstanciesScreen() {
                     multiline
                   />
                   <Button
-                    title={saving ? 'Emitiendo…' : 'Emitir constancia'}
+                    title="Emitir constancia"
                     onPress={issue}
-                    disabled={saving || description.trim().length < 5}
+                    loading={saving}
+                    disabled={description.trim().length < 5}
                   />
                   <Button title="Cancelar" variant="secondary" onPress={() => setTarget(null)} />
                 </View>
@@ -179,7 +233,7 @@ export default function ConstanciesScreen() {
 
               <Text style={styles.section}>Emitidas ({issued.length})</Text>
               {issued.length === 0 ? (
-                <Muted>Todavía no se emitió ninguna constancia.</Muted>
+                <Muted>Todavía no se emitió ninguna constancia para esta actividad.</Muted>
               ) : (
                 issued.map((c) => (
                   <View key={c.id} style={styles.row}>
@@ -198,6 +252,7 @@ export default function ConstanciesScreen() {
             </View>
           )}
         </Card>
+        </FadeIn>
       ))}
     </Screen>
   );

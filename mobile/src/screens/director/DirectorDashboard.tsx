@@ -1,16 +1,18 @@
 import { Text, View, StyleSheet } from 'react-native';
 import { reportService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { Screen, Card, H1, Muted, Loading, ErrorText } from '../../components/ui';
+import { Screen, Card, Muted, ErrorText, PageHeader, SkeletonCards } from '../../components/ui';
 import { colors } from '../../theme';
 
 export default function DirectorDashboard() {
   const { data, loading, error, reload } = useAsync(() => reportService.directorOverview(), []);
   return (
     <Screen refreshing={loading} onRefresh={reload}>
-      <H1>Panel de dirección</H1>
-      <Muted>Indicadores descriptivos. No representan rendimiento ni predicción.</Muted>
-      {loading && <Loading />}
+      <PageHeader
+        title="Panel de dirección"
+        description="Indicadores descriptivos. No representan rendimiento ni predicción."
+      />
+      {loading && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
       {data && (
         <>
