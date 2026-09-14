@@ -3,6 +3,7 @@ import { apiError } from '../../api/client';
 import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { AsyncView, Card, Badge } from '../../components/ui';
+import { useConfirm } from '../../components/feedback';
 import type { AcademicArea } from '../../services/types';
 
 const emptyForm = { name: '', description: '', tags: '' };
@@ -66,7 +67,20 @@ export default function AdminAreasPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const confirm = useConfirm();
+
   const toggleActive = async (area: AcademicArea) => {
+    if (area.isActive) {
+      const ok = await confirm({
+        title: `Dar de baja “${area.name}”`,
+        message:
+          'Dejará de ofrecerse al declarar intereses, proyectos y actividades. ' +
+          'Lo ya registrado con esta área se conserva.',
+        confirmLabel: 'Dar de baja',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
     setErr(null);
     try {
       await adminService.updateArea(area.id, { isActive: !area.isActive });

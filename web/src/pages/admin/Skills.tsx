@@ -4,6 +4,7 @@ import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill } from '../../services/types';
 import { AsyncView, Card, Badge } from '../../components/ui';
+import { useConfirm } from '../../components/feedback';
 
 const emptyForm = { name: '', academicAreaId: '' };
 
@@ -55,7 +56,19 @@ export default function AdminSkillsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const confirm = useConfirm();
+
   const toggleActive = async (skill: Skill) => {
+    if (skill.isActive) {
+      const ok = await confirm({
+        title: `Dar de baja “${skill.name}”`,
+        message:
+          'Dejará de ofrecerse al declarar habilidades. Las que ya la tienen declarada la conservan.',
+        confirmLabel: 'Dar de baja',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
     setErr(null);
     try {
       await adminService.updateSkill(skill.id, { isActive: !skill.isActive });

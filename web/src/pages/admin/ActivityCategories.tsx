@@ -3,6 +3,7 @@ import { apiError } from '../../api/client';
 import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { AsyncView, Card, Badge } from '../../components/ui';
+import { useConfirm } from '../../components/feedback';
 import { ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
 import type { ActivityCategoryItem } from '../../services/types';
 
@@ -79,6 +80,8 @@ export default function AdminActivityCategoriesPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const confirm = useConfirm();
+
   const toggleActive = async (c: ActivityCategoryItem) => {
     setErr(null);
     try {
@@ -86,9 +89,15 @@ export default function AdminActivityCategoriesPage() {
         const usage = await adminService.activityCategoryUsage(c.id);
         const aviso =
           usage.activities > 0
-            ? `${usage.activities} actividad${usage.activities === 1 ? '' : 'es'} usa${usage.activities === 1 ? '' : 'n'} esta categoría. Al darla de baja dejará de ofrecerse para nuevas actividades, pero las existentes la conservan. ¿Continuar?`
-            : `Dar de baja la categoría “${c.name}”. ¿Continuar?`;
-        if (!window.confirm(aviso)) return;
+            ? `${usage.activities} actividad${usage.activities === 1 ? '' : 'es'} usa${usage.activities === 1 ? '' : 'n'} esta categoría. Dejará de ofrecerse para nuevas actividades, pero las existentes la conservan.`
+            : 'Dejará de ofrecerse al publicar nuevas actividades. Puede reactivarla cuando quiera.';
+        const ok = await confirm({
+          title: `Dar de baja “${c.name}”`,
+          message: aviso,
+          confirmLabel: 'Dar de baja',
+          tone: 'danger',
+        });
+        if (!ok) return;
       }
       await adminService.updateActivityCategory(c.id, { isActive: !c.isActive });
       notify(c.isActive ? 'Categoría dada de baja.' : 'Categoría reactivada.');

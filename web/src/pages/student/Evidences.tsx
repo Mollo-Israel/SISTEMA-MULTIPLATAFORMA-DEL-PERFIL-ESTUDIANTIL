@@ -12,6 +12,7 @@ import {
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { Card, Badge, Loading, EmptyState, AsyncView } from '../../components/ui';
+import { useConfirm } from '../../components/feedback';
 import type {
   AcademicArea,
   Activity,
@@ -57,8 +58,16 @@ export default function StudentEvidencesPage() {
     window.setTimeout(() => setMsg(null), 4500);
   };
 
+  const confirm = useConfirm();
+
   const removeEvidence = async (e: Evidence) => {
-    if (!window.confirm('Se eliminará la evidencia y su archivo. ¿Continuar?')) return;
+    const ok = await confirm({
+      title: 'Eliminar evidencia',
+      message: 'Se eliminará la evidencia y su archivo. Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await evidenceService.remove(e.id);
       notify('Evidencia eliminada.');
@@ -69,7 +78,13 @@ export default function StudentEvidencesPage() {
   };
 
   const removeCertificate = async (c: ExternalCertificate) => {
-    if (!window.confirm(`Se eliminará el certificado “${c.certificateName}”. ¿Continuar?`)) return;
+    const ok = await confirm({
+      title: 'Eliminar certificado',
+      message: `Se eliminará “${c.certificateName}” y su archivo. Esta acción no se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await certificateService.remove(c.id);
       notify('Certificado eliminado.');

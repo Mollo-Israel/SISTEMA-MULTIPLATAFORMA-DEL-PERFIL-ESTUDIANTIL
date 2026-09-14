@@ -10,7 +10,6 @@ import {
   FiFolder,
   FiGrid,
   FiLayers,
-  FiLogOut,
   FiMenu,
   FiPaperclip,
   FiShield,
@@ -24,9 +23,9 @@ import {
 } from 'react-icons/fi';
 import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthContext';
-import { ROLE_LABEL } from '../constants';
 import { NAV } from '../navigation';
 import { TopProgress } from './feedback';
+import UserMenu from './UserMenu';
 
 const ICONS: Record<string, IconType> = {
   '/student': FiGrid,
@@ -57,7 +56,7 @@ const ICONS: Record<string, IconType> = {
 };
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   // En pantallas angostas el menu lateral se abre sobre el contenido. En
   // escritorio siempre esta visible y este estado no interviene.
@@ -77,7 +76,6 @@ export default function Layout() {
 
   if (!user) return null;
   const groups = NAV[user.role] ?? [];
-  const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
 
   return (
     <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`}>
@@ -136,17 +134,8 @@ export default function Layout() {
             </div>
           ))}
         </nav>
-        <div className="user-box">
-          <div>{user.firstName} {user.lastName}</div>
-          <div className="role">{ROLE_LABEL[user.role] ?? user.role}</div>
-          <button
-            className="btn btn-secondary btn-sm"
-            style={{ marginTop: '0.6rem', width: '100%' }}
-            onClick={logout}
-          >
-            <FiLogOut size={14} /> Cerrar sesión
-          </button>
-        </div>
+        {/* La sesion vive ahora en la esquina superior derecha: este bloque
+            crecia con el contenido y arrastraba el menu al desplazarse. */}
       </aside>
 
       <div className="main">
@@ -164,14 +153,7 @@ export default function Layout() {
             </button>
             <span className="page-title">{currentTitle(user.role, location.pathname)}</span>
           </div>
-          <div className="user-mini">
-            <div className="meta">
-              <b>{user.firstName} {user.lastName}</b>
-              <br />
-              <span>{ROLE_LABEL[user.role] ?? user.role}</span>
-            </div>
-            <div className="avatar">{initials}</div>
-          </div>
+          <UserMenu />
         </header>
         <motion.div
           className="content"

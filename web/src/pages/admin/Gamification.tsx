@@ -4,6 +4,7 @@ import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, GamificationCriterion } from '../../services/types';
 import { AsyncView, Card, Badge } from '../../components/ui';
+import { useConfirm } from '../../components/feedback';
 import { GAMIFICATION_TRIGGERS, lbl } from '../../constants';
 
 const TRIGGER_LABEL: Record<string, string> = Object.fromEntries(
@@ -81,7 +82,18 @@ export default function AdminGamificationPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const confirm = useConfirm();
+
   const toggleActive = async (c: GamificationCriterion) => {
+    if (c.isActive) {
+      const ok = await confirm({
+        title: `Desactivar “${c.name}”`,
+        message: 'El criterio dejará de aplicarse. Puede activarlo de nuevo cuando quiera.',
+        confirmLabel: 'Desactivar',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
     setErr(null);
     try {
       await adminService.updateCriterion(c.id, { isActive: !c.isActive });

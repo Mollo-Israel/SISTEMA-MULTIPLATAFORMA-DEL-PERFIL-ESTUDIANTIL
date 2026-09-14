@@ -4,6 +4,7 @@ import { apiError } from '../../api/client';
 import { adminService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { AsyncView, Card, Badge } from '../../components/ui';
+import { useConfirm } from '../../components/feedback';
 import { ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, SEMESTERS } from '../../constants';
 import type { PublicUser } from '../../services/types';
 
@@ -53,15 +54,20 @@ export default function AdminUsersPage() {
     }
   };
 
+  const confirm = useConfirm();
+
   const toggle = async (user: PublicUser) => {
     const activate = user.status !== 'active';
-    if (
-      !activate &&
-      !window.confirm(
-        `Desactivar a ${user.firstName} ${user.lastName}. Perderá el acceso al sistema de inmediato. ¿Continuar?`,
-      )
-    ) {
-      return;
+    if (!activate) {
+      const ok = await confirm({
+        title: `Desactivar a ${user.firstName} ${user.lastName}`,
+        message:
+          'Perderá el acceso al sistema de inmediato, aunque su sesión siga abierta. ' +
+          'Puede reactivar la cuenta cuando quiera.',
+        confirmLabel: 'Desactivar cuenta',
+        tone: 'danger',
+      });
+      if (!ok) return;
     }
     setErr(null);
     try {
