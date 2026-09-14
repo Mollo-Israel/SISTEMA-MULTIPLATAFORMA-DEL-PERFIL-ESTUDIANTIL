@@ -199,7 +199,7 @@ table { border-radius: 10px; overflow: hidden; }
 .act-item .grow { flex: 1; min-width: 0; }
 .act-item .grow b { font-size: 0.85rem; display: block; }
 .act-item .grow span { font-size: 0.74rem; color: var(--gray-500); }
-.qa-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.8rem; }
+.qa-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 0.8rem; }
 @media (max-width: 1050px) { .qa-grid { grid-template-columns: 1fr 1fr; } }
 .qa-card { display: flex; flex-direction: column; gap: 0.5rem; background: var(--white); border: 1px solid var(--gray-200); border-radius: 14px; padding: 1rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s; text-decoration: none; color: var(--gray-900); }
 .qa-card:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(107,18,32,0.1); border-color: #e7c9cf; }
@@ -651,4 +651,42 @@ input[type="file"] { padding: 0.45rem; background: var(--gray-50); }
 @media (max-width: 620px) {
   .user-menu-trigger .meta { display: none; }
   .user-dropdown { width: 240px; }
+}
+
+
+/* =========================================================================
+   PANTALLAS DEL ESTUDIANTE - piezas de apoyo
+   ========================================================================= */
+
+/* Ayuda debajo de un campo: aclara sin ocupar sitio */
+.field-hint { display: block; margin-top: 0.3rem; font-size: 0.74rem; color: var(--gray-500); }
+
+/* Fila de una tabla con un valor ya elegido */
+tr.row-picked td { background: rgba(107, 18, 32, 0.035); }
+tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
+
+/* Filtros rapidos en forma de pastilla */
+.chip-row { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--gray-300); background: var(--white); cursor: pointer;
+  border-radius: 999px; padding: 0.42rem 0.85rem; font-family: var(--font);
+  font-size: 0.8rem; font-weight: 600; color: var(--gray-700);
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+}
+.chip:hover { border-color: #e7c9cf; transform: translateY(-1px); }
+.chip.on { background: var(--bordo); border-color: var(--bordo); color: #fff; }
+
+/* Aviso breve dentro de una tarjeta */
+.inline-note {
+  display: flex; align-items: center; gap: 0.4rem; margin: 0.7rem 0 0;
+  font-size: 0.78rem; color: var(--amber);
+}
+.inline-note svg { flex-shrink: 0; }
+
+/* El buscador dentro de un encabezado de seccion no debe estirarse */
+.section-title .search-input { min-width: 260px; }
+@media (max-width: 700px) {
+  .section-title { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+  .section-title .search-input { min-width: 0; width: 100%; }
+  .filters .search-input { width: 100%; }
 }

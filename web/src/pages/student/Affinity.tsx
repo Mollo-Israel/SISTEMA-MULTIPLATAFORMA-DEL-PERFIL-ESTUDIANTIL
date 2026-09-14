@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { FiActivity, FiRefreshCw, FiSearch, FiSliders } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { affinityService, AffinitySnapshotView, AffinityWeightRow } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { AsyncView, Card, Badge } from '../../components/ui';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
+  SkeletonCards, SkeletonTable, Tabs,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { AffinityBars } from '../../components/charts';
 import {
   AffinityDisclaimer,
@@ -11,6 +16,9 @@ import {
   formatDateTime,
 } from '../../components/affinity';
 import { AFFINITY_BADGE, AFFINITY_LEVEL_LABEL, lbl } from '../../constants';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
  * Areas de afinidad del estudiante en el panel web (RF17).
@@ -22,23 +30,42 @@ import { AFFINITY_BADGE, AFFINITY_LEVEL_LABEL, lbl } from '../../constants';
 export default function StudentAffinityPage() {
   const summaryState = useAsync(() => affinityService.summary(), []);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [tab, setTab] = useState<'areas' | 'history' | 'rules'>('areas');
   const [history, setHistory] = useState<AffinitySnapshotView[] | null>(null);
   const [weights, setWeights] = useState<AffinityWeightRow[] | null>(null);
+  const [weightQuery, setWeightQuery] = useState('');
 
   const reloadSummary = summaryState.reload;
 
+  const visibleWeights = useMemo(() => {
+    if (!weights) return [];
+    const q = normalize(weightQuery.trim());
+    if (!q) return weights;
+    return weights.filter((w) =>
+      [w.label ?? '', w.description ?? ''].some((f) => normalize(f).includes(q)),
+    );
+  }, [weights, weightQuery]);
+
   const recalc = async () => {
+    const ok = await confirm({
+      title: 'Recalcular afinidad',
+      message:
+        'Se volverán a calcular tus áreas con la información que tienes registrada hoy. '
+        + 'El resultado anterior queda guardado en la pestaña «Evolución».',
+      confirmLabel: 'Recalcular',
+    });
+    if (!ok) return;
     setBusy(true);
-    setErr(null);
     try {
       await affinityService.recalculateMine();
       reloadSummary();
       setHistory(null);
+      toast.success('Afinidad recalculada', 'Tus áreas reflejan tu información más reciente.');
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setBusy(false);
     }
@@ -46,48 +73,44 @@ export default function StudentAffinityPage() {
 
   const openTab = async (next: 'areas' | 'history' | 'rules') => {
     setTab(next);
-    setErr(null);
     try {
       if (next === 'history' && !history) setHistory(await affinityService.history(10));
       if (next === 'rules' && !weights) setWeights(await affinityService.weights());
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
     }
   };
 
   return (
     <div>
-      <div className="flex between">
-        <h1>Mis afinidades</h1>
-        <button className="btn btn-primary" onClick={recalc} disabled={busy}>
-          {busy ? 'Recalculando…' : 'Recalcular afinidad'}
-        </button>
-      </div>
+      <PageHeader
+        title="Mis afinidades"
+        description="Las áreas con las que más se relaciona lo que declaras y lo que haces en la plataforma."
+        actions={
+          <Button loading={busy} onClick={recalc} icon={<FiRefreshCw size={15} />}>
+            Recalcular afinidad
+          </Button>
+        }
+      />
 
       <AffinityDisclaimer />
-      {err && <div className="alert alert-error">{err}</div>}
 
-      <div className="filters">
-        {([
+      <Tabs
+        value={tab}
+        onChange={(key) => openTab(key as 'areas' | 'history' | 'rules')}
+        items={[
           { key: 'areas', label: 'Áreas' },
           { key: 'history', label: 'Evolución' },
           { key: 'rules', label: 'Cómo se calcula' },
-        ] as const).map((t) => (
-          <button
-            key={t.key}
-            className={`btn btn-sm ${tab === t.key ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => openTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        ]}
+      />
 
       {tab === 'areas' && (
         <AsyncView
           loading={summaryState.loading}
           error={summaryState.error}
           data={summaryState.data}
+          skeleton={<SkeletonCards count={2} />}
         >
           {(summary) =>
             summary.status === 'insufficient_data' ? (
@@ -133,9 +156,12 @@ export default function StudentAffinityPage() {
           <p className="muted">
             Historial de los cálculos registrados. No es una predicción de resultados académicos.
           </p>
-          {!history && <p className="muted">Cargando…</p>}
+          {!history && <SkeletonTable rows={4} columns={6} />}
           {history && history.length === 0 && (
-            <p className="muted">Todavía no hay cálculos registrados.</p>
+            <EmptyState
+              icon={<FiActivity size={22} />}
+              message="Todavía no hay cálculos registrados. Recalcula tu afinidad para empezar el historial."
+            />
           )}
           {history && history.length > 0 && (
             <div className="scroll-x">
@@ -190,13 +216,38 @@ export default function StudentAffinityPage() {
       )}
 
       {tab === 'rules' && (
-        <Card title="Ponderaciones del motor">
+        <Card
+          title="Ponderaciones del motor"
+          actions={
+            weights && (
+              <div className="flex" style={{ gap: '0.6rem' }}>
+                <SearchInput
+                  value={weightQuery}
+                  onChange={setWeightQuery}
+                  placeholder="Buscar señal…"
+                />
+                <ResultCount shown={visibleWeights.length} total={weights.length} noun="reglas" />
+              </div>
+            )
+          }
+        >
           <p className="muted">
             Reglas con las que el sistema calcula la afinidad. Son configuración del sistema y se
             consultan solo de lectura.
           </p>
-          {!weights && <p className="muted">Cargando…</p>}
-          {weights && (
+          {!weights && <SkeletonTable rows={5} columns={3} />}
+          {weights && visibleWeights.length === 0 && (
+            <EmptyState
+              icon={<FiSearch size={22} />}
+              message={`Ninguna regla coincide con “${weightQuery}”.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={() => setWeightQuery('')}>
+                  Limpiar búsqueda
+                </Button>
+              }
+            />
+          )}
+          {weights && visibleWeights.length > 0 && (
             <div className="scroll-x">
               <table>
                 <thead>
@@ -207,9 +258,11 @@ export default function StudentAffinityPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {weights.map((w) => (
+                  {visibleWeights.map((w) => (
                     <tr key={w.code}>
-                      <td>{w.label}</td>
+                      <td className="flex" style={{ gap: '0.45rem' }}>
+                        <FiSliders size={13} /> {w.label}
+                      </td>
                       <td className="muted">{w.description}</td>
                       <td style={{ textAlign: 'right' }}>{w.points}</td>
                     </tr>

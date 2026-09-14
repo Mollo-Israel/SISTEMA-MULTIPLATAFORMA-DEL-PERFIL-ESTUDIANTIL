@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { FiUpload, FiLink, FiFile, FiTrash2, FiExternalLink, FiAward } from 'react-icons/fi';
+import {
+  FiUpload, FiLink, FiFile, FiTrash2, FiExternalLink, FiAward, FiSearch,
+} from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
   activityService,
@@ -11,8 +13,14 @@ import {
   uploadService,
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { Card, Badge, Loading, EmptyState, AsyncView } from '../../components/ui';
-import { useConfirm } from '../../components/feedback';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, Loading, PageHeader, ResultCount,
+  SearchInput, SkeletonTable,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 import type {
   AcademicArea,
   Activity,
@@ -40,8 +48,9 @@ export default function StudentEvidencesPage() {
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [evidenceQuery, setEvidenceQuery] = useState('');
+  const [certificateQuery, setCertificateQuery] = useState('');
+  const toast = useToast();
 
   useEffect(() => {
     catalogService.areas().then(setAreas).catch(() => {});
@@ -52,11 +61,7 @@ export default function StudentEvidencesPage() {
       .catch(() => {});
   }, []);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setErr(null);
-    window.setTimeout(() => setMsg(null), 4500);
-  };
+  const notify = (t: string) => toast.success(t);
 
   const confirm = useConfirm();
 
@@ -73,7 +78,7 @@ export default function StudentEvidencesPage() {
       notify('Evidencia eliminada.');
       evidences.reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     }
   };
 
@@ -90,41 +95,73 @@ export default function StudentEvidencesPage() {
       notify('Certificado eliminado.');
       certificates.reload();
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     }
   };
 
   return (
     <div>
-      <h1>Evidencias y certificados</h1>
-      <p className="muted">
-        Respalda tu trayectoria con enlaces o archivos. Los certificados externos se registran como
-        evidencia: el sistema no los certifica ni los valida oficialmente.
-      </p>
-
-      {msg && <div className="alert alert-success">{msg}</div>}
-      {err && <div className="alert alert-error">{err}</div>}
+      <PageHeader
+        title="Evidencias y certificados"
+        description="Respalda tu trayectoria con enlaces o archivos. Los certificados externos se registran como evidencia: el sistema no los certifica ni los valida oficialmente."
+      />
 
       <EvidenceForm
         areas={areas}
         projects={projects}
         activities={activities}
-        onError={setErr}
+        onError={(m) => toast.error(m)}
         onSaved={() => {
           notify('Evidencia registrada.');
           evidences.reload();
         }}
       />
 
-      <Card title="Mis evidencias">
+      <Card
+        title="Mis evidencias"
+        actions={
+          <SearchInput
+            value={evidenceQuery}
+            onChange={setEvidenceQuery}
+            placeholder="Buscar evidencia…"
+          />
+        }
+      >
         <AsyncView
           loading={evidences.loading}
           error={evidences.error}
           data={evidences.data}
+          skeleton={<SkeletonTable rows={4} columns={3} />}
           isEmpty={(d) => d.length === 0}
           emptyMessage="Todavía no registras evidencias. Usa el formulario de arriba para agregar la primera."
         >
-          {(rows) => (
+          {(all) => {
+            const q = normalize(evidenceQuery.trim());
+            const rows = q
+              ? all.filter((e) =>
+                  [e.description ?? '', e.fileName ?? '', e.project?.title ?? '',
+                   e.activity?.title ?? '', e.academicArea?.name ?? '']
+                    .some((f) => normalize(f).includes(q)),
+                )
+              : all;
+            if (rows.length === 0) {
+              return (
+                <EmptyState
+                  icon={<FiSearch size={22} />}
+                  message={`Ninguna evidencia coincide con “${evidenceQuery}”.`}
+                  action={
+                    <Button variant="secondary" size="sm" onClick={() => setEvidenceQuery('')}>
+                      Limpiar búsqueda
+                    </Button>
+                  }
+                />
+              );
+            }
+            return (
+            <>
+            <div className="flex between" style={{ marginBottom: '0.6rem' }}>
+              <ResultCount shown={rows.length} total={all.length} noun="evidencias" />
+            </div>
             <div className="evidence-list">
               {rows.map((e) => (
                 <div key={e.id} className="evidence-item">
@@ -164,35 +201,73 @@ export default function StudentEvidencesPage() {
                     >
                       <FiExternalLink /> Abrir
                     </a>
-                    <button className="btn btn-secondary btn-sm" onClick={() => removeEvidence(e)}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => removeEvidence(e)}
+                      title="Eliminar evidencia"
+                      aria-label="Eliminar evidencia"
+                    >
                       <FiTrash2 />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-          )}
+            </>
+            );
+          }}
         </AsyncView>
       </Card>
 
       <CertificateForm
         areas={areas}
-        onError={setErr}
+        onError={(m) => toast.error(m)}
         onSaved={() => {
           notify('Certificado registrado.');
           certificates.reload();
         }}
       />
 
-      <Card title="Mis certificados externos">
+      <Card
+        title="Mis certificados externos"
+        actions={
+          <SearchInput
+            value={certificateQuery}
+            onChange={setCertificateQuery}
+            placeholder="Buscar certificado o emisor…"
+          />
+        }
+      >
         <AsyncView
           loading={certificates.loading}
           error={certificates.error}
           data={certificates.data}
+          skeleton={<SkeletonTable rows={3} columns={5} />}
           isEmpty={(d) => d.length === 0}
           emptyMessage="Todavía no registras certificados externos."
         >
-          {(rows) => (
+          {(allCerts) => {
+            const q = normalize(certificateQuery.trim());
+            const rows = q
+              ? allCerts.filter((c) =>
+                  [c.certificateName, c.issuer, c.academicArea?.name ?? '', c.description ?? '']
+                    .some((f) => normalize(f).includes(q)),
+                )
+              : allCerts;
+            if (rows.length === 0) {
+              return (
+                <EmptyState
+                  icon={<FiSearch size={22} />}
+                  message={`Ningún certificado coincide con “${certificateQuery}”.`}
+                  action={
+                    <Button variant="secondary" size="sm" onClick={() => setCertificateQuery('')}>
+                      Limpiar búsqueda
+                    </Button>
+                  }
+                />
+              );
+            }
+            return (
             <div className="scroll-x">
               <table>
                 <thead>
@@ -242,6 +317,8 @@ export default function StudentEvidencesPage() {
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={() => removeCertificate(c)}
+                          title="Eliminar certificado"
+                          aria-label="Eliminar certificado"
                         >
                           <FiTrash2 />
                         </button>
@@ -251,7 +328,8 @@ export default function StudentEvidencesPage() {
                 </tbody>
               </table>
             </div>
-          )}
+            );
+          }}
         </AsyncView>
       </Card>
 
@@ -264,6 +342,7 @@ export default function StudentEvidencesPage() {
           loading={constancies.loading}
           error={constancies.error}
           data={constancies.data}
+          skeleton={<SkeletonTable rows={2} columns={3} />}
           isEmpty={(d: any) => d.length === 0}
           emptyMessage="Todavía no recibes constancias internas."
         >

@@ -1,5 +1,8 @@
 import { useCallback, useState } from 'react';
-import { FiChevronDown, FiChevronRight, FiExternalLink, FiInfo } from 'react-icons/fi';
+import {
+  FiBookmark, FiChevronDown, FiChevronRight, FiCompass, FiCornerUpLeft, FiExternalLink,
+  FiInfo, FiSearch, FiSlash,
+} from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
   recommendationService,
@@ -8,7 +11,15 @@ import {
   RecommendationsResponse,
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { AsyncView, Card, Badge, Loading } from '../../components/ui';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, Loading, PageHeader, ResultCount, SearchInput,
+  SkeletonCards, Stagger, Tabs,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 
 /**
  * Recomendaciones academicas del estudiante en el panel web (RF18).
@@ -37,8 +48,10 @@ const HINTS = [
 
 export default function StudentRecommendationsPage() {
   const [tab, setTab] = useState<Tab>('foryou');
-  const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [open, setOpen] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, RecommendationDetail>>({});
@@ -52,20 +65,20 @@ export default function StudentRecommendationsPage() {
 
   const loadHistory = useCallback(async (status: 'saved' | 'dismissed') => {
     setLoadingHistory(true);
-    setErr(null);
     try {
       setHistory(await recommendationService.history(status));
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setLoadingHistory(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const changeTab = (next: Tab) => {
     setTab(next);
     setOpen(null);
-    setErr(null);
+    setHistory(null);
     if (next === 'foryou') reloadMain();
     else loadHistory(next);
   };
@@ -79,21 +92,25 @@ export default function StudentRecommendationsPage() {
     setOpen(id);
     if (details[id]) return;
     setLoadingDetail(id);
-    setErr(null);
     try {
       const detail = await recommendationService.detail(id);
       setDetails((prev) => ({ ...prev, [id]: detail }));
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
       setOpen(null);
     } finally {
       setLoadingDetail(null);
     }
   };
 
+  const DECISION_MESSAGE: Record<string, string> = {
+    saved: 'Recomendación guardada. La encuentras en la pestaña «Guardadas».',
+    dismissed: 'Recomendación descartada. Puedes recuperarla desde «Descartadas».',
+    viewed: 'Recomendación devuelta a «Para ti».',
+  };
+
   const decide = async (id: string, status: 'saved' | 'dismissed' | 'viewed') => {
     setBusy(id);
-    setErr(null);
     try {
       await recommendationService.decide(id, status);
       setDetails((prev) => {
@@ -104,14 +121,37 @@ export default function StudentRecommendationsPage() {
       setOpen(null);
       if (tab === 'foryou') reloadMain();
       else loadHistory(tab);
+      toast.success(DECISION_MESSAGE[status]);
     } catch (e) {
-      setErr(apiError(e));
+      toast.error(apiError(e));
     } finally {
       setBusy(null);
     }
   };
 
+  /** Descartar saca la recomendacion de la vista: se confirma antes. */
+  const dismiss = async (item: RecommendationItem) => {
+    const ok = await confirm({
+      title: 'Descartar recomendación',
+      message: (
+        <>
+          Dejaremos de mostrarte <strong>{item.title}</strong> entre tus sugerencias. Podrás
+          recuperarla desde la pestaña «Descartadas».
+        </>
+      ),
+      confirmLabel: 'No me interesa',
+    });
+    if (ok) decide(item.id, 'dismissed');
+  };
+
   const counts = main.data?.counts;
+
+  const q = normalize(query.trim());
+  const matches = (item: RecommendationItem) =>
+    !q
+    || [item.title, item.description ?? '', item.area?.name ?? '']
+      .some((field) => normalize(field).includes(q));
+  const historyRows = (history ?? []).filter(matches);
 
   const renderItem = (item: RecommendationItem, fromHistory: boolean) => {
     const isOpen = open === item.id;
@@ -191,29 +231,34 @@ export default function StudentRecommendationsPage() {
               )}
 
               {fromHistory || item.status === 'dismissed' ? (
-                <button
-                  className="btn btn-sm btn-primary"
+                <Button
+                  size="sm"
+                  loading={busy === item.id}
                   onClick={() => decide(item.id, 'viewed')}
-                  disabled={busy === item.id}
+                  icon={<FiCornerUpLeft size={14} />}
                 >
                   Devolver a mis recomendaciones
-                </button>
+                </Button>
               ) : (
                 <>
-                  <button
-                    className="btn btn-sm btn-primary"
+                  <Button
+                    size="sm"
+                    loading={busy === item.id}
+                    disabled={item.status === 'saved'}
                     onClick={() => decide(item.id, 'saved')}
-                    disabled={busy === item.id || item.status === 'saved'}
+                    icon={<FiBookmark size={14} />}
                   >
                     {item.status === 'saved' ? 'Guardada' : 'Guardar'}
-                  </button>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    onClick={() => decide(item.id, 'dismissed')}
-                    disabled={busy === item.id}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={busy === item.id}
+                    onClick={() => dismiss(item)}
+                    icon={<FiSlash size={14} />}
                   >
                     No me interesa
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -225,7 +270,17 @@ export default function StudentRecommendationsPage() {
 
   return (
     <div>
-      <h1>Recomendaciones</h1>
+      <PageHeader
+        title="Recomendaciones"
+        description="Actividades, oportunidades y compañeros sugeridos a partir de tu perfil."
+        actions={
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar recomendación…"
+          />
+        }
+      />
 
       <div className="scope-note">
         <FiInfo size={16} />
@@ -235,26 +290,23 @@ export default function StudentRecommendationsPage() {
         </span>
       </div>
 
-      {err && <div className="alert alert-error">{err}</div>}
-
-      <div className="filters">
-        {([
+      <Tabs
+        value={tab}
+        onChange={(key) => changeTab(key as Tab)}
+        items={[
           { key: 'foryou', label: 'Para ti' },
-          { key: 'saved', label: `Guardadas${counts?.saved ? ` (${counts.saved})` : ''}` },
-          { key: 'dismissed', label: `Descartadas${counts?.dismissed ? ` (${counts.dismissed})` : ''}` },
-        ] as const).map((t) => (
-          <button
-            key={t.key}
-            className={`btn btn-sm ${tab === t.key ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => changeTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+          { key: 'saved', label: 'Guardadas', count: counts?.saved },
+          { key: 'dismissed', label: 'Descartadas', count: counts?.dismissed },
+        ]}
+      />
 
       {tab === 'foryou' && (
-        <AsyncView loading={main.loading} error={main.error} data={main.data}>
+        <AsyncView
+          loading={main.loading}
+          error={main.error}
+          data={main.data}
+          skeleton={<SkeletonCards count={3} />}
+        >
           {(data) => {
             if (data.outcome === 'insufficient_profile') {
               return (
@@ -275,12 +327,35 @@ export default function StudentRecommendationsPage() {
                 </Card>
               );
             }
+            const groups = data.groups
+              .map((group) => ({ ...group, items: group.items.filter(matches) }))
+              .filter((group) => group.items.length > 0);
+            const total = data.groups.reduce((n, group) => n + group.items.length, 0);
+            const shown = groups.reduce((n, group) => n + group.items.length, 0);
+            if (shown === 0) {
+              return (
+                <EmptyState
+                  icon={<FiSearch size={22} />}
+                  message={`Ninguna recomendación coincide con “${query}”.`}
+                  action={
+                    <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
+                      Limpiar búsqueda
+                    </Button>
+                  }
+                />
+              );
+            }
             return (
               <>
-                {data.groups.map((group) => (
-                  <Card key={group.type} title={`${group.label} (${group.items.length})`}>
-                    {group.items.map((item) => renderItem(item, false))}
-                  </Card>
+                <div className="flex" style={{ marginBottom: '0.7rem' }}>
+                  <ResultCount shown={shown} total={total} noun="recomendaciones" />
+                </div>
+                {groups.map((group, index) => (
+                  <Stagger key={group.type} index={index}>
+                    <Card title={`${group.label} (${group.items.length})`}>
+                      {group.items.map((item) => renderItem(item, false))}
+                    </Card>
+                  </Stagger>
                 ))}
               </>
             );
@@ -289,16 +364,41 @@ export default function StudentRecommendationsPage() {
       )}
 
       {tab !== 'foryou' && (
-        <Card title={tab === 'saved' ? 'Recomendaciones guardadas' : 'Recomendaciones descartadas'}>
-          {loadingHistory && <Loading />}
+        <Card
+          title={tab === 'saved' ? 'Recomendaciones guardadas' : 'Recomendaciones descartadas'}
+          actions={
+            history && history.length > 0 ? (
+              <ResultCount
+                shown={historyRows.length}
+                total={history.length}
+                noun="recomendaciones"
+              />
+            ) : undefined
+          }
+        >
+          {loadingHistory && <SkeletonCards count={2} />}
           {!loadingHistory && history && history.length === 0 && (
-            <p className="muted">
-              {tab === 'saved'
-                ? 'Todavía no guardaste ninguna recomendación.'
-                : 'No descartaste ninguna recomendación.'}
-            </p>
+            <EmptyState
+              icon={<FiCompass size={22} />}
+              message={
+                tab === 'saved'
+                  ? 'Todavía no guardaste ninguna recomendación.'
+                  : 'No descartaste ninguna recomendación.'
+              }
+            />
           )}
-          {!loadingHistory && history?.map((item) => renderItem(item, true))}
+          {!loadingHistory && history && history.length > 0 && historyRows.length === 0 && (
+            <EmptyState
+              icon={<FiSearch size={22} />}
+              message={`Ninguna recomendación coincide con “${query}”.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
+                  Limpiar búsqueda
+                </Button>
+              }
+            />
+          )}
+          {!loadingHistory && historyRows.map((item) => renderItem(item, true))}
         </Card>
       )}
     </div>

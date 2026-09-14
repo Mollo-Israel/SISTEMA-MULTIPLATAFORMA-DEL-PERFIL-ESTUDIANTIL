@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  FiFolder, FiCalendar, FiTarget, FiBarChart2, FiUpload, FiCheckCircle, FiCircle, FiAward, FiFileText, FiHelpCircle,
+  FiFolder, FiCalendar, FiTarget, FiBarChart2, FiUpload, FiCheckCircle, FiCircle, FiCompass, FiHelpCircle,
 } from 'react-icons/fi';
 import { useAsync } from '../../hooks/useAsync';
 import { profileService } from '../../services';
-import { AsyncView, Card } from '../../components/ui';
+import { AsyncView, Card, PageHeader, SkeletonCards } from '../../components/ui';
 import { AffinityBars, CompletionDonut } from '../../components/charts';
 import { ACTIVITY_TYPE_LABEL, PROFILE_STATUS_LABEL, PROJECT_STATUS_LABEL, REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
 
@@ -13,10 +13,11 @@ const tile = { hidden: { opacity: 0, y: 16 }, show: (i = 0) => ({ opacity: 1, y:
 
 const QUICK = [
   { to: '/student/projects', icon: <FiFolder />, t: 'Registrar proyecto', d: 'Documenta tus proyectos.' },
-  { to: '/student/projects', icon: <FiUpload />, t: 'Subir evidencia', d: 'Comparte tus logros.' },
+  { to: '/student/evidences', icon: <FiUpload />, t: 'Subir evidencia', d: 'Respalda tu trayectoria.' },
   { to: '/student/activities', icon: <FiCalendar />, t: 'Ver actividades', d: 'Talleres y eventos.' },
   { to: '/student/affinity', icon: <FiBarChart2 />, t: 'Ver afinidades', d: 'Tus áreas destacadas.' },
   { to: '/student/interests', icon: <FiTarget />, t: 'Intereses y habilidades', d: 'Actualiza tu perfil.' },
+  { to: '/student/recommendations', icon: <FiCompass />, t: 'Recomendaciones', d: 'Sugerencias para ti.' },
 ];
 
 export default function StudentDashboard() {
@@ -24,8 +25,10 @@ export default function StudentDashboard() {
 
   return (
     <div>
-      <h1>Mi panel</h1>
-      <p className="muted">Tu perfil se construye con lo que declaras y con tu actividad académica.</p>
+      <PageHeader
+        title="Mi panel"
+        description="Tu perfil se construye con lo que declaras y con tu actividad académica."
+      />
 
       {!summary.loading && !summary.data && (
         <Card title="Aún no tienes perfil">
@@ -34,7 +37,13 @@ export default function StudentDashboard() {
         </Card>
       )}
 
-      <AsyncView loading={summary.loading} error={summary.error} data={summary.data} emptyMessage="">
+      <AsyncView
+        loading={summary.loading}
+        error={summary.error}
+        data={summary.data}
+        skeleton={<SkeletonCards count={3} />}
+        emptyMessage=""
+      >
         {(d) => {
           const checklist = [
             { t: 'Definir semestre', done: !!d.profile.semester },
@@ -106,7 +115,7 @@ export default function StudentDashboard() {
                     <div className="ev-tile amber"><div className="n">{d.internalConstancies.length}</div><div className="l">Constancias</div></div>
                     <div className="ev-tile"><div className="n">{d.interests.length + d.skills.length}</div><div className="l">Intereses + habilidades</div></div>
                   </div>
-                  <Link to="/student/projects" className="btn btn-secondary btn-sm mt" style={{ width: '100%', justifyContent: 'center' }}>Subir evidencia</Link>
+                  <Link to="/student/evidences" className="btn btn-secondary btn-sm mt" style={{ width: '100%', justifyContent: 'center' }}>Subir evidencia</Link>
                 </Card>
 
                 {/* Resumen */}
