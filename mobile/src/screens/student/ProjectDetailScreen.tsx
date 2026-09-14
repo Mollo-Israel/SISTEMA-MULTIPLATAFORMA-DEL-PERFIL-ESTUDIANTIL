@@ -79,6 +79,9 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
 
   const [showInvite, setShowInvite] = useState(false);
   const [candidates, setCandidates] = useState<any[]>([]);
+  const [peerQuery, setPeerQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [invitee, setInvitee] = useState('');
   const [role, setRole] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -165,20 +168,35 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
     }
   };
 
-  const openInvite = async () => {
+  const openInvite = () => {
     setShowInvite(true);
     setError(null);
+    setCandidates([]);
+    setPeerQuery('');
+    setSearched(false);
+  };
+
+  /**
+   * Busca companeros por nombre (RF14).
+   *
+   * Antes se pedia el directorio institucional de estudiantes, reservado a
+   * docente, director y administrador: un estudiante recibia 403 y la lista de
+   * candidatos salia siempre vacia. Ahora se usa la busqueda entre estudiantes,
+   * que devuelve solo nombre y semestre.
+   */
+  const buscarCompaneros = async () => {
+    const termino = peerQuery.trim();
+    if (termino.length < 2) return;
+    setSearching(true);
+    setError(null);
     try {
-      const dir = await profileService.listStudents();
-      // Se excluyen el responsable y quienes ya son integrantes.
-      const memberIds = new Set(members.map((m) => m.userId));
-      setCandidates(
-        (dir.students ?? []).filter(
-          (s: any) => s.profileId !== project?.createdByProfileId && !memberIds.has(s.userId),
-        ),
-      );
-    } catch {
-      setCandidates([]);
+      const encontrados = await profileService.searchPeers(termino);
+      setCandidates(encontrados.filter((c) => c.profileId !== project?.createdByProfileId));
+      setSearched(true);
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -442,11 +460,27 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
         {isOwner && showInvite && (
           <View style={styles.inviteBox}>
             <Text style={styles.label}>Estudiante</Text>
-            {candidates.length === 0 ? (
-              <Muted>No hay estudiantes disponibles para invitar.</Muted>
-            ) : (
+            <Field
+              label="Buscar por nombre"
+              value={peerQuery}
+              onChangeText={setPeerQuery}
+              placeholder="Escribe al menos 2 letras"
+            />
+            <Button
+              title={searching ? 'Buscando…' : 'Buscar'}
+              variant="secondary"
+              onPress={buscarCompaneros}
+              disabled={searching || peerQuery.trim().length < 2}
+            />
+            {!searched && !searching && (
+              <Muted>Busca por nombre al compañero que quieres invitar.</Muted>
+            )}
+            {searched && candidates.length === 0 && (
+              <Muted>Ningún estudiante coincide con esa búsqueda.</Muted>
+            )}
+            {candidates.length > 0 && (
               <View style={styles.chips}>
-                {candidates.slice(0, 20).map((c: any) => (
+                {candidates.map((c: any) => (
                   <Pressable
                     key={c.profileId}
                     onPress={() => setInvitee(c.profileId)}
@@ -454,6 +488,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
                   >
                     <Text style={invitee === c.profileId ? styles.chipOnText : styles.chipText}>
                       {c.studentName}
+                      {c.semester ? ` · ${c.semester}.º sem.` : ''}
                     </Text>
                   </Pressable>
                 ))}

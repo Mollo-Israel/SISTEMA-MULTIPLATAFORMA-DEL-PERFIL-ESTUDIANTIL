@@ -17,6 +17,7 @@ import MyActivitiesScreen from '../screens/student/MyActivitiesScreen';
 import ProjectsScreen from '../screens/student/ProjectsScreen';
 import ProjectDetailScreen from '../screens/student/ProjectDetailScreen';
 import AffinityScreen from '../screens/student/AffinityScreen';
+import RecommendationsScreen from '../screens/student/RecommendationsScreen';
 
 import TeacherActivities from '../screens/teacher/TeacherActivities';
 import StudentSummary from '../screens/teacher/StudentSummary';
@@ -105,6 +106,13 @@ function StudentTabs() {
         name="Afinidad"
         component={AffinityScreen}
         options={{ title: 'Mis afinidades', ...withLogout }}
+      />
+      {/* RF18 nombra la pantalla "Recomendaciones". La pestana usa una
+          etiqueta corta porque ya son seis en la barra inferior. */}
+      <Tab.Screen
+        name="Sugerencias"
+        component={RecommendationsScreen}
+        options={{ title: 'Recomendaciones', ...withLogout }}
       />
     </Tab.Navigator>
   );
