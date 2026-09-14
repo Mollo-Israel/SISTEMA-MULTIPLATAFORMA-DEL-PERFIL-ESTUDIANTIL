@@ -14,6 +14,7 @@ import InterestsSkillsPage from './pages/student/InterestsSkills';
 import StudentProjectsPage from './pages/student/Projects';
 import StudentActivitiesPage from './pages/student/Activities';
 import StudentAffinityPage from './pages/student/Affinity';
+import StudentRecommendationsPage from './pages/student/Recommendations';
 import StudentEvidencesPage from './pages/student/Evidences';
 
 import TeacherDashboard from './pages/teacher/Dashboard';
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="/student/activities" element={<StudentActivitiesPage />} />
             <Route path="/student/evidences" element={<StudentEvidencesPage />} />
             <Route path="/student/affinity" element={<StudentAffinityPage />} />
+            <Route path="/student/recommendations" element={<StudentRecommendationsPage />} />
           </Route>
 
           <Route element={guarded([T], <Layout />)}>

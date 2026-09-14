@@ -242,6 +242,67 @@ export const affinityService = {
       .then((r) => r.data),
 };
 
+/** Un motivo por el que se recomienda algo, con su peso (RF18). */
+export interface RecommendationReasonView {
+  code: string;
+  label: string;
+  points: number;
+}
+
+export interface RecommendationItem {
+  id: string;
+  type: 'activity' | 'opportunity' | 'external_course' | 'resource' | 'strengthening_area' | 'teammate';
+  typeLabel: string;
+  status: 'new' | 'viewed' | 'saved' | 'dismissed';
+  title: string;
+  description: string | null;
+  targetId: string;
+  targetLink: string | null;
+  area: { id: string; name: string } | null;
+  score: number;
+  reasons: RecommendationReasonView[];
+  /** Falso cuando el elemento ya no esta disponible en la plataforma. */
+  isCurrent: boolean;
+  generatedAt: string;
+  viewedAt: string | null;
+  decidedAt: string | null;
+}
+
+export interface RecommendationGroup {
+  type: string;
+  label: string;
+  items: RecommendationItem[];
+}
+
+/**
+ * La Tabla 2.27 define tres resultados distintos: hay recomendaciones, el perfil
+ * no tiene informacion suficiente (flujo 2a) o no hay coincidencias (flujo 3a).
+ */
+export interface RecommendationsResponse {
+  outcome: 'available' | 'insufficient_profile' | 'no_matches';
+  message: string;
+  generatedAt: string;
+  rulesVersion: string;
+  counts: { total: number; saved: number; dismissed: number; byType: Record<string, number> };
+  groups: RecommendationGroup[];
+}
+
+export interface RecommendationDetail extends RecommendationItem {
+  detail: Record<string, unknown> | null;
+}
+
+export const recommendationService = {
+  mine: () => api.get<RecommendationsResponse>('/recommendations/me').then((r) => r.data),
+  /** Abrir el detalle marca la recomendacion como vista (markAsViewed). */
+  detail: (id: string) =>
+    api.get<RecommendationDetail>(`/recommendations/me/${id}`).then((r) => r.data),
+  decide: (id: string, status: 'viewed' | 'saved' | 'dismissed') =>
+    api.patch<RecommendationItem>(`/recommendations/me/${id}`, { status }).then((r) => r.data),
+  history: (status: 'saved' | 'dismissed') =>
+    api.get<RecommendationItem[]>(`/recommendations/me/history?status=${status}`).then((r) => r.data),
+  rules: () => api.get('/recommendations/rules').then((r) => r.data),
+};
+
 export const reportService = {
   teacherOverview: () => api.get('/reports/teacher/overview').then((r) => r.data),
   teacherAffinity: () => api.get('/reports/teacher/affinity-summary').then((r) => r.data),
