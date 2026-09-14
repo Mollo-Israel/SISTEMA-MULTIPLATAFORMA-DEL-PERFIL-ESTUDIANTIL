@@ -1,6 +1,6 @@
 import { useAsync } from '../../hooks/useAsync';
 import { reportService } from '../../services';
-import { AsyncView, Card, Badge } from '../../components/ui';
+import { AsyncView, Badge, Card, PageHeader, SkeletonTable } from '../../components/ui';
 
 export default function TeacherReportsPage() {
   const affinity = useAsync(() => reportService.teacherAffinity(), []);
@@ -8,11 +8,18 @@ export default function TeacherReportsPage() {
 
   return (
     <div>
-      <h1>Reportes del curso</h1>
-      <p className="muted">Reportes descriptivos. No generan ranking de estudiantes ni evalúan rendimiento.</p>
+      <PageHeader
+        title="Reportes del curso"
+        description="Reportes descriptivos. No generan ranking de estudiantes ni evalúan rendimiento."
+      />
 
       <Card title="Áreas de afinidad del grupo">
-        <AsyncView loading={affinity.loading} error={affinity.error} data={affinity.data}>
+        <AsyncView
+          loading={affinity.loading}
+          error={affinity.error}
+          data={affinity.data}
+          skeleton={<SkeletonTable rows={4} columns={4} />}
+        >
           {(d: any) => d.groupAffinity.length === 0 ? <p className="muted">Sin datos.</p> : (
             <table>
               <thead><tr><th>Área</th><th>Estudiantes</th><th>Promedio</th><th>Bajo/Medio/Alto</th></tr></thead>
@@ -30,7 +37,12 @@ export default function TeacherReportsPage() {
       </Card>
 
       <Card title="Proyectos registrados">
-        <AsyncView loading={projects.loading} error={projects.error} data={projects.data}>
+        <AsyncView
+          loading={projects.loading}
+          error={projects.error}
+          data={projects.data}
+          skeleton={<SkeletonTable rows={3} columns={2} />}
+        >
           {(d: any) => (
             <>
               <p><strong>Total:</strong> {d.total}</p>

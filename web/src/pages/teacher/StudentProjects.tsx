@@ -10,7 +10,11 @@ import {
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { catalogService, projectFeedbackService, projectService } from '../../services';
-import { AsyncView, Card, Badge, Loading, EmptyState } from '../../components/ui';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
+  SkeletonCards, SkeletonTable, Stagger,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUSES, lbl } from '../../constants';
 import type {
   AcademicArea,
@@ -47,7 +51,8 @@ export default function TeacherStudentProjectsPage() {
   const [comment, setComment] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const params = useMemo(() => {
     const p: Record<string, string> = {};
@@ -77,16 +82,11 @@ export default function TeacherStudentProjectsPage() {
     catalogService.areas().then(setAreas).catch(() => {});
   }, []);
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setError(null);
-    window.setTimeout(() => setMsg(null), 4000);
-  };
+  const notify = (t: string, detail?: string) => toast.success(t, detail);
 
   const openProject = async (id: string) => {
     setSelectedId(id);
     setDetailLoading(true);
-    setError(null);
     setComment('');
     setEditingId(null);
     try {
@@ -97,7 +97,7 @@ export default function TeacherStudentProjectsPage() {
       setMembers(m);
       setFeedback(f);
     } catch (e) {
-      setError(apiError(e, 'No se pudo cargar el proyecto.'));
+      toast.error(apiError(e, 'No se pudo cargar el proyecto.'));
       setMembers([]);
       setFeedback([]);
     } finally {
@@ -108,21 +108,28 @@ export default function TeacherStudentProjectsPage() {
   const submitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedId) return;
+    const ok = await confirm({
+      title: editingId ? 'Guardar los cambios' : 'Publicar la retroalimentación',
+      message: editingId
+        ? 'El estudiante y sus integrantes verán el comentario corregido en su portafolio.'
+        : 'El estudiante y sus integrantes verán este comentario en su portafolio. Es orientación académica, no una nota.',
+      confirmLabel: editingId ? 'Guardar cambios' : 'Publicar',
+    });
+    if (!ok) return;
     setSaving(true);
-    setError(null);
     try {
       if (editingId) {
         await projectFeedbackService.update(selectedId, editingId, comment);
         notify('Retroalimentación actualizada.');
       } else {
         await projectFeedbackService.create(selectedId, comment);
-        notify('Retroalimentación registrada. El estudiante ya puede verla.');
+        notify('Retroalimentación registrada.', 'El estudiante ya puede verla.');
       }
       setComment('');
       setEditingId(null);
       setFeedback(await projectFeedbackService.list(selectedId));
     } catch (e2) {
-      setError(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setSaving(false);
     }
@@ -136,15 +143,10 @@ export default function TeacherStudentProjectsPage() {
 
   return (
     <div>
-      <h1>Proyectos estudiantiles</h1>
-      <p className="muted">
-        Consulte los proyectos que sus estudiantes habilitaron para revisión docente y registre
-        retroalimentación académica. La retroalimentación es orientación complementaria: no es una
-        nota ni una evaluación oficial.
-      </p>
-
-      {msg && <div className="alert alert-success">{msg}</div>}
-      {error && <div className="alert alert-error">{error}</div>}
+      <PageHeader
+        title="Proyectos estudiantiles"
+        description="Los proyectos que sus estudiantes habilitaron para revisión docente. La retroalimentación es orientación complementaria: no es una nota ni una evaluación oficial."
+      />
 
       {scope?.restricted && !noScope && (
         <div className="scope-note">
@@ -230,19 +232,20 @@ export default function TeacherStudentProjectsPage() {
             </div>
             <div className="field">
               <label>Estudiante o título</label>
-              <input
+              <SearchInput
                 value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                placeholder="Buscar…"
+                onChange={(value) => setFilters({ ...filters, search: value })}
+                placeholder="Nombre del estudiante o título…"
               />
             </div>
-            <button className="btn btn-secondary btn-sm" type="submit">
-              <FiSearch /> Buscar
-            </button>
+            <Button type="submit" variant="secondary" size="sm" icon={<FiSearch size={14} />}>
+              Buscar
+            </Button>
             {hasFilters && (
-              <button
+              <Button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   const empty = { status: '', areaId: '', technology: '', semester: '', search: '' };
                   setFilters(empty);
@@ -250,7 +253,7 @@ export default function TeacherStudentProjectsPage() {
                 }}
               >
                 Limpiar
-              </button>
+              </Button>
             )}
           </form>
 
@@ -258,6 +261,7 @@ export default function TeacherStudentProjectsPage() {
             loading={loading}
             error={error}
             data={data}
+            skeleton={<SkeletonTable rows={5} columns={6} />}
             isEmpty={() => projects.length === 0}
             emptyMessage={
               hasFilters
@@ -280,7 +284,7 @@ export default function TeacherStudentProjectsPage() {
                   </thead>
                   <tbody>
                     {projects.map((p) => (
-                      <tr key={p.id}>
+                      <tr key={p.id} className={selectedId === p.id ? 'row-picked' : undefined}>
                         <td>
                           <strong>{p.title}</strong>
                           {p.technologies && p.technologies.length > 0 && (
@@ -296,12 +300,14 @@ export default function TeacherStudentProjectsPage() {
                           </Badge>
                         </td>
                         <td>
-                          <button
-                            className={`btn btn-sm ${selectedId === p.id ? 'btn-primary' : 'btn-secondary'}`}
+                          <Button
+                            size="sm"
+                            variant={selectedId === p.id ? 'primary' : 'secondary'}
+                            loading={detailLoading && selectedId === p.id}
                             onClick={() => openProject(p.id)}
                           >
                             Abrir
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -311,19 +317,29 @@ export default function TeacherStudentProjectsPage() {
             )}
           </AsyncView>
           {projects.length > 0 && (
-            <p className="muted" style={{ marginTop: '0.6rem', fontSize: '0.8rem' }}>
-              {projects.length} proyecto{projects.length === 1 ? '' : 's'} visible
-              {projects.length === 1 ? '' : 's'}
-            </p>
+            <div style={{ marginTop: '0.6rem' }}>
+              <ResultCount
+                shown={projects.length}
+                total={projects.length}
+                noun="proyectos visibles"
+              />
+            </div>
           )}
         </Card>
       )}
 
-      {detailLoading && <Loading label="Cargando proyecto…" />}
+      {detailLoading && <SkeletonCards count={2} />}
 
       {selected && !detailLoading && (
-        <>
-          <Card title={selected.title}>
+        <Stagger index={0}>
+          <Card
+            title={selected.title}
+            actions={
+              <Button variant="ghost" size="sm" onClick={() => setSelectedId(null)}>
+                Cerrar
+              </Button>
+            }
+          >
             <p className="muted">
               {selected.student} · {selected.semester ? `${selected.semester}º semestre` : 'Sin semestre'}{' '}
               · {lbl(PROJECT_STATUS_LABEL, selected.status)}
@@ -405,28 +421,35 @@ export default function TeacherStudentProjectsPage() {
                 </span>
               </div>
               <div className="flex" style={{ gap: '0.5rem' }}>
-                <button className="btn btn-primary" disabled={saving || comment.trim().length < 10}>
-                  <FiMessageSquare />{' '}
-                  {saving ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Registrar retroalimentación'}
-                </button>
+                <Button
+                  type="submit"
+                  loading={saving}
+                  disabled={comment.trim().length < 10}
+                  icon={<FiMessageSquare size={15} />}
+                >
+                  {editingId ? 'Guardar cambios' : 'Registrar retroalimentación'}
+                </Button>
                 {editingId && (
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-secondary"
+                    variant="secondary"
                     onClick={() => {
                       setEditingId(null);
                       setComment('');
                     }}
                   >
                     Cancelar
-                  </button>
+                  </Button>
                 )}
               </div>
             </form>
 
             <div className="mt">
               {feedback.length === 0 ? (
-                <EmptyState message="Todavía no hay retroalimentación registrada para este proyecto." />
+                <EmptyState
+                  icon={<FiMessageSquare size={22} />}
+                  message="Todavía no hay retroalimentación registrada para este proyecto."
+                />
               ) : (
                 <div className="evidence-list">
                   {feedback.map((f) => (
@@ -466,7 +489,7 @@ export default function TeacherStudentProjectsPage() {
               )}
             </div>
           </Card>
-        </>
+        </Stagger>
       )}
 
       {!selected && !detailLoading && projects.length > 0 && (

@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FiExternalLink, FiMapPin, FiCalendar } from 'react-icons/fi';
+import { FiCalendar, FiExternalLink, FiMapPin, FiSearch, FiUsers } from 'react-icons/fi';
 import { activityService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { AsyncView, Card, Badge } from '../../components/ui';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
+  SkeletonCards, Stagger,
+} from '../../components/ui';
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
 import type { Activity, ActivityCategoryItem } from '../../services/types';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
  * Vista de consulta para el docente.
@@ -17,6 +23,7 @@ export default function TeacherActivitiesPage() {
   const { data, loading, error } = useAsync<Activity[]>(() => activityService.list(), []);
   const [type, setType] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [query, setQuery] = useState('');
   const [categories, setCategories] = useState<ActivityCategoryItem[]>([]);
 
   useEffect(() => {
@@ -24,22 +31,35 @@ export default function TeacherActivitiesPage() {
   }, []);
 
   const filtered = useMemo(() => {
+    const q = normalize(query.trim());
     let list = data ?? [];
     if (type) list = list.filter((a) => a.type === type);
     if (categoryId) list = list.filter((a) => a.category?.id === categoryId);
+    if (q) {
+      list = list.filter((a) =>
+        [a.title, a.description ?? '', a.location ?? '', a.academicArea?.name ?? '']
+          .some((field) => normalize(field).includes(q)),
+      );
+    }
     return list;
-  }, [data, type, categoryId]);
+  }, [data, type, categoryId, query]);
+
+  const hasFilters = !!(type || categoryId || query);
 
   return (
     <div>
-      <h1>Actividades del programa</h1>
-      <p className="muted">
-        Consulte la oferta vigente para orientar a sus estudiantes. Las actividades académicas las
-        publica el director de carrera; las extracurriculares, la sociedad científica.
-      </p>
+      <PageHeader
+        title="Actividades del programa"
+        description="La oferta vigente, para orientar a sus estudiantes. Las actividades académicas las publica el director de carrera; las extracurriculares, la sociedad científica."
+      />
 
       <Card>
         <div className="filters">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar por título, lugar o área…"
+          />
           <div className="field">
             <label>Tipo</label>
             <select value={type} onChange={(e) => setType(e.target.value)}>
@@ -59,34 +79,60 @@ export default function TeacherActivitiesPage() {
               ))}
             </select>
           </div>
-          {(type || categoryId) && (
-            <button
-              className="btn btn-ghost btn-sm"
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setType('');
                 setCategoryId('');
+                setQuery('');
               }}
             >
               Limpiar filtros
-            </button>
+            </Button>
           )}
+          <ResultCount
+            shown={filtered.length}
+            total={(data ?? []).length}
+            noun="actividades"
+          />
         </div>
 
         <AsyncView
           loading={loading}
           error={error}
           data={data}
+          skeleton={<SkeletonCards count={3} />}
           isEmpty={() => filtered.length === 0}
-          emptyMessage={
-            type || categoryId
-              ? 'Ninguna actividad coincide con los filtros aplicados.'
-              : 'Todavía no hay actividades publicadas.'
+          empty={
+            hasFilters ? (
+              <EmptyState
+                icon={<FiSearch size={22} />}
+                message="Ninguna actividad coincide con los filtros aplicados."
+                action={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setType('');
+                      setCategoryId('');
+                      setQuery('');
+                    }}
+                  >
+                    Quitar filtros
+                  </Button>
+                }
+              />
+            ) : undefined
           }
+          emptyMessage="Todavía no hay actividades publicadas."
         >
           {() => (
             <div className="activity-list">
-              {filtered.map((a) => (
-                <article key={a.id} className="activity-item">
+              {filtered.map((a, index) => (
+                <Stagger key={a.id} index={index}>
+                <article className="activity-item">
                   <div className="grow">
                     <div className="flex" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
                       <Badge tone={a.type === 'academica' ? 'bordo' : 'amber'}>
@@ -116,7 +162,7 @@ export default function TeacherActivitiesPage() {
                       )}
                       {a.academicArea && <span>Área: {a.academicArea.name}</span>}
                       <span>
-                        {a.confirmedCount ?? 0} confirmado
+                        <FiUsers /> {a.confirmedCount ?? 0} confirmado
                         {(a.confirmedCount ?? 0) === 1 ? '' : 's'}
                         {a.capacity ? ` de ${a.capacity}` : ''}
                       </span>
@@ -128,6 +174,7 @@ export default function TeacherActivitiesPage() {
                     </div>
                   </div>
                 </article>
+                </Stagger>
               ))}
             </div>
           )}

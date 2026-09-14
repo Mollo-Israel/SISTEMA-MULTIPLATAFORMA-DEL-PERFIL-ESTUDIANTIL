@@ -1,6 +1,6 @@
 import { useAsync } from '../../hooks/useAsync';
 import { reportService } from '../../services';
-import { AsyncView, Card, Badge } from '../../components/ui';
+import { AsyncView, Badge, Card, PageHeader, SkeletonCards, SkeletonTable } from '../../components/ui';
 import { LevelStackBars } from '../../components/charts';
 
 export default function DirectorAffinityMap() {
@@ -9,11 +9,20 @@ export default function DirectorAffinityMap() {
 
   return (
     <div>
-      <h1>Mapa básico de afinidad</h1>
-      <p className="muted">Distribución agregada de afinidad por área académica.</p>
+      <PageHeader
+        title="Mapa básico de afinidad"
+        description="Distribución agregada de afinidad por área académica. Es una lectura del conjunto, no una evaluación de personas."
+      />
 
       <Card title="Áreas de afinidad (agregado)">
-        <AsyncView loading={map.loading} error={map.error} data={map.data} isEmpty={(d: any) => d.length === 0} emptyMessage="Aún no hay afinidades calculadas.">
+        <AsyncView
+          loading={map.loading}
+          error={map.error}
+          data={map.data}
+          skeleton={<SkeletonCards count={2} />}
+          isEmpty={(d: any) => d.length === 0}
+          emptyMessage="Aún no hay afinidades calculadas."
+        >
           {(rows: any) => (
             <>
             <div style={{ marginBottom: '1rem' }}>
@@ -38,7 +47,12 @@ export default function DirectorAffinityMap() {
       </Card>
 
       <Card title="Proyectos registrados">
-        <AsyncView loading={projects.loading} error={projects.error} data={projects.data}>
+        <AsyncView
+          loading={projects.loading}
+          error={projects.error}
+          data={projects.data}
+          skeleton={<SkeletonTable rows={3} columns={2} />}
+        >
           {(d: any) => (
             <>
               <p><strong>Total:</strong> {d.total}</p>

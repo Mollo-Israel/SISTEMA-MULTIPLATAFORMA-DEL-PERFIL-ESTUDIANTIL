@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
-import { FiCalendar, FiEdit2, FiUsers, FiPlus } from 'react-icons/fi';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  FiCalendar, FiCheck, FiEdit2, FiPlus, FiSave, FiSearch, FiUserX, FiUsers, FiX,
+} from 'react-icons/fi';
 import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
 import type { AcademicArea, Activity, ActivityCategoryItem, Participant } from '../services/types';
-import { Card, Loading, EmptyState, Badge } from './ui';
+import {
+  Badge, Button, Card, EmptyState, ResultCount, SearchInput, SkeletonTable, Stagger,
+} from './ui';
+import { useConfirm, useToast } from './feedback';
 import {
   ACTIVITY_MODALITIES,
   ACTIVITY_STATUS_LABEL,
@@ -12,6 +18,9 @@ import {
   REGISTRATION_STATUS_LABEL,
   lbl,
 } from '../constants';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const emptyForm = {
   title: '',
@@ -35,9 +44,11 @@ export default function ActivityManager({
   const [activities, setActivities] = useState<Activity[]>([]);
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Solo el fallo de la carga inicial: el resto de errores son avisos flotantes. */
   const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [categories, setCategories] = useState<ActivityCategoryItem[]>([]);
   const [editing, setEditing] = useState<Activity | null>(null);
@@ -47,17 +58,18 @@ export default function ActivityManager({
   const [selected, setSelected] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [partLoading, setPartLoading] = useState(false);
+  const [busyRow, setBusyRow] = useState<string | null>(null);
+
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [partQuery, setPartQuery] = useState('');
 
   // Del catálogo administrable: las que aplican a este tipo o a ambos (RF4).
   const usableCategories = categories.filter(
     (c) => c.isActive && (!c.appliesTo || c.appliesTo === activityType),
   );
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setError(null);
-    window.setTimeout(() => setMsg(null), 4000);
-  };
+  const notify = (t: string, detail?: string) => toast.success(t, detail);
 
   const load = useCallback(async () => {
     const list = await activityService.managed();
@@ -75,6 +87,17 @@ export default function ActivityManager({
       .finally(() => setLoading(false));
   }, [load]);
 
+  const visible = useMemo(() => {
+    const q = normalize(query.trim());
+    return activities.filter((a) => {
+      if (statusFilter && a.status !== statusFilter) return false;
+      if (!q) return true;
+      return [a.title, a.description ?? '', a.location ?? '', a.category?.name ?? '',
+        a.academicArea?.name ?? '', (a.tags ?? []).join(' ')]
+        .some((field) => normalize(field).includes(q));
+    });
+  }, [activities, query, statusFilter]);
+
   const resetForm = () => {
     setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
     setEditing(null);
@@ -83,7 +106,6 @@ export default function ActivityManager({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setSaving(true);
     const payload: Record<string, unknown> = {
       title: form.title,
@@ -120,7 +142,7 @@ export default function ActivityManager({
       resetForm();
       await load();
     } catch (err) {
-      setError(apiError(err));
+      toast.error(apiError(err));
     } finally {
       setSaving(false);
     }
@@ -145,77 +167,139 @@ export default function ActivityManager({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /**
+   * Pasar a cancelada o volver a borrador saca la actividad de la vista del
+   * estudiante, asi que esos dos casos se confirman antes.
+   */
   const changeStatus = async (a: Activity, status: string) => {
-    setError(null);
+    const label = lbl(ACTIVITY_STATUS_LABEL, status);
+    if (status === 'cancelled' || status === 'draft') {
+      const ok = await confirm({
+        title: status === 'cancelled' ? 'Cancelar la actividad' : 'Devolver a borrador',
+        message: (
+          <>
+            <strong>{a.title}</strong> dejará de estar disponible para los estudiantes
+            {(a.registrationCount ?? 0) > 0
+              ? ` y ya tiene ${a.registrationCount} inscripción(es) registrada(s).`
+              : '.'}
+          </>
+        ),
+        confirmLabel: status === 'cancelled' ? 'Cancelar actividad' : 'Devolver a borrador',
+        cancelLabel: 'Dejar como está',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
     try {
       await activityService.update(a.id, { status });
-      notify(`Estado actualizado a “${lbl(ACTIVITY_STATUS_LABEL, status)}”.`);
+      notify(`Estado actualizado a “${label}”.`);
       await load();
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
     }
   };
 
   const openParticipants = async (activityId: string) => {
     setSelected(activityId);
+    setPartQuery('');
     setPartLoading(true);
-    setError(null);
     try {
       setParticipants(await activityService.participants(activityId));
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
       setParticipants([]);
     } finally {
       setPartLoading(false);
     }
   };
 
-  const decide = async (activityId: string, studentProfileId: string, status: 'confirmed' | 'absent') => {
-    setError(null);
+  /**
+   * Marcar ausente retira participacion que ya cuenta en el perfil del
+   * estudiante (RN-9), de modo que se confirma antes de enviarlo.
+   */
+  const decide = async (
+    activityId: string,
+    row: Participant,
+    status: 'confirmed' | 'absent',
+  ) => {
+    const who = row.studentName ?? 'el estudiante';
+    if (status === 'absent') {
+      const ok = await confirm({
+        title: 'Registrar ausencia',
+        message: (
+          <>
+            Se registrará a <strong>{who}</strong> como ausente.
+            {row.status === 'confirmed'
+              && ' Su participación estaba confirmada y dejará de contar en su perfil.'}
+          </>
+        ),
+        confirmLabel: 'Registrar ausente',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    setBusyRow(row.id);
     try {
-      await activityService.confirm(activityId, studentProfileId, status);
+      await activityService.confirm(activityId, row.studentProfileId, status);
       setParticipants(await activityService.participants(activityId));
       await load();
-      notify(status === 'confirmed' ? 'Participación confirmada.' : 'Registrado como ausente.');
+      notify(
+        status === 'confirmed' ? 'Participación confirmada.' : 'Registrado como ausente.',
+        `${who} · ${status === 'confirmed' ? 'suma a su perfil' : 'ya no cuenta en su perfil'}`,
+      );
     } catch (e) {
-      setError(apiError(e));
+      toast.error(apiError(e));
+    } finally {
+      setBusyRow(null);
     }
   };
 
-  if (loading) return <Loading label="Cargando actividades…" />;
+  if (loading) return <SkeletonTable rows={5} columns={6} />;
 
   const selectedActivity = activities.find((a) => a.id === selected);
-  const pending = participants.filter((r) => r.status === 'registered');
-  const interested = participants.filter((r) => r.status === 'interested');
-  const confirmed = participants.filter((r) => r.status === 'confirmed');
-  const absent = participants.filter((r) => r.status === 'absent');
-  const full = !!(selectedActivity?.capacity && confirmed.length >= selectedActivity.capacity);
+  const partNeedle = normalize(partQuery.trim());
+  const shownParticipants = partNeedle
+    ? participants.filter((r) => normalize(r.studentName ?? '').includes(partNeedle))
+    : participants;
+  const pending = shownParticipants.filter((r) => r.status === 'registered');
+  const interested = shownParticipants.filter((r) => r.status === 'interested');
+  const confirmed = shownParticipants.filter((r) => r.status === 'confirmed');
+  const absent = shownParticipants.filter((r) => r.status === 'absent');
+  const allConfirmed = participants.filter((r) => r.status === 'confirmed');
+  const full = !!(selectedActivity?.capacity && allConfirmed.length >= selectedActivity.capacity);
   const tipo = activityType === 'academica' ? 'académica' : 'extracurricular';
 
   return (
     <div>
       {error && <div className="alert alert-error">{error}</div>}
-      {msg && <div className="alert alert-success">{msg}</div>}
 
       {!showForm && (
-        <button
-          className="btn btn-primary"
+        <Button
           onClick={() => {
             setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
             setShowForm(true);
           }}
+          icon={<FiPlus size={15} />}
         >
-          <FiPlus /> Nueva actividad {tipo}
-        </button>
+          Nueva actividad {tipo}
+        </Button>
       )}
 
+      <AnimatePresence initial={false}>
       {showForm && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.25 }}
+          style={{ overflow: 'hidden' }}
+        >
         <Card
           title={editing ? `Editar “${editing.title}”` : `Nueva actividad ${tipo}`}
           actions={
-            <button className="btn btn-ghost btn-sm" onClick={resetForm}>
+            <Button variant="ghost" size="sm" onClick={resetForm} icon={<FiX size={14} />}>
               Cancelar
-            </button>
+            </Button>
           }
         >
           <form onSubmit={submit}>
@@ -357,21 +441,66 @@ export default function ActivityManager({
               puedan inscribirse debe estar <strong>publicada</strong> o <strong>abierta</strong>.
             </p>
 
-            <button className="btn btn-primary" disabled={saving}>
-              {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar actividad'}
-            </button>
+            <Button type="submit" loading={saving} icon={<FiSave size={15} />}>
+              {editing ? 'Guardar cambios' : 'Guardar actividad'}
+            </Button>
           </form>
         </Card>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       <div className="section-title">
         <h2>Actividades que gestiona</h2>
+        {activities.length > 0 && (
+          <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar por título, lugar, categoría o etiqueta…"
+            />
+            <select
+              className="status-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filtrar por estado"
+            >
+              <option value="">Todos los estados</option>
+              {ACTIVITY_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {lbl(ACTIVITY_STATUS_LABEL, s)}
+                </option>
+              ))}
+            </select>
+            <ResultCount shown={visible.length} total={activities.length} noun="actividades" />
+          </div>
+        )}
       </div>
 
       {activities.length === 0 ? (
         <Card>
           <EmptyState
+            icon={<FiCalendar size={22} />}
             message={`Todavía no ha publicado ninguna actividad ${tipo}. Use el botón “Nueva actividad” para crear la primera.`}
+          />
+        </Card>
+      ) : visible.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<FiSearch size={22} />}
+            message="Ninguna actividad coincide con los filtros aplicados."
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setQuery('');
+                  setStatusFilter('');
+                }}
+              >
+                Quitar filtros
+              </Button>
+            }
           />
         </Card>
       ) : (
@@ -390,10 +519,10 @@ export default function ActivityManager({
                 </tr>
               </thead>
               <tbody>
-                {activities.map((a) => {
+                {visible.map((a) => {
                   const pend = (a.registrationCount ?? 0) - (a.confirmedCount ?? 0);
                   return (
-                    <tr key={a.id}>
+                    <tr key={a.id} className={selected === a.id ? 'row-picked' : undefined}>
                       <td>
                         <strong>{a.title}</strong>
                         {a.location && <div className="muted">{a.location}</div>}
@@ -441,7 +570,8 @@ export default function ActivityManager({
                           <button
                             className="btn btn-secondary btn-sm"
                             onClick={() => startEdit(a)}
-                            title="Editar"
+                            title="Editar actividad"
+                            aria-label={`Editar ${a.title}`}
                           >
                             <FiEdit2 />
                           </button>
@@ -463,17 +593,52 @@ export default function ActivityManager({
       )}
 
       {selectedActivity && (
-        <Card title={`Participación · ${selectedActivity.title}`}>
+        <Stagger index={0}>
+        <Card
+          title={`Participación · ${selectedActivity.title}`}
+          actions={
+            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              {participants.length > 0 && (
+                <SearchInput
+                  value={partQuery}
+                  onChange={setPartQuery}
+                  placeholder="Buscar estudiante…"
+                />
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelected(null)}
+                icon={<FiX size={14} />}
+              >
+                Cerrar
+              </Button>
+            </div>
+          }
+        >
           <p className="muted">
-            Confirmados: <strong>{confirmed.length}</strong> de{' '}
+            Confirmados: <strong>{allConfirmed.length}</strong> de{' '}
             {selectedActivity.capacity ?? 'cupo ilimitado'}
             {full && ' · el cupo está lleno'}
           </p>
 
           {partLoading ? (
-            <Loading label="Cargando participantes…" />
+            <SkeletonTable rows={3} columns={3} />
           ) : participants.length === 0 ? (
-            <EmptyState message="Todavía nadie manifestó interés ni se inscribió en esta actividad." />
+            <EmptyState
+              icon={<FiUsers size={22} />}
+              message="Todavía nadie manifestó interés ni se inscribió en esta actividad."
+            />
+          ) : shownParticipants.length === 0 ? (
+            <EmptyState
+              icon={<FiSearch size={22} />}
+              message={`Ningún participante coincide con “${partQuery}”.`}
+              action={
+                <Button variant="secondary" size="sm" onClick={() => setPartQuery('')}>
+                  Limpiar búsqueda
+                </Button>
+              }
+            />
           ) : (
             <>
               <ParticipantGroup
@@ -482,20 +647,25 @@ export default function ActivityManager({
                 empty="No hay inscripciones pendientes."
                 render={(r) => (
                   <div className="flex" style={{ gap: '0.35rem' }}>
-                    <button
-                      className="btn btn-primary btn-sm"
+                    <Button
+                      size="sm"
                       disabled={full}
+                      loading={busyRow === r.id}
                       title={full ? 'El cupo está lleno' : 'Registrar asistencia'}
-                      onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}
+                      onClick={() => decide(selectedActivity.id, r, 'confirmed')}
+                      icon={<FiCheck size={14} />}
                     >
                       Confirmar participación
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={busyRow === r.id}
+                      onClick={() => decide(selectedActivity.id, r, 'absent')}
+                      icon={<FiUserX size={14} />}
                     >
                       Ausente
-                    </button>
+                    </Button>
                   </div>
                 )}
               />
@@ -505,13 +675,16 @@ export default function ActivityManager({
                 rows={interested}
                 empty="Nadie marcó únicamente interés."
                 render={(r) => (
-                  <button
-                    className="btn btn-secondary btn-sm"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     disabled={full}
-                    onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}
+                    loading={busyRow === r.id}
+                    onClick={() => decide(selectedActivity.id, r, 'confirmed')}
+                    icon={<FiCheck size={14} />}
                   >
                     Confirmar participación
-                  </button>
+                  </Button>
                 )}
               />
 
@@ -520,12 +693,15 @@ export default function ActivityManager({
                 rows={confirmed}
                 empty="Todavía no hay participación confirmada."
                 render={(r) => (
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => decide(selectedActivity.id, r.studentProfileId, 'absent')}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={busyRow === r.id}
+                    onClick={() => decide(selectedActivity.id, r, 'absent')}
+                    icon={<FiUserX size={14} />}
                   >
                     Marcar ausente
-                  </button>
+                  </Button>
                 )}
               />
 
@@ -535,19 +711,23 @@ export default function ActivityManager({
                   rows={absent}
                   empty=""
                   render={(r) => (
-                    <button
-                      className="btn btn-secondary btn-sm"
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       disabled={full}
-                      onClick={() => decide(selectedActivity.id, r.studentProfileId, 'confirmed')}
+                      loading={busyRow === r.id}
+                      onClick={() => decide(selectedActivity.id, r, 'confirmed')}
+                      icon={<FiCheck size={14} />}
                     >
                       Confirmar participación
-                    </button>
+                    </Button>
                   )}
                 />
               )}
             </>
           )}
         </Card>
+        </Stagger>
       )}
 
       {!selectedActivity && activities.length > 0 && (

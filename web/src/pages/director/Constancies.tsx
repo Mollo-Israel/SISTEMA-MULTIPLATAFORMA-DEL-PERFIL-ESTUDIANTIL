@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
-import { FiAward, FiCheck } from 'react-icons/fi';
+import { useEffect, useMemo, useState } from 'react';
+import { FiAward, FiCalendar, FiCheck, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { activityService, constancyService } from '../../services';
-import { Card, Badge, Loading, EmptyState } from '../../components/ui';
+import {
+  Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput, SkeletonCards,
+  SkeletonTable, Stagger,
+} from '../../components/ui';
+import { useConfirm, useToast } from '../../components/feedback';
 import type { Activity, EligibleParticipant, InternalConstancy } from '../../services/types';
+
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
  * Emisión de constancias internas (RF12).
@@ -19,31 +26,29 @@ export default function DirectorConstanciesPage() {
   const [target, setTarget] = useState<EligibleParticipant | null>(null);
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const toast = useToast();
+  const confirm = useConfirm();
 
-  const notify = (t: string) => {
-    setMsg(t);
-    setErr(null);
-    window.setTimeout(() => setMsg(null), 4500);
-  };
+  const notify = (t: string, detail?: string) => toast.success(t, detail);
 
   useEffect(() => {
     activityService
       .managed()
       .then(setActivities)
-      .catch((e) => setErr(apiError(e)))
+      .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadActivity = async (activityId: string) => {
     setSelected(activityId);
     setTarget(null);
+    setQuery('');
     setEligible([]);
     setIssued([]);
     if (!activityId) return;
     setListBusy(true);
-    setErr(null);
     try {
       const [e, i] = await Promise.all([
         constancyService.eligible(activityId),
@@ -52,7 +57,7 @@ export default function DirectorConstanciesPage() {
       setEligible(e);
       setIssued(i);
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setListBusy(false);
     }
@@ -69,45 +74,65 @@ export default function DirectorConstanciesPage() {
   const issue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!target) return;
+    const who = target.studentName ?? 'el estudiante';
+    const ok = await confirm({
+      title: 'Emitir la constancia',
+      message: (
+        <>
+          Se emitirá la constancia interna de <strong>{who}</strong>. Solo puede emitirse una
+          vez por estudiante y actividad, y el estudiante la verá en sus evidencias.
+        </>
+      ),
+      confirmLabel: 'Emitir constancia',
+    });
+    if (!ok) return;
     setSaving(true);
-    setErr(null);
     try {
       await constancyService.create({
         profileId: target.studentProfileId,
         activityId: selected,
         description,
       });
-      notify(`Constancia emitida para ${target.studentName ?? 'el estudiante'}.`);
+      notify('Constancia emitida.', `${who} ya puede verla en sus evidencias.`);
       setTarget(null);
       setDescription('');
       await loadActivity(selected);
     } catch (e2) {
-      setErr(apiError(e2));
+      toast.error(apiError(e2));
     } finally {
       setSaving(false);
     }
   };
 
-  const pending = eligible.filter((e) => !e.hasConstancy);
+  const needle = normalize(query.trim());
+  const match = (name: string | null | undefined) =>
+    !needle || normalize(name ?? '').includes(needle);
+
+  const allPending = eligible.filter((e) => !e.hasConstancy);
+  const pending = allPending.filter((e) => match(e.studentName));
   const withConstancy = eligible.filter((e) => e.hasConstancy);
 
-  if (loading) return <Loading label="Cargando actividades…" />;
+  if (loading) return <SkeletonCards count={2} />;
 
   return (
     <div>
-      <h1>Constancias internas</h1>
-      <p className="muted">
-        Se emiten únicamente sobre participación <strong>confirmada</strong> y una sola vez por
-        estudiante y actividad. Es una constancia interna del sistema: no sustituye ni equivale a
-        un certificado oficial de la universidad.
-      </p>
-
-      {msg && <div className="alert alert-success">{msg}</div>}
-      {err && <div className="alert alert-error">{err}</div>}
+      <PageHeader
+        title="Constancias internas"
+        description={
+          <>
+            Se emiten únicamente sobre participación <strong>confirmada</strong> y una sola vez
+            por estudiante y actividad. Es una constancia interna del sistema: no sustituye ni
+            equivale a un certificado oficial de la universidad.
+          </>
+        }
+      />
 
       <Card title="Elegir actividad">
         {activities.length === 0 ? (
-          <EmptyState message="Todavía no gestiona ninguna actividad. Publique una desde “Actividades académicas”." />
+          <EmptyState
+            icon={<FiCalendar size={22} />}
+            message="Todavía no gestiona ninguna actividad. Publique una desde “Actividades académicas”."
+          />
         ) : (
           <div className="field">
             <label>Actividad</label>
@@ -124,17 +149,46 @@ export default function DirectorConstanciesPage() {
         )}
       </Card>
 
-      {listBusy && <Loading label="Cargando participantes…" />}
+      {listBusy && <SkeletonTable rows={4} columns={3} />}
 
       {selected && !listBusy && (
         <>
-          <Card title={`Participación confirmada sin constancia (${pending.length})`}>
-            {pending.length === 0 ? (
+          <Card
+            title={`Participación confirmada sin constancia (${allPending.length})`}
+            actions={
+              allPending.length > 0 ? (
+                <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+                  <SearchInput
+                    value={query}
+                    onChange={setQuery}
+                    placeholder="Buscar estudiante…"
+                  />
+                  <ResultCount
+                    shown={pending.length}
+                    total={allPending.length}
+                    noun="estudiantes"
+                  />
+                </div>
+              ) : undefined
+            }
+          >
+            {allPending.length === 0 ? (
               <EmptyState
+                icon={<FiAward size={22} />}
                 message={
                   eligible.length === 0
                     ? 'Esta actividad todavía no tiene participación confirmada. Registre primero la asistencia desde “Actividades académicas”.'
                     : 'Todos los participantes confirmados ya tienen su constancia.'
+                }
+              />
+            ) : pending.length === 0 ? (
+              <EmptyState
+                icon={<FiSearch size={22} />}
+                message={`Ningún estudiante coincide con “${query}”.`}
+                action={
+                  <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
+                    Limpiar búsqueda
+                  </Button>
                 }
               />
             ) : (
@@ -149,16 +203,27 @@ export default function DirectorConstanciesPage() {
                   </thead>
                   <tbody>
                     {pending.map((p) => (
-                      <tr key={p.studentProfileId}>
+                      <tr
+                        key={p.studentProfileId}
+                        className={
+                          target?.studentProfileId === p.studentProfileId ? 'row-picked' : undefined
+                        }
+                      >
                         <td>{p.studentName ?? 'Estudiante'}</td>
                         <td className="muted">{p.semester ? `${p.semester}º` : '—'}</td>
                         <td>
-                          <button
-                            className={`btn btn-sm ${target?.studentProfileId === p.studentProfileId ? 'btn-primary' : 'btn-secondary'}`}
+                          <Button
+                            size="sm"
+                            variant={
+                              target?.studentProfileId === p.studentProfileId
+                                ? 'primary'
+                                : 'secondary'
+                            }
                             onClick={() => startIssue(p)}
+                            icon={<FiAward size={14} />}
                           >
-                            <FiAward /> Emitir constancia
-                          </button>
+                            Emitir constancia
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -169,6 +234,7 @@ export default function DirectorConstanciesPage() {
           </Card>
 
           {target && (
+            <Stagger index={0}>
             <Card title={`Emitir constancia · ${target.studentName ?? 'Estudiante'}`}>
               <form onSubmit={issue}>
                 <div className="field">
@@ -186,20 +252,29 @@ export default function DirectorConstanciesPage() {
                   </span>
                 </div>
                 <div className="flex" style={{ gap: '0.5rem' }}>
-                  <button className="btn btn-primary" disabled={saving}>
-                    {saving ? 'Emitiendo…' : 'Emitir constancia'}
-                  </button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setTarget(null)}>
+                  <Button type="submit" loading={saving} icon={<FiAward size={15} />}>
+                    Emitir constancia
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setTarget(null)}
+                    icon={<FiX size={14} />}
+                  >
                     Cancelar
-                  </button>
+                  </Button>
                 </div>
               </form>
             </Card>
+            </Stagger>
           )}
 
           <Card title={`Constancias emitidas (${issued.length})`}>
             {issued.length === 0 ? (
-              <EmptyState message="Todavía no se emitió ninguna constancia para esta actividad." />
+              <EmptyState
+                icon={<FiAward size={22} />}
+                message="Todavía no se emitió ninguna constancia para esta actividad."
+              />
             ) : (
               <div className="scroll-x">
                 <table>

@@ -1,9 +1,13 @@
 import { useMemo, useState } from 'react';
-import { FiSearch, FiUser, FiInfo } from 'react-icons/fi';
+import { FiActivity, FiAward, FiFolder, FiInfo, FiSearch, FiTarget, FiUser } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { affinityService, profileService, AffinitySummary } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { AsyncView, Card, Badge, Loading } from '../../components/ui';
+import {
+  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
+  SkeletonCards, SkeletonTable, Stagger,
+} from '../../components/ui';
+import { useToast } from '../../components/feedback';
 import {
   AffinityDisclaimer,
   AffinityInsufficient,
@@ -13,6 +17,9 @@ import {
 import { PROFILE_STATUS_LABEL, lbl } from '../../constants';
 import type { StudentDirectory } from '../../services/types';
 
+const normalize = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 export default function TeacherStudentsPage() {
   const { data, loading, error } = useAsync<StudentDirectory>(() => profileService.listStudents(), []);
   const [search, setSearch] = useState('');
@@ -20,25 +27,23 @@ export default function TeacherStudentsPage() {
   const [view, setView] = useState<any>(null);
   const [affinity, setAffinity] = useState<AffinitySummary | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const toast = useToast();
 
   const students = data?.students ?? [];
   const scope = data?.scope;
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = normalize(search.trim());
     if (!term) return students;
-    return students.filter(
-      (s) =>
-        (s.studentName ?? '').toLowerCase().includes(term) ||
-        (s.email ?? '').toLowerCase().includes(term),
+    return students.filter((s) =>
+      [s.studentName ?? '', s.email ?? '', s.semester ? `${s.semester}` : '']
+        .some((field) => normalize(field).includes(term)),
     );
   }, [students, search]);
 
   const openProfile = async (profileId: string) => {
     setSelected(profileId);
     setDetailLoading(true);
-    setDetailError(null);
     setView(null);
     setAffinity(null);
     try {
@@ -51,7 +56,8 @@ export default function TeacherStudentsPage() {
       setView(v);
       setAffinity(a);
     } catch (e) {
-      setDetailError(apiError(e, 'No se pudo cargar el perfil.'));
+      toast.error(apiError(e, 'No se pudo cargar el perfil.'));
+      setSelected(null);
     } finally {
       setDetailLoading(false);
     }
@@ -61,11 +67,10 @@ export default function TeacherStudentsPage() {
 
   return (
     <div>
-      <h1>Perfil de estudiante</h1>
-      <p className="muted">
-        Consulta la vista permitida del estudiante: intereses, habilidades, proyectos, actividades
-        y afinidades. No incluye notas, datos sensibles ni las constancias internas.
-      </p>
+      <PageHeader
+        title="Perfil de estudiante"
+        description="La vista permitida del estudiante: intereses, habilidades, proyectos, actividades y afinidades. No incluye notas, datos sensibles ni las constancias internas."
+      />
 
       {scope?.restricted && !noScope && (
         <div className="scope-note">
@@ -92,38 +97,46 @@ export default function TeacherStudentsPage() {
           </div>
         </Card>
       ) : (
-        <Card>
-          <div style={{ position: 'relative' }}>
-            <input
-              placeholder="Buscar por nombre o correo…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ paddingLeft: '2.4rem' }}
-            />
-            <span
-              style={{
-                position: 'absolute',
-                left: '0.8rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--gray-500)',
-              }}
-            >
-              <FiSearch />
-            </span>
-          </div>
-
-          <div className="mt">
+        <Card
+          title="Estudiantes a su cargo"
+          actions={
+            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Buscar por nombre, correo o semestre…"
+              />
+              {students.length > 0 && (
+                <ResultCount
+                  shown={filtered.length}
+                  total={students.length}
+                  noun="estudiantes"
+                />
+              )}
+            </div>
+          }
+        >
+          <div>
             <AsyncView
               loading={loading}
               error={error}
               data={data}
+              skeleton={<SkeletonTable rows={6} columns={5} />}
               isEmpty={() => filtered.length === 0}
-              emptyMessage={
-                search
-                  ? `Ningún estudiante coincide con “${search}”.`
-                  : 'No hay estudiantes en los semestres habilitados.'
+              empty={
+                search ? (
+                  <EmptyState
+                    icon={<FiSearch size={22} />}
+                    message={`Ningún estudiante coincide con “${search}”.`}
+                    action={
+                      <Button variant="secondary" size="sm" onClick={() => setSearch('')}>
+                        Limpiar búsqueda
+                      </Button>
+                    }
+                  />
+                ) : undefined
               }
+              emptyMessage="No hay estudiantes en los semestres habilitados."
             >
               {() => (
                 <table>
@@ -138,7 +151,10 @@ export default function TeacherStudentsPage() {
                   </thead>
                   <tbody>
                     {filtered.map((s) => (
-                      <tr key={s.profileId}>
+                      <tr
+                        key={s.profileId}
+                        className={selected === s.profileId ? 'row-picked' : undefined}
+                      >
                         <td>{s.studentName}</td>
                         <td className="muted">{s.email}</td>
                         <td>{s.semester ? `${s.semester}º` : '—'}</td>
@@ -148,12 +164,15 @@ export default function TeacherStudentsPage() {
                           </Badge>
                         </td>
                         <td>
-                          <button
-                            className={`btn btn-sm ${selected === s.profileId ? 'btn-primary' : 'btn-secondary'}`}
+                          <Button
+                            size="sm"
+                            variant={selected === s.profileId ? 'primary' : 'secondary'}
+                            loading={detailLoading && selected === s.profileId}
                             onClick={() => openProfile(s.profileId)}
+                            icon={<FiUser size={14} />}
                           >
                             Ver perfil
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -161,20 +180,29 @@ export default function TeacherStudentsPage() {
                 </table>
               )}
             </AsyncView>
-            {filtered.length > 0 && (
-              <p className="muted" style={{ marginTop: '0.6rem', fontSize: '0.8rem' }}>
-                {filtered.length} estudiante{filtered.length === 1 ? '' : 's'}
-              </p>
-            )}
           </div>
         </Card>
       )}
 
-      {detailLoading && <Loading label="Cargando perfil…" />}
-      {detailError && <div className="alert alert-error">{detailError}</div>}
+      {detailLoading && <SkeletonCards count={2} />}
 
-      {view && (
-        <Card title={view.studentName ?? 'Estudiante'}>
+      {view && !detailLoading && (
+        <Stagger index={0}>
+        <Card
+          title={view.studentName ?? 'Estudiante'}
+          actions={
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setView(null);
+                setSelected(null);
+              }}
+            >
+              Cerrar
+            </Button>
+          }
+        >
           <p>
             <strong>Semestre:</strong> {view.semester ? `${view.semester}º` : '—'} ·{' '}
             <strong>Estado del perfil:</strong> {lbl(PROFILE_STATUS_LABEL, view.status)}
@@ -183,7 +211,9 @@ export default function TeacherStudentsPage() {
 
           <div className="grid cols-2 mt">
             <div>
-              <strong>Áreas de interés</strong>
+              <strong className="flex" style={{ gap: '0.4rem' }}>
+                <FiTarget size={14} /> Áreas de interés
+              </strong>
               {view.interests?.length ? (
                 <div className="tag-list mt">
                   {view.interests.map((i: any) => (
@@ -214,7 +244,9 @@ export default function TeacherStudentsPage() {
 
           <div className="grid cols-2 mt">
             <div>
-              <strong>Proyectos ({view.projects?.length ?? 0})</strong>
+              <strong className="flex" style={{ gap: '0.4rem' }}>
+                <FiFolder size={14} /> Proyectos ({view.projects?.length ?? 0})
+              </strong>
               {view.projects?.length ? (
                 <ul className="plain-list">
                   {view.projects.map((p: any, i: number) => (
@@ -228,7 +260,9 @@ export default function TeacherStudentsPage() {
               )}
             </div>
             <div>
-              <strong>Actividades ({view.activities?.length ?? 0})</strong>
+              <strong className="flex" style={{ gap: '0.4rem' }}>
+                <FiActivity size={14} /> Actividades ({view.activities?.length ?? 0})
+              </strong>
               {view.activities?.length ? (
                 <ul className="plain-list">
                   {view.activities.map((a: any, i: number) => (
@@ -244,7 +278,9 @@ export default function TeacherStudentsPage() {
           </div>
 
           <div className="mt">
-            <strong>Certificados externos ({view.externalCertificates?.length ?? 0})</strong>
+            <strong className="flex" style={{ gap: '0.4rem' }}>
+              <FiAward size={14} /> Certificados externos ({view.externalCertificates?.length ?? 0})
+            </strong>
             {view.externalCertificates?.length ? (
               <ul className="plain-list">
                 {view.externalCertificates.map((c: any, i: number) => (
@@ -287,6 +323,7 @@ export default function TeacherStudentsPage() {
             )}
           </div>
         </Card>
+        </Stagger>
       )}
 
       {!view && !detailLoading && !noScope && (

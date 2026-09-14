@@ -1,14 +1,13 @@
 import ActivityManager from '../../components/ActivityManager';
+import { PageHeader } from '../../components/ui';
 
 export default function DirectorActivitiesPage() {
   return (
     <div>
-      <h1>Actividades académicas</h1>
-      <p className="muted">
-        Publique y dé seguimiento a talleres, clases espejo, seminarios, charlas, cursos y demás
-        actividades académicas complementarias del programa. Desde aquí también se registra la
-        asistencia y participación de los estudiantes.
-      </p>
+      <PageHeader
+        title="Actividades académicas"
+        description="Publique y dé seguimiento a talleres, clases espejo, seminarios, charlas y cursos del programa. Desde aquí también se registra la asistencia y la participación de los estudiantes."
+      />
       <ActivityManager activityType="academica" />
     </div>
   );

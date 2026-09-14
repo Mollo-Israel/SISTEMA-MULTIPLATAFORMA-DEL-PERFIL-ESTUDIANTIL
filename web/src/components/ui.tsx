@@ -142,6 +142,8 @@ interface AsyncViewProps<T> {
   /** Contenido a mostrar mientras carga. Por defecto, el indicador de siempre. */
   skeleton?: ReactNode;
   emptyAction?: ReactNode;
+  /** Vacio a medida. Sustituye por completo al EmptyState por defecto. */
+  empty?: ReactNode;
   children: (data: T) => ReactNode;
 }
 
@@ -153,12 +155,14 @@ export function AsyncView<T>({
   emptyMessage,
   skeleton,
   emptyAction,
+  empty,
   children,
 }: AsyncViewProps<T>) {
+  const nothing = empty ?? <EmptyState message={emptyMessage} action={emptyAction} />;
   if (loading) return <>{skeleton ?? <Loading />}</>;
   if (error) return <ErrorState message={error} />;
-  if (!data) return <EmptyState message={emptyMessage} action={emptyAction} />;
-  if (isEmpty && isEmpty(data)) return <EmptyState message={emptyMessage} action={emptyAction} />;
+  if (!data) return <>{nothing}</>;
+  if (isEmpty && isEmpty(data)) return <>{nothing}</>;
   return <>{children(data)}</>;
 }
 

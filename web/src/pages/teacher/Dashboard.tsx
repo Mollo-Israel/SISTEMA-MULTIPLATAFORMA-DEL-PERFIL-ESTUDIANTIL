@@ -1,13 +1,21 @@
 import { useAsync } from '../../hooks/useAsync';
 import { reportService } from '../../services';
-import { AsyncView, Stat, Card } from '../../components/ui';
+import { AsyncView, Card, PageHeader, SkeletonCards, Stat } from '../../components/ui';
 
 export default function TeacherDashboard() {
   const { data, loading, error } = useAsync(() => reportService.teacherOverview(), []);
   return (
     <div>
-      <h1>Panel docente</h1>
-      <AsyncView loading={loading} error={error} data={data}>
+      <PageHeader
+        title="Panel docente"
+        description="Resumen descriptivo de los estudiantes que acompaña."
+      />
+      <AsyncView
+        loading={loading}
+        error={error}
+        data={data}
+        skeleton={<SkeletonCards count={4} />}
+      >
         {(d: any) => (
           <>
             <div className="grid cols-4">

@@ -1,6 +1,6 @@
 import { useAsync } from '../../hooks/useAsync';
 import { reportService } from '../../services';
-import { AsyncView, Card, Stat } from '../../components/ui';
+import { AsyncView, Card, PageHeader, SkeletonCards, SkeletonTable, Stat } from '../../components/ui';
 
 export default function DirectorDashboard() {
   const overview = useAsync(() => reportService.directorOverview(), []);
@@ -8,10 +8,17 @@ export default function DirectorDashboard() {
 
   return (
     <div>
-      <h1>Panel de dirección</h1>
-      <p className="muted">Indicadores descriptivos de la carrera. No representan rendimiento ni predicción.</p>
+      <PageHeader
+        title="Panel de dirección"
+        description="Indicadores descriptivos de la carrera. No representan rendimiento ni predicción."
+      />
 
-      <AsyncView loading={overview.loading} error={overview.error} data={overview.data}>
+      <AsyncView
+        loading={overview.loading}
+        error={overview.error}
+        data={overview.data}
+        skeleton={<SkeletonCards count={4} />}
+      >
         {(d: any) => (
           <>
             <div className="grid cols-4">
@@ -40,7 +47,14 @@ export default function DirectorDashboard() {
       </AsyncView>
 
       <Card title="Participación por semestre">
-        <AsyncView loading={semester.loading} error={semester.error} data={semester.data} isEmpty={(d: any) => d.length === 0} emptyMessage="Sin participaciones registradas.">
+        <AsyncView
+          loading={semester.loading}
+          error={semester.error}
+          data={semester.data}
+          skeleton={<SkeletonTable rows={4} columns={6} />}
+          isEmpty={(d: any) => d.length === 0}
+          emptyMessage="Sin participaciones registradas."
+        >
           {(rows: any) => (
             <table>
               <thead><tr><th>Semestre</th><th>Total</th><th>Interés</th><th>Inscritos</th><th>Confirmados</th><th>Ausentes</th></tr></thead>
