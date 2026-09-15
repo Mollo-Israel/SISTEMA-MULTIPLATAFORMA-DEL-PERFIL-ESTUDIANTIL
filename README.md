@@ -234,6 +234,8 @@ Objetivo 7 (70 %):
 
 Transversal:
 
+- [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md) — **empiece por aquí**: todo el
+  sistema explicado con diagramas de flujo, sin necesidad de abrir el código
 - [`docs/MEJORAS_UX.md`](docs/MEJORAS_UX.md) — buscadores, modales de confirmación, avisos
   flotantes y animaciones en el panel web y la aplicación móvil, sin cambiar ninguna regla
 
