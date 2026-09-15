@@ -274,7 +274,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
     return (
       <Screen>
         <ErrorText message={error ?? 'No se pudo cargar el proyecto.'} />
-        <Button title="Volver" variant="secondary" onPress={() => navigation.goBack()} />
+        <Button icon="arrow-left" title="Volver" variant="secondary" onPress={() => navigation.goBack()} />
       </Screen>
     );
   }
@@ -331,7 +331,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
               onPress={() => Linking.openURL(project.demoUrl)}
             />
           ) : null}
-          {isOwner && <Button title="Editar proyecto" onPress={() => setEditing(true)} />}
+          {isOwner && <Button icon="edit-2" title="Editar proyecto" onPress={() => setEditing(true)} />}
         </Card>
       ) : (
         <Card title="Editar proyecto">
@@ -418,6 +418,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
           <Button title={saving ? 'Guardando…' : 'Guardar cambios'} onPress={save} disabled={saving} />
           <Button
             title="Cancelar"
+            icon="x"
             variant="secondary"
             onPress={() => {
               setEditing(false);
@@ -514,6 +515,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
             />
             <Button
               title="Cancelar"
+              icon="x"
               variant="secondary"
               onPress={() => {
                 setShowInvite(false);

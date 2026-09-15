@@ -183,6 +183,7 @@ export default function AffinityScreen() {
         <>
           <Button
             title="Recalcular mis afinidades"
+            icon="refresh-cw"
             onPress={recalc}
             loading={busy}
           />
@@ -324,7 +325,7 @@ export default function AffinityScreen() {
 
           {historyState.data && historyState.data.length === 0 && (
             <EmptyState
-              icon="↗"
+              icon="trending-up"
               message="Todavía no hay cálculos registrados. Se guarda uno cada vez que tu perfil cambia."
             />
           )}

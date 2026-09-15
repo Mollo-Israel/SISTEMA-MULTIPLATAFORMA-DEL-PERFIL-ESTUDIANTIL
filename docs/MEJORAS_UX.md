@@ -58,8 +58,9 @@ conecta `TopProgress`; los interceptores marcan inicio y fin de cada petición.
 
 ### Aplicación móvil
 
-`mobile/src/components/feedback.tsx` (nuevo) — el equivalente construido **solo
-con la API de React Native** (`Animated`, `Modal`), sin librerías nuevas:
+`mobile/src/components/feedback.tsx` (nuevo) — el equivalente, con la animación
+y la ventana construidas **solo con la API de React Native** (`Animated`,
+`Modal`):
 
 - `ToastProvider` / `useToast`: aviso deslizante desde arriba, respetando el
   área segura del dispositivo. Se toca para descartarlo.
@@ -69,6 +70,34 @@ con la API de React Native** (`Animated`, `Modal`), sin librerías nuevas:
 `mobile/src/components/ui.tsx` (ampliado) — `SearchInput`, `ResultCount`,
 `PageHeader`, `ProgressBar`, `FadeIn`, `Chip`, `Skeleton` / `SkeletonCards`, y
 el mismo `Button` con estado de carga.
+
+### Iconos
+
+`mobile/src/components/icons.tsx` (nuevo) sobre **`@expo/vector-icons`**, la
+única dependencia que se agregó en todo este trabajo. Usa el conjunto
+**Feather**, que es exactamente el mismo que el panel web consume mediante
+`react-icons/fi`: la lupa, la papelera o el calendario se dibujan igual en los
+dos clientes.
+
+Antes la aplicación móvil no tenía librería de iconos y usaba caracteres
+Unicode sueltos —`⌕`, `☷`, `✦`, `☺`—. Se veían distintos en cada teléfono y en
+Android varios caían en el cuadro vacío de «glifo no disponible», porque
+dependían de la fuente del sistema. Una fuente empaquetada con la aplicación no
+depende de nada externo: el empaquetado de Metro confirma que `Feather.ttf`
+(55,6 kB) viaja dentro del paquete.
+
+Alcance del cambio:
+
+| Dónde | Antes | Ahora |
+|---|---|---|
+| Barra de pestañas, los 5 roles | solo texto | icono + etiqueta |
+| Vacíos de pantalla | 30 caracteres Unicode | iconos Feather |
+| Botones | solo texto | 52 con icono |
+| Buscador | `⌕` y `✕` | `search` y `x` |
+| Avisos flotantes | `✓` `✕` `i` | `check`, `x`, `info` |
+| Confirmación | `!` | `alert-triangle` |
+| Desplegables y listas | `▲ ▼ ›` | `chevron-up/down/right` |
+| Cerrar sesión | «Salir» | `log-out` + «Salir» |
 
 ---
 

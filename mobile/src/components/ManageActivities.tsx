@@ -214,7 +214,7 @@ export default function ManageActivities({
       />
 
       {!showForm ? (
-        <Button title="Nueva actividad" onPress={() => setShowForm(true)} />
+        <Button icon="plus" title="Nueva actividad" onPress={() => setShowForm(true)} />
       ) : (
         <Card title="Nueva actividad">
           <Field
@@ -267,8 +267,8 @@ export default function ManageActivities({
             ))}
           </View>
           <Muted>En borrador la actividad no es visible para los estudiantes.</Muted>
-          <Button title="Guardar" onPress={publish} loading={saving} />
-          <Button title="Cancelar" variant="secondary" onPress={() => setShowForm(false)} />
+          <Button icon="save" title="Guardar" onPress={publish} loading={saving} />
+          <Button icon="x" title="Cancelar" variant="secondary" onPress={() => setShowForm(false)} />
         </Card>
       )}
 
@@ -285,18 +285,19 @@ export default function ManageActivities({
 
       {items.length === 0 && (
         <EmptyState
-          icon="☷"
+          icon="calendar"
           message={`Todavía no ha publicado actividades ${tipo}.`}
         />
       )}
 
       {items.length > 0 && visible.length === 0 && (
         <EmptyState
-          icon="⌕"
+          icon="search"
           message={`Ninguna actividad coincide con “${query}”.`}
           action={
             <Button
               title="Limpiar búsqueda"
+              icon="x"
               variant="secondary"
               small
               onPress={() => setQuery('')}
@@ -344,7 +345,7 @@ export default function ManageActivities({
             {isOpen && partBusy && <SkeletonCards count={2} />}
             {isOpen && !partBusy && participants.length === 0 && (
               <EmptyState
-                icon="☺"
+                icon="users"
                 message="Todavía nadie se inscribió ni marcó interés."
               />
             )}
@@ -376,6 +377,7 @@ export default function ManageActivities({
                     {p.status !== 'absent' && (
                       <Button
                         title="Ausente"
+                        icon="user-x"
                         variant="secondary"
                         loading={busyRow === p.id}
                         small

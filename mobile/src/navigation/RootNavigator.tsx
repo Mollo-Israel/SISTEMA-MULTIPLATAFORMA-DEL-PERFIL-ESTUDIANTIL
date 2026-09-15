@@ -1,7 +1,8 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
+import { Icon, TAB_ICON } from '../components/icons';
 import { colors } from '../theme';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -43,13 +44,27 @@ const screenOptions = {
   headerTitleStyle: { fontWeight: '700' as const },
   tabBarActiveTintColor: colors.bordo,
   tabBarInactiveTintColor: colors.gray500,
+  tabBarLabelStyle: { fontSize: 11, fontWeight: '600' as const },
 };
+
+/**
+ * Icono de una pestaña. Se resuelve por el nombre de la ruta, de modo que
+ * agregar una pestaña solo exige agregar su entrada en TAB_ICON.
+ */
+const tabIcon =
+  (route: string) =>
+  ({ color, size }: { color: string; size: number }) => (
+    <Icon name={TAB_ICON[route] ?? 'circle'} size={size - 2} color={color} />
+  );
 
 function LogoutButton() {
   const { logout } = useAuth();
   return (
-    <Pressable onPress={logout} hitSlop={10}>
-      <Text style={{ color: '#fff', fontWeight: '600', marginRight: 4 }}>Salir</Text>
+    <Pressable onPress={logout} hitSlop={10} accessibilityLabel="Cerrar sesión">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginRight: 4 }}>
+        <Icon name="log-out" size={15} color="#fff" />
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Salir</Text>
+      </View>
     </Pressable>
   );
 }
@@ -96,23 +111,39 @@ function ActividadesStack() {
 function StudentTabs() {
   return (
     <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen name="Inicio" component={HomeScreen} options={withLogout} />
-      <Tab.Screen name="Perfil" component={PerfilStack} options={{ headerShown: false }} />
-      <Tab.Screen name="Actividades" component={ActividadesStack} options={{ headerShown: false }} />
-      <Tab.Screen name="Proyectos" component={ProyectosStack} options={{ headerShown: false }} />
+      <Tab.Screen
+        name="Inicio"
+        component={HomeScreen}
+        options={{ tabBarIcon: tabIcon('Inicio'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Perfil"
+        component={PerfilStack}
+        options={{ headerShown: false, tabBarIcon: tabIcon('Perfil') }}
+      />
+      <Tab.Screen
+        name="Actividades"
+        component={ActividadesStack}
+        options={{ headerShown: false, tabBarIcon: tabIcon('Actividades') }}
+      />
+      <Tab.Screen
+        name="Proyectos"
+        component={ProyectosStack}
+        options={{ headerShown: false, tabBarIcon: tabIcon('Proyectos') }}
+      />
       {/* RF17 nombra la pantalla "Mis afinidades". La pestana conserva la
           etiqueta corta porque son cinco en la barra inferior. */}
       <Tab.Screen
         name="Afinidad"
         component={AffinityScreen}
-        options={{ title: 'Mis afinidades', ...withLogout }}
+        options={{ title: 'Mis afinidades', tabBarIcon: tabIcon('Afinidad'), ...withLogout }}
       />
       {/* RF18 nombra la pantalla "Recomendaciones". La pestana usa una
           etiqueta corta porque ya son seis en la barra inferior. */}
       <Tab.Screen
         name="Sugerencias"
         component={RecommendationsScreen}
-        options={{ title: 'Recomendaciones', ...withLogout }}
+        options={{ title: 'Recomendaciones', tabBarIcon: tabIcon('Sugerencias'), ...withLogout }}
       />
     </Tab.Navigator>
   );
@@ -121,10 +152,26 @@ function StudentTabs() {
 function TeacherTabs() {
   return (
     <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen name="Actividades" component={TeacherActivities} options={withLogout} />
-      <Tab.Screen name="Estudiante" component={StudentSummary} options={withLogout} />
-      <Tab.Screen name="Reporte" component={TeacherReport} options={withLogout} />
-      <Tab.Screen name="Próximamente" component={ComingSoonScreen} options={withLogout} />
+      <Tab.Screen
+        name="Actividades"
+        component={TeacherActivities}
+        options={{ tabBarIcon: tabIcon('Actividades'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Estudiante"
+        component={StudentSummary}
+        options={{ tabBarIcon: tabIcon('Estudiante'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Reporte"
+        component={TeacherReport}
+        options={{ tabBarIcon: tabIcon('Reporte'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Próximamente"
+        component={ComingSoonScreen}
+        options={{ tabBarIcon: tabIcon('Próximamente'), ...withLogout }}
+      />
     </Tab.Navigator>
   );
 }
@@ -132,8 +179,16 @@ function TeacherTabs() {
 function SocietyTabs() {
   return (
     <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen name="Actividades" component={SocietyActivities} options={withLogout} />
-      <Tab.Screen name="Próximamente" component={ComingSoonScreen} options={withLogout} />
+      <Tab.Screen
+        name="Actividades"
+        component={SocietyActivities}
+        options={{ tabBarIcon: tabIcon('Actividades'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Próximamente"
+        component={ComingSoonScreen}
+        options={{ tabBarIcon: tabIcon('Próximamente'), ...withLogout }}
+      />
     </Tab.Navigator>
   );
 }
@@ -141,11 +196,31 @@ function SocietyTabs() {
 function DirectorTabs() {
   return (
     <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen name="Dashboard" component={DirectorDashboard} options={withLogout} />
-      <Tab.Screen name="Actividades" component={DirectorActivities} options={withLogout} />
-      <Tab.Screen name="Constancias" component={ConstanciesScreen} options={withLogout} />
-      <Tab.Screen name="Afinidad" component={AffinityMapScreen} options={withLogout} />
-      <Tab.Screen name="Semestre" component={ParticipationScreen} options={withLogout} />
+      <Tab.Screen
+        name="Dashboard"
+        component={DirectorDashboard}
+        options={{ tabBarIcon: tabIcon('Dashboard'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Actividades"
+        component={DirectorActivities}
+        options={{ tabBarIcon: tabIcon('Actividades'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Constancias"
+        component={ConstanciesScreen}
+        options={{ tabBarIcon: tabIcon('Constancias'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Afinidad"
+        component={AffinityMapScreen}
+        options={{ tabBarIcon: tabIcon('Afinidad'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Semestre"
+        component={ParticipationScreen}
+        options={{ tabBarIcon: tabIcon('Semestre'), ...withLogout }}
+      />
     </Tab.Navigator>
   );
 }
@@ -153,8 +228,16 @@ function DirectorTabs() {
 function AdminTabs() {
   return (
     <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen name="Usuarios" component={AdminUsers} options={withLogout} />
-      <Tab.Screen name="Áreas" component={AdminAreas} options={withLogout} />
+      <Tab.Screen
+        name="Usuarios"
+        component={AdminUsers}
+        options={{ tabBarIcon: tabIcon('Usuarios'), ...withLogout }}
+      />
+      <Tab.Screen
+        name="Áreas"
+        component={AdminAreas}
+        options={{ tabBarIcon: tabIcon('Áreas'), ...withLogout }}
+      />
     </Tab.Navigator>
   );
 }

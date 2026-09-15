@@ -11,6 +11,7 @@ import {
   View,
   RefreshControl,
 } from 'react-native';
+import { Icon, type IconName } from './icons';
 import { colors } from '../theme';
 
 export function Screen({
@@ -63,6 +64,7 @@ export function Button({
   disabled,
   loading,
   small,
+  icon,
 }: {
   title: string;
   onPress: () => void;
@@ -70,6 +72,7 @@ export function Button({
   disabled?: boolean;
   loading?: boolean;
   small?: boolean;
+  icon?: IconName;
 }) {
   const blocked = disabled || loading;
   const solid = variant === 'primary' || variant === 'danger';
@@ -91,6 +94,12 @@ export function Button({
       <View style={styles.btnInner}>
         {loading ? (
           <ActivityIndicator size="small" color={solid ? colors.white : colors.gray700} />
+        ) : icon ? (
+          <Icon
+            name={icon}
+            size={small ? 13 : 15}
+            color={solid ? colors.white : colors.gray700}
+          />
         ) : null}
         <Text style={solid ? styles.btnPrimaryText : styles.btnSecondaryText}>{title}</Text>
       </View>
@@ -155,12 +164,14 @@ export function EmptyState({
   action,
 }: {
   message?: string;
-  icon?: string;
+  icon?: IconName;
   action?: ReactNode;
 }) {
   return (
     <View style={styles.center}>
-      {icon ? <Text style={styles.emptyIcon}>{icon}</Text> : null}
+      {icon ? (
+        <Icon name={icon} size={26} color={colors.gray300} style={styles.emptyIcon} />
+      ) : null}
       <Text style={[styles.muted, { textAlign: 'center' }]}>{message}</Text>
       {action ? <View style={{ marginTop: 12 }}>{action}</View> : null}
     </View>
@@ -204,7 +215,7 @@ export function SearchInput({
 }) {
   return (
     <View style={styles.search}>
-      <Text style={styles.searchIcon}>⌕</Text>
+      <Icon name="search" size={16} />
       <TextInput
         style={styles.searchInput}
         value={value}
@@ -222,7 +233,7 @@ export function SearchInput({
           hitSlop={10}
           accessibilityLabel="Limpiar búsqueda"
         >
-          <Text style={styles.searchClear}>✕</Text>
+          <Icon name="x" size={15} />
         </Pressable>
       ) : null}
     </View>
@@ -428,7 +439,7 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, alignSelf: 'flex-start' },
   badgeText: { fontSize: 12, fontWeight: '700' },
   center: { alignItems: 'center', justifyContent: 'center', padding: 28 },
-  emptyIcon: { fontSize: 26, marginBottom: 8, opacity: 0.45 },
+  emptyIcon: { marginBottom: 8 },
   pageHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
   search: {
     flexDirection: 'row',
@@ -441,9 +452,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginBottom: 10,
   },
-  searchIcon: { color: colors.gray500, fontSize: 17 },
   searchInput: { flex: 1, paddingVertical: 10, fontSize: 15, color: colors.gray900 },
-  searchClear: { color: colors.gray500, fontSize: 14, paddingHorizontal: 2 },
   resultCount: { color: colors.gray500, fontSize: 12.5, marginBottom: 8 },
   skeleton: { backgroundColor: colors.gray100, borderRadius: 7 },
   progressHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },

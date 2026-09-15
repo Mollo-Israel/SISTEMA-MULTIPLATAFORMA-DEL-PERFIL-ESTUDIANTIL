@@ -87,9 +87,9 @@ export default function SkillsScreen() {
       <Card>
         {visible.length === 0 ? (
           <EmptyState
-            icon="⌕"
+            icon="search"
             message={`Ninguna habilidad coincide con “${query}”.`}
-            action={<Button title="Limpiar búsqueda" variant="secondary" small onPress={() => setQuery('')} />}
+            action={<Button icon="x" title="Limpiar búsqueda" variant="secondary" small onPress={() => setQuery('')} />}
           />
         ) : (
           visible.map((s) => (
@@ -100,7 +100,7 @@ export default function SkillsScreen() {
           ))
         )}
       </Card>
-      <Button title="Guardar habilidades" onPress={save} loading={saving} />
+      <Button icon="save" title="Guardar habilidades" onPress={save} loading={saving} />
     </Screen>
   );
 }

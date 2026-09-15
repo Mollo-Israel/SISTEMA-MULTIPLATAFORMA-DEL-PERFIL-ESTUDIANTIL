@@ -20,6 +20,7 @@ import {
   SkeletonCards,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
+import { Icon } from '../../components/icons';
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
 import { colors } from '../../theme';
 
@@ -169,6 +170,7 @@ export default function ActivitiesScreen({ navigation }: any) {
 
       <Button
         title="Ver mis actividades"
+        icon="list"
         variant="secondary"
         onPress={() => navigation.navigate('MisActividades')}
       />
@@ -249,7 +251,7 @@ export default function ActivitiesScreen({ navigation }: any) {
       </View>
 
       {hasFilters && (
-        <Button title="Limpiar filtros" variant="secondary" onPress={clearFilters} />
+        <Button icon="x" title="Limpiar filtros" variant="secondary" onPress={clearFilters} />
       )}
 
       {loading && <SkeletonCards count={3} />}
@@ -263,7 +265,7 @@ export default function ActivitiesScreen({ navigation }: any) {
 
       {!loading && !error && filtered.length === 0 && (
         <EmptyState
-          icon={query || hasFilters ? '⌕' : '☷'}
+          icon={query || hasFilters ? 'search' : 'calendar'}
           message={
             query
               ? `Ninguna actividad coincide con “${query}”.`
@@ -275,6 +277,7 @@ export default function ActivitiesScreen({ navigation }: any) {
             query || hasFilters ? (
               <Button
                 title="Quitar filtros"
+                icon="x"
                 variant="secondary"
                 small
                 onPress={() => {
@@ -314,7 +317,16 @@ export default function ActivitiesScreen({ navigation }: any) {
                     })}`
                   : ''}
               </Muted>
-              <Text style={styles.toggle}>{isOpen ? 'Ocultar detalle ▲' : 'Ver detalle ▼'}</Text>
+              <View style={styles.toggleRow}>
+                <Text style={styles.toggle}>
+                  {isOpen ? 'Ocultar detalle' : 'Ver detalle'}
+                </Text>
+                <Icon
+                  name={isOpen ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.bordo}
+                />
+              </View>
             </Pressable>
 
             {isOpen && detailBusy && <SkeletonCards count={1} />}
@@ -353,6 +365,7 @@ export default function ActivitiesScreen({ navigation }: any) {
                 {d.externalUrl ? (
                   <Button
                     title="Abrir enlace externo"
+                    icon="external-link"
                     variant="secondary"
                     onPress={() => Linking.openURL(d.externalUrl)}
                   />
@@ -386,6 +399,7 @@ export default function ActivitiesScreen({ navigation }: any) {
                     <View style={{ flex: 1 }}>
                       <Button
                         title="Me interesa"
+                        icon="heart"
                         variant="secondary"
                         loading={busy === a.id}
                         disabled={mine?.status === 'interested'}
@@ -402,6 +416,7 @@ export default function ActivitiesScreen({ navigation }: any) {
                     <View style={{ flex: 1 }}>
                       <Button
                         title="Inscribirme"
+                        icon="user-plus"
                         loading={busy === a.id}
                         disabled={mine?.status === 'registered'}
                         onPress={() => enrol(a)}
@@ -432,7 +447,8 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: 'row', gap: 10 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   title: { fontSize: 15.5, fontWeight: '700', color: colors.gray900, marginBottom: 3 },
-  toggle: { color: colors.bordo, fontSize: 12.5, fontWeight: '600', marginTop: 8 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  toggle: { color: colors.bordo, fontSize: 12.5, fontWeight: '600' },
   detail: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.gray100, paddingTop: 12 },
   desc: { fontSize: 13.5, color: colors.gray700, marginBottom: 10 },
   metaBlock: { marginBottom: 10, gap: 3 },

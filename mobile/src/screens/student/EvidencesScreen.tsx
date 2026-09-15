@@ -219,14 +219,15 @@ export default function EvidencesScreen() {
           />
         )}
         {evidences.length === 0 ? (
-          <EmptyState icon="⎘" message="Todavía no registras evidencias." />
+          <EmptyState icon="file-text" message="Todavía no registras evidencias." />
         ) : visibleEvidences.length === 0 ? (
           <EmptyState
-            icon="⌕"
+            icon="search"
             message={`Ninguna evidencia coincide con “${query}”.`}
             action={
               <Button
                 title="Limpiar búsqueda"
+                icon="x"
                 variant="secondary"
                 small
                 onPress={() => setQuery('')}
@@ -251,6 +252,7 @@ export default function EvidencesScreen() {
                   <View style={{ flex: 1 }}>
                     <Button
                       title="Abrir"
+                      icon="external-link"
                       variant="secondary"
                       onPress={() =>
                         Linking.openURL(
@@ -264,6 +266,7 @@ export default function EvidencesScreen() {
                   <View style={{ flex: 1 }}>
                     <Button
                       title="Eliminar"
+                      icon="trash-2"
                       variant="secondary"
                       loading={removing === e.id}
                       onPress={() => removeEvidence(e)}
@@ -286,14 +289,15 @@ export default function EvidencesScreen() {
           />
         )}
         {certificates.length === 0 ? (
-          <EmptyState icon="✦" message="Todavía no registras certificados externos." />
+          <EmptyState icon="award" message="Todavía no registras certificados externos." />
         ) : visibleCertificates.length === 0 ? (
           <EmptyState
-            icon="⌕"
+            icon="search"
             message={`Ningún certificado coincide con “${query}”.`}
             action={
               <Button
                 title="Limpiar búsqueda"
+                icon="x"
                 variant="secondary"
                 small
                 onPress={() => setQuery('')}
@@ -316,6 +320,7 @@ export default function EvidencesScreen() {
                     <View style={{ flex: 1 }}>
                       <Button
                         title="Ver"
+                        icon="external-link"
                         variant="secondary"
                         onPress={() =>
                           Linking.openURL(
@@ -328,6 +333,7 @@ export default function EvidencesScreen() {
                   <View style={{ flex: 1 }}>
                     <Button
                       title="Eliminar"
+                      icon="trash-2"
                       variant="secondary"
                       loading={removing === c.id}
                       onPress={() => removeCertificate(c)}
@@ -347,7 +353,7 @@ export default function EvidencesScreen() {
           a un certificado oficial de la universidad.
         </Muted>
         {constancies.length === 0 ? (
-          <EmptyState icon="✓" message="Todavía no recibes constancias internas." />
+          <EmptyState icon="check-circle" message="Todavía no recibes constancias internas." />
         ) : (
           constancies.map((c: any) => (
             <View key={c.id} style={styles.row}>
@@ -565,7 +571,7 @@ function EvidenceForm({
         options={areas.map((a) => ({ id: a.id, label: a.name }))}
       />
 
-      <Button title="Registrar evidencia" onPress={submit} loading={saving} disabled={busy} />
+      <Button icon="paperclip" title="Registrar evidencia" onPress={submit} loading={saving} disabled={busy} />
     </Card>
   );
 }
@@ -664,6 +670,7 @@ function CertificateForm({
       </View>
       <Button
         title="Registrar certificado"
+        icon="award"
         onPress={submit}
         loading={saving}
         disabled={busy}

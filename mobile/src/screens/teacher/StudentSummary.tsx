@@ -18,6 +18,7 @@ import {
   SkeletonCards,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
+import { Icon } from '../../components/icons';
 import { affinityColor, colors } from '../../theme';
 
 export default function StudentSummary() {
@@ -102,7 +103,7 @@ export default function StudentSummary() {
           />
           {students.length === 0 ? (
             <EmptyState
-              icon={search ? '⌕' : '☰'}
+              icon={search ? 'search' : 'users'}
               message={
                 search
                   ? `Ningún estudiante coincide con “${search}”.`
@@ -112,6 +113,7 @@ export default function StudentSummary() {
                 search ? (
                   <Button
                     title="Limpiar búsqueda"
+                    icon="x"
                     variant="secondary"
                     small
                     onPress={() => setSearch('')}
@@ -133,7 +135,7 @@ export default function StudentSummary() {
                       {s.completionPercentage}%
                     </Text>
                   </View>
-                  <Text style={styles.chevron}>›</Text>
+                  <Icon name="chevron-right" size={18} color={colors.gray500} />
                 </Pressable>
               </FadeIn>
             ))

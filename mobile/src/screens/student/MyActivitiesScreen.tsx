@@ -63,18 +63,19 @@ export default function MyActivitiesScreen() {
 
       {data && data.length === 0 && (
         <EmptyState
-          icon="☷"
+          icon="calendar"
           message="Todavía no te has inscrito ni has marcado interés en ninguna actividad."
         />
       )}
 
       {data && data.length > 0 && rows.length === 0 && (
         <EmptyState
-          icon="⌕"
+          icon="search"
           message={`Ninguna actividad coincide con “${query}”.`}
           action={
             <Button
               title="Limpiar búsqueda"
+              icon="x"
               variant="secondary"
               small
               onPress={() => setQuery('')}

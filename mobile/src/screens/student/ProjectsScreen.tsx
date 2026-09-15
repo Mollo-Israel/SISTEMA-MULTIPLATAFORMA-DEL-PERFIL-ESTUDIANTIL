@@ -22,6 +22,7 @@ import {
   SkeletonCards,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
+import { Icon } from '../../components/icons';
 import { colors } from '../../theme';
 
 const normalize = (s: string) =>
@@ -216,7 +217,7 @@ export default function ProjectsScreen({ navigation }: any) {
       {tab === 'mine' && (
         <>
           {!showForm ? (
-            <Button title="Nuevo proyecto" onPress={() => setShowForm(true)} />
+            <Button icon="plus" title="Nuevo proyecto" onPress={() => setShowForm(true)} />
           ) : (
             <Card title="Nuevo proyecto">
               <Field
@@ -296,12 +297,14 @@ export default function ProjectsScreen({ navigation }: any) {
 
               <Button
                 title="Crear proyecto"
+                icon="plus"
                 onPress={create}
                 loading={saving}
                 disabled={form.title.trim().length < 3}
               />
               <Button
                 title="Cancelar"
+                icon="x"
                 variant="secondary"
                 onPress={() => {
                   setShowForm(false);
@@ -313,7 +316,7 @@ export default function ProjectsScreen({ navigation }: any) {
 
           {owned.length === 0 ? (
             <EmptyState
-              icon={query ? '⌕' : '☰'}
+              icon={query ? 'search' : 'folder'}
               message={
                 query
                   ? `Ningún proyecto tuyo coincide con “${query}”.`
@@ -323,6 +326,7 @@ export default function ProjectsScreen({ navigation }: any) {
                 query ? (
                   <Button
                     title="Limpiar búsqueda"
+                    icon="x"
                     variant="secondary"
                     small
                     onPress={() => setQuery('')}
@@ -351,7 +355,7 @@ export default function ProjectsScreen({ navigation }: any) {
           </Muted>
           {shared.length === 0 ? (
             <EmptyState
-              icon={query ? '⌕' : '☰'}
+              icon={query ? 'search' : 'folder'}
               message={
                 query
                   ? `Ningún proyecto compartido coincide con “${query}”.`
@@ -361,6 +365,7 @@ export default function ProjectsScreen({ navigation }: any) {
                 query ? (
                   <Button
                     title="Limpiar búsqueda"
+                    icon="x"
                     variant="secondary"
                     small
                     onPress={() => setQuery('')}
@@ -389,7 +394,7 @@ export default function ProjectsScreen({ navigation }: any) {
             tu portafolio.
           </Muted>
           {invitations.length === 0 ? (
-            <EmptyState icon="✉" message="No tienes invitaciones pendientes." />
+            <EmptyState icon="mail" message="No tienes invitaciones pendientes." />
           ) : (
             invitations.map((inv, index) => (
               <FadeIn key={inv.id} index={index}>
@@ -416,6 +421,7 @@ export default function ProjectsScreen({ navigation }: any) {
                   <View style={{ flex: 1 }}>
                     <Button
                       title="Aceptar"
+                      icon="check"
                       onPress={() => respond(inv, 'accept')}
                       loading={respondingId === inv.id}
                     />
@@ -423,6 +429,7 @@ export default function ProjectsScreen({ navigation }: any) {
                   <View style={{ flex: 1 }}>
                     <Button
                       title="Rechazar"
+                      icon="x"
                       variant="secondary"
                       onPress={() => respond(inv, 'reject')}
                       loading={respondingId === inv.id}
@@ -480,7 +487,10 @@ function ProjectCard({ project, onOpen }: { project: any; onOpen: () => void }) 
             ))}
           </View>
         ) : null}
-        <Text style={styles.open}>Abrir proyecto ›</Text>
+        <View style={styles.openRow}>
+          <Text style={styles.open}>Abrir proyecto</Text>
+          <Icon name="chevron-right" size={14} color={colors.bordo} />
+        </View>
       </Pressable>
     </Card>
   );
@@ -506,5 +516,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 15.5, fontWeight: '700', color: colors.gray900, marginBottom: 6 },
   desc: { fontSize: 13.5, color: colors.gray700, marginVertical: 6 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  open: { color: colors.bordo, fontSize: 12.5, fontWeight: '700', marginTop: 10 },
+  openRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 10 },
+  open: { color: colors.bordo, fontSize: 12.5, fontWeight: '700' },
 });

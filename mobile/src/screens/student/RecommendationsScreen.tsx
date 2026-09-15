@@ -217,6 +217,7 @@ export default function RecommendationsScreen() {
             {!!item.targetLink && (
               <Button
                 title="Abrir enlace"
+                icon="external-link"
                 variant="secondary"
                 onPress={() => abrirEnlace(item.targetLink as string)}
               />
@@ -225,6 +226,7 @@ export default function RecommendationsScreen() {
             {fromHistory || item.status === 'dismissed' ? (
               <Button
                 title="Devolver a mis recomendaciones"
+                icon="corner-up-left"
                 onPress={() => decide(item.id, 'viewed')}
                 loading={busy === item.id}
               />
@@ -241,6 +243,7 @@ export default function RecommendationsScreen() {
                 <View style={{ flex: 1 }}>
                   <Button
                     title="No me interesa"
+                    icon="slash"
                     variant="secondary"
                     onPress={() => dismiss(item)}
                     loading={busy === item.id}
@@ -317,11 +320,12 @@ export default function RecommendationsScreen() {
             if (shown === 0) {
               return (
                 <EmptyState
-                  icon="⌕"
+                  icon="search"
                   message={`Ninguna recomendación coincide con “${query}”.`}
                   action={
                     <Button
                       title="Limpiar búsqueda"
+                      icon="x"
                       variant="secondary"
                       small
                       onPress={() => setQuery('')}
@@ -353,7 +357,7 @@ export default function RecommendationsScreen() {
           {loadingHistory && <SkeletonCards count={2} />}
           {!loadingHistory && history && history.length === 0 && (
             <EmptyState
-              icon="☆"
+              icon="bookmark"
               message={
                 tab === 'saved'
                   ? 'Todavía no guardaste ninguna recomendación.'
@@ -370,11 +374,12 @@ export default function RecommendationsScreen() {
           )}
           {!loadingHistory && history && history.length > 0 && historyRows.length === 0 && (
             <EmptyState
-              icon="⌕"
+              icon="search"
               message={`Ninguna recomendación coincide con “${query}”.`}
               action={
                 <Button
                   title="Limpiar búsqueda"
+                  icon="x"
                   variant="secondary"
                   small
                   onPress={() => setQuery('')}

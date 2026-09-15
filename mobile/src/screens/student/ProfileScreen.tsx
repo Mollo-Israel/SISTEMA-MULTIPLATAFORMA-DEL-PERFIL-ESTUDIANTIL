@@ -116,11 +116,12 @@ export default function ProfileScreen({ navigation }: any) {
 
         {visibleAreas.length === 0 ? (
           <EmptyState
-            icon="⌕"
+            icon="search"
             message={`Ningún área coincide con “${areaQuery}”.`}
             action={
               <Button
                 title="Limpiar búsqueda"
+                icon="x"
                 variant="secondary"
                 small
                 onPress={() => setAreaQuery('')}
@@ -147,9 +148,9 @@ export default function ProfileScreen({ navigation }: any) {
         />
       </Card>
 
-      <Button title="Registrar intereses" variant="secondary" onPress={() => navigation.navigate('Intereses')} />
-      <Button title="Registrar habilidades" variant="secondary" onPress={() => navigation.navigate('Habilidades')} />
-      <Button title="Evidencias y certificados" variant="secondary" onPress={() => navigation.navigate('Evidencias')} />
+      <Button icon="target" title="Registrar intereses" variant="secondary" onPress={() => navigation.navigate('Intereses')} />
+      <Button icon="award" title="Registrar habilidades" variant="secondary" onPress={() => navigation.navigate('Habilidades')} />
+      <Button icon="paperclip" title="Evidencias y certificados" variant="secondary" onPress={() => navigation.navigate('Evidencias')} />
     </Screen>
   );
 }

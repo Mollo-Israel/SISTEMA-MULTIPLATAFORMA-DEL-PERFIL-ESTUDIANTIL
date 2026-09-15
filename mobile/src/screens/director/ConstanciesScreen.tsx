@@ -17,6 +17,7 @@ import {
   SkeletonCards,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
+import { Icon } from '../../components/icons';
 import { colors } from '../../theme';
 
 const normalize = (s: string) =>
@@ -140,18 +141,19 @@ export default function ConstanciesScreen() {
 
       {activities.length === 0 && (
         <EmptyState
-          icon="☷"
+          icon="calendar"
           message="Todavía no gestiona ninguna actividad académica."
         />
       )}
 
       {activities.length > 0 && visible.length === 0 && (
         <EmptyState
-          icon="⌕"
+          icon="search"
           message={`Ninguna actividad coincide con “${query}”.`}
           action={
             <Button
               title="Limpiar búsqueda"
+              icon="x"
               variant="secondary"
               small
               onPress={() => setQuery('')}
@@ -169,9 +171,16 @@ export default function ConstanciesScreen() {
               {a.confirmedCount ?? 0} participación
               {(a.confirmedCount ?? 0) === 1 ? ' confirmada' : 'es confirmadas'}
             </Muted>
-            <Text style={styles.toggle}>
-              {selected?.id === a.id ? 'Ocultar ▲' : 'Gestionar constancias ▼'}
-            </Text>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggle}>
+                {selected?.id === a.id ? 'Ocultar' : 'Gestionar constancias'}
+              </Text>
+              <Icon
+                name={selected?.id === a.id ? 'chevron-up' : 'chevron-down'}
+                size={14}
+                color={colors.bordo}
+              />
+            </View>
           </Pressable>
 
           {selected?.id === a.id && listBusy && <SkeletonCards count={2} />}
@@ -198,6 +207,7 @@ export default function ConstanciesScreen() {
                     <View style={{ width: 110 }}>
                       <Button
                         title="Emitir"
+                        icon="award"
                         small
                         onPress={() => {
                           setTarget(p);
@@ -223,11 +233,12 @@ export default function ConstanciesScreen() {
                   />
                   <Button
                     title="Emitir constancia"
+                    icon="award"
                     onPress={issue}
                     loading={saving}
                     disabled={description.trim().length < 5}
                   />
-                  <Button title="Cancelar" variant="secondary" onPress={() => setTarget(null)} />
+                  <Button icon="x" title="Cancelar" variant="secondary" onPress={() => setTarget(null)} />
                 </View>
               )}
 
@@ -260,7 +271,8 @@ export default function ConstanciesScreen() {
 
 const styles = StyleSheet.create({
   title: { fontSize: 15.5, fontWeight: '700', color: colors.gray900, marginBottom: 3 },
-  toggle: { color: colors.bordo, fontSize: 12.5, fontWeight: '600', marginTop: 8 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  toggle: { color: colors.bordo, fontSize: 12.5, fontWeight: '600' },
   detail: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.gray100, paddingTop: 10 },
   section: {
     fontSize: 13,

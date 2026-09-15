@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Icon, type IconName } from './icons';
 import { colors } from '../theme';
 
 /**
@@ -48,7 +49,7 @@ interface ToastApi {
   info: (message: string, description?: string) => void;
 }
 
-const MARK: Record<ToastKind, string> = { success: '✓', error: '✕', info: 'i' };
+const MARK: Record<ToastKind, IconName> = { success: 'check', error: 'x', info: 'info' };
 const TONE: Record<ToastKind, string> = {
   success: colors.green,
   error: colors.red,
@@ -139,7 +140,7 @@ function ToastRow({ item, onDismiss }: { item: ToastItem; onDismiss: () => void 
     >
       <Pressable style={toastStyles.press} onPress={onDismiss}>
         <View style={[toastStyles.mark, { backgroundColor: TONE[item.kind] }]}>
-          <Text style={toastStyles.markText}>{MARK[item.kind]}</Text>
+          <Icon name={MARK[item.kind]} size={13} color={colors.white} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={toastStyles.message}>{item.message}</Text>
@@ -238,9 +239,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                     { backgroundColor: danger ? colors.red + '1a' : colors.bordoBg },
                   ]}
                 >
-                  <Text style={[confirmStyles.iconText, { color: danger ? colors.red : colors.bordo }]}>
-                    !
-                  </Text>
+                  <Icon
+                    name="alert-triangle"
+                    size={17}
+                    color={danger ? colors.red : colors.bordo}
+                  />
                 </View>
                 <Text style={confirmStyles.title}>{pending?.options.title}</Text>
               </View>
@@ -305,7 +308,6 @@ const toastStyles = StyleSheet.create({
   },
   press: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12 },
   mark: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  markText: { color: colors.white, fontSize: 12, fontWeight: '800', lineHeight: 16 },
   message: { color: colors.gray900, fontWeight: '700', fontSize: 14 },
   description: { color: colors.gray500, fontSize: 12.5, marginTop: 2 },
 });
@@ -327,7 +329,6 @@ const confirmStyles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   icon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  iconText: { fontSize: 18, fontWeight: '800' },
   title: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.gray900 },
   message: { color: colors.gray700, fontSize: 14, lineHeight: 20, marginBottom: 16 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },

@@ -108,11 +108,12 @@ export default function InterestsScreen() {
 
         {visibleAreas.length === 0 ? (
           <EmptyState
-            icon="⌕"
+            icon="search"
             message={`Ningún área coincide con “${areaQuery}”.`}
             action={
               <Button
                 title="Limpiar búsqueda"
+                icon="x"
                 variant="secondary"
                 small
                 onPress={() => setAreaQuery('')}
@@ -131,7 +132,7 @@ export default function InterestsScreen() {
           ))
         )}
 
-        <Button title="Guardar intereses" onPress={save} loading={saving} />
+        <Button icon="save" title="Guardar intereses" onPress={save} loading={saving} />
       </Card>
     </Screen>
   );

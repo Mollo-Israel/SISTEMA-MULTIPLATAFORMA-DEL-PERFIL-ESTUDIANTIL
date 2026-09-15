@@ -93,7 +93,7 @@ export default function TeacherActivities() {
 
       {!loading && filtered.length === 0 && (
         <EmptyState
-          icon={query || type ? '⌕' : '☷'}
+          icon={query || type ? 'search' : 'calendar'}
           message={
             query || type
               ? 'Ninguna actividad coincide con los filtros aplicados.'
@@ -103,6 +103,7 @@ export default function TeacherActivities() {
             query || type ? (
               <Button
                 title="Quitar filtros"
+                icon="x"
                 variant="secondary"
                 small
                 onPress={() => {

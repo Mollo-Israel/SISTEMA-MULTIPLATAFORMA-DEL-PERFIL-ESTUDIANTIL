@@ -22,7 +22,7 @@ export default function HomeScreen({ navigation }: any) {
       {!loading && !data && (
         <Card title="Aún no tienes perfil">
           <Muted>Crea tu perfil dinámico para empezar.</Muted>
-          <Button title="Completar perfil" onPress={() => navigation.navigate('Perfil')} />
+          <Button icon="user" title="Completar perfil" onPress={() => navigation.navigate('Perfil')} />
         </Card>
       )}
 
