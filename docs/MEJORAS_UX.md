@@ -149,10 +149,10 @@ Ejecutado sobre la API en `http://localhost:3010/api` con la base sembrada:
 | Suite | Resultado |
 |---|---|
 | `test:40` — objetivos 1 a 4 | **235 verificaciones OK · 0 fallos** |
-| `test:50` — objetivo 5 | **109 verificaciones OK · 0 fallos** |
+| `test:50` — objetivo 5 | **112 verificaciones OK · 0 fallos** |
 | `test:60` — objetivo 6 | **82 verificaciones OK · 0 fallos** |
 | `test:70` — objetivo 7 | **84 verificaciones OK · 0 fallos** |
-| **Total** | **510 verificaciones · 0 fallos** |
+| **Total** | **513 verificaciones · 0 fallos** |
 
 Compilación:
 
