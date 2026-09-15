@@ -9,13 +9,19 @@
     "splash": {
       "backgroundColor": "#6b1220"
     },
-    "assetBundlePatterns": ["**/*"],
-    "ios": { "supportsTablet": true },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
-      "adaptiveIcon": { "backgroundColor": "#6b1220" }
+      "adaptiveIcon": {
+        "backgroundColor": "#6b1220"
+      }
     },
     "extra": {
-      "apiUrl": "http://localhost:3000/api"
+      "apiUrl": "http://localhost:3010/api"
     }
   }
 }

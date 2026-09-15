@@ -81,10 +81,21 @@ npm run web:dev        # http://localhost:5173
 npm run mobile:start   # abre Expo; escanea el QR con Expo Go
 ```
 
-> **Móvil:** la app necesita alcanzar la API por red. Edita `mobile/.env`:
-> - Emulador Android: `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api`
-> - Celular físico (misma Wi‑Fi): `EXPO_PUBLIC_API_URL=http://TU_IP_LAN:3000/api` (averígua tu IP con `ipconfig`)
-> Si el celular no conecta por firewall, usa `cd mobile && npx expo start --tunnel`.
+> **Móvil:** la dirección de la API ya **no se configura a mano**. La app la
+> deduce del mismo equipo que sirvió el paquete, así que funciona igual en un
+> celular físico, en el emulador de Android y en el simulador de iOS, y
+> sigue funcionando al cambiar de red.
+>
+> Solo hace falta que el celular esté en la **misma Wi‑Fi** que el equipo y que
+> la API esté levantada en el puerto **3010**.
+>
+> Si aun así no conecta, el mensaje de error indica a qué dirección intentó
+> llegar. Dos salidas:
+> - `cd mobile && npx expo start --tunnel` — evita la red local por completo.
+> - `EXPO_PUBLIC_API_URL=http://TU_IP:3010/api` — fuerza una dirección concreta.
+>
+> Si el celular alcanza Expo (puerto 8081) pero no la API (3010), es el
+> cortafuegos de Windows: hay que permitir Node.js en redes privadas.
 
 ### Cuentas para iniciar sesión
 

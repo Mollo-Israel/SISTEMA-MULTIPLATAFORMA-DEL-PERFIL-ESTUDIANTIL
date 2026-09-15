@@ -40,7 +40,12 @@ export function apiError(error: unknown, fallback = 'Ocurrió un error.'): strin
     const message = error.response?.data?.message;
     if (Array.isArray(message)) return message.join(', ');
     if (typeof message === 'string') return message;
-    if (error.code === 'ERR_NETWORK') return 'No se pudo conectar con el servidor.';
+    if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+      // Decir a donde se intento llegar ahorra la mitad del diagnostico:
+      // casi siempre es que la API no esta levantada o que el telefono
+      // esta en otra red que el equipo.
+      return `No se pudo conectar con el servidor (${API_URL}). Verifique que la API esté levantada y que el teléfono esté en la misma red.`;
+    }
   }
   return fallback;
 }
