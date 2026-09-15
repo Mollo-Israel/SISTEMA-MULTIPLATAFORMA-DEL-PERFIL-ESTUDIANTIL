@@ -10,6 +10,7 @@ import ComingSoonScreen from '../screens/ComingSoonScreen';
 import HomeScreen from '../screens/student/HomeScreen';
 import ProfileScreen from '../screens/student/ProfileScreen';
 import InterestsScreen from '../screens/student/InterestsScreen';
+import SkillsScreen from '../screens/student/SkillsScreen';
 import EvidencesScreen from '../screens/student/EvidencesScreen';
 import ActivitiesScreen from '../screens/student/ActivitiesScreen';
 import MyActivitiesScreen from '../screens/student/MyActivitiesScreen';
@@ -60,6 +61,7 @@ function PerfilStack() {
     <Stack.Navigator screenOptions={{ ...screenOptions, headerShown: true }}>
       <Stack.Screen name="MiPerfil" component={ProfileScreen} options={{ title: 'Perfil', ...withLogout }} />
       <Stack.Screen name="Intereses" component={InterestsScreen} options={{ title: 'Intereses' }} />
+      <Stack.Screen name="Habilidades" component={SkillsScreen} options={{ title: 'Habilidades' }} />
       <Stack.Screen name="Evidencias" component={EvidencesScreen} options={{ title: 'Evidencias' }} />
     </Stack.Navigator>
   );

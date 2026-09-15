@@ -156,10 +156,16 @@ flowchart TD
 Dos distinciones del modelo que suelen confundirse:
 
 - **`student_interests` vs `student_free_interests`.** Las primeras son áreas
-  del catálogo con una prioridad de 1 a 5 («áreas de preferencia»). Las
-  segundas son texto libre que el estudiante escribe con sus palabras. El
+  del catálogo con una prioridad de 1 a 5. Las segundas son texto libre. El
   documento de grado las enumera como datos declarativos **distintos**, y así
   están modeladas.
+
+  > **Estado actual.** Los intereses en texto libre **ya no se declaran desde
+  > ningún cliente**: la aplicación móvil era la única que lo permitía y esa
+  > función se retiró para que ambos clientes ofrezcan exactamente lo mismo.
+  > La tabla, sus endpoints (`/profiles/me/free-interests`) y los 43 registros
+  > ya declarados siguen intactos, y el motor de recomendaciones los sigue
+  > leyendo; lo que ya no ocurre es que se creen nuevos.
 - **`external_certificates` vs `internal_constancies`.** El certificado externo
   lo sube el estudiante y **el sistema no lo certifica**: es evidencia
   declarada. La constancia interna la **emite la dirección de carrera** sobre
@@ -244,7 +250,7 @@ abierta.
 flowchart LR
     A[Semestre y bio] --> C[(student_profiles)]
     B1[Áreas de preferencia<br/>prioridad 1-5] --> C2[(student_interests)]
-    B2[Intereses en texto libre] --> C3[(student_free_interests)]
+    B2[Intereses en texto libre<br/>ya no se declaran] -.-> C3[(student_free_interests)]
     B3[Habilidades nivel 1-5] --> C4[(student_skills)]
     B4[Áreas a mejorar] --> C
     C --> D{Completitud}
@@ -261,10 +267,10 @@ La **completitud** se calcula sobre cinco piezas: semestre, descripción,
 intereses, habilidades y áreas de mejora. Cada cambio en el perfil dispara una
 recalculación de afinidad a través del puerto `AFFINITY_RECALCULATION`.
 
-> **Nota sobre las habilidades.** Se declaran desde el **panel web**
-> («Intereses y habilidades»). El registro de habilidades se retiró de la
-> aplicación móvil a pedido del usuario; el dato sigue existiendo y sigue
-> alimentando la afinidad exactamente igual.
+> **Paridad entre clientes.** El panel web y la aplicación móvil ofrecen lo
+> mismo: elegir áreas del catálogo con una prioridad de 1 a 5, y declarar
+> habilidades con un nivel de 1 a 5. El estudiante **no crea** intereses:
+> elige de un catálogo que administra el administrador.
 
 ---
 
@@ -534,6 +540,11 @@ Puntajes principales: área de afinidad **6 / 4 / 2** según nivel; área de
 mejora **4**; coincidencia con interés libre **3**; coincidencia con habilidad
 **2**; fecha próxima **+1** dentro de 30 días. El mínimo para recomendar algo
 es **2 puntos**, y la fecha próxima **nunca alcanza por sí sola**.
+
+> La señal de **interés libre** sigue implementada y sigue puntuando sobre los
+> intereses ya declarados, pero como ningún cliente permite crear nuevos, en la
+> práctica dejará de aparecer para los estudiantes que se registren a partir
+> de ahora. Si conviene recuperarla, basta con añadir la sección al panel web.
 
 Lo que el motor **excluye** siempre: actividades en las que el estudiante ya
 está inscrito, actividades pasadas, actividades con el cupo lleno y actividades
