@@ -96,6 +96,13 @@ npm run mobile:start   # abre Expo; escanea el QR con Expo Go
 >
 > Si el celular alcanza Expo (puerto 8081) pero no la API (3010), es el
 > cortafuegos de Windows: hay que permitir Node.js en redes privadas.
+>
+> ⚠️ **Revise primero `mobile/.env`.** Si tiene una `EXPO_PUBLIC_API_URL`
+> escrita a mano, esa gana sobre la detección automática, y queda obsoleta en
+> cuanto cambia la IP del equipo. El síntoma es un error de conexión contra una
+> dirección que ya no existe. Comente esa línea y reinicie con
+> `npx expo start -c`: las variables se incrustan al empaquetar, así que no
+> basta con guardar el archivo.
 
 ### Cuentas para iniciar sesión
 
