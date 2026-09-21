@@ -19,7 +19,10 @@ export async function seedAdminUser(dataSource: DataSource): Promise<void> {
     return;
   }
 
-  const password = process.env.ADMIN_PASSWORD ?? 'Admin123*';
+  // §13 exige 12 caracteres como minimo. Este valor solo sirve para el
+  // arranque inicial en desarrollo; en cualquier despliegue real se define
+  // ADMIN_PASSWORD por entorno.
+  const password = process.env.ADMIN_PASSWORD ?? 'AfiniaAdmin2026*';
   const passwordHash = await bcrypt.hash(password, 10);
 
   await userRepo.save(

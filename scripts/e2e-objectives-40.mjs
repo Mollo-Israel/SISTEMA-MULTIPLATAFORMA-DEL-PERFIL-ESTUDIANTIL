@@ -17,7 +17,8 @@ import { Buffer } from 'node:buffer';
 
 const API = process.env.API_URL ?? 'http://localhost:3000/api';
 const TS = Date.now();
-const PWD = 'Afinia2026*';
+// §13: la politica exige 12 caracteres como minimo.
+const PWD = 'Afinia2026Seg*';
 const email = (n) => `e2e.${n}.${TS}@univalle.edu`;
 const studentEmail = (n) => `e2e.${n}.${TS}@est.univalle.edu`;
 
@@ -114,26 +115,118 @@ async function main() {
 
 // ===========================================================================
 //  OBJETIVO 1 — Usuarios, autenticacion, roles y control de acceso
+/**
+ * Provisiona una cuenta y la activa (§9.1: no existe registro publico).
+ *
+ * El administrador la crea, el titular la activa con el token y despues inicia
+ * sesion. Es el mismo camino que recorre una persona real.
+ */
+async function provisionarCuenta(adminToken, { firstName, lastName, email, role = 'STUDENT' }) {
+  const creado = await req('POST', '/users', {
+    token: adminToken,
+    body: { firstName, lastName, email, password: PWD, role },
+  });
+  if (creado.status !== 201) {
+    throw new Error(`No se pudo provisionar ${email} (${creado.status}): ${JSON.stringify(creado.data)}`);
+  }
+  const activationToken = creado.data?.activationToken;
+  if (!activationToken) {
+    throw new Error(`Sin token de activacion para ${email}. Las pruebas requieren un entorno sin SMTP.`);
+  }
+  const activado = await req('POST', '/activation/activate', {
+    body: { token: activationToken, password: PWD },
+  });
+  if (activado.status !== 200) {
+    throw new Error(`No se pudo activar ${email} (${activado.status}): ${JSON.stringify(activado.data)}`);
+  }
+  const login = await req('POST', '/auth/login', { body: { email, password: PWD } });
+  if (login.status !== 200) {
+    throw new Error(`No se pudo iniciar sesion como ${email} (${login.status}).`);
+  }
+  return { accessToken: login.data.accessToken, userId: creado.data.id, activationToken };
+}
+
 // ===========================================================================
 async function objective1(ctx) {
   objective('OBJETIVO 1 — Gestion de usuarios, autenticacion, roles y control de acceso');
 
-  // --- RF1: registro de estudiante ---
-  section('RF1 · Registro de cuenta de estudiante');
-  const reg = await req('POST', '/auth/register', {
+  // --- RF01/RF02: provisionamiento y activacion ---
+  section('RF01 · Provisionamiento de cuentas (ya no existe registro publico)');
+
+  const registroPublico = await req('POST', '/auth/register', {
+    body: {
+      firstName: 'Valeria',
+      lastName: 'Antezana',
+      email: studentEmail('publico'),
+      password: PWD,
+    },
+  });
+  check(
+    registroPublico.status === 404,
+    '1.1 El registro publico ya no existe -> 404',
+    `status ${registroPublico.status}`,
+  );
+
+  const provisionada = await req('POST', '/users', {
+    token: ctx.admin,
     body: {
       firstName: 'Valeria',
       lastName: 'Antezana',
       email: studentEmail('est1'),
       password: PWD,
+      role: 'STUDENT',
     },
   });
-  check(reg.status === 201, '1.1 Registro de estudiante devuelve 201', `status ${reg.status} ${msgOf(reg)}`);
-  check(reg.data?.user?.role === 'STUDENT', '1.2 El rol asignado automaticamente es STUDENT');
-  check(!!reg.data?.accessToken, '1.3 El registro devuelve token de sesion');
-  check(reg.data?.user?.passwordHash === undefined, '1.4 La respuesta no expone el hash de contrasena');
+  check(
+    provisionada.status === 201,
+    '1.2 El administrador provisiona una cuenta -> 201',
+    `status ${provisionada.status} ${msgOf(provisionada)}`,
+  );
+  check(
+    provisionada.data?.status === 'pending_activation',
+    '1.3 La cuenta nace en PENDING_ACTIVATION',
+    `status=${provisionada.data?.status}`,
+  );
+  check(
+    provisionada.data?.passwordHash === undefined,
+    '1.4 La respuesta no expone el hash de contrasena',
+  );
 
-  const selfRole = await req('POST', '/auth/register', {
+  const sinActivar = await req('POST', '/auth/login', {
+    body: { email: studentEmail('est1'), password: PWD },
+  });
+  check(
+    sinActivar.status === 401,
+    '1.5 Una cuenta provisionada no puede iniciar sesion -> 401',
+    `status ${sinActivar.status}`,
+  );
+
+  const dup = await req('POST', '/users', {
+    token: ctx.admin,
+    body: {
+      firstName: 'Valeria',
+      lastName: 'Antezana',
+      email: studentEmail('est1'),
+      password: PWD,
+      role: 'STUDENT',
+    },
+  });
+  check(dup.status === 409, '1.6 Correo duplicado -> 409', `status ${dup.status}`);
+
+  const badEmail = await req('POST', '/users', {
+    token: ctx.admin,
+    body: {
+      firstName: 'Ana',
+      lastName: 'Lopez',
+      email: `ana.${TS}@gmail.com`,
+      password: PWD,
+      role: 'STUDENT',
+    },
+  });
+  check(badEmail.status === 400, '1.7 Correo no institucional -> 400', `status ${badEmail.status}`);
+
+  const estudianteProvisiona = await req('POST', '/users', {
+    token: sinActivar.data?.accessToken ?? 'sin-token',
     body: {
       firstName: 'Intruso',
       lastName: 'Prueba',
@@ -142,25 +235,53 @@ async function objective1(ctx) {
       role: 'ADMIN',
     },
   });
-  check(selfRole.status === 400, '1.5 No puede autootorgarse un rol al registrarse -> 400', `status ${selfRole.status}`);
+  check(
+    estudianteProvisiona.status === 401 || estudianteProvisiona.status === 403,
+    '1.8 Solo el administrador provisiona cuentas -> 401/403',
+    `status ${estudianteProvisiona.status}`,
+  );
 
-  const dup = await req('POST', '/auth/register', {
-    body: { firstName: 'Valeria', lastName: 'Antezana', email: studentEmail('est1'), password: PWD },
+  section('RF02 · Activacion de cuenta');
+
+  const tokenActivacion = provisionada.data?.activationToken;
+  check(!!tokenActivacion, '1.9 El provisionamiento entrega un token de activacion');
+
+  const tokenFalso = await req('POST', '/activation/activate', {
+    body: { token: 'x'.repeat(40), password: PWD },
   });
-  check(dup.status === 409, '1.6 Correo duplicado -> 409', `status ${dup.status}`);
+  check(tokenFalso.status === 400, '1.10 Token de activacion invalido -> 400', `status ${tokenFalso.status}`);
 
-  const badEmail = await req('POST', '/auth/register', {
-    body: { firstName: 'Ana', lastName: 'Lopez', email: `ana.${TS}@gmail.com`, password: PWD },
+  const debilAlActivar = await req('POST', '/activation/activate', {
+    body: { token: tokenActivacion, password: 'corta1*' },
   });
-  check(badEmail.status === 400, '1.7 Correo no institucional -> 400', `status ${badEmail.status}`);
+  check(
+    debilAlActivar.status === 400,
+    '1.11 Contrasena que incumple la politica -> 400',
+    `status ${debilAlActivar.status}`,
+  );
 
-  const weakPwd = await req('POST', '/auth/register', {
-    body: { firstName: 'Ana', lastName: 'Lopez', email: studentEmail('debil'), password: '12345678' },
+  const activacion = await req('POST', '/activation/activate', {
+    body: { token: tokenActivacion, password: PWD },
   });
-  check(weakPwd.status === 400, '1.8 Contrasena sin complejidad -> 400', `status ${weakPwd.status}`);
+  check(activacion.status === 200, '1.12 Activacion valida -> 200', `status ${activacion.status} ${msgOf(activacion)}`);
 
-  const incomplete = await req('POST', '/auth/register', { body: { email: studentEmail('x'), password: PWD } });
-  check(incomplete.status === 400, '1.9 Campos incompletos -> 400', `status ${incomplete.status}`);
+  const reutilizado = await req('POST', '/activation/activate', {
+    body: { token: tokenActivacion, password: PWD },
+  });
+  check(
+    reutilizado.status === 400,
+    '1.13 El token de activacion sirve una sola vez -> 400',
+    `status ${reutilizado.status}`,
+  );
+
+  const genericaInexistente = await req('POST', '/activation/request', {
+    body: { email: `nadie.${TS}@univalle.edu` },
+  });
+  check(
+    genericaInexistente.status === 200,
+    '1.14 Pedir activacion de un correo inexistente responde igual (no enumera cuentas)',
+    `status ${genericaInexistente.status}`,
+  );
 
   // --- RF2: sesion ---
   section('RF2 · Gestion de sesion');
@@ -198,11 +319,23 @@ async function objective1(ctx) {
 
   // --- RF3: usuarios institucionales, roles y estados ---
   section('RF3 · Usuarios institucionales, roles y estados');
+  /**
+   * Provisiona una cuenta institucional y la deja activada.
+   *
+   * Desde §9.2 ninguna cuenta nace utilizable: crear ya no basta para poder
+   * iniciar sesion. Devuelve la respuesta del alta para que las aserciones
+   * sobre el alta sigan siendo las mismas.
+   */
   const mkStaff = async (role, first, last, key) => {
     const r = await req('POST', '/users', {
       token: ctx.admin,
       body: { firstName: first, lastName: last, email: email(key), password: PWD, role },
     });
+    if (r.status === 201 && r.data?.activationToken) {
+      await req('POST', '/activation/activate', {
+        body: { token: r.data.activationToken, password: PWD },
+      });
+    }
     return r;
   };
 
@@ -215,8 +348,12 @@ async function objective1(ctx) {
 
   const adminRes = await mkStaff('ADMIN', 'Falso', 'Admin', 'adminfalso');
   check(adminRes.status === 400, '3.4 No se puede crear otro ADMIN por este endpoint -> 400', `status ${adminRes.status}`);
-  const studentRes = await mkStaff('STUDENT', 'Falso', 'Estudiante', 'estfalso');
-  check(studentRes.status === 400, '3.5 No se puede crear un STUDENT por este endpoint -> 400', `status ${studentRes.status}`);
+  const studentRes = await mkStaff('STUDENT', 'Marta', 'Estudiante', 'estprov');
+  check(
+    studentRes.status === 201,
+    '3.5 El administrador tambien provisiona estudiantes (§9.2)',
+    `status ${studentRes.status} ${msgOf(studentRes)}`,
+  );
 
   const teacherId = teacherRes.data?.id;
   const directorId = directorRes.data?.id;
@@ -276,8 +413,15 @@ async function objective1(ctx) {
   const teacherToken = teacherLogin.data?.accessToken;
   check(!!teacherToken, '3.14 El docente puede iniciar sesion mientras esta activo');
 
-  const deact = await req('PATCH', `/users/${teacherId}/status`, { token: ctx.admin, body: { active: false } });
-  check(deact.status === 200 && deact.data.status === 'inactive', '3.15 Admin desactiva la cuenta');
+  const deact = await req('PATCH', `/users/${teacherId}/status`, {
+    token: ctx.admin,
+    body: { status: 'suspended' },
+  });
+  check(
+    deact.status === 200 && deact.data.status === 'suspended',
+    '3.15 Admin suspende la cuenta',
+    `status ${deact.status} -> ${deact.data?.status}`,
+  );
 
   check(
     (await req('POST', '/auth/login', { body: { email: email('docente'), password: PWD } })).status === 401,
@@ -290,10 +434,23 @@ async function objective1(ctx) {
     `status ${withOldToken.status}`,
   );
 
-  const react = await req('PATCH', `/users/${teacherId}/status`, { token: ctx.admin, body: { active: true } });
+  const react = await req('PATCH', `/users/${teacherId}/status`, {
+    token: ctx.admin,
+    body: { status: 'active' },
+  });
   check(react.status === 200 && react.data.status === 'active', '3.18 Admin reactiva la cuenta');
-  const afterReact = await req('GET', '/auth/me', { token: teacherToken });
-  check(afterReact.status === 200, '3.19 Tras reactivar, el acceso vuelve a funcionar', `status ${afterReact.status}`);
+
+  // §14: suspender revoca las sesiones. El token anterior NO revive al
+  // reactivar; hay que volver a iniciar sesion. Es lo correcto: si la
+  // suspension fue por un token comprometido, revivirlo anularia la medida.
+  const reloginTeacher = await req('POST', '/auth/login', {
+    body: { email: email('docente'), password: PWD },
+  });
+  check(
+    reloginTeacher.status === 200 && !!reloginTeacher.data?.accessToken,
+    '3.19 Tras reactivar, el acceso vuelve a funcionar iniciando sesion de nuevo',
+    `status ${reloginTeacher.status}`,
+  );
 
   // --- RF4: catalogos ---
   section('RF4 · Catalogos y configuracion');
@@ -496,10 +653,12 @@ async function objective2(ctx) {
   check(!raw.includes('passwordHash') && !raw.includes('password_hash'), '2.27 El resumen no expone credenciales');
 
   // Segundo estudiante, en un semestre fuera del alcance del docente (3, 4, 5)
-  const other = await req('POST', '/auth/register', {
-    body: { firstName: 'Diego', lastName: 'Rocha', email: studentEmail('est2'), password: PWD },
+  const other = await provisionarCuenta(ctx.admin, {
+    firstName: 'Diego',
+    lastName: 'Rocha',
+    email: studentEmail('est2'),
   });
-  const otherToken = other.data?.accessToken;
+  const otherToken = other.accessToken;
   const otherProfile = await req('POST', '/profiles/me', { token: otherToken, body: { semester: 7 } });
   const otherProfileId = otherProfile.data?.id;
   ctx.otherStudentToken = otherToken;
@@ -557,12 +716,13 @@ async function objective2(ctx) {
   );
 
   // Docente sin semestres habilitados
-  await req('POST', '/users', {
-    token: admin,
-    body: { firstName: 'Ines', lastName: 'Moreno', email: email('docente2'), password: PWD, role: 'TEACHER' },
+  const lonely = await provisionarCuenta(admin, {
+    firstName: 'Ines',
+    lastName: 'Moreno',
+    email: email('docente2'),
+    role: 'TEACHER',
   });
-  const lonelyToken = (await req('POST', '/auth/login', { body: { email: email('docente2'), password: PWD } }))
-    .data?.accessToken;
+  const lonelyToken = lonely.accessToken;
   const lonelyDir = await req('GET', '/profiles/students', { token: lonelyToken });
   check(
     lonelyDir.data?.students?.length === 0 && lonelyDir.data?.scope?.semesters?.length === 0,
@@ -919,16 +1079,20 @@ async function objective4(ctx) {
   );
 
   // Cupo: la actividad admite 2 confirmados
-  const s3 = await req('POST', '/auth/register', {
-    body: { firstName: 'Camila', lastName: 'Ortiz', email: studentEmail('est3'), password: PWD },
+  const s3 = await provisionarCuenta(ctx.admin, {
+    firstName: 'Camila',
+    lastName: 'Ortiz',
+    email: studentEmail('est3'),
   });
-  const s3Token = s3.data?.accessToken;
+  const s3Token = s3.accessToken;
   const s3Profile = (await req('POST', '/profiles/me', { token: s3Token, body: { semester: 4 } })).data;
   await req('POST', `/activities/${academicActivityId}/register`, { token: s3Token });
-  const s4 = await req('POST', '/auth/register', {
-    body: { firstName: 'Bruno', lastName: 'Aguilar', email: studentEmail('est4'), password: PWD },
+  const s4 = await provisionarCuenta(ctx.admin, {
+    firstName: 'Bruno',
+    lastName: 'Aguilar',
+    email: studentEmail('est4'),
   });
-  const s4Token = s4.data?.accessToken;
+  const s4Token = s4.accessToken;
   const s4Profile = (await req('POST', '/profiles/me', { token: s4Token, body: { semester: 4 } })).data;
   await req('POST', `/activities/${academicActivityId}/register`, { token: s4Token });
 
@@ -972,10 +1136,51 @@ async function objective4(ctx) {
     '4.20 El nombre en disco lo genera el sistema, no el cliente',
   );
 
-  const fileRes = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`);
-  const downloaded = Buffer.from(await fileRes.arrayBuffer());
-  check(fileRes.status === 200, '4.21 El archivo queda accesible por su URL', `status ${fileRes.status}`);
-  check(downloaded.length === pdfBytes.length, '4.22 El archivo descargado coincide con el subido');
+  // §83: conocer la URL no debe bastar para descargar. Antes esta prueba
+  // afirmaba lo contrario, que era precisamente el hallazgo a corregir.
+  const anonimo = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`);
+  check(
+    anonimo.status === 401,
+    '4.21 Conocer la URL NO permite descargar sin sesion -> 401',
+    `status ${anonimo.status}`,
+  );
+
+  // El archivo recien subido aun no esta referenciado por ninguna evidencia,
+  // de modo que nadie puede alcanzarlo: se adjunta primero.
+  const evidenciaArchivo = await req('POST', '/evidences', {
+    token: student,
+    body: {
+      evidenceType: 'file',
+      fileUrl: upload.data?.url,
+      fileName: 'constancia.pdf',
+      fileSize: upload.data?.size,
+      description: 'Archivo de prueba de descarga autorizada',
+    },
+  });
+  check(
+    evidenciaArchivo.status === 201,
+    '4.22 La evidencia con archivo queda registrada',
+    `status ${evidenciaArchivo.status} ${msgOf(evidenciaArchivo)}`,
+  );
+
+  const propio = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`, {
+    headers: { Authorization: `Bearer ${student}` },
+  });
+  const descargado = Buffer.from(await propio.arrayBuffer());
+  check(
+    propio.status === 200 && descargado.length === pdfBytes.length,
+    '4.23 Su titular si lo descarga, y el contenido coincide',
+    `status ${propio.status}`,
+  );
+
+  const ajeno = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`, {
+    headers: { Authorization: `Bearer ${ctx.otherStudentToken}` },
+  });
+  check(
+    ajeno.status === 404 || ajeno.status === 403,
+    '4.24 Otro estudiante NO descarga el archivo ajeno',
+    `status ${ajeno.status}`,
+  );
 
   const badType = new FormData();
   badType.append('file', new Blob([Buffer.from('MZ ejecutable')], { type: 'application/x-msdownload' }), 'virus.exe');

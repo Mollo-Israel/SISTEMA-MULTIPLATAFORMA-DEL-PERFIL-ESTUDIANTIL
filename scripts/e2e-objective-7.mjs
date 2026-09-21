@@ -20,7 +20,8 @@
 
 const API = process.env.API_URL ?? 'http://localhost:3000/api';
 const TS = Date.now();
-const PWD = 'Afinia2026*';
+// §13: la politica exige 12 caracteres como minimo.
+const PWD = 'Afinia2026Seg*';
 const email = (n) => `o7.${n}.${TS}@univalle.edu`;
 const studentEmail = (n) => `o7.${n}.${TS}@est.univalle.edu`;
 
@@ -71,6 +72,37 @@ const LIMITS = {
 };
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Provisiona una cuenta y la activa (§9.1: no existe registro publico).
+ *
+ * El administrador la crea, el titular la activa con el token y despues inicia
+ * sesion. Es el mismo camino que recorre una persona real.
+ */
+async function provisionarCuenta(adminToken, { firstName, lastName, email, role = 'STUDENT' }) {
+  const creado = await req('POST', '/users', {
+    token: adminToken,
+    body: { firstName, lastName, email, password: PWD, role },
+  });
+  if (creado.status !== 201) {
+    throw new Error(`No se pudo provisionar ${email} (${creado.status}): ${JSON.stringify(creado.data)}`);
+  }
+  const activationToken = creado.data?.activationToken;
+  if (!activationToken) {
+    throw new Error(`Sin token de activacion para ${email}. Las pruebas requieren un entorno sin SMTP.`);
+  }
+  const activado = await req('POST', '/activation/activate', {
+    body: { token: activationToken, password: PWD },
+  });
+  if (activado.status !== 200) {
+    throw new Error(`No se pudo activar ${email} (${activado.status}): ${JSON.stringify(activado.data)}`);
+  }
+  const login = await req('POST', '/auth/login', { body: { email, password: PWD } });
+  if (login.status !== 200) {
+    throw new Error(`No se pudo iniciar sesion como ${email} (${login.status}).`);
+  }
+  return { accessToken: login.data.accessToken, userId: creado.data.id, activationToken };
+}
 
 async function main() {
   console.log(`\n${C.b}Prueba integral del Objetivo 7 contra ${API}${C.r}`);
@@ -155,12 +187,13 @@ async function prepararEscenario(ctx) {
 
   section('Responsables de actividades');
   const crearStaff = async (key, first, last, role) => {
-    await req('POST', '/users', {
-      token: ctx.admin,
-      body: { firstName: first, lastName: last, email: email(key), password: PWD, role },
+    const cuenta = await provisionarCuenta(ctx.admin, {
+      firstName: first,
+      lastName: last,
+      email: email(key),
+      role,
     });
-    const login = await req('POST', '/auth/login', { body: { email: email(key), password: PWD } });
-    return login.data?.accessToken;
+    return cuenta.accessToken;
   };
   ctx.director = await crearStaff('director', 'Aurora', 'Paz', 'CAREER_DIRECTOR');
   ctx.sociedad = await crearStaff('sociedad', 'Benito', 'Lara', 'SCIENTIFIC_SOCIETY');
@@ -169,10 +202,12 @@ async function prepararEscenario(ctx) {
 
   section('Estudiantes');
   const nuevoEstudiante = async (key, first, last, semester) => {
-    const reg = await req('POST', '/auth/register', {
-      body: { firstName: first, lastName: last, email: studentEmail(key), password: PWD },
+    const cuenta = await provisionarCuenta(ctx.admin, {
+      firstName: first,
+      lastName: last,
+      email: studentEmail(key),
     });
-    const token = reg.data?.accessToken;
+    const token = cuenta.accessToken;
     const profile = await req('POST', '/profiles/me', { token, body: { semester } });
     return { token, profileId: profile.data?.id, name: `${first} ${last}` };
   };

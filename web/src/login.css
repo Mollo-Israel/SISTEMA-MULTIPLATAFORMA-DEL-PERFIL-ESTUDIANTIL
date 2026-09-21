@@ -113,3 +113,41 @@
 .li-reqs { list-style: none; padding: 0; margin: 0.4rem 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0.15rem 0.6rem; }
 .li-reqs li { font-size: 0.72rem; color: #9a8a8f; display: flex; align-items: center; gap: 0.3rem; }
 .li-reqs li.ok { color: #1f7a4d; }
+
+/* ------------------------------------------------------------------ */
+/* Pantallas de activación y recuperación (§12, §13)                   */
+/* ------------------------------------------------------------------ */
+
+/* Sin panel de marca lateral: son trámites cortos, no una portada. */
+.li-card-slim { grid-template-columns: 1fr; max-width: 460px; }
+.li-card-slim .li-form { padding: 2.2rem 2rem 1.8rem; }
+
+.li-brand-dark { color: var(--li-bordo); display: flex; align-items: center; font-weight: 800; margin-bottom: 1.4rem; }
+
+.li-hint { font-size: 0.72rem; color: #9a8a8f; margin: 0.45rem 0 0; }
+
+/* Barra de fuerza: informativa, nunca bloquea el envío. */
+.li-strength { height: 4px; background: #f0e2e5; border-radius: 999px; margin-top: 0.5rem; overflow: hidden; }
+.li-strength span { display: block; height: 100%; border-radius: 999px; background: #d24b60; }
+.li-strength span[data-level='media'] { background: #d98324; }
+.li-strength span[data-level='alta'] { background: #1f7a4d; }
+
+.li-ok { display: flex; gap: 0.7rem; background: #eaf6f0; border: 1px solid #cbe7d9; color: #1f5f45; border-radius: 12px; padding: 0.85rem 0.9rem; margin-bottom: 1rem; }
+.li-ok .ic { color: #1f7a4d; display: flex; align-items: flex-start; padding-top: 0.1rem; }
+.li-ok strong { display: block; font-size: 0.88rem; }
+.li-ok p { margin: 0.2rem 0 0; font-size: 0.8rem; line-height: 1.45; }
+
+.li-done { text-align: center; margin-bottom: 1.2rem; }
+.li-done .ic { color: #1f7a4d; display: inline-flex; margin-bottom: 0.6rem; }
+.li-done h1 { font-size: 1.3rem; margin: 0 0 0.35rem; color: var(--li-ink); }
+.li-done p { font-size: 0.85rem; color: #8a7a80; line-height: 1.5; margin: 0; }
+
+/* El botón también se usa como enlace de React Router. */
+a.li-btn { text-decoration: none; }
+
+.li-switch a { color: var(--li-bordo); font-weight: 700; text-decoration: none; }
+.li-switch a:hover { text-decoration: underline; }
+
+.li-links { display: flex; justify-content: flex-end; margin-top: -0.4rem; margin-bottom: 0.9rem; }
+.li-links a { font-size: 0.78rem; color: #a08a90; text-decoration: none; }
+.li-links a:hover { color: var(--li-bordo); text-decoration: underline; }

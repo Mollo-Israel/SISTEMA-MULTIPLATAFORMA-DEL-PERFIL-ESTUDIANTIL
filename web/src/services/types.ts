@@ -3,17 +3,93 @@ export interface PublicUser {
   email: string;
   firstName: string;
   lastName: string;
-  status: 'active' | 'inactive';
+  status: UserStatus;
   role: string;
   createdAt: string;
   updatedAt: string;
   /** Solo para usuarios con rol docente. */
   semesters?: number[];
+  /**
+   * Solo en desarrollo sin SMTP configurado: el enlace de activación que en
+   * producción llega por correo. Permite probar el alta sin servidor de correo.
+   */
+  activationToken?: string;
 }
+
+/** Ciclo de vida de una cuenta (§12). Solo `active` puede operar. */
+export type UserStatus = 'pending_activation' | 'active' | 'suspended' | 'inactive';
+
+export const USER_STATUS_LABEL: Record<UserStatus, string> = {
+  pending_activation: 'Pendiente de activación',
+  active: 'Activa',
+  suspended: 'Suspendida',
+  inactive: 'Inactiva',
+};
 
 export interface AuthResult {
   accessToken: string;
+  /** Token de larga duración y revocable con el que se renueva el acceso (§14). */
+  refreshToken: string;
+  /** Vida del access token en segundos. */
+  expiresIn: number;
   user: PublicUser;
+}
+
+/* ------------------------------------------------------------------ */
+/* Importación de padrón (§10)                                         */
+/* ------------------------------------------------------------------ */
+
+/** Veredicto de una fila del padrón. Solo NEW y UPDATE escriben algo. */
+export type ImportRowStatus = 'NEW' | 'UPDATE' | 'UNCHANGED' | 'CONFLICT' | 'INVALID';
+
+export interface ImportRow {
+  rowNumber: number;
+  universityCode: string | null;
+  institutionalEmail: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  semester: number | null;
+  status: ImportRowStatus;
+  /** Motivo del rechazo o del conflicto; null cuando la fila es limpia. */
+  message: string | null;
+}
+
+export type ImportCounts = Record<ImportRowStatus, number>;
+
+export interface ImportPreview {
+  batchId: string;
+  counts: ImportCounts;
+  totalRows: number;
+  rows: ImportRow[];
+}
+
+export interface ImportBatchDetail {
+  id: string;
+  filename: string;
+  status: 'PREVIEWED' | 'APPLIED' | 'DISCARDED';
+  counts: ImportCounts;
+  totalRows: number;
+  createdAt: string;
+  appliedAt: string | null;
+  rows: ImportRow[];
+}
+
+export interface ImportBatchSummary {
+  id: string;
+  filename: string;
+  status: 'PREVIEWED' | 'APPLIED' | 'DISCARDED';
+  totalRows: number;
+  counts: ImportCounts;
+  importedBy: string | null;
+  createdAt: string;
+  appliedAt: string | null;
+}
+
+export interface ImportApplyResult {
+  batchId: string;
+  created: number;
+  updated: number;
+  message: string;
 }
 
 export interface AcademicArea {

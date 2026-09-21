@@ -75,15 +75,60 @@ export const trimUniqueArray = ({ value }: { value: unknown }) => {
 export const NAME_RE = /^[A-Za-zÀ-ÿ]+(?:[ '-][A-Za-zÀ-ÿ]+)*$/;
 
 // Correo institucional: debe terminar en univalle.edu (admite subdominios).
+// El dominio autorizado real se configura por entorno
+// (INSTITUTIONAL_EMAIL_DOMAINS, especificacion §11); esta expresion es el
+// formato de respaldo para los DTO que no reciben configuracion.
 export const UNIVALLE_RE = /^[a-z0-9._%+-]+@(?:[a-z0-9-]+\.)*univalle\.edu$/i;
 
-// Contrasena fuerte: mayuscula, minuscula, numero y simbolo; sin espacios; 8 a 72.
-export const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])(?!.*\s).{8,72}$/;
+/**
+ * Contrasena (especificacion §13): 12 a 128 caracteres, con mayuscula,
+ * minuscula, numero y simbolo, sin espacios.
+ *
+ * Nota sobre el hash: bcrypt solo considera los primeros 72 bytes. Se admiten
+ * 128 caracteres porque la especificacion lo exige y porque una frase larga es
+ * mejor practica, pero mas alla de 72 bytes la cola no aporta entropia
+ * adicional. 72 bytes ya son holgadamente suficientes.
+ */
+export const PASSWORD_MIN = 12;
+export const PASSWORD_MAX = 128;
+export const PASSWORD_RE = new RegExp(
+  '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9\\s])(?!.*\\s)'
+    + `.{${PASSWORD_MIN},${PASSWORD_MAX}}$`,
+);
 
 export const NAME_MSG = 'Solo admite letras, espacios, apóstrofo o guion.';
 export const EMAIL_MSG = 'El correo debe ser institucional (terminar en univalle.edu).';
 export const PASSWORD_MSG =
-  'La contraseña debe incluir mayúscula, minúscula, número y símbolo, sin espacios.';
+  `La contraseña debe tener al menos ${PASSWORD_MIN} caracteres e incluir mayúscula, `
+  + 'minúscula, número y símbolo, sin espacios.';
+
+/**
+ * Comprobaciones que una expresion regular no puede hacer (§13): la
+ * contrasena no puede ser el propio correo ni contener el codigo
+ * universitario. Devuelve el motivo del rechazo, o null si es aceptable.
+ */
+export function passwordPolicyError(
+  password: string,
+  context: { email?: string | null; universityCode?: string | null } = {},
+): string | null {
+  if (!PASSWORD_RE.test(password)) return PASSWORD_MSG;
+
+  const lower = password.toLowerCase();
+  const email = context.email?.toLowerCase().trim();
+  if (email) {
+    const localPart = email.split('@')[0];
+    if (lower === email || (localPart.length >= 4 && lower.includes(localPart))) {
+      return 'La contraseña no puede contener su correo institucional.';
+    }
+  }
+
+  const code = context.universityCode?.toLowerCase().trim();
+  if (code && code.length >= 4 && lower.includes(code)) {
+    return 'La contraseña no puede contener su código universitario.';
+  }
+
+  return null;
+}
 
 /**
  * Valida que una fecha no sea anterior a la de otro campo del mismo DTO.

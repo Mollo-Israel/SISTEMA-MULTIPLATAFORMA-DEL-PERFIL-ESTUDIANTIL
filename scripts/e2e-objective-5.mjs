@@ -17,7 +17,8 @@ import { Buffer } from 'node:buffer';
 
 const API = process.env.API_URL ?? 'http://localhost:3000/api';
 const TS = Date.now();
-const PWD = 'Afinia2026*';
+// §13: la politica exige 12 caracteres como minimo.
+const PWD = 'Afinia2026Seg*';
 const email = (n) => `o5.${n}.${TS}@univalle.edu`;
 const studentEmail = (n) => `o5.${n}.${TS}@est.univalle.edu`;
 
@@ -110,20 +111,53 @@ async function main() {
  *   docenteEnAlcance   habilitado en 4o  -> ve los proyectos de A
  *   docenteFueraAlcance habilitado en 2o -> no ve nada de A
  */
+/**
+ * Provisiona una cuenta y la activa (§9.1: no existe registro publico).
+ *
+ * El administrador la crea, el titular la activa con el token y despues inicia
+ * sesion. Es el mismo camino que recorre una persona real.
+ */
+async function provisionarCuenta(adminToken, { firstName, lastName, email, role = 'STUDENT' }) {
+  const creado = await req('POST', '/users', {
+    token: adminToken,
+    body: { firstName, lastName, email, password: PWD, role },
+  });
+  if (creado.status !== 201) {
+    throw new Error(`No se pudo provisionar ${email} (${creado.status}): ${JSON.stringify(creado.data)}`);
+  }
+  const activationToken = creado.data?.activationToken;
+  if (!activationToken) {
+    throw new Error(`Sin token de activacion para ${email}. Las pruebas requieren un entorno sin SMTP.`);
+  }
+  const activado = await req('POST', '/activation/activate', {
+    body: { token: activationToken, password: PWD },
+  });
+  if (activado.status !== 200) {
+    throw new Error(`No se pudo activar ${email} (${activado.status}): ${JSON.stringify(activado.data)}`);
+  }
+  const login = await req('POST', '/auth/login', { body: { email, password: PWD } });
+  if (login.status !== 200) {
+    throw new Error(`No se pudo iniciar sesion como ${email} (${login.status}).`);
+  }
+  return { accessToken: login.data.accessToken, userId: creado.data.id, activationToken };
+}
+
 async function prepararActores(ctx) {
   objective('PREPARACION · Actores del escenario');
   section('Cuentas y alcances');
 
   const nuevoEstudiante = async (key, first, last, semester) => {
-    const reg = await req('POST', '/auth/register', {
-      body: { firstName: first, lastName: last, email: studentEmail(key), password: PWD },
+    const cuenta = await provisionarCuenta(ctx.admin, {
+      firstName: first,
+      lastName: last,
+      email: studentEmail(key),
     });
-    const token = reg.data?.accessToken;
+    const token = cuenta.accessToken;
     const profile = await req('POST', '/profiles/me', {
       token,
       body: { semester, bio: `Estudiante de ${semester}o semestre.` },
     });
-    return { token, profileId: profile.data?.id, userId: reg.data?.user?.id, name: `${first} ${last}` };
+    return { token, profileId: profile.data?.id, userId: cuenta.userId, name: `${first} ${last}` };
   };
 
   ctx.A = await nuevoEstudiante('estA', 'Ariana', 'Peredo', 4);
@@ -133,16 +167,17 @@ async function prepararActores(ctx) {
   check(!!ctx.A.profileId && !!ctx.B.profileId, 'P.2 Los perfiles quedan creados');
 
   const nuevoDocente = async (key, first, last, semesters) => {
-    const created = await req('POST', '/users', {
-      token: ctx.admin,
-      body: { firstName: first, lastName: last, email: email(key), password: PWD, role: 'TEACHER' },
+    const cuenta = await provisionarCuenta(ctx.admin, {
+      firstName: first,
+      lastName: last,
+      email: email(key),
+      role: 'TEACHER',
     });
-    await req('PUT', `/users/${created.data?.id}/semesters`, {
+    await req('PUT', `/users/${cuenta.userId}/semesters`, {
       token: ctx.admin,
       body: { semesters },
     });
-    const login = await req('POST', '/auth/login', { body: { email: email(key), password: PWD } });
-    return { token: login.data?.accessToken, id: created.data?.id, name: `${first} ${last}` };
+    return { token: cuenta.accessToken, id: cuenta.userId, name: `${first} ${last}` };
   };
 
   ctx.docente = await nuevoDocente('docente', 'Ruben', 'Ledezma', [4]);
@@ -151,20 +186,14 @@ async function prepararActores(ctx) {
   check(!!ctx.docente.token, 'P.3 Docente habilitado en 4o semestre');
   check(!!ctx.docenteFuera.token, 'P.4 Docente habilitado solo en 2o semestre');
 
-  const director = await req('POST', '/users', {
-    token: ctx.admin,
-    body: {
-      firstName: 'Elsa',
-      lastName: 'Montano',
-      email: email('director'),
-      password: PWD,
-      role: 'CAREER_DIRECTOR',
-    },
+  const director = await provisionarCuenta(ctx.admin, {
+    firstName: 'Elsa',
+    lastName: 'Montano',
+    email: email('director'),
+    role: 'CAREER_DIRECTOR',
   });
-  ctx.directorToken = (
-    await req('POST', '/auth/login', { body: { email: email('director'), password: PWD } })
-  ).data?.accessToken;
-  check(director.status === 201 && !!ctx.directorToken, 'P.5 Director de carrera disponible');
+  ctx.directorToken = director.accessToken;
+  check(!!ctx.directorToken, 'P.5 Director de carrera disponible');
 }
 
 // ===========================================================================

@@ -28,7 +28,7 @@ const features = [
 ];
 
 const steps = [
-  { icon: <FiUser />, t: 'Crea tu cuenta', d: 'Regístrate como estudiante en segundos.' },
+  { icon: <FiUser />, t: 'Activa tu cuenta', d: 'La carrera la crea con tu correo institucional; tú defines la contraseña.' },
   { icon: <FiCheckCircle />, t: 'Completa tu perfil', d: 'Añade intereses, habilidades y metas.' },
   { icon: <FiFolder />, t: 'Registra y sube', d: 'Proyectos, actividades y evidencias.' },
   { icon: <FiUsers />, t: 'Participa y conecta', d: 'Inscríbete en actividades y suma participación.' },
@@ -56,7 +56,9 @@ export default function LandingPage() {
   }, []);
 
   const goLogin = () => navigate('/login');
-  const goRegister = () => navigate('/login?registro=1');
+  // No hay registro público (§9): la puerta de entrada es activar la cuenta
+  // que la carrera ya provisionó con el padrón institucional.
+  const goActivate = () => navigate('/activar');
   const goPanel = () => navigate(user ? (HOME_BY_ROLE[user.role] ?? '/login') : '/login');
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
@@ -89,7 +91,7 @@ export default function LandingPage() {
               habilidades, proyectos, actividades, evidencias y afinidades tecnológicas en un solo lugar.
             </motion.p>
             <motion.div className="lp-cta" variants={reveal}>
-              <button className="lp-btn lp-btn-solid" onClick={goRegister}><FiUser /> Crear mi cuenta</button>
+              <button className="lp-btn lp-btn-solid" onClick={goActivate}><FiUser /> Activar mi cuenta</button>
               <button className="lp-btn lp-btn-outline" onClick={() => scrollTo('funciones')}>Conocer la plataforma</button>
             </motion.div>
             <motion.div className="lp-mini" variants={reveal}>
@@ -204,7 +206,7 @@ export default function LandingPage() {
         <div className="in">
           <div><h2>Potencia tu perfil. Conecta con oportunidades.</h2><p>Empieza hoy a construir tu perfil académico y profesional.</p></div>
           <div className="lp-cta">
-            <button className="lp-btn lp-btn-light" onClick={goRegister}><FiUser /> Crear mi cuenta</button>
+            <button className="lp-btn lp-btn-light" onClick={goActivate}><FiUser /> Activar mi cuenta</button>
             <button className="lp-btn lp-btn-outline" onClick={goLogin} style={{ background: 'transparent', borderColor: '#fff', color: '#fff' }}><FiLogIn /> Iniciar sesión</button>
           </div>
         </div>

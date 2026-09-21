@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../auth/AuthContext';
 import { ROLE_LABEL, RolNombre } from '../constants';
+import { USER_STATUS_LABEL } from '../services/types';
 
 /**
  * Identidad y sesion, en la esquina superior derecha.
@@ -157,7 +158,7 @@ export default function UserMenu() {
                   <span className="ico"><FiUser size={15} /></span>
                   <div>
                     <b>Estado de la cuenta</b>
-                    <span>{user.status === 'active' ? 'Activa' : 'Inactiva'}</span>
+                    <span>{USER_STATUS_LABEL[user.status] ?? user.status}</span>
                   </div>
                 </li>
               </ul>

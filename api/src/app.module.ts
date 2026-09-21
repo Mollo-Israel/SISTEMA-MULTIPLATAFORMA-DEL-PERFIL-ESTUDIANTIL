@@ -2,8 +2,14 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { rateLimits } from './config/identity.config';
 import { buildDatabaseConfig } from './config/database.config';
 import { HealthController } from './health/health.controller';
+import { AuditModule } from './audit/audit.module';
+import { MailModule } from './mail/mail.module';
+import { IdentityModule } from './identity/identity.module';
+import { ImportsModule } from './imports/imports.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
@@ -31,6 +37,21 @@ import { RolesGuard } from './auth/guards/roles.guard';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => buildDatabaseConfig(config),
     }),
+    // §15: límite global generoso. Los endpoints sensibles —login, activación,
+    // recuperación— lo estrechan en su propio controlador.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      // Un unico limitador: con varios nombrados, todos se aplican a cada
+      // ruta salvo que se salten explicitamente, y el login habria quedado
+      // limitado por el perfil de activacion.
+      useFactory: (config: ConfigService) => [
+        { name: 'default', ttl: 60_000, limit: rateLimits.global(config) },
+      ],
+    }),
+    AuditModule,
+    MailModule,
+    IdentityModule,
+    ImportsModule,
     AuthModule,
     UsersModule,
     RolesModule,
@@ -48,6 +69,9 @@ import { RolesGuard } from './auth/guards/roles.guard';
   ],
   controllers: [HealthController],
   providers: [
+    // El orden importa: primero se descarta el abuso, luego se identifica y por
+    // último se autoriza.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

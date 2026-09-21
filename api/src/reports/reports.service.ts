@@ -9,8 +9,23 @@ import { Project } from '../entities/project.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { AffinityEngineService } from '../affinity-recalc/affinity.engine';
+import { TeacherScopeService } from '../access/teacher-scope.service';
+import { AuthenticatedUser } from '../auth/types/authenticated-user';
 
 const num = (value: unknown): number => Number(value ?? 0);
+
+/**
+ * Semestres a los que se limita un reporte.
+ *
+ * `null` significa sin restriccion, y lo producen el director y el
+ * administrador. Un arreglo vacio significa "ningun semestre habilitado" y
+ * debe devolver cero filas: es lo que le corresponde a un docente al que
+ * todavia no se le asigno alcance.
+ */
+type Scope = number[] | null;
+
+/** ¿Este alcance no puede ver absolutamente nada? */
+const isEmptyScope = (scope: Scope): boolean => Array.isArray(scope) && scope.length === 0;
 
 @Injectable()
 export class ReportsService {
@@ -23,19 +38,30 @@ export class ReportsService {
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
     private readonly affinityEngine: AffinityEngineService,
+    private readonly teacherScope: TeacherScopeService,
   ) {}
 
   // ---------- Docente ----------
 
-  async teacherOverview() {
+  /**
+   * Panel del docente, restringido a sus semestres habilitados (§68).
+   *
+   * Proteger el endpoint por rol no basta: hay que restringir el contenido.
+   * Antes este metodo contaba todos los perfiles de la carrera y devolvia los
+   * nombres de los estudiantes incompletos a cualquier docente.
+   */
+  async teacherOverview(user: AuthenticatedUser) {
+    const scope = await this.teacherScope.scopeFor(user);
+    if (isEmptyScope(scope)) return this.emptyTeacherOverview();
+
     const [total, byStatus, incomplete, topInterests, topTechnologies, participation] =
       await Promise.all([
-        this.profiles.count(),
-        this.profileStatusCounts(),
-        this.incompleteStudents(),
-        this.topInterestAreas(10),
-        this.topTechnologies(10),
-        this.participationCounts(),
+        this.countProfiles(scope),
+        this.profileStatusCounts(scope),
+        this.incompleteStudents(scope),
+        this.topInterestAreas(10, scope),
+        this.topTechnologies(10, scope),
+        this.participationCounts(scope),
       ]);
 
     return {
@@ -45,30 +71,75 @@ export class ReportsService {
       topTechnologies,
       participation,
       group: {
-        label: 'Cohorte general',
-        description: 'Agrupación por curso/grupo no disponible en el 30%; se reporta la cohorte completa.',
+        label: scope ? `Semestres ${scope.join(', ')}` : 'Cohorte general',
+        description: scope
+          ? 'Solo incluye estudiantes de los semestres habilitados para usted.'
+          : 'Incluye a todos los estudiantes de la carrera.',
         students: total,
+        semesters: scope,
       },
     };
   }
 
-  async teacherAffinitySummary() {
-    const [groupAffinity, topInterests] = await Promise.all([
-      this.affinityEngine.basicMap(),
-      this.topInterestAreas(10),
-    ]);
-    return { groupAffinity, topInterests };
+  /** Respuesta de un docente sin semestres asignados: vacia, no de la carrera. */
+  private emptyTeacherOverview() {
+    return {
+      students: {
+        total: 0,
+        byStatus: {
+          [ProfileStatus.INCOMPLETE]: 0,
+          [ProfileStatus.ACTIVE]: 0,
+          [ProfileStatus.UPDATED]: 0,
+        },
+      },
+      incompleteStudents: { count: 0, list: [] as unknown[] },
+      topInterests: [] as unknown[],
+      topTechnologies: [] as unknown[],
+      participation: {
+        total: 0,
+        byStatus: {
+          [RegistrationStatus.INTERESTED]: 0,
+          [RegistrationStatus.REGISTERED]: 0,
+          [RegistrationStatus.CONFIRMED]: 0,
+          [RegistrationStatus.ABSENT]: 0,
+        },
+      },
+      group: {
+        label: 'Sin semestres habilitados',
+        description:
+          'El administrador todavía no le asignó semestres. Hasta entonces no puede '
+          + 'consultar información de estudiantes.',
+        students: 0,
+        semesters: [] as number[],
+      },
+    };
   }
 
-  async teacherProjectsSummary() {
-    const [total, byStatus, byArea, topTechnologies, recent] = await Promise.all([
-      this.projects.count(),
-      this.projectStatusCounts(),
-      this.projectsByArea(),
-      this.topTechnologies(10),
-      this.recentProjects(10),
+  async teacherAffinitySummary(user: AuthenticatedUser) {
+    const scope = await this.teacherScope.scopeFor(user);
+    if (isEmptyScope(scope)) return { groupAffinity: [], topInterests: [], semesters: [] };
+
+    const [groupAffinity, topInterests] = await Promise.all([
+      this.affinityEngine.basicMap(scope ?? undefined),
+      this.topInterestAreas(10, scope),
     ]);
-    return { total, byStatus, byArea, topTechnologies, recent };
+    return { groupAffinity, topInterests, semesters: scope };
+  }
+
+  async teacherProjectsSummary(user: AuthenticatedUser) {
+    const scope = await this.teacherScope.scopeFor(user);
+    if (isEmptyScope(scope)) {
+      return { total: 0, byStatus: [], byArea: [], topTechnologies: [], recent: [], semesters: [] };
+    }
+
+    const [total, byStatus, byArea, topTechnologies, recent] = await Promise.all([
+      this.countProjects(scope),
+      this.projectStatusCounts(scope),
+      this.projectsByArea(scope),
+      this.topTechnologies(10, scope),
+      this.recentProjects(10, scope),
+    ]);
+    return { total, byStatus, byArea, topTechnologies, recent, semesters: scope };
   }
 
   // ---------- Director ----------
@@ -81,7 +152,7 @@ export class ReportsService {
         this.activities.count(),
         this.registrations.count(),
         this.topActivitiesByRegistrations(10),
-        this.topInterestAreas(10),
+        this.topInterestAreas(10, null),
         this.skillDistribution(15),
         this.descriptiveTrends(),
       ]);
@@ -135,21 +206,41 @@ export class ReportsService {
   async directorProjectsSummary() {
     const [total, byStatus, byArea] = await Promise.all([
       this.projects.count(),
-      this.projectStatusCounts(),
-      this.projectsByArea(),
+      this.projectStatusCounts(null),
+      this.projectsByArea(null),
     ]);
     return { total, byStatus, byArea };
   }
 
   // ---------- Helpers ----------
 
-  private async profileStatusCounts() {
-    const rows = await this.profiles
+  /** Cuantos estudiantes entran en el alcance. */
+  private async countProfiles(scope: Scope): Promise<number> {
+    const qb = this.profiles.createQueryBuilder('p');
+    if (scope) qb.andWhere('p.semester IN (:...scope)', { scope });
+    return qb.getCount();
+  }
+
+  /** Proyectos cuyo responsable entra en el alcance. */
+  private async countProjects(scope: Scope): Promise<number> {
+    const qb = this.projects.createQueryBuilder('p');
+    if (scope) {
+      qb.innerJoin('p.createdByProfile', 'owner').andWhere(
+        'owner.semester IN (:...scope)',
+        { scope },
+      );
+    }
+    return qb.getCount();
+  }
+
+  private async profileStatusCounts(scope: Scope) {
+    const qb = this.profiles
       .createQueryBuilder('p')
       .select('p.status', 'status')
       .addSelect('COUNT(*)', 'count')
-      .groupBy('p.status')
-      .getRawMany();
+      .groupBy('p.status');
+    if (scope) qb.andWhere('p.semester IN (:...scope)', { scope });
+    const rows = await qb.getRawMany();
     const result = {
       [ProfileStatus.INCOMPLETE]: 0,
       [ProfileStatus.ACTIVE]: 0,
@@ -159,16 +250,24 @@ export class ReportsService {
     return result;
   }
 
-  private async incompleteStudents() {
-    const rows = await this.profiles
+  /**
+   * Lista NOMINAL de estudiantes con el perfil incompleto.
+   *
+   * Es el dato mas sensible de este servicio: son nombres propios. Sin el
+   * filtro de alcance, un docente de un semestre veia a los de toda la
+   * carrera.
+   */
+  private async incompleteStudents(scope: Scope) {
+    const qb = this.profiles
       .createQueryBuilder('p')
       .leftJoin('p.user', 'u')
       .where('p.status = :status', { status: ProfileStatus.INCOMPLETE })
       .select('p.id', 'profileId')
       .addSelect('p.completion_percentage', 'completionPercentage')
       .addSelect("CONCAT(u.first_name, ' ', u.last_name)", 'studentName')
-      .orderBy('p.completion_percentage', 'ASC')
-      .getRawMany();
+      .orderBy('p.completion_percentage', 'ASC');
+    if (scope) qb.andWhere('p.semester IN (:...scope)', { scope });
+    const rows = await qb.getRawMany();
     return rows.map((r) => ({
       profileId: r.profileId,
       studentName: r.studentName,
@@ -176,41 +275,59 @@ export class ReportsService {
     }));
   }
 
-  private async topInterestAreas(limit: number) {
-    const rows = await this.interests
+  private async topInterestAreas(limit: number, scope: Scope) {
+    const qb = this.interests
       .createQueryBuilder('si')
       .leftJoin('si.academicArea', 'a')
       .select('a.name', 'area')
       .addSelect('COUNT(*)', 'count')
       .groupBy('a.name')
       .orderBy('count', 'DESC')
-      .limit(limit)
-      .getRawMany();
+      .limit(limit);
+    if (scope) {
+      qb.innerJoin('si.studentProfile', 'sp').andWhere('sp.semester IN (:...scope)', { scope });
+    }
+    const rows = await qb.getRawMany();
     return rows.map((r) => ({ area: r.area, count: num(r.count) }));
   }
 
-  private async topTechnologies(limit: number) {
-    const rows = await this.projects.query(
-      `SELECT tech AS technology, COUNT(*)::int AS count
-       FROM projects, unnest(technologies) AS tech
-       GROUP BY tech
-       ORDER BY count DESC
-       LIMIT $1`,
-      [limit],
-    );
+  private async topTechnologies(limit: number, scope: Scope) {
+    const rows = scope
+      ? await this.projects.query(
+          `SELECT tech AS technology, COUNT(*)::int AS count
+           FROM projects p
+           JOIN student_profiles sp ON sp.id = p.created_by_profile_id,
+                unnest(p.technologies) AS tech
+           WHERE sp.semester = ANY($2::int[])
+           GROUP BY tech
+           ORDER BY count DESC
+           LIMIT $1`,
+          [limit, scope],
+        )
+      : await this.projects.query(
+          `SELECT tech AS technology, COUNT(*)::int AS count
+           FROM projects, unnest(technologies) AS tech
+           GROUP BY tech
+           ORDER BY count DESC
+           LIMIT $1`,
+          [limit],
+        );
     return rows.map((r: { technology: string; count: number }) => ({
       technology: r.technology,
       count: num(r.count),
     }));
   }
 
-  private async participationCounts() {
-    const rows = await this.registrations
+  private async participationCounts(scope: Scope) {
+    const qb = this.registrations
       .createQueryBuilder('r')
       .select('r.status', 'status')
       .addSelect('COUNT(*)', 'count')
-      .groupBy('r.status')
-      .getRawMany();
+      .groupBy('r.status');
+    if (scope) {
+      qb.innerJoin('r.studentProfile', 'sp').andWhere('sp.semester IN (:...scope)', { scope });
+    }
+    const rows = await qb.getRawMany();
     const byStatus = {
       [RegistrationStatus.INTERESTED]: 0,
       [RegistrationStatus.REGISTERED]: 0,
@@ -225,34 +342,50 @@ export class ReportsService {
     return { total, byStatus };
   }
 
-  private async projectStatusCounts() {
-    const rows = await this.projects
+  private async projectStatusCounts(scope: Scope) {
+    const qb = this.projects
       .createQueryBuilder('p')
       .select('p.status', 'status')
       .addSelect('COUNT(*)', 'count')
-      .groupBy('p.status')
-      .getRawMany();
+      .groupBy('p.status');
+    if (scope) {
+      qb.innerJoin('p.createdByProfile', 'owner').andWhere('owner.semester IN (:...scope)', {
+        scope,
+      });
+    }
+    const rows = await qb.getRawMany();
     return rows.map((r) => ({ status: r.status, count: num(r.count) }));
   }
 
-  private async projectsByArea() {
-    const rows = await this.projects
+  private async projectsByArea(scope: Scope) {
+    const qb = this.projects
       .createQueryBuilder('p')
       .leftJoin('p.academicArea', 'a')
       .select('a.name', 'area')
       .addSelect('COUNT(*)', 'count')
       .groupBy('a.name')
-      .orderBy('count', 'DESC')
-      .getRawMany();
+      .orderBy('count', 'DESC');
+    if (scope) {
+      qb.innerJoin('p.createdByProfile', 'owner').andWhere('owner.semester IN (:...scope)', {
+        scope,
+      });
+    }
+    const rows = await qb.getRawMany();
     return rows.map((r) => ({ area: r.area ?? 'Sin área', count: num(r.count) }));
   }
 
-  private async recentProjects(limit: number) {
-    const rows = await this.projects.find({
-      relations: { academicArea: true },
-      order: { createdAt: 'DESC' },
-      take: limit,
-    });
+  private async recentProjects(limit: number, scope: Scope) {
+    const qb = this.projects
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.academicArea', 'academicArea')
+      .orderBy('p.createdAt', 'DESC')
+      .take(limit);
+    if (scope) {
+      qb.innerJoin('p.createdByProfile', 'owner').andWhere('owner.semester IN (:...scope)', {
+        scope,
+      });
+    }
+    const rows = await qb.getMany();
     return rows.map((p) => ({
       id: p.id,
       title: p.title,

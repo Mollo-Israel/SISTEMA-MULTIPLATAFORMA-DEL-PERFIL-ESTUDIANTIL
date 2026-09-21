@@ -551,10 +551,24 @@ export class AffinityEngineService implements AffinityRecalculationPort {
    * por semestre daba igual, pero crece con el numero de estudiantes por el de
    * areas y no hay razon para pagarlo.
    */
-  async basicMap() {
-    const rows = await this.results
+  /**
+   * Mapa agregado de afinidad por area.
+   *
+   * `semesters` lo usa el docente para no recibir datos de estudiantes fuera
+   * de su alcance (§68). Sin argumento, agrega toda la carrera, que es lo que
+   * corresponde a Direccion.
+   */
+  async basicMap(semesters?: number[]) {
+    const qb = this.results
       .createQueryBuilder('result')
-      .innerJoin('result.academicArea', 'area')
+      .innerJoin('result.academicArea', 'area');
+
+    if (semesters) {
+      qb.innerJoin('result.studentProfile', 'profile')
+        .andWhere('profile.semester IN (:...semesters)', { semesters });
+    }
+
+    const rows = await qb
       .select('result.academic_area_id', 'areaId')
       .addSelect('area.name', 'area')
       .addSelect('COUNT(*)::int', 'students')

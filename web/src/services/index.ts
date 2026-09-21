@@ -16,6 +16,11 @@ import type {
   Activity,
   AffinityResult,
   AuthResult,
+  ImportApplyResult,
+  ImportBatchDetail,
+  ImportBatchSummary,
+  ImportPreview,
+  UserStatus,
   ProfileSummary,
   Project,
   PublicUser,
@@ -28,9 +33,47 @@ import type {
 export const authService = {
   login: (email: string, password: string) =>
     api.post<AuthResult>('/auth/login', { email, password }).then((r) => r.data),
-  register: (data: { firstName: string; lastName: string; email: string; password: string }) =>
-    api.post<AuthResult>('/auth/register', data).then((r) => r.data),
   me: () => api.get<PublicUser>('/auth/me').then((r) => r.data),
+  /** Cierra la sesión en el servidor, no solo en el navegador (§14). */
+  logout: (refreshToken: string) =>
+    api.post('/auth/logout', { refreshToken }).then((r) => r.data),
+  sessions: () => api.get('/auth/sessions').then((r) => r.data),
+  logoutAll: () => api.delete('/auth/sessions').then((r) => r.data),
+};
+
+/**
+ * Activación y recuperación (§12).
+ *
+ * Sustituyen al registro público: una cuenta la provisiona el administrador
+ * y su titular la activa demostrando control del correo institucional.
+ */
+export const activationService = {
+  request: (email: string) =>
+    api.post<{ message: string }>('/activation/request', { email }).then((r) => r.data),
+  activate: (token: string, password: string) =>
+    api.post<{ message: string }>('/activation/activate', { token, password }).then((r) => r.data),
+  forgotPassword: (email: string) =>
+    api.post<{ message: string }>('/activation/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (token: string, password: string) =>
+    api.post<{ message: string }>('/activation/reset-password', { token, password }).then((r) => r.data),
+};
+
+/** Importación de padrón institucional (§10). */
+export const importsService = {
+  preview: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api
+      .post<ImportPreview>('/imports/students/preview', form)
+      .then((r) => r.data);
+  },
+  apply: (batchId: string) =>
+    api.post<ImportApplyResult>(`/imports/students/${batchId}/apply`).then((r) => r.data),
+  discard: (batchId: string) =>
+    api.post(`/imports/students/${batchId}/discard`).then((r) => r.data),
+  list: () => api.get<ImportBatchSummary[]>('/imports/students').then((r) => r.data),
+  detail: (batchId: string) =>
+    api.get<ImportBatchDetail>(`/imports/students/${batchId}`).then((r) => r.data),
 };
 
 export const profileService = {
@@ -319,8 +362,13 @@ export const adminService = {
   createUser: (data: Record<string, unknown>) => api.post<PublicUser>('/users', data).then((r) => r.data),
   updateUser: (id: string, data: Record<string, unknown>) =>
     api.patch<PublicUser>(`/users/${id}`, data).then((r) => r.data),
-  setActive: (id: string, active: boolean) =>
-    api.patch<PublicUser>(`/users/${id}/status`, { active }).then((r) => r.data),
+  /** Cambia el estado de la cuenta (§12). Reactivar una pendiente no es posible. */
+  setStatus: (id: string, status: UserStatus) =>
+    api.patch<PublicUser>(`/users/${id}/status`, { status }).then((r) => r.data),
+  resendActivation: (id: string) =>
+    api
+      .post<{ message: string; activationToken?: string }>(`/users/${id}/resend-activation`)
+      .then((r) => r.data),
   deleteUser: (id: string) => api.delete(`/users/${id}`).then((r) => r.data),
   roles: () => api.get('/roles').then((r) => r.data),
 

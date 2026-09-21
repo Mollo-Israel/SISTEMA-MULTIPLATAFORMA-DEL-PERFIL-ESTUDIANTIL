@@ -12,15 +12,38 @@ export interface PublicUser {
 
 export interface AuthResult {
   accessToken: string;
+  /** Token de larga duración y revocable con el que se renueva el acceso (§14). */
+  refreshToken: string;
+  /** Vida del access token en segundos. */
+  expiresIn: number;
   user: PublicUser;
 }
 
 export const authService = {
   login: (email: string, password: string) =>
     api.post<AuthResult>('/auth/login', { email, password }).then((r) => r.data),
-  register: (data: { firstName: string; lastName: string; email: string; password: string }) =>
-    api.post<AuthResult>('/auth/register', data).then((r) => r.data),
   me: () => api.get<PublicUser>('/auth/me').then((r) => r.data),
+  /** Cierra la sesión en el servidor, no solo en el teléfono (§14). */
+  logout: (refreshToken: string) =>
+    api.post('/auth/logout', { refreshToken }).then((r) => r.data),
+};
+
+/**
+ * Activación y recuperación (§12, §13).
+ *
+ * Sustituyen al registro público: la cuenta la provisiona la carrera a
+ * partir del padrón y su titular la activa demostrando que controla el
+ * correo institucional.
+ */
+export const activationService = {
+  request: (email: string) =>
+    api.post<{ message: string }>('/activation/request', { email }).then((r) => r.data),
+  activate: (token: string, password: string) =>
+    api.post<{ message: string }>('/activation/activate', { token, password }).then((r) => r.data),
+  forgotPassword: (email: string) =>
+    api.post<{ message: string }>('/activation/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (token: string, password: string) =>
+    api.post<{ message: string }>('/activation/reset-password', { token, password }).then((r) => r.data),
 };
 
 export const catalogService = {

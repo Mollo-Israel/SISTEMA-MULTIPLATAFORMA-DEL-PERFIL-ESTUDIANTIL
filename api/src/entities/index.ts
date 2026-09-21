@@ -24,3 +24,7 @@ export * from './affinity-contribution.entity';
 export * from './affinity-snapshot.entity';
 export * from './affinity-snapshot-item.entity';
 export * from './recommendation.entity';
+export * from './account-token.entity';
+export * from './auth-session.entity';
+export * from './import-batch.entity';
+export * from './audit-event.entity';

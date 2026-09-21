@@ -6,8 +6,25 @@ export enum RolNombre {
   ADMIN = 'ADMIN',
 }
 
-/** Roles que el administrador puede dar de alta (RF3). */
+/**
+ * Roles institucionales, los que no son estudiante.
+ * Se conserva porque al editar un usuario la interfaz distingue ambos grupos.
+ */
 export const INSTITUTIONAL_ROLES = [
+  RolNombre.TEACHER,
+  RolNombre.CAREER_DIRECTOR,
+  RolNombre.SCIENTIFIC_SOCIETY,
+];
+
+/**
+ * Roles que el administrador puede provisionar (§9.2).
+ *
+ * Incluye estudiante: desde que no hay registro público, también esas cuentas
+ * nacen aquí o por importación de padrón. La de administrador sigue creándose
+ * por seed, no desde esta pantalla.
+ */
+export const PROVISIONABLE_ROLES = [
+  RolNombre.STUDENT,
   RolNombre.TEACHER,
   RolNombre.CAREER_DIRECTOR,
   RolNombre.SCIENTIFIC_SOCIETY,

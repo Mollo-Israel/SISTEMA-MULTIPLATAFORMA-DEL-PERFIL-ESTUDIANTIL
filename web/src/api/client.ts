@@ -1,11 +1,29 @@
 import axios from 'axios';
 
-const TOKEN_KEY = 'perfil_token';
+const TOKEN_KEY = 'afinia_access';
+const REFRESH_KEY = 'afinia_refresh';
 
+/**
+ * Almacen de sesion (§14).
+ *
+ * El access token vive en memoria y solo se respalda en localStorage para
+ * sobrevivir a una recarga; dura minutos, asi que su exposicion es acotada.
+ * El refresh token es el que de verdad importa y es revocable desde el
+ * servidor: cerrar sesion o suspender la cuenta lo invalidan de inmediato.
+ */
 export const tokenStore = {
   get: () => localStorage.getItem(TOKEN_KEY),
   set: (token: string) => localStorage.setItem(TOKEN_KEY, token),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+  getRefresh: () => localStorage.getItem(REFRESH_KEY),
+  setRefresh: (token: string) => localStorage.setItem(REFRESH_KEY, token),
+  setPair: (access: string, refresh: string) => {
+    localStorage.setItem(TOKEN_KEY, access);
+    localStorage.setItem(REFRESH_KEY, refresh);
+  },
+  clear: () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+  },
 };
 
 export const api = axios.create({
@@ -60,13 +78,66 @@ export const setUnauthorizedHandler = (handler: () => void) => {
   onUnauthorized = handler;
 };
 
+/**
+ * Renovacion en curso.
+ *
+ * Si varias peticiones caducan a la vez, todas esperan al mismo canje. Sin
+ * esto cada una pediria su propio refresh y, como el token rota, solo la
+ * primera funcionaria: el resto cerraria la sesion del usuario.
+ */
+let refreshing: Promise<string | null> | null = null;
+
+async function renovarSesion(): Promise<string | null> {
+  const refreshToken = tokenStore.getRefresh();
+  if (!refreshToken) return null;
+  try {
+    // Cliente aparte: este no debe pasar por los interceptores, o un 401 en
+    // la propia renovacion entraria en bucle.
+    const { data } = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {
+      refreshToken,
+    });
+    tokenStore.setPair(data.accessToken, data.refreshToken);
+    return data.accessToken as string;
+  } catch {
+    tokenStore.clear();
+    return null;
+  }
+}
+
 api.interceptors.response.use(
   (response) => {
     endRequest();
     return response;
   },
-  (error) => {
+  async (error) => {
     endRequest();
+
+    const original = error.config as (typeof error.config & { _reintentado?: boolean });
+    // Se excluyen login y refresh: reintentar un login fallido no tiene sentido,
+    // y reintentar el propio refresh entraria en bucle. El resto —incluido
+    // /auth/me al arrancar— si debe poder renovar, o quien vuelva con la sesion
+    // caducada saldria expulsado teniendo un refresh perfectamente valido.
+    const url = String(original?.url ?? '');
+    const esRenovable =
+      error.response?.status === 401
+      && original
+      && !original._reintentado
+      && !url.includes('/auth/refresh')
+      && !url.includes('/auth/login')
+      && !!tokenStore.getRefresh();
+
+    if (esRenovable) {
+      original._reintentado = true;
+      refreshing = refreshing ?? renovarSesion();
+      const nuevo = await refreshing;
+      refreshing = null;
+      if (nuevo) {
+        // No hace falta tocar la cabecera: `api.request` vuelve a pasar por el
+        // interceptor de peticion, que la rellena con el token ya renovado.
+        return api.request(original);
+      }
+    }
+
     if (error.response?.status === 401 && onUnauthorized) {
       onUnauthorized();
     }

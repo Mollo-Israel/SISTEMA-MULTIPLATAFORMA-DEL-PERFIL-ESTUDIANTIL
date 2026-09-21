@@ -1,21 +1,32 @@
 import { useEffect, useState } from 'react';
-import { FiCheck, FiEdit2, FiPlus, FiSearch, FiSliders, FiUserPlus, FiUsers } from 'react-icons/fi';
+import {
+  FiCheck, FiEdit2, FiMail, FiPlus, FiSearch, FiSliders, FiSlash, FiUserPlus, FiUsers,
+} from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { adminService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
-  SkeletonTable,
+  AsyncView, Badge, Button, Card, CopyButton, EmptyState, Modal, PageHeader, ResultCount,
+  SearchInput, SkeletonTable,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
-import { ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, SEMESTERS } from '../../constants';
-import type { PublicUser } from '../../services/types';
+import { ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, PROVISIONABLE_ROLES, SEMESTERS } from '../../constants';
+import { USER_STATUS_LABEL } from '../../services/types';
+import type { PublicUser, UserStatus } from '../../services/types';
 
+/** Color del estado en la tabla (§12). */
+const STATUS_TONE: Record<UserStatus, string> = {
+  pending_activation: 'amber',
+  active: 'green',
+  suspended: 'red',
+  inactive: 'gray',
+};
+
+// Sin contraseña a propósito (§12): la define el titular al activar.
 const emptyForm = {
   firstName: '',
   lastName: '',
   email: '',
-  password: '',
   role: RolNombre.TEACHER as string,
 };
 
@@ -31,6 +42,7 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<PublicUser | null>(null);
   const [semesterTarget, setSemesterTarget] = useState<PublicUser | null>(null);
+  const [activationToken, setActivationToken] = useState<{ email: string; token: string } | null>(null);
   const toast = useToast();
 
   const notify = (text: string, detail?: string) => toast.success(text, detail);
@@ -39,9 +51,14 @@ export default function AdminUsersPage() {
     e.preventDefault();
     setCreating(true);
     try {
-      await adminService.createUser(form);
+      const creado = await adminService.createUser(form);
       setForm(emptyForm);
-      notify('Usuario institucional creado.', `${form.email} ya puede iniciar sesión.`);
+      notify(
+        'Cuenta provisionada.',
+        `${form.email} recibió su enlace de activación y podrá definir su contraseña.`,
+      );
+      // Solo llega en desarrollo sin SMTP: permite continuar sin correo.
+      if (creado.activationToken) setActivationToken({ email: creado.email, token: creado.activationToken });
       reload();
     } catch (e2) {
       toast.error(apiError(e2));
@@ -52,26 +69,42 @@ export default function AdminUsersPage() {
 
   const confirm = useConfirm();
 
-  const toggle = async (user: PublicUser) => {
-    const activate = user.status !== 'active';
-    if (!activate) {
+  /**
+   * Suspende o reactiva una cuenta (§12).
+   *
+   * Una cuenta pendiente no se puede "activar" desde aquí: activarla es un
+   * acto de su titular, que demuestra control del correo. Lo que sí puede
+   * hacer el administrador es reenviarle el enlace.
+   */
+  const cambiarEstado = async (user: PublicUser, status: UserStatus) => {
+    if (status !== 'active') {
       const ok = await confirm({
-        title: `Desactivar a ${user.firstName} ${user.lastName}`,
+        title: `Suspender a ${user.firstName} ${user.lastName}`,
         message:
-          'Perderá el acceso al sistema de inmediato, aunque su sesión siga abierta. ' +
+          'Perderá el acceso de inmediato y se cerrarán todas sus sesiones abiertas. ' +
           'Puede reactivar la cuenta cuando quiera.',
-        confirmLabel: 'Desactivar cuenta',
+        confirmLabel: 'Suspender cuenta',
         tone: 'danger',
       });
       if (!ok) return;
     }
     try {
-      await adminService.setActive(user.id, activate);
+      await adminService.setStatus(user.id, status);
       notify(
-        activate ? 'Cuenta activada.' : 'Cuenta desactivada.',
+        status === 'active' ? 'Cuenta reactivada.' : 'Cuenta suspendida.',
         `${user.firstName} ${user.lastName}`,
       );
       reload();
+    } catch (e2) {
+      toast.error(apiError(e2));
+    }
+  };
+
+  const reenviar = async (user: PublicUser) => {
+    try {
+      const res = await adminService.resendActivation(user.id);
+      notify('Enlace reenviado.', res.message);
+      if (res.activationToken) setActivationToken({ email: user.email, token: res.activationToken });
     } catch (e2) {
       toast.error(apiError(e2));
     }
@@ -81,10 +114,10 @@ export default function AdminUsersPage() {
     <div>
       <PageHeader
         title="Gestión de usuarios"
-        description="Alta y control de acceso de los usuarios institucionales. Los estudiantes se registran por su cuenta desde la aplicación móvil."
+        description="Alta y control de acceso de las cuentas institucionales. No existe registro público: toda cuenta se provisiona aquí o por importación de padrón, y su titular la activa desde el enlace que recibe."
       />
 
-      <Card title="Crear usuario institucional">
+      <Card title="Provisionar cuenta">
         <form onSubmit={create}>
           <div className="row">
             <div className="field">
@@ -118,19 +151,9 @@ export default function AdminUsersPage() {
               />
             </div>
             <div className="field">
-              <label>Contraseña</label>
-              <input
-                type="password"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="Mayúscula, minúscula, número y símbolo"
-                required
-              />
-            </div>
-            <div className="field">
               <label>Rol</label>
               <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {INSTITUTIONAL_ROLES.map((r) => (
+                {PROVISIONABLE_ROLES.map((r) => (
                   <option key={r} value={r}>
                     {ROLE_LABEL[r]}
                   </option>
@@ -138,8 +161,12 @@ export default function AdminUsersPage() {
               </select>
             </div>
           </div>
+          <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
+            No se define contraseña: la cuenta queda pendiente de activación y su titular
+            elige la suya desde el enlace que recibe por correo.
+          </p>
           <Button type="submit" loading={creating} icon={<FiUserPlus size={15} />}>
-            Crear usuario
+            Provisionar cuenta
           </Button>
         </form>
       </Card>
@@ -256,8 +283,8 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td>
-                      <Badge tone={u.status === 'active' ? 'green' : 'red'}>
-                        {u.status === 'active' ? 'Activo' : 'Inactivo'}
+                      <Badge tone={STATUS_TONE[u.status] ?? 'gray'}>
+                        {USER_STATUS_LABEL[u.status] ?? u.status}
                       </Badge>
                     </td>
                     <td>
@@ -269,13 +296,25 @@ export default function AdminUsersPage() {
                         >
                           <FiEdit2 />
                         </button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => toggle(u)}
-                        >
-                          {u.status === 'active' ? 'Desactivar' : 'Activar'}
-                        </Button>
+                        {u.status === 'pending_activation' ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => reenviar(u)}
+                            icon={<FiMail size={13} />}
+                          >
+                            Reenviar enlace
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => cambiarEstado(u, u.status === 'active' ? 'suspended' : 'active')}
+                            icon={u.status === 'active' ? <FiSlash size={13} /> : <FiCheck size={13} />}
+                          >
+                            {u.status === 'active' ? 'Suspender' : 'Reactivar'}
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -298,6 +337,32 @@ export default function AdminUsersPage() {
           }}
           onError={(m) => toast.error(m)}
         />
+      )}
+
+      {activationToken && (
+        <Modal
+          title="Enlace de activación"
+          subtitle={activationToken.email}
+          onClose={() => setActivationToken(null)}
+        >
+          <p className="muted" style={{ marginTop: 0 }}>
+            No hay servidor de correo configurado en este entorno, así que el enlace se
+            muestra aquí. En producción llega únicamente al correo institucional y esta
+            ventana no aparece.
+          </p>
+          <div className="token-box">
+            <code>{activationToken.token}</code>
+            <CopyButton text={activationToken.token} label="Copiar código" />
+          </div>
+          <p className="muted" style={{ fontSize: '0.78rem' }}>
+            Debe pegarse en <strong>/activar</strong> para definir la contraseña.
+          </p>
+          <div className="flex" style={{ justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setActivationToken(null)}>
+              Cerrar
+            </Button>
+          </div>
+        </Modal>
       )}
 
       {semesterTarget && (

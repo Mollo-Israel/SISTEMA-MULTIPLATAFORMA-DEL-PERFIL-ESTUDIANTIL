@@ -7,6 +7,7 @@ import { Project } from '../entities/project.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { AccessModule } from '../access/access.module';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 
@@ -21,6 +22,7 @@ import { ReportsController } from './reports.controller';
       ActivityRegistration,
     ]),
     AffinityRecalcModule,
+    AccessModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService],

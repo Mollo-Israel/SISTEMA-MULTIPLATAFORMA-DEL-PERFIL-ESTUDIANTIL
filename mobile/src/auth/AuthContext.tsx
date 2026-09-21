@@ -6,7 +6,6 @@ interface AuthState {
   user: PublicUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<void>;
   logout: () => void;
 }
 
@@ -39,22 +38,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const result = await authService.login(email, password);
-    await tokenStore.set(result.accessToken);
+    await tokenStore.setPair(result.accessToken, result.refreshToken);
     setUser(result.user);
   };
 
-  const register = async (data: { firstName: string; lastName: string; email: string; password: string }) => {
-    const result = await authService.register(data);
-    await tokenStore.set(result.accessToken);
-    setUser(result.user);
-  };
-
+  /**
+   * Cierra la sesión también en el servidor (§14).
+   *
+   * Si la llamada falla —sin red, por ejemplo— se limpia igualmente el
+   * teléfono: el usuario pidió salir, y dejarlo dentro sería peor que perder
+   * la revocación remota, que la caducidad del token resolverá sola.
+   */
   const logout = async () => {
+    const refreshToken = await tokenStore.getRefresh();
+    if (refreshToken) {
+      try {
+        await authService.logout(refreshToken);
+      } catch {
+        // Silencioso a propósito: ver comentario anterior.
+      }
+    }
     await tokenStore.clear();
     setUser(null);
   };
 
-  const value = useMemo(() => ({ user, loading, login, register, logout }), [user, loading]);
+  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

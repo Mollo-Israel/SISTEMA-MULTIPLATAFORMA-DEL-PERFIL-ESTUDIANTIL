@@ -5,11 +5,25 @@ import { RolNombre, UserStatus } from '@perfil/shared';
 import { cleanLine, EMAIL_MSG, NAME_MSG, NAME_RE, PASSWORD_MSG, PASSWORD_RE, trimLower, UNIVALLE_RE } from '../../common/validation';
 
 /**
- * Roles que el administrador puede dar de alta (RF3).
- * El estudiante se registra por si mismo y siempre obtiene STUDENT; la cuenta
- * de administrador es unica y se crea por seed, no por este endpoint.
+ * Roles institucionales, los que no son estudiante.
+ * Se conserva porque la interfaz distingue ambos grupos al editar un usuario.
  */
 export const INSTITUTIONAL_ROLES = [
+  RolNombre.TEACHER,
+  RolNombre.CAREER_DIRECTOR,
+  RolNombre.SCIENTIFIC_SOCIETY,
+] as const;
+
+/**
+ * Roles que el administrador puede provisionar (RF01, §9.2).
+ *
+ * Incluye STUDENT: desde que no existe registro publico, tambien las cuentas
+ * de estudiante nacen por importacion o alta administrativa. La de
+ * administrador sigue creandose por seed, no por este endpoint: quien ya es
+ * administrador no debe poder fabricar otro desde la interfaz ordinaria.
+ */
+export const PROVISIONABLE_ROLES = [
+  RolNombre.STUDENT,
   RolNombre.TEACHER,
   RolNombre.CAREER_DIRECTOR,
   RolNombre.SCIENTIFIC_SOCIETY,
@@ -39,22 +53,35 @@ export class CreateUserDto {
   @Matches(UNIVALLE_RE, { message: EMAIL_MSG })
   email: string;
 
-  @ApiProperty({ example: 'Clave123*', minLength: 8 })
+  /**
+   * Opcional a propósito (§12).
+   *
+   * La cuenta nace en `pending_activation` y su titular fija la contraseña al
+   * activarla. Si se omite, el servidor guarda un hash aleatorio que nadie
+   * conoce: es preferible a que el administrador elija una clave que luego
+   * tendría que comunicar por un canal inseguro. Se acepta cuando se envía
+   * porque el alta con estado `active` explícito sigue necesitándola.
+   */
+  @ApiProperty({ example: 'Clave123*', minLength: 8, required: false })
+  @IsOptional()
   @IsString()
   @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres.' })
   @MaxLength(72, { message: 'La contraseña es demasiado larga.' })
   @Matches(PASSWORD_RE, { message: PASSWORD_MSG })
-  password: string;
+  password?: string;
 
   @ApiProperty({
-    enum: INSTITUTIONAL_ROLES,
-    example: RolNombre.TEACHER,
-    description: 'Solo roles institucionales: docente, director de carrera o sociedad científica.',
+    enum: PROVISIONABLE_ROLES,
+    example: RolNombre.STUDENT,
+    description:
+      'Estudiante, docente, director de carrera o sociedad científica. '
+      + 'La cuenta de administrador no se crea desde aquí.',
   })
   @IsEnum(RolNombre)
-  @IsIn(INSTITUTIONAL_ROLES as unknown as RolNombre[], {
+  @IsIn(PROVISIONABLE_ROLES as unknown as RolNombre[], {
     message:
-      'Solo se pueden crear usuarios institucionales (docente, director de carrera o sociedad científica). El estudiante se registra por su cuenta.',
+      'Rol no permitido. Puede provisionar estudiantes, docentes, dirección de carrera '
+      + 'o sociedad científica.',
   })
   role: RolNombre;
 

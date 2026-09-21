@@ -7,7 +7,6 @@ interface AuthState {
   user: PublicUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<PublicUser>;
-  register: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<PublicUser>;
   logout: () => void;
 }
 
@@ -36,25 +35,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const result = await authService.login(email, password);
-    tokenStore.set(result.accessToken);
+    tokenStore.setPair(result.accessToken, result.refreshToken);
     setUser(result.user);
     return result.user;
   };
 
-  const register = async (data: { firstName: string; lastName: string; email: string; password: string }) => {
-    const result = await authService.register(data);
-    tokenStore.set(result.accessToken);
-    setUser(result.user);
-    return result.user;
-  };
-
+  /**
+   * Cierra la sesión también en el servidor (§14).
+   *
+   * Si la llamada falla, se limpia igualmente el navegador: el usuario pidió
+   * salir y dejarlo dentro sería peor que perder la revocación remota, que
+   * el token caducado resolverá por sí sola.
+   */
   const logout = () => {
+    const refreshToken = tokenStore.getRefresh();
+    if (refreshToken) {
+      authService.logout(refreshToken).catch(() => {});
+    }
     tokenStore.clear();
     setUser(null);
     delete api.defaults.headers.common.Authorization;
   };
 
-  const value = useMemo(() => ({ user, loading, login, register, logout }), [user, loading]);
+  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

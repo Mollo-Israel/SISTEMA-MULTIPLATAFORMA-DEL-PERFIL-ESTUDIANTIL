@@ -2,6 +2,8 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ReportsService } from './reports.service';
 
 @ApiTags('reports')
@@ -14,20 +16,20 @@ export class ReportsController {
 
   @Get('teacher/overview')
   @Roles(RolNombre.TEACHER, RolNombre.ADMIN)
-  teacherOverview() {
-    return this.reportsService.teacherOverview();
+  teacherOverview(@CurrentUser() user: AuthenticatedUser) {
+    return this.reportsService.teacherOverview(user);
   }
 
   @Get('teacher/affinity-summary')
   @Roles(RolNombre.TEACHER, RolNombre.ADMIN)
-  teacherAffinitySummary() {
-    return this.reportsService.teacherAffinitySummary();
+  teacherAffinitySummary(@CurrentUser() user: AuthenticatedUser) {
+    return this.reportsService.teacherAffinitySummary(user);
   }
 
   @Get('teacher/projects-summary')
   @Roles(RolNombre.TEACHER, RolNombre.ADMIN)
-  teacherProjectsSummary() {
-    return this.reportsService.teacherProjectsSummary();
+  teacherProjectsSummary(@CurrentUser() user: AuthenticatedUser) {
+    return this.reportsService.teacherProjectsSummary(user);
   }
 
   // ---------- Director ----------

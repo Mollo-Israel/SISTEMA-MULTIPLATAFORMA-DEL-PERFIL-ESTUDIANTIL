@@ -714,3 +714,45 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
   padding: 0.7rem 0.85rem;
 }
 .feedback-item p { margin: 0 0 0.35rem; color: var(--gray-700); line-height: 1.5; }
+
+/* ------------------------------------------------------------------ */
+/* Importación de padrón (§10)                                         */
+/* ------------------------------------------------------------------ */
+
+.import-drop {
+  display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+  border: 2px dashed var(--bordo-200, #edd3d8); border-radius: 14px;
+  padding: 1.6rem 1rem; text-align: center; cursor: pointer;
+  background: var(--bordo-50, #fdf6f7); transition: border-color 0.18s, background 0.18s;
+}
+.import-drop:hover { border-color: var(--bordo); background: #fcf0f2; }
+.import-drop input { display: none; }
+.import-drop .ic { color: var(--bordo); }
+.import-drop strong { font-size: 0.95rem; color: var(--gray-800, #2a1116); }
+.import-drop .muted { font-size: 0.78rem; }
+
+.import-notas { margin: 0.9rem 0 0; padding-left: 1.1rem; color: var(--gray-600, #6b5a60); font-size: 0.8rem; line-height: 1.6; }
+
+/* Contadores por veredicto: también filtran la tabla al pulsarlos. */
+.import-counts { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.import-count {
+  flex: 1 1 110px; min-width: 110px; text-align: left; cursor: pointer;
+  background: var(--gray-50, #f7f4f5); border: 1px solid transparent; border-radius: 12px;
+  padding: 0.6rem 0.75rem; transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.import-count:hover { transform: translateY(-1px); }
+.import-count.on { border-color: var(--bordo); background: #fff; }
+.import-count .n { display: block; font-size: 1.3rem; font-weight: 800; line-height: 1.1; color: var(--gray-800, #2a1116); }
+.import-count .l { display: flex; align-items: center; gap: 0.25rem; font-size: 0.74rem; color: var(--gray-600, #6b5a60); margin-top: 0.15rem; }
+.import-count.t-green .n { color: var(--green); }
+.import-count.t-bordo .n { color: var(--bordo); }
+.import-count.t-amber .n { color: var(--amber); }
+.import-count.t-red .n { color: var(--red); }
+
+/* Código de activación mostrado solo cuando no hay SMTP (desarrollo). */
+.token-box {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+  background: var(--gray-50, #f7f4f5); border: 1px solid var(--gray-200, #e7dfe1);
+  border-radius: 10px; padding: 0.7rem 0.8rem; margin: 0.6rem 0;
+}
+.token-box code { font-size: 0.78rem; word-break: break-all; flex: 1; min-width: 200px; color: var(--bordo); }

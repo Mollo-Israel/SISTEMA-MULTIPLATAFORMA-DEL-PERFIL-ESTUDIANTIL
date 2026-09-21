@@ -6,18 +6,24 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { RolNombre, UserStatus } from '@perfil/shared';
 import { User } from '../entities/user.entity';
 import { TeacherSemesterAccess } from '../entities/teacher-semester-access.entity';
 import { RolesService } from '../roles/roles.service';
+import { AuthSessionsService } from '../identity/auth-sessions.service';
+import { AccountTokensService } from '../identity/account-tokens.service';
+import { ActivationService } from '../identity/activation.service';
+import { AuditEventType, AuditService } from '../audit/audit.service';
 import { PublicUser, toPublicUser } from './types/public-user';
 
 interface CreateUserParams {
   firstName: string;
   lastName: string;
   email: string;
-  password: string;
+  /** Si se omite, se guarda un hash aleatorio hasta que el titular active (§12). */
+  password?: string;
   role: RolNombre;
   status?: UserStatus;
 }
@@ -46,14 +52,23 @@ export class UsersService {
     @InjectRepository(TeacherSemesterAccess)
     private readonly semesterAccess: Repository<TeacherSemesterAccess>,
     private readonly rolesService: RolesService,
+    private readonly sessions: AuthSessionsService,
+    private readonly accountTokens: AccountTokensService,
+    private readonly activation: ActivationService,
+    private readonly audit: AuditService,
   ) {}
 
-  async create(params: CreateUserParams): Promise<PublicUser> {
+  async create(params: CreateUserParams, actorUserId?: string): Promise<PublicUser> {
     const email = params.email.toLowerCase().trim();
     await this.assertEmailAvailable(email);
 
     const role = await this.rolesService.findByName(params.role);
-    const passwordHash = await bcrypt.hash(params.password, 10);
+    // Sin contrasena declarada se guarda una aleatoria que nadie conoce: la
+    // cuenta solo sera utilizable cuando su titular la active.
+    const passwordHash = await bcrypt.hash(
+      params.password ?? randomBytes(32).toString('hex'),
+      10,
+    );
 
     const user = this.usersRepository.create({
       firstName: params.firstName,
@@ -61,11 +76,30 @@ export class UsersService {
       email,
       passwordHash,
       roleId: role.id,
-      status: params.status ?? UserStatus.ACTIVE,
+      // §9.2: una cuenta nace provisionada. Quien la crea no fija la
+      // contrasena definitiva; la fija su titular al activar.
+      status: params.status ?? UserStatus.PENDING_ACTIVATION,
     });
     const saved = await this.usersRepository.save(user);
     saved.role = role;
-    return toPublicUser(saved);
+
+    // Una cuenta provisionada necesita su enlace para poder usarse.
+    let activationToken: string | null = null;
+    if (saved.status === UserStatus.PENDING_ACTIVATION) {
+      activationToken = await this.activation.issueAndSendActivation(saved);
+    }
+
+    await this.audit.record({
+      actorUserId: actorUserId ?? null,
+      eventType: AuditEventType.USER_PROVISIONED,
+      entityType: 'user',
+      entityId: saved.id,
+      metadata: { email: saved.email, role: params.role, via: 'admin' },
+    });
+
+    const result = toPublicUser(saved) as PublicUser & { activationToken?: string };
+    if (activationToken) result.activationToken = activationToken;
+    return result;
   }
 
   /** Listado administrativo con busqueda por nombre, apellido o correo. */
@@ -141,10 +175,72 @@ export class UsersService {
     return toPublicUser(saved);
   }
 
-  async setActive(id: string, active: boolean): Promise<PublicUser> {
+  /**
+   * Cambia el estado de una cuenta (§9.3).
+   *
+   * Retirar el acceso revoca las sesiones abiertas: si no, el usuario
+   * suspendido seguiria operando hasta que caducara su JWT, que es
+   * exactamente lo que la suspension pretende impedir.
+   *
+   * Reactivar una cuenta que nunca se activo la devuelve a
+   * PENDING_ACTIVATION, no a ACTIVE: su titular aun no fijo contrasena.
+   */
+  async setStatus(
+    id: string,
+    status: UserStatus,
+    actorUserId: string | null,
+  ): Promise<PublicUser> {
     const user = await this.findEntityOrFail(id);
-    user.status = active ? UserStatus.ACTIVE : UserStatus.INACTIVE;
-    return toPublicUser(await this.usersRepository.save(user));
+    const previous = user.status;
+
+    if (status === UserStatus.ACTIVE && previous === UserStatus.PENDING_ACTIVATION) {
+      throw new BadRequestException(
+        'La cuenta aún no fue activada por su titular. Reenvíe el enlace de activación.',
+      );
+    }
+
+    user.status = status;
+    const saved = await this.usersRepository.save(user);
+
+    if (status !== UserStatus.ACTIVE) {
+      await this.sessions.revokeAllForUser(id);
+      await this.accountTokens.revokeAll(id);
+    }
+
+    await this.audit.record({
+      actorUserId,
+      eventType: AuditEventType.USER_STATUS_CHANGED,
+      entityType: 'user',
+      entityId: id,
+      metadata: { from: previous, to: status },
+    });
+
+    return toPublicUser(saved);
+  }
+
+  /**
+   * Reenvia el enlace de activacion de una cuenta provisionada.
+   * Lo usa el administrador cuando el correo original no llego.
+   */
+  async resendActivation(
+    id: string,
+    actorUserId: string | null,
+  ): Promise<{ message: string; activationToken?: string }> {
+    const user = await this.findEntityOrFail(id);
+    if (user.status !== UserStatus.PENDING_ACTIVATION) {
+      throw new BadRequestException('Esta cuenta ya está activada.');
+    }
+    const token = await this.activation.issueAndSendActivation(user);
+    await this.audit.record({
+      actorUserId,
+      eventType: AuditEventType.ACTIVATION_REQUESTED,
+      entityType: 'user',
+      entityId: id,
+      metadata: { via: 'admin' },
+    });
+    return token
+      ? { message: 'Enlace de activación reenviado.', activationToken: token }
+      : { message: 'Enlace de activación reenviado.' };
   }
 
   async remove(id: string): Promise<void> {

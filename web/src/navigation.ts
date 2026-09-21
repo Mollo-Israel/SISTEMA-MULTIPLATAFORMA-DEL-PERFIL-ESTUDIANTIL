@@ -77,6 +77,7 @@ export const NAV: Record<string, NavGroup[]> = {
       section: 'Administración',
       items: [
         { to: '/admin', label: 'Usuarios' },
+        { to: '/admin/imports', label: 'Importar padrón' },
         { to: '/admin/roles', label: 'Roles' },
         { to: '/admin/areas', label: 'Áreas académicas' },
         { to: '/admin/skills', label: 'Catálogo de habilidades' },

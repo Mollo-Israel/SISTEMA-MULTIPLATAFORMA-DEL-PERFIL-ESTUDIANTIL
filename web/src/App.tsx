@@ -8,6 +8,8 @@ import { Loading } from './components/ui';
 import { ConfirmProvider, ToastProvider } from './components/feedback';
 import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
+import SetPasswordPage from './pages/auth/SetPasswordPage';
+import RequestTokenPage from './pages/auth/RequestTokenPage';
 
 import StudentDashboard from './pages/student/Dashboard';
 import StudentProfilePage from './pages/student/Profile';
@@ -33,6 +35,7 @@ import SocietyDashboard from './pages/society/Dashboard';
 import SocietyActivitiesPage from './pages/society/Activities';
 
 import AdminUsersPage from './pages/admin/Users';
+import AdminImportsPage from './pages/admin/Imports';
 import AdminRolesPage from './pages/admin/Roles';
 import AdminAreasPage from './pages/admin/Areas';
 import AdminSkillsPage from './pages/admin/Skills';
@@ -70,6 +73,12 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<LandingPage />} />
 
+          {/* Activación y recuperación: públicas por necesidad (§12, §13). */}
+          <Route path="/activar" element={<SetPasswordPage mode="activate" />} />
+          <Route path="/activar/solicitar" element={<RequestTokenPage mode="activation" />} />
+          <Route path="/recuperar" element={<RequestTokenPage mode="reset" />} />
+          <Route path="/restablecer" element={<SetPasswordPage mode="reset" />} />
+
           <Route element={guarded([S], <Layout />)}>
             <Route path="/student" element={<StudentDashboard />} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
@@ -103,6 +112,7 @@ export default function App() {
 
           <Route element={guarded([A], <Layout />)}>
             <Route path="/admin" element={<AdminUsersPage />} />
+            <Route path="/admin/imports" element={<AdminImportsPage />} />
             <Route path="/admin/roles" element={<AdminRolesPage />} />
             <Route path="/admin/areas" element={<AdminAreasPage />} />
             <Route path="/admin/skills" element={<AdminSkillsPage />} />
