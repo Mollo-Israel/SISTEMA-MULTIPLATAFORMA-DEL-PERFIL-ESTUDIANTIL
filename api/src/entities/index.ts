@@ -31,3 +31,4 @@ export * from './audit-event.entity';
 export * from './onboarding-run.entity';
 export * from './stored-file.entity';
 export * from './validation-record.entity';
+export * from './activity-skill.entity';

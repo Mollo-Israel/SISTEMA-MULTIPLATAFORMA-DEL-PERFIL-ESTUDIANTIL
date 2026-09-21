@@ -44,6 +44,7 @@ export const NAV: Record<string, NavGroup[]> = {
       section: 'Docente',
       items: [
         { to: '/teacher', label: 'Panel' },
+        { to: '/teacher/my-activities', label: 'Mis actividades' },
         { to: '/teacher/activities', label: 'Actividades del programa' },
         { to: '/teacher/students', label: 'Perfil de estudiante' },
         { to: '/teacher/projects', label: 'Proyectos estudiantiles' },

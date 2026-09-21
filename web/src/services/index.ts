@@ -156,6 +156,9 @@ export const activityService = {
     api.patch<Activity>(`/activities/${id}`, data).then((r) => r.data),
   registerInterest: (id: string) => api.post(`/activities/${id}/register-interest`).then((r) => r.data),
   register: (id: string) => api.post(`/activities/${id}/register`).then((r) => r.data),
+  /** Baja voluntaria, solo antes de que confirmen la participación (§23). */
+  cancelRegistration: (id: string) =>
+    api.post(`/activities/${id}/cancel-registration`).then((r) => r.data),
   confirm: (id: string, studentProfileId: string, status: string) =>
     api.patch(`/activities/${id}/confirm-participation`, { studentProfileId, status }).then((r) => r.data),
   participants: (id: string) => api.get<Participant[]>(`/activities/${id}/participants`).then((r) => r.data),

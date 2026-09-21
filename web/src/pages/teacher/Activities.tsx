@@ -13,11 +13,11 @@ const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 /**
- * Vista de consulta para el docente.
+ * Vista de consulta del docente sobre todo el programa.
  *
- * La publicación de actividades corresponde al director de carrera (académicas)
- * y a la sociedad científica (extracurriculares). El docente las consulta para
- * acompañar a sus estudiantes, pero no las gestiona.
+ * Aquí ve la oferta completa —incluida la de otros semestres y la de la
+ * sociedad científica— para poder orientar a sus estudiantes. Lo que él
+ * gestiona vive en «Mis actividades»: esta pantalla no edita nada.
  */
 export default function TeacherActivitiesPage() {
   const { data, loading, error } = useAsync<Activity[]>(() => activityService.list(), []);

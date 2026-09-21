@@ -71,14 +71,21 @@ const DEFAULT_WEIGHTS: Record<AffinityWeightCode, number> = {
   [AffinityWeightCode.SKILL_BASIC]: 1,
   [AffinityWeightCode.SKILL_INTERMEDIATE]: 2,
   [AffinityWeightCode.SKILL_ADVANCED]: 3,
-  [AffinityWeightCode.ACTIVITY_INTERESTED]: 1,
-  [AffinityWeightCode.ACTIVITY_REGISTERED]: 2,
+  // §23: interes e inscripcion son intencion, no experiencia; §51.2 es
+  // explicito en que para actividades solo cuenta CONFIRMED. Se siguen
+  // registrando con valor cero para que el desglose muestre que el
+  // estudiante manifesto interes y que eso, por si solo, no suma.
+  [AffinityWeightCode.ACTIVITY_INTERESTED]: 0,
+  [AffinityWeightCode.ACTIVITY_REGISTERED]: 0,
   [AffinityWeightCode.ACTIVITY_CONFIRMED]: 3,
   [AffinityWeightCode.PROJECT_OWNED]: 5,
   [AffinityWeightCode.PROJECT_MEMBER]: 5,
   [AffinityWeightCode.EVIDENCE]: 2,
   [AffinityWeightCode.CERTIFICATE]: 4,
-  [AffinityWeightCode.CONSTANCY]: 3,
+  // §24 y §55: una constancia interna respalda la participacion que ya se
+  // conto. Aumenta respaldo y trazabilidad, no afinidad: la misma realidad
+  // no aporta dos veces por estar representada en dos tablas.
+  [AffinityWeightCode.CONSTANCY]: 0,
 };
 
 /** Familia de senal a la que pertenece cada ponderacion. */
@@ -266,12 +273,15 @@ export class AffinityEngineService implements AffinityRecalculationPort {
       if (!areaId) return;
       const code = this.activityWeightCode(r.status);
       if (!code) return;
+      // Interes e inscripcion valen 0 a proposito (§23): se registran para
+      // que el desglose las muestre, no porque sumen.
       add(
         areaId,
         code,
         AffinityMatchType.INHERITED,
         `${this.activityLabel(r.status)}: ${r.activity?.title ?? 'actividad'}`,
         r.activity?.id ?? null,
+        true,
       );
     });
 
@@ -383,7 +393,9 @@ export class AffinityEngineService implements AffinityRecalculationPort {
       relations: { activity: true },
     });
     constancies.forEach((c) => {
-      const label = `Constancia interna: ${c.description}`;
+      // §24: la etiqueta dice lo que hace. Respalda la participacion que ya
+      // se conto; no la vuelve a contar.
+      const label = `Constancia interna (respalda, no suma): ${c.description}`;
       if (c.activity?.academicAreaId) {
         add(
           c.activity.academicAreaId,
@@ -391,10 +403,11 @@ export class AffinityEngineService implements AffinityRecalculationPort {
           AffinityMatchType.INHERITED,
           label,
           c.id,
+          true,
         );
       } else {
         this.matchAreasByText(c.description, areas).forEach((areaId) =>
-          add(areaId, AffinityWeightCode.CONSTANCY, AffinityMatchType.TEXT, label, c.id),
+          add(areaId, AffinityWeightCode.CONSTANCY, AffinityMatchType.TEXT, label, c.id, true),
         );
       }
     });

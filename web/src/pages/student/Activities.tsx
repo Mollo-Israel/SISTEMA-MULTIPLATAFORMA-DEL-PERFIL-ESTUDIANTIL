@@ -8,7 +8,7 @@ import {
   FiMapPin,
   FiSearch,
   FiTag,
-  FiUserPlus,
+  FiUserMinus, FiUserPlus,
   FiUsers,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
@@ -90,6 +90,33 @@ export default function StudentActivitiesPage() {
       a.id,
       'Solicitud enviada',
       'Queda pendiente de aprobación del responsable.',
+    );
+  };
+
+  /**
+   * Baja voluntaria (§23).
+   *
+   * Solo antes de que confirmen: después ya es experiencia registrada y
+   * borrarla sería falsear la trayectoria.
+   */
+  const cancelSeat = async (a: Activity) => {
+    const ok = await confirm({
+      title: 'Darte de baja',
+      message: (
+        <>
+          Dejarás de estar inscrito en <strong>{a.title}</strong>. Puedes volver a
+          inscribirte mientras la actividad siga admitiendo inscripciones.
+        </>
+      ),
+      confirmLabel: 'Darme de baja',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    run(
+      () => activityService.cancelRegistration(a.id),
+      a.id,
+      'Inscripción dada de baja',
+      `Ya no estás inscrito en “${a.title}”.`,
     );
   };
 
@@ -195,23 +222,53 @@ export default function StudentActivitiesPage() {
                   )}
 
                   <div className="flex mt" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      loading={busy === a.id}
-                      onClick={() => markInterest(a)}
-                      icon={<FiHeart size={14} />}
-                    >
-                      Me interesa
-                    </Button>
-                    <Button
-                      size="sm"
-                      loading={busy === a.id}
-                      onClick={() => requestSeat(a)}
-                      icon={<FiUserPlus size={14} />}
-                    >
-                      Solicitar inscripción
-                    </Button>
+                    {/*
+                      §23: los tres estados significan cosas distintas, así que
+                      la pantalla ofrece cosas distintas. Confirmada ya es
+                      experiencia registrada y solo el responsable la corrige.
+                    */}
+                    {a.myRegistration?.status === 'confirmed'
+                      || a.myRegistration?.status === 'absent' ? (
+                        <p className="inline-note" style={{ margin: 0 }}>
+                          <FiAlertCircle size={13} />{' '}
+                          {a.myRegistration.status === 'confirmed'
+                            ? 'Tu participación ya fue confirmada. Si hay un error, avisa al responsable.'
+                            : 'El responsable registró tu ausencia.'}
+                        </p>
+                      ) : (
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={busy === a.id}
+                            disabled={a.myRegistration?.status === 'interested'}
+                            onClick={() => markInterest(a)}
+                            icon={<FiHeart size={14} />}
+                          >
+                            {a.myRegistration?.status === 'interested' ? 'Te interesa' : 'Me interesa'}
+                          </Button>
+                          {a.myRegistration?.status === 'registered' ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={busy === a.id}
+                              onClick={() => cancelSeat(a)}
+                              icon={<FiUserMinus size={14} />}
+                            >
+                              Darme de baja
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              loading={busy === a.id}
+                              onClick={() => requestSeat(a)}
+                              icon={<FiUserPlus size={14} />}
+                            >
+                              Solicitar inscripción
+                            </Button>
+                          )}
+                        </>
+                      )}
                   </div>
                 </Card>
               </Stagger>

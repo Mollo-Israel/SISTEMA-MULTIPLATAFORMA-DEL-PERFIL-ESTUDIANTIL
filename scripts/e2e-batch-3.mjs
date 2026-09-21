@@ -159,6 +159,27 @@ async function procesarCola(admin, limite = 20) {
   return r.data?.procesados ?? 0;
 }
 
+/**
+ * Espera a que el veredicto de un recurso sea definitivo.
+ *
+ * El worker corre solo cada pocos segundos, así que puede haberse llevado el
+ * trabajo justo antes de que la prueba fuerce su vuelta. Si eso pasa,
+ * `procesarCola` no encuentra nada que hacer y la lectura cae mientras el
+ * trabajo sigue en PROCESSING. No es un fallo del sistema: es que hay dos
+ * caminos hacia el mismo resultado. Se espera al resultado, no a quién lo
+ * produjo.
+ */
+async function esperarVeredicto(ctx, tipo, id, intentos = 12) {
+  const terminales = ['completed', 'inconclusive', 'failed'];
+  for (let i = 0; i < intentos; i += 1) {
+    await procesarCola(ctx.admin);
+    const v = (await req('GET', `/validation/${tipo}/${id}`, { token: ctx.est.token })).data;
+    if (v && terminales.includes(v.status)) return v;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return (await req('GET', `/validation/${tipo}/${id}`, { token: ctx.est.token })).data;
+}
+
 // ===========================================================================
 //  §27 · Pipeline de archivos
 // ===========================================================================
@@ -325,11 +346,7 @@ async function extraccion(ctx) {
     `status ${pendiente.data?.status}`,
   );
 
-  await procesarCola(ctx.admin);
-
-  const v = (await req('GET', `/validation/external_certificate/${ctx.certId}`, {
-    token: ctx.est.token,
-  })).data;
+  const v = await esperarVeredicto(ctx, 'external_certificate', ctx.certId);
 
   check(v?.status === 'completed', 'B3.20 El worker la procesa', `status ${v?.status}`);
   check(
@@ -392,11 +409,7 @@ async function extraccion(ctx) {
       storedFileId: subidaAjena.data?.id,
     },
   });
-  await procesarCola(ctx.admin);
-
-  const vAjeno = (await req('GET', `/validation/external_certificate/${certAjeno.data?.id}`, {
-    token: ctx.est.token,
-  })).data;
+  const vAjeno = await esperarVeredicto(ctx, 'external_certificate', certAjeno.data?.id);
   check(
     vAjeno?.identityMatchStatus === 'mismatch',
     'B3.30 Un nombre que no corresponde se marca MISMATCH (§30)',
@@ -418,11 +431,7 @@ async function extraccion(ctx) {
       storedFileId: ilegible.data?.id,
     },
   });
-  await procesarCola(ctx.admin);
-
-  const vIlegible = (await req('GET', `/validation/external_certificate/${certIlegible.data?.id}`, {
-    token: ctx.est.token,
-  })).data;
+  const vIlegible = await esperarVeredicto(ctx, 'external_certificate', certIlegible.data?.id);
   check(
     vIlegible?.status === 'inconclusive',
     'B3.32 Sin texto legible el resultado es INCONCLUSIVE, no un fallo (§29)',
@@ -449,11 +458,7 @@ async function extraccion(ctx) {
       storedFileId: ctx.duplicado.id,
     },
   });
-  await procesarCola(ctx.admin);
-
-  const vDuplicado = (await req('GET', `/validation/external_certificate/${certDuplicado.data?.id}`, {
-    token: ctx.est.token,
-  })).data;
+  const vDuplicado = await esperarVeredicto(ctx, 'external_certificate', certDuplicado.data?.id);
   check(
     vDuplicado?.isDuplicate === true,
     'B3.35 La validación reconoce que el contenido ya se había aportado (§28)',
@@ -510,10 +515,7 @@ async function enlaces(ctx) {
       continue;
     }
 
-    await procesarCola(ctx.admin);
-    const v = (await req('GET', `/validation/external_certificate/${creado.data?.id}`, {
-      token: ctx.est.token,
-    })).data;
+    const v = await esperarVeredicto(ctx, 'external_certificate', creado.data?.id);
     check(
       v?.linkCheck?.status === 'blocked',
       `B3.${n} El sistema se niega a consultar: ${nota}`,
@@ -531,10 +533,7 @@ async function enlaces(ctx) {
       certificateUrl: `https://no-existe-${TS}.invalid/verificar`,
     },
   });
-  await procesarCola(ctx.admin);
-  const vInexistente = (await req('GET', `/validation/external_certificate/${inexistente.data?.id}`, {
-    token: ctx.est.token,
-  })).data;
+  const vInexistente = await esperarVeredicto(ctx, 'external_certificate', inexistente.data?.id);
   check(
     vInexistente?.linkCheck?.status === 'unavailable',
     `B3.${n} Un servidor ausente es UNAVAILABLE, no BLOCKED (§31)`,

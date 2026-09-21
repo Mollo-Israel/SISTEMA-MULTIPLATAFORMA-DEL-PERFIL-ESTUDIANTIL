@@ -25,6 +25,20 @@ const PWD = 'Afinia2026Seg*';
 const email = (n) => `o7.${n}.${TS}@univalle.edu`;
 const studentEmail = (n) => `o7.${n}.${TS}@est.univalle.edu`;
 
+/**
+ * Apellido irrepetible para esta ejecucion.
+ *
+ * La busqueda de companeros devuelve como mucho 20 resultados, y una base de
+ * desarrollo acumula una persona por cada pasada de esta suite. Buscando un
+ * apellido fijo, a la vigesimoprimera ejecucion el estudiante recien creado
+ * queda fuera del corte y la comprobacion falla sin que nada este roto. El
+ * sufijo se codifica en letras porque el validador de nombres no admite
+ * digitos.
+ */
+const LETRAS = 'abcdefghij';
+const sufijo = String(TS).slice(-6).split('').map((d) => LETRAS[Number(d)]).join('');
+const apellido = (base) => `${base} ${sufijo}`;
+
 let pass = 0;
 let fail = 0;
 const failures = [];
@@ -219,7 +233,7 @@ async function prepararEscenario(ctx) {
   ctx.S1 = await nuevoEstudiante('s1', 'Ines', 'Zapata', 5);
   ctx.S2 = await nuevoEstudiante('s2', 'Omar', 'Bejarano', 5);
   ctx.S3 = await nuevoEstudiante('s3', 'Nadia', 'Chumacero', 5);
-  ctx.S4 = await nuevoEstudiante('s4', 'Ramiro', 'Ledezma', 5);
+  ctx.S4 = await nuevoEstudiante('s4', 'Ramiro', apellido('Ledezma'), 5);
   ctx.S5 = await nuevoEstudiante('s5', 'Sofia', 'Encinas', 5);
   ctx.Z = await nuevoEstudiante('z', 'Zulema', 'Arispe', 5);
   check(
@@ -598,7 +612,11 @@ async function rf14Directorio(ctx) {
   objective('RF14 · Busqueda de companeros para invitar');
 
   section('Consulta del estudiante');
-  const encontrados = await req('GET', '/profiles/peers?search=Ledezma', { token: ctx.S1.token });
+  const encontrados = await req(
+    'GET',
+    `/profiles/peers?search=${encodeURIComponent(sufijo)}`,
+    { token: ctx.S1.token },
+  );
   check(encontrados.status === 200 && Array.isArray(encontrados.data), '18.65 El estudiante busca companeros (antes respondia 403)', encontrados.status);
   const ramiro = (encontrados.data ?? []).find((p) => p.profileId === ctx.S4.profileId);
   check(!!ramiro, '18.66 Encuentra al companero buscado por su apellido');

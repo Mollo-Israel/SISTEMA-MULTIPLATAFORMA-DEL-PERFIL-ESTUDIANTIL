@@ -267,6 +267,41 @@ export interface VisibilitySettings {
   neverShared: string[];
 }
 
+/** Ciclo de vida de una actividad (§22). */
+export type ActivityStatus =
+  | 'draft' | 'published' | 'open' | 'closed' | 'finished' | 'cancelled';
+
+export const ACTIVITY_STATUS_LABEL: Record<ActivityStatus, string> = {
+  draft: 'Borrador',
+  published: 'Publicada',
+  open: 'Inscripciones abiertas',
+  closed: 'Inscripciones cerradas',
+  finished: 'Finalizada',
+  cancelled: 'Cancelada',
+};
+
+/**
+ * Transiciones posibles (§22), copiadas del contrato del servidor.
+ *
+ * Permiten ofrecer solo los cambios que existen, en vez de mostrar seis
+ * botones y dejar que el servidor rechace cinco.
+ */
+export const ACTIVITY_TRANSITIONS: Record<ActivityStatus, ActivityStatus[]> = {
+  draft: ['published', 'open', 'cancelled'],
+  published: ['draft', 'open', 'closed', 'finished', 'cancelled'],
+  open: ['closed', 'finished', 'cancelled'],
+  closed: ['open', 'finished', 'cancelled'],
+  finished: [],
+  cancelled: [],
+};
+
+export type RegistrationMode = 'open' | 'approval';
+
+export const REGISTRATION_MODE_LABEL: Record<RegistrationMode, string> = {
+  open: 'Inscripción libre',
+  approval: 'Requiere aprobación',
+};
+
 export interface Activity {
   id: string;
   title: string;
@@ -279,10 +314,21 @@ export interface Activity {
   academicAreaId: string | null;
   academicArea?: AcademicArea | null;
   creatorId: string;
+  /** Quien responde por ella; puede no ser su creador (§22). */
+  responsibleUserId: string | null;
+  /** Inicio (§22, `start_at`). */
   eventDate: string | null;
+  /** Fin (§22, `end_at`). */
+  endAt: string | null;
+  /** Semestres a los que va dirigida. null = toda la carrera (§22). */
+  semesterScope: number[] | null;
+  registrationMode: RegistrationMode;
+  requirements: string | null;
+  /** Habilidades que la actividad trabaja (§73.3). */
+  activitySkills?: { id: string; skillId: string; skill?: Skill | null }[];
   location: string | null;
   capacity: number | null;
-  status: string;
+  status: ActivityStatus;
   tags: string[] | null;
   externalUrl: string | null;
   evidenceRequired: boolean;
@@ -292,7 +338,13 @@ export interface Activity {
   confirmedCount?: number;
   seatsLeft?: number | null;
   registrationBlockReason?: string | null;
+  /** Situación del estudiante que consulta. Solo llega en su listado. */
+  myRegistration?: { id: string; status: RegistrationStatus } | null;
 }
+
+/** Participación de un estudiante en una actividad (§23). */
+export type RegistrationStatus =
+  | 'interested' | 'registered' | 'confirmed' | 'absent' | 'cancelled';
 
 export interface Participant {
   id: string;

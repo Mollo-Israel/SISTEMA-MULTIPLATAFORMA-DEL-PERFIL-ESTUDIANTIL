@@ -10,6 +10,7 @@ import {
   Badge, Button, Card, EmptyState, ResultCount, SearchInput, SkeletonTable, Stagger,
 } from './ui';
 import { useConfirm, useToast } from './feedback';
+import { ACTIVITY_TRANSITIONS } from '../services/types';
 import {
   ACTIVITY_MODALITIES,
   ACTIVITY_STATUS_LABEL,
@@ -542,18 +543,31 @@ export default function ActivityManager({
                         )}
                       </td>
                       <td>
+                        {/*
+                          §22: solo se ofrecen las transiciones que existen. De
+                          una actividad finalizada o cancelada no se sale, así
+                          que su estado se muestra y no se edita: enseñar seis
+                          opciones para que el servidor rechace cinco no es una
+                          interfaz, es una trampa.
+                        */}
+                        {ACTIVITY_TRANSITIONS[a.status]?.length ? (
                         <select
                           className="status-select"
                           value={a.status}
                           onChange={(e) => changeStatus(a, e.target.value)}
                           aria-label={`Estado de ${a.title}`}
                         >
-                          {ACTIVITY_STATUSES.map((s) => (
+                          {[a.status, ...ACTIVITY_TRANSITIONS[a.status]].map((s) => (
                             <option key={s} value={s}>
                               {lbl(ACTIVITY_STATUS_LABEL, s)}
                             </option>
                           ))}
                         </select>
+                        ) : (
+                          <Badge tone={a.status === 'cancelled' ? 'red' : 'gray'}>
+                            {lbl(ACTIVITY_STATUS_LABEL, a.status)}
+                          </Badge>
+                        )}
                       </td>
                       <td>
                         {a.confirmedCount ?? 0} / {a.capacity ?? '∞'}

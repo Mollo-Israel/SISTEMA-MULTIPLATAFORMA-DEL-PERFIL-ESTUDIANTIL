@@ -28,6 +28,16 @@ export enum ActivityModality {
   HIBRIDA = 'hibrida',
 }
 
+/**
+ * Ciclo de vida de una actividad (especificacion §22).
+ *
+ *   DRAFT     — se está redactando; solo la ve quien la gestiona.
+ *   PUBLISHED — visible, pero todavía sin inscripciones.
+ *   OPEN      — admite inscripciones.
+ *   CLOSED    — cerrada a nuevas inscripciones; aún no ocurrió o no terminó.
+ *   FINISHED  — terminó; es cuando se confirma la participación.
+ *   CANCELLED — no se realizará. Estado final.
+ */
 export enum ActivityStatus {
   DRAFT = 'draft',
   PUBLISHED = 'published',
@@ -36,3 +46,80 @@ export enum ActivityStatus {
   FINISHED = 'finished',
   CANCELLED = 'cancelled',
 }
+
+/**
+ * Máquina de estados explícita (§22).
+ *
+ * Se declara como tabla en vez de repartir condiciones por el servicio: así el
+ * ciclo de vida completo se lee de un vistazo y añadir un camino nuevo es
+ * cambiar una línea, no recordar en qué tres sitios había un `if`.
+ *
+ * Las ausencias son tan deliberadas como las presencias:
+ *
+ *   - de `FINISHED` no se sale. Una actividad que ya ocurrió no deja de haber
+ *     ocurrido, y su participación confirmada ya alimentó perfiles;
+ *   - de `CANCELLED` tampoco: recuperarla sería reabrir algo que se comunicó
+ *     como cancelado. Se crea otra;
+ *   - `CLOSED → OPEN` sí existe, porque cerrar y reabrir inscripciones es una
+ *     decisión ordinaria de quien organiza;
+ *   - volver a `DRAFT` se permite solo desde `PUBLISHED`, y el servicio añade
+ *     una condición que esta tabla no puede expresar: que nadie tenga aún
+ *     participación confirmada.
+ */
+export const ACTIVITY_TRANSITIONS: Record<ActivityStatus, readonly ActivityStatus[]> = {
+  // `DRAFT → OPEN` existe porque publicar y abrir inscripciones a la vez es lo
+  // que de verdad hace quien termina de redactar una actividad. No salta
+  // ningún control: `OPEN` es estrictamente más visible que `PUBLISHED`, así
+  // que obligar a dos llamadas añadiría fricción sin ganar nada.
+  [ActivityStatus.DRAFT]: [
+    ActivityStatus.PUBLISHED,
+    ActivityStatus.OPEN,
+    ActivityStatus.CANCELLED,
+  ],
+  [ActivityStatus.PUBLISHED]: [
+    ActivityStatus.DRAFT,
+    ActivityStatus.OPEN,
+    ActivityStatus.CLOSED,
+    ActivityStatus.FINISHED,
+    ActivityStatus.CANCELLED,
+  ],
+  [ActivityStatus.OPEN]: [
+    ActivityStatus.CLOSED,
+    ActivityStatus.FINISHED,
+    ActivityStatus.CANCELLED,
+  ],
+  [ActivityStatus.CLOSED]: [
+    ActivityStatus.OPEN,
+    ActivityStatus.FINISHED,
+    ActivityStatus.CANCELLED,
+  ],
+  [ActivityStatus.FINISHED]: [],
+  [ActivityStatus.CANCELLED]: [],
+};
+
+/** Estados finales: ya no admiten ningún cambio. */
+export const TERMINAL_ACTIVITY_STATUSES: readonly ActivityStatus[] = [
+  ActivityStatus.FINISHED,
+  ActivityStatus.CANCELLED,
+];
+
+/** Estados en los que un estudiante puede manifestar interés o inscribirse. */
+export const REGISTRABLE_ACTIVITY_STATUSES: readonly ActivityStatus[] = [
+  ActivityStatus.PUBLISHED,
+  ActivityStatus.OPEN,
+];
+
+export function canTransition(from: ActivityStatus, to: ActivityStatus): boolean {
+  if (from === to) return true;
+  return (ACTIVITY_TRANSITIONS[from] ?? []).includes(to);
+}
+
+/** Etiquetas para la interfaz, en un solo sitio para web y móvil. */
+export const ACTIVITY_STATUS_LABEL: Record<ActivityStatus, string> = {
+  [ActivityStatus.DRAFT]: 'Borrador',
+  [ActivityStatus.PUBLISHED]: 'Publicada',
+  [ActivityStatus.OPEN]: 'Inscripciones abiertas',
+  [ActivityStatus.CLOSED]: 'Inscripciones cerradas',
+  [ActivityStatus.FINISHED]: 'Finalizada',
+  [ActivityStatus.CANCELLED]: 'Cancelada',
+};

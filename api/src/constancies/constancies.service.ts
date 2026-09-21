@@ -145,11 +145,17 @@ export class ConstanciesService {
         'No se pudo determinar el responsable de la actividad; no está autorizada.',
       );
     }
+    // §22: una actividad académica la gestiona la dirección de carrera o un
+    // docente dentro de su alcance. Antes solo valía la dirección, y esa regla
+    // dejaba sin constancia toda la participación en actividades de docente.
     const expected = OWNER_ROLE_BY_TYPE[activity.type];
-    if (creatorRole !== expected && creatorRole !== RolNombre.ADMIN) {
+    const docenteEnAcademica =
+      creatorRole === RolNombre.TEACHER && activity.type === ActivityType.ACADEMICA;
+
+    if (creatorRole !== expected && creatorRole !== RolNombre.ADMIN && !docenteEnAcademica) {
       const quien =
         expected === RolNombre.CAREER_DIRECTOR
-          ? 'el director de carrera'
+          ? 'la dirección de carrera o un docente dentro de su alcance'
           : 'la sociedad científica';
       throw new BadRequestException(
         `La actividad no sigue el flujo institucional que le corresponde: las actividades ${

@@ -18,7 +18,12 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ActivityModality, ActivityStatus, ActivityType } from '@perfil/shared';
+import {
+  ActivityModality,
+  ActivityStatus,
+  ActivityType,
+  RegistrationMode,
+} from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
 export class CreateActivityDto {
@@ -108,4 +113,48 @@ export class CreateActivityDto {
   @IsOptional()
   @IsEnum(ActivityStatus)
   status?: ActivityStatus;
+
+  /** Fin de la actividad (§22, `end_at`). */
+  @ApiProperty({ required: false, example: '2026-04-12T18:00:00.000Z' })
+  @IsOptional()
+  @IsISO8601({}, { message: 'La fecha de fin no es válida.' })
+  endAt?: string;
+
+  /**
+   * Semestres a los que va dirigida (§22, `semester_scope`).
+   *
+   * Para un docente no es informativo: delimita qué puede gestionar. El
+   * servidor rechaza los semestres fuera de su alcance habilitado.
+   */
+  @ApiProperty({ required: false, type: [Number], example: [4, 5] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(8, { message: 'La carrera tiene 8 semestres.' })
+  @ArrayUnique({ message: 'No repita semestres.' })
+  @IsInt({ each: true, message: 'Cada semestre debe ser un número.' })
+  @Min(1, { each: true, message: 'El semestre mínimo es 1.' })
+  @Max(8, { each: true, message: 'El semestre máximo es 8.' })
+  semesterScope?: number[];
+
+  /** Habilidades que la actividad trabaja (§22, §73.3). */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20, { message: 'Máximo 20 habilidades por actividad.' })
+  @ArrayUnique({ message: 'No repita habilidades.' })
+  @IsUUID('4', { each: true })
+  skillIds?: string[];
+
+  @ApiProperty({ enum: RegistrationMode, required: false, default: RegistrationMode.OPEN })
+  @IsOptional()
+  @IsEnum(RegistrationMode, { message: 'Modo de inscripción no válido.' })
+  registrationMode?: RegistrationMode;
+
+  /** Requisitos previos (§22, `requirements`). */
+  @ApiProperty({ required: false, example: 'Conocer fundamentos de JavaScript.' })
+  @IsOptional()
+  @Transform(cleanText)
+  @IsString()
+  @MaxLength(500, { message: 'Los requisitos no pueden superar 500 caracteres.' })
+  requirements?: string;
 }

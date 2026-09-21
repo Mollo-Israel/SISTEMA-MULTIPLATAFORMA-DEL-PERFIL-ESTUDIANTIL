@@ -5,6 +5,9 @@ import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
+import { ActivitySkill } from '../entities/activity-skill.entity';
+import { Skill } from '../entities/skill.entity';
+import { AccessModule } from '../access/access.module';
 import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
 import { ActivitiesService } from './activities.service';
 import { ActivitiesController } from './activities.controller';
@@ -17,8 +20,11 @@ import { ActivitiesController } from './activities.controller';
       StudentProfile,
       AcademicArea,
       ActivityCategory,
+      ActivitySkill,
+      Skill,
     ]),
     AffinityRecalcModule,
+    AccessModule,
   ],
   controllers: [ActivitiesController],
   providers: [ActivitiesService],

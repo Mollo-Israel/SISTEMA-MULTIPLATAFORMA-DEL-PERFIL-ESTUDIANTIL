@@ -381,7 +381,9 @@ export default function ActivitiesScreen({ navigation }: any) {
                           ? 'inscrito, pendiente de registro por el responsable'
                           : mine.status === 'absent'
                             ? 'registrado como ausente'
-                            : 'interesado'}
+                            : mine.status === 'cancelled'
+                              ? 'diste de baja tu inscripción'
+                              : 'interesado'}
                     </Text>
                   </View>
                 )}
@@ -415,11 +417,23 @@ export default function ActivitiesScreen({ navigation }: any) {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Button
-                        title="Inscribirme"
-                        icon="user-plus"
+                        title={mine?.status === 'registered' ? 'Darme de baja' : 'Inscribirme'}
+                        icon={mine?.status === 'registered' ? 'user-minus' : 'user-plus'}
+                        variant={mine?.status === 'registered' ? 'danger' : 'primary'}
                         loading={busy === a.id}
-                        disabled={mine?.status === 'registered'}
-                        onPress={() => enrol(a)}
+                        onPress={() =>
+                          // §23: mientras nadie haya confirmado, la inscripción es
+                          // reversible. Una vez confirmada ya es experiencia y solo
+                          // el responsable puede corregirla.
+                          (mine?.status === 'registered'
+                            ? act(
+                              () => activityService.cancelRegistration(a.id),
+                              'Inscripción dada de baja.',
+                              a.id,
+                              `Ya no estás inscrito en “${a.title}”.`,
+                            )
+                            : enrol(a))
+                        }
                       />
                     </View>
                   </View>

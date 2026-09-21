@@ -846,14 +846,51 @@ async function objective3(ctx) {
     `status ${directorExtra.status}`,
   );
 
+  // §22: el docente vuelve a gestionar actividades academicas, pero solo
+  // dentro de los semestres que el administrador le habilito. Antes esta
+  // comprobacion afirmaba que no podia publicar ninguna.
   const teacherPublish = await req('POST', '/activities', {
     token: teacherToken,
-    body: { title: `Intento docente ${TS}`, type: 'academica', categoryId: catId('charla') },
+    body: {
+      title: `Taller del docente ${TS}`,
+      type: 'academica',
+      categoryId: catId('charla'),
+      semesterScope: [4],
+    },
   });
   check(
-    teacherPublish.status === 403,
-    '3.6 El docente NO publica actividades -> 403',
-    `status ${teacherPublish.status}`,
+    teacherPublish.status === 201,
+    '3.6 El docente SI publica actividades academicas en su alcance (§22)',
+    `status ${teacherPublish.status} ${msgOf(teacherPublish)}`,
+  );
+
+  const teacherOutOfScope = await req('POST', '/activities', {
+    token: teacherToken,
+    body: {
+      title: `Fuera de alcance ${TS}`,
+      type: 'academica',
+      categoryId: catId('charla'),
+      semesterScope: [8],
+    },
+  });
+  check(
+    teacherOutOfScope.status === 403,
+    '3.6b El docente NO dirige una actividad a semestres fuera de su alcance -> 403',
+    `status ${teacherOutOfScope.status}`,
+  );
+
+  const teacherExtra = await req('POST', '/activities', {
+    token: teacherToken,
+    body: {
+      title: `Extracurricular del docente ${TS}`,
+      type: 'extracurricular',
+      categoryId: catId('hackathon'),
+    },
+  });
+  check(
+    teacherExtra.status === 403,
+    '3.6c El docente NO publica extracurriculares: son de la sociedad -> 403',
+    `status ${teacherExtra.status}`,
   );
 
   const studentPublish = await req('POST', '/activities', {

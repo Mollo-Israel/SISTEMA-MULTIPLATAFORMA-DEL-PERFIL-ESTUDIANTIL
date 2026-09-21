@@ -24,6 +24,7 @@ import StudentEvidencesPage from './pages/student/Evidences';
 
 import TeacherDashboard from './pages/teacher/Dashboard';
 import TeacherActivitiesPage from './pages/teacher/Activities';
+import TeacherMyActivitiesPage from './pages/teacher/MyActivities';
 import TeacherStudentsPage from './pages/teacher/Students';
 import TeacherReportsPage from './pages/teacher/Reports';
 import TeacherStudentProjectsPage from './pages/teacher/StudentProjects';
@@ -97,6 +98,7 @@ export default function App() {
           <Route element={guarded([T], <Layout />)}>
             <Route path="/teacher" element={<TeacherDashboard />} />
             <Route path="/teacher/activities" element={<TeacherActivitiesPage />} />
+            <Route path="/teacher/my-activities" element={<TeacherMyActivitiesPage />} />
             <Route path="/teacher/students" element={<TeacherStudentsPage />} />
             <Route path="/teacher/projects" element={<TeacherStudentProjectsPage />} />
             <Route path="/teacher/reports" element={<TeacherReportsPage />} />

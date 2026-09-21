@@ -9,11 +9,17 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ActivityModality, ActivityStatus, ActivityType } from '@perfil/shared';
+import {
+  ActivityModality,
+  ActivityStatus,
+  ActivityType,
+  RegistrationMode,
+} from '@perfil/shared';
 import { User } from './user.entity';
 import { AcademicArea } from './academic-area.entity';
 import { ActivityCategory } from './activity-category.entity';
 import { ActivityRegistration } from './activity-registration.entity';
+import { ActivitySkill } from './activity-skill.entity';
 
 @Entity('activities')
 export class Activity {
@@ -73,8 +79,57 @@ export class Activity {
   @JoinColumn({ name: 'creator_id' })
   creator: User;
 
+  /**
+   * Inicio de la actividad.
+   *
+   * Se conserva el nombre `event_date` de la columna: es la misma fecha que
+   * siempre fue, y renombrarla obligaria a tocar consultas y datos sin
+   * ganar nada. §22 la llama `start_at`.
+   */
   @Column({ name: 'event_date', type: 'timestamptz', nullable: true })
   eventDate: Date | null;
+
+  /** Fin de la actividad (§22, `end_at`). Nulo si dura un solo momento. */
+  @Column({ name: 'end_at', type: 'timestamptz', nullable: true })
+  endAt: Date | null;
+
+  /**
+   * Semestres a los que va dirigida (§22, `semester_scope`).
+   *
+   * Vacio o nulo significa «toda la carrera». Para un docente no es
+   * decorativo: es lo que delimita que puede gestionar, y el servidor
+   * comprueba que no declare semestres fuera de los suyos.
+   */
+  @Column({ name: 'semester_scope', type: 'smallint', array: true, nullable: true })
+  semesterScope: number[] | null;
+
+  /** Como se entra (§22, `registration_mode`). */
+  @Column({
+    name: 'registration_mode',
+    type: 'enum',
+    enum: RegistrationMode,
+    default: RegistrationMode.OPEN,
+  })
+  registrationMode: RegistrationMode;
+
+  /** Requisitos previos, en texto libre (§22, `requirements`). */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  requirements: string | null;
+
+  /**
+   * Quien responde por la actividad (§22, `responsible_user_id`).
+   *
+   * Distinto de `creator_id`: quien la creo puede dejar el cargo, y la
+   * actividad sigue necesitando a alguien que confirme participaciones.
+   * Por defecto es su creador.
+   */
+  @Index()
+  @Column({ name: 'responsible_user_id', type: 'uuid', nullable: true })
+  responsibleUserId: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'responsible_user_id' })
+  responsible: User | null;
 
   @Column({ type: 'int', nullable: true })
   capacity: number | null;
@@ -88,6 +143,10 @@ export class Activity {
 
   @OneToMany(() => ActivityRegistration, (reg) => reg.activity)
   registrations: ActivityRegistration[];
+
+  /** Habilidades que la actividad trabaja (§22, §73.3). */
+  @OneToMany(() => ActivitySkill, (link) => link.activity)
+  activitySkills: ActivitySkill[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

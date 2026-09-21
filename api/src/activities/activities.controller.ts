@@ -24,12 +24,17 @@ import { ConfirmParticipationDto } from './dto/confirm-participation.dto';
  * Actividades academicas y extracurriculares (Objetivo 3) y registro de
  * participacion (Objetivo 4).
  *
- * Responsables segun el documento vigente:
- *   - Academicas       -> Director de carrera
- *   - Extracurriculares-> Sociedad cientifica
- * El administrador conserva funciones de soporte. El docente consulta, no publica.
+ * Quien gestiona cada tipo (§22):
+ *   - Academicas        -> Direccion de carrera, y docentes dentro de su alcance
+ *   - Extracurriculares -> Sociedad cientifica
+ * El administrador conserva funciones de soporte sobre ambos tipos.
+ *
+ * El decorador solo abre la puerta al rol; que un docente concreto alcance a
+ * una actividad concreta lo decide el servicio consultando sus semestres
+ * habilitados. Un rol en la lista no es una autorizacion.
  */
 const MANAGER_ROLES = [
+  RolNombre.TEACHER,
   RolNombre.CAREER_DIRECTOR,
   RolNombre.SCIENTIFIC_SOCIETY,
   RolNombre.ADMIN,
@@ -101,6 +106,21 @@ export class ActivitiesController {
     return this.activitiesService.registerInterest(user.userId, id);
   }
 
+  @Post(':id/cancel-registration')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Darse de baja de una actividad (§23).',
+    description:
+      'Solo antes de que se confirme la participación. Una vez confirmada es '
+      + 'experiencia registrada y solo el responsable puede corregirla.',
+  })
+  cancelRegistration(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.activitiesService.cancelRegistration(user.userId, id);
+  }
+
   @Post(':id/register')
   @Roles(RolNombre.STUDENT)
   @ApiOperation({ summary: 'El estudiante se inscribe (crea una solicitud pendiente de aprobación).' })
@@ -109,7 +129,9 @@ export class ActivitiesController {
   }
 
   @Patch(':id/confirm-participation')
-  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.SCIENTIFIC_SOCIETY, RolNombre.ADMIN)
+  // §22: el docente gestiona actividades academicas dentro de su alcance.
+  // Que alcance a *esta* actividad lo decide el servicio, no el decorador.
+  @Roles(...MANAGER_ROLES)
   @HttpCode(200)
   @ApiOperation({
     summary:

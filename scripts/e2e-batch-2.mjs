@@ -512,7 +512,7 @@ async function areasDeMejora(ctx) {
   ) ?? (areas.data ?? [])[0];
 
   const antes = await req('GET', '/profiles/me/summary', { token: ctx.est.token });
-  const puntajeAntes = (antes.data?.affinity?.areas ?? []).find(
+  const puntajeAntes = (antes.data?.affinities ?? []).find(
     (a) => a.academicAreaId === aislada.id,
   )?.score ?? 0;
 
@@ -522,7 +522,7 @@ async function areasDeMejora(ctx) {
   });
 
   const despues = await req('GET', '/profiles/me/summary', { token: ctx.est.token });
-  const puntajeDespues = (despues.data?.affinity?.areas ?? []).find(
+  const puntajeDespues = (despues.data?.affinities ?? []).find(
     (a) => a.academicAreaId === aislada.id,
   )?.score ?? 0;
 
