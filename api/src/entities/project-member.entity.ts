@@ -5,11 +5,13 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
 import { Project } from './project.entity';
 import { User } from './user.entity';
+import { ProjectMemberSkill } from './project-member-skill.entity';
 
 @Entity('project_members')
 @Unique('uq_project_member', ['projectId', 'userId'])
@@ -44,6 +46,21 @@ export class ProjectMember {
 
   @Column({ type: 'text', nullable: true })
   contribution: string | null;
+
+  /**
+   * Cuando el propio integrante confirmo su contribucion (§33).
+   *
+   * Nulo significa que lo que hay lo escribio otra persona y el integrante
+   * aun no lo ha revisado. §33 es explicito: no se permite que el creador
+   * atribuya unilateralmente experiencia definitiva a otro estudiante, asi
+   * que hasta que no confirma, esa contribucion no alimenta su perfil.
+   */
+  @Column({ name: 'contribution_confirmed_at', type: 'timestamptz', nullable: true })
+  contributionConfirmedAt: Date | null;
+
+  /** Tecnologias que uso este integrante en concreto (§34). */
+  @OneToMany(() => ProjectMemberSkill, (link) => link.projectMember)
+  memberSkills: ProjectMemberSkill[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

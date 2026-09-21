@@ -7,19 +7,30 @@ import {
   FiLink,
   FiMessageSquare,
   FiPaperclip,
+  FiClock,
   FiPlus,
+  FiShield,
   FiUsers,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
   catalogService,
   evidenceService,
+  projectDetailService,
   projectFeedbackService,
   projectService,
 } from '../../services';
+import { useAuth } from '../../auth/AuthContext';
+import ProjectContribution from '../../components/ProjectContribution';
+import {
+  PROJECT_BACKING_HELP,
+  PROJECT_BACKING_LABEL,
+  PROJECT_EVENT_LABEL,
+} from '../../services/types';
 import type {
   AcademicArea,
   Project,
+  ProjectEventItem,
   ProjectFeedbackItem,
 } from '../../services/types';
 import {
@@ -56,6 +67,26 @@ export default function StudentProjectsPage() {
   // Retroalimentacion docente (RF16). Se pide solo del proyecto que el
   // estudiante abre: el listado ya trae cuantos comentarios tiene cada uno.
   const [openFeedback, setOpenFeedback] = useState<string | null>(null);
+  const [openContribution, setOpenContribution] = useState<string | null>(null);
+  const [openTimeline, setOpenTimeline] = useState<string | null>(null);
+  const [timeline, setTimeline] = useState<Record<string, ProjectEventItem[]>>({});
+  const { user } = useAuth();
+
+  /** La bitácora se pide al abrirla: es historia, no algo que mirar siempre. */
+  const toggleTimeline = async (projectId: string) => {
+    if (openTimeline === projectId) {
+      setOpenTimeline(null);
+      return;
+    }
+    setOpenTimeline(projectId);
+    if (timeline[projectId]) return;
+    try {
+      const eventos = await projectDetailService.timeline(projectId);
+      setTimeline((prev) => ({ ...prev, [projectId]: eventos }));
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
   const [feedback, setFeedback] = useState<Record<string, ProjectFeedbackItem[]>>({});
   const [loadingFeedback, setLoadingFeedback] = useState<string | null>(null);
 
@@ -267,6 +298,92 @@ export default function StudentProjectsPage() {
                   ))}
                 </div>
               )}
+
+              {/*
+                §36: el nivel de respaldo se deriva de señales observables y se
+                explica. No mide calidad: un proyecto excelente de una sola
+                persona sin repositorio público se queda en «Declarado», y eso
+                no dice nada malo de él.
+              */}
+              {p.backingTier && (
+                <div className="mt respaldo-proyecto">
+                  <Badge
+                    tone={
+                      p.backingTier === 'flagged' ? 'red'
+                        : p.backingTier === 'reviewed' || p.backingTier === 'corroborated' ? 'green'
+                          : p.backingTier === 'supported' ? 'bordo' : 'gray'
+                    }
+                  >
+                    <FiShield size={11} /> {PROJECT_BACKING_LABEL[p.backingTier]}
+                  </Badge>
+                  <span className="muted">{PROJECT_BACKING_HELP[p.backingTier]}</span>
+                  {(p.backingReasons ?? []).length > 0 && (
+                    <ul className="respaldo-motivos">
+                      {(p.backingReasons ?? []).map((r) => <li key={r}>{r}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/*
+                §33: el integrante confirma lo que hizo. Sin esta pantalla,
+                quien acepta una invitación no obtiene nada del proyecto.
+              */}
+              <div className="mt feedback-block">
+                <button
+                  type="button"
+                  className="feedback-toggle"
+                  onClick={() => setOpenContribution(openContribution === p.id ? null : p.id)}
+                  aria-expanded={openContribution === p.id}
+                >
+                  {openContribution === p.id ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                  <FiUsers size={14} />
+                  <span>Contribuciones del equipo</span>
+                </button>
+                {openContribution === p.id && user && (
+                  <div className="feedback-list">
+                    <ProjectContribution
+                      projectId={p.id}
+                      currentUserId={user.id}
+                      isOwner={p.isOwner === true}
+                      onChanged={load}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* §41: la bitácora del proyecto, en eventos, no en conversaciones. */}
+              <div className="mt feedback-block">
+                <button
+                  type="button"
+                  className="feedback-toggle"
+                  onClick={() => toggleTimeline(p.id)}
+                  aria-expanded={openTimeline === p.id}
+                >
+                  {openTimeline === p.id ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                  <FiClock size={14} />
+                  <span>Bitácora del proyecto</span>
+                </button>
+                {openTimeline === p.id && (
+                  <div className="feedback-list">
+                    {(timeline[p.id] ?? []).length === 0 ? (
+                      <p className="muted">Sin eventos registrados todavía.</p>
+                    ) : (
+                      <ul className="bitacora">
+                        {(timeline[p.id] ?? []).map((e) => (
+                          <li key={e.id}>
+                            <span className="ev">{PROJECT_EVENT_LABEL[e.eventType] ?? e.eventType}</span>
+                            <span className="muted">
+                              {e.actor ?? 'Sistema'} ·{' '}
+                              {new Date(e.createdAt).toLocaleString('es-BO')}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Retroalimentación docente (RF16). El estudiante vinculado al
                   proyecto puede leerla; el backend ya lo permitía, pero el

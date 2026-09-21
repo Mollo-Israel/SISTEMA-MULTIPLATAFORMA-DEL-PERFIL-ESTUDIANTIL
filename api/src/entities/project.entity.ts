@@ -16,6 +16,7 @@ import { ProjectMember } from './project-member.entity';
 import { ProjectEvidence } from './project-evidence.entity';
 import { ProjectInvitation } from './project-invitation.entity';
 import { ProjectFeedback } from './project-feedback.entity';
+import { ProjectBackingTier } from '@perfil/shared';
 
 @Entity('projects')
 export class Project {
@@ -66,6 +67,26 @@ export class Project {
 
   @Column({ name: 'demo_url', type: 'varchar', length: 500, nullable: true })
   demoUrl: string | null;
+
+  /**
+   * Nivel de respaldo derivado (§36).
+   *
+   * No se fija a mano: lo recalcula el sistema a partir de senales
+   * observables —integrantes aceptados, evidencias, repositorio, demo,
+   * retroalimentacion—. Crear un proyecto por si solo deja DECLARED (§32).
+   */
+  @Index()
+  @Column({
+    name: 'backing_tier',
+    type: 'enum',
+    enum: ProjectBackingTier,
+    default: ProjectBackingTier.DECLARED,
+  })
+  backingTier: ProjectBackingTier;
+
+  /** Por que esta en ese nivel, en lenguaje legible. */
+  @Column({ name: 'backing_reasons', type: 'text', array: true, nullable: true })
+  backingReasons: string[] | null;
 
   @OneToMany(() => ProjectMember, (member) => member.project)
   members: ProjectMember[];

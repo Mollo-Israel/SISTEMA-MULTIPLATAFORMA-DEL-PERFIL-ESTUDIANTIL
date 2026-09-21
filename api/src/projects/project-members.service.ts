@@ -8,10 +8,17 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { ProjectInvitationStatus, RolNombre, UserStatus } from '@perfil/shared';
+import {
+  ProjectEventType,
+  ProjectInvitationStatus,
+  RolNombre,
+  UserStatus,
+} from '@perfil/shared';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectInvitation } from '../entities/project-invitation.entity';
+import { ProjectEventsService } from './project-events.service';
+import { ProjectBackingService } from './project-backing.service';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { InviteMemberDto } from './dto/invite-member.dto';
@@ -35,6 +42,8 @@ export class ProjectMembersService {
     @InjectRepository(ProjectInvitation)
     private readonly invitations: Repository<ProjectInvitation>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
+    private readonly events: ProjectEventsService,
+    private readonly backing: ProjectBackingService,
     @Inject(AFFINITY_RECALCULATION)
     private readonly affinityRecalculation: AffinityRecalculationPort,
   ) {}
@@ -97,6 +106,14 @@ export class ProjectMembersService {
       invitedById: user.userId,
     });
     const saved = await this.invitations.save(invitation);
+
+    await this.events.record({
+      projectId,
+      actorUserId: user.userId,
+      eventType: ProjectEventType.MEMBER_INVITED,
+      metadata: { rol: invitation.proposedRole },
+    });
+
     return this.findInvitationOrFail(saved.id);
   }
 
@@ -240,6 +257,12 @@ export class ProjectMembersService {
       // Rechazar no crea pertenencia alguna.
       invitation.status = ProjectInvitationStatus.REJECTED;
       await this.invitations.save(invitation);
+      await this.events.record({
+        projectId: invitation.projectId,
+        actorUserId: userId,
+        eventType: ProjectEventType.MEMBER_DECLINED,
+        metadata: {},
+      });
       return this.findInvitationOrFail(invitation.id);
     }
 
@@ -263,7 +286,18 @@ export class ProjectMembersService {
       );
     }
 
-    // El proyecto pasa a formar parte del perfil del nuevo integrante.
+    await this.events.record({
+      projectId: invitation.projectId,
+      actorUserId: userId,
+      eventType: ProjectEventType.MEMBER_ACCEPTED,
+      metadata: { rol: invitation.proposedRole },
+    });
+    // §36: un integrante aceptado es una fuente adicional de respaldo.
+    await this.backing.recalculate(invitation.projectId, userId);
+
+    // §33: aceptar crea la pertenencia, pero la contribucion sigue sin
+    // confirmar. Hasta que el integrante la confirme, el proyecto no aporta
+    // a su afinidad: nadie puede atribuirle experiencia por el.
     await this.affinityRecalculation.requestRecalculation(profile.id);
     return this.findInvitationOrFail(invitation.id);
   }

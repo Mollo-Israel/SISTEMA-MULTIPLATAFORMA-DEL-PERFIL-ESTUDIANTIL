@@ -1,9 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUrl, IsUUID, MaxLength } from 'class-validator';
 import { EvidenceType } from '@perfil/shared';
-import { cleanLine, cleanText, trim } from '../../common/validation';
+import { cleanText, trim } from '../../common/validation';
 
+/**
+ * Evidencia de un proyecto (§35, §27).
+ *
+ * El archivo se nombra por su identificador, no por su URL. Esta ruta se había
+ * quedado con el patrón antiguo —`fileUrl` y sus metadatos sueltos— después de
+ * que la ruta general de evidencias lo abandonara: permitía adjuntar el
+ * archivo de otra persona, que es exactamente contra lo que advierte §27.
+ */
 export class AddEvidenceDto {
   @ApiProperty({ enum: EvidenceType })
   @IsEnum(EvidenceType, { message: 'Tipo de evidencia inválido.' })
@@ -16,12 +24,15 @@ export class AddEvidenceDto {
   @MaxLength(300, { message: 'La descripción no puede superar 300 caracteres.' })
   description?: string;
 
-  @ApiProperty({ required: false, description: 'Ruta del archivo (cuando evidenceType=file)' })
+  @ApiProperty({
+    required: false,
+    description:
+      'Identificador devuelto por POST /uploads (cuando evidenceType=file). '
+      + 'Solo se aceptan archivos subidos por quien adjunta la evidencia.',
+  })
   @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(500)
-  fileUrl?: string;
+  @IsUUID('4', { message: 'El archivo debe identificarse por el id que devolvió la subida.' })
+  storedFileId?: string;
 
   @ApiProperty({ required: false, description: 'Enlace externo (cuando evidenceType=link)' })
   @IsOptional()
@@ -29,25 +40,4 @@ export class AddEvidenceDto {
   @IsUrl({}, { message: 'El enlace debe ser una URL válida.' })
   @MaxLength(500)
   externalUrl?: string;
-
-  @ApiProperty({ required: false, description: 'Nombre original del archivo subido' })
-  @IsOptional()
-  @Transform(cleanLine)
-  @IsString()
-  @MaxLength(160)
-  fileName?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(120)
-  mimeType?: string;
-
-  @ApiProperty({ required: false, description: 'Tamaño en bytes' })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(5 * 1024 * 1024, { message: 'El archivo supera el máximo de 5 MB.' })
-  fileSize?: number;
 }

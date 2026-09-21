@@ -684,10 +684,36 @@ async function rf15(ctx) {
   );
 
   section('Afinidad del integrante aceptado');
+
+  /*
+   * §33: aceptar la invitacion crea la pertenencia, pero no la experiencia.
+   * Mientras el integrante no confirme su contribucion, lo que figura en ella
+   * lo escribio otra persona, y «no se permite que el creador atribuya
+   * unilateralmente experiencia definitiva a otro estudiante».
+   *
+   * Antes esta comprobacion daba por bueno lo contrario: que aceptar bastara.
+   */
+  const antesDeConfirmar = await req('GET', '/affinity/me', { token: B.token });
+  check(
+    antesDeConfirmar.status === 200 && antesDeConfirmar.data.length === 0,
+    '15.28 Aceptar la invitacion NO atribuye experiencia todavia (§33)',
+    `areas ${antesDeConfirmar.data?.length}`,
+  );
+
+  const confirmada = await req('PUT', `/projects/${projectId}/my-contribution`, {
+    token: B.token,
+    body: { contribution: 'Desarrolle la interfaz de inscripcion.', role: 'Frontend' },
+  });
+  check(
+    confirmada.status === 200 && confirmada.data?.contributionConfirmed === true,
+    '15.28b El integrante confirma su propia contribucion (§33)',
+    msgOf(confirmada),
+  );
+
   const affinityB = await req('GET', '/affinity/me', { token: B.token });
   check(
     affinityB.status === 200 && affinityB.data.length > 0,
-    '15.28 El proyecto colaborativo alimenta la afinidad del integrante',
+    '15.28c Confirmada, el proyecto si alimenta su afinidad',
     msgOf(affinityB),
   );
   const affinityC = await req('GET', '/affinity/me', { token: C.token });

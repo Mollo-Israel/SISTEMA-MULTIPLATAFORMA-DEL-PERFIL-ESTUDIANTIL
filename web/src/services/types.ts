@@ -363,6 +363,111 @@ export interface Registration {
   studentProfile?: { id: string; user?: PublicUser };
 }
 
+/** Nivel de respaldo de un proyecto (§36). Se deriva; no se declara. */
+export type ProjectBackingTier =
+  | 'declared' | 'supported' | 'corroborated' | 'reviewed' | 'flagged';
+
+export const PROJECT_BACKING_LABEL: Record<ProjectBackingTier, string> = {
+  declared: 'Declarado',
+  supported: 'Respaldado',
+  corroborated: 'Corroborado',
+  reviewed: 'Revisado',
+  flagged: 'Con observaciones',
+};
+
+export const PROJECT_BACKING_HELP: Record<ProjectBackingTier, string> = {
+  declared: 'Solo la información que escribiste. No es una crítica: el sistema aún no pudo comprobar nada por su cuenta.',
+  supported: 'Hay al menos una fuente adicional: un integrante aceptado, una evidencia, el repositorio o la demo.',
+  corroborated: 'Hay dos señales independientes y algo que responde por sí mismo.',
+  reviewed: 'Además, un docente dejó retroalimentación. No significa aprobado académicamente.',
+  flagged: 'Algo no cuadra: un enlace bloqueado o un recurso que desapareció. El proyecto se conserva.',
+};
+
+/** Situación de una tecnología declarada frente a lo encontrado (§38). */
+export type TechnologyStatus = 'declared' | 'detected' | 'both';
+
+export const TECHNOLOGY_STATUS_LABEL: Record<TechnologyStatus, string> = {
+  declared: 'Declarada',
+  detected: 'Detectada',
+  both: 'Declarada y detectada',
+};
+
+/** Integrante con su contribución y sus tecnologías (§33, §34). */
+export interface ProjectMemberDetailed {
+  id: string;
+  userId: string;
+  name: string | null;
+  role: string | null;
+  contribution: string | null;
+  /** Mientras sea false, lo que figura lo escribió otra persona (§33). */
+  contributionConfirmed: boolean;
+  contributionConfirmedAt: string | null;
+  skillsUsed: { skillId: string; name: string | null }[];
+  createdAt: string;
+}
+
+/** Lo que se sabe del repositorio y la demo (§36, §37, §39). */
+export interface ProjectChecks {
+  backingTier: ProjectBackingTier;
+  backingReasons: string[];
+  repository: {
+    url: string;
+    status: LinkCheckStatus;
+    metadata: {
+      exists: boolean;
+      owner: string | null;
+      repositoryName: string | null;
+      defaultBranch: string | null;
+      languages: string[];
+      updatedAt: string | null;
+      readmePresence: boolean;
+      manifests: string[];
+      stars: number | null;
+      error: string | null;
+    } | null;
+    technologySignals: { name: string; status: TechnologyStatus; source: string | null }[];
+    checkedAt: string;
+  } | null;
+  demo: {
+    url: string;
+    status: LinkCheckStatus;
+    isHttps: boolean;
+    title: string | null;
+    httpStatus: number | null;
+    blockedReason: string | null;
+    checkedAt: string;
+  } | null;
+  disclaimer: string;
+}
+
+/** Un evento de la bitácora del proyecto (§41). */
+export interface ProjectEventItem {
+  id: string;
+  eventType: string;
+  actor: string | null;
+  actorUserId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export const PROJECT_EVENT_LABEL: Record<string, string> = {
+  project_created: 'Proyecto creado',
+  member_invited: 'Integrante invitado',
+  member_accepted: 'Invitación aceptada',
+  member_declined: 'Invitación rechazada',
+  member_removed: 'Integrante retirado',
+  contribution_updated: 'Contribución propuesta',
+  contribution_confirmed: 'Contribución confirmada',
+  evidence_added: 'Evidencia añadida',
+  evidence_removed: 'Evidencia retirada',
+  repository_checked: 'Repositorio comprobado',
+  demo_checked: 'Demo comprobada',
+  feedback_added: 'Retroalimentación docente',
+  project_visibility_changed: 'Visibilidad cambiada',
+  project_archived: 'Proyecto archivado',
+  backing_tier_changed: 'Nivel de respaldo recalculado',
+};
+
 export interface Project {
   id: string;
   title: string;
@@ -373,6 +478,12 @@ export interface Project {
   academicArea?: AcademicArea | null;
   repositoryUrl: string | null;
   demoUrl: string | null;
+  /** true si el estudiante es su responsable; false si participa como integrante. */
+  isOwner?: boolean;
+  myRole?: string | null;
+  /** Derivado de señales observables (§36). */
+  backingTier?: ProjectBackingTier;
+  backingReasons?: string[] | null;
   members?: ProjectMember[];
   evidences?: ProjectEvidence[];
   /** Comentarios docentes recibidos (RF16). Lo calcula GET /projects/mine. */

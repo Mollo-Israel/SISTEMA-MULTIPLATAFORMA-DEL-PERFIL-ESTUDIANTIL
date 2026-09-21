@@ -21,6 +21,9 @@ import type {
   ImportBatchSummary,
   ImportPreview,
   OnboardingRun,
+  ProjectChecks,
+  ProjectEventItem,
+  ProjectMemberDetailed,
   ValidationVerdict,
   Questionnaire,
   SkillLevel,
@@ -221,6 +224,35 @@ export const validationService = {
       .get<ValidationVerdict>(`/validation/${resourceType}/${resourceId}`)
       .then((r) => r.data),
   queue: () => api.get('/validation/queue').then((r) => r.data),
+};
+
+/** Proyectos: contribución, respaldo y bitácora (§33 a §41). */
+export const projectDetailService = {
+  membersDetailed: (projectId: string) =>
+    api
+      .get<ProjectMemberDetailed[]>(`/projects/${projectId}/members/detailed`)
+      .then((r) => r.data),
+  /** §33: solo el propio integrante confirma lo que hizo. */
+  confirmMyContribution: (
+    projectId: string,
+    data: { contribution?: string; role?: string; skillIds?: string[] },
+  ) => api
+    .put<ProjectMemberDetailed>(`/projects/${projectId}/my-contribution`, data)
+    .then((r) => r.data),
+  /** El responsable propone; retira la confirmación anterior. */
+  proposeContribution: (
+    projectId: string,
+    memberId: string,
+    data: { contribution?: string; role?: string },
+  ) => api
+    .patch<ProjectMemberDetailed>(`/projects/${projectId}/members/${memberId}/contribution`, data)
+    .then((r) => r.data),
+  checks: (projectId: string) =>
+    api.get<ProjectChecks>(`/projects/${projectId}/checks`).then((r) => r.data),
+  recheck: (projectId: string) =>
+    api.post<ProjectChecks>(`/projects/${projectId}/checks/recheck`).then((r) => r.data),
+  timeline: (projectId: string) =>
+    api.get<ProjectEventItem[]>(`/projects/${projectId}/timeline`).then((r) => r.data),
 };
 
 export const evidenceService = {

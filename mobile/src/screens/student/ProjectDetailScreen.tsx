@@ -21,6 +21,7 @@ import {
   EmptyState,
   SkeletonCards,
   Badge,
+  Chip,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
 import { colors } from '../../theme';
@@ -66,6 +67,42 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
+  const [miContribucion, setMiContribucion] = useState<any>(null);
+  const [contribForm, setContribForm] = useState<{
+    contribution: string;
+    role: string;
+    skillIds: string[];
+  }>({ contribution: '', role: '', skillIds: [] });
+  const [catalogoSkills, setCatalogoSkills] = useState<any[]>([]);
+  const [guardandoContrib, setGuardandoContrib] = useState(false);
+
+  /**
+   * §33: el integrante confirma lo que hizo.
+   *
+   * Hasta que lo hace, lo que figura en su contribución lo escribió otra
+   * persona y no alimenta su perfil.
+   */
+  const confirmarContribucion = async () => {
+    setGuardandoContrib(true);
+    try {
+      const actualizada = await projectService.confirmMyContribution(projectId, {
+        contribution: contribForm.contribution || undefined,
+        role: contribForm.role || undefined,
+        skillIds: contribForm.skillIds,
+      });
+      setMiContribucion(actualizada);
+      toast.success(
+        'Contribución confirmada.',
+        'Ahora este proyecto cuenta en tu perfil con las tecnologías que declaraste.',
+      );
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setGuardandoContrib(false);
+    }
+  };
+
+
   const [invitations, setInvitations] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<any[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
@@ -106,12 +143,28 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
       status: p.status,
       visibility: p.visibility,
     });
-    const [m, f] = await Promise.all([
+    const [m, f, detallados, skills] = await Promise.all([
       projectService.members(projectId).catch(() => []),
       projectFeedbackService.list(projectId).catch(() => []),
+      projectService.membersDetailed(projectId).catch(() => []),
+      catalogService.skills().catch(() => []),
     ]);
     setMembers(m);
     setFeedback(f);
+    setCatalogoSkills(skills);
+
+    // §33: si el usuario es integrante, se carga SU contribucion para que
+    // pueda revisarla y confirmarla.
+    const propia = (detallados ?? []).find((x: any) => x.userId === me?.userId)
+      ?? (detallados ?? []).find((x: any) => x.userId === p?.viewerUserId);
+    if (propia) {
+      setMiContribucion(propia);
+      setContribForm({
+        contribution: propia.contribution ?? '',
+        role: propia.role ?? '',
+        skillIds: (propia.skillsUsed ?? []).map((x: any) => x.skillId),
+      });
+    }
     return p;
   }, [projectId]);
 
@@ -428,6 +481,67 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
         </Card>
       )}
 
+      {/* ---------------- §33 · Mi contribución ---------------- */}
+      {!isOwner && miContribucion !== null && (
+        <Card title="Mi contribución">
+          {!miContribucion.contributionConfirmed && (
+            <View style={styles.avisoContribucion}>
+              <Text style={styles.avisoTexto}>
+                Mientras no la confirmes, este proyecto no cuenta en tu perfil. Nadie
+                puede atribuirte experiencia por ti.
+              </Text>
+            </View>
+          )}
+
+          <Field
+            label="Qué hiciste"
+            value={contribForm.contribution}
+            onChangeText={(t) => setContribForm({ ...contribForm, contribution: t })}
+            placeholder="Implementé la API de inscripciones."
+            multiline
+          />
+          <Field
+            label="Tu rol"
+            value={contribForm.role}
+            onChangeText={(t) => setContribForm({ ...contribForm, role: t })}
+            placeholder="Backend"
+          />
+
+          <Text style={styles.label}>Tecnologías que usaste tú</Text>
+          <Muted>
+            Solo las que tocaste. Que el proyecto use cuatro no significa que las hayas
+            usado todas.
+          </Muted>
+          <View style={styles.chips}>
+            {catalogoSkills.slice(0, 30).map((s) => {
+              const on = contribForm.skillIds.includes(s.id);
+              return (
+                <Chip
+                  key={s.id}
+                  label={s.name}
+                  on={on}
+                  onPress={() => setContribForm({
+                    ...contribForm,
+                    skillIds: on
+                      ? contribForm.skillIds.filter((x: string) => x !== s.id)
+                      : [...contribForm.skillIds, s.id],
+                  })}
+                />
+              );
+            })}
+          </View>
+
+          <Button
+            icon="check"
+            title={miContribucion.contributionConfirmed
+              ? 'Guardar y reconfirmar'
+              : 'Confirmar mi contribución'}
+            loading={guardandoContrib}
+            onPress={confirmarContribucion}
+          />
+        </Card>
+      )}
+
       {/* ---------------- Integrantes ---------------- */}
       <Card title={`Integrantes (${members.length})`}>
         {members.length === 0 ? (
@@ -700,4 +814,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
   },
+  // §33: el aviso de que la contribucion sin confirmar no cuenta.
+  avisoContribucion: {
+    backgroundColor: '#fdf6ea',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.amber,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  avisoTexto: { fontSize: 12, color: colors.gray700, lineHeight: 17 },
 });

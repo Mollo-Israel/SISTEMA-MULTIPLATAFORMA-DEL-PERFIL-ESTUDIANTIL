@@ -293,7 +293,10 @@ export class AffinityEngineService implements AffinityRecalculationPort {
     // tanto, no influyen en la afinidad.
     const owned = await this.projects.find({ where: { createdByProfileId: studentProfileId } });
 
-    const memberships = await this.projectMembers.find({ where: { userId: profile.userId } });
+    const memberships = await this.projectMembers.find({
+      where: { userId: profile.userId },
+      relations: { memberSkills: { skill: true } },
+    });
     const ownedIds = new Set(owned.map((p) => p.id));
     const collaborativeIds = memberships
       .map((m) => m.projectId)
@@ -302,28 +305,63 @@ export class AffinityEngineService implements AffinityRecalculationPort {
       ? await this.projects.find({ where: { id: In(collaborativeIds) } })
       : [];
 
+    const membershipByProject = new Map(memberships.map((m) => [m.projectId, m]));
+
     const areasByProject = new Map<string, string[]>();
     for (const project of [...owned, ...collaborative]) {
       const isOwned = ownedIds.has(project.id);
+      const membership = membershipByProject.get(project.id);
+
+      /*
+       * §33: mientras el integrante no confirme su contribucion, lo que figura
+       * en ella lo escribio otra persona. Atribuirle experiencia por eso seria
+       * exactamente lo que §33 prohibe: que el creador se la adjudique
+       * unilateralmente.
+       *
+       * El proyecto propio no necesita confirmacion: lo declaro su autor.
+       */
+      if (!isOwned && membership && !membership.contributionConfirmedAt) {
+        continue;
+      }
+
       const code = isOwned
         ? AffinityWeightCode.PROJECT_OWNED
         : AffinityWeightCode.PROJECT_MEMBER;
       const prefix = isOwned ? 'Proyecto propio' : 'Proyecto como integrante';
 
-      // El area declarada manda. Si no hay, se deduce por coincidencia entre
-      // las tecnologias del proyecto y las etiquetas del area (RN-14).
+      /*
+       * §34: la afinidad individual usa principalmente las tecnologias de la
+       * contribucion propia.
+       *
+       * Antes se usaban siempre las del proyecto, de modo que entrar en uno de
+       * React, NestJS, PostgreSQL y Docker atribuia las cuatro a quien solo
+       * habia tocado React. Ahora, si el integrante declaro las suyas, mandan
+       * esas; si no declaro ninguna, se cae a las del proyecto, que es lo unico
+       * que se sabe.
+       */
+      const tecnologiasPropias = (membership?.memberSkills ?? [])
+        .map((s) => s.skill?.name)
+        .filter((n): n is string => !!n);
+      const tecnologias = !isOwned && tecnologiasPropias.length > 0
+        ? tecnologiasPropias
+        : project.technologies;
+
       const declared = !!project.academicAreaId;
       const projectAreas = declared
         ? [project.academicAreaId as string]
-        : this.inferAreasByTech(project.technologies, areas);
+        : this.inferAreasByTech(tecnologias, areas);
       areasByProject.set(project.id, projectAreas);
+
+      const detalle = !isOwned && tecnologiasPropias.length > 0
+        ? ` (${tecnologiasPropias.slice(0, 4).join(', ')})`
+        : '';
 
       projectAreas.forEach((areaId) =>
         add(
           areaId,
           code,
           declared ? AffinityMatchType.DECLARED : AffinityMatchType.TAG,
-          `${prefix}: ${project.title}`,
+          `${prefix}: ${project.title}${detalle}`,
           project.id,
         ),
       );

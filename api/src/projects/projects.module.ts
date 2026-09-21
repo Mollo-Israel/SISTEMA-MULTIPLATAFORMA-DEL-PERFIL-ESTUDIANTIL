@@ -5,6 +5,17 @@ import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectInvitation } from '../entities/project-invitation.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
+import { ProjectMemberSkill } from '../entities/project-member-skill.entity';
+import {
+  ProjectEvent,
+  ProjectLinkCheck,
+  ProjectRepositoryCheck,
+} from '../entities/project-check.entity';
+import { Skill } from '../entities/skill.entity';
+import { StorageModule } from '../storage/storage.module';
+import { ProjectEventsService } from './project-events.service';
+import { ProjectBackingService } from './project-backing.service';
+import { RepositoryInspectorService } from './repository-inspector.service';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { User } from '../entities/user.entity';
@@ -30,12 +41,24 @@ import { ProjectsController } from './projects.controller';
       StudentProfile,
       AcademicArea,
       User,
+      ProjectMemberSkill,
+      ProjectRepositoryCheck,
+      ProjectLinkCheck,
+      ProjectEvent,
+      Skill,
     ]),
     AffinityRecalcModule,
     AccessModule,
+    StorageModule,
   ],
   controllers: [ProjectsController],
-  providers: [ProjectsService, ProjectMembersService],
-  exports: [ProjectsService, ProjectMembersService],
+  providers: [
+    ProjectsService,
+    ProjectMembersService,
+    ProjectEventsService,
+    ProjectBackingService,
+    RepositoryInspectorService,
+  ],
+  exports: [ProjectsService, ProjectMembersService, ProjectEventsService, ProjectBackingService],
 })
 export class ProjectsModule {}

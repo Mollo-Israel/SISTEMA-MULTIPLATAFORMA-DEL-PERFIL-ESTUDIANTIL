@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -20,6 +21,10 @@ import { ProjectMembersService } from './project-members.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddEvidenceDto } from './dto/add-evidence.dto';
+import {
+  ConfirmContributionDto,
+  ProposeContributionDto,
+} from './dto/contribution.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { InviteMemberDto, RespondInvitationDto } from './dto/invite-member.dto';
 
@@ -106,6 +111,97 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Detalle de un proyecto, según visibilidad y alcance.' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.projectsService.findOneForUser(user, id);
+  }
+
+  // ---------------- §33 y §34 · Contribución por integrante ----------------
+
+  @Get(':id/members/detailed')
+  @Roles(RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Integrantes con su contribución y sus tecnologías (§33, §34).',
+    description:
+      'Indica si cada contribución fue confirmada por su propio autor. Mientras no lo '
+      + 'esté, lo que figura lo escribió otra persona y no alimenta su perfil.',
+  })
+  listMembersDetailed(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.projectsService.listMembersDetailed(user, id);
+  }
+
+  @Put(':id/my-contribution')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Confirmar mi contribución y las tecnologías que usé (§33).',
+    description:
+      'Solo el propio integrante. §33 prohíbe que el responsable atribuya '
+      + 'unilateralmente experiencia definitiva a otro estudiante.',
+  })
+  confirmMyContribution(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConfirmContributionDto,
+  ) {
+    return this.projectsService.confirmMyContribution(user.userId, id, dto);
+  }
+
+  @Patch(':id/members/:memberId/contribution')
+  @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Proponer la contribución de un integrante (§33).',
+    description:
+      'El responsable propone; no atribuye. Guardar esto retira la confirmación '
+      + 'anterior para que el integrante vuelva a revisarla.',
+  })
+  proposeContribution(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Body() dto: ProposeContributionDto,
+  ) {
+    return this.projectsService.proposeContribution(user, id, memberId, dto);
+  }
+
+  // ---------------- §36 a §41 · Respaldo, fuentes externas y bitácora ----------------
+
+  @Get(':id/checks')
+  @Roles(RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Nivel de respaldo y estado de repositorio y demo (§36, §37, §39).',
+    description:
+      'Las tecnologías detectadas indican indicios compatibles en fuentes públicas. '
+      + 'No afirman dominio ni autoría (§38).',
+  })
+  externalChecks(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.projectsService.externalChecks(user, id);
+  }
+
+  @Post(':id/checks/recheck')
+  @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Volver a comprobar repositorio y demo. Solo el responsable.' })
+  recheck(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.projectsService.recheckExternalSources(user, id);
+  }
+
+  @Get(':id/timeline')
+  @Roles(RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Bitácora del proyecto (§41).',
+    description: 'Eventos estructurados: quién hizo qué y cuándo. No se analizan conversaciones.',
+  })
+  timeline(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.projectsService.timeline(user, id, limit ? Number(limit) : undefined);
   }
 
   // ---------------- RF14 · Integrantes e invitaciones del proyecto ----------------

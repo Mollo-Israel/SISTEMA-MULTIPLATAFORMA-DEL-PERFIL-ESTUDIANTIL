@@ -6,7 +6,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RolNombre } from '@perfil/shared';
+import { ProjectEventType } from '@perfil/shared';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
+import { ProjectEventsService } from '../projects/project-events.service';
+import { ProjectBackingService } from '../projects/project-backing.service';
 import { Project } from '../entities/project.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ProjectsService } from '../projects/projects.service';
@@ -34,6 +37,8 @@ export class ProjectFeedbackService {
     private readonly feedback: Repository<ProjectFeedback>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     private readonly projectsService: ProjectsService,
+    private readonly events: ProjectEventsService,
+    private readonly backing: ProjectBackingService,
   ) {}
 
   async create(
@@ -52,6 +57,19 @@ export class ProjectFeedbackService {
         comment: dto.comment,
       }),
     );
+
+    // §40: la retroalimentación aumenta el nivel de respaldo, queda
+    // asociada al docente y genera evento. No es nota ni calificación: que
+    // un proyecto llegue a REVIEWED significa que alguien con criterio lo
+    // miró, no que esté aprobado.
+    await this.events.record({
+      projectId,
+      actorUserId: user.userId,
+      eventType: ProjectEventType.FEEDBACK_ADDED,
+      metadata: { longitud: dto.comment.length },
+    });
+    await this.backing.recalculate(projectId, user.userId);
+
     return this.findOneOrFail(saved.id);
   }
 

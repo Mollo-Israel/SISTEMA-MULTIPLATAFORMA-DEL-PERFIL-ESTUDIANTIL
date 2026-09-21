@@ -119,6 +119,24 @@ export const projectService = {
   members: (id: string) => api.get<any[]>(`/projects/${id}/members`).then((r) => r.data),
   removeMember: (id: string, memberId: string) =>
     api.delete(`/projects/${id}/members/${memberId}`).then((r) => r.data),
+
+  /** Integrantes con su contribucion y sus tecnologias (§33, §34). */
+  membersDetailed: (id: string) =>
+    api.get<any[]>(`/projects/${id}/members/detailed`).then((r) => r.data),
+  /**
+   * Confirmar la contribucion propia (§33).
+   *
+   * Sin esto, quien acepta una invitacion no obtiene nada del proyecto:
+   * la contribucion que escribio otra persona no alimenta su perfil.
+   */
+  confirmMyContribution: (
+    id: string,
+    data: { contribution?: string; role?: string; skillIds?: string[] },
+  ) => api.put<any>(`/projects/${id}/my-contribution`, data).then((r) => r.data),
+  /** Nivel de respaldo y estado de repositorio y demo (§36, §37, §39). */
+  checks: (id: string) => api.get<any>(`/projects/${id}/checks`).then((r) => r.data),
+  /** Bitacora del proyecto (§41). */
+  timeline: (id: string) => api.get<any[]>(`/projects/${id}/timeline`).then((r) => r.data),
 };
 
 /** Invitaciones a integrar proyectos (RF14). */

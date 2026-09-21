@@ -13,3 +13,4 @@ export * from './enums/recommendation.enum';
 export * from './enums/identity.enum';
 export * from './enums/onboarding.enum';
 export * from './enums/validation.enum';
+export * from './enums/project-backing.enum';
