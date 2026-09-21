@@ -47,3 +47,6 @@ mobile/dist/
 # Respaldo del documento de grado (no versionar: 22 MB)
 docs/respaldo-documento/
 *.docx
+
+# Respaldos lógicos de base de datos (no versionados)
+backups/
