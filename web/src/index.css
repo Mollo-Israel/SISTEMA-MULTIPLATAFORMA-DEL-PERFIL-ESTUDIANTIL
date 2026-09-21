@@ -756,3 +756,94 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
   border-radius: 10px; padding: 0.7rem 0.8rem; margin: 0.6rem 0;
 }
 .token-box code { font-size: 0.78rem; word-break: break-all; flex: 1; min-width: 200px; color: var(--bordo); }
+
+/* ------------------------------------------------------------------ */
+/* Cuestionario de orientación (§16)                                   */
+/* ------------------------------------------------------------------ */
+
+.onb-pregunta { font-size: 1.12rem; font-weight: 700; color: var(--gray-800, #2a1116); margin: 1rem 0 0.2rem; line-height: 1.4; }
+.onb-ayuda { margin: 0 0 0.9rem; font-size: 0.8rem; }
+
+.onb-opciones { display: grid; gap: 0.5rem; }
+.onb-opcion {
+  display: flex; align-items: center; gap: 0.65rem; text-align: left; cursor: pointer;
+  background: var(--gray-50, #f7f4f5); border: 1px solid transparent; border-radius: 12px;
+  padding: 0.8rem 0.9rem; font-size: 0.92rem; color: var(--gray-800, #2a1116);
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+.onb-opcion:hover { border-color: var(--bordo-200, #edd3d8); transform: translateX(2px); }
+.onb-opcion.on { border-color: var(--bordo); background: #fff; font-weight: 600; }
+.onb-opcion .chk {
+  flex: 0 0 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--gray-300, #c8cdd4);
+  display: flex; align-items: center; justify-content: center; color: #fff;
+}
+.onb-opcion.on .chk { background: var(--bordo); border-color: var(--bordo); }
+
+.onb-sugeridas { display: grid; gap: 0.5rem; }
+.onb-sugerida {
+  display: flex; align-items: center; gap: 0.7rem; text-align: left; cursor: pointer; width: 100%;
+  background: var(--gray-50, #f7f4f5); border: 1px solid transparent; border-radius: 12px;
+  padding: 0.75rem 0.9rem; transition: border-color 0.15s, background 0.15s;
+}
+.onb-sugerida:hover { border-color: var(--bordo-200, #edd3d8); }
+.onb-sugerida.on { border-color: var(--bordo); background: #fff; }
+.onb-sugerida.off { opacity: 0.6; cursor: default; }
+.onb-sugerida .pos {
+  flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--bordo-100, #f7e4e8);
+  color: var(--bordo); font-size: 0.78rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.onb-sugerida .nom { flex: 1; font-size: 0.92rem; color: var(--gray-800, #2a1116); }
+.onb-sugerida .chk { color: var(--green); display: flex; align-items: center; }
+
+/* ------------------------------------------------------------------ */
+/* Privacidad (§44)                                                    */
+/* ------------------------------------------------------------------ */
+
+.priv-switch { display: flex; align-items: flex-start; gap: 0.8rem; cursor: pointer; }
+.priv-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.priv-switch .track {
+  flex: 0 0 44px; height: 24px; border-radius: 999px; background: var(--gray-300, #c8cdd4);
+  position: relative; transition: background 0.18s; margin-top: 0.1rem;
+}
+.priv-switch .thumb {
+  position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: transform 0.18s; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.priv-switch input:checked + .track { background: var(--green); }
+.priv-switch input:checked + .track .thumb { transform: translateX(20px); }
+.priv-switch strong { display: block; font-size: 0.92rem; color: var(--gray-800, #2a1116); }
+.priv-switch .muted { display: block; font-size: 0.79rem; margin-top: 0.15rem; }
+
+.priv-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem; }
+.priv-campo {
+  display: flex; align-items: center; gap: 0.6rem; cursor: pointer;
+  background: var(--gray-50, #f7f4f5); border: 1px solid transparent; border-radius: 10px;
+  padding: 0.65rem 0.75rem; transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+}
+.priv-campo input { position: absolute; opacity: 0; width: 0; height: 0; }
+.priv-campo:hover { border-color: var(--bordo-200, #edd3d8); }
+.priv-campo.on { border-color: var(--bordo); background: #fff; }
+.priv-campo.on .ic { color: var(--bordo); }
+.priv-campo .ic { color: var(--gray-500, #7b828c); display: flex; }
+.priv-campo .txt { font-size: 0.86rem; color: var(--gray-800, #2a1116); }
+/* Atenuado cuando el perfil compartible esta apagado: sigue configurable,
+   pero se ve que ahora mismo no tiene efecto. */
+.priv-campo.apagado { opacity: 0.55; }
+
+.priv-nunca { list-style: none; padding: 0; margin: 0 0 0.9rem; display: grid; gap: 0.35rem; }
+.priv-nunca li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--gray-700, #3f444c); }
+.priv-nunca .ic { color: var(--gray-500, #7b828c); display: flex; }
+
+/* Datos institucionales, solo lectura (§17.1). El borde discontinuo dice
+   "esto no se edita" sin necesidad de un candado en cada campo. */
+.inst-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; }
+.inst-dato {
+  background: var(--gray-50); border: 1px dashed var(--gray-300);
+  border-radius: 10px; padding: 0.7rem 0.8rem;
+}
+.inst-dato .lbl {
+  display: flex; align-items: center; gap: 0.3rem; font-size: 0.72rem;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500);
+}
+.inst-dato .val { display: block; margin-top: 0.25rem; font-size: 0.95rem; font-weight: 600; color: var(--gray-900); }

@@ -24,11 +24,13 @@ export const NAV: Record<string, NavGroup[]> = {
       items: [
         { to: '/student', label: 'Inicio' },
         { to: '/student/profile', label: 'Perfil dinámico' },
+        { to: '/student/onboarding', label: 'Orientación académica' },
         { to: '/student/interests', label: 'Intereses y habilidades' },
         { to: '/student/projects', label: 'Proyectos' },
         { to: '/student/evidences', label: 'Evidencias y certificados' },
         { to: '/student/affinity', label: 'Áreas de afinidad' },
         { to: '/student/recommendations', label: 'Recomendaciones' },
+        { to: '/student/privacy', label: 'Privacidad' },
       ],
     },
     {

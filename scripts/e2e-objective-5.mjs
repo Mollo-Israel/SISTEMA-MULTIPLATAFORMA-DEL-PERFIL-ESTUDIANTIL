@@ -153,9 +153,14 @@ async function prepararActores(ctx) {
       email: studentEmail(key),
     });
     const token = cuenta.accessToken;
+    // §17.1: el semestre es dato institucional y lo fija el administrador.
     const profile = await req('POST', '/profiles/me', {
       token,
-      body: { semester, bio: `Estudiante de ${semester}o semestre.` },
+      body: { bio: 'Estudiante de Ingenieria en Sistemas.' },
+    });
+    await req('PATCH', `/profiles/${profile.data?.id}/institutional-data`, {
+      token: ctx.admin,
+      body: { semester },
     });
     return { token, profileId: profile.data?.id, userId: cuenta.userId, name: `${first} ${last}` };
   };

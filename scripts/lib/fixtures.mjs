@@ -100,7 +100,36 @@ export async function provisionAndActivate(adminToken, { firstName, lastName, em
   };
 }
 
-/** Atajo para el caso más frecuente: un estudiante listo para operar. */
+/**
+ * Crea el perfil del estudiante y deja que el administrador fije su semestre.
+ *
+ * Reproduce el reparto que fija §17.1: la biografía es del estudiante, el
+ * semestre es institucional. Devuelve el perfil ya con el semestre puesto.
+ */
+export async function crearPerfilConSemestre(studentToken, adminToken, { semester, bio } = {}) {
+  const creado = await req('POST', '/profiles/me', {
+    token: studentToken,
+    body: bio === undefined ? {} : { bio },
+  });
+  const profileId = creado.data?.id ?? null;
+  if (semester !== undefined && profileId) {
+    await req('PATCH', `/profiles/${profileId}/institutional-data`, {
+      token: adminToken,
+      body: { semester },
+    });
+  }
+  const actual = await req('GET', '/profiles/me', { token: studentToken });
+  return { status: creado.status, data: actual.data ?? creado.data };
+}
+
+/**
+ * Atajo para el caso más frecuente: un estudiante listo para operar.
+ *
+ * Desde el BATCH 2 el semestre es dato institucional (§17.1): lo fija el
+ * administrador o llega por padrón, y el estudiante no puede tocarlo. Por eso
+ * aquí el perfil lo crea el estudiante —la biografía es suya— pero el semestre
+ * lo pone el administrador, que es como ocurre en el sistema real.
+ */
 export async function provisionStudent(adminToken, { firstName, lastName, email, semester }) {
   const actor = await provisionAndActivate(adminToken, {
     firstName,
@@ -109,15 +138,26 @@ export async function provisionStudent(adminToken, { firstName, lastName, email,
     role: 'STUDENT',
   });
 
-  // El perfil lo crea el propio estudiante: el provisionamiento solo aporta la
-  // identidad institucional.
-  if (semester !== undefined) {
-    await req('POST', '/profiles/me', {
-      token: actor.token,
-      body: { semester, bio: `Estudiante de ${semester}º semestre.` },
-    });
-  }
+  await req('POST', '/profiles/me', {
+    token: actor.token,
+    body: { bio: `Estudiante de Ingeniería en Sistemas.` },
+  });
 
   const profile = await req('GET', '/profiles/me', { token: actor.token });
-  return { ...actor, profileId: profile.data?.id ?? null };
+  const profileId = profile.data?.id ?? null;
+
+  if (semester !== undefined && profileId) {
+    const asignado = await req('PATCH', `/profiles/${profileId}/institutional-data`, {
+      token: adminToken,
+      body: { semester },
+    });
+    if (asignado.status !== 200) {
+      throw new Error(
+        `No se pudo fijar el semestre de ${email} (${asignado.status}): `
+        + JSON.stringify(asignado.data),
+      );
+    }
+  }
+
+  return { ...actor, profileId };
 }

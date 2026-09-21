@@ -1,5 +1,4 @@
 import {
-  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -10,12 +9,12 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
+import { SkillLevel } from '@perfil/shared';
 import { StudentProfile } from './student-profile.entity';
 import { Skill } from './skill.entity';
 
 @Entity('student_skills')
 @Unique('uq_student_skill', ['studentProfileId', 'skillId'])
-@Check('chk_student_skill_level', 'level >= 1 AND level <= 5')
 export class StudentSkill {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -42,8 +41,19 @@ export class StudentSkill {
   @JoinColumn({ name: 'skill_id' })
   skill: Skill;
 
-  @Column({ type: 'smallint', default: 1 })
-  level: number;
+  /**
+   * Autoevaluacion en tres niveles (§21.1).
+   *
+   * Era una escala numerica de 1 a 5. Pedir esa precision a una
+   * autoevaluacion sugiere una exactitud que no tiene: nadie sabe si esta
+   * en un 3 o en un 4 de si mismo.
+   *
+   * Sea cual sea el valor, esto es **autodeclarado**. La experiencia
+   * respaldada por proyectos, actividades o certificados se cuenta aparte
+   * (§21.2) y nunca se mezcla con esto.
+   */
+  @Column({ type: 'enum', enum: SkillLevel, default: SkillLevel.BASIC })
+  level: SkillLevel;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -7,7 +7,7 @@ import {
   SkeletonCards,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
-import { LevelPicker } from '../../components/LevelPicker';
+import { LevelPicker, type NivelElegido, type SkillLevel } from '../../components/LevelPicker';
 import { colors } from '../../theme';
 
 const normalize = (s: string) =>
@@ -16,8 +16,9 @@ const normalize = (s: string) =>
 export default function SkillsScreen() {
   const [loading, setLoading] = useState(true);
   const [skills, setSkills] = useState<any[]>([]);
-  const [values, setValues] = useState<Record<string, number>>({});
+  const [values, setValues] = useState<Record<string, NivelElegido>>({});
   const [query, setQuery] = useState('');
+  const [resumen, setResumen] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -26,6 +27,7 @@ export default function SkillsScreen() {
       .then(([sk, s]) => {
         setSkills(sk);
         if (s) setValues(Object.fromEntries(s.skills.map((x: any) => [x.skillId, x.level])));
+        if (s) setResumen(s.skills ?? []);
       })
       .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
@@ -40,13 +42,21 @@ export default function SkillsScreen() {
     );
   }, [skills, query]);
 
-  const declared = Object.values(values).filter((l) => l > 0).length;
+  const declared = Object.values(values).filter((l) => l !== '').length;
+
+  /** Experiencia que respalda cada habilidad (§21.2), por id. */
+  const respaldoPorSkill = useMemo(
+    () => Object.fromEntries(resumen.map((x: any) => [x.skillId, x.backing?.total ?? 0])),
+    [resumen],
+  );
 
   const save = async () => {
     setSaving(true);
     try {
       await profileService.setSkills(
-        Object.entries(values).filter(([, l]) => l > 0).map(([skillId, level]) => ({ skillId, level })),
+        Object.entries(values)
+          .filter((e): e is [string, SkillLevel] => e[1] !== '')
+          .map(([skillId, level]) => ({ skillId, level })),
       );
       toast.success(
         'Habilidades guardadas.',
@@ -70,8 +80,8 @@ export default function SkillsScreen() {
   return (
     <Screen>
       <PageHeader
-        title="Habilidades declaradas"
-        description="Nivel de 1 a 5 (— para ninguno). El área de cada habilidad es la que recibe puntaje en tu afinidad."
+        title="Habilidades autodeclaradas"
+        description="Básico, intermedio o avanzado. Es tu propia valoración: aparte se cuenta la experiencia que la respalda."
       />
 
       <SearchInput
@@ -95,7 +105,12 @@ export default function SkillsScreen() {
           visible.map((s) => (
             <View key={s.id} style={styles.row}>
               <Text style={styles.name}>{s.name} <Text style={styles.area}>· {s.academicArea?.name ?? 'General'}</Text></Text>
-              <LevelPicker value={values[s.id] ?? 0} onChange={(v) => setValues({ ...values, [s.id]: v })} />
+              <LevelPicker value={values[s.id] ?? ''} onChange={(v) => setValues({ ...values, [s.id]: v })} />
+              {respaldoPorSkill[s.id] > 0 && (
+                <Text style={styles.respaldo}>
+                  {respaldoPorSkill[s.id]} registro(s) de experiencia respaldan esta habilidad
+                </Text>
+              )}
             </View>
           ))
         )}
@@ -110,4 +125,5 @@ const styles = StyleSheet.create({
   row: { marginBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.gray100, paddingBottom: 10 },
   name: { fontWeight: '600', color: colors.gray900, marginBottom: 6 },
   area: { fontWeight: '400', color: colors.gray500, fontSize: 12 },
+  respaldo: { marginTop: 6, fontSize: 11, color: colors.green },
 });

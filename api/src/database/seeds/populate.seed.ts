@@ -9,7 +9,7 @@ import * as bcrypt from 'bcryptjs';
 import {
   ActivityCategory as ActivityCategoryCode, ActivityModality, ActivityStatus, ActivityType,
   ConstancyStatus, EvidenceType, GamificationTrigger, ProjectInvitationStatus,
-  ProjectStatus, ProjectVisibility, RegistrationStatus, RolNombre, UserStatus,
+  ProjectStatus, ProjectVisibility, RegistrationStatus, RolNombre, SkillLevel, UserStatus,
 } from '@perfil/shared';
 import { AppModule } from '../../app.module';
 import { AffinityEngineService } from '../../affinity-recalc/affinity.engine';
@@ -38,6 +38,9 @@ import { seedRoles } from './roles.seed';
 import { seedAcademicAreas } from './academic-areas.seed';
 import { seedSkills } from './skills.seed';
 import { seedAdminUser } from './users.seed';
+
+/** Niveles con los que se siembran las habilidades, de mayor a menor (§21.1). */
+const SEEDED_SKILL_LEVELS = [SkillLevel.ADVANCED, SkillLevel.INTERMEDIATE, SkillLevel.BASIC];
 
 const PWD = 'Univalle2026*';
 const ascii = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -184,7 +187,15 @@ async function run() {
     const rows = names
       .map((n) => skillByName.get(n))
       .filter((s): s is Skill => !!s)
-      .map((s, idx) => studentSkillRepo.create({ studentProfileId: profile!.id, skillId: s.id, level: 5 - idx }));
+      // La primera habilidad del area principal se declara avanzada y el resto
+      // va bajando: una autoevaluacion sembrada plana no permitiria comprobar
+      // que el motor pondera distinto segun el nivel (§21.1).
+      .map((s, idx) =>
+        studentSkillRepo.create({
+          studentProfileId: profile!.id,
+          skillId: s.id,
+          level: SEEDED_SKILL_LEVELS[Math.min(idx, SEEDED_SKILL_LEVELS.length - 1)],
+        }));
     if (rows.length) await studentSkillRepo.save(rows);
   }
 

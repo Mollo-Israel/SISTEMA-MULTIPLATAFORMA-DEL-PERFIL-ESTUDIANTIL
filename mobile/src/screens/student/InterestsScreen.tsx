@@ -14,7 +14,7 @@ import {
   SkeletonCards,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
-import { LevelPicker } from '../../components/LevelPicker';
+import { PriorityPicker } from '../../components/PriorityPicker';
 import { colors } from '../../theme';
 
 const normalize = (s: string) =>
@@ -124,7 +124,7 @@ export default function InterestsScreen() {
           visibleAreas.map((a) => (
             <View key={a.id} style={styles.row}>
               <Text style={styles.name}>{a.name}</Text>
-              <LevelPicker
+              <PriorityPicker
                 value={values[a.id] ?? 0}
                 onChange={(v) => setValues({ ...values, [a.id]: v })}
               />

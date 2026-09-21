@@ -510,7 +510,11 @@ async function main() {
   };
 
   const estudiante = await provisionar('estBase', 'Base', 'Estudiante', 'STUDENT');
-  await req('POST', '/profiles/me', { token: estudiante.token, body: { semester: 4 } });
+  const perfilBase = await req('POST', '/profiles/me', { token: estudiante.token, body: {} });
+  await req('PATCH', `/profiles/${perfilBase.data?.id}/institutional-data`, {
+    token: admin,
+    body: { semester: 4 },
+  });
 
   const docenteSin = await provisionar('docSin', 'Sin', 'Alcance', 'TEACHER');
   const docenteCon = await provisionar('docCon', 'Con', 'Alcance', 'TEACHER');

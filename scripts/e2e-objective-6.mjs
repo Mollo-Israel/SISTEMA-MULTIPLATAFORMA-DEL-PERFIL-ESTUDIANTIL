@@ -186,9 +186,14 @@ async function prepararActores(ctx) {
       email: studentEmail(key),
     });
     const token = cuenta.accessToken;
+    // §17.1: el semestre lo fija el administrador, no el estudiante.
     const profile = await req('POST', '/profiles/me', {
       token,
-      body: { semester, bio: `Estudiante de ${semester}o semestre.` },
+      body: { bio: 'Estudiante de Ingenieria en Sistemas.' },
+    });
+    await req('PATCH', `/profiles/${profile.data?.id}/institutional-data`, {
+      token: ctx.admin,
+      body: { semester },
     });
     return { token, profileId: profile.data?.id, name: `${first} ${last}` };
   };
@@ -273,43 +278,43 @@ async function rf17Calculo(ctx) {
     `senales ${s?.signalsCount}`,
   );
 
-  section('Habilidad declarada (peso segun nivel)');
+  section('Habilidad autodeclarada (peso segun nivel, §21.1)');
   await req('PUT', '/profiles/me/skills', {
     token: A.token,
-    body: { items: [{ skillId: skill.id, level: 5 }] },
+    body: { items: [{ skillId: skill.id, level: 'advanced' }] },
   });
   s = await summaryOf(A.token);
   check(
     scoreOf(s, areaPrincipal.id) === 5,
-    '17.8 Una habilidad de nivel 5 aporta 3 puntos (2 + 3 = 5)',
+    '17.8 Una habilidad avanzada aporta 3 puntos (2 + 3 = 5)',
     `puntaje ${scoreOf(s, areaPrincipal.id)}`,
   );
 
   await req('PUT', '/profiles/me/skills', {
     token: A.token,
-    body: { items: [{ skillId: skill.id, level: 1 }] },
+    body: { items: [{ skillId: skill.id, level: 'basic' }] },
   });
   s = await summaryOf(A.token);
   check(
     scoreOf(s, areaPrincipal.id) === 3,
-    '17.9 La misma habilidad en nivel 1 aporta solo 1 punto (2 + 1 = 3)',
+    '17.9 La misma habilidad en nivel basico aporta solo 1 punto (2 + 1 = 3)',
     `puntaje ${scoreOf(s, areaPrincipal.id)}`,
   );
   // Se restaura el nivel alto para el resto del escenario.
   await req('PUT', '/profiles/me/skills', {
     token: A.token,
-    body: { items: [{ skillId: skill.id, level: 5 }] },
+    body: { items: [{ skillId: skill.id, level: 'advanced' }] },
   });
 
-  section('Area en la que desea mejorar (peso 1)');
+  section('Area en la que desea mejorar (0 puntos, §20)');
   await req('PATCH', '/profiles/me', {
     token: A.token,
     body: { improvementAreaIds: [areaPrincipal.id] },
   });
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 6,
-    '17.10 El area de mejora aporta 1 punto (5 + 1 = 6)',
+    scoreOf(s, areaPrincipal.id) === 5,
+    '17.10 El area de mejora NO suma afinidad: querer aprender algo no es tener afinidad (§20)',
     `puntaje ${scoreOf(s, areaPrincipal.id)}`,
   );
 
@@ -330,8 +335,8 @@ async function rf17Calculo(ctx) {
 
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 11,
-    '17.12 Un proyecto propio aporta 5 puntos (6 + 5 = 11)',
+    scoreOf(s, areaPrincipal.id) === 10,
+    '17.12 Un proyecto propio aporta 5 puntos (5 + 5 = 10)',
     `puntaje ${scoreOf(s, areaPrincipal.id)}`,
   );
 
@@ -349,8 +354,8 @@ async function rf17Calculo(ctx) {
 
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 13,
-    '17.14 Una evidencia aporta 2 puntos (11 + 2 = 13)',
+    scoreOf(s, areaPrincipal.id) === 12,
+    '17.14 Una evidencia aporta 2 puntos (10 + 2 = 12)',
     `puntaje ${scoreOf(s, areaPrincipal.id)}`,
   );
 
@@ -370,8 +375,8 @@ async function rf17Calculo(ctx) {
 
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 17,
-    '17.16 Un certificado externo aporta 4 puntos (13 + 4 = 17)',
+    scoreOf(s, areaPrincipal.id) === 16,
+    '17.16 Un certificado externo aporta 4 puntos (12 + 4 = 16)',
     `puntaje ${scoreOf(s, areaPrincipal.id)}`,
   );
   check(
@@ -614,7 +619,11 @@ async function rf17Fallo(ctx) {
     email: studentEmail('estVacio'),
   });
   const vacio = reg.accessToken;
-  await req('POST', '/profiles/me', { token: vacio, body: { semester: 2 } });
+  const perfilVacio = await req('POST', '/profiles/me', { token: vacio, body: {} });
+  await req('PATCH', `/profiles/${perfilVacio.data?.id}/institutional-data`, {
+    token: ctx.admin,
+    body: { semester: 2 },
+  });
 
   const s = await summaryOf(vacio);
   check(

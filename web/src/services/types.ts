@@ -138,15 +138,133 @@ export interface Skill {
   isActive: boolean;
 }
 
+/** Autoevaluación en tres niveles (§21.1). Siempre autodeclarada. */
+export type SkillLevel = 'basic' | 'intermediate' | 'advanced';
+
+export const SKILL_LEVEL_LABEL: Record<SkillLevel, string> = {
+  basic: 'Básico',
+  intermediate: 'Intermedio',
+  advanced: 'Avanzado',
+};
+
+/** Disponibilidad declarada para colaborar (§17.2). */
+export type AvailabilityStatus = 'looking' | 'open' | 'busy' | 'unspecified';
+
+export const AVAILABILITY_LABEL: Record<AvailabilityStatus, string> = {
+  looking: 'Busco equipo',
+  open: 'Abierto a propuestas',
+  busy: 'Sin disponibilidad',
+  unspecified: 'Sin declarar',
+};
+
+export type CollaborationMode = 'remote' | 'in_person' | 'hybrid';
+
+export const COLLABORATION_MODE_LABEL: Record<CollaborationMode, string> = {
+  remote: 'Remoto',
+  in_person: 'Presencial',
+  hybrid: 'Híbrido',
+};
+
+export type CollaborationInterest =
+  | 'projects' | 'research' | 'competitions' | 'study_groups' | 'volunteering';
+
+export const COLLABORATION_INTEREST_LABEL: Record<CollaborationInterest, string> = {
+  projects: 'Proyectos',
+  research: 'Investigación',
+  competitions: 'Competencias',
+  study_groups: 'Grupos de estudio',
+  volunteering: 'Voluntariado',
+};
+
+export interface CollaborationPreferences {
+  modes: CollaborationMode[];
+  interests: CollaborationInterest[];
+  hoursPerWeek: number | null;
+  notes: string | null;
+}
+
 export interface StudentProfile {
   id: string;
   userId: string;
+  /** Institucional: llega del padrón y el estudiante no lo edita (§17.1). */
   universityCode: string | null;
+  /** Institucional: lo fija el administrador o el padrón (§17.1). */
   semester: number | null;
   bio: string | null;
   status: string;
   completionPercentage: number;
   improvementAreaIds: string[] | null;
+  availability: AvailabilityStatus;
+  collaborationPreferences: CollaborationPreferences | null;
+  peerDiscoverable: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cuestionario de orientación (§16)                                   */
+/* ------------------------------------------------------------------ */
+
+export interface OnboardingOption {
+  code: string;
+  label: string;
+}
+
+export interface OnboardingQuestion {
+  code: string;
+  text: string;
+  help: string | null;
+  type: 'single' | 'multiple';
+  maxChoices: number | null;
+  options: OnboardingOption[];
+}
+
+export interface Questionnaire {
+  version: number;
+  totalQuestions: number;
+  questions: OnboardingQuestion[];
+}
+
+export interface SuggestedArea {
+  academicAreaId: string;
+  name: string;
+  score: number;
+}
+
+export interface OnboardingRun {
+  id: string;
+  version: number;
+  status: 'completed' | 'confirmed' | 'superseded';
+  suggestedAreas: SuggestedArea[];
+  confirmedAreaIds: string[];
+  answers: { questionCode: string; optionCodes: string[] }[];
+  createdAt: string;
+  confirmedAt: string | null;
+  message?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Privacidad (§44)                                                    */
+/* ------------------------------------------------------------------ */
+
+export type PublicProfileField =
+  | 'bio' | 'areas' | 'affinities' | 'support_level'
+  | 'projects' | 'skills' | 'availability' | 'trajectory';
+
+export const PUBLIC_FIELD_LABEL: Record<PublicProfileField, string> = {
+  bio: 'Mi descripción',
+  areas: 'Mis áreas principales',
+  affinities: 'Mis afinidades calculadas',
+  support_level: 'Mi nivel de respaldo',
+  projects: 'Mis proyectos visibles',
+  skills: 'Mis tecnologías y experiencia',
+  availability: 'Mi disponibilidad',
+  trajectory: 'Mi resumen de trayectoria',
+};
+
+export interface VisibilitySettings {
+  publicProfileEnabled: boolean;
+  fields: Record<PublicProfileField, boolean>;
+  /** Lo que el sistema nunca comparte, se configure lo que se configure. */
+  neverShared: string[];
 }
 
 export interface Activity {
@@ -250,8 +368,26 @@ export interface StudentDirectory {
 export interface ProfileSummary {
   profile: { id: string; semester: number | null; bio: string | null; status: string; completionPercentage: number };
   improvementAreas: { id: string; name: string }[];
-  interests: { academicAreaId: string; area: string | null; priority: number }[];
-  skills: { skillId: string; skill: string | null; level: number }[];
+  interests: {
+    academicAreaId: string; area: string | null; priority: number;
+    source?: 'onboarding' | 'manual';
+  }[];
+  preferredAreas?: {
+    academicAreaId: string; area: string | null; priority: number;
+    source?: 'onboarding' | 'manual';
+  }[];
+  /** Autoevaluación (§21.1) junto a la experiencia que la respalda (§21.2). */
+  skills: {
+    skillId: string;
+    skill: string | null;
+    academicAreaId?: string | null;
+    level: SkillLevel;
+    selfAssessed?: boolean;
+    backing?: {
+      projects: number; activities: number; certificates: number;
+      evidences: number; total: number;
+    };
+  }[];
   projects: { id: string; title: string; status: string; technologies: string[] | null }[];
   evidences: unknown[];
   activities: { activityId: string; title: string | null; type: string | null; status: string }[];

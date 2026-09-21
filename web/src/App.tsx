@@ -14,6 +14,8 @@ import RequestTokenPage from './pages/auth/RequestTokenPage';
 import StudentDashboard from './pages/student/Dashboard';
 import StudentProfilePage from './pages/student/Profile';
 import InterestsSkillsPage from './pages/student/InterestsSkills';
+import StudentOnboardingPage from './pages/student/Onboarding';
+import StudentPrivacyPage from './pages/student/Privacy';
 import StudentProjectsPage from './pages/student/Projects';
 import StudentActivitiesPage from './pages/student/Activities';
 import StudentAffinityPage from './pages/student/Affinity';
@@ -82,7 +84,9 @@ export default function App() {
           <Route element={guarded([S], <Layout />)}>
             <Route path="/student" element={<StudentDashboard />} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
+            <Route path="/student/onboarding" element={<StudentOnboardingPage />} />
             <Route path="/student/interests" element={<InterestsSkillsPage />} />
+            <Route path="/student/privacy" element={<StudentPrivacyPage />} />
             <Route path="/student/projects" element={<StudentProjectsPage />} />
             <Route path="/student/activities" element={<StudentActivitiesPage />} />
             <Route path="/student/evidences" element={<StudentEvidencesPage />} />

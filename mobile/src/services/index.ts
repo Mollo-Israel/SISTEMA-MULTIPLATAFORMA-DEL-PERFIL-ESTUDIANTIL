@@ -87,7 +87,7 @@ export const profileService = {
     api.patch<any>(`/profiles/me/free-interests/${id}`, data).then((r) => r.data),
   removeFreeInterest: (id: string) =>
     api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
-  setSkills: (items: { skillId: string; level: number }[]) =>
+  setSkills: (items: { skillId: string; level: 'basic' | 'intermediate' | 'advanced' }[]) =>
     api.put('/profiles/me/skills', { items }).then((r) => r.data),
 };
 

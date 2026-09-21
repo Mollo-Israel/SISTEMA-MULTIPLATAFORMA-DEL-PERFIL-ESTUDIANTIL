@@ -28,3 +28,4 @@ export * from './account-token.entity';
 export * from './auth-session.entity';
 export * from './import-batch.entity';
 export * from './audit-event.entity';
+export * from './onboarding-run.entity';

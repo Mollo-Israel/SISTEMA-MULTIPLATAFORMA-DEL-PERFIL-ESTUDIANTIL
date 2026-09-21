@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { FiAward, FiSave, FiSliders, FiTarget } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { catalogService, profileService } from '../../services';
-import type { AcademicArea, Skill } from '../../services/types';
+import { SKILL_LEVEL_LABEL } from '../../services/types';
+import type { AcademicArea, Skill, SkillLevel } from '../../services/types';
 import {
   Badge,
   Button,
@@ -24,14 +25,20 @@ const PRIORITY_LABELS: Record<number, string> = {
   4: 'Alto',
   5: 'Muy alto',
 };
-const LEVEL_LABELS: Record<number, string> = {
-  0: 'Sin experiencia',
-  1: 'Principiante',
-  2: 'Básico',
-  3: 'Intermedio',
-  4: 'Avanzado',
-  5: 'Experto',
-};
+/**
+ * Autoevaluacion en tres niveles (§21.1).
+ *
+ * La cadena vacia no es un nivel: significa que la habilidad no esta
+ * declarada y por tanto no se envia al servidor.
+ */
+type NivelElegido = SkillLevel | '';
+
+const NIVELES: { value: NivelElegido; label: string }[] = [
+  { value: '', label: 'Sin declarar' },
+  { value: 'basic', label: SKILL_LEVEL_LABEL.basic },
+  { value: 'intermediate', label: SKILL_LEVEL_LABEL.intermediate },
+  { value: 'advanced', label: SKILL_LEVEL_LABEL.advanced },
+];
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -41,7 +48,7 @@ export default function InterestsSkillsPage() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [interests, setInterests] = useState<Record<string, number>>({});
-  const [skillLevels, setSkillLevels] = useState<Record<string, number>>({});
+  const [skillLevels, setSkillLevels] = useState<Record<string, NivelElegido>>({});
   const [savingInterests, setSavingInterests] = useState(false);
   const [savingSkills, setSavingSkills] = useState(false);
   const [areaQuery, setAreaQuery] = useState('');
@@ -78,7 +85,7 @@ export default function InterestsSkillsPage() {
   }, [skills, skillQuery]);
 
   const chosenInterests = Object.values(interests).filter((p) => p > 0).length;
-  const chosenSkills = Object.values(skillLevels).filter((l) => l > 0).length;
+  const chosenSkills = Object.values(skillLevels).filter((l) => l !== '').length;
 
   const saveInterests = async () => {
     setSavingInterests(true);
@@ -101,7 +108,7 @@ export default function InterestsSkillsPage() {
     try {
       await profileService.setSkills(
         Object.entries(skillLevels)
-          .filter(([, l]) => l > 0)
+          .filter((entry): entry is [string, SkillLevel] => entry[1] !== '')
           .map(([skillId, level]) => ({ skillId, level })),
       );
       toast.success('Habilidades actualizadas', `${chosenSkills} habilidad${chosenSkills === 1 ? '' : 'es'} declarada${chosenSkills === 1 ? '' : 's'}.`);
@@ -242,24 +249,26 @@ export default function InterestsSkillsPage() {
                 <tr>
                   <th>Habilidad</th>
                   <th>Área</th>
-                  <th style={{ width: 190 }}>Nivel de dominio</th>
+                  <th style={{ width: 190 }}>Nivel autodeclarado</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleSkills.map((s) => {
-                  const value = skillLevels[s.id] ?? 0;
+                  const value = skillLevels[s.id] ?? '';
                   return (
-                    <tr key={s.id} className={value > 0 ? 'row-picked' : ''}>
+                    <tr key={s.id} className={value !== '' ? 'row-picked' : ''}>
                       <td>{s.name}</td>
                       <td className="muted">{s.academicArea?.name ?? '—'}</td>
                       <td>
                         <select
                           value={value}
-                          onChange={(e) => setSkillLevels({ ...skillLevels, [s.id]: Number(e.target.value) })}
+                          onChange={(e) => setSkillLevels({
+                            ...skillLevels,
+                            [s.id]: e.target.value as NivelElegido,
+                          })}
                         >
-                          <option value={0}>{LEVEL_LABELS[0]}</option>
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <option key={n} value={n}>{LEVEL_LABELS[n]}</option>
+                          {NIVELES.map((n) => (
+                            <option key={n.value} value={n.value}>{n.label}</option>
                           ))}
                         </select>
                       </td>

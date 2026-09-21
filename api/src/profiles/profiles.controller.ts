@@ -23,6 +23,8 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ReplaceInterestsDto, SetInterestsDto } from './dto/set-interests.dto';
 import { ReplaceSkillsDto, SetSkillsDto } from './dto/set-skills.dto';
 import { SearchPeersDto } from './dto/search-peers.dto';
+import { SetInstitutionalDataDto } from './dto/institutional-data.dto';
+import { UpdateVisibilityDto } from './dto/visibility.dto';
 
 @ApiTags('profiles')
 @ApiBearerAuth()
@@ -62,8 +64,56 @@ export class ProfilesController {
 
   @Patch('me')
   @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Editar mi perfil.',
+    description:
+      'Solo campos propios (§17.2). El semestre y el código universitario son '
+      + 'institucionales y no se editan desde aquí (§17.1).',
+  })
   updateMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
     return this.profilesService.updateMyProfile(user.userId, dto);
+  }
+
+  // ---------------- Privacidad (§44) ----------------
+
+  @Get('me/visibility')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Qué comparto hoy en mi perfil compartible.' })
+  getMyVisibility(@CurrentUser() user: AuthenticatedUser) {
+    return this.profilesService.getVisibility(user.userId);
+  }
+
+  @Put('me/visibility')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Cambiar qué comparto.',
+    description:
+      'La lista de campos es cerrada: el correo institucional, los archivos '
+      + 'privados y los identificadores internos no tienen forma de activarse.',
+  })
+  updateMyVisibility(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateVisibilityDto,
+  ) {
+    return this.profilesService.updateVisibility(user.userId, dto);
+  }
+
+  // ---------------- Datos institucionales (§17.1) ----------------
+
+  @Patch(':studentId/institutional-data')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Fijar el semestre y el código universitario de un estudiante.',
+    description:
+      'Reservado al administrador. Normalmente estos datos llegan por importación '
+      + 'de padrón; esto cubre el alta manual y la corrección puntual.',
+  })
+  setInstitutionalData(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() dto: SetInstitutionalDataDto,
+  ) {
+    return this.profilesService.setInstitutionalData(studentId, dto, admin.userId);
   }
 
   // ---------------- Intereses en texto libre (RF5) ----------------

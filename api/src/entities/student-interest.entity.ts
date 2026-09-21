@@ -10,6 +10,7 @@ import {
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
+import { InterestSource } from '@perfil/shared';
 import { StudentProfile } from './student-profile.entity';
 import { AcademicArea } from './academic-area.entity';
 
@@ -44,6 +45,16 @@ export class StudentInterest {
 
   @Column({ type: 'smallint', default: 1 })
   priority: number;
+
+  /**
+   * De donde salio este interes (§18).
+   *
+   * Permite responder por que aparece un area en el perfil, y distinguir lo
+   * que el estudiante eligio del catalogo de lo que confirmo tras el
+   * cuestionario.
+   */
+  @Column({ type: 'enum', enum: InterestSource, default: InterestSource.MANUAL })
+  source: InterestSource;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

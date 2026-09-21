@@ -9,6 +9,7 @@ import {
   AffinitySignalType,
   AffinityWeightCode,
   RegistrationStatus,
+  SkillLevel,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
@@ -62,7 +63,11 @@ interface Contribution {
  */
 const DEFAULT_WEIGHTS: Record<AffinityWeightCode, number> = {
   [AffinityWeightCode.INTEREST]: 2,
-  [AffinityWeightCode.IMPROVEMENT_AREA]: 1,
+  // §20: un area de mejora vale 0. Sigue registrandose como contribucion
+  // para que el estudiante vea que se tuvo en cuenta, pero no suma: querer
+  // aprender algo no es tener afinidad con ello. Sirve para recomendaciones
+  // y objetivos personales, que es donde §20 la manda.
+  [AffinityWeightCode.IMPROVEMENT_AREA]: 0,
   [AffinityWeightCode.SKILL_BASIC]: 1,
   [AffinityWeightCode.SKILL_INTERMEDIATE]: 2,
   [AffinityWeightCode.SKILL_ADVANCED]: 3,
@@ -176,16 +181,28 @@ export class AffinityEngineService implements AffinityRecalculationPort {
     const { points: weightOf, version: rulesVersion } = await this.loadWeights();
 
     const found: Contribution[] = [];
+    /**
+     * Registra una contribucion.
+     *
+     * `permitirCero` distingue dos situaciones que valen lo mismo y
+     * significan cosas opuestas: una ponderacion mal configurada, que debe
+     * descartarse en silencio antes de ensuciar el desglose, y una senal que
+     * vale cero *a proposito*, como el area de mejora de §20. Esta ultima si
+     * se registra: el estudiante tiene derecho a ver que se tuvo en cuenta y
+     * que no sumo, en vez de que desaparezca sin explicacion.
+     */
     const add = (
       areaId: string | null | undefined,
       weightCode: AffinityWeightCode,
       matchType: AffinityMatchType,
       sourceLabel: string,
       sourceId: string | null,
+      permitirCero = false,
     ) => {
       if (!areaId) return;
       const points = weightOf.get(weightCode) ?? 0;
-      if (points <= 0) return;
+      if (points < 0) return;
+      if (points === 0 && !permitirCero) return;
       found.push({
         areaId,
         signalType: SIGNAL_OF[weightCode],
@@ -220,19 +237,22 @@ export class AffinityEngineService implements AffinityRecalculationPort {
         s.skill.academicAreaId,
         this.skillWeightCode(s.level),
         AffinityMatchType.DECLARED,
-        `Habilidad declarada: ${s.skill.name} (nivel ${s.level})`,
+        `Habilidad autodeclarada: ${s.skill.name} (nivel ${this.skillLevelLabel(s.level)})`,
         s.id,
       );
     });
 
-    // 3. Areas en las que desea mejorar
+    // 3. Areas en las que desea mejorar. Valen 0 (§20): querer aprender algo
+    // no es tener afinidad con ello. Se registran igualmente para que el
+    // desglose lo diga en lugar de omitirlo.
     (profile.improvementAreaIds ?? []).forEach((id) =>
       add(
         id,
         AffinityWeightCode.IMPROVEMENT_AREA,
         AffinityMatchType.DECLARED,
-        `Area en la que desea mejorar: ${areaName.get(id) ?? 'area'}`,
+        `Area en la que desea mejorar (no suma afinidad): ${areaName.get(id) ?? 'area'}`,
         null,
+        true,
       ),
     );
 
@@ -755,10 +775,17 @@ export class AffinityEngineService implements AffinityRecalculationPort {
     }
   }
 
-  private skillWeightCode(level: number): AffinityWeightCode {
-    if (level <= 2) return AffinityWeightCode.SKILL_BASIC;
-    if (level === 3) return AffinityWeightCode.SKILL_INTERMEDIATE;
-    return AffinityWeightCode.SKILL_ADVANCED;
+  private skillWeightCode(level: SkillLevel): AffinityWeightCode {
+    if (level === SkillLevel.ADVANCED) return AffinityWeightCode.SKILL_ADVANCED;
+    if (level === SkillLevel.INTERMEDIATE) return AffinityWeightCode.SKILL_INTERMEDIATE;
+    return AffinityWeightCode.SKILL_BASIC;
+  }
+
+  /** Etiqueta legible del nivel autodeclarado (§21.1). */
+  private skillLevelLabel(level: SkillLevel): string {
+    if (level === SkillLevel.ADVANCED) return 'avanzado';
+    if (level === SkillLevel.INTERMEDIATE) return 'intermedio';
+    return 'basico';
   }
 
   private activityWeightCode(status: RegistrationStatus): AffinityWeightCode | null {

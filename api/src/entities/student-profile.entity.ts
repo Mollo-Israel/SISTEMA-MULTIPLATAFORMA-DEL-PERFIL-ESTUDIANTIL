@@ -9,7 +9,14 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ProfileStatus } from '@perfil/shared';
+import {
+  AvailabilityStatus,
+  CollaborationInterest,
+  CollaborationMode,
+  DEFAULT_PUBLIC_VISIBILITY,
+  ProfileStatus,
+  PublicProfileField,
+} from '@perfil/shared';
 import { User } from './user.entity';
 import { StudentSkill } from './student-skill.entity';
 import { StudentInterest } from './student-interest.entity';
@@ -61,6 +68,52 @@ export class StudentProfile {
    */
   @Column({ name: 'peer_discoverable', type: 'boolean', default: true })
   peerDiscoverable: boolean;
+
+  /**
+   * Disponibilidad declarada para colaborar (§17.2).
+   *
+   * Por defecto sin declarar: no se asume que alguien busca equipo solo
+   * porque no ha tocado la pantalla.
+   */
+  @Column({
+    type: 'enum',
+    enum: AvailabilityStatus,
+    default: AvailabilityStatus.UNSPECIFIED,
+  })
+  availability: AvailabilityStatus;
+
+  /** Como y en que le interesa colaborar (§17.2). */
+  @Column({ name: 'collaboration_preferences', type: 'jsonb', nullable: true })
+  collaborationPreferences: {
+    modes: CollaborationMode[];
+    interests: CollaborationInterest[];
+    hoursPerWeek: number | null;
+    notes: string | null;
+  } | null;
+
+  /**
+   * Perfil compartible activo (§44).
+   *
+   * Desactivado mientras el estudiante no lo active: compartir es una
+   * decision, no un ajuste por omision.
+   */
+  @Column({ name: 'public_profile_enabled', type: 'boolean', default: false })
+  publicProfileEnabled: boolean;
+
+  /**
+   * Que campos acepta mostrar, dentro de los limites del sistema (§44).
+   *
+   * Las claves posibles son las de `PublicProfileField` y nada mas. Lo que
+   * nunca es publicable —correo institucional, archivos privados,
+   * identificadores internos— no tiene clave aqui, de modo que ninguna
+   * configuracion puede exponerlo.
+   */
+  @Column({
+    name: 'public_visibility_config',
+    type: 'jsonb',
+    default: () => `'${JSON.stringify(DEFAULT_PUBLIC_VISIBILITY)}'::jsonb`,
+  })
+  publicVisibilityConfig: Record<PublicProfileField, boolean>;
 
   @OneToMany(() => StudentSkill, (skill) => skill.studentProfile)
   skills: StudentSkill[];

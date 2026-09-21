@@ -208,7 +208,12 @@ async function prepararEscenario(ctx) {
       email: studentEmail(key),
     });
     const token = cuenta.accessToken;
-    const profile = await req('POST', '/profiles/me', { token, body: { semester } });
+    // §17.1: el semestre es dato institucional y lo fija el administrador.
+    const profile = await req('POST', '/profiles/me', { token, body: {} });
+    await req('PATCH', `/profiles/${profile.data?.id}/institutional-data`, {
+      token: ctx.admin,
+      body: { semester },
+    });
     return { token, profileId: profile.data?.id, name: `${first} ${last}` };
   };
   ctx.S1 = await nuevoEstudiante('s1', 'Ines', 'Zapata', 5);

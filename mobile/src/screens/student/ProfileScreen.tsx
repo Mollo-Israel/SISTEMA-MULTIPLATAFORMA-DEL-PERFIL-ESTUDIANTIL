@@ -17,7 +17,13 @@ export default function ProfileScreen({ navigation }: any) {
   const [exists, setExists] = useState(false);
   const [areas, setAreas] = useState<any[]>([]);
   const [completion, setCompletion] = useState(0);
-  const [form, setForm] = useState({ universityCode: '', semester: '', bio: '', improvementAreaIds: [] as string[] });
+  // Semestre y codigo van aparte del formulario: §17.1 los declara
+  // institucionales y el estudiante solo los consulta.
+  const [institucional, setInstitucional] = useState({
+    universityCode: null as string | null,
+    semester: null as number | null,
+  });
+  const [form, setForm] = useState({ bio: '', improvementAreaIds: [] as string[] });
   const [areaQuery, setAreaQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const toast = useToast();
@@ -29,9 +35,11 @@ export default function ProfileScreen({ navigation }: any) {
         if (p) {
           setExists(true);
           setCompletion(p.completionPercentage);
+          setInstitucional({
+            universityCode: p.universityCode ?? null,
+            semester: p.semester ?? null,
+          });
           setForm({
-            universityCode: p.universityCode ?? '',
-            semester: p.semester ? String(p.semester) : '',
             bio: p.bio ?? '',
             improvementAreaIds: p.improvementAreaIds ?? [],
           });
@@ -59,7 +67,6 @@ export default function ProfileScreen({ navigation }: any) {
   const save = async () => {
     setSaving(true);
     const payload: any = {
-      semester: form.semester ? Number(form.semester) : undefined,
       bio: form.bio || undefined,
       improvementAreaIds: form.improvementAreaIds,
     };
@@ -104,7 +111,19 @@ export default function ProfileScreen({ navigation }: any) {
       </Card>
 
       <Card>
-        <Field label="Semestre (1–8)" value={form.semester} onChangeText={(t) => setForm({ ...form, semester: t })} keyboardType="numeric" />
+        <View style={styles.institucional}>
+          <Text style={styles.instTitulo}>Datos institucionales</Text>
+          <Text style={styles.instFila}>
+            Semestre: <Text style={styles.instValor}>
+              {institucional.semester ? `${institucional.semester}.º` : "Sin asignar"}
+            </Text>
+          </Text>
+          <Text style={styles.instFila}>
+            Código: <Text style={styles.instValor}>{institucional.universityCode ?? "Sin asignar"}</Text>
+          </Text>
+          <Muted>Los aporta la carrera desde el padrón. No se editan aquí.</Muted>
+        </View>
+
         <Field label="Descripción / bio" value={form.bio} onChangeText={(t) => setForm({ ...form, bio: t })} multiline />
 
         <View style={styles.areaHead}>
@@ -159,4 +178,24 @@ const styles = StyleSheet.create({
   areaHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   label: { fontSize: 13, color: colors.gray700, marginBottom: 6, fontWeight: '500' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  // Borde discontinuo: dice "esto no se edita" sin un candado por campo.
+  institucional: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.gray300,
+    backgroundColor: colors.gray50,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  instTitulo: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: colors.gray500,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  instFila: { fontSize: 13, color: colors.gray700, marginBottom: 2 },
+  instValor: { fontWeight: '700', color: colors.gray900 },
 });

@@ -1,17 +1,29 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsInt, IsUUID, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsEnum, IsUUID, ValidateNested } from 'class-validator';
+import { SkillLevel } from '@perfil/shared';
 
 export class SkillItemDto {
   @ApiProperty({ description: 'ID de la habilidad (catálogo)' })
   @IsUUID('4')
   skillId: string;
 
-  @ApiProperty({ example: 3, minimum: 1, maximum: 5, description: 'Nivel declarado' })
-  @IsInt({ message: 'El nivel debe ser un número.' })
-  @Min(1, { message: 'El nivel mínimo es 1.' })
-  @Max(5, { message: 'El nivel máximo es 5.' })
-  level: number;
+  /**
+   * Autoevaluación en tres niveles (§21.1).
+   *
+   * Era una escala de 1 a 5. Se reduce a tres porque nadie sabe situarse
+   * entre un 3 y un 4 de sí mismo, y la precisión extra solo servía para
+   * dar una falsa sensación de medida.
+   */
+  @ApiProperty({
+    enum: SkillLevel,
+    example: SkillLevel.INTERMEDIATE,
+    description: 'Nivel autodeclarado: basic, intermediate o advanced',
+  })
+  @IsEnum(SkillLevel, {
+    message: 'El nivel debe ser basic, intermediate o advanced.',
+  })
+  level: SkillLevel;
 }
 
 export class SetSkillsDto {

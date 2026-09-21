@@ -1,12 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   FiCheck, FiCode, FiSmartphone, FiCpu, FiDatabase, FiWifi, FiShield, FiGitBranch, FiTrello,
-  FiTarget, FiSave, FiUser,
+  FiTarget, FiSave, FiUser, FiLock,
 } from 'react-icons/fi';
 import type { IconType } from 'react-icons';
 import { apiError } from '../../api/client';
 import { catalogService, profileService } from '../../services';
-import type { AcademicArea, StudentProfile } from '../../services/types';
+import {
+  AVAILABILITY_LABEL,
+  COLLABORATION_INTEREST_LABEL,
+  COLLABORATION_MODE_LABEL,
+} from '../../services/types';
+import type {
+  AcademicArea,
+  AvailabilityStatus,
+  CollaborationInterest,
+  CollaborationMode,
+  StudentProfile,
+} from '../../services/types';
+
+const AVAILABILITIES: AvailabilityStatus[] = ['looking', 'open', 'busy', 'unspecified'];
+const MODES: CollaborationMode[] = ['remote', 'in_person', 'hybrid'];
+const COLLAB_INTERESTS: CollaborationInterest[] = [
+  'projects', 'research', 'competitions', 'study_groups', 'volunteering',
+];
 import {
   Badge,
   Button,
@@ -46,7 +63,15 @@ export default function StudentProfilePage() {
   const [saving, setSaving] = useState(false);
   const [exists, setExists] = useState(false);
   const [areaQuery, setAreaQuery] = useState('');
-  const [form, setForm] = useState({ semester: '', bio: '', improvementAreaIds: [] as string[] });
+  const [form, setForm] = useState({
+    bio: '',
+    improvementAreaIds: [] as string[],
+    availability: 'unspecified' as AvailabilityStatus,
+    modes: [] as CollaborationMode[],
+    collabInterests: [] as CollaborationInterest[],
+    hoursPerWeek: '',
+    notes: '',
+  });
   const toast = useToast();
 
   useEffect(() => {
@@ -57,9 +82,15 @@ export default function StudentProfilePage() {
           setProfile(p);
           setExists(true);
           setForm({
-            semester: p.semester ? String(p.semester) : '',
             bio: p.bio ?? '',
             improvementAreaIds: p.improvementAreaIds ?? [],
+            availability: p.availability ?? 'unspecified',
+            modes: p.collaborationPreferences?.modes ?? [],
+            collabInterests: p.collaborationPreferences?.interests ?? [],
+            hoursPerWeek: p.collaborationPreferences?.hoursPerWeek
+              ? String(p.collaborationPreferences.hoursPerWeek)
+              : '',
+            notes: p.collaborationPreferences?.notes ?? '',
           });
         }
       })
@@ -77,10 +108,18 @@ export default function StudentProfilePage() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    // §17.1: ni semestre ni codigo universitario. Son institucionales y el
+    // servidor rechaza recibirlos de un estudiante.
     const payload = {
-      semester: form.semester ? Number(form.semester) : undefined,
       bio: form.bio || undefined,
       improvementAreaIds: form.improvementAreaIds,
+      availability: form.availability,
+      collaborationPreferences: {
+        modes: form.modes,
+        interests: form.collabInterests,
+        hoursPerWeek: form.hoursPerWeek ? Number(form.hoursPerWeek) : null,
+        notes: form.notes || null,
+      },
     };
     try {
       const result = exists ? await profileService.update(payload) : await profileService.create(payload);
@@ -136,27 +175,38 @@ export default function StudentProfilePage() {
                 tone={profile.completionPercentage >= 80 ? 'green' : profile.completionPercentage >= 40 ? 'amber' : 'bordo'}
               />
               <p className="muted" style={{ marginTop: '0.6rem' }}>
-                Se completa al declarar semestre, descripción, áreas de preferencia, habilidades y
-                áreas donde quieres mejorar.
+                Se completa con tu descripción, tus áreas de preferencia, tus habilidades y las
+                áreas donde quieres mejorar. El semestre lo aporta la carrera.
               </p>
+            </Card>
+          )}
+
+          {profile && (
+            <Card
+              title="Datos institucionales"
+              actions={<Badge tone="gray">No editables</Badge>}
+            >
+              <p className="muted" style={{ marginTop: 0 }}>
+                Estos datos los aporta la carrera desde el padrón. Si alguno es incorrecto,
+                avisa a la administración: no se corrigen desde aquí.
+              </p>
+              <div className="inst-grid">
+                <div className="inst-dato">
+                  <span className="lbl"><FiLock size={11} /> Semestre</span>
+                  <span className="val">
+                    {profile.semester ? `${profile.semester}º semestre` : 'Sin asignar'}
+                  </span>
+                </div>
+                <div className="inst-dato">
+                  <span className="lbl"><FiLock size={11} /> Código universitario</span>
+                  <span className="val">{profile.universityCode ?? 'Sin asignar'}</span>
+                </div>
+              </div>
             </Card>
           )}
 
           <Card title={exists ? 'Editar perfil' : 'Crear perfil'}>
             <form onSubmit={save}>
-              <div className="row">
-                <div className="field">
-                  <label>Semestre</label>
-                  <select value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })}>
-                    <option value="">Selecciona…</option>
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-                      <option key={n} value={n}>{n}º semestre</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field" style={{ flex: 2 }} />
-              </div>
-
               <div className="field">
                 <label>Descripción</label>
                 <textarea
@@ -208,6 +258,97 @@ export default function StudentProfilePage() {
                     })}
                   </div>
                 )}
+              </div>
+
+              <div className="field">
+                <label>Disponibilidad para colaborar</label>
+                <div className="chip-row">
+                  {AVAILABILITIES.map((a) => (
+                    <button
+                      type="button"
+                      key={a}
+                      className={`chip ${form.availability === a ? 'on' : ''}`}
+                      onClick={() => setForm({ ...form, availability: a })}
+                      aria-pressed={form.availability === a}
+                    >
+                      {AVAILABILITY_LABEL[a]}
+                    </button>
+                  ))}
+                </div>
+                <span className="field-hint">
+                  Es una señal para formar equipos, no un compromiso.
+                </span>
+              </div>
+
+              <div className="row">
+                <div className="field">
+                  <label>Modo de trabajo</label>
+                  <div className="chip-row">
+                    {MODES.map((m) => {
+                      const on = form.modes.includes(m);
+                      return (
+                        <button
+                          type="button"
+                          key={m}
+                          className={`chip ${on ? 'on' : ''}`}
+                          onClick={() => setForm({
+                            ...form,
+                            modes: on ? form.modes.filter((x) => x !== m) : [...form.modes, m],
+                          })}
+                          aria-pressed={on}
+                        >
+                          {COLLABORATION_MODE_LABEL[m]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Horas por semana</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={40}
+                    value={form.hoursPerWeek}
+                    onChange={(e) => setForm({ ...form, hoursPerWeek: e.target.value })}
+                    placeholder="Por ejemplo, 8"
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Qué te interesa hacer</label>
+                <div className="chip-row">
+                  {COLLAB_INTERESTS.map((i) => {
+                    const on = form.collabInterests.includes(i);
+                    return (
+                      <button
+                        type="button"
+                        key={i}
+                        className={`chip ${on ? 'on' : ''}`}
+                        onClick={() => setForm({
+                          ...form,
+                          collabInterests: on
+                            ? form.collabInterests.filter((x) => x !== i)
+                            : [...form.collabInterests, i],
+                        })}
+                        aria-pressed={on}
+                      >
+                        {COLLABORATION_INTEREST_LABEL[i]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="field">
+                <label>Nota para quien quiera invitarte</label>
+                <input
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder="Por ejemplo, disponible por las tardes"
+                  maxLength={300}
+                />
               </div>
 
               <Button type="submit" loading={saving} icon={exists ? <FiSave size={15} /> : <FiUser size={15} />}>

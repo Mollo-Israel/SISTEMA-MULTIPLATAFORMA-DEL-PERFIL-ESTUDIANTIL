@@ -8,7 +8,17 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Not, Repository } from 'typeorm';
-import { ProfileStatus, ProjectVisibility, RolNombre, UserStatus } from '@perfil/shared';
+import {
+  DEFAULT_PUBLIC_VISIBILITY,
+  InterestSource,
+  ProfileStatus,
+  ProjectVisibility,
+  PUBLIC_PROFILE_FIELDS,
+  PublicProfileField,
+  RegistrationStatus,
+  RolNombre,
+  UserStatus,
+} from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentFreeInterest } from '../entities/student-free-interest.entity';
@@ -29,6 +39,9 @@ import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { InterestItemDto } from './dto/set-interests.dto';
 import { SkillItemDto } from './dto/set-skills.dto';
+import { SetInstitutionalDataDto } from './dto/institutional-data.dto';
+import { UpdateVisibilityDto } from './dto/visibility.dto';
+import { AuditEventType, AuditService } from '../audit/audit.service';
 import {
   AFFINITY_RECALCULATION,
   AffinityRecalculationPort,
@@ -69,6 +82,7 @@ export class ProfilesService {
     @Inject(AFFINITY_RECALCULATION)
     private readonly affinityRecalculation: AffinityRecalculationPort,
     private readonly teacherScope: TeacherScopeService,
+    private readonly audit: AuditService,
   ) {}
 
   async createMyProfile(userId: string, dto: CreateProfileDto): Promise<StudentProfile> {
@@ -78,9 +92,11 @@ export class ProfilesService {
     }
     await this.assertAreasExist(dto.improvementAreaIds);
 
+    // Ni semestre ni codigo universitario: §17.1 los declara
+    // institucionales. Llegan por importacion de padron o los fija el
+    // administrador, nunca el propio estudiante.
     const profile = this.profiles.create({
       userId,
-      semester: dto.semester ?? null,
       bio: dto.bio ?? null,
       improvementAreaIds: dto.improvementAreaIds ?? null,
       status: ProfileStatus.INCOMPLETE,
@@ -208,9 +224,17 @@ export class ProfilesService {
       await this.assertAreasExist(dto.improvementAreaIds);
       profile.improvementAreaIds = dto.improvementAreaIds;
     }
-    if (dto.semester !== undefined) profile.semester = dto.semester;
     if (dto.bio !== undefined) profile.bio = dto.bio;
     if (dto.peerDiscoverable !== undefined) profile.peerDiscoverable = dto.peerDiscoverable;
+    if (dto.availability !== undefined) profile.availability = dto.availability;
+    if (dto.collaborationPreferences !== undefined) {
+      profile.collaborationPreferences = {
+        modes: dto.collaborationPreferences.modes ?? [],
+        interests: dto.collaborationPreferences.interests ?? [],
+        hoursPerWeek: dto.collaborationPreferences.hoursPerWeek ?? null,
+        notes: dto.collaborationPreferences.notes ?? null,
+      };
+    }
     await this.profiles.save(profile);
     await this.refreshCompletion(profile.id);
     await this.requestAffinity(profile.id);
@@ -233,6 +257,7 @@ export class ProfilesService {
             studentProfileId: profile.id,
             academicAreaId: item.academicAreaId,
             priority: item.priority,
+            source: InterestSource.MANUAL,
           }),
         );
       }
@@ -255,6 +280,7 @@ export class ProfilesService {
             studentProfileId: profile.id,
             academicAreaId: item.academicAreaId,
             priority: item.priority,
+            source: InterestSource.MANUAL,
           }),
         ),
       );
@@ -403,6 +429,124 @@ export class ProfilesService {
     }
   }
 
+  // ---------------------------------------------------------------------
+  //  Datos institucionales (§17.1)
+  // ---------------------------------------------------------------------
+
+  /**
+   * Fija semestre y código universitario de un estudiante.
+   *
+   * Solo el administrador. Normalmente estos datos llegan por importación de
+   * padrón; esto cubre el alta manual y la corrección puntual sin obligar a
+   * reimportar el padrón entero.
+   */
+  async setInstitutionalData(
+    profileId: string,
+    dto: SetInstitutionalDataDto,
+    actorUserId: string,
+  ): Promise<StudentProfile> {
+    const profile = await this.profiles.findOne({ where: { id: profileId } });
+    if (!profile) throw new NotFoundException('Perfil no encontrado.');
+
+    const antes = { semester: profile.semester, universityCode: profile.universityCode };
+
+    if (dto.universityCode !== undefined) {
+      const enUso = await this.profiles.findOne({
+        where: { universityCode: dto.universityCode, id: Not(profileId) },
+      });
+      if (enUso) {
+        throw new ConflictException(
+          'Ese código universitario ya pertenece a otro estudiante.',
+        );
+      }
+      profile.universityCode = dto.universityCode;
+    }
+    if (dto.semester !== undefined) profile.semester = dto.semester;
+
+    await this.profiles.save(profile);
+    // Cambiar el semestre mueve al estudiante dentro o fuera del alcance de un
+    // docente, asi que queda registrado quien lo hizo.
+    await this.audit.record({
+      actorUserId,
+      eventType: AuditEventType.INSTITUTIONAL_DATA_CHANGED,
+      entityType: 'student_profile',
+      entityId: profile.id,
+      metadata: {
+        antes,
+        despues: { semester: profile.semester, universityCode: profile.universityCode },
+      },
+    });
+
+    await this.refreshCompletion(profile.id);
+    return this.profiles.findOne({ where: { id: profile.id } }) as Promise<StudentProfile>;
+  }
+
+  // ---------------------------------------------------------------------
+  //  Privacidad (§44)
+  // ---------------------------------------------------------------------
+
+  /** Lo que el estudiante comparte hoy, con la lista completa de campos posibles. */
+  async getVisibility(userId: string) {
+    const profile = await this.getOwnProfile(userId);
+    return this.visibilityView(profile);
+  }
+
+  /**
+   * Cambia qué se comparte (§44).
+   *
+   * Solo se aceptan las claves de `PublicProfileField`. Lo que nunca es
+   * publicable —correo institucional, archivos privados, identificadores
+   * internos— no tiene clave, de modo que ninguna petición puede activarlo.
+   */
+  async updateVisibility(userId: string, dto: UpdateVisibilityDto) {
+    const profile = await this.getOwnProfile(userId);
+
+    if (dto.publicProfileEnabled !== undefined) {
+      profile.publicProfileEnabled = dto.publicProfileEnabled;
+    }
+    if (dto.fields) {
+      const actual = { ...DEFAULT_PUBLIC_VISIBILITY, ...(profile.publicVisibilityConfig ?? {}) };
+      for (const field of PUBLIC_PROFILE_FIELDS) {
+        const valor = (dto.fields as Record<string, boolean | undefined>)[field];
+        if (valor !== undefined) actual[field] = valor;
+      }
+      profile.publicVisibilityConfig = actual;
+    }
+
+    await this.profiles.save(profile);
+    await this.audit.record({
+      actorUserId: userId,
+      eventType: AuditEventType.VISIBILITY_CHANGED,
+      entityType: 'student_profile',
+      entityId: profile.id,
+      metadata: {
+        publicProfileEnabled: profile.publicProfileEnabled,
+        campos: profile.publicVisibilityConfig,
+      },
+    });
+    return this.visibilityView(profile);
+  }
+
+  private visibilityView(profile: StudentProfile) {
+    const config = { ...DEFAULT_PUBLIC_VISIBILITY, ...(profile.publicVisibilityConfig ?? {}) };
+    return {
+      publicProfileEnabled: profile.publicProfileEnabled,
+      fields: config,
+      /**
+       * Lo que nunca se comparte, dígase lo que se diga en `fields`. Se
+       * devuelve para que la interfaz pueda mostrarlo y el estudiante sepa
+       * qué queda fuera sin tener que confiar en que así sea.
+       */
+      neverShared: [
+        'correo institucional',
+        'código universitario',
+        'archivos y certificados privados',
+        'conversaciones',
+        'identificadores internos',
+      ],
+    };
+  }
+
   async getSummary(userId: string) {
     const profile = await this.getOwnProfile(userId);
     return this.buildSummary(profile, { includeInternal: true });
@@ -536,16 +680,32 @@ export class ProfilesService {
         academicAreaId: i.academicAreaId,
         area: i.academicArea?.name ?? null,
         priority: i.priority,
+        /** De donde salio (§18): del catalogo o del cuestionario. */
+        source: i.source,
       })),
       interests: interests.map((i) => ({
         academicAreaId: i.academicAreaId,
         area: i.academicArea?.name ?? null,
         priority: i.priority,
+        source: i.source,
       })),
+      /**
+       * Habilidades autodeclaradas (§21.1) junto a la experiencia que las
+       * respalda (§21.2).
+       *
+       * Los dos números viajan separados a propósito: `level` es lo que el
+       * estudiante dice de sí mismo y `backing` es lo que puede demostrar.
+       * Mezclarlos daría un único número que no significaría ninguna de las
+       * dos cosas.
+       */
       skills: skills.map((s) => ({
         skillId: s.skillId,
         skill: s.skill?.name ?? null,
+        academicAreaId: s.skill?.academicAreaId ?? null,
+        /** Autoevaluación. Siempre etiquetada como tal. */
         level: s.level,
+        selfAssessed: true,
+        backing: this.backingFor(s, projects, registrations, certificates, evidences),
       })),
       projects: projects.map((p) => ({
         id: p.id,
@@ -633,6 +793,9 @@ export class ProfilesService {
       this.skills.count({ where: { studentProfileId: profileId } }),
     ]);
 
+    // El semestre sigue contando porque un perfil sin el esta incompleto de
+    // verdad, pero ya no depende del estudiante: lo fija el padron. Si falta,
+    // lo que hay que arreglar es la importacion, no pedirselo a el.
     let percentage = 0;
     if (profile.semester) percentage += 20;
     if (profile.bio && profile.bio.trim().length > 0) percentage += 20;
@@ -653,6 +816,60 @@ export class ProfilesService {
 
   private async requestAffinity(profileId: string): Promise<void> {
     await this.affinityRecalculation.requestRecalculation(profileId);
+  }
+
+  /**
+   * Experiencia registrada que respalda una habilidad autodeclarada (§21.2).
+   *
+   * Cuenta dos cosas distintas y las suma: los proyectos que nombran la
+   * tecnología explícitamente, y todo lo que ocurrió dentro del área a la que
+   * pertenece la habilidad —actividades confirmadas, certificados y
+   * evidencias—. Un proyecto que use «React» respalda React aunque su área sea
+   * otra; una actividad de desarrollo web respalda las habilidades de esa área
+   * aunque no nombre ninguna.
+   *
+   * No emite juicio: informa de cuánto hay detrás. Quien mire decide si esa
+   * cantidad sostiene el nivel declarado.
+   */
+  private backingFor(
+    studentSkill: StudentSkill,
+    projects: Project[],
+    registrations: ActivityRegistration[],
+    certificates: ExternalCertificate[],
+    evidences: ProjectEvidence[],
+  ) {
+    const nombre = studentSkill.skill?.name?.toLowerCase().trim() ?? '';
+    const areaId = studentSkill.skill?.academicAreaId ?? null;
+
+    const proyectos = projects.filter((p) => {
+      const porTecnologia =
+        nombre.length > 0
+        && (p.technologies ?? []).some((t) => t.toLowerCase().trim() === nombre);
+      return porTecnologia || (areaId !== null && p.academicAreaId === areaId);
+    }).length;
+
+    const actividades = areaId === null
+      ? 0
+      : registrations.filter(
+        (r) => r.status === RegistrationStatus.CONFIRMED
+          && r.activity?.academicAreaId === areaId,
+      ).length;
+
+    const certificados = areaId === null
+      ? 0
+      : certificates.filter((c) => c.academicAreaId === areaId).length;
+
+    const evidencias = areaId === null
+      ? 0
+      : evidences.filter((e) => e.academicAreaId === areaId).length;
+
+    return {
+      projects: proyectos,
+      activities: actividades,
+      certificates: certificados,
+      evidences: evidencias,
+      total: proyectos + actividades + certificados + evidencias,
+    };
   }
 
   private async resolveAreas(ids: string[] | null) {

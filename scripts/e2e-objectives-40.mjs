@@ -146,6 +146,28 @@ async function provisionarCuenta(adminToken, { firstName, lastName, email, role 
   return { accessToken: login.data.accessToken, userId: creado.data.id, activationToken };
 }
 
+/**
+ * Crea el perfil y deja que el administrador fije el semestre (§17.1).
+ *
+ * El semestre dejo de ser un campo que el estudiante declara: es dato
+ * institucional. Estas pruebas reproducen ese reparto en vez de saltarselo.
+ */
+async function crearPerfilConSemestre(studentToken, adminToken, { semester, bio } = {}) {
+  const creado = await req('POST', '/profiles/me', {
+    token: studentToken,
+    body: bio === undefined ? {} : { bio },
+  });
+  const profileId = creado.data?.id;
+  if (semester !== undefined && profileId) {
+    await req('PATCH', `/profiles/${profileId}/institutional-data`, {
+      token: adminToken,
+      body: { semester },
+    });
+  }
+  const actual = await req('GET', '/profiles/me', { token: studentToken });
+  return { status: creado.status, data: actual.data ?? creado.data };
+}
+
 // ===========================================================================
 async function objective1(ctx) {
   objective('OBJETIVO 1 — Gestion de usuarios, autenticacion, roles y control de acceso');
@@ -537,21 +559,38 @@ async function objective2(ctx) {
   const created = await req('POST', '/profiles/me', {
     token: student,
     body: {
-      semester: 4,
       bio: 'Estudiante de cuarto semestre interesada en desarrollo web y datos.',
       improvementAreaIds: [dataArea.id],
     },
   });
   check(created.status === 201, '2.1 El estudiante crea su perfil', `status ${created.status} ${msgOf(created)}`);
-  check(created.data?.semester === 4, '2.2 El semestre queda registrado');
   const profileId = created.data?.id;
   ctx.studentProfileId = profileId;
 
-  const dupProfile = await req('POST', '/profiles/me', { token: student, body: { semester: 4 } });
+  // §17.1: el semestre es dato institucional. Lo fija el administrador o
+  // llega por padron; el estudiante no lo declara.
+  const semestreAsignado = await req('PATCH', `/profiles/${profileId}/institutional-data`, {
+    token: ctx.admin,
+    body: { semester: 4 },
+  });
+  check(semestreAsignado.status === 200, '2.2 El administrador fija el semestre (§17.1)', msgOf(semestreAsignado));
+  check(semestreAsignado.data?.semester === 4, '2.2b El semestre queda registrado');
+
+  const dupProfile = await req('POST', '/profiles/me', { token: student, body: {} });
   check(dupProfile.status === 409, '2.3 Perfil duplicado -> 409', `status ${dupProfile.status}`);
 
-  const badSemester = await req('PATCH', '/profiles/me', { token: student, body: { semester: 12 } });
+  const badSemester = await req('PATCH', `/profiles/${profileId}/institutional-data`, {
+    token: ctx.admin,
+    body: { semester: 12 },
+  });
   check(badSemester.status === 400, '2.4 Semestre fuera de rango (1-8) -> 400', `status ${badSemester.status}`);
+
+  const semestrePropio = await req('PATCH', '/profiles/me', { token: student, body: { semester: 7 } });
+  check(
+    semestrePropio.status === 400,
+    '2.4b El estudiante NO puede cambiar su propio semestre (§17.1) -> 400',
+    `status ${semestrePropio.status}`,
+  );
 
   // Areas de interes / preferencia (area academica + prioridad 1-5)
   const interests = await req('PUT', '/profiles/me/interests', {
@@ -580,16 +619,16 @@ async function objective2(ctx) {
   );
 
   const skillItems = sqlSkill && sqlSkill.id !== reactSkill.id
-    ? [{ skillId: reactSkill.id, level: 4 }, { skillId: sqlSkill.id, level: 3 }]
-    : [{ skillId: reactSkill.id, level: 4 }];
+    ? [{ skillId: reactSkill.id, level: 'advanced' }, { skillId: sqlSkill.id, level: 'intermediate' }]
+    : [{ skillId: reactSkill.id, level: 'advanced' }];
   const skillsRes = await req('PUT', '/profiles/me/skills', { token: student, body: { items: skillItems } });
   check(skillsRes.status === 200, '2.8 Registra habilidades con nivel', msgOf(skillsRes));
   check(
     (await req('PUT', '/profiles/me/skills', {
       token: student,
-      body: { items: [{ skillId: reactSkill.id, level: 9 }] },
+      body: { items: [{ skillId: reactSkill.id, level: 'experto' }] },
     })).status === 400,
-    '2.9 Nivel de habilidad fuera de rango -> 400',
+    '2.9 Nivel de habilidad no valido -> 400',
   );
   // Se restauran las habilidades validas tras el intento invalido.
   await req('PUT', '/profiles/me/skills', { token: student, body: { items: skillItems } });
@@ -602,12 +641,16 @@ async function objective2(ctx) {
   const updated = await req('PATCH', '/profiles/me', {
     token: student,
     body: {
-      semester: 5,
       bio: 'Ahora enfocada en backend y bases de datos.',
       improvementAreaIds: [webArea.id, dataArea.id],
     },
   });
   check(updated.status === 200, '2.11 El estudiante edita su perfil', msgOf(updated));
+
+  await req('PATCH', `/profiles/${profileId}/institutional-data`, {
+    token: ctx.admin,
+    body: { semester: 5 },
+  });
 
   const reread = await req('GET', '/profiles/me', { token: student });
   check(
@@ -659,7 +702,7 @@ async function objective2(ctx) {
     email: studentEmail('est2'),
   });
   const otherToken = other.accessToken;
-  const otherProfile = await req('POST', '/profiles/me', { token: otherToken, body: { semester: 7 } });
+  const otherProfile = await crearPerfilConSemestre(otherToken, ctx.admin, { semester: 7 });
   const otherProfileId = otherProfile.data?.id;
   ctx.otherStudentToken = otherToken;
   ctx.otherStudentProfileId = otherProfileId;
@@ -1085,7 +1128,7 @@ async function objective4(ctx) {
     email: studentEmail('est3'),
   });
   const s3Token = s3.accessToken;
-  const s3Profile = (await req('POST', '/profiles/me', { token: s3Token, body: { semester: 4 } })).data;
+  const s3Profile = (await crearPerfilConSemestre(s3Token, ctx.admin, { semester: 4 })).data;
   await req('POST', `/activities/${academicActivityId}/register`, { token: s3Token });
   const s4 = await provisionarCuenta(ctx.admin, {
     firstName: 'Bruno',
@@ -1093,7 +1136,7 @@ async function objective4(ctx) {
     email: studentEmail('est4'),
   });
   const s4Token = s4.accessToken;
-  const s4Profile = (await req('POST', '/profiles/me', { token: s4Token, body: { semester: 4 } })).data;
+  const s4Profile = (await crearPerfilConSemestre(s4Token, ctx.admin, { semester: 4 })).data;
   await req('POST', `/activities/${academicActivityId}/register`, { token: s4Token });
 
   const second = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {

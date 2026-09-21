@@ -20,7 +20,11 @@ import type {
   ImportBatchDetail,
   ImportBatchSummary,
   ImportPreview,
+  OnboardingRun,
+  Questionnaire,
+  SkillLevel,
   UserStatus,
+  VisibilitySettings,
   ProfileSummary,
   Project,
   PublicUser,
@@ -97,8 +101,40 @@ export const profileService = {
     api.patch<FreeInterest>(`/profiles/me/free-interests/${id}`, data).then((r) => r.data),
   removeFreeInterest: (id: string) =>
     api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
-  setSkills: (items: { skillId: string; level: number }[]) =>
+  setSkills: (items: { skillId: string; level: SkillLevel }[]) =>
     api.put('/profiles/me/skills', { items }).then((r) => r.data),
+
+  /** Qué comparto en mi perfil compartible (§44). */
+  visibility: () =>
+    api.get<VisibilitySettings>('/profiles/me/visibility').then((r) => r.data),
+  setVisibility: (data: {
+    publicProfileEnabled?: boolean;
+    fields?: Record<string, boolean>;
+  }) => api.put<VisibilitySettings>('/profiles/me/visibility', data).then((r) => r.data),
+};
+
+/**
+ * Cuestionario Inicial de Orientación Académica (§16).
+ *
+ * Responder no crea intereses: los crea la confirmación posterior.
+ */
+export const onboardingService = {
+  questionnaire: () =>
+    api.get<Questionnaire>('/onboarding/questionnaire').then((r) => r.data),
+  current: () =>
+    api
+      .get<{ run: OnboardingRun | null; pendingConfirmation: boolean }>('/onboarding/me')
+      .then((r) => r.data),
+  history: () => api.get<OnboardingRun[]>('/onboarding/me/history').then((r) => r.data),
+  submit: (answers: { questionCode: string; optionCodes: string[] }[]) =>
+    api.post<OnboardingRun>('/onboarding/runs', { answers }).then((r) => r.data),
+  confirm: (runId: string, academicAreaIds: string[]) =>
+    api
+      .post<{ runId: string; confirmedAreaIds: string[]; message: string }>(
+        `/onboarding/runs/${runId}/confirm`,
+        { academicAreaIds },
+      )
+      .then((r) => r.data),
 };
 
 export const catalogService = {
@@ -365,6 +401,11 @@ export const adminService = {
   /** Cambia el estado de la cuenta (§12). Reactivar una pendiente no es posible. */
   setStatus: (id: string, status: UserStatus) =>
     api.patch<PublicUser>(`/users/${id}/status`, { status }).then((r) => r.data),
+  /** Semestre y código universitario de un estudiante (§17.1). */
+  setInstitutionalData: (
+    studentProfileId: string,
+    data: { semester?: number; universityCode?: string },
+  ) => api.patch(`/profiles/${studentProfileId}/institutional-data`, data).then((r) => r.data),
   resendActivation: (id: string) =>
     api
       .post<{ message: string; activationToken?: string }>(`/users/${id}/resend-activation`)

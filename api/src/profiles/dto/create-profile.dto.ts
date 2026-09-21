@@ -1,16 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { cleanText } from '../../common/validation';
 
+/**
+ * Alta del perfil por parte del estudiante.
+ *
+ * No lleva `semester` ni `universityCode`: son datos institucionales y §17.1
+ * los declara no editables por el estudiante. Llegan por importación de padrón
+ * o los fija el administrador. Enviarlos aquí devuelve 400, porque el
+ * ValidationPipe global rechaza campos no declarados.
+ */
 export class CreateProfileDto {
-  @ApiProperty({ required: false, example: 5, minimum: 1, maximum: 8 })
-  @IsOptional()
-  @IsInt({ message: 'El semestre debe ser un número.' })
-  @Min(1, { message: 'El semestre mínimo es 1.' })
-  @Max(8, { message: 'El semestre máximo es 8.' })
-  semester?: number;
-
   @ApiProperty({ required: false, example: 'Interesado en desarrollo web y datos.' })
   @IsOptional()
   @Transform(cleanText)
