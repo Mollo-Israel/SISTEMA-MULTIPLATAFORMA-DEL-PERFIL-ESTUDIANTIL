@@ -8,9 +8,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
+import { ValidationResourceType } from '@perfil/shared';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
-import { STORAGE_PORT, StoragePort } from '../storage/storage.port';
+import { FILES_ROUTE } from '../storage/local-storage.driver';
+import { UploadsService } from '../storage/uploads.service';
+import { ValidationService } from '../validation/validation.service';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { CreateExternalCertificateDto } from './dto/create-external-certificate.dto';
 import { UpdateExternalCertificateDto } from './dto/update-external-certificate.dto';
@@ -26,7 +29,8 @@ export class CertificatesService {
     private readonly certificates: Repository<ExternalCertificate>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
-    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    private readonly uploads: UploadsService,
+    private readonly validation: ValidationService,
     @Inject(AFFINITY_RECALCULATION)
     private readonly affinityRecalculation: AffinityRecalculationPort,
   ) {}
@@ -40,20 +44,37 @@ export class CertificatesService {
       throw new ConflictException('Ya registraste un certificado con ese nombre.');
     }
     await this.assertAreaExists(dto.academicAreaId);
+
+    // §27: solo se adjunta un archivo propio, y sus metadatos los resuelve
+    // el servidor a partir del registro.
+    const archivo = dto.storedFileId
+      ? await this.uploads.requireOwned(userId, dto.storedFileId)
+      : null;
+
     const certificate = this.certificates.create({
       studentProfileId: profile.id,
       certificateName: dto.certificateName,
       issuer: dto.issuer,
       certificateUrl: dto.certificateUrl ?? null,
       issueDate: dto.issueDate ?? null,
+      credentialId: dto.credentialId ?? null,
       description: dto.description ?? null,
       academicAreaId: dto.academicAreaId ?? null,
-      fileUrl: dto.fileUrl ?? null,
-      fileName: dto.fileName ?? null,
-      mimeType: dto.mimeType ?? null,
-      fileSize: dto.fileSize ?? null,
+      storedFileId: archivo?.id ?? null,
+      fileUrl: archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null,
+      fileName: archivo?.originalFilename ?? null,
+      mimeType: archivo?.mimeTypeDetected ?? null,
+      fileSize: archivo?.sizeBytes ?? null,
     });
     const saved = await this.certificates.save(certificate);
+
+    // §26: el certificado existe desde ya; lo que puede corroborarse se
+    // averigua aparte y sin hacer esperar a nadie.
+    await this.validation.enqueue({
+      resourceType: ValidationResourceType.EXTERNAL_CERTIFICATE,
+      resourceId: saved.id,
+    });
+
     await this.affinityRecalculation.requestRecalculation(profile.id);
     return saved;
   }
@@ -82,26 +103,46 @@ export class CertificatesService {
       await this.assertAreaExists(dto.academicAreaId);
       certificate.academicAreaId = dto.academicAreaId ?? null;
     }
-    if (dto.fileUrl !== undefined) {
-      // Al reemplazar el archivo se elimina el anterior del almacenamiento.
-      if (certificate.fileUrl && certificate.fileUrl !== dto.fileUrl) {
-        await this.storage.remove(certificate.fileUrl);
-      }
-      certificate.fileUrl = dto.fileUrl ?? null;
-      certificate.fileName = dto.fileName ?? null;
-      certificate.mimeType = dto.mimeType ?? null;
-      certificate.fileSize = dto.fileSize ?? null;
+    if (dto.credentialId !== undefined) certificate.credentialId = dto.credentialId ?? null;
+
+    let reemplazado: string | null = null;
+    if (dto.storedFileId !== undefined) {
+      const anterior = certificate.storedFileId;
+      const archivo = dto.storedFileId
+        ? await this.uploads.requireOwned(userId, dto.storedFileId)
+        : null;
+      certificate.storedFileId = archivo?.id ?? null;
+      certificate.fileUrl = archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null;
+      certificate.fileName = archivo?.originalFilename ?? null;
+      certificate.mimeType = archivo?.mimeTypeDetected ?? null;
+      certificate.fileSize = archivo?.sizeBytes ?? null;
+      reemplazado = anterior && anterior !== certificate.storedFileId ? anterior : null;
     }
+
     const saved = await this.certificates.save(certificate);
+
+    // El archivo anterior se borra despues de guardar: si el guardado fallara,
+    // el certificado se habria quedado sin archivo y sin vuelta atras.
+    if (reemplazado) await this.uploads.remove(reemplazado);
+
+    // Lo declarado cambio, asi que el veredicto anterior ya no describe
+    // este certificado: se vuelve a validar.
+    await this.validation.enqueue({
+      resourceType: ValidationResourceType.EXTERNAL_CERTIFICATE,
+      resourceId: saved.id,
+      force: true,
+    });
+
     await this.affinityRecalculation.requestRecalculation(certificate.studentProfileId);
     return saved;
   }
 
   async remove(userId: string, id: string): Promise<void> {
     const certificate = await this.requireOwned(userId, id);
+    const storedFileId = certificate.storedFileId;
     await this.certificates.delete(certificate.id);
-    if (certificate.fileUrl) {
-      await this.storage.remove(certificate.fileUrl);
+    if (storedFileId) {
+      await this.uploads.remove(storedFileId);
     }
     await this.affinityRecalculation.requestRecalculation(certificate.studentProfileId);
   }

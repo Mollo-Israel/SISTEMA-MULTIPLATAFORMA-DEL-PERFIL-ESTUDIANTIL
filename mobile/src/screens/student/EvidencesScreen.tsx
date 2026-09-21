@@ -32,7 +32,8 @@ import { colors } from '../../theme';
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-const MAX_BYTES = 5 * 1024 * 1024;
+/** §27.3: maximo por archivo. */
+const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPTED = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
 
 const humanSize = (bytes?: number | null) => {
@@ -389,7 +390,7 @@ function useFilePicker(onError: (m: string) => void) {
 
     const asset = result.assets[0];
     if (asset.size && asset.size > MAX_BYTES) {
-      onError('El archivo supera el máximo de 5 MB.');
+      onError('El archivo supera el máximo de 10 MB.');
       return;
     }
     const mimeType = asset.mimeType ?? 'application/octet-stream';
@@ -400,13 +401,17 @@ function useFilePicker(onError: (m: string) => void) {
 
     setBusy(true);
     try {
-      setFile(
-        await uploadService.upload({
-          uri: asset.uri,
-          name: asset.name ?? 'archivo',
-          mimeType,
-        }),
-      );
+      const subido = await uploadService.upload({
+        uri: asset.uri,
+        name: asset.name ?? 'archivo',
+        mimeType,
+      });
+      setFile(subido);
+      // §28: no se impide, se avisa. El mismo documento puede respaldar
+      // legitimamente dos cosas; lo que no hara es contar dos veces.
+      if (subido.duplicateOfId) {
+        onError('Ya habías subido este mismo archivo. Puedes usarlo igual, pero no sumará respaldo por separado.');
+      }
     } catch (e) {
       onError(apiError(e, 'No se pudo subir el archivo.'));
     } finally {
@@ -485,10 +490,8 @@ function EvidenceForm({
         evidenceType: type,
         description: description || undefined,
         externalUrl: type === 'link' ? externalUrl : undefined,
-        fileUrl: type === 'file' ? file?.url : undefined,
-        fileName: type === 'file' ? file?.originalName : undefined,
-        mimeType: type === 'file' ? file?.mimeType : undefined,
-        fileSize: type === 'file' ? file?.size : undefined,
+        // §27: se adjunta por identificador; los metadatos los pone el servidor.
+        storedFileId: type === 'file' ? file?.id : undefined,
         projectId: projectId || undefined,
         activityId: activityId || undefined,
         academicAreaId: areaId || undefined,
@@ -543,7 +546,7 @@ function EvidenceForm({
           />
           {file && (
             <Text style={styles.fileChip}>
-              {file.originalName} · {humanSize(file.size)}
+              {file.originalFilename} · {humanSize(file.sizeBytes)}
             </Text>
           )}
         </View>
@@ -604,10 +607,7 @@ function CertificateForm({
         issueDate: form.issueDate || undefined,
         description: form.description || undefined,
         academicAreaId: areaId || undefined,
-        fileUrl: file?.url,
-        fileName: file?.originalName,
-        mimeType: file?.mimeType,
-        fileSize: file?.size,
+        storedFileId: file?.id,
       });
       setForm({ certificateName: '', issuer: '', issueDate: '', description: '' });
       setAreaId('');
@@ -664,7 +664,7 @@ function CertificateForm({
         />
         {file && (
           <Text style={styles.fileChip}>
-            {file.originalName} · {humanSize(file.size)}
+            {file.originalFilename} · {humanSize(file.sizeBytes)}
           </Text>
         )}
       </View>

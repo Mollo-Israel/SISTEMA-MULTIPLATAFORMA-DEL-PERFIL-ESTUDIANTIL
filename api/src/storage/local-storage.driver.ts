@@ -67,6 +67,22 @@ export class LocalStorageDriver implements StoragePort, OnModuleInit {
     };
   }
 
+  async read(storageKey: string): Promise<Buffer | null> {
+    const id = path.basename(storageKey);
+    // basename descarta cualquier intento de recorrido de rutas; ademas se
+    // comprueba que no quede nada raro.
+    if (!id || id.includes('..') || id !== path.basename(id)) return null;
+    try {
+      return await fs.readFile(path.join(this.root, id));
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        this.logger.warn(`No se pudo leer ${id}: ${String(error)}`);
+      }
+      return null;
+    }
+  }
+
   async remove(fileUrl: string): Promise<void> {
     const id = path.basename(fileUrl);
     // basename descarta cualquier intento de recorrido de rutas.

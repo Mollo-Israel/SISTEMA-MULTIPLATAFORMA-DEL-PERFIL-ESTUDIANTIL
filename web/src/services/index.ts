@@ -21,6 +21,7 @@ import type {
   ImportBatchSummary,
   ImportPreview,
   OnboardingRun,
+  ValidationVerdict,
   Questionnaire,
   SkillLevel,
   UserStatus,
@@ -189,7 +190,12 @@ export const projectFeedbackService = {
       .then((r) => r.data),
 };
 
-/** Subida de archivos de evidencia. Devuelve la referencia a persistir. */
+/**
+ * Subida de archivos (§27).
+ *
+ * Devuelve un identificador que después se adjunta a la evidencia o al
+ * certificado. El servidor comprueba que quien lo adjunta es quien lo subió.
+ */
 export const uploadService = {
   upload: (file: File) => {
     const form = new FormData();
@@ -203,6 +209,15 @@ export const uploadService = {
     const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/api$/, '');
     return `${base}${relative}`;
   },
+};
+
+/** Consulta del Motor de Validación (§26). */
+export const validationService = {
+  forResource: (resourceType: string, resourceId: string) =>
+    api
+      .get<ValidationVerdict>(`/validation/${resourceType}/${resourceId}`)
+      .then((r) => r.data),
+  queue: () => api.get('/validation/queue').then((r) => r.data),
 };
 
 export const evidenceService = {

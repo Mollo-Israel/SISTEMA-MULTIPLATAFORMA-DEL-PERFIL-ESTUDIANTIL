@@ -11,6 +11,7 @@ import { MailModule } from './mail/mail.module';
 import { IdentityModule } from './identity/identity.module';
 import { ImportsModule } from './imports/imports.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { ValidationModule } from './validation/validation.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
@@ -54,6 +55,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     IdentityModule,
     ImportsModule,
     OnboardingModule,
+    ValidationModule,
     AuthModule,
     UsersModule,
     RolesModule,

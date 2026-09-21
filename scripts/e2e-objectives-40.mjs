@@ -1171,32 +1171,28 @@ async function objective4(ctx) {
   uploadForm.append('file', new Blob([pdfBytes], { type: 'application/pdf' }), 'constancia.pdf');
   const upload = await req('POST', '/uploads', { token: student, raw: uploadForm });
   check(upload.status === 201, '4.16 El estudiante sube un archivo real (PDF)', `status ${upload.status} ${msgOf(upload)}`);
-  check(!!upload.data?.url && upload.data.url.startsWith('/api/files/'), '4.17 La subida devuelve una URL servible');
-  check(upload.data?.mimeType === 'application/pdf', '4.18 Se conserva el tipo MIME');
-  check(upload.data?.size === pdfBytes.length, '4.19 Se conserva el tamano del archivo');
+  // §27: la subida ya no devuelve una URL que el cliente reenvie, sino un
+  // identificador con dueno.
   check(
-    !String(upload.data?.id ?? '').includes('constancia'),
-    '4.20 El nombre en disco lo genera el sistema, no el cliente',
+    !!upload.data?.id && !upload.data?.url,
+    '4.17 La subida devuelve un identificador, no una URL reenviable (§27)',
+    JSON.stringify(Object.keys(upload.data ?? {})),
+  );
+  check(upload.data?.mimeType === 'application/pdf', '4.18 Se detecta el tipo por la firma real del archivo');
+  check(upload.data?.sizeBytes === pdfBytes.length, '4.19 Se conserva el tamano del archivo');
+  check(
+    /^[0-9a-f]{64}$/.test(upload.data?.sha256 ?? ''),
+    '4.20 La subida calcula la huella SHA-256 del contenido (§28)',
+    upload.data?.sha256,
   );
 
-  // §83: conocer la URL no debe bastar para descargar. Antes esta prueba
-  // afirmaba lo contrario, que era precisamente el hallazgo a corregir.
-  const anonimo = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`);
-  check(
-    anonimo.status === 401,
-    '4.21 Conocer la URL NO permite descargar sin sesion -> 401',
-    `status ${anonimo.status}`,
-  );
-
-  // El archivo recien subido aun no esta referenciado por ninguna evidencia,
-  // de modo que nadie puede alcanzarlo: se adjunta primero.
+  // El archivo se adjunta primero: hasta que una evidencia lo referencia,
+  // nadie puede alcanzarlo.
   const evidenciaArchivo = await req('POST', '/evidences', {
     token: student,
     body: {
       evidenceType: 'file',
-      fileUrl: upload.data?.url,
-      fileName: 'constancia.pdf',
-      fileSize: upload.data?.size,
+      storedFileId: upload.data?.id,
       description: 'Archivo de prueba de descarga autorizada',
     },
   });
@@ -1206,7 +1202,25 @@ async function objective4(ctx) {
     `status ${evidenciaArchivo.status} ${msgOf(evidenciaArchivo)}`,
   );
 
-  const propio = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`, {
+  // La URL de descarga la publica la evidencia, no la subida: es el
+  // servidor quien decide como se sirve el archivo.
+  const urlArchivo = evidenciaArchivo.data?.fileUrl;
+  check(
+    typeof urlArchivo === 'string' && urlArchivo.startsWith('/api/files/'),
+    '4.22b La evidencia publica la ruta de descarga del archivo',
+    String(urlArchivo),
+  );
+
+  // §83: conocer la URL no basta para descargar. Antes esta comprobacion
+  // afirmaba lo contrario, que era precisamente el hallazgo a corregir.
+  const anonimo = await fetch(`${API.replace(/\/api$/, '')}${urlArchivo}`);
+  check(
+    anonimo.status === 401,
+    '4.22c Conocer la URL NO permite descargar sin sesion -> 401',
+    `status ${anonimo.status}`,
+  );
+
+  const propio = await fetch(`${API.replace(/\/api$/, '')}${urlArchivo}`, {
     headers: { Authorization: `Bearer ${student}` },
   });
   const descargado = Buffer.from(await propio.arrayBuffer());
@@ -1216,7 +1230,7 @@ async function objective4(ctx) {
     `status ${propio.status}`,
   );
 
-  const ajeno = await fetch(`${API.replace(/\/api$/, '')}${upload.data?.url}`, {
+  const ajeno = await fetch(`${API.replace(/\/api$/, '')}${urlArchivo}`, {
     headers: { Authorization: `Bearer ${ctx.otherStudentToken}` },
   });
   check(
@@ -1228,33 +1242,65 @@ async function objective4(ctx) {
   const badType = new FormData();
   badType.append('file', new Blob([Buffer.from('MZ ejecutable')], { type: 'application/x-msdownload' }), 'virus.exe');
   const badTypeRes = await req('POST', '/uploads', { token: student, raw: badType });
-  check(badTypeRes.status === 400, '4.23 Formato no permitido -> 400', `status ${badTypeRes.status}`);
+  check(
+    badTypeRes.status === 400,
+    '4.23 Formato no permitido -> 400',
+    `status ${badTypeRes.status}`,
+  );
+
+  // §27.3: el tipo se decide por la firma del archivo, no por lo que
+  // declare el cliente. Un ejecutable con extension .pdf y el Content-Type
+  // correcto pasaba cualquier filtro basado en la cabecera.
+  const disfrazado = new FormData();
+  disfrazado.append(
+    'file',
+    new Blob([Buffer.from('MZ\x90\x00ejecutable disfrazado')], { type: 'application/pdf' }),
+    'inofensivo.pdf',
+  );
+  const disfrazadoRes = await req('POST', '/uploads', { token: student, raw: disfrazado });
+  check(
+    disfrazadoRes.status === 400,
+    '4.23b Un archivo que miente sobre su tipo se rechaza por su firma (§27.3) -> 400',
+    `status ${disfrazadoRes.status}`,
+  );
 
   const tooBig = new FormData();
-  tooBig.append('file', new Blob([Buffer.alloc(6 * 1024 * 1024)], { type: 'application/pdf' }), 'grande.pdf');
+  tooBig.append('file', new Blob([Buffer.alloc(11 * 1024 * 1024)], { type: 'application/pdf' }), 'grande.pdf');
   const tooBigRes = await req('POST', '/uploads', { token: student, raw: tooBig });
   check(
     tooBigRes.status === 400 || tooBigRes.status === 413,
-    '4.24 Archivo mayor a 5 MB -> rechazado',
+    '4.24 Archivo mayor al maximo (10 MB, §27.3) -> rechazado',
     `status ${tooBigRes.status}`,
   );
   check((await req('POST', '/uploads', { raw: new FormData() })).status === 401, '4.25 Subida sin sesion -> 401');
 
   // Evidencia de archivo asociada a la actividad
+  // Un archivo nuevo: el anterior ya esta adjunto a otra evidencia.
+  const segundoForm = new FormData();
+  segundoForm.append(
+    'file',
+    new Blob([Buffer.concat([pdfBytes, Buffer.from('% segunda constancia\n')])], {
+      type: 'application/pdf',
+    }),
+    'asistencia.pdf',
+  );
+  const segundo = await req('POST', '/uploads', { token: student, raw: segundoForm });
   const fileEvidence = await req('POST', '/evidences', {
     token: student,
     body: {
       evidenceType: 'file',
       description: 'Constancia de asistencia al taller.',
-      fileUrl: upload.data?.url,
-      fileName: upload.data?.originalName,
-      mimeType: upload.data?.mimeType,
-      fileSize: upload.data?.size,
+      storedFileId: segundo.data?.id,
       activityId: academicActivityId,
     },
   });
   check(fileEvidence.status === 201, '4.26 Evidencia de archivo asociada a la actividad', msgOf(fileEvidence));
-  check(fileEvidence.data?.fileUrl === upload.data?.url, '4.27 La referencia del archivo queda persistida');
+  check(
+    fileEvidence.data?.fileName === 'asistencia.pdf'
+      && fileEvidence.data?.mimeType === 'application/pdf',
+    '4.27 Los metadatos del archivo los resuelve el servidor, no el cliente (§27.2)',
+    JSON.stringify({ n: fileEvidence.data?.fileName, m: fileEvidence.data?.mimeType }),
+  );
 
   const linkEvidence = await req('POST', '/evidences', {
     token: student,
@@ -1271,7 +1317,7 @@ async function objective4(ctx) {
     token: student,
     body: { evidenceType: 'file', description: 'Sin archivo' },
   });
-  check(fileWithoutUrl.status === 400, '4.29 Evidencia de tipo archivo sin fileUrl -> 400');
+  check(fileWithoutUrl.status === 400, '4.29 Evidencia de tipo archivo sin storedFileId -> 400');
   const linkWithoutUrl = await req('POST', '/evidences', {
     token: student,
     body: { evidenceType: 'link', description: 'Sin enlace' },
@@ -1317,14 +1363,15 @@ async function objective4(ctx) {
       issueDate: '2026-03-10',
       description: 'Curso de 40 horas con evaluacion final.',
       academicAreaId: webArea.id,
-      fileUrl: certFile.data?.url,
-      fileName: certFile.data?.originalName,
-      mimeType: certFile.data?.mimeType,
-      fileSize: certFile.data?.size,
+      storedFileId: certFile.data?.id,
     },
   });
   check(cert.status === 201, '4.34 El estudiante registra un certificado externo con archivo', msgOf(cert));
-  check(cert.data?.fileUrl === certFile.data?.url, '4.35 El archivo del certificado queda vinculado');
+  check(
+    typeof cert.data?.fileUrl === 'string' && cert.data.fileUrl.startsWith('/api/files/'),
+    '4.35 El archivo del certificado queda vinculado',
+    String(cert.data?.fileUrl),
+  );
   check(cert.data?.academicAreaId === webArea.id, '4.36 El certificado guarda su area academica');
 
   const futureCert = await req('POST', '/certificates/external', {

@@ -144,13 +144,39 @@ export const projectFeedbackService = {
 };
 
 /** Subida de archivos de evidencia. Devuelve la referencia a persistir. */
+/**
+ * Archivo subido (§27.2).
+ *
+ * Ya no trae URL: trae identificador. La URL de descarga la publica la
+ * evidencia o el certificado al que se adjunte, porque es el servidor quien
+ * decide como se sirve un archivo y a quien.
+ */
 export interface StoredFile {
   id: string;
-  url: string;
-  originalName: string;
+  originalFilename: string;
   mimeType: string;
-  size: number;
+  sizeBytes: number;
+  /** Huella del contenido (§28). */
+  sha256: string;
+  /** Id del archivo identico que ya habia subido esta persona, si lo hay. */
+  duplicateOfId: string | null;
+  createdAt: string;
 }
+
+/** Niveles de respaldo de un documento (§30). */
+export type BackingTier = 'declared' | 'supported' | 'corroborated';
+
+export const BACKING_TIER_LABEL: Record<BackingTier, string> = {
+  declared: 'Aportado',
+  supported: 'Respaldado',
+  corroborated: 'Corroborado',
+};
+
+export const BACKING_TIER_HELP: Record<BackingTier, string> = {
+  declared: 'Lo adjuntaste, pero el sistema no pudo comprobar nada por si mismo.',
+  supported: 'El documento se leyo y coincide con lo que declaraste.',
+  corroborated: 'Ademas, el enlace de verificacion del emisor respondio.',
+};
 
 export const uploadService = {
   /**
@@ -169,6 +195,12 @@ export const uploadService = {
       .then((r) => r.data);
   },
   fileUrl: (relative: string) => `${API_URL.replace(/\/api$/, '')}${relative}`,
+};
+
+/** Consulta del Motor de Validacion (§26). */
+export const validationService = {
+  forResource: (resourceType: string, resourceId: string) =>
+    api.get<any>(`/validation/${resourceType}/${resourceId}`).then((r) => r.data),
 };
 
 export const evidenceService = {

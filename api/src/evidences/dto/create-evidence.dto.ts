@@ -2,23 +2,30 @@ import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsEnum,
-  IsInt,
   IsOptional,
   IsString,
   IsUrl,
   IsUUID,
-  Max,
   MaxLength,
-  Min,
 } from 'class-validator';
 import { EvidenceType } from '@perfil/shared';
-import { cleanLine, cleanText, trim } from '../../common/validation';
+import { cleanText, trim } from '../../common/validation';
 
 /**
- * Alta de una evidencia academica (RF11).
+ * Alta de una evidencia academica (RF11, §27).
  *
  * Una evidencia es un enlace o un archivo previamente subido a POST /uploads.
- * Se asocia, segun corresponda, a un proyecto, a una actividad o a un area.
+ *
+ * El archivo se nombra por su identificador, no por su URL. Antes se
+ * enviaban `fileUrl`, `fileName`, `mimeType` y `fileSize` tal cual los
+ * devolvia la subida, y nada comprobaba su procedencia: bastaba con enviar
+ * la URL de otra persona para adjuntar su archivo a una evidencia propia y,
+ * como la autorizacion de descarga se resuelve mirando de quien es la
+ * evidencia, quedar autorizado a leerlo. §27 advierte exactamente de ese
+ * patron.
+ *
+ * Ahora el servidor resuelve los metadatos a partir del identificador, que
+ * ademas tiene dueno.
  */
 export class CreateEvidenceDto {
   @ApiProperty({ enum: EvidenceType, description: 'link = enlace externo · file = archivo subido' })
@@ -41,34 +48,13 @@ export class CreateEvidenceDto {
 
   @ApiProperty({
     required: false,
-    description: 'Referencia devuelta por POST /uploads. Obligatorio cuando evidenceType = file',
+    description:
+      'Identificador devuelto por POST /uploads. Obligatorio cuando evidenceType = file. '
+      + 'Solo se aceptan archivos subidos por quien crea la evidencia.',
   })
   @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(500)
-  fileUrl?: string;
-
-  @ApiProperty({ required: false, description: 'Nombre original del archivo subido' })
-  @IsOptional()
-  @Transform(cleanLine)
-  @IsString()
-  @MaxLength(160)
-  fileName?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(120)
-  mimeType?: string;
-
-  @ApiProperty({ required: false, description: 'Tamaño en bytes' })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(5 * 1024 * 1024, { message: 'El archivo supera el máximo de 5 MB.' })
-  fileSize?: number;
+  @IsUUID('4', { message: 'El archivo debe identificarse por el id que devolvió la subida.' })
+  storedFileId?: string;
 
   @ApiProperty({ required: false, description: 'Proyecto que respalda la evidencia' })
   @IsOptional()

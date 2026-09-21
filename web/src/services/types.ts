@@ -396,13 +396,100 @@ export interface ProfileSummary {
   affinities: { academicAreaId: string; area: string | null; score: number; level: string }[];
 }
 
-/** Referencia devuelta por POST /uploads. */
+/**
+ * Archivo subido (§27.2).
+ *
+ * Ya no trae una URL: trae un identificador. La URL de descarga la publica
+ * después la evidencia o el certificado al que se adjunte, porque es el
+ * servidor quien decide cómo se sirve un archivo y a quién.
+ */
 export interface StoredFile {
   id: string;
-  url: string;
-  originalName: string;
+  originalFilename: string;
   mimeType: string;
-  size: number;
+  sizeBytes: number;
+  /** Huella del contenido (§28). */
+  sha256: string;
+  /** Id del archivo idéntico que ya había subido esta persona, si lo hay. */
+  duplicateOfId: string | null;
+  createdAt: string;
+}
+
+/** Niveles de respaldo de un documento (§30). */
+export type BackingTier = 'declared' | 'supported' | 'corroborated';
+
+export const BACKING_TIER_LABEL: Record<BackingTier, string> = {
+  declared: 'Aportado',
+  supported: 'Respaldado',
+  corroborated: 'Corroborado',
+};
+
+export const BACKING_TIER_HELP: Record<BackingTier, string> = {
+  declared: 'Adjuntaste el documento, pero el sistema no pudo comprobar nada por sí mismo.',
+  supported: 'El documento se leyó y sus datos coinciden con lo que declaraste.',
+  corroborated: 'Además, el enlace de verificación del emisor respondió.',
+};
+
+export type ValidationStatus =
+  | 'pending' | 'processing' | 'completed' | 'inconclusive' | 'failed';
+
+export const VALIDATION_STATUS_LABEL: Record<ValidationStatus, string> = {
+  pending: 'En cola',
+  processing: 'Procesando',
+  completed: 'Verificado',
+  inconclusive: 'Sin poder concluir',
+  failed: 'Error al procesar',
+};
+
+export type IdentityMatchStatus = 'match' | 'partial_match' | 'mismatch' | 'unknown';
+
+export const IDENTITY_MATCH_LABEL: Record<IdentityMatchStatus, string> = {
+  match: 'El nombre coincide',
+  partial_match: 'El nombre coincide en parte',
+  mismatch: 'El nombre no corresponde',
+  unknown: 'No se pudo leer el nombre',
+};
+
+export type LinkCheckStatus = 'unverified' | 'available' | 'unavailable' | 'blocked';
+
+export const LINK_CHECK_LABEL: Record<LinkCheckStatus, string> = {
+  unverified: 'Sin comprobar',
+  available: 'El enlace responde',
+  unavailable: 'El enlace no responde',
+  blocked: 'No se consultó por seguridad',
+};
+
+/** Veredicto del Motor de Validación (§26). */
+export interface ValidationVerdict {
+  resourceType: string;
+  resourceId: string;
+  status: ValidationStatus;
+  backingTier: BackingTier;
+  identityMatchStatus: IdentityMatchStatus;
+  extractedData: {
+    holderName: string | null;
+    issuer: string | null;
+    certificateTitle: string | null;
+    issueDate: string | null;
+    credentialId: string | null;
+    verificationUrl: string | null;
+    source: 'pdf_text' | 'ocr' | 'qr' | 'none';
+    textLength: number;
+  } | null;
+  linkCheck: {
+    status: LinkCheckStatus;
+    finalUrl: string | null;
+    httpStatus: number | null;
+    title: string | null;
+    blockedReason: string | null;
+    checkedAt: string;
+  } | null;
+  isDuplicate: boolean;
+  validatorVersion: number;
+  attempts: number;
+  errorCode: string | null;
+  finishedAt: string | null;
+  disclaimer: string;
 }
 
 export interface Evidence {

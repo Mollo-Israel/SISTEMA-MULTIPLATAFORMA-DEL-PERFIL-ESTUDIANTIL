@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { EvidenceType, RolNombre } from '@perfil/shared';
+import { EvidenceType, RolNombre, ValidationResourceType } from '@perfil/shared';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { Project } from '../entities/project.entity';
@@ -16,7 +16,9 @@ import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
-import { STORAGE_PORT, StoragePort } from '../storage/storage.port';
+import { FILES_ROUTE } from '../storage/local-storage.driver';
+import { UploadsService } from '../storage/uploads.service';
+import { ValidationService } from '../validation/validation.service';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
 import {
   AFFINITY_RECALCULATION,
@@ -34,7 +36,8 @@ export class EvidencesService {
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
-    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
+    private readonly uploads: UploadsService,
+    private readonly validation: ValidationService,
     @Inject(AFFINITY_RECALCULATION)
     private readonly affinityRecalculation: AffinityRecalculationPort,
   ) {}
@@ -47,6 +50,12 @@ export class EvidencesService {
     if (dto.activityId) await this.assertActivityParticipation(profile.id, dto.activityId);
     if (dto.academicAreaId) await this.assertAreaExists(dto.academicAreaId);
 
+    // §27: los metadatos del archivo los pone el servidor a partir del
+    // registro, no el cliente. Y solo si el archivo es de quien lo adjunta.
+    const archivo = dto.evidenceType === EvidenceType.FILE && dto.storedFileId
+      ? await this.uploads.requireOwned(user.userId, dto.storedFileId)
+      : null;
+
     const evidence = this.evidences.create({
       studentProfileId: profile.id,
       projectId: dto.projectId ?? null,
@@ -55,13 +64,22 @@ export class EvidencesService {
       evidenceType: dto.evidenceType,
       description: dto.description ?? null,
       externalUrl: dto.evidenceType === EvidenceType.LINK ? (dto.externalUrl ?? null) : null,
-      fileUrl: dto.evidenceType === EvidenceType.FILE ? (dto.fileUrl ?? null) : null,
-      fileName: dto.evidenceType === EvidenceType.FILE ? (dto.fileName ?? null) : null,
-      mimeType: dto.evidenceType === EvidenceType.FILE ? (dto.mimeType ?? null) : null,
-      fileSize: dto.evidenceType === EvidenceType.FILE ? (dto.fileSize ?? null) : null,
+      storedFileId: archivo?.id ?? null,
+      fileUrl: archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null,
+      fileName: archivo?.originalFilename ?? null,
+      mimeType: archivo?.mimeTypeDetected ?? null,
+      fileSize: archivo?.sizeBytes ?? null,
     });
 
     const saved = await this.evidences.save(evidence);
+
+    // §26: la validacion va aparte y puede tardar. Encolar no bloquea al
+    // estudiante ni condiciona que la evidencia exista.
+    await this.validation.enqueue({
+      resourceType: ValidationResourceType.PROJECT_EVIDENCE,
+      resourceId: saved.id,
+    });
+
     await this.affinityRecalculation.requestRecalculation(profile.id);
     return this.findOneOrFail(saved.id);
   }
@@ -81,12 +99,12 @@ export class EvidencesService {
    */
   async remove(user: AuthenticatedUser, id: string): Promise<void> {
     const evidence = await this.requireOwned(user, id);
-    const fileUrl = evidence.fileUrl;
+    const storedFileId = evidence.storedFileId;
     const profileId = evidence.studentProfileId;
 
     await this.evidences.delete(evidence.id);
-    if (evidence.evidenceType === EvidenceType.FILE && fileUrl) {
-      await this.storage.remove(fileUrl);
+    if (storedFileId) {
+      await this.uploads.remove(storedFileId);
     }
     await this.affinityRecalculation.requestRecalculation(profileId);
   }
@@ -95,9 +113,10 @@ export class EvidencesService {
     if (dto.evidenceType === EvidenceType.LINK && !dto.externalUrl) {
       throw new BadRequestException('Una evidencia de tipo enlace requiere externalUrl.');
     }
-    if (dto.evidenceType === EvidenceType.FILE && !dto.fileUrl) {
+    if (dto.evidenceType === EvidenceType.FILE && !dto.storedFileId) {
       throw new BadRequestException(
-        'Una evidencia de tipo archivo requiere fileUrl. Suba primero el archivo en POST /uploads.',
+        'Una evidencia de tipo archivo requiere storedFileId. '
+        + 'Suba primero el archivo en POST /uploads y use el id que devuelve.',
       );
     }
   }

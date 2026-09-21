@@ -2,15 +2,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsDateString,
-  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
   IsUUID,
-  Max,
+  Matches,
   MaxLength,
-  Min,
   MinLength,
 } from 'class-validator';
 import { cleanLine, cleanText, IsNotFutureDate, trim } from '../../common/validation';
@@ -32,12 +30,30 @@ export class CreateExternalCertificateDto {
   @MaxLength(160, { message: 'La entidad emisora no puede superar 160 caracteres.' })
   issuer: string;
 
+  /**
+   * Enlace de verificación del emisor (§30).
+   *
+   * Si responde y es coherente con lo declarado, el certificado sube a
+   * CORROBORATED. El sistema lo consulta con las protecciones de §31: nunca
+   * alcanza direcciones internas ni el servicio de metadata de la nube.
+   */
   @ApiProperty({ required: false, example: 'https://emisor.example.com/cert/123' })
   @IsOptional()
   @Transform(trim)
   @IsUrl({}, { message: 'El enlace del certificado debe ser una URL válida.' })
   @MaxLength(500)
   certificateUrl?: string;
+
+  /** Identificador que el emisor imprime en el documento (§30). */
+  @ApiProperty({ required: false, example: 'AF-2026-00417' })
+  @IsOptional()
+  @Transform(cleanLine)
+  @IsString()
+  @MaxLength(80, { message: 'El identificador de credencial es demasiado largo.' })
+  @Matches(/^[A-Za-z0-9._\/-]+$/, {
+    message: 'El identificador de credencial solo admite letras, números, punto, guion y barra.',
+  })
+  credentialId?: string;
 
   @ApiProperty({ required: false, example: '2026-01-15' })
   @IsOptional()
@@ -57,34 +73,18 @@ export class CreateExternalCertificateDto {
   @IsUUID('4')
   academicAreaId?: string;
 
+  /**
+   * Archivo del certificado, por su identificador (§27).
+   *
+   * Solo se aceptan archivos subidos por quien registra el certificado: la
+   * URL suelta que se enviaba antes permitia adjuntar el documento de otra
+   * persona.
+   */
   @ApiProperty({
     required: false,
-    description: 'Referencia del archivo devuelta por POST /uploads',
+    description: 'Identificador del archivo devuelto por POST /uploads',
   })
   @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(500)
-  fileUrl?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @Transform(cleanLine)
-  @IsString()
-  @MaxLength(160)
-  fileName?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(120)
-  mimeType?: string;
-
-  @ApiProperty({ required: false, description: 'Tamaño en bytes' })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(5 * 1024 * 1024, { message: 'El archivo supera el máximo de 5 MB.' })
-  fileSize?: number;
+  @IsUUID('4', { message: 'El archivo debe identificarse por el id que devolvió la subida.' })
+  storedFileId?: string;
 }

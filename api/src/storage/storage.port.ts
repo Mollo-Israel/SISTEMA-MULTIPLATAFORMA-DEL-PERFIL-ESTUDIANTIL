@@ -30,4 +30,13 @@ export interface StoragePort {
 
   /** Elimina un archivo. No falla si ya no existe. */
   remove(fileUrl: string): Promise<void>;
+
+  /**
+   * Devuelve el contenido, o null si el archivo ya no esta.
+   *
+   * Lo necesita el Motor de Validacion para leer el documento. Que sea
+   * parte del puerto y no un acceso directo al disco es lo que permite
+   * cambiar a un bucket privado sin tocar el validador.
+   */
+  read(storageKey: string): Promise<Buffer | null>;
 }

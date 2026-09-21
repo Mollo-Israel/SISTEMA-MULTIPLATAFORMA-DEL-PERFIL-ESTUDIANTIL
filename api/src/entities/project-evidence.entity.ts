@@ -12,6 +12,7 @@ import { Project } from './project.entity';
 import { StudentProfile } from './student-profile.entity';
 import { Activity } from './activity.entity';
 import { AcademicArea } from './academic-area.entity';
+import { StoredFileRecord } from './stored-file.entity';
 
 /**
  * Evidencia academica del estudiante (RF11).
@@ -81,6 +82,22 @@ export class ProjectEvidence {
 
   @Column({ name: 'file_size', type: 'int', nullable: true })
   fileSize: number | null;
+
+  /**
+   * Archivo adjunto como entidad con dueno (§27.2).
+   *
+   * Las columnas `file_url`, `file_name`, `mime_type` y `file_size` se
+   * conservan porque las consultan las vistas existentes, pero la fuente de
+   * verdad es esta: es la unica que sabe quien subio el archivo y cual es su
+   * huella.
+   */
+  @Index()
+  @Column({ name: 'stored_file_id', type: 'uuid', nullable: true })
+  storedFileId: string | null;
+
+  @ManyToOne(() => StoredFileRecord, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'stored_file_id' })
+  storedFile: StoredFileRecord | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

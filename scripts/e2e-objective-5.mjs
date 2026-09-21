@@ -325,10 +325,8 @@ async function rf13(ctx) {
     body: {
       evidenceType: 'file',
       description: 'Informe de avance del proyecto',
-      fileUrl: upload.data?.url,
-      fileName: upload.data?.originalName,
-      mimeType: upload.data?.mimeType,
-      fileSize: upload.data?.size,
+      // §27: se adjunta por identificador; los metadatos los pone el servidor.
+      storedFileId: upload.data?.id,
       projectId,
     },
   });

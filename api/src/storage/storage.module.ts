@@ -7,11 +7,13 @@ import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
+import { StoredFileRecord } from '../entities/stored-file.entity';
 import { AccessModule } from '../access/access.module';
 import { LocalStorageDriver } from './local-storage.driver';
 import { UploadsController } from './uploads.controller';
 import { FilesController } from './files.controller';
 import { FileAccessService } from './file-access.service';
+import { UploadsService } from './uploads.service';
 import { STORAGE_PORT } from './storage.port';
 
 /**
@@ -37,6 +39,7 @@ import { STORAGE_PORT } from './storage.port';
       Project,
       ProjectMember,
       StudentProfile,
+      StoredFileRecord,
     ]),
     AccessModule,
   ],
@@ -44,8 +47,9 @@ import { STORAGE_PORT } from './storage.port';
   providers: [
     LocalStorageDriver,
     FileAccessService,
+    UploadsService,
     { provide: STORAGE_PORT, useExisting: LocalStorageDriver },
   ],
-  exports: [STORAGE_PORT],
+  exports: [STORAGE_PORT, UploadsService],
 })
 export class StorageModule {}

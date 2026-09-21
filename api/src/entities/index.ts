@@ -29,3 +29,5 @@ export * from './auth-session.entity';
 export * from './import-batch.entity';
 export * from './audit-event.entity';
 export * from './onboarding-run.entity';
+export * from './stored-file.entity';
+export * from './validation-record.entity';

@@ -847,3 +847,8 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
   text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500);
 }
 .inst-dato .val { display: block; margin-top: 0.25rem; font-size: 0.95rem; font-weight: 600; color: var(--gray-900); }
+
+/* Nivel de respaldo de un documento (§30). */
+.respaldo { display: flex; flex-direction: column; gap: 0.2rem; align-items: flex-start; max-width: 260px; }
+.respaldo .muted { font-size: 0.72rem; line-height: 1.35; }
+.respaldo-aviso { font-size: 0.72rem; color: var(--red); font-weight: 600; line-height: 1.35; }

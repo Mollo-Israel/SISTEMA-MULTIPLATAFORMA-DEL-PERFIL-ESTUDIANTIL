@@ -11,6 +11,7 @@ import {
   evidenceService,
   projectService,
   uploadService,
+  validationService,
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
@@ -21,6 +22,11 @@ import { useConfirm, useToast } from '../../components/feedback';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+import {
+  BACKING_TIER_HELP,
+  BACKING_TIER_LABEL,
+  LINK_CHECK_LABEL,
+} from '../../services/types';
 import type {
   AcademicArea,
   Activity,
@@ -28,9 +34,11 @@ import type {
   ExternalCertificate,
   Project,
   StoredFile,
+  ValidationVerdict,
 } from '../../services/types';
 
-const MAX_MB = 5;
+/** §27.3: máximo por archivo. */
+const MAX_MB = 10;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp';
 
 const humanSize = (bytes: number | null) => {
@@ -277,6 +285,7 @@ export default function StudentEvidencesPage() {
                     <th>Área</th>
                     <th>Emisión</th>
                     <th>Adjunto</th>
+                    <th>Respaldo</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -312,6 +321,9 @@ export default function StudentEvidencesPage() {
                         ) : (
                           <span className="muted">Sin adjunto</span>
                         )}
+                      </td>
+                      <td>
+                        <RespaldoDelCertificado certificateId={c.id} />
                       </td>
                       <td>
                         <button
@@ -403,7 +415,13 @@ function FilePicker({
     }
     setBusy(true);
     try {
-      onPicked(await uploadService.upload(selected));
+      const subido = await uploadService.upload(selected);
+      onPicked(subido);
+      // §28: no se impide, se avisa. El mismo documento puede respaldar
+      // legítimamente dos cosas; lo que no hará es contar dos veces.
+      if (subido.duplicateOfId) {
+        onError('Ya habías subido este mismo archivo. Puedes usarlo igual, pero no sumará respaldo por separado.');
+      }
     } catch (e2) {
       onError(apiError(e2, 'No se pudo subir el archivo.'));
     } finally {
@@ -421,7 +439,10 @@ function FilePicker({
       {busy && <Loading label="Subiendo archivo…" />}
       {file && (
         <div className="file-chip">
-          <FiFile /> {file.originalName} · {humanSize(file.size)}
+          <FiFile /> {file.originalFilename} · {humanSize(file.sizeBytes)}
+          {file.duplicateOfId && (
+            <Badge tone="amber">Ya lo habías subido</Badge>
+          )}
           <button
             type="button"
             className="btn btn-ghost btn-sm"
@@ -472,10 +493,9 @@ function EvidenceForm({
         evidenceType: type,
         description: description || undefined,
         externalUrl: type === 'link' ? externalUrl : undefined,
-        fileUrl: type === 'file' ? file?.url : undefined,
-        fileName: type === 'file' ? file?.originalName : undefined,
-        mimeType: type === 'file' ? file?.mimeType : undefined,
-        fileSize: type === 'file' ? file?.size : undefined,
+        // §27: se envía el identificador del archivo. Los metadatos los
+        // resuelve el servidor a partir de lo que realmente se subió.
+        storedFileId: type === 'file' ? file?.id : undefined,
         projectId: projectId || undefined,
         activityId: activityId || undefined,
         academicAreaId: academicAreaId || undefined,
@@ -607,6 +627,7 @@ function CertificateForm({
     description: '',
     academicAreaId: '',
     certificateUrl: '',
+    credentialId: '',
   });
   const [file, setFile] = useState<StoredFile | null>(null);
   const [saving, setSaving] = useState(false);
@@ -622,10 +643,8 @@ function CertificateForm({
         description: form.description || undefined,
         academicAreaId: form.academicAreaId || undefined,
         certificateUrl: form.certificateUrl || undefined,
-        fileUrl: file?.url,
-        fileName: file?.originalName,
-        mimeType: file?.mimeType,
-        fileSize: file?.size,
+        credentialId: form.credentialId || undefined,
+        storedFileId: file?.id,
       });
       setForm({
         certificateName: '',
@@ -634,6 +653,7 @@ function CertificateForm({
         description: '',
         academicAreaId: '',
         certificateUrl: '',
+        credentialId: '',
       });
       setFile(null);
       onSaved();
@@ -710,6 +730,19 @@ function CertificateForm({
               onChange={(e) => setForm({ ...form, certificateUrl: e.target.value })}
               placeholder="https://emisor.example.com/cert/123"
             />
+            <span className="field-hint">
+              Si el emisor publica una página para verificar el certificado, este es el
+              dato que más lo respalda.
+            </span>
+          </div>
+          <div className="field">
+            <label>Código de credencial (opcional)</label>
+            <input
+              value={form.credentialId}
+              onChange={(e) => setForm({ ...form, credentialId: e.target.value })}
+              placeholder="AF-2026-00417"
+              maxLength={80}
+            />
           </div>
         </div>
         <FilePicker
@@ -723,5 +756,68 @@ function CertificateForm({
         </button>
       </form>
     </Card>
+  );
+}
+
+/**
+ * Nivel de respaldo de un certificado (§30).
+ *
+ * Se consulta por separado porque la validación es asíncrona: el certificado
+ * existe desde que se registra y su veredicto llega cuando llega. Mientras
+ * tanto se dice «comprobando», que es la verdad.
+ *
+ * El texto evita cualquier palabra que suene a autenticidad legal: esto mide
+ * qué pudo corroborarse técnicamente, nada más.
+ */
+function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
+  const [verdict, setVerdict] = useState<ValidationVerdict | null>(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    let vivo = true;
+    validationService
+      .forResource('external_certificate', certificateId)
+      .then((v) => { if (vivo) setVerdict(v); })
+      .catch(() => { /* sin veredicto todavía */ })
+      .finally(() => { if (vivo) setCargando(false); });
+    return () => { vivo = false; };
+  }, [certificateId]);
+
+  if (cargando) return <span className="muted" style={{ fontSize: '0.76rem' }}>Comprobando…</span>;
+  if (!verdict) return <span className="muted" style={{ fontSize: '0.76rem' }}>Sin comprobar</span>;
+
+  if (verdict.status === 'pending' || verdict.status === 'processing') {
+    return <Badge tone="gray">En cola</Badge>;
+  }
+
+  const tono = verdict.backingTier === 'corroborated'
+    ? 'green'
+    : verdict.backingTier === 'supported' ? 'bordo' : 'gray';
+
+  return (
+    <div className="respaldo">
+      <Badge tone={tono}>{BACKING_TIER_LABEL[verdict.backingTier]}</Badge>
+      <span className="muted">{BACKING_TIER_HELP[verdict.backingTier]}</span>
+
+      {verdict.identityMatchStatus === 'mismatch' && (
+        <span className="respaldo-aviso">
+          El nombre del documento no corresponde al tuyo.
+        </span>
+      )}
+      {verdict.status === 'inconclusive' && (
+        <span className="muted">
+          No se pudo leer el documento. Sigue registrado; añade el enlace de
+          verificación del emisor si lo tienes.
+        </span>
+      )}
+      {verdict.isDuplicate && (
+        <span className="muted">Este mismo archivo ya respalda otro registro tuyo.</span>
+      )}
+      {verdict.linkCheck && verdict.linkCheck.status !== 'unverified' && (
+        <span className="muted">
+          Enlace: {LINK_CHECK_LABEL[verdict.linkCheck.status].toLowerCase()}
+        </span>
+      )}
+    </div>
   );
 }

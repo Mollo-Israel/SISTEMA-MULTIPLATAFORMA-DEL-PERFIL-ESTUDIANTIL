@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { StudentProfile } from './student-profile.entity';
 import { AcademicArea } from './academic-area.entity';
+import { StoredFileRecord } from './stored-file.entity';
 
 /**
  * Certificado emitido por una entidad externa y adjuntado por el estudiante.
@@ -44,6 +45,15 @@ export class ExternalCertificate {
   @Column({ name: 'issue_date', type: 'date', nullable: true })
   issueDate: string | null;
 
+  /**
+   * Identificador que imprime el emisor (§30).
+   *
+   * Se compara con el que el validador lea del documento: si coinciden, es
+   * una senal de que lo declarado corresponde al papel.
+   */
+  @Column({ name: 'credential_id', type: 'varchar', length: 80, nullable: true })
+  credentialId: string | null;
+
   @Column({ type: 'varchar', length: 300, nullable: true })
   description: string | null;
 
@@ -67,6 +77,22 @@ export class ExternalCertificate {
 
   @Column({ name: 'file_size', type: 'int', nullable: true })
   fileSize: number | null;
+
+  /**
+   * Archivo adjunto como entidad con dueno (§27.2).
+   *
+   * Las columnas `file_url`, `file_name`, `mime_type` y `file_size` se
+   * conservan porque las consultan las vistas existentes, pero la fuente de
+   * verdad es esta: es la unica que sabe quien subio el archivo y cual es su
+   * huella.
+   */
+  @Index()
+  @Column({ name: 'stored_file_id', type: 'uuid', nullable: true })
+  storedFileId: string | null;
+
+  @ManyToOne(() => StoredFileRecord, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'stored_file_id' })
+  storedFile: StoredFileRecord | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
