@@ -18,6 +18,7 @@ import InterestsSkillsPage from './pages/student/InterestsSkills';
 import StudentOnboardingPage from './pages/student/Onboarding';
 import StudentPrivacyPage from './pages/student/Privacy';
 import StudentCollaborationPage from './pages/student/Collaboration';
+import StudentProgressPage from './pages/student/Progress';
 import StudentProjectsPage from './pages/student/Projects';
 import StudentActivitiesPage from './pages/student/Activities';
 import StudentAffinityPage from './pages/student/Affinity';
@@ -95,6 +96,7 @@ export default function App() {
             <Route path="/student/interests" element={<InterestsSkillsPage />} />
             <Route path="/student/privacy" element={<StudentPrivacyPage />} />
             <Route path="/student/collaboration" element={<StudentCollaborationPage />} />
+            <Route path="/student/progress" element={<StudentProgressPage />} />
             <Route path="/student/projects" element={<StudentProjectsPage />} />
             <Route path="/student/activities" element={<StudentActivitiesPage />} />
             <Route path="/student/evidences" element={<StudentEvidencesPage />} />

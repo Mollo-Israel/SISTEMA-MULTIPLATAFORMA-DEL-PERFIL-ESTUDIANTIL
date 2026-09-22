@@ -386,6 +386,27 @@ export const collaborationService = {
     api.patch(`/teams/invitations/${id}`, { decision }).then((r) => r.data),
 };
 
+/** Gamificacion (§66). Los puntos reconocen hechos; no alimentan la afinidad. */
+export interface GamificationSummary {
+  totalPoints: number;
+  eventsCount: number;
+  note: string;
+  badges: {
+    code: string; name: string; description: string; trigger: string;
+    triggerLabel: string; threshold: number; progress: number;
+    earned: boolean; earnedAt: string | null;
+  }[];
+  events: {
+    id: string; trigger: string; triggerLabel: string; points: number;
+    reason: string; occurredAt: string;
+  }[];
+  rules: { trigger: string; label: string; points: number }[];
+}
+
+export const gamificationService = {
+  myProgress: () => api.get<GamificationSummary>('/gamification/me').then((r) => r.data),
+};
+
 export const affinityService = {
   mine: () => api.get<any[]>('/affinity/me').then((r) => r.data),
   recalculateMine: () => api.post<any[]>('/affinity/recalculate/me').then((r) => r.data),

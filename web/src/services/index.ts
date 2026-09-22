@@ -347,6 +347,72 @@ export const collaborationService = {
     api.post<MessageView>(`/conversations/${id}/messages`, { body }).then((r) => r.data),
 };
 
+/** Gamificación (§66). Los puntos reconocen hechos; no alimentan la afinidad. */
+export interface GamificationSummary {
+  totalPoints: number;
+  eventsCount: number;
+  note: string;
+  badges: {
+    code: string;
+    name: string;
+    description: string;
+    trigger: string;
+    triggerLabel: string;
+    threshold: number;
+    progress: number;
+    earned: boolean;
+    earnedAt: string | null;
+  }[];
+  events: {
+    id: string;
+    trigger: string;
+    triggerLabel: string;
+    points: number;
+    reason: string;
+    occurredAt: string;
+  }[];
+  rules: { trigger: string; label: string; points: number }[];
+}
+
+export interface TrajectorySectionOption {
+  key: string;
+  label: string;
+}
+
+export const gamificationService = {
+  myProgress: () => api.get<GamificationSummary>('/gamification/me').then((r) => r.data),
+};
+
+export const trajectoryService = {
+  sections: () =>
+    api
+      .get<{ sections: TrajectorySectionOption[]; disclaimer: string }>(
+        '/trajectory-summary/sections',
+      )
+      .then((r) => r.data),
+  preview: (sections: string[]) =>
+    api
+      .post<Record<string, unknown>>('/trajectory-summary/preview', { sections })
+      .then((r) => r.data),
+  /**
+   * Descarga el PDF.
+   *
+   * Va como blob y no como un enlace directo porque la ruta exige la sesión, y
+   * un `<a href>` no lleva la cabecera de autorización.
+   */
+  pdf: async (sections: string[]) => {
+    const res = await api.get(`/trajectory-summary/pdf?sections=${sections.join(',')}`, {
+      responseType: 'blob',
+    });
+    const disposition = String(res.headers['content-disposition'] ?? '');
+    const encontrado = /filename="([^"]+)"/.exec(disposition);
+    return {
+      blob: res.data as Blob,
+      filename: encontrado?.[1] ?? 'resumen-trayectoria.pdf',
+    };
+  },
+};
+
 export const activityService = {
   list: (params?: Record<string, string>) =>
     api.get<Activity[]>('/activities', { params }).then((r) => r.data),

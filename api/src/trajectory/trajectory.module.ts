@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Recommendation } from '../entities/recommendation.entity';
 import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { GamificationModule } from '../gamification/gamification.module';
 import { TRAJECTORY_RECALCULATION } from './trajectory-recalculation.port';
 import { TrajectoryRecalculationService } from './trajectory-recalculation.service';
 
@@ -14,7 +15,11 @@ import { TrajectoryRecalculationService } from './trajectory-recalculation.servi
  * opcional y a la larga alguien lo saltaria.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Recommendation]), AffinityRecalcModule],
+  imports: [
+    TypeOrmModule.forFeature([Recommendation]),
+    AffinityRecalcModule,
+    GamificationModule,
+  ],
   providers: [
     TrajectoryRecalculationService,
     { provide: TRAJECTORY_RECALCULATION, useExisting: TrajectoryRecalculationService },

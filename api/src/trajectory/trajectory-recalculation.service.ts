@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AffinityEngineService } from '../affinity-recalc/affinity.engine';
+import { GamificationService } from '../gamification/gamification.service';
 import { Recommendation } from '../entities/recommendation.entity';
 import { TrajectoryRecalculationPort, TrajectorySignal } from './trajectory-recalculation.port';
 
@@ -32,6 +33,7 @@ export class TrajectoryRecalculationService implements TrajectoryRecalculationPo
 
   constructor(
     private readonly affinity: AffinityEngineService,
+    private readonly gamification: GamificationService,
     @InjectRepository(Recommendation)
     private readonly recommendations: Repository<Recommendation>,
   ) {}
@@ -58,6 +60,25 @@ export class TrajectoryRecalculationService implements TrajectoryRecalculationPo
       );
     }
 
-    // 3. Gamificacion: §66, BATCH 9. El punto de enganche es este y no otro.
+    /*
+     * 3. Gamificacion (§66).
+     *
+     * Va la ultima y su fallo no propaga, por el mismo motivo que el paso
+     * anterior: los puntos reconocen lo que el estudiante hizo, y no haberlos
+     * podido sumar no puede invalidar el calculo de su trayectoria.
+     *
+     * La direccion importa y es en un solo sentido: la gamificacion **lee** la
+     * trayectoria para reconocer hechos. §66 prohibe la contraria -nunca
+     * `puntos -> afinidad`- y por eso el motor de afinidad no conoce este
+     * servicio.
+     */
+    try {
+      await this.gamification.sync(studentProfileId);
+    } catch (e) {
+      this.logger.warn(
+        `Trayectoria de ${studentProfileId} recalculada por «${signal}», pero los `
+        + `puntos no pudieron ponerse al dia: ${String(e)}`,
+      );
+    }
   }
 }

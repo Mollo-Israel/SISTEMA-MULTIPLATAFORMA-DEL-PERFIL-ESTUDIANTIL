@@ -36,3 +36,4 @@ export * from './project-member-skill.entity';
 export * from './project-check.entity';
 export * from './learning-resource.entity';
 export * from './collaboration.entity';
+export * from './gamification.entity';

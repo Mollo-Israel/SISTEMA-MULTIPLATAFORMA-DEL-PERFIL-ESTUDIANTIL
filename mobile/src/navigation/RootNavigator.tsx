@@ -11,6 +11,7 @@ import ComingSoonScreen from '../screens/ComingSoonScreen';
 import HomeScreen from '../screens/student/HomeScreen';
 import ProfileScreen from '../screens/student/ProfileScreen';
 import CollaborationScreen from '../screens/student/CollaborationScreen';
+import ProgressScreen from '../screens/student/ProgressScreen';
 import InterestsScreen from '../screens/student/InterestsScreen';
 import SkillsScreen from '../screens/student/SkillsScreen';
 import EvidencesScreen from '../screens/student/EvidencesScreen';
@@ -83,6 +84,11 @@ function PerfilStack() {
         name="Colaboracion"
         component={CollaborationScreen}
         options={{ title: 'Colaboración' }}
+      />
+      <Stack.Screen
+        name="Progreso"
+        component={ProgressScreen}
+        options={{ title: 'Mi progreso' }}
       />
     </Stack.Navigator>
   );
