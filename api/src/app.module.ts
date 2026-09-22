@@ -25,6 +25,7 @@ import { CatalogsModule } from './catalogs/catalogs.module';
 import { StorageModule } from './storage/storage.module';
 import { EvidencesModule } from './evidences/evidences.module';
 import { ProjectFeedbackModule } from './project-feedback/project-feedback.module';
+import { CollaborationModule } from './collaboration/collaboration.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -70,6 +71,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     EvidencesModule,
     ProjectFeedbackModule,
     RecommendationsModule,
+    CollaborationModule,
   ],
   controllers: [HealthController],
   providers: [

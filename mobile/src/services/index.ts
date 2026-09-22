@@ -351,6 +351,41 @@ export interface AffinityEngineRules {
   weights: AffinityWeight[];
 }
 
+/** Colaboracion entre estudiantes (§42 a §47). */
+export interface PublicLinkView {
+  slug: string;
+  url: string;
+  enabled: boolean;
+  qrSvg: string;
+  qrSize: number;
+  qrPayload: string;
+}
+
+export interface ContactView {
+  contactId: string;
+  profileId: string;
+  name: string;
+  semester: number | null;
+  availability: string | null;
+  source: string;
+  since: string;
+}
+
+export const collaborationService = {
+  myPublicLink: () => api.get<PublicLinkView>('/profiles/me/public-link').then((r) => r.data),
+  rotatePublicLink: () =>
+    api.post<PublicLinkView>('/profiles/me/public-link/rotate').then((r) => r.data),
+  requestContact: (body: { slug: string; message?: string; source?: string }) =>
+    api.post('/contacts/requests', body).then((r) => r.data),
+  receivedRequests: () => api.get<any[]>('/contacts/requests/received').then((r) => r.data),
+  decideContactRequest: (id: string, decision: 'accept' | 'reject') =>
+    api.patch(`/contacts/requests/${id}`, { decision }).then((r) => r.data),
+  contacts: () => api.get<ContactView[]>('/contacts').then((r) => r.data),
+  myTeamInvitations: () => api.get<any[]>('/teams/invitations/mine').then((r) => r.data),
+  decideTeamInvitation: (id: string, decision: 'accept' | 'decline') =>
+    api.patch(`/teams/invitations/${id}`, { decision }).then((r) => r.data),
+};
+
 export const affinityService = {
   mine: () => api.get<any[]>('/affinity/me').then((r) => r.data),
   recalculateMine: () => api.post<any[]>('/affinity/recalculate/me').then((r) => r.data),

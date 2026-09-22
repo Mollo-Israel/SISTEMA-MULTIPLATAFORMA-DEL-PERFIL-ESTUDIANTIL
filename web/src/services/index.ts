@@ -186,6 +186,167 @@ export const learningResourceService = {
     api.patch<LearningResource>(`/learning-resources/${id}`, data).then((r) => r.data),
 };
 
+/**
+ * Colaboración entre estudiantes (§42 a §47).
+ *
+ * El perfil compartible es la única llamada del sistema que no lleva sesión:
+ * un QR que exigiera iniciar sesión no serviría para lo que existe.
+ */
+export interface PublicProfileView {
+  slug: string;
+  name: string;
+  semester: number | null;
+  bio?: string | null;
+  availability?: string;
+  collaborationModes?: string[];
+  collaborationInterests?: string[];
+  areas?: { area: string | null; score?: number; supportLevel?: string }[];
+  skills?: { name: string; level: string }[];
+  projects?: {
+    title: string;
+    description: string | null;
+    technologies?: string[];
+    backingTier?: string;
+  }[];
+  trajectory?: {
+    areasCount: number;
+    signalsCount: number;
+    averageSupport: number;
+    calculatedAt: string;
+  } | null;
+}
+
+export interface PublicLinkView {
+  slug: string;
+  url: string;
+  enabled: boolean;
+  /** SVG ya renderizado. Lo genera el servidor, que es donde vive §43. */
+  qrSvg: string;
+  qrSize: number;
+  /** El contenido exacto del código: únicamente la URL. */
+  qrPayload: string;
+}
+
+export interface ContactView {
+  contactId: string;
+  profileId: string;
+  name: string;
+  semester: number | null;
+  availability: string | null;
+  source: string;
+  since: string;
+}
+
+export interface TeamNeedView {
+  id: string;
+  purpose: string;
+  description: string | null;
+  status: 'open' | 'closed';
+  maxMembers: number;
+  availabilityRequirement: string;
+  isOwner: boolean;
+  owner: { profileId: string; name: string };
+  requiredSkills: { skillId: string; name: string | null }[];
+  preferredAreas: { academicAreaId: string; name: string | null }[];
+  createdAt: string;
+}
+
+export interface TeamSuggestionsView {
+  need: TeamNeedView;
+  missingSkills?: { skillId: string; name: string | null }[];
+  coveredSkills?: { skillId: string; name: string | null }[];
+  candidates: {
+    profileId: string;
+    name: string;
+    semester: number | null;
+    availability: string;
+    score: number;
+    reasons: { code: string; label: string; points: number }[];
+  }[];
+}
+
+export interface TeamView {
+  id: string;
+  name: string;
+  status: string;
+  purpose: string | null;
+  isOwner: boolean;
+  maxMembers: number | null;
+  requiredSkills: { skillId: string; name: string | null }[];
+  coveredSkills: { skillId: string; name: string | null }[];
+  missingSkills: { skillId: string; name: string | null }[];
+  openings: number;
+  members: { profileId: string; name: string; role: string | null; availability: string | null }[];
+}
+
+export interface ConversationView {
+  id: string;
+  kind: 'direct' | 'team';
+  teamId: string | null;
+  title: string;
+  participants: { profileId: string; name: string }[];
+  lastMessageAt: string | null;
+}
+
+export interface MessageView {
+  id: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+  sender: { profileId: string; name: string };
+}
+
+export const collaborationService = {
+  // §43, §44
+  publicProfile: (slug: string) =>
+    api.get<PublicProfileView>(`/public/profiles/${slug}`).then((r) => r.data),
+  myPublicLink: () =>
+    api.get<PublicLinkView>('/profiles/me/public-link').then((r) => r.data),
+  rotatePublicLink: () =>
+    api.post<PublicLinkView>('/profiles/me/public-link/rotate').then((r) => r.data),
+
+  // §45
+  requestContact: (body: { slug: string; message?: string; source?: string }) =>
+    api.post('/contacts/requests', body).then((r) => r.data),
+  receivedRequests: () =>
+    api.get<any[]>('/contacts/requests/received').then((r) => r.data),
+  sentRequests: () => api.get<any[]>('/contacts/requests/sent').then((r) => r.data),
+  decideContactRequest: (id: string, decision: 'accept' | 'reject') =>
+    api.patch(`/contacts/requests/${id}`, { decision }).then((r) => r.data),
+  cancelContactRequest: (id: string) =>
+    api.delete(`/contacts/requests/${id}`).then((r) => r.data),
+  contacts: () => api.get<ContactView[]>('/contacts').then((r) => r.data),
+  removeContact: (profileId: string) =>
+    api.delete(`/contacts/${profileId}`).then((r) => r.data),
+
+  // §46, §47
+  createTeamNeed: (body: Record<string, unknown>) =>
+    api.post<TeamNeedView>('/team-needs', body).then((r) => r.data),
+  openNeeds: () => api.get<TeamNeedView[]>('/team-needs').then((r) => r.data),
+  myNeeds: () => api.get<TeamNeedView[]>('/team-needs/mine').then((r) => r.data),
+  updateTeamNeed: (id: string, body: Record<string, unknown>) =>
+    api.patch<TeamNeedView>(`/team-needs/${id}`, body).then((r) => r.data),
+  teamSuggestions: (id: string) =>
+    api.get<TeamSuggestionsView>(`/team-needs/${id}/suggestions`).then((r) => r.data),
+  createTeam: (needId: string, name: string) =>
+    api.post(`/team-needs/${needId}/team`, { name }).then((r) => r.data),
+  myTeams: () => api.get<TeamView[]>('/teams/mine').then((r) => r.data),
+  inviteToTeam: (teamId: string, invitedProfileId: string, message?: string) =>
+    api.post(`/teams/${teamId}/invitations`, { invitedProfileId, message }).then((r) => r.data),
+  myTeamInvitations: () => api.get<any[]>('/teams/invitations/mine').then((r) => r.data),
+  decideTeamInvitation: (id: string, decision: 'accept' | 'decline') =>
+    api.patch(`/teams/invitations/${id}`, { decision }).then((r) => r.data),
+
+  // §42
+  conversations: () => api.get<ConversationView[]>('/conversations').then((r) => r.data),
+  openDirect: (profileId: string) =>
+    api.post<ConversationView>('/conversations/direct', { profileId }).then((r) => r.data),
+  messages: (id: string) =>
+    api.get<MessageView[]>(`/conversations/${id}/messages`).then((r) => r.data),
+  sendMessage: (id: string, body: string) =>
+    api.post<MessageView>(`/conversations/${id}/messages`, { body }).then((r) => r.data),
+};
+
 export const activityService = {
   list: (params?: Record<string, string>) =>
     api.get<Activity[]>('/activities', { params }).then((r) => r.data),

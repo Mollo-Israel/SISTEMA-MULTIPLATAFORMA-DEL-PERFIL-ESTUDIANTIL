@@ -1,4 +1,5 @@
 import {
+  BeforeInsert,
   Column,
   CreateDateColumn,
   Entity,
@@ -16,7 +17,10 @@ import {
   DEFAULT_PUBLIC_VISIBILITY,
   ProfileStatus,
   PublicProfileField,
+  PUBLIC_SLUG_ALPHABET,
+  PUBLIC_SLUG_LENGTH,
 } from '@perfil/shared';
+import { randomInt } from 'crypto';
 import { User } from './user.entity';
 import { StudentSkill } from './student-skill.entity';
 import { StudentInterest } from './student-interest.entity';
@@ -97,6 +101,18 @@ export class StudentProfile {
    * Desactivado mientras el estudiante no lo active: compartir es una
    * decision, no un ajuste por omision.
    */
+  /**
+   * Identificador publico opaco del perfil compartible (§43).
+   *
+   * §43 prohibe usar el correo, el codigo universitario o el UUID interno: un
+   * identificador que se pueda adivinar o que revele algo deja de ser opaco.
+   * Se puede rotar, y rotarlo invalida los QR impresos antes, que es justo
+   * para lo que sirve.
+   */
+  @Index({ unique: true })
+  @Column({ name: 'public_profile_slug', type: 'varchar', length: 24 })
+  publicProfileSlug: string;
+
   @Column({ name: 'public_profile_enabled', type: 'boolean', default: false })
   publicProfileEnabled: boolean;
 
@@ -138,4 +154,26 @@ export class StudentProfile {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  /**
+   * Asigna el identificador publico al crear el perfil (§43).
+   *
+   * Va en la entidad y no en el servicio a proposito: hay varios caminos por
+   * los que nace un perfil -el estudiante, el padron, la siembra- y uno solo
+   * que se olvide dejaria una fila sin identificador, que la base rechaza.
+   *
+   * No se comprueba la unicidad contra la base: doce simbolos de un alfabeto
+   * de veintiocho son 2,4 x 10^17 combinaciones, y con cien mil perfiles la
+   * probabilidad de choque esta en el orden de 10^-8. La restriccion unica de
+   * la tabla queda como red de seguridad para ese caso.
+   */
+  @BeforeInsert()
+  asignarSlugPublico(): void {
+    if (this.publicProfileSlug) return;
+    let slug = '';
+    for (let i = 0; i < PUBLIC_SLUG_LENGTH; i++) {
+      slug += PUBLIC_SLUG_ALPHABET[randomInt(PUBLIC_SLUG_ALPHABET.length)];
+    }
+    this.publicProfileSlug = slug;
+  }
 }

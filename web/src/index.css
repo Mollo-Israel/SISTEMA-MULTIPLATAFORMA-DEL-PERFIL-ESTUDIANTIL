@@ -873,3 +873,28 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .reglas-motor { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1.2rem; }
 .reglas-motor p { margin: 0; line-height: 1.6; }
 .reglas-motor table th:last-child, .reglas-motor table td:last-child { white-space: nowrap; }
+
+/* BATCH 8 · §43 a §47 — perfil compartible, contactos, equipos y mensajería. */
+.public-page { max-width: 760px; margin: 0 auto; padding: 2rem 1rem; display: flex; flex-direction: column; gap: 1rem; }
+.qr-bloque { display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: flex-start; }
+.qr-lienzo { flex: 0 0 auto; line-height: 0; border: 1px solid var(--gray-100); border-radius: 8px; padding: 0.4rem; background: #fff; }
+.qr-lienzo svg { width: 190px; height: 190px; }
+.qr-datos { flex: 1 1 260px; min-width: 240px; }
+.enlace-publico { background: var(--gray-50, #f4f5f7); padding: 0.35rem 0.55rem; border-radius: 6px; font-size: 0.8rem; word-break: break-all; }
+.solicitud-fila { padding: 0.6rem 0; border-bottom: 1px solid var(--gray-100); gap: 0.8rem; flex-wrap: wrap; }
+.solicitud-fila:last-child { border-bottom: none; }
+.necesidad { padding: 0.8rem 0; border-bottom: 1px solid var(--gray-100); display: flex; flex-direction: column; gap: 0.5rem; }
+.necesidad:last-child { border-bottom: none; }
+.candidato { border: 1px solid var(--gray-100); border-radius: 8px; padding: 0.7rem; margin-bottom: 0.6rem; }
+.mensajeria { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+.mensajeria-lista { flex: 0 0 220px; display: flex; flex-direction: column; gap: 0.35rem; }
+.conversacion { all: unset; cursor: pointer; padding: 0.5rem 0.6rem; border-radius: 8px; display: flex; flex-direction: column; border: 1px solid var(--gray-100); }
+.conversacion.on { border-color: var(--bordo); background: var(--gray-50, #f7f4f5); }
+.conversacion .muted { font-size: 0.74rem; }
+.mensajeria-hilo { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 0.6rem; }
+.mensajes { display: flex; flex-direction: column; gap: 0.45rem; max-height: 340px; overflow-y: auto; }
+.mensaje { background: var(--gray-50, #f4f5f7); border-radius: 10px; padding: 0.45rem 0.7rem; max-width: 80%; }
+.mensaje.mio { align-self: flex-end; background: var(--bordo-suave, #f3e7ea); }
+.mensaje p { margin: 0; }
+.mensaje .muted { font-size: 0.72rem; }
+@media (max-width: 720px) { .mensajeria-lista { flex: 1 1 100%; } }

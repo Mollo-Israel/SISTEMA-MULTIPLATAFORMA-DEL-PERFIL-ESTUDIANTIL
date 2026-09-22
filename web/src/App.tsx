@@ -8,6 +8,7 @@ import { Loading } from './components/ui';
 import { ConfirmProvider, ToastProvider } from './components/feedback';
 import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
+import PublicProfilePage from './pages/PublicProfile';
 import SetPasswordPage from './pages/auth/SetPasswordPage';
 import RequestTokenPage from './pages/auth/RequestTokenPage';
 
@@ -16,6 +17,7 @@ import StudentProfilePage from './pages/student/Profile';
 import InterestsSkillsPage from './pages/student/InterestsSkills';
 import StudentOnboardingPage from './pages/student/Onboarding';
 import StudentPrivacyPage from './pages/student/Privacy';
+import StudentCollaborationPage from './pages/student/Collaboration';
 import StudentProjectsPage from './pages/student/Projects';
 import StudentActivitiesPage from './pages/student/Activities';
 import StudentAffinityPage from './pages/student/Affinity';
@@ -76,6 +78,9 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<LandingPage />} />
+          {/* §43: el perfil compartible es la única pantalla sin sesión. Un QR
+              que exigiera iniciar sesión no serviría para lo que existe. */}
+          <Route path="/p/:slug" element={<PublicProfilePage />} />
 
           {/* Activación y recuperación: públicas por necesidad (§12, §13). */}
           <Route path="/activar" element={<SetPasswordPage mode="activate" />} />
@@ -89,6 +94,7 @@ export default function App() {
             <Route path="/student/onboarding" element={<StudentOnboardingPage />} />
             <Route path="/student/interests" element={<InterestsSkillsPage />} />
             <Route path="/student/privacy" element={<StudentPrivacyPage />} />
+            <Route path="/student/collaboration" element={<StudentCollaborationPage />} />
             <Route path="/student/projects" element={<StudentProjectsPage />} />
             <Route path="/student/activities" element={<StudentActivitiesPage />} />
             <Route path="/student/evidences" element={<StudentEvidencesPage />} />
