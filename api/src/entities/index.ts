@@ -34,3 +34,4 @@ export * from './validation-record.entity';
 export * from './activity-skill.entity';
 export * from './project-member-skill.entity';
 export * from './project-check.entity';
+export * from './learning-resource.entity';

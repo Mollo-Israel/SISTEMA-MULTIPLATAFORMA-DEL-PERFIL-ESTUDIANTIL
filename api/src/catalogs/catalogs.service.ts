@@ -1,11 +1,16 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Not, Repository } from 'typeorm';
+import { ILike, In, Not, Repository } from 'typeorm';
+import { LearningResourceStatus } from '@perfil/shared';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { Activity } from '../entities/activity.entity';
+import {
+  LearningResource,
+  LearningResourceSkill,
+} from '../entities/learning-resource.entity';
 import { CreateAcademicAreaDto } from './dto/create-academic-area.dto';
 import { UpdateAcademicAreaDto } from './dto/update-academic-area.dto';
 import { CreateSkillDto } from './dto/create-skill.dto';
@@ -18,6 +23,10 @@ import {
   CreateActivityCategoryDto,
   UpdateActivityCategoryDto,
 } from './dto/activity-category.dto';
+import {
+  CreateLearningResourceDto,
+  UpdateLearningResourceDto,
+} from './dto/learning-resource.dto';
 
 @Injectable()
 export class CatalogsService {
@@ -29,6 +38,10 @@ export class CatalogsService {
     @InjectRepository(ActivityCategory)
     private readonly activityCategories: Repository<ActivityCategory>,
     @InjectRepository(Activity) private readonly activities: Repository<Activity>,
+    @InjectRepository(LearningResource)
+    private readonly learningResources: Repository<LearningResource>,
+    @InjectRepository(LearningResourceSkill)
+    private readonly resourceSkills: Repository<LearningResourceSkill>,
   ) {}
 
   // ------------------------------------------------------------------
@@ -263,6 +276,130 @@ export class CatalogsService {
     }
     if (dto.isActive !== undefined) criterion.isActive = dto.isActive;
     return this.criteria.save(criterion);
+  }
+
+  // ================================================================== §61
+  //  Catalogo controlado de recursos y cursos externos
+  // ====================================================================
+
+  /**
+   * Recursos del catalogo.
+   *
+   * Por omision devuelve solo los vigentes: un recurso retirado no se
+   * recomienda (§61). Quien administra el catalogo puede pedir tambien los
+   * retirados, porque conservarlos es justamente el punto.
+   */
+  async findLearningResources(opciones: {
+    includeInactive?: boolean;
+    academicAreaId?: string;
+  } = {}): Promise<LearningResource[]> {
+    const where: Record<string, unknown> = {};
+    if (!opciones.includeInactive) where.status = LearningResourceStatus.ACTIVE;
+    if (opciones.academicAreaId) where.academicAreaId = opciones.academicAreaId;
+
+    return this.learningResources.find({
+      where,
+      relations: { academicArea: true, resourceSkills: { skill: true } },
+      order: { title: 'ASC' },
+    });
+  }
+
+  async createLearningResource(
+    dto: CreateLearningResourceDto,
+    createdBy: string,
+  ): Promise<LearningResource> {
+    await this.assertAreaExists(dto.academicAreaId);
+    await this.assertSkillsExist(dto.skillIds);
+
+    // Un mismo enlace dos veces en el catalogo solo genera recomendaciones
+    // duplicadas para la misma persona.
+    const repetido = await this.learningResources.findOne({ where: { url: dto.url } });
+    if (repetido) {
+      throw new ConflictException('Ese enlace ya está en el catálogo.');
+    }
+
+    const recurso = await this.learningResources.save(
+      this.learningResources.create({
+        title: dto.title,
+        provider: dto.provider,
+        url: dto.url,
+        description: dto.description ?? null,
+        academicAreaId: dto.academicAreaId,
+        resourceType: dto.resourceType,
+        status: LearningResourceStatus.ACTIVE,
+        createdBy,
+      }),
+    );
+    await this.replaceResourceSkills(recurso.id, dto.skillIds);
+    return this.findLearningResourceOrFail(recurso.id);
+  }
+
+  async updateLearningResource(
+    id: string,
+    dto: UpdateLearningResourceDto,
+  ): Promise<LearningResource> {
+    const recurso = await this.learningResources.findOne({ where: { id } });
+    if (!recurso) {
+      throw new NotFoundException('Recurso no encontrado.');
+    }
+
+    if (dto.url !== undefined && dto.url !== recurso.url) {
+      const repetido = await this.learningResources.findOne({
+        where: { url: dto.url, id: Not(id) },
+      });
+      if (repetido) {
+        throw new ConflictException('Ese enlace ya está en el catálogo.');
+      }
+      recurso.url = dto.url;
+    }
+    if (dto.academicAreaId !== undefined) {
+      await this.assertAreaExists(dto.academicAreaId);
+      recurso.academicAreaId = dto.academicAreaId;
+    }
+    if (dto.title !== undefined) recurso.title = dto.title;
+    if (dto.provider !== undefined) recurso.provider = dto.provider;
+    if (dto.description !== undefined) recurso.description = dto.description ?? null;
+    if (dto.resourceType !== undefined) recurso.resourceType = dto.resourceType;
+    if (dto.status !== undefined) recurso.status = dto.status;
+
+    await this.learningResources.save(recurso);
+    if (dto.skillIds !== undefined) {
+      await this.assertSkillsExist(dto.skillIds);
+      await this.replaceResourceSkills(id, dto.skillIds);
+    }
+    return this.findLearningResourceOrFail(id);
+  }
+
+  private async findLearningResourceOrFail(id: string): Promise<LearningResource> {
+    const recurso = await this.learningResources.findOne({
+      where: { id },
+      relations: { academicArea: true, resourceSkills: { skill: true } },
+    });
+    if (!recurso) {
+      throw new NotFoundException('Recurso no encontrado.');
+    }
+    return recurso;
+  }
+
+  /** Reemplaza, no acumula: editar las habilidades es decir cuales son ahora. */
+  private async replaceResourceSkills(
+    learningResourceId: string,
+    skillIds: string[] | undefined,
+  ): Promise<void> {
+    if (skillIds === undefined) return;
+    await this.resourceSkills.delete({ learningResourceId });
+    if (skillIds.length === 0) return;
+    await this.resourceSkills.insert(
+      skillIds.map((skillId) => ({ learningResourceId, skillId })),
+    );
+  }
+
+  private async assertSkillsExist(skillIds?: string[]): Promise<void> {
+    if (!skillIds || skillIds.length === 0) return;
+    const encontradas = await this.skills.count({ where: { id: In(skillIds) } });
+    if (encontradas !== skillIds.length) {
+      throw new BadRequestException('Alguna de las habilidades indicadas no existe.');
+    }
   }
 
   private async assertAreaExists(areaId?: string | null): Promise<void> {

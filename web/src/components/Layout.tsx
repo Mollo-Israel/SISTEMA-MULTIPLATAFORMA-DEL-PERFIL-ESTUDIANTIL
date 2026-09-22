@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiAward,
   FiBarChart2,
+  FiBookOpen,
   FiCalendar,
   FiClock,
   FiCompass,
@@ -45,6 +46,7 @@ const ICONS: Record<string, IconType> = {
   '/director/activities': FiCalendar,
   '/director/constancies': FiAward,
   '/director/affinity': FiTarget,
+  '/director/resources': FiBookOpen,
   '/society': FiGrid,
   '/society/activities': FiCalendar,
   '/admin': FiUsers,

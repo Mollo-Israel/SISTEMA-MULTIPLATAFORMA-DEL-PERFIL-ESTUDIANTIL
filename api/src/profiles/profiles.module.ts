@@ -13,7 +13,7 @@ import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
-import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { AccessModule } from '../access/access.module';
 import { ProfilesService } from './profiles.service';
 import { ProfilesController } from './profiles.controller';
@@ -35,7 +35,7 @@ import { ProfilesController } from './profiles.controller';
       InternalConstancy,
       AffinityResult,
     ]),
-    AffinityRecalcModule,
+    TrajectoryModule,
     AccessModule,
   ],
   controllers: [ProfilesController],

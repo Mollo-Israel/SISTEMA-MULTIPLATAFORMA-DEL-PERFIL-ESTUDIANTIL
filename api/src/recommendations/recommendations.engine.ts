@@ -2,8 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, MoreThan, Repository } from 'typeorm';
 import {
+  ActivityModality,
   ActivityStatus,
   AffinityLevel,
+  AvailabilityStatus,
+  CollaborationMode,
+  LearningResourceStatus,
+  LearningResourceType,
   RecommendationReasonCode,
   RecommendationStatus,
   RecommendationType,
@@ -18,16 +23,22 @@ import { StudentSkill } from '../entities/student-skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
+import { LearningResource } from '../entities/learning-resource.entity';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { Recommendation, RecommendationReason } from '../entities/recommendation.entity';
 import {
+  CATALOGUED_AS_RESOURCE_CATEGORIES,
   LEVEL_LABEL,
   RULES,
   RULES_VERSION,
+  RecommendationRegime,
+  SUPPORT_LABEL,
+  fitsRegime,
   matchesDeclaredTerm,
   normalize,
   typeForCategory,
+  typeForResource,
 } from './recommendation.rules';
 
 /** Estados de actividad que admiten inscripcion, igual que en ActivitiesService. */
@@ -55,29 +66,50 @@ export interface GenerationResult {
   produced: number;
 }
 
+/**
+ * Lo que el motor de afinidad V2 dice de un area (§49).
+ *
+ * Los dos puntajes viajan juntos porque §59 necesita los dos a la vez: la misma
+ * afinidad pide cosas opuestas segun se pueda o no demostrar.
+ */
 interface AffinityInfo {
   level: AffinityLevel;
   score: number;
-  share: number;
+  supportScore: number;
+  supportLevel: AffinityLevel;
+}
+
+/** Lo que el motor necesita saber del estudiante para comparar (§58). */
+interface Contexto {
+  profile: StudentProfile;
+  affinityByArea: Map<string, AffinityInfo>;
+  /** Areas donde el estudiante se inclina, en orden (§52). */
+  strongAreas: string[];
+  regimeByArea: Map<string, RecommendationRegime>;
+  preferredByArea: Map<string, number>;
+  improvementIds: Set<string>;
+  areaName: Map<string, string>;
+  freeInterestNames: string[];
+  skillNames: string[];
+  skillIds: Set<string>;
+  now: Date;
 }
 
 /**
- * Motor de recomendaciones academicas ligeras (RF18, RN-16).
+ * Motor de recomendaciones academicas (§58 a §62, RF18, RN-16).
  *
- * Sigue literalmente el flujo basico de la Tabla 2.27:
- *   2. obtiene la informacion del perfil y las afinidades identificadas;
- *   3. la compara con las actividades, oportunidades, recursos y demas
- *      elementos disponibles;
- *   4. identifica las sugerencias relacionadas con el perfil;
- *   5. las organiza por tipo.
+ * §58 es explicito en que **no debe operar como motor aislado**: consume la
+ * afinidad, el nivel de respaldo, los intereses, las areas de mejora, las
+ * actividades abiertas, el catalogo de recursos y la disponibilidad declarada.
  *
- * Cada recomendacion lleva sus motivos, y su puntaje es exactamente la suma de
- * esos motivos. Nada se recomienda sin al menos un motivo de relevancia.
+ * Sigue el flujo de la Tabla 2.27 -obtener el perfil, compararlo con lo
+ * disponible, identificar lo relacionado y organizarlo por tipo- y cada
+ * recomendacion responde las cuatro preguntas de §92: que se recomienda, por
+ * que, que area se relaciona y que senal la origino.
  *
  * Lo que el estudiante decidio (guardar o descartar) se conserva entre
  * calculos: el motor actualiza el contenido de una recomendacion existente,
- * nunca su estado. Asi se cumple que "el estudiante conservara la decision
- * sobre su utilizacion" (RN-16).
+ * nunca su estado (RN-16).
  */
 @Injectable()
 export class RecommendationsEngine {
@@ -93,6 +125,8 @@ export class RecommendationsEngine {
     @InjectRepository(Activity) private readonly activities: Repository<Activity>,
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
+    @InjectRepository(LearningResource)
+    private readonly resources: Repository<LearningResource>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     @InjectRepository(ProjectMember) private readonly members: Repository<ProjectMember>,
   ) {}
@@ -108,7 +142,10 @@ export class RecommendationsEngine {
       this.affinities.find({ where: { studentProfileId: profileId } }),
       this.preferred.find({ where: { studentProfileId: profileId } }),
       this.freeInterests.find({ where: { studentProfileId: profileId } }),
-      this.studentSkills.find({ where: { studentProfileId: profileId }, relations: { skill: true } }),
+      this.studentSkills.find({
+        where: { studentProfileId: profileId },
+        relations: { skill: true },
+      }),
       this.areas.find(),
     ]);
     const improvementIds = new Set(profile.improvementAreaIds ?? []);
@@ -134,49 +171,75 @@ export class RecommendationsEngine {
         .map((a) => [a.id, a.name]),
     );
 
-    const topAffinity = affinityRows.reduce((max, r) => Math.max(max, Number(r.score)), 0);
     const affinityByArea = new Map<string, AffinityInfo>(
       affinityRows.map((r) => [
         r.academicAreaId,
         {
           level: r.level,
           score: Number(r.score),
-          share: topAffinity > 0 ? Number(r.score) / topAffinity : 0,
+          supportScore: Number(r.supportScore ?? 0),
+          supportLevel: r.supportLevel ?? AffinityLevel.LOW,
         },
       ]),
     );
-    const preferredByArea = new Map(preferredRows.map((p) => [p.academicAreaId, p.priority]));
 
-    // --- 3 y 4. Comparar con los elementos disponibles --------------------
-    const { elements, availableByArea } = await this.elementCandidates(
-      profileId,
-      affinityByArea,
-      preferredByArea,
-      improvementIds,
-      areaName,
-      freeRows.map((f) => f.name),
-      skillRows.filter((s) => s.skill).map((s) => s.skill.name),
-      generatedAt,
-    );
+    /*
+     * §59 necesita saber donde se inclina el estudiante, y eso es una lectura
+     * relativa. El nivel de afinidad de V2 es absoluto -y tiene que serlo, §52
+     * lo exige para poder comparar en el tiempo-, pero como selector no sirve:
+     * casi nadie en primeros semestres supera 25 sobre 100, y entonces ningun
+     * regimen se activaria nunca para quien mas lo necesita.
+     */
+    const strongAreas = [...affinityByArea.entries()]
+      .filter(([, a]) => a.score > 0)
+      .sort(([, x], [, y]) => y.score - x.score)
+      .slice(0, RULES.regime.topAreas)
+      .map(([id]) => id);
 
-    const strengthening = this.strengtheningCandidates(
-      affinityByArea,
-      preferredByArea,
-      improvementIds,
-      areaName,
-      availableByArea,
-    );
+    const regimeByArea = new Map<string, RecommendationRegime>();
+    for (const areaId of strongAreas) {
+      const info = affinityByArea.get(areaId)!;
+      regimeByArea.set(
+        areaId,
+        info.supportLevel === AffinityLevel.LOW
+          ? RecommendationRegime.BUILD_EXPERIENCE
+          : RecommendationRegime.ADVANCE,
+      );
+    }
 
-    const teammates = await this.teammateCandidates(
+    const ctx: Contexto = {
       profile,
       affinityByArea,
-      preferredByArea,
+      strongAreas,
+      regimeByArea,
+      preferredByArea: new Map(preferredRows.map((p) => [p.academicAreaId, p.priority])),
       improvementIds,
       areaName,
-    );
+      freeInterestNames: freeRows.map((f) => f.name),
+      skillNames: skillRows.filter((s) => s.skill).map((s) => s.skill.name),
+      skillIds: new Set(skillRows.map((s) => s.skillId)),
+      now: generatedAt,
+    };
+
+    // --- 3 y 4. Comparar con los elementos disponibles --------------------
+    const { elements, availableByArea } = await this.activityCandidates(profileId, ctx);
+    const resources = await this.resourceCandidates(ctx);
+
+    for (const r of resources) {
+      if (!r.academicAreaId) continue;
+      availableByArea.set(r.academicAreaId, (availableByArea.get(r.academicAreaId) ?? 0) + 1);
+    }
+
+    const strengthening = this.strengtheningCandidates(ctx, availableByArea);
+    const teammates = await this.teammateCandidates(ctx);
 
     // --- 5. Organizar por tipo, con su limite ----------------------------
-    const produced = this.limitByType([...elements, ...strengthening, ...teammates]);
+    const produced = this.limitByType([
+      ...elements,
+      ...resources,
+      ...strengthening,
+      ...teammates,
+    ]);
     await this.persist(profileId, produced, generatedAt);
 
     return {
@@ -188,27 +251,193 @@ export class RecommendationsEngine {
   }
 
   // =========================================================================
-  // Actividades, oportunidades, cursos externos y recursos de apoyo
+  // §60 · El reparto del ranking
   // =========================================================================
 
-  private async elementCandidates(
+  /**
+   * Puntua un elemento segun el reparto de §60, sobre 100.
+   *
+   * Cada componente devuelve ademas su motivo legible, porque §60 cierra con
+   * «mostrar siempre la razon» y §92 exige que la recomendacion diga que senal
+   * la origino. Un elemento sin ningun motivo no se recomienda: seria un enlace
+   * puesto ahi porque si.
+   */
+  private scoreElement(
+    ctx: Contexto,
+    areaId: string | null,
+    haystack: string,
+    contexto: { factor: number; label: string | null },
+  ): { score: number; reasons: RecommendationReason[] } {
+    const reasons: RecommendationReason[] = [];
+    const name = areaId ? ctx.areaName.get(areaId) : undefined;
+
+    // ---------------------------------------------------- 50 % afinidad
+    let affinity = 0;
+    if (areaId && name) {
+      const info = ctx.affinityByArea.get(areaId);
+      if (info && info.score > 0) {
+        affinity = RULES.ranking.affinity * (info.score / 100);
+        reasons.push({
+          code: RecommendationReasonCode.AFFINITY_AREA,
+          label:
+            `Tu afinidad con ${name} es ${LEVEL_LABEL[info.level]} `
+            + `(${info.score}/100)`,
+          points: this.redondear(affinity),
+        });
+      }
+    }
+
+    // -------------------------------------------- 20 % interes explicito
+    let interest = 0;
+
+    /*
+     * El interes puede llegar por varios caminos -el area declarada, un
+     * interes escrito a mano, una habilidad- y todos son interes explicito del
+     * estudiante, asi que comparten el mismo 20 % de §60 en vez de sumarse por
+     * encima de el. Cada uno aporta lo que quepa en lo que queda, y por eso su
+     * motivo lleva lo que aporto **de verdad** y no lo que la regla le
+     * concederia en el vacio: de otro modo, la suma de los motivos no daria el
+     * puntaje y la explicacion seria falsa.
+     */
+    const anadirInteres = (
+      code: RecommendationReasonCode,
+      label: string,
+      factor: number,
+    ): void => {
+      const espacio = RULES.ranking.explicitInterest - interest;
+      if (espacio <= 0) return;
+      const aporte = Math.min(RULES.ranking.explicitInterest * factor, espacio);
+      if (aporte <= 0) return;
+      interest = this.redondear(interest + aporte);
+      reasons.push({ code, label, points: this.redondear(aporte) });
+    };
+
+    if (areaId && name) {
+      const priority = ctx.preferredByArea.get(areaId);
+      if (priority) {
+        anadirInteres(
+          RecommendationReasonCode.PREFERRED_AREA,
+          `${name} es un área de tu preferencia (prioridad ${priority})`,
+          RULES.interestByPriority[Math.min(Math.max(priority, 1), 5) - 1],
+        );
+      }
+    }
+
+    const libre = ctx.freeInterestNames.find((n) => matchesDeclaredTerm(haystack, n, 4));
+    if (libre) {
+      anadirInteres(
+        RecommendationReasonCode.FREE_INTEREST_MATCH,
+        `Coincide con tu interés «${libre}»`,
+        RULES.freeInterestFactor,
+      );
+    }
+
+    const skill = ctx.skillNames.find((n) => matchesDeclaredTerm(haystack, n, 3));
+    if (skill) {
+      anadirInteres(
+        RecommendationReasonCode.SKILL_MATCH,
+        `Relacionado con tu habilidad ${skill}`,
+        RULES.skillMatchFactor,
+      );
+    }
+
+    // ------------------------------------------- 20 % area de mejora
+    let improvement = 0;
+    if (areaId && name && ctx.improvementIds.has(areaId)) {
+      improvement = RULES.ranking.improvementArea;
+      reasons.push({
+        code: RecommendationReasonCode.IMPROVEMENT_AREA,
+        label: `Quieres fortalecerte en ${name}`,
+        points: improvement,
+      });
+    }
+
+    // Sin un motivo de relevancia no hay recomendacion. El contexto solo
+    // refuerza algo que ya encaja con el perfil.
+    if (reasons.length === 0) return { score: 0, reasons: [] };
+
+    // ------------------------------------- 10 % disponibilidad y contexto
+    const context = RULES.ranking.context * contexto.factor;
+    if (context > 0 && contexto.label) {
+      reasons.push({
+        code: RecommendationReasonCode.CONTEXT_MATCH,
+        label: contexto.label,
+        points: this.redondear(context),
+      });
+    }
+
+    return {
+      score: this.redondear(affinity + interest + improvement + context),
+      reasons,
+    };
+  }
+
+  /**
+   * §59 · Refuerzo por regimen, y su explicacion.
+   *
+   * El refuerzo no penaliza: un elemento que no encaja simplemente no lo
+   * recibe. Nada desaparece de la lista por esto, solo cambia el orden.
+   */
+  private applyRegime(
+    ctx: Contexto,
+    areaId: string | null,
+    categoryCode: string | null,
+    resourceType: LearningResourceType | null,
+    type: RecommendationType,
+    reasons: RecommendationReason[],
+    score: number,
+  ): number {
+    if (!areaId) return score;
+    const regime = ctx.regimeByArea.get(areaId) ?? RecommendationRegime.NONE;
+    if (!fitsRegime(regime, categoryCode, resourceType, type)) return score;
+
+    const name = ctx.areaName.get(areaId) ?? 'esta área';
+    const info = ctx.affinityByArea.get(areaId);
+
+    if (regime === RecommendationRegime.BUILD_EXPERIENCE) {
+      reasons.push({
+        code: RecommendationReasonCode.BUILD_EXPERIENCE,
+        label:
+          `Tu respaldo en ${name} todavía es ${SUPPORT_LABEL[info?.supportLevel ?? AffinityLevel.LOW]}`
+          + ': esto te deja algo que puedas demostrar',
+        points: RULES.regime.bonus,
+      });
+    } else {
+      reasons.push({
+        code: RecommendationReasonCode.ADVANCE_LEVEL,
+        label:
+          `Tu trayectoria en ${name} ya está respaldada `
+          + `(${info?.supportScore ?? 0}/100): esto te lleva más lejos`,
+        points: RULES.regime.bonus,
+      });
+    }
+    return Math.min(100, this.redondear(score + RULES.regime.bonus));
+  }
+
+  // =========================================================================
+  // Actividades y oportunidades
+  // =========================================================================
+
+  private async activityCandidates(
     profileId: string,
-    affinityByArea: Map<string, AffinityInfo>,
-    preferredByArea: Map<string, number>,
-    improvementIds: Set<string>,
-    areaName: Map<string, string>,
-    freeInterestNames: string[],
-    skillNames: string[],
-    now: Date,
+    ctx: Contexto,
   ): Promise<{ elements: Produced[]; availableByArea: Map<string, number> }> {
     const candidates = await this.activities.find({
       where: { status: In(REGISTRABLE_STATUSES) },
       relations: { category: true },
     });
 
+    // §61: los cursos y recursos ya no son actividades. Se excluyen aqui para
+    // no recomendar lo mismo dos veces por dos caminos distintos.
+    const actividades = candidates.filter(
+      (a) => !CATALOGUED_AS_RESOURCE_CATEGORIES.includes(a.category?.code ?? ''),
+    );
+
     // Una actividad cuya fecha ya paso no admite inscripcion (mismo criterio
     // que ActivitiesService.registrationBlockReason).
-    const open = candidates.filter((a) => !a.eventDate || a.eventDate.getTime() >= now.getTime());
+    const open = actividades.filter(
+      (a) => !a.eventDate || a.eventDate.getTime() >= ctx.now.getTime(),
+    );
 
     // El estudiante ya conoce aquello en lo que se inscribio, marco interes o
     // participo: no se le recomienda otra vez.
@@ -232,91 +461,178 @@ export class RecommendationsEngine {
       }
     }
 
-    const windowEnd = now.getTime() + RULES.upcomingWindowDays * 24 * 60 * 60 * 1000;
     const elements: Produced[] = [];
-
     for (const a of available) {
-      const reasons: RecommendationReason[] = [];
-      const area = a.academicAreaId;
-      const name = area ? areaName.get(area) : undefined;
-
-      if (area && name) {
-        const affinity = affinityByArea.get(area);
-        if (affinity) {
-          reasons.push({
-            code: RecommendationReasonCode.AFFINITY_AREA,
-            label: `Tienes afinidad ${LEVEL_LABEL[affinity.level]} con ${name}`,
-            points: RULES.affinityPoints[affinity.level],
-          });
-        }
-        const priority = preferredByArea.get(area);
-        if (priority) {
-          reasons.push({
-            code: RecommendationReasonCode.PREFERRED_AREA,
-            label: `${name} es un área de tu preferencia`,
-            points: RULES.preferredAreaBase + priority,
-          });
-        }
-        if (improvementIds.has(area)) {
-          reasons.push({
-            code: RecommendationReasonCode.IMPROVEMENT_AREA,
-            label: `Quieres fortalecerte en ${name}`,
-            points: RULES.improvementAreaPoints,
-          });
-        }
-      }
-
       const haystack = normalize(
         [a.title, a.description, (a.tags ?? []).join(' '), a.category?.name].join(' '),
       );
-
-      const interest = freeInterestNames.find((n) => matchesDeclaredTerm(haystack, n, 4));
-      if (interest) {
-        reasons.push({
-          code: RecommendationReasonCode.FREE_INTEREST_MATCH,
-          label: `Coincide con tu interés «${interest}»`,
-          points: RULES.freeInterestPoints,
-        });
-      }
-
-      const skill = skillNames.find((n) => matchesDeclaredTerm(haystack, n, 3));
-      if (skill) {
-        reasons.push({
-          code: RecommendationReasonCode.SKILL_MATCH,
-          label: `Relacionado con tu habilidad ${skill}`,
-          points: RULES.skillMatchPoints,
-        });
-      }
-
-      // Sin un motivo de relevancia no hay recomendacion. La fecha proxima solo
-      // refuerza algo que ya es relevante.
+      const contexto = this.activityContext(ctx, a);
+      const { score, reasons } = this.scoreElement(ctx, a.academicAreaId, haystack, contexto);
       if (reasons.length === 0) continue;
 
-      if (a.eventDate && a.eventDate.getTime() <= windowEnd) {
-        reasons.push({
-          code: RecommendationReasonCode.UPCOMING_DATE,
-          label: `Se realiza pronto: ${this.formatDate(a.eventDate)}`,
-          points: RULES.upcomingDatePoints,
-        });
-      }
-
-      const score = this.sum(reasons);
-      if (score < RULES.minElementScore) continue;
+      const type = typeForCategory(a.category?.code);
+      const final = this.applyRegime(
+        ctx,
+        a.academicAreaId,
+        a.category?.code ?? null,
+        null,
+        type,
+        reasons,
+        score,
+      );
+      if (final < RULES.minElementScore) continue;
 
       elements.push({
-        type: typeForCategory(a.category?.code),
+        type,
         targetId: a.id,
-        academicAreaId: area ?? null,
+        academicAreaId: a.academicAreaId ?? null,
         title: a.title,
         description: a.description ? a.description.slice(0, 500) : null,
         targetLink: a.externalUrl,
         reasons,
-        score,
+        score: final,
         sortKey: `${a.eventDate ? a.eventDate.toISOString() : '9999'}|${a.title}`,
       });
     }
 
     return { elements, availableByArea };
+  }
+
+  /**
+   * §60 · El 10 % de disponibilidad y contexto, para una actividad.
+   *
+   * Todo lo que entra aqui es comprobable: si ocurre pronto, si va dirigida a
+   * su semestre, si la modalidad coincide con como dijo que prefiere colaborar
+   * y si declaro estar disponible. Nada de suposiciones sobre la persona.
+   */
+  private activityContext(
+    ctx: Contexto,
+    a: Activity,
+  ): { factor: number; label: string | null } {
+    const partes: string[] = [];
+    let factor = 0;
+
+    const windowEnd = ctx.now.getTime() + RULES.upcomingWindowDays * 24 * 60 * 60 * 1000;
+    if (a.eventDate && a.eventDate.getTime() <= windowEnd) {
+      factor += RULES.context.upcomingDate;
+      partes.push(`se realiza pronto (${this.formatDate(a.eventDate)})`);
+    }
+
+    const alcance = a.semesterScope ?? [];
+    if (ctx.profile.semester && alcance.length > 0 && alcance.includes(ctx.profile.semester)) {
+      factor += RULES.context.semesterScope;
+      partes.push(`va dirigida a ${ctx.profile.semester}.º semestre`);
+    }
+
+    const modos = ctx.profile.collaborationPreferences?.modes ?? [];
+    if (a.modality && modos.length > 0 && this.modalityMatches(a.modality, modos)) {
+      factor += RULES.context.modality;
+      partes.push('la modalidad coincide con cómo prefieres participar');
+    }
+
+    if (
+      ctx.profile.availability === AvailabilityStatus.LOOKING
+      || ctx.profile.availability === AvailabilityStatus.OPEN
+    ) {
+      factor += RULES.context.availability;
+      partes.push('declaraste estar disponible');
+    }
+
+    return {
+      factor: Math.min(1, factor),
+      label: partes.length ? `Encaja con tu contexto: ${partes.join(', ')}` : null,
+    };
+  }
+
+  /** La modalidad hibrida encaja con cualquiera; el resto, con la suya. */
+  private modalityMatches(modality: ActivityModality, modos: CollaborationMode[]): boolean {
+    if (modality === ActivityModality.HIBRIDA) return true;
+    if (modos.includes(CollaborationMode.HYBRID)) return true;
+    if (modality === ActivityModality.VIRTUAL) return modos.includes(CollaborationMode.REMOTE);
+    return modos.includes(CollaborationMode.IN_PERSON);
+  }
+
+  // =========================================================================
+  // §61 · Catalogo controlado de recursos y cursos externos
+  // =========================================================================
+
+  /**
+   * Recursos del catalogo que encajan con el perfil.
+   *
+   * Todos salen de `learning_resources`, que es el catalogo que §61 exige. No
+   * se consulta Internet ni se construye ninguna URL: lo que se recomienda es
+   * lo que alguien de la carrera decidio incluir, y los retirados no entran.
+   */
+  private async resourceCandidates(ctx: Contexto): Promise<Produced[]> {
+    const vigentes = await this.resources.find({
+      where: { status: LearningResourceStatus.ACTIVE },
+      relations: { resourceSkills: true },
+    });
+
+    const elements: Produced[] = [];
+    for (const r of vigentes) {
+      const haystack = normalize([r.title, r.description, r.provider].join(' '));
+
+      // Una habilidad que el recurso declara y el estudiante tambien tiene es
+      // una coincidencia mas firme que cualquier parecido de texto.
+      const porHabilidad = (r.resourceSkills ?? []).some((s) => ctx.skillIds.has(s.skillId));
+
+      const contexto = {
+        factor: this.resourceContextFactor(ctx, r, porHabilidad),
+        label: porHabilidad
+          ? 'Trabaja una habilidad que ya declaraste'
+          : ctx.profile.availability === AvailabilityStatus.LOOKING
+            ? 'Puedes avanzarlo a tu ritmo'
+            : null,
+      };
+
+      const { score, reasons } = this.scoreElement(ctx, r.academicAreaId, haystack, contexto);
+      if (reasons.length === 0) continue;
+
+      const type = typeForResource(r.resourceType);
+      const final = this.applyRegime(
+        ctx,
+        r.academicAreaId,
+        null,
+        r.resourceType,
+        type,
+        reasons,
+        score,
+      );
+      if (final < RULES.minElementScore) continue;
+
+      elements.push({
+        type,
+        targetId: r.id,
+        academicAreaId: r.academicAreaId,
+        title: r.title,
+        description: r.description
+          ? `${r.provider} · ${r.description}`.slice(0, 500)
+          : r.provider,
+        targetLink: r.url,
+        reasons,
+        score: final,
+        sortKey: r.title,
+      });
+    }
+
+    return elements;
+  }
+
+  /**
+   * Un recurso no tiene fecha ni semestre, asi que su contexto es mas simple:
+   * pesa la coincidencia de habilidad y, si acaso, la disponibilidad declarada.
+   */
+  private resourceContextFactor(
+    ctx: Contexto,
+    _resource: LearningResource,
+    porHabilidad: boolean,
+  ): number {
+    let factor = porHabilidad ? RULES.context.modality + RULES.context.semesterScope : 0;
+    if (ctx.profile.availability === AvailabilityStatus.LOOKING) {
+      factor += RULES.context.availability;
+    }
+    return Math.min(1, factor);
   }
 
   // =========================================================================
@@ -325,36 +641,38 @@ export class RecommendationsEngine {
 
   /**
    * Un area se recomienda para fortalecer cuando al estudiante le importa -la
-   * declaro como area de mejora o de preferencia- y todavia no tiene trayectoria
-   * en ella, o tiene poca. Si ya tiene afinidad media o alta, no hace falta
-   * fortalecerla.
+   * declaro como area de mejora o de preferencia- y todavia no tiene
+   * trayectoria en ella, o la tiene sin respaldo.
+   *
+   * §59 lo pide expresamente para las areas de mejora, y anade la condicion que
+   * faltaba: un area con afinidad pero respaldo bajo tambien hay que
+   * fortalecerla, aunque el puntaje de afinidad se vea bien.
    */
   private strengtheningCandidates(
-    affinityByArea: Map<string, AffinityInfo>,
-    preferredByArea: Map<string, number>,
-    improvementIds: Set<string>,
-    areaName: Map<string, string>,
+    ctx: Contexto,
     availableByArea: Map<string, number>,
   ): Produced[] {
-    const candidateAreas = new Set([...improvementIds, ...preferredByArea.keys()]);
+    const candidateAreas = new Set([...ctx.improvementIds, ...ctx.preferredByArea.keys()]);
     const result: Produced[] = [];
 
     for (const areaId of candidateAreas) {
-      const name = areaName.get(areaId);
+      const name = ctx.areaName.get(areaId);
       if (!name) continue;
 
-      const affinity = affinityByArea.get(areaId);
-      if (affinity && affinity.level !== AffinityLevel.LOW) continue;
+      const info = ctx.affinityByArea.get(areaId);
+      const respaldoBajo = !info || info.supportLevel === AffinityLevel.LOW;
+      // Si ya tiene afinidad alta Y respaldo, no hay nada que fortalecer.
+      if (info && info.level !== AffinityLevel.LOW && !respaldoBajo) continue;
 
       const reasons: RecommendationReason[] = [];
-      if (improvementIds.has(areaId)) {
+      if (ctx.improvementIds.has(areaId)) {
         reasons.push({
           code: RecommendationReasonCode.IMPROVEMENT_AREA,
           label: `Declaraste que quieres mejorar en ${name}`,
           points: RULES.strengthening.improvementPoints,
         });
       }
-      const priority = preferredByArea.get(areaId);
+      const priority = ctx.preferredByArea.get(areaId);
       if (priority) {
         reasons.push({
           code: RecommendationReasonCode.PREFERRED_AREA,
@@ -362,19 +680,35 @@ export class RecommendationsEngine {
           points: priority,
         });
       }
-      reasons.push(
-        affinity
-          ? {
-              code: RecommendationReasonCode.LOW_TRAJECTORY,
-              label: `Tu afinidad con ${name} todavía es baja`,
-              points: RULES.strengthening.lowTrajectoryPoints,
-            }
-          : {
-              code: RecommendationReasonCode.LOW_TRAJECTORY,
-              label: `Todavía no tienes trayectoria registrada en ${name}`,
-              points: RULES.strengthening.noTrajectoryPoints,
-            },
-      );
+
+      if (!info) {
+        reasons.push({
+          code: RecommendationReasonCode.LOW_TRAJECTORY,
+          label: `Todavía no tienes trayectoria registrada en ${name}`,
+          points: RULES.strengthening.noTrajectoryPoints,
+        });
+      } else if (info.level === AffinityLevel.LOW) {
+        reasons.push({
+          code: RecommendationReasonCode.LOW_TRAJECTORY,
+          label: `Tu afinidad con ${name} todavía es baja (${info.score}/100)`,
+          points: RULES.strengthening.lowTrajectoryPoints,
+        });
+      }
+
+      // §59: el respaldo bajo es una razon por si sola, aunque la afinidad se
+      // vea bien. Es la diferencia entre decir que algo te interesa y poder
+      // demostrar que lo hiciste.
+      if (info && respaldoBajo) {
+        reasons.push({
+          code: RecommendationReasonCode.LOW_SUPPORT,
+          label:
+            `Tu respaldo en ${name} es ${SUPPORT_LABEL[info.supportLevel]} `
+            + `(${info.supportScore}/100): falta con qué demostrarlo`,
+          points: RULES.strengthening.lowSupportPoints,
+        });
+      }
+
+      if (reasons.length === 0) continue;
 
       const count = availableByArea.get(areaId) ?? 0;
       result.push({
@@ -397,39 +731,31 @@ export class RecommendationsEngine {
   }
 
   // =========================================================================
-  // Posibles companeros de equipo
+  // §62 · Posibles companeros de equipo
   // =========================================================================
 
   /**
-   * Companeros con quienes el estudiante comparte trayectoria, o que pueden
-   * aportar justo donde el quiere fortalecerse.
+   * Companeros que pueden aportar lo que al estudiante le falta.
+   *
+   * §62 fija el orden de prioridad y este metodo lo respeta: primero las
+   * habilidades faltantes, despues el respaldo relacionado, luego la afinidad
+   * contextual y la disponibilidad. Un equipo se forma por lo que le falta, no
+   * por lo que ya tiene repetido.
    *
    * Privacidad: solo participan estudiantes con cuenta activa que aceptaron
    * aparecer en sugerencias. De cada companero se guarda su nombre, su semestre
    * y las areas que justifican la sugerencia; nunca su correo, sus puntajes ni
    * sus proyectos.
-   *
-   * Quien ya trabaja con el estudiante en un proyecto no se sugiere: ya forman
-   * equipo.
    */
-  private async teammateCandidates(
-    profile: StudentProfile,
-    affinityByArea: Map<string, AffinityInfo>,
-    preferredByArea: Map<string, number>,
-    improvementIds: Set<string>,
-    areaName: Map<string, string>,
-  ): Promise<Produced[]> {
-    // Las areas mas fuertes DEL ESTUDIANTE, no las que superan un umbral fijo
-    // (§52: el nivel es absoluto y no sirve como filtro relativo).
-    const misMasFuertes = [...affinityByArea.entries()]
-      .filter(([, a]) => a.score > 0)
-      .sort(([, x], [, y]) => y.score - x.score)
-      .slice(0, RULES.teammate.topAreas);
-    const strongAreas = new Set(misMasFuertes.map(([id]) => id));
-    const miPuntaje = new Map(misMasFuertes.map(([id, a]) => [id, a.score]));
-
+  private async teammateCandidates(ctx: Contexto): Promise<Produced[]> {
+    const strongAreas = new Set(ctx.strongAreas);
+    const miPuntaje = new Map(
+      ctx.strongAreas.map((id) => [id, ctx.affinityByArea.get(id)?.score ?? 0]),
+    );
     const wantsToGrow = new Set(
-      [...improvementIds, ...preferredByArea.keys()].filter((id) => !strongAreas.has(id)),
+      [...ctx.improvementIds, ...ctx.preferredByArea.keys()].filter(
+        (id) => !strongAreas.has(id),
+      ),
     );
     if (strongAreas.size === 0 && wantsToGrow.size === 0) return [];
 
@@ -438,21 +764,26 @@ export class RecommendationsEngine {
       .innerJoin('p.user', 'u')
       .select('p.id', 'profileId')
       .addSelect('p.semester', 'semester')
+      .addSelect('p.availability', 'availability')
       .addSelect('u.id', 'userId')
       .addSelect("CONCAT(u.first_name, ' ', u.last_name)", 'name')
-      .where('p.id <> :me', { me: profile.id })
+      .where('p.id <> :me', { me: ctx.profile.id })
       .andWhere('p.peer_discoverable = true')
       .andWhere('u.status = :active', { active: UserStatus.ACTIVE })
-      .getRawMany<{ profileId: string; semester: number | null; userId: string; name: string }>();
+      .getRawMany<{
+        profileId: string;
+        semester: number | null;
+        availability: AvailabilityStatus;
+        userId: string;
+        name: string;
+      }>();
     if (peers.length === 0) return [];
 
-    const alreadyTeam = await this.currentTeammates(profile);
+    const alreadyTeam = await this.currentTeammates(ctx.profile);
+    const peerIds = peers.map((p) => p.profileId);
 
     const peerAffinities = await this.affinities.find({
-      where: {
-        studentProfileId: In(peers.map((p) => p.profileId)),
-        score: MoreThan(0),
-      },
+      where: { studentProfileId: In(peerIds), score: MoreThan(0) },
     });
     const byPeer = new Map<string, AffinityResult[]>();
     for (const row of peerAffinities) {
@@ -461,7 +792,8 @@ export class RecommendationsEngine {
       byPeer.set(row.studentProfileId, list);
     }
     // De cada companero se miran solo sus areas mas fuertes, por el mismo
-    // motivo: comparar contra un umbral absoluto excluiria a casi todos.
+    // motivo que del propio estudiante: un umbral absoluto excluiria a casi
+    // todos.
     for (const [id, filas] of byPeer) {
       byPeer.set(
         id,
@@ -471,39 +803,98 @@ export class RecommendationsEngine {
       );
     }
 
+    // §62, primera prioridad: habilidades faltantes. Solo cuentan las de las
+    // areas que al estudiante le importan; que alguien sepa algo ajeno a su
+    // trayectoria no lo convierte en buen companero para el.
+    const areasQueImportan = new Set([...strongAreas, ...wantsToGrow]);
+    // El descarte de las habilidades que el estudiante ya declara se hace abajo
+    // y no en el WHERE: con un perfil sin habilidades, la lista a excluir
+    // quedaria vacia y `NOT IN ()` no es SQL valido.
+    const peerSkills = await this.studentSkills.find({
+      where: { studentProfileId: In(peerIds) },
+      relations: { skill: true },
+    });
+    const skillsByPeer = new Map<string, StudentSkill[]>();
+    for (const s of peerSkills) {
+      if (!s.skill?.academicAreaId || !areasQueImportan.has(s.skill.academicAreaId)) continue;
+      if (ctx.skillIds.has(s.skillId)) continue;
+      const list = skillsByPeer.get(s.studentProfileId) ?? [];
+      list.push(s);
+      skillsByPeer.set(s.studentProfileId, list);
+    }
+
     const result: Produced[] = [];
     for (const peer of peers) {
       if (alreadyTeam.has(peer.userId)) continue;
-      const rows = (byPeer.get(peer.profileId) ?? []).sort((a, b) => Number(b.score) - Number(a.score));
-
+      const rows = byPeer.get(peer.profileId) ?? [];
       const reasons: RecommendationReason[] = [];
-      const shared = rows
-        .filter((r) => strongAreas.has(r.academicAreaId) && areaName.has(r.academicAreaId))
-        .slice(0, RULES.teammate.maxSharedAreas);
-      for (const r of shared) {
+
+      // 1. Habilidades faltantes.
+      const faltantes = (skillsByPeer.get(peer.profileId) ?? []).slice(
+        0,
+        RULES.teammate.maxMissingSkills,
+      );
+      for (const s of faltantes) {
         reasons.push({
-          code: RecommendationReasonCode.SHARED_AFFINITY,
-          label: `Comparten trayectoria en ${areaName.get(r.academicAreaId)}`,
-          points: RULES.teammate.sharedAreaPoints,
+          code: RecommendationReasonCode.MISSING_SKILL,
+          label: `Declara ${s.skill.name}, que tú todavía no declaras`,
+          points: RULES.teammate.missingSkillPoints,
         });
       }
 
-      // Complementario significa que el companero esta por delante en algo que
-      // el estudiante quiere trabajar. <<Por delante>> se mide contra el
-      // puntaje del propio estudiante en esa area, no contra un nivel fijo.
+      // 2. Respaldo relacionado y 3. afinidad contextual.
+      const shared = rows
+        .filter((r) => strongAreas.has(r.academicAreaId) && ctx.areaName.has(r.academicAreaId))
+        .slice(0, RULES.teammate.maxSharedAreas);
+      for (const r of shared) {
+        const nombre = ctx.areaName.get(r.academicAreaId);
+        if (Number(r.supportScore ?? 0) > 0) {
+          reasons.push({
+            code: RecommendationReasonCode.SUPPORT_BACKED,
+            label: `Tiene trayectoria respaldada en ${nombre}`,
+            points: RULES.teammate.supportBackedPoints,
+          });
+        } else {
+          reasons.push({
+            code: RecommendationReasonCode.SHARED_AFFINITY,
+            label: `Comparten trayectoria en ${nombre}`,
+            points: RULES.teammate.sharedAreaPoints,
+          });
+        }
+      }
+
       const complementary = rows
         .filter(
           (r) =>
             wantsToGrow.has(r.academicAreaId) &&
-            areaName.has(r.academicAreaId) &&
+            ctx.areaName.has(r.academicAreaId) &&
             Number(r.score) > (miPuntaje.get(r.academicAreaId) ?? 0),
         )
         .slice(0, RULES.teammate.maxComplementaryAreas);
       for (const r of complementary) {
         reasons.push({
           code: RecommendationReasonCode.COMPLEMENTARY_PROFILE,
-          label: `Puede aportar en ${areaName.get(r.academicAreaId)}, donde quieres fortalecerte`,
+          label: `Puede aportar en ${ctx.areaName.get(r.academicAreaId)}, donde quieres fortalecerte`,
           points: RULES.teammate.complementaryPoints,
+        });
+      }
+
+      // Sin ninguna de las tres primeras prioridades no hay sugerencia: la
+      // disponibilidad sola no hace a nadie buen companero.
+      if (reasons.length === 0) continue;
+
+      // 4. Disponibilidad declarada.
+      if (
+        peer.availability === AvailabilityStatus.LOOKING
+        || peer.availability === AvailabilityStatus.OPEN
+      ) {
+        reasons.push({
+          code: RecommendationReasonCode.AVAILABILITY,
+          label:
+            peer.availability === AvailabilityStatus.LOOKING
+              ? 'Declaró que busca sumarse a algo'
+              : 'Declaró que escucha propuestas',
+          points: RULES.teammate.availabilityPoints,
         });
       }
 
@@ -511,11 +902,15 @@ export class RecommendationsEngine {
       if (score < RULES.teammate.minScore) continue;
 
       const semester = peer.semester === null ? null : Number(peer.semester);
-      const distance = semester && profile.semester ? Math.abs(semester - profile.semester) : 9;
+      const distance =
+        semester && ctx.profile.semester ? Math.abs(semester - ctx.profile.semester) : 9;
       result.push({
         type: RecommendationType.TEAMMATE,
         targetId: peer.profileId,
-        academicAreaId: (complementary[0] ?? shared[0])?.academicAreaId ?? null,
+        academicAreaId:
+          (complementary[0] ?? shared[0])?.academicAreaId
+          ?? faltantes[0]?.skill?.academicAreaId
+          ?? null,
         title: peer.name,
         description: semester ? `Estudiante de ${semester}.º semestre` : 'Estudiante de la carrera',
         targetLink: null,
@@ -535,7 +930,9 @@ export class RecommendationsEngine {
       select: { id: true },
     });
     const memberships = await this.members.find({ where: { userId: profile.userId } });
-    const projectIds = [...new Set([...owned.map((p) => p.id), ...memberships.map((m) => m.projectId)])];
+    const projectIds = [
+      ...new Set([...owned.map((p) => p.id), ...memberships.map((m) => m.projectId)]),
+    ];
     if (projectIds.length === 0) return new Set();
 
     const [teamMembers, teamProjects] = await Promise.all([
@@ -657,7 +1054,11 @@ export class RecommendationsEngine {
   }
 
   private sum(reasons: RecommendationReason[]): number {
-    return Number(reasons.reduce((acc, r) => acc + r.points, 0).toFixed(2));
+    return this.redondear(reasons.reduce((acc, r) => acc + r.points, 0));
+  }
+
+  private redondear(n: number): number {
+    return Math.round(n * 100) / 100;
   }
 
   private formatDate(date: Date): string {

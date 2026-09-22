@@ -18,9 +18,9 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { CreateExternalCertificateDto } from './dto/create-external-certificate.dto';
 import { UpdateExternalCertificateDto } from './dto/update-external-certificate.dto';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 @Injectable()
 export class CertificatesService {
@@ -31,8 +31,8 @@ export class CertificatesService {
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     private readonly uploads: UploadsService,
     private readonly validation: ValidationService,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
   ) {}
 
   async create(userId: string, dto: CreateExternalCertificateDto): Promise<ExternalCertificate> {
@@ -75,7 +75,7 @@ export class CertificatesService {
       resourceId: saved.id,
     });
 
-    await this.affinityRecalculation.requestRecalculation(profile.id);
+    await this.trajectory.requestRecalculation(profile.id);
     return saved;
   }
 
@@ -133,7 +133,7 @@ export class CertificatesService {
       force: true,
     });
 
-    await this.affinityRecalculation.requestRecalculation(certificate.studentProfileId);
+    await this.trajectory.requestRecalculation(certificate.studentProfileId);
     return saved;
   }
 
@@ -144,7 +144,7 @@ export class CertificatesService {
     if (storedFileId) {
       await this.uploads.remove(storedFileId);
     }
-    await this.affinityRecalculation.requestRecalculation(certificate.studentProfileId);
+    await this.trajectory.requestRecalculation(certificate.studentProfileId);
   }
 
   private async assertAreaExists(areaId?: string | null): Promise<void> {

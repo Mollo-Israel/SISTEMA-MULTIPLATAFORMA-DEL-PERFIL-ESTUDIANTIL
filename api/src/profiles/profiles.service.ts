@@ -43,9 +43,9 @@ import { SetInstitutionalDataDto } from './dto/institutional-data.dto';
 import { UpdateVisibilityDto } from './dto/visibility.dto';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 interface StudentDirectoryRow {
   profileId: string;
@@ -79,8 +79,8 @@ export class ProfilesService {
     @InjectRepository(InternalConstancy)
     private readonly constancies: Repository<InternalConstancy>,
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
     private readonly teacherScope: TeacherScopeService,
     private readonly audit: AuditService,
   ) {}
@@ -815,7 +815,7 @@ export class ProfilesService {
   }
 
   private async requestAffinity(profileId: string): Promise<void> {
-    await this.affinityRecalculation.requestRecalculation(profileId);
+    await this.trajectory.requestRecalculation(profileId);
   }
 
   /**

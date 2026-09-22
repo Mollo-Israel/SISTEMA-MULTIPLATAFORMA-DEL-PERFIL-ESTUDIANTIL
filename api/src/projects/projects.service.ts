@@ -43,9 +43,9 @@ import { ProjectEventsService } from './project-events.service';
 import { ProjectBackingService } from './project-backing.service';
 import { RepositoryInspectorService } from './repository-inspector.service';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 
 @Injectable()
@@ -75,8 +75,8 @@ export class ProjectsService {
     private readonly linkChecker: LinkCheckerService,
     private readonly uploads: UploadsService,
     private readonly validation: ValidationService,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
   ) {}
 
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
@@ -111,7 +111,7 @@ export class ProjectsService {
     await this.checkExternalSources(saved.id, userId);
     await this.backing.recalculate(saved.id, userId);
 
-    await this.affinityRecalculation.requestRecalculation(profile.id);
+    await this.trajectory.requestRecalculation(profile.id);
     return this.findOneOrFail(saved.id);
   }
 
@@ -170,7 +170,7 @@ export class ProjectsService {
     if (enlacesCambian) await this.checkExternalSources(project.id, user.userId);
     await this.backing.recalculate(project.id, user.userId);
 
-    await this.affinityRecalculation.requestRecalculation(project.createdByProfileId);
+    await this.trajectory.requestRecalculation(project.createdByProfileId);
     return this.findOneOrFail(id);
   }
 
@@ -423,7 +423,7 @@ export class ProjectsService {
     await this.backing.recalculate(project.id, user.userId);
 
     // El recálculo va a quien aportó, no al dueño del proyecto (§35).
-    await this.affinityRecalculation.requestRecalculation(ownProfile.id);
+    await this.trajectory.requestRecalculation(ownProfile.id);
     return saved;
   }
 
@@ -450,7 +450,7 @@ export class ProjectsService {
     await this.backing.recalculate(project.id, user.userId);
 
     // §35: se recalcula a quien pertenecía, no al dueño del proyecto.
-    await this.affinityRecalculation.requestRecalculation(dueno);
+    await this.trajectory.requestRecalculation(dueno);
   }
 
   // ====================================================================
@@ -497,7 +497,7 @@ export class ProjectsService {
 
     // Ahora sí: lo que confirmó pasa a contar en SU perfil (§34).
     const profile = await this.profiles.findOne({ where: { userId } });
-    if (profile) await this.affinityRecalculation.requestRecalculation(profile.id);
+    if (profile) await this.trajectory.requestRecalculation(profile.id);
 
     return this.memberView(member.id);
   }

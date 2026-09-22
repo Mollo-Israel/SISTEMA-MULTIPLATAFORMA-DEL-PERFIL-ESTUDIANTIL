@@ -258,19 +258,40 @@ async function prepararEscenario(ctx) {
     capacity: 10, activityDate: dias(15),
   })).data;
 
-  ctx.aCurso = (await crearActividad(ctx.director, {
-    title: `Curso externo de modelado dimensional ${TS}`,
-    description: 'Curso abierto de una plataforma externa.',
-    type: 'academica', categoryId: ctx.cat.curso, areaId: ctx.areaPrincipal.id,
-    externalUrl: 'https://example.org/curso-modelado',
-  })).data;
+  // §61 · Un curso externo y un recurso ya no son actividades: viven en el
+  // catalogo controlado. Un recurso no tiene fecha, ni cupo, ni inscripcion,
+  // ni participacion que confirmar, y modelarlo como actividad lo obligaba a
+  // fingir todo eso.
+  const curso = await req('POST', '/learning-resources', {
+    token: ctx.director,
+    body: {
+      title: `Curso externo de modelado dimensional ${TS}`,
+      provider: 'Plataforma abierta de datos',
+      url: `https://example.org/curso-modelado-${TS}`,
+      description: 'Curso abierto de una plataforma externa.',
+      academicAreaId: ctx.areaPrincipal.id,
+      resourceType: 'external_course',
+    },
+  });
+  ctx.aCurso = curso.data;
 
-  ctx.aRecurso = (await crearActividad(ctx.director, {
-    title: `Guia de referencia de bodegas de datos ${TS}`,
-    description: 'Material de consulta permanente.',
-    type: 'academica', categoryId: ctx.cat.recurso, areaId: ctx.areaPrincipal.id,
-    externalUrl: 'https://example.org/guia-bodegas',
-  })).data;
+  const recurso = await req('POST', '/learning-resources', {
+    token: ctx.director,
+    body: {
+      title: `Guia de referencia de bodegas de datos ${TS}`,
+      provider: 'Documentación oficial',
+      url: `https://example.org/guia-bodegas-${TS}`,
+      description: 'Material de consulta permanente.',
+      academicAreaId: ctx.areaPrincipal.id,
+      resourceType: 'guide',
+    },
+  });
+  ctx.aRecurso = recurso.data;
+  check(
+    curso.status === 201 && recurso.status === 201,
+    'P.4b El curso y el recurso se incorporan al catálogo controlado (§61)',
+    `${curso.status} / ${recurso.status} ${msgOf(curso)} ${msgOf(recurso)}`,
+  );
 
   ctx.aConvocatoria = (await crearActividad(ctx.sociedad, {
     title: `Convocatoria de proyectos de datos ${TS}`,
@@ -307,8 +328,9 @@ async function prepararEscenario(ctx) {
     activityDate: dias(14),
   })).data;
 
-  const creadas = [ctx.aTaller, ctx.aCurso, ctx.aRecurso, ctx.aConvocatoria, ctx.aPasada, ctx.aLlena, ctx.aBorrador, ctx.aAjena];
-  check(creadas.every((a) => a?.id), 'P.5 Ocho actividades creadas, con sus casos limite');
+  const creadas = [ctx.aTaller, ctx.aConvocatoria, ctx.aPasada, ctx.aLlena, ctx.aBorrador, ctx.aAjena];
+  check(creadas.every((a) => a?.id), 'P.5 Seis actividades creadas, con sus casos limite');
+  check(!!ctx.aCurso?.id && !!ctx.aRecurso?.id, 'P.5b Y dos entradas del catálogo (§61)');
 
   // Z ocupa el unico cupo confirmable de la actividad llena.
   await req('POST', `/activities/${ctx.aLlena.id}/register`, { token: ctx.Z.token });
@@ -428,10 +450,25 @@ async function rf18Generacion(ctx) {
   check(companero?.type === 'teammate', '18.14 Sugiere un posible companero de equipo', companero?.type);
 
   section('Motivos (RN-16: a partir del perfil y de las afinidades)');
+  // §60 reparte el ranking en porcentajes: 50 % afinidad, 20 % interes
+  // explicito, 20 % area de mejora y 10 % contexto. La prioridad 5 cobra algo
+  // mas de la mitad de ese 20 %.
   check(
-    taller?.reasons.some((x) => x.code === 'preferred_area' && x.points === 6),
-    '18.15 Area de preferencia con prioridad 5 aporta 6 puntos',
+    taller?.reasons.some((x) => x.code === 'preferred_area' && x.points === 12),
+    '18.15 Un área de preferencia con prioridad 5 aporta 12 de los 20 puntos de interés (§60)',
     JSON.stringify(taller?.reasons),
+  );
+  check(
+    (taller?.score ?? 0) > 0 && (taller?.score ?? 0) <= 100,
+    '18.15b El puntaje de una recomendación vive entre 0 y 100 (§60)',
+    String(taller?.score),
+  );
+  check(
+    Math.abs(
+      (taller?.reasons ?? []).reduce((a, x) => a + Number(x.points), 0) - Number(taller?.score),
+    ) < 0.011,
+    '18.15c INVARIANTE: los motivos suman exactamente el puntaje',
+    `${(taller?.reasons ?? []).reduce((a, x) => a + Number(x.points), 0)} vs ${taller?.score}`,
   );
   check(
     taller?.reasons.some((x) => x.code === 'affinity_area'),
@@ -477,15 +514,22 @@ async function rf18Exclusiones(ctx) {
 
   const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
   const nombres = new Set(areas.map((a) => a.name));
+  // §62 anade prioridades -habilidades faltantes, respaldo relacionado,
+  // disponibilidad- y con ellas plantillas nuevas. Lo que NO puede aparecer
+  // sigue siendo lo mismo: el nivel o el puntaje del companero.
   const plantillaValida = (label) => {
     const compartida = /^Comparten trayectoria en (.+)$/.exec(label);
     if (compartida) return nombres.has(compartida[1]);
+    const respaldada = /^Tiene trayectoria respaldada en (.+)$/.exec(label);
+    if (respaldada) return nombres.has(respaldada[1]);
     const complementaria = /^Puede aportar en (.+), donde quieres fortalecerte$/.exec(label);
-    return complementaria ? nombres.has(complementaria[1]) : false;
+    if (complementaria) return nombres.has(complementaria[1]);
+    if (/^Declara .+, que tú todavía no declaras$/.test(label)) return true;
+    return /^Declaró que (busca sumarse a algo|escucha propuestas)$/.test(label);
   };
   check(
     mates.every((m) => m.reasons.every((x) => plantillaValida(x.label))),
-    '18.28 Los motivos de un companero solo nombran areas, sin niveles ni puntajes suyos',
+    '18.28 Los motivos de un companero solo nombran areas y habilidades (§62)',
     JSON.stringify(mates.flatMap((m) => m.reasons.map((x) => x.label))),
   );
 
@@ -582,7 +626,18 @@ async function rf18Validaciones(ctx) {
   section('Reglas visibles');
   const reglas = await req('GET', '/recommendations/rules', { token: ctx.S1.token });
   check(reglas.status === 200 && !!reglas.data.rulesVersion, '18.56 Las reglas se consultan de solo lectura', reglas.status);
-  check(Array.isArray(reglas.data.rules) && reglas.data.rules.length >= 8, '18.57 Estan publicadas todas las reglas de puntuacion', reglas.data?.rules?.length);
+  const pesos = reglas.data?.ranking ?? [];
+  check(
+    pesos.length === 4 && pesos.reduce((a, r) => a + r.weight, 0) === 100,
+    '18.57 El reparto publicado es el de §60 y suma 100',
+    JSON.stringify(pesos.map((r) => [r.code, r.weight])),
+  );
+  check(
+    (reglas.data?.regimes ?? []).length === 2
+      && (reglas.data?.teammate ?? []).length >= 5,
+    '18.57b Y se publican los dos regímenes de §59 y las prioridades de §62',
+    JSON.stringify([reglas.data?.regimes?.length, reglas.data?.teammate?.length]),
+  );
   check(!!reglas.data.limits && !!reglas.data.minimumScore, '18.58 Tambien los limites y el puntaje minimo');
 }
 

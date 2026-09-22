@@ -2,15 +2,18 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 import {
+  LearningResourceStatus,
   RecommendationOutcome,
   RecommendationStatus,
   RecommendationType,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { Activity } from '../entities/activity.entity';
+import { LearningResource } from '../entities/learning-resource.entity';
 import { Recommendation } from '../entities/recommendation.entity';
 import { RecommendationsEngine } from './recommendations.engine';
 import {
+  ACTIVITY_BACKED_TYPES,
   ELEMENT_TYPES,
   RULES,
   RULES_VERSION,
@@ -43,6 +46,8 @@ export class RecommendationsService {
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(Recommendation) private readonly recommendations: Repository<Recommendation>,
     @InjectRepository(Activity) private readonly activities: Repository<Activity>,
+    @InjectRepository(LearningResource)
+    private readonly resources: Repository<LearningResource>,
   ) {}
 
   /**
@@ -162,21 +167,93 @@ export class RecommendationsService {
     return rows.map((r) => this.toView(r));
   }
 
-  /** Las reglas con que se genera cada recomendacion, de solo lectura. */
+  /**
+   * Las reglas con que se genera cada recomendacion, de solo lectura.
+   *
+   * §60 reparte el ranking en porcentajes y §59 anade el refuerzo por regimen.
+   * Se publican los dos: un estudiante que ve «43 de 100» tiene derecho a saber
+   * de donde sale ese 43, igual que con la afinidad.
+   */
   getRules() {
     return {
       rulesVersion: RULES_VERSION,
-      rules: [
-        { code: 'affinity_area', label: 'Área con afinidad alta', points: RULES.affinityPoints.high },
-        { code: 'affinity_area', label: 'Área con afinidad media', points: RULES.affinityPoints.medium },
-        { code: 'affinity_area', label: 'Área con afinidad baja', points: RULES.affinityPoints.low },
-        { code: 'preferred_area', label: 'Área de preferencia (1 más su prioridad de 1 a 5)', points: RULES.preferredAreaBase },
-        { code: 'improvement_area', label: 'Área en la que quieres mejorar', points: RULES.improvementAreaPoints },
-        { code: 'free_interest_match', label: 'Coincide con un interés declarado', points: RULES.freeInterestPoints },
-        { code: 'skill_match', label: 'Relacionado con una habilidad declarada', points: RULES.skillMatchPoints },
-        { code: 'upcoming_date', label: `Fecha dentro de los próximos ${RULES.upcomingWindowDays} días (solo refuerza)`, points: RULES.upcomingDatePoints },
-        { code: 'shared_affinity', label: 'Compañero con trayectoria en un área en común', points: RULES.teammate.sharedAreaPoints },
-        { code: 'complementary_profile', label: 'Compañero que puede aportar donde quieres fortalecerte', points: RULES.teammate.complementaryPoints },
+      /** §60 · Reparto del ranking inicial. Suma 100. */
+      ranking: [
+        {
+          code: 'affinity_area',
+          label: 'Afinidad con el área del elemento',
+          weight: RULES.ranking.affinity,
+          detail: 'Proporcional a tu puntaje de afinidad sobre 100.',
+        },
+        {
+          code: 'preferred_area',
+          label: 'Interés explícito en esa área',
+          weight: RULES.ranking.explicitInterest,
+          detail:
+            'Entero con prioridad 1 y algo más de la mitad con prioridad 5. Un interés '
+            + 'deducido del texto pesa menos que uno que declaraste.',
+        },
+        {
+          code: 'improvement_area',
+          label: 'Es un área en la que quieres mejorar',
+          weight: RULES.ranking.improvementArea,
+          detail: 'Entero o nada: o la declaraste, o no.',
+        },
+        {
+          code: 'context_match',
+          label: 'Disponibilidad y contexto',
+          weight: RULES.ranking.context,
+          detail:
+            'Fecha próxima, semestre al que va dirigida, modalidad compatible con cómo '
+            + 'prefieres participar y disponibilidad que declaraste.',
+        },
+      ],
+      /** §59 · Lo que se recomienda cambia segun se pueda demostrar o no. */
+      regimes: [
+        {
+          code: 'build_experience',
+          label: 'Afinidad con respaldo bajo',
+          detail:
+            'Se priorizan talleres, retos, prácticas y herramientas: lo que deja algo que '
+            + 'puedas demostrar después.',
+          bonus: RULES.regime.bonus,
+        },
+        {
+          code: 'advance_level',
+          label: 'Afinidad con respaldo ya construido',
+          detail:
+            'Se priorizan convocatorias, hackathones, retos e investigación: lo que lleva '
+            + 'más lejos a quien ya demostró.',
+          bonus: RULES.regime.bonus,
+        },
+      ],
+      /** §62 · Prioridades para sugerir un compañero, en su orden. */
+      teammate: [
+        {
+          code: 'missing_skill',
+          label: 'Cubre una habilidad que no declaras',
+          points: RULES.teammate.missingSkillPoints,
+        },
+        {
+          code: 'support_backed',
+          label: 'Tiene trayectoria respaldada en un área común',
+          points: RULES.teammate.supportBackedPoints,
+        },
+        {
+          code: 'shared_affinity',
+          label: 'Comparten trayectoria en un área',
+          points: RULES.teammate.sharedAreaPoints,
+        },
+        {
+          code: 'complementary_profile',
+          label: 'Puede aportar donde quieres fortalecerte',
+          points: RULES.teammate.complementaryPoints,
+        },
+        {
+          code: 'availability',
+          label: 'Declaró disponibilidad para colaborar',
+          points: RULES.teammate.availabilityPoints,
+        },
       ],
       limits: RULES.limits,
       minimumScore: { element: RULES.minElementScore, teammate: RULES.teammate.minScore },
@@ -186,7 +263,7 @@ export class RecommendationsService {
   // -------------------------------------------------------------------------
 
   private async detailFor(profileId: string, r: Recommendation) {
-    if (ELEMENT_TYPES.includes(r.type)) {
+    if (ACTIVITY_BACKED_TYPES.includes(r.type)) {
       const activity = await this.activities.findOne({
         where: { id: r.targetId },
         relations: { category: true, academicArea: true },
@@ -202,6 +279,33 @@ export class RecommendationsService {
         eventDate: activity.eventDate,
         externalUrl: activity.externalUrl,
         capacity: activity.capacity,
+      };
+    }
+
+    // §61: un recurso o un curso externo apunta al catalogo controlado, no a
+    // una actividad. Se devuelve tambien quien lo incorporo, porque es lo que
+    // distingue un catalogo curado de una lista de enlaces.
+    if (
+      r.type === RecommendationType.RESOURCE
+      || r.type === RecommendationType.EXTERNAL_COURSE
+    ) {
+      const resource = await this.resources.findOne({
+        where: { id: r.targetId },
+        relations: { academicArea: true, resourceSkills: { skill: true } },
+      });
+      if (!resource) return { available: false };
+      return {
+        // Un recurso retirado del catalogo deja de estar disponible aunque la
+        // recomendacion guardada siga existiendo (§61).
+        available: r.isCurrent && resource.status === LearningResourceStatus.ACTIVE,
+        resourceId: resource.id,
+        provider: resource.provider,
+        resourceType: resource.resourceType,
+        status: resource.status,
+        url: resource.url,
+        skills: (resource.resourceSkills ?? [])
+          .map((s) => s.skill?.name)
+          .filter((n): n is string => !!n),
       };
     }
 

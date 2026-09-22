@@ -22,9 +22,9 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { TeacherScopeService } from '../access/teacher-scope.service';
 import { CreateInternalConstancyDto } from './dto/create-internal-constancy.dto';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 /** Actor institucional responsable de cada tipo de actividad. */
 const OWNER_ROLE_BY_TYPE: Record<ActivityType, RolNombre> = {
@@ -42,8 +42,8 @@ export class ConstanciesService {
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
     private readonly teacherScope: TeacherScopeService,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
   ) {}
 
   /**
@@ -107,7 +107,7 @@ export class ConstanciesService {
       authorizedById: authorizer.userId,
     });
     const saved = await this.constancies.save(constancy);
-    await this.affinityRecalculation.requestRecalculation(dto.profileId);
+    await this.trajectory.requestRecalculation(dto.profileId);
     return this.findOneOrFail(saved.id);
   }
 

@@ -23,9 +23,9 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 /**
  * Integrantes e invitaciones de un proyecto (RF14).
@@ -44,8 +44,8 @@ export class ProjectMembersService {
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     private readonly events: ProjectEventsService,
     private readonly backing: ProjectBackingService,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
   ) {}
 
   // ------------------------------------------------------------------
@@ -158,7 +158,7 @@ export class ProjectMembersService {
     await this.members.delete(member.id);
     // El proyecto deja de contar en el portafolio y la afinidad del ex integrante.
     if (profile) {
-      await this.affinityRecalculation.requestRecalculation(profile.id);
+      await this.trajectory.requestRecalculation(profile.id);
     }
   }
 
@@ -298,7 +298,7 @@ export class ProjectMembersService {
     // §33: aceptar crea la pertenencia, pero la contribucion sigue sin
     // confirmar. Hasta que el integrante la confirme, el proyecto no aporta
     // a su afinidad: nadie puede atribuirle experiencia por el.
-    await this.affinityRecalculation.requestRecalculation(profile.id);
+    await this.trajectory.requestRecalculation(profile.id);
     return this.findInvitationOrFail(invitation.id);
   }
 

@@ -181,6 +181,9 @@ export default function RecommendationsScreen() {
           )}
 
           {!!top && <Text style={styles.reason}>{top.label}</Text>}
+          {/* §60 reparte el ranking en porcentajes: el puntaje dice cuanto
+              encaja, no en que puesto va. Sin el «de 100» seria mudo. */}
+          <Text style={styles.area}>Encaje con tu perfil: {Math.round(item.score)} de 100</Text>
           <Text style={styles.link}>{isOpen ? 'Ocultar detalle' : 'Ver por qué y decidir'}</Text>
         </TouchableOpacity>
 
@@ -195,6 +198,17 @@ export default function RecommendationsScreen() {
                 <Text style={styles.reasonPoints}>+{r.points}</Text>
               </View>
             ))}
+
+            {/* §61: si viene del catalogo, quien lo publica es parte de por
+                que se puede confiar en el. */}
+            {!!detail.detail?.provider && (
+              <Muted>
+                Publicado por {String(detail.detail.provider)}
+                {Array.isArray(detail.detail.skills) && detail.detail.skills.length > 0
+                  ? ` · Trabaja: ${(detail.detail.skills as string[]).join(', ')}`
+                  : ''}
+              </Muted>
+            )}
 
             {detail.type === 'teammate' && (
               <Muted>

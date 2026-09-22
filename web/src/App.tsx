@@ -33,6 +33,7 @@ import DirectorDashboard from './pages/director/Dashboard';
 import DirectorAffinityMap from './pages/director/AffinityMap';
 import DirectorActivitiesPage from './pages/director/Activities';
 import DirectorConstanciesPage from './pages/director/Constancies';
+import DirectorLearningResourcesPage from './pages/director/LearningResources';
 
 import SocietyDashboard from './pages/society/Dashboard';
 import SocietyActivitiesPage from './pages/society/Activities';
@@ -109,6 +110,7 @@ export default function App() {
             <Route path="/director/activities" element={<DirectorActivitiesPage />} />
             <Route path="/director/constancies" element={<DirectorConstanciesPage />} />
             <Route path="/director/affinity" element={<DirectorAffinityMap />} />
+            <Route path="/director/resources" element={<DirectorLearningResourcesPage />} />
           </Route>
 
           <Route element={guarded([SC], <Layout />)}>

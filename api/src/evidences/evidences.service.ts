@@ -21,9 +21,9 @@ import { UploadsService } from '../storage/uploads.service';
 import { ValidationService } from '../validation/validation.service';
 import { CreateEvidenceDto } from './dto/create-evidence.dto';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 @Injectable()
 export class EvidencesService {
@@ -38,8 +38,8 @@ export class EvidencesService {
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     private readonly uploads: UploadsService,
     private readonly validation: ValidationService,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
   ) {}
 
   async create(user: AuthenticatedUser, dto: CreateEvidenceDto): Promise<ProjectEvidence> {
@@ -80,7 +80,7 @@ export class EvidencesService {
       resourceId: saved.id,
     });
 
-    await this.affinityRecalculation.requestRecalculation(profile.id);
+    await this.trajectory.requestRecalculation(profile.id);
     return this.findOneOrFail(saved.id);
   }
 
@@ -106,7 +106,7 @@ export class EvidencesService {
     if (storedFileId) {
       await this.uploads.remove(storedFileId);
     }
-    await this.affinityRecalculation.requestRecalculation(profileId);
+    await this.trajectory.requestRecalculation(profileId);
   }
 
   private assertPayloadMatchesType(dto: CreateEvidenceDto): void {

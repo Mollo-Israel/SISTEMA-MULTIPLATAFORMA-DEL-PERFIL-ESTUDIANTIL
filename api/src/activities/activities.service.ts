@@ -40,9 +40,9 @@ import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivitiesDto } from './dto/query-activities.dto';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 /** Estados en los que un estudiante puede manifestar interes o inscribirse. */
 const REGISTRABLE_STATUSES = REGISTRABLE_ACTIVITY_STATUSES;
@@ -118,8 +118,8 @@ export class ActivitiesService {
     @InjectRepository(ActivitySkill)
     private readonly activitySkills: Repository<ActivitySkill>,
     @InjectRepository(Skill) private readonly skills: Repository<Skill>,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
     private readonly teacherScope: TeacherScopeService,
     private readonly audit: AuditService,
   ) {}
@@ -439,7 +439,7 @@ export class ActivitiesService {
     // la auditoría se registra aquí porque es la decisión de una persona
     // sobre otra y debe quedar constancia de quién la tomó.
     if (status === RegistrationStatus.CONFIRMED) {
-      await this.affinityRecalculation.requestRecalculation(studentProfileId);
+      await this.trajectory.requestRecalculation(studentProfileId);
     }
 
     await this.audit.record({

@@ -8,6 +8,7 @@ import { StudentSkill } from '../entities/student-skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
+import { LearningResource } from '../entities/learning-resource.entity';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { Recommendation } from '../entities/recommendation.entity';
@@ -36,6 +37,7 @@ import { RecommendationsController } from './recommendations.controller';
       AcademicArea,
       Activity,
       ActivityRegistration,
+      LearningResource,
       Project,
       ProjectMember,
       Recommendation,

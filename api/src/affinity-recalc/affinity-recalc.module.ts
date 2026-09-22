@@ -18,7 +18,6 @@ import { AffinityContribution } from '../entities/affinity-contribution.entity';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { AffinitySnapshotItem } from '../entities/affinity-snapshot-item.entity';
 import { AccessModule } from '../access/access.module';
-import { AFFINITY_RECALCULATION } from './affinity-recalculation.port';
 import { AffinityEngineService } from './affinity.engine';
 import { AffinityBackfillService } from './affinity-backfill.service';
 import { AffinityController } from './affinity.controller';
@@ -47,11 +46,10 @@ import { AffinityController } from './affinity.controller';
     AccessModule,
   ],
   controllers: [AffinityController],
-  providers: [
-    AffinityEngineService,
-    AffinityBackfillService,
-    { provide: AFFINITY_RECALCULATION, useExisting: AffinityEngineService },
-  ],
-  exports: [AFFINITY_RECALCULATION, AffinityEngineService, AffinityBackfillService],
+  providers: [AffinityEngineService, AffinityBackfillService],
+  // El puerto de recomputacion ya no vive aqui: §109 lo centraliza en
+  // TrajectoryModule, que coordina afinidad y recomendaciones. Exponerlo desde
+  // los dos sitios permitiria saltarse al coordinador sin darse cuenta.
+  exports: [AffinityEngineService, AffinityBackfillService],
 })
 export class AffinityRecalcModule {}

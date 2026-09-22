@@ -17,9 +17,9 @@ import {
 } from '../entities/project-check.entity';
 import { ProjectEventsService } from './project-events.service';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 import { StudentProfile } from '../entities/student-profile.entity';
 
 /**
@@ -49,8 +49,8 @@ export class ProjectBackingService {
     @InjectRepository(StudentProfile)
     private readonly profiles: Repository<StudentProfile>,
     private readonly events: ProjectEventsService,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
   ) {}
 
   /**
@@ -170,7 +170,7 @@ export class ProjectBackingService {
 
     for (const perfilId of destinatarios) {
       try {
-        await this.affinityRecalculation.requestRecalculation(perfilId);
+        await this.trajectory.requestRecalculation(perfilId);
       } catch (e) {
         // El nivel de respaldo ya quedo guardado. Un fallo al recalcular no
         // puede deshacerlo ni impedir la respuesta: se registra y el proximo

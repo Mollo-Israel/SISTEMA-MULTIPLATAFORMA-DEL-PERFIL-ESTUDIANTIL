@@ -7,7 +7,7 @@ import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StorageModule } from '../storage/storage.module';
-import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { OCR_PORT, TesseractOcrAdapter } from './ocr.port';
 import { DocumentExtractionService } from './document-extraction.service';
 import { LinkCheckerService } from './link-checker.service';
@@ -37,7 +37,7 @@ import { ValidationController } from './validation.controller';
       StudentProfile,
     ]),
     StorageModule,
-    AffinityRecalcModule,
+    TrajectoryModule,
   ],
   controllers: [ValidationController],
   providers: [

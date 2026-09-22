@@ -7,7 +7,7 @@ import { ProjectMember } from '../entities/project-member.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
-import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { StorageModule } from '../storage/storage.module';
 import { EvidencesService } from './evidences.service';
 import { EvidencesController } from './evidences.controller';
@@ -23,7 +23,7 @@ import { EvidencesController } from './evidences.controller';
       ActivityRegistration,
       AcademicArea,
     ]),
-    AffinityRecalcModule,
+    TrajectoryModule,
     StorageModule,
   ],
   controllers: [EvidencesController],

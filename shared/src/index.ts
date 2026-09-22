@@ -11,6 +11,7 @@ export * from './enums/constancy.enum';
 export * from './enums/gamification.enum';
 export * from './enums/portfolio.enum';
 export * from './enums/recommendation.enum';
+export * from './enums/learning-resource.enum';
 export * from './enums/identity.enum';
 export * from './enums/onboarding.enum';
 export * from './enums/validation.enum';

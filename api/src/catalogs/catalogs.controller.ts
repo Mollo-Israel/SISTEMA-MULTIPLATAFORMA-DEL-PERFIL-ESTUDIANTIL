@@ -17,6 +17,10 @@ import {
   CreateActivityCategoryDto,
   UpdateActivityCategoryDto,
 } from './dto/activity-category.dto';
+import {
+  CreateLearningResourceDto,
+  UpdateLearningResourceDto,
+} from './dto/learning-resource.dto';
 
 @ApiTags('catalogs')
 @ApiBearerAuth()
@@ -98,6 +102,58 @@ export class CatalogsController {
   @ApiOperation({ summary: 'Editar una habilidad o cambiar su estado.' })
   updateSkill(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSkillDto) {
     return this.catalogsService.updateSkill(id, dto);
+  }
+
+  // ---------------- Catalogo de recursos y cursos externos (§61) ----------------
+
+  /**
+   * §61 pide un catalogo **controlado**: nada de URLs recogidas
+   * automaticamente de Internet. Por eso escribir aqui es cosa de la direccion
+   * de carrera, y el estudiante solo lee lo vigente.
+   */
+  @Get('learning-resources')
+  @ApiOperation({
+    summary: 'Recursos y cursos externos del catálogo controlado (§61).',
+    description:
+      'El estudiante ve los vigentes. La dirección puede pedir también los retirados, '
+      + 'que se conservan históricamente aunque ya no se recomienden.',
+  })
+  findLearningResources(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('includeInactive') includeInactive?: string,
+    @Query('academicAreaId') academicAreaId?: string,
+  ) {
+    const administra =
+      user.role === RolNombre.ADMIN || user.role === RolNombre.CAREER_DIRECTOR;
+    return this.catalogsService.findLearningResources({
+      includeInactive: administra && includeInactive === 'true',
+      academicAreaId,
+    });
+  }
+
+  @Post('learning-resources')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Incorporar un recurso al catálogo controlado (§61).' })
+  createLearningResource(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateLearningResourceDto,
+  ) {
+    return this.catalogsService.createLearningResource(dto, user.userId);
+  }
+
+  @Patch('learning-resources/:id')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Editar un recurso o retirarlo del catálogo.',
+    description:
+      'No hay borrado: retirar es pasar el estado a «inactive». §61 exige conservarlo '
+      + 'históricamente, porque una recomendación anterior debe poder explicar a qué apuntaba.',
+  })
+  updateLearningResource(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLearningResourceDto,
+  ) {
+    return this.catalogsService.updateLearningResource(id, dto);
   }
 
   // ---------------- Criterios de gamificacion ----------------

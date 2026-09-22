@@ -44,7 +44,6 @@ import { AffinityWeight } from '../entities/affinity-weight.entity';
 import { AffinityContribution } from '../entities/affinity-contribution.entity';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { AffinitySnapshotItem } from '../entities/affinity-snapshot-item.entity';
-import { AffinityRecalculationPort } from './affinity-recalculation.port';
 
 interface AreaInfo {
   id: string;
@@ -282,7 +281,7 @@ interface AreaScore {
 }
 
 @Injectable()
-export class AffinityEngineService implements AffinityRecalculationPort {
+export class AffinityEngineService {
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,

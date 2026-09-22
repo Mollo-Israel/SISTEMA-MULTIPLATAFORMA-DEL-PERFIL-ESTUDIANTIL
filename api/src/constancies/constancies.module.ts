@@ -4,7 +4,7 @@ import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
-import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { AccessModule } from '../access/access.module';
 import { ConstanciesService } from './constancies.service';
 import { ConstanciesController } from './constancies.controller';
@@ -17,7 +17,7 @@ import { ConstanciesController } from './constancies.controller';
       Activity,
       ActivityRegistration,
     ]),
-    AffinityRecalcModule,
+    TrajectoryModule,
     AccessModule,
   ],
   controllers: [ConstanciesController],

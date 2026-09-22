@@ -19,7 +19,7 @@ import { RepositoryInspectorService } from './repository-inspector.service';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { User } from '../entities/user.entity';
-import { AffinityRecalcModule } from '../affinity-recalc/affinity-recalc.module';
+import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { AccessModule } from '../access/access.module';
 import { ProjectsService } from './projects.service';
 import { ProjectMembersService } from './project-members.service';
@@ -47,7 +47,7 @@ import { ProjectsController } from './projects.controller';
       ProjectEvent,
       Skill,
     ]),
-    AffinityRecalcModule,
+    TrajectoryModule,
     AccessModule,
     StorageModule,
   ],

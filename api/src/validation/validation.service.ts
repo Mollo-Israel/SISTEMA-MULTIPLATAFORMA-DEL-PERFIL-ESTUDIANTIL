@@ -19,9 +19,9 @@ import { DocumentExtractionService } from './document-extraction.service';
 import { LinkCheckerService } from './link-checker.service';
 import { compareHolderName } from './metadata.extractor';
 import {
-  AFFINITY_RECALCULATION,
-  AffinityRecalculationPort,
-} from '../affinity-recalc/affinity-recalculation.port';
+  TRAJECTORY_RECALCULATION,
+  TrajectoryRecalculationPort,
+} from '../trajectory/trajectory-recalculation.port';
 
 /** Version del validador. Subirla permite reprocesar lo ya validado. */
 export const VALIDATOR_VERSION = 1;
@@ -54,8 +54,8 @@ export class ValidationService {
     private readonly extraction: DocumentExtractionService,
     private readonly linkChecker: LinkCheckerService,
     private readonly audit: AuditService,
-    @Inject(AFFINITY_RECALCULATION)
-    private readonly affinityRecalculation: AffinityRecalculationPort,
+    @Inject(TRAJECTORY_RECALCULATION)
+    private readonly trajectory: TrajectoryRecalculationPort,
   ) {}
 
   // ====================================================================
@@ -372,7 +372,7 @@ export class ValidationService {
 
     try {
       const dueno = await this.duenoDe(record);
-      if (dueno) await this.affinityRecalculation.requestRecalculation(dueno);
+      if (dueno) await this.trajectory.requestRecalculation(dueno);
     } catch (e) {
       // El veredicto ya esta guardado y es lo que importa. Un fallo al
       // recalcular no puede deshacerlo ni volver a encolar el trabajo.

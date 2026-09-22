@@ -190,6 +190,14 @@ export default function StudentRecommendationsPage() {
               {top.label}
             </div>
           )}
+          {/*
+            §60 reparte el ranking en porcentajes, así que el puntaje ya no es
+            un número de orden: dice cuánto encaja la recomendación con el
+            perfil. Mostrarlo sin el «de 100» lo dejaría tan mudo como antes.
+          */}
+          <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
+            Encaje con tu perfil: {Math.round(item.score)} de 100
+          </div>
         </button>
 
         {isOpen && loadingDetail === item.id && <Loading />}
@@ -205,6 +213,21 @@ export default function StudentRecommendationsPage() {
                 </li>
               ))}
             </ul>
+
+            {/* §61: un recurso o curso externo viene del catálogo controlado, y
+                quién lo publica es parte de por qué se puede confiar en él. */}
+            {!!detail.detail?.provider && (
+              <p className="muted">
+                Publicado por {String(detail.detail.provider)}
+                {Array.isArray(detail.detail.skills) && detail.detail.skills.length > 0
+                  && ` · Trabaja: ${(detail.detail.skills as string[]).join(', ')}`}
+              </p>
+            )}
+            {detail.detail?.status === 'inactive' && (
+              <p className="muted">
+                Este recurso ya no está vigente en el catálogo de la carrera.
+              </p>
+            )}
 
             {detail.type === 'teammate' && (
               <p className="muted">Puedes invitarlo desde tu proyecto, en la sección Integrantes.</p>

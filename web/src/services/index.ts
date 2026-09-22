@@ -149,6 +149,43 @@ export const catalogService = {
     api.get<ActivityCategoryItem[]>('/activity-categories').then((r) => r.data),
 };
 
+/**
+ * Entrada del catálogo controlado de recursos y cursos externos (§61).
+ *
+ * `createdBy` es lo que separa un catálogo curado de una lista de enlaces: un
+ * recurso está aquí porque una persona concreta decidió incluirlo.
+ */
+export interface LearningResource {
+  id: string;
+  title: string;
+  provider: string;
+  url: string;
+  description: string | null;
+  academicAreaId: string;
+  academicArea?: { id: string; name: string };
+  resourceType: string;
+  status: 'active' | 'inactive';
+  createdBy: string | null;
+  resourceSkills?: { id: string; skillId: string; skill?: { id: string; name: string } }[];
+  createdAt: string;
+}
+
+export const learningResourceService = {
+  list: (params?: { includeInactive?: boolean; academicAreaId?: string }) =>
+    api
+      .get<LearningResource[]>('/learning-resources', {
+        params: {
+          ...(params?.includeInactive ? { includeInactive: 'true' } : {}),
+          ...(params?.academicAreaId ? { academicAreaId: params.academicAreaId } : {}),
+        },
+      })
+      .then((r) => r.data),
+  create: (data: Record<string, unknown>) =>
+    api.post<LearningResource>('/learning-resources', data).then((r) => r.data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch<LearningResource>(`/learning-resources/${id}`, data).then((r) => r.data),
+};
+
 export const activityService = {
   list: (params?: Record<string, string>) =>
     api.get<Activity[]>('/activities', { params }).then((r) => r.data),

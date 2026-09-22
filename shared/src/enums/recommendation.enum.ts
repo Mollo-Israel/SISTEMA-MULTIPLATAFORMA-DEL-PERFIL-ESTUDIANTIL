@@ -66,6 +66,30 @@ export enum RecommendationReasonCode {
   UPCOMING_DATE = 'upcoming_date',
   /** Area de interes o mejora con poca trayectoria registrada todavia. */
   LOW_TRAJECTORY = 'low_trajectory',
+  /**
+   * §59, primer regimen: hay afinidad pero poco respaldo.
+   *
+   * Es la situacion de quien sabe hacia donde va y todavia no puede
+   * demostrarlo. Lo que necesita es practica, no mas teoria.
+   */
+  BUILD_EXPERIENCE = 'build_experience',
+  /**
+   * §59, segundo regimen: afinidad con respaldo ya construido.
+   *
+   * Recomendarle una introduccion a quien ya tiene tres proyectos corroborados
+   * en el area es hacerle perder el tiempo.
+   */
+  ADVANCE_LEVEL = 'advance_level',
+  /** El respaldo del area es bajo: la senal que dispara el primer regimen. */
+  LOW_SUPPORT = 'low_support',
+  /** Companero que cubre una habilidad que el estudiante no declara (§62). */
+  MISSING_SKILL = 'missing_skill',
+  /** Companero con respaldo trazable en el area compartida (§62). */
+  SUPPORT_BACKED = 'support_backed',
+  /** Disponibilidad declarada para colaborar (§58, §62). */
+  AVAILABILITY = 'availability',
+  /** El elemento encaja con el contexto del estudiante: modalidad, semestre. */
+  CONTEXT_MATCH = 'context_match',
 }
 
 /**
