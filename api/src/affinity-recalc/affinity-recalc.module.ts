@@ -8,8 +8,10 @@ import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
+import { ProjectFeedback } from '../entities/project-feedback.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
+import { ValidationRecord } from '../entities/validation-record.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { AffinityWeight } from '../entities/affinity-weight.entity';
 import { AffinityContribution } from '../entities/affinity-contribution.entity';
@@ -18,6 +20,7 @@ import { AffinitySnapshotItem } from '../entities/affinity-snapshot-item.entity'
 import { AccessModule } from '../access/access.module';
 import { AFFINITY_RECALCULATION } from './affinity-recalculation.port';
 import { AffinityEngineService } from './affinity.engine';
+import { AffinityBackfillService } from './affinity-backfill.service';
 import { AffinityController } from './affinity.controller';
 
 @Module({
@@ -31,8 +34,10 @@ import { AffinityController } from './affinity.controller';
       Project,
       ProjectMember,
       ProjectEvidence,
+      ProjectFeedback,
       ExternalCertificate,
       InternalConstancy,
+      ValidationRecord,
       AffinityResult,
       AffinityWeight,
       AffinityContribution,
@@ -44,8 +49,9 @@ import { AffinityController } from './affinity.controller';
   controllers: [AffinityController],
   providers: [
     AffinityEngineService,
+    AffinityBackfillService,
     { provide: AFFINITY_RECALCULATION, useExisting: AffinityEngineService },
   ],
-  exports: [AFFINITY_RECALCULATION, AffinityEngineService],
+  exports: [AFFINITY_RECALCULATION, AffinityEngineService, AffinityBackfillService],
 })
 export class AffinityRecalcModule {}

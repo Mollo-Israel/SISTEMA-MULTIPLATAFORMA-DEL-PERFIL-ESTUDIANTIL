@@ -493,11 +493,11 @@ async function constancias(ctx) {
     JSON.stringify(lineas.filter((c) => c.signalType === 'constancy').map((c) => c.points)),
   );
 
-  const suma = lineas.reduce((acc, c) => acc + c.points, 0);
+  const suma = lineas.reduce((acc, c) => acc + Number(c.points), 0);
   check(
-    suma === desglose.data?.score,
-    'B4.43 INVARIANTE: la suma del desglose sigue siendo el puntaje del área',
-    `suma ${suma} vs puntaje ${desglose.data?.score}`,
+    Math.abs(suma - Number(desglose.data?.rawPoints)) < 0.011,
+    'B4.43 INVARIANTE: la suma del desglose sigue siendo el puntaje crudo del área (§52)',
+    `suma ${suma} vs crudo ${desglose.data?.rawPoints}`,
   );
 }
 

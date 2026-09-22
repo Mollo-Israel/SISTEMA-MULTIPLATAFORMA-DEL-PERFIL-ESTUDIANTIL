@@ -288,14 +288,22 @@ export const constancyService = {
 };
 
 /** Un area dentro del resumen de afinidad (RF17). */
+
+
 export interface AffinityArea {
   academicAreaId: string;
   area: string | null;
+  /** AFFINITY_SCORE de §49: de 0 a 100. */
   score: number;
+  /** Puntos crudos sobre 60, que es lo que suma el desglose (§52). */
+  rawPoints: number;
   level: 'low' | 'medium' | 'high';
+  /** SUPPORT_SCORE de §49: cuánta información trazable lo sostiene. */
+  supportScore: number;
+  supportLevel: 'low' | 'medium' | 'high';
+  /** Familias independientes que respaldan el área (§54). */
+  supportFamilies: string[];
   rank: number;
-  /** Peso relativo respecto al area mas fuerte del propio estudiante. */
-  share: number;
 }
 
 /**
@@ -308,16 +316,26 @@ export interface AffinitySummary {
   message: string;
   calculatedAt: string | null;
   rulesVersion: string | null;
+  engineVersion: number;
   signalsCount: number;
+  maxRawPoints: number;
   totalScore: number;
   areas: AffinityArea[];
 }
 
 export interface AffinityContributionRow {
+  signalFamily: string;
   signalType: string;
   weightCode: string;
   matchType: 'declared' | 'tag' | 'text' | 'inherited';
+  sourceEntityType: string | null;
+  /** Puntos que dictaba la regla antes de los rendimientos decrecientes. */
+  rawPoints: number;
+  /** Multiplicador aplicado por repetición dentro del área (§51). */
+  multiplier: number;
   points: number;
+  supportPoints: number;
+  reason: string;
   sourceLabel: string;
   sourceId: string | null;
 }
@@ -326,8 +344,18 @@ export interface AffinityBreakdown {
   academicAreaId: string;
   area: string;
   score: number;
+  rawPoints: number;
+  maxRawPoints: number;
   level: 'low' | 'medium' | 'high' | null;
+  supportScore: number;
+  supportLevel: 'low' | 'medium' | 'high' | null;
+  supportFamilies: string[];
+  engineVersion: number;
   contributions: AffinityContributionRow[];
+  /** §91: lo que suma. */
+  contributing: AffinityContributionRow[];
+  /** §91: lo que se tuvo en cuenta y no suma. Suele ser la mitad que falta. */
+  notContributing: AffinityContributionRow[];
 }
 
 export interface AffinitySnapshotView {
@@ -338,7 +366,12 @@ export interface AffinitySnapshotView {
   areasCount: number;
   signalsCount: number;
   rulesVersion: string;
-  areas: { academicAreaId: string; area: string | null; score: number; level: string; rank: number }[];
+  engineVersion: number;
+  averageSupport: number;
+  areas: {
+    academicAreaId: string; area: string | null; score: number; rawPoints: number;
+    level: string; supportScore: number; supportLevel: string; rank: number;
+  }[];
 }
 
 export interface AffinityWeightRow {
@@ -347,6 +380,25 @@ export interface AffinityWeightRow {
   points: number;
   label: string;
   description: string;
+}
+
+/**
+ * Las reglas completas del motor (§51).
+ *
+ * No solo los pesos: tambien los topes, los rendimientos decrecientes y la
+ * normalizacion. Mostrar unicamente los pesos daria una imagen incompleta,
+ * porque el tope de un area cambia el resultado tanto como el peso.
+ */
+export interface AffinityEngineRules {
+  engineVersion: number;
+  maxRawPoints: number;
+  caps: Record<string, number>;
+  supportCaps: Record<string, number>;
+  supportPoints: Record<string, number>;
+  diminishing: Record<string, number[]>;
+  levelThresholds: { LOW_MAX: number; MEDIUM_MAX: number };
+  independentFamilies: string[];
+  weights: AffinityWeightRow[];
 }
 
 export const affinityService = {
@@ -360,7 +412,7 @@ export const affinityService = {
     api.get<AffinityBreakdown>(`/affinity/me/areas/${areaId}/breakdown`).then((r) => r.data),
   history: (limit = 10) =>
     api.get<AffinitySnapshotView[]>(`/affinity/me/history?limit=${limit}`).then((r) => r.data),
-  weights: () => api.get<AffinityWeightRow[]>('/affinity/weights').then((r) => r.data),
+  weights: () => api.get<AffinityEngineRules>('/affinity/weights').then((r) => r.data),
 
   /** Consulta institucional: el backend aplica el alcance academico (RN-23). */
   studentSummary: (studentId: string) =>

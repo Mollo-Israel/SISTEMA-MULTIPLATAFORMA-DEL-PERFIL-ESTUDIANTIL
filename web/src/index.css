@@ -868,3 +868,8 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 }
 .bitacora .ev { font-size: 0.85rem; font-weight: 600; color: var(--gray-900); }
 .bitacora .muted { font-size: 0.74rem; }
+
+/* BATCH 6 · §51 y §91 — la regla completa y el desglose de dos listas. */
+.reglas-motor { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1.2rem; }
+.reglas-motor p { margin: 0; line-height: 1.6; }
+.reglas-motor table th:last-child, .reglas-motor table td:last-child { white-space: nowrap; }

@@ -73,6 +73,21 @@ export class AffinitySnapshot {
   @Column({ name: 'rules_version', type: 'varchar', length: 64 })
   rulesVersion: string;
 
+  /**
+   * Version del motor que produjo la instantanea (§56).
+   *
+   * Es lo que permite conservar historia sin mentir: las instantaneas del
+   * motor V1 guardan puntos crudos sin techo y las del V2 puntajes sobre 100.
+   * Compararlas sin mirar este campo daria una caida enorme donde solo hubo un
+   * cambio de escala.
+   */
+  @Column({ name: 'engine_version', type: 'smallint', default: 1 })
+  engineVersion: number;
+
+  /** Respaldo promedio de las areas con puntaje, para leer la evolucion. */
+  @Column({ name: 'average_support', type: 'smallint', default: 0 })
+  averageSupport: number;
+
   @OneToMany(() => AffinitySnapshotItem, (item) => item.snapshot)
   items: AffinitySnapshotItem[];
 

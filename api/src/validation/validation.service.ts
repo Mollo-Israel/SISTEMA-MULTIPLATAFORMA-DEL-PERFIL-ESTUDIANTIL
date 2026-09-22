@@ -18,6 +18,10 @@ import { STORAGE_PORT, StoragePort } from '../storage/storage.port';
 import { DocumentExtractionService } from './document-extraction.service';
 import { LinkCheckerService } from './link-checker.service';
 import { compareHolderName } from './metadata.extractor';
+import {
+  AFFINITY_RECALCULATION,
+  AffinityRecalculationPort,
+} from '../affinity-recalc/affinity-recalculation.port';
 
 /** Version del validador. Subirla permite reprocesar lo ya validado. */
 export const VALIDATOR_VERSION = 1;
@@ -50,6 +54,8 @@ export class ValidationService {
     private readonly extraction: DocumentExtractionService,
     private readonly linkChecker: LinkCheckerService,
     private readonly audit: AuditService,
+    @Inject(AFFINITY_RECALCULATION)
+    private readonly affinityRecalculation: AffinityRecalculationPort,
   ) {}
 
   // ====================================================================
@@ -340,7 +346,57 @@ export class ValidationService {
       claimedBy: null,
       validatorVersion: VALIDATOR_VERSION,
     });
-    return this.records.save(record);
+    const guardado = await this.records.save(record);
+    await this.recalcularDueno(guardado);
+    return guardado;
+  }
+
+  /**
+   * Avisa al Motor de Afinidad de que hay un veredicto nuevo (§57).
+   *
+   * §51.4 puntua un certificado **segun lo que se pudo corroborar**, y §53
+   * hace lo mismo con el respaldo. Hasta ahora el veredicto se guardaba y ahi
+   * se quedaba: un certificado pasaba a CORROBORATED y el puntaje del
+   * estudiante seguia siendo el del nivel anterior hasta que tocara cualquier
+   * otra cosa. §57 lo nombra entre las senales que obligan a recalcular.
+   *
+   * Recalcula al dueno del recurso, no a quien disparo la validacion: son
+   * personas distintas cuando un docente pide reprocesar (§57, «al propietario
+   * correcto de la senal»).
+   */
+  private async recalcularDueno(record: ValidationRecord): Promise<void> {
+    const terminal = record.status === ValidationStatus.COMPLETED
+      || record.status === ValidationStatus.INCONCLUSIVE
+      || record.status === ValidationStatus.FAILED;
+    if (!terminal) return;
+
+    try {
+      const dueno = await this.duenoDe(record);
+      if (dueno) await this.affinityRecalculation.requestRecalculation(dueno);
+    } catch (e) {
+      // El veredicto ya esta guardado y es lo que importa. Un fallo al
+      // recalcular no puede deshacerlo ni volver a encolar el trabajo.
+      this.logger.warn(
+        `Veredicto ${record.resourceType}/${record.resourceId} guardado, `
+        + `pero la afinidad no pudo recalcularse: ${String(e)}`,
+      );
+    }
+  }
+
+  /** Perfil estudiantil al que pertenece el recurso validado. */
+  private async duenoDe(record: ValidationRecord): Promise<string | null> {
+    if (record.resourceType === ValidationResourceType.EXTERNAL_CERTIFICATE) {
+      const cert = await this.certificates.findOne({
+        where: { id: record.resourceId },
+        select: { id: true, studentProfileId: true },
+      });
+      return cert?.studentProfileId ?? null;
+    }
+    const evidencia = await this.evidences.findOne({
+      where: { id: record.resourceId },
+      select: { id: true, studentProfileId: true },
+    });
+    return evidencia?.studentProfileId ?? null;
   }
 
   /**

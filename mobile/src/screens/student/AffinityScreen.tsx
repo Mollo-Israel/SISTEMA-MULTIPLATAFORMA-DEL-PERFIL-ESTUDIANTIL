@@ -4,6 +4,7 @@ import { apiError } from '../../api/client';
 import {
   affinityService,
   AffinityBreakdown,
+  AffinityEngineRules,
   AffinitySnapshot,
   AffinitySummary,
   AffinityWeight,
@@ -44,15 +45,14 @@ const LEVEL_LABEL: Record<string, string> = {
   low: 'Baja',
 };
 
-const SIGNAL_LABEL: Record<string, string> = {
-  interest: 'Interes declarado',
-  skill: 'Habilidad',
-  improvement_area: 'Area de mejora',
-  activity: 'Actividad',
-  project: 'Proyecto',
-  evidence: 'Evidencia',
-  certificate: 'Certificado externo',
-  constancy: 'Constancia interna',
+/** Familias de prueba de §53 y §54, en las palabras del estudiante. */
+const FAMILY_LABEL: Record<string, string> = {
+  preference: 'Lo que declaras',
+  activity: 'Actividades',
+  project: 'Proyectos',
+  external_certificate: 'Certificados externos',
+  academic_review: 'Revision academica',
+  other: 'Otras senales',
 };
 
 const MATCH_LABEL: Record<string, string> = {
@@ -80,7 +80,7 @@ export default function AffinityScreen() {
   const [loadingArea, setLoadingArea] = useState<string | null>(null);
 
   const [showRules, setShowRules] = useState(false);
-  const [weights, setWeights] = useState<AffinityWeight[] | null>(null);
+  const [weights, setWeights] = useState<AffinityEngineRules | null>(null);
 
   const summaryState = useAsync<AffinitySummary>(() => affinityService.summary(), []);
   const historyState = useAsync<AffinitySnapshot[]>(() => affinityService.history(10), []);
@@ -233,26 +233,37 @@ export default function AffinityScreen() {
                           <Text style={styles.areaName}>{a.area ?? 'Area'}</Text>
                         </View>
                         <Badge color={affinityColor(a.level)}>
-                          {LEVEL_LABEL[a.level] ?? a.level} · {a.score}
+                          Afinidad {a.score}/100
                         </Badge>
                       </View>
 
-                      {/* La barra representa el peso relativo, que es como se
-                          clasifica el nivel: comparado con tu area mas fuerte. */}
+                      {/* §52: la barra es el puntaje sobre el maximo teorico,
+                          no el peso relativo dentro del perfil. Con lo
+                          anterior, el area mas fuerte de cualquiera llenaba la
+                          barra entera aunque su puntaje fuera minimo. */}
                       <View style={styles.barTrack}>
                         <View
                           style={[
                             styles.barFill,
                             {
-                              width: `${Math.max(4, Math.round(a.share * 100))}%`,
+                              width: `${Math.max(2, a.score)}%`,
                               backgroundColor: affinityColor(a.level),
                             },
                           ]}
                         />
                       </View>
+
+                      <View style={styles.respaldoLinea}>
+                        <Badge color={affinityColor(a.supportLevel)}>
+                          Respaldo {LEVEL_LABEL[a.supportLevel] ?? a.supportLevel}
+                        </Badge>
+                        <Text style={styles.shareText}>
+                          {a.rawPoints} de {summary.maxRawPoints} puntos · respaldo{' '}
+                          {a.supportScore}/100
+                        </Text>
+                      </View>
+
                       <Text style={styles.shareText}>
-                        {Math.round(a.share * 100)}% respecto a tu area mas fuerte
-                        {'   '}
                         <Text style={styles.link}>{open ? 'ocultar detalle' : 'ver por que'}</Text>
                       </Text>
                     </TouchableOpacity>
@@ -261,23 +272,49 @@ export default function AffinityScreen() {
 
                     {open && detail && (
                       <View style={styles.breakdown}>
-                        {detail.contributions.map((c, i) => (
+                        <Text style={styles.subtitulo}>Por que</Text>
+                        {detail.contributing.length === 0 && (
+                          <Text style={styles.contribMeta}>
+                            Todavia no hay ninguna senal que sume en esta area.
+                          </Text>
+                        )}
+                        {detail.contributing.map((c, i) => (
                           <View key={`${c.sourceId ?? 'x'}-${i}`} style={styles.contribRow}>
                             <View style={styles.contribMain}>
-                              <Text style={styles.contribSource}>{c.sourceLabel}</Text>
+                              <Text style={styles.contribSource}>{c.reason ?? c.sourceLabel}</Text>
                               <Text style={styles.contribMeta}>
-                                {SIGNAL_LABEL[c.signalType] ?? c.signalType}
+                                {FAMILY_LABEL[c.signalFamily] ?? c.signalFamily}
                                 {' · '}
                                 {MATCH_LABEL[c.matchType] ?? c.matchType}
+                                {c.multiplier < 1 ? ` · ${c.rawPoints} x ${c.multiplier}` : ''}
+                                {c.supportPoints > 0 ? ` · respaldo +${c.supportPoints}` : ''}
                               </Text>
                             </View>
-                            <Text style={styles.contribPoints}>+{c.points}</Text>
+                            <Text style={styles.contribPoints}>
+                              {c.points > 0 ? `+${c.points}` : '—'}
+                            </Text>
                           </View>
                         ))}
                         <View style={styles.totalRow}>
                           <Text style={styles.totalLabel}>Total del area</Text>
-                          <Text style={styles.totalValue}>{detail.score}</Text>
+                          <Text style={styles.totalValue}>
+                            {detail.rawPoints} / {detail.maxRawPoints}
+                          </Text>
                         </View>
+
+                        {/* §91: la segunda lista es la que de verdad orienta.
+                            La pregunta del estudiante casi nunca es «por que
+                            tengo 60», sino «por que no tengo mas». */}
+                        {detail.notContributing.length > 0 && (
+                          <>
+                            <Text style={styles.subtitulo}>No contribuye</Text>
+                            {detail.notContributing.map((c, i) => (
+                              <Text key={`${c.sourceId ?? 'n'}-${i}`} style={styles.contribMeta}>
+                                • {c.reason ?? c.sourceLabel}
+                              </Text>
+                            ))}
+                          </>
+                        )}
                       </View>
                     )}
                   </Card>
@@ -297,7 +334,15 @@ export default function AffinityScreen() {
             </TouchableOpacity>
             {showRules && weights && (
               <View style={styles.rules}>
-                {weights.map((w) => (
+                {/* §51: la estructura limita tanto como los pesos. Mostrar
+                    solo los segundos daria una explicacion incompleta. */}
+                <Text style={styles.contribMeta}>
+                  Motor v{weights.engineVersion}. Cada area suma como mucho{' '}
+                  {weights.maxRawPoints} puntos, que equivalen a 100 de afinidad. Para que el
+                  respaldo llegue a alto hacen falta senales de al menos dos familias
+                  independientes.
+                </Text>
+                {weights.weights.map((w: AffinityWeight) => (
                   <View key={w.code} style={styles.contribRow}>
                     <View style={styles.contribMain}>
                       <Text style={styles.contribSource}>{w.label}</Text>
@@ -402,6 +447,10 @@ const styles = StyleSheet.create({
   },
   barFill: { height: 8, borderRadius: 999 },
   shareText: { color: colors.gray500, fontSize: 12, marginTop: 6 },
+  respaldoLinea: { flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginTop: 8, flexWrap: 'wrap' },
+  subtitulo: { fontWeight: '700', color: colors.gray700, fontSize: 13,
+    marginTop: 10, marginBottom: 4 },
 
   breakdown: {
     marginTop: 12,

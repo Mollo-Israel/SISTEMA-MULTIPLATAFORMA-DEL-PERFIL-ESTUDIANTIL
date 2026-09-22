@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, MoreThan, Repository } from 'typeorm';
 import {
   ActivityStatus,
   AffinityLevel,
@@ -419,16 +419,17 @@ export class RecommendationsEngine {
     improvementIds: Set<string>,
     areaName: Map<string, string>,
   ): Promise<Produced[]> {
-    const strongAreas = new Set(
-      [...affinityByArea.entries()]
-        .filter(([, a]) => a.level !== AffinityLevel.LOW)
-        .map(([id]) => id),
-    );
+    // Las areas mas fuertes DEL ESTUDIANTE, no las que superan un umbral fijo
+    // (§52: el nivel es absoluto y no sirve como filtro relativo).
+    const misMasFuertes = [...affinityByArea.entries()]
+      .filter(([, a]) => a.score > 0)
+      .sort(([, x], [, y]) => y.score - x.score)
+      .slice(0, RULES.teammate.topAreas);
+    const strongAreas = new Set(misMasFuertes.map(([id]) => id));
+    const miPuntaje = new Map(misMasFuertes.map(([id, a]) => [id, a.score]));
+
     const wantsToGrow = new Set(
-      [...improvementIds, ...preferredByArea.keys()].filter((id) => {
-        const a = affinityByArea.get(id);
-        return !a || a.level === AffinityLevel.LOW;
-      }),
+      [...improvementIds, ...preferredByArea.keys()].filter((id) => !strongAreas.has(id)),
     );
     if (strongAreas.size === 0 && wantsToGrow.size === 0) return [];
 
@@ -450,7 +451,7 @@ export class RecommendationsEngine {
     const peerAffinities = await this.affinities.find({
       where: {
         studentProfileId: In(peers.map((p) => p.profileId)),
-        level: In([AffinityLevel.MEDIUM, AffinityLevel.HIGH]),
+        score: MoreThan(0),
       },
     });
     const byPeer = new Map<string, AffinityResult[]>();
@@ -458,6 +459,16 @@ export class RecommendationsEngine {
       const list = byPeer.get(row.studentProfileId) ?? [];
       list.push(row);
       byPeer.set(row.studentProfileId, list);
+    }
+    // De cada companero se miran solo sus areas mas fuertes, por el mismo
+    // motivo: comparar contra un umbral absoluto excluiria a casi todos.
+    for (const [id, filas] of byPeer) {
+      byPeer.set(
+        id,
+        [...filas]
+          .sort((a, b) => Number(b.score) - Number(a.score))
+          .slice(0, RULES.teammate.topAreas),
+      );
     }
 
     const result: Produced[] = [];
@@ -477,12 +488,15 @@ export class RecommendationsEngine {
         });
       }
 
+      // Complementario significa que el companero esta por delante en algo que
+      // el estudiante quiere trabajar. <<Por delante>> se mide contra el
+      // puntaje del propio estudiante en esa area, no contra un nivel fijo.
       const complementary = rows
         .filter(
           (r) =>
-            r.level === AffinityLevel.HIGH &&
             wantsToGrow.has(r.academicAreaId) &&
-            areaName.has(r.academicAreaId),
+            areaName.has(r.academicAreaId) &&
+            Number(r.score) > (miPuntaje.get(r.academicAreaId) ?? 0),
         )
         .slice(0, RULES.teammate.maxComplementaryAreas);
       for (const r of complementary) {

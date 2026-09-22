@@ -50,8 +50,25 @@ export class AffinitySnapshotItem {
   @Column({ type: 'numeric', precision: 6, scale: 2 })
   score: number;
 
+  /** Puntos crudos sobre 60 en ese momento (§52). */
+  @Column({ name: 'raw_points', type: 'numeric', precision: 6, scale: 2, default: 0 })
+  rawPoints: number;
+
   @Column({ type: 'enum', enum: AffinityLevel, enumName: 'affinity_results_level_enum' })
   level: AffinityLevel;
+
+  /** SUPPORT_SCORE del area en ese momento (§49). */
+  @Column({ name: 'support_score', type: 'smallint', default: 0 })
+  supportScore: number;
+
+  @Column({
+    name: 'support_level',
+    type: 'enum',
+    enum: AffinityLevel,
+    enumName: 'affinity_results_level_enum',
+    default: AffinityLevel.LOW,
+  })
+  supportLevel: AffinityLevel;
 
   /** Posicion del area en el ranking de este calculo. 1 es la mas afin. */
   @Column({ type: 'smallint' })

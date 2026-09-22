@@ -54,6 +54,18 @@ export enum AffinitySignalType {
  */
 export enum AffinityWeightCode {
   INTEREST = 'interest',
+  /**
+   * Interes segun la prioridad que le dio el estudiante (§51.1).
+   *
+   * Sustituyen a `INTEREST`, que valia lo mismo para todas. Que alguien ponga
+   * un area en primer lugar y otra en quinto es informacion, y tratarlas igual
+   * era desperdiciarla.
+   */
+  INTEREST_PRIORITY_1 = 'interest_priority_1',
+  INTEREST_PRIORITY_2 = 'interest_priority_2',
+  INTEREST_PRIORITY_3 = 'interest_priority_3',
+  INTEREST_PRIORITY_4 = 'interest_priority_4',
+  INTEREST_PRIORITY_5 = 'interest_priority_5',
   IMPROVEMENT_AREA = 'improvement_area',
   SKILL_BASIC = 'skill_basic',
   SKILL_INTERMEDIATE = 'skill_intermediate',
@@ -63,8 +75,25 @@ export enum AffinityWeightCode {
   ACTIVITY_CONFIRMED = 'activity_confirmed',
   PROJECT_OWNED = 'project_owned',
   PROJECT_MEMBER = 'project_member',
+  /**
+   * Proyecto segun su nivel de respaldo (§51.3).
+   *
+   * Sustituyen a `PROJECT_OWNED`/`PROJECT_MEMBER`, que puntuaban igual un
+   * proyecto con repositorio publico y revision docente que uno del que solo
+   * existe su descripcion. Ser el autor ya no vale mas que ser integrante: lo
+   * que vale es lo que se puede comprobar.
+   */
+  PROJECT_DECLARED = 'project_declared',
+  PROJECT_SUPPORTED = 'project_supported',
+  PROJECT_CORROBORATED = 'project_corroborated',
+  PROJECT_REVIEWED = 'project_reviewed',
+  PROJECT_FLAGGED = 'project_flagged',
   EVIDENCE = 'evidence',
   CERTIFICATE = 'certificate',
+  /** Certificado externo segun lo que el validador pudo corroborar (§51.4). */
+  CERTIFICATE_DECLARED = 'certificate_declared',
+  CERTIFICATE_SUPPORTED = 'certificate_supported',
+  CERTIFICATE_CORROBORATED = 'certificate_corroborated',
   CONSTANCY = 'constancy',
 }
 

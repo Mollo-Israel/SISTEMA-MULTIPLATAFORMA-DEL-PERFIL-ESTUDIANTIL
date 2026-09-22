@@ -710,10 +710,34 @@ async function rf15(ctx) {
     msgOf(confirmada),
   );
 
+  const checksProyecto = await req('GET', `/projects/${projectId}/checks`, { token: A.token });
+  check(
+    checksProyecto.data?.backingTier === 'flagged',
+    '15.28c El proyecto esta FLAGGED: declara un repositorio que no existe (§36)',
+    String(checksProyecto.data?.backingTier),
+  );
+
+  // El area del proyecto se edita antes en este mismo escenario, asi que se
+  // lee del proyecto en vez de darla por sabida: asumir la inicial haria que
+  // esta comprobacion pasara o fallara por un motivo que no es el suyo.
+  const proyectoActual = await req('GET', `/projects/${projectId}`, { token: B.token });
+  const areaDelProyecto = proyectoActual.data?.academicAreaId ?? dataArea.id;
+  const desgloseB = await req('GET', `/affinity/me/areas/${areaDelProyecto}/breakdown`, {
+    token: B.token,
+  });
+  const lineaProyecto = (desgloseB.data?.contributions ?? []).find(
+    (c) => c.sourceId === projectId,
+  );
+  check(
+    !!lineaProyecto && Number(lineaProyecto.points) === 0,
+    '15.28d Confirmada la contribucion, el proyecto es suyo, pero FLAGGED vale 0 (§51.3)',
+    JSON.stringify(lineaProyecto ?? null),
+  );
+
   const affinityB = await req('GET', '/affinity/me', { token: B.token });
   check(
-    affinityB.status === 200 && affinityB.data.length > 0,
-    '15.28c Confirmada, el proyecto si alimenta su afinidad',
+    affinityB.status === 200,
+    '15.28e Y su afinidad se consulta igual, con el motivo visible en el desglose',
     msgOf(affinityB),
   );
   const affinityC = await req('GET', '/affinity/me', { token: C.token });

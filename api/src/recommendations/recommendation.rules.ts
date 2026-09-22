@@ -40,13 +40,26 @@ export const RULES = {
   },
 
   teammate: {
-    /** Area donde ambos tienen afinidad media o alta. */
+    /** Area que esta entre las mas fuertes de ambos. */
     sharedAreaPoints: 3,
     maxSharedAreas: 3,
-    /** Area donde el companero tiene afinidad alta y el estudiante quiere fortalecerse. */
+    /** Area donde el companero esta claramente por delante y el estudiante quiere fortalecerse. */
     complementaryPoints: 4,
     maxComplementaryAreas: 2,
     minScore: 3,
+    /**
+     * Cuantas areas de cada perfil se consideran <<sus mas fuertes>> (§52).
+     *
+     * Antes esto era el nivel: <<media o alta>>. Con el motor V2 el nivel es
+     * absoluto y comparable en el tiempo, lo cual es correcto para orientar
+     * pero inservible como filtro relativo: un estudiante de tercer semestre
+     * no tiene ningun area por encima de 25 sobre 100, y la regla vieja lo
+     * dejaba sin companeros sugeridos justo cuando mas le sirven.
+     *
+     * Mirar las tres areas mas fuertes de cada uno conserva lo que la regla
+     * queria decir sin depender de una escala absoluta.
+     */
+    topAreas: 3,
   },
 
   /** Cuantas recomendaciones de cada tipo se muestran como maximo. */

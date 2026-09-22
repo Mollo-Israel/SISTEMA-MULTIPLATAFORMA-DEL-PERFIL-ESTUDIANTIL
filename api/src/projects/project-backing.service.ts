@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   LinkCheckStatus,
   ProjectBackingTier,
@@ -16,6 +16,11 @@ import {
   ProjectRepositoryCheck,
 } from '../entities/project-check.entity';
 import { ProjectEventsService } from './project-events.service';
+import {
+  AFFINITY_RECALCULATION,
+  AffinityRecalculationPort,
+} from '../affinity-recalc/affinity-recalculation.port';
+import { StudentProfile } from '../entities/student-profile.entity';
 
 /**
  * Nivel de respaldo de un proyecto (especificacion §36).
@@ -41,7 +46,11 @@ export class ProjectBackingService {
     private readonly repoChecks: Repository<ProjectRepositoryCheck>,
     @InjectRepository(ProjectLinkCheck)
     private readonly linkChecks: Repository<ProjectLinkCheck>,
+    @InjectRepository(StudentProfile)
+    private readonly profiles: Repository<StudentProfile>,
     private readonly events: ProjectEventsService,
+    @Inject(AFFINITY_RECALCULATION)
+    private readonly affinityRecalculation: AffinityRecalculationPort,
   ) {}
 
   /**
@@ -130,8 +139,45 @@ export class ProjectBackingService {
         eventType: ProjectEventType.BACKING_TIER_CHANGED,
         metadata: { de: anterior, a: tier, senales },
       });
+      await this.recalcularAfinidades(project);
     }
     return project;
+  }
+
+  /**
+   * Recalcula la afinidad de quienes obtienen experiencia de este proyecto
+   * (§57).
+   *
+   * §51.3 puntua el proyecto **segun su nivel de respaldo**, asi que cambiar
+   * el nivel cambia la afinidad de todo el equipo, no solo la de quien provoco
+   * el cambio. Antes esto no se hacia: un docente dejaba retroalimentacion, el
+   * proyecto subia a REVIEWED y los puntajes seguian reflejando el nivel
+   * anterior hasta que alguien tocara otra cosa por casualidad.
+   *
+   * §57 tambien exige recalcular «al propietario correcto de la señal»: los
+   * integrantes cuentan solo si confirmaron su contribucion (§33), asi que un
+   * recalculo para quien no la confirmo no cambiaria nada, pero tampoco hace
+   * daño y evita depender de ese detalle desde aqui.
+   */
+  private async recalcularAfinidades(project: Project): Promise<void> {
+    const integrantes = await this.members.find({ where: { projectId: project.id } });
+    const perfiles = integrantes.length
+      ? await this.profiles.find({ where: { userId: In(integrantes.map((m) => m.userId)) } })
+      : [];
+
+    const destinatarios = new Set<string>([project.createdByProfileId]);
+    perfiles.forEach((p) => destinatarios.add(p.id));
+
+    for (const perfilId of destinatarios) {
+      try {
+        await this.affinityRecalculation.requestRecalculation(perfilId);
+      } catch (e) {
+        // El nivel de respaldo ya quedo guardado. Un fallo al recalcular no
+        // puede deshacerlo ni impedir la respuesta: se registra y el proximo
+        // recalculo del perfil lo pone al dia.
+        this.logger.warn(`No se pudo recalcular la afinidad de ${perfilId}: ${String(e)}`);
+      }
+    }
   }
 
   /**

@@ -65,8 +65,20 @@ const msgOf = (r) => {
 };
 
 /** Puntaje de un area concreta dentro del resumen del estudiante. */
-const scoreOf = (summary, areaId) =>
-  summary?.areas?.find((a) => a.academicAreaId === areaId)?.score ?? 0;
+const areaOf = (summary, areaId) =>
+  summary?.areas?.find((a) => a.academicAreaId === areaId) ?? null;
+
+/** AFFINITY_SCORE normalizado de 0 a 100 (§49). */
+const scoreOf = (summary, areaId) => areaOf(summary, areaId)?.score ?? 0;
+
+/**
+ * Puntos crudos sobre 60 (§52).
+ *
+ * Es lo que hay que mirar para comprobar una ponderacion concreta: el puntaje
+ * visible ya esta normalizado, y comparar «2 puntos» con «3 de 100» no
+ * demuestra nada.
+ */
+const rawOf = (summary, areaId) => areaOf(summary, areaId)?.rawPoints ?? 0;
 
 const summaryOf = async (token) => (await req('GET', '/affinity/me/summary', { token })).data;
 
@@ -248,7 +260,7 @@ async function rf17Calculo(ctx) {
   );
   check(inicial?.areas?.length === 0, '17.2 Sin areas calculadas al inicio');
 
-  section('Intereses declarados (peso 2)');
+  section('Intereses declarados, ponderados por prioridad (§51.1)');
   const interes = await req('PUT', '/profiles/me/interests', {
     token: A.token,
     body: {
@@ -263,14 +275,14 @@ async function rf17Calculo(ctx) {
   let s = await summaryOf(A.token);
   check(s?.status === 'calculated', '17.4 El estado pasa a calculado');
   check(
-    scoreOf(s, areaPrincipal.id) === 2,
-    '17.5 Un interes declarado aporta 2 puntos',
-    `puntaje ${scoreOf(s, areaPrincipal.id)}`,
+    rawOf(s, areaPrincipal.id) === 1,
+    '17.5 Un interes de prioridad 5 aporta 1 punto (§51.1)',
+    `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
   check(
-    scoreOf(s, areaSecundaria.id) === 2,
-    '17.6 El area secundaria tambien recibe su interes',
-    `puntaje ${scoreOf(s, areaSecundaria.id)}`,
+    rawOf(s, areaSecundaria.id) === 4,
+    '17.6 Uno de prioridad 2 aporta 4: el orden del estudiante es informacion (§51.1)',
+    `crudo ${rawOf(s, areaSecundaria.id)}`,
   );
   check(
     s?.signalsCount === 2,
@@ -285,9 +297,9 @@ async function rf17Calculo(ctx) {
   });
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 5,
-    '17.8 Una habilidad avanzada aporta 3 puntos (2 + 3 = 5)',
-    `puntaje ${scoreOf(s, areaPrincipal.id)}`,
+    rawOf(s, areaPrincipal.id) === 2.5,
+    '17.8 Una habilidad avanzada aporta 1,5 puntos (1 + 1,5 = 2,5) (§51.1)',
+    `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
 
   await req('PUT', '/profiles/me/skills', {
@@ -296,9 +308,9 @@ async function rf17Calculo(ctx) {
   });
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 3,
-    '17.9 La misma habilidad en nivel basico aporta solo 1 punto (2 + 1 = 3)',
-    `puntaje ${scoreOf(s, areaPrincipal.id)}`,
+    rawOf(s, areaPrincipal.id) === 1.5,
+    '17.9 En nivel basico aporta 0,5: el nivel lo declaro el propio estudiante',
+    `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
   // Se restaura el nivel alto para el resto del escenario.
   await req('PUT', '/profiles/me/skills', {
@@ -313,12 +325,12 @@ async function rf17Calculo(ctx) {
   });
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 5,
+    rawOf(s, areaPrincipal.id) === 2.5,
     '17.10 El area de mejora NO suma afinidad: querer aprender algo no es tener afinidad (§20)',
-    `puntaje ${scoreOf(s, areaPrincipal.id)}`,
+    `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
 
-  section('Proyecto propio (peso 5)');
+  section('Proyecto propio, ponderado por su nivel de respaldo (§51.3)');
   const proyecto = await req('POST', '/projects', {
     token: A.token,
     body: {
@@ -335,12 +347,17 @@ async function rf17Calculo(ctx) {
 
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 10,
-    '17.12 Un proyecto propio aporta 5 puntos (5 + 5 = 10)',
-    `puntaje ${scoreOf(s, areaPrincipal.id)}`,
+    rawOf(s, areaPrincipal.id) === 4.5,
+    '17.12 Un proyecto recien creado esta DECLARED y aporta 2 puntos (2,5 + 2 = 4,5) (§51.3)',
+    `crudo ${rawOf(s, areaPrincipal.id)}`,
+  );
+  check(
+    areaOf(s, areaPrincipal.id)?.supportScore === 0,
+    '17.12b Y no aporta respaldo: todavia no hay nada que corroborar (§53.2)',
+    `respaldo ${areaOf(s, areaPrincipal.id)?.supportScore}`,
   );
 
-  section('Evidencia academica (peso 2)');
+  section('Evidencia academica: mejora el respaldo, no crea experiencia (§55)');
   const evidencia = await req('POST', '/evidences', {
     token: A.token,
     body: {
@@ -354,12 +371,12 @@ async function rf17Calculo(ctx) {
 
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 12,
-    '17.14 Una evidencia aporta 2 puntos (10 + 2 = 12)',
-    `puntaje ${scoreOf(s, areaPrincipal.id)}`,
+    rawOf(s, areaPrincipal.id) === 4.5,
+    '17.14 Una evidencia NO suma afinidad por si sola (§50, §55)',
+    `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
 
-  section('Certificado externo (peso 4)');
+  section('Certificado externo, ponderado por lo corroborado (§51.4)');
   const cert = await req('POST', '/certificates/external', {
     token: A.token,
     body: {
@@ -375,14 +392,14 @@ async function rf17Calculo(ctx) {
 
   s = await summaryOf(A.token);
   check(
-    scoreOf(s, areaPrincipal.id) === 16,
-    '17.16 Un certificado externo aporta 4 puntos (12 + 4 = 16)',
-    `puntaje ${scoreOf(s, areaPrincipal.id)}`,
+    rawOf(s, areaPrincipal.id) === 5.5,
+    '17.16 Un certificado sin corroborar aporta 1 punto (4,5 + 1 = 5,5) (§51.4)',
+    `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
   check(
-    scoreOf(s, areaSecundaria.id) === 2,
+    rawOf(s, areaSecundaria.id) === 4,
     '17.17 El area secundaria se mantiene en su unico interes',
-    `puntaje ${scoreOf(s, areaSecundaria.id)}`,
+    `crudo ${rawOf(s, areaSecundaria.id)}`,
   );
 
   section('Recalculo explicito e idempotencia');
@@ -401,10 +418,22 @@ async function rf17Calculo(ctx) {
     despues.areas.every((a, i) => i === 0 || despues.areas[i - 1].score >= a.score),
     '17.20 El ranking viene ordenado de mayor a menor puntaje',
   );
+  // §52 prohibe normalizar contra el area mas fuerte del propio estudiante.
+  // El campo `share`, que era justo eso, desaparecio: si el divisor cambiara
+  // con el perfil, un 80 de hoy y un 80 del ano que viene no significarian lo
+  // mismo y la pantalla de evolucion mentiria.
   check(
-    despues.areas[0]?.rank === 1 && despues.areas[0]?.share === 1,
-    '17.21 El area mas fuerte ocupa el puesto 1 con peso relativo 1',
+    despues.areas[0]?.rank === 1 && despues.areas[0]?.share === undefined,
+    '17.21 El area mas fuerte ocupa el puesto 1, y ya no se normaliza contra si misma (§52)',
     `rank ${despues.areas[0]?.rank} share ${despues.areas[0]?.share}`,
+  );
+  check(
+    despues.maxRawPoints === 60
+      && despues.areas.every(
+        (a) => a.score === Math.round(Math.min(100, (a.rawPoints / 60) * 100)),
+      ),
+    '17.21b Cada puntaje es round(crudo / 60 x 100), el mismo divisor para todos (§52)',
+    JSON.stringify(despues.areas.map((a) => [a.rawPoints, a.score])),
   );
 }
 
@@ -426,11 +455,11 @@ async function rf17Explicabilidad(ctx) {
     `lineas ${bd.data?.contributions?.length}`,
   );
 
-  const suma = (bd.data?.contributions ?? []).reduce((acc, c) => acc + c.points, 0);
+  const suma = (bd.data?.contributions ?? []).reduce((acc, c) => acc + Number(c.points), 0);
   check(
-    suma === bd.data?.score,
+    Math.abs(suma - Number(bd.data?.rawPoints)) < 0.011,
     '17.24 INVARIANTE: la suma del desglose es exactamente el puntaje del area',
-    `suma ${suma} vs puntaje ${bd.data?.score}`,
+    `suma ${suma} vs crudo ${bd.data?.rawPoints}`,
   );
 
   const tipos = new Set((bd.data?.contributions ?? []).map((c) => c.signalType));
@@ -480,26 +509,43 @@ async function rf17Explicabilidad(ctx) {
     (bdSec.data?.contributions ?? []).map((c) => c.matchType).join(', '),
   );
   check(
-    (bdSec.data?.contributions ?? []).reduce((a, c) => a + c.points, 0) === bdSec.data?.score,
+    Math.abs(
+      (bdSec.data?.contributions ?? []).reduce((a, c) => a + Number(c.points), 0)
+      - Number(bdSec.data?.rawPoints),
+    ) < 0.011,
     '17.31 El invariante tambien se cumple en el area deducida',
+    `suma ${(bdSec.data?.contributions ?? []).reduce((a, c) => a + Number(c.points), 0)}`
+    + ` vs crudo ${bdSec.data?.rawPoints}`,
   );
 
   section('Ponderaciones expuestas (RN-14)');
   const pesos = await req('GET', '/affinity/weights', { token: A.token });
   check(pesos.status === 200, '17.32 Las ponderaciones del motor son consultables');
   check(
-    Array.isArray(pesos.data) && pesos.data.length === 13,
-    '17.33 Estan definidas las 13 ponderaciones del sistema',
-    `reglas ${pesos.data?.length}`,
+    Array.isArray(pesos.data?.weights) && pesos.data.weights.length >= 13,
+    '17.33 Las ponderaciones del motor estan almacenadas y son consultables (§51)',
+    `reglas ${pesos.data?.weights?.length}`,
   );
   check(
-    (pesos.data ?? []).every((w) => w.label && w.description && typeof w.points === 'number'),
+    (pesos.data?.weights ?? []).every(
+      (w) => w.label && w.description && typeof w.points === 'number',
+    ),
     '17.34 Cada ponderacion declara su etiqueta, justificacion y puntos',
   );
-  const codigos = new Set((pesos.data ?? []).map((w) => w.code));
+  const codigos = new Set((pesos.data?.weights ?? []).map((w) => w.code));
   check(
-    codigos.has('project_owned') && codigos.has('certificate') && codigos.has('activity_confirmed'),
-    '17.35 Las ponderaciones cubren las fuentes que nombra RN-14',
+    codigos.has('interest_priority_1') && codigos.has('project_corroborated')
+      && codigos.has('certificate_corroborated') && codigos.has('activity_confirmed'),
+    '17.35 Las ponderaciones cubren las fuentes que nombran RN-14 y §51',
+    [...codigos].join(', '),
+  );
+  // §51 separa los pesos de la estructura, y la estructura tambien es regla:
+  // publicar solo los primeros daria una explicacion incompleta.
+  check(
+    pesos.data?.caps?.PROJECT === 24 && pesos.data?.supportCaps?.PROJECT === 45
+      && Array.isArray(pesos.data?.diminishing?.PROJECT),
+    '17.35b Y se publican tambien los topes y los rendimientos decrecientes (§51)',
+    JSON.stringify([pesos.data?.caps, pesos.data?.supportCaps]),
   );
 }
 
@@ -507,26 +553,38 @@ async function rf17Explicabilidad(ctx) {
 //  RF17 · Niveles relativos al propio estudiante
 // ===========================================================================
 async function rf17Niveles(ctx) {
-  objective('RF17 · Clasificacion del nivel de afinidad');
+  objective('RF17 y §54 · Clasificacion del nivel de afinidad');
   const { A, areaPrincipal, areaSecundaria } = ctx;
 
   const s = await summaryOf(A.token);
   const principal = s.areas.find((a) => a.academicAreaId === areaPrincipal.id);
   const secundaria = s.areas.find((a) => a.academicAreaId === areaSecundaria.id);
 
+  /*
+   * Aqui la regla cambio de sentido y conviene decir por que.
+   *
+   * El nivel era relativo: el area mas fuerte de CUALQUIER estudiante salia
+   * «alta», aunque su puntaje fuera minimo. Con eso, un perfil recien
+   * empezado se veia igual de consolidado que uno de octavo semestre, y el
+   * nivel dejaba de orientar. §52 exige que el puntaje se pueda comparar en el
+   * tiempo, y un nivel cuyo divisor cambia con el perfil no se puede comparar
+   * ni consigo mismo.
+   */
+  const umbral = (n) => (n > 59 ? 'high' : n > 24 ? 'medium' : 'low');
+
   check(
-    principal?.level === 'high',
-    '17.36 El area con mas trayectoria queda en nivel alto',
+    principal?.level === umbral(principal?.score),
+    '17.36 El nivel sale de los cortes absolutos de §54, no del ranking interno',
+    `puntaje ${principal?.score} -> nivel ${principal?.level}`,
+  );
+  check(
+    principal?.level !== 'high',
+    '17.37 El area mas fuerte de un perfil incipiente NO es «alta» por ser la primera',
     `nivel ${principal?.level} puntaje ${principal?.score}`,
   );
   check(
-    secundaria && secundaria.level !== 'high',
-    '17.37 Un area marginal NO alcanza nivel alto aunque el perfil sea fuerte',
-    `nivel ${secundaria?.level} puntaje ${secundaria?.score}`,
-  );
-  check(
-    principal.share === 1 && secundaria.share < 1,
-    '17.38 El peso relativo compara cada area con la mas fuerte del perfil',
+    principal.share === undefined && secundaria.share === undefined,
+    '17.38 El peso relativo al propio perfil desaparecio del contrato (§52)',
     `${principal.share} vs ${secundaria.share}`,
   );
   check(
@@ -548,9 +606,14 @@ async function rf17Niveles(ctx) {
   const sb = await summaryOf(ctx.B.token);
   const unica = sb.areas[0];
   check(
-    unica?.share === 1 && unica?.level !== 'high',
-    '17.41 Un area unica de 2 puntos no se clasifica como alta pese a ser la primera',
-    `nivel ${unica?.level} puntaje ${unica?.score} share ${unica?.share}`,
+    unica?.level === 'low' && unica?.rawPoints === 1,
+    '17.41 Un unico interes de prioridad 5 es 1 punto de 60: nivel bajo, sea o no el primero',
+    `nivel ${unica?.level} crudo ${unica?.rawPoints} puntaje ${unica?.score}`,
+  );
+  check(
+    unica?.supportScore === 0 && unica?.supportLevel === 'low',
+    '17.41b Y sin respaldo alguno: declarar algo no lo respalda (§49, §53)',
+    `respaldo ${unica?.supportScore} / ${unica?.supportLevel}`,
   );
 }
 
@@ -699,7 +762,10 @@ async function rf17Permisos(ctx) {
   );
   check(bd.status === 200, '17.59 El docente de su semestre consulta el desglose');
   check(
-    (bd.data?.contributions ?? []).reduce((a, c) => a + c.points, 0) === bd.data?.score,
+    Math.abs(
+      (bd.data?.contributions ?? []).reduce((a, c) => a + Number(c.points), 0)
+      - Number(bd.data?.rawPoints),
+    ) < 0.011,
     '17.60 El desglose que ve el docente cumple el mismo invariante',
   );
 
@@ -781,7 +847,7 @@ async function rn15(ctx) {
 
   const pesos = await req('GET', '/affinity/weights', { token: A.token });
   check(
-    (pesos.data ?? []).every((w) => w.points >= 0 && w.points <= 100),
+    (pesos.data?.weights ?? []).every((w) => w.points >= 0 && w.points <= 100),
     '17.73 Las ponderaciones son puntajes acotados, no escalas de nota',
   );
 

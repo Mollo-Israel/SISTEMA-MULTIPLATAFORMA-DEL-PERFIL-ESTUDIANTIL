@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FiActivity, FiRefreshCw, FiSearch, FiSliders } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { affinityService, AffinitySnapshotView, AffinityWeightRow } from '../../services';
+import { affinityService, AffinityEngineRules, AffinitySnapshotView } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
   AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
@@ -35,7 +35,7 @@ export default function StudentAffinityPage() {
 
   const [tab, setTab] = useState<'areas' | 'history' | 'rules'>('areas');
   const [history, setHistory] = useState<AffinitySnapshotView[] | null>(null);
-  const [weights, setWeights] = useState<AffinityWeightRow[] | null>(null);
+  const [weights, setWeights] = useState<AffinityEngineRules | null>(null);
   const [weightQuery, setWeightQuery] = useState('');
 
   const reloadSummary = summaryState.reload;
@@ -43,8 +43,8 @@ export default function StudentAffinityPage() {
   const visibleWeights = useMemo(() => {
     if (!weights) return [];
     const q = normalize(weightQuery.trim());
-    if (!q) return weights;
-    return weights.filter((w) =>
+    if (!q) return weights.weights;
+    return weights.weights.filter((w) =>
       [w.label ?? '', w.description ?? ''].some((f) => normalize(f).includes(q)),
     );
   }, [weights, weightQuery]);
@@ -172,6 +172,7 @@ export default function StudentAffinityPage() {
                     <th>Áreas</th>
                     <th>Señales</th>
                     <th>Total</th>
+                    <th>Respaldo medio</th>
                     <th>Área más afín</th>
                     <th>Variación</th>
                   </tr>
@@ -187,6 +188,7 @@ export default function StudentAffinityPage() {
                         <td>{s.areasCount}</td>
                         <td>{s.signalsCount}</td>
                         <td>{s.totalScore}</td>
+                        <td>{s.averageSupport}/100</td>
                         <td>
                           {top ? (
                             <Badge
@@ -226,7 +228,11 @@ export default function StudentAffinityPage() {
                   onChange={setWeightQuery}
                   placeholder="Buscar señal…"
                 />
-                <ResultCount shown={visibleWeights.length} total={weights.length} noun="reglas" />
+                <ResultCount
+                  shown={visibleWeights.length}
+                  total={weights.weights.length}
+                  noun="reglas"
+                />
               </div>
             )
           }
@@ -235,6 +241,71 @@ export default function StudentAffinityPage() {
             Reglas con las que el sistema calcula la afinidad. Son configuración del sistema y se
             consultan solo de lectura.
           </p>
+
+          {/*
+            §51 separa dos cosas que suelen confundirse: los puntos de cada
+            señal y la estructura que los limita. Mostrar solo los primeros
+            daría una explicación incompleta —el tope de un área cambia el
+            resultado tanto como el peso— así que se muestran las dos.
+          */}
+          {weights && (
+            <div className="reglas-motor">
+              <p className="muted" style={{ fontSize: '0.82rem' }}>
+                Motor v{weights.engineVersion}. Cada área puede sumar como mucho{' '}
+                <strong>{weights.maxRawPoints} puntos</strong>, que equivalen a 100 de afinidad.
+                El puntaje no se compara contra tu área más fuerte, sino contra ese máximo: así un
+                80 de hoy y un 80 del año que viene significan lo mismo.
+              </p>
+              <div className="scroll-x">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Familia</th>
+                      <th style={{ textAlign: 'right' }}>Tope de afinidad</th>
+                      <th style={{ textAlign: 'right' }}>Tope de respaldo</th>
+                      <th>Rendimientos por repetición</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Intereses y habilidades</td>
+                      <td style={{ textAlign: 'right' }}>{weights.caps.PREFERENCE}</td>
+                      <td style={{ textAlign: 'right' }} className="muted">no aplica</td>
+                      <td className="muted">—</td>
+                    </tr>
+                    <tr>
+                      <td>Actividades confirmadas</td>
+                      <td style={{ textAlign: 'right' }}>{weights.caps.ACTIVITY}</td>
+                      <td style={{ textAlign: 'right' }}>{weights.supportCaps.ACTIVITY}</td>
+                      <td className="muted">
+                        {weights.diminishing.ACTIVITY.map((d) => `${Math.round(d * 100)}%`).join(' · ')}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Proyectos</td>
+                      <td style={{ textAlign: 'right' }}>{weights.caps.PROJECT}</td>
+                      <td style={{ textAlign: 'right' }}>{weights.supportCaps.PROJECT}</td>
+                      <td className="muted">
+                        {weights.diminishing.PROJECT.map((d) => `${Math.round(d * 100)}%`).join(' · ')}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Certificados externos</td>
+                      <td style={{ textAlign: 'right' }}>{weights.caps.CERTIFICATE}</td>
+                      <td style={{ textAlign: 'right' }}>{weights.supportCaps.CERTIFICATE}</td>
+                      <td className="muted">
+                        {weights.diminishing.PROJECT.map((d) => `${Math.round(d * 100)}%`).join(' · ')}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="muted" style={{ fontSize: '0.82rem' }}>
+                Para que el respaldo llegue a <strong>alto</strong> hacen falta señales de al menos
+                dos familias independientes. Mucha cantidad de lo mismo no es respaldo alto.
+              </p>
+            </div>
+          )}
           {!weights && <SkeletonTable rows={5} columns={3} />}
           {weights && visibleWeights.length === 0 && (
             <EmptyState

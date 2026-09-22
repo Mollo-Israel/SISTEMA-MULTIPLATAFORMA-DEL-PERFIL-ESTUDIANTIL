@@ -16,6 +16,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { TeacherScopeService } from '../access/teacher-scope.service';
 import { AffinityEngineService } from './affinity.engine';
+import { AffinityBackfillService } from './affinity-backfill.service';
 
 /**
  * Consulta de afinidades academicas (RF17).
@@ -31,6 +32,7 @@ import { AffinityEngineService } from './affinity.engine';
 export class AffinityController {
   constructor(
     private readonly engine: AffinityEngineService,
+    private readonly backfill: AffinityBackfillService,
     private readonly teacherScope: TeacherScopeService,
   ) {}
 
@@ -53,6 +55,22 @@ export class AffinityController {
   ) {
     await this.teacherScope.assertCanAccessProfile(user, studentId);
     return this.engine.recalculate(studentId);
+  }
+
+  /**
+   * Recalcula el padron completo (§57, §131).
+   *
+   * Hace falta cuando cambia una regla del motor y no un dato del estudiante:
+   * sin esto, quien no vuelva a entrar al sistema conservaria indefinidamente
+   * un puntaje calculado con la ponderacion anterior. Solo ADMIN: es una
+   * operacion sobre todos los perfiles de la carrera.
+   */
+  @Post('recalculate-all')
+  @Roles(RolNombre.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Recalcula la afinidad de todos los perfiles.' })
+  async recalculateAll(@Query('all') all?: string) {
+    return this.backfill.run(all === 'true');
   }
 
   // ------------------------------------------------------------------

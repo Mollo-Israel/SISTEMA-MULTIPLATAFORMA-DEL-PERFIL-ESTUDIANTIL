@@ -32,7 +32,8 @@
     "test:b2": "node scripts/e2e-batch-2.mjs",
     "test:b3": "node scripts/e2e-batch-3.mjs",
     "test:b4": "node scripts/e2e-batch-4.mjs",
-    "test:b5": "node scripts/e2e-batch-5.mjs"
+    "test:b5": "node scripts/e2e-batch-5.mjs",
+    "test:b6": "node scripts/e2e-batch-6.mjs"
   },
   "engines": {
     "node": ">=20"

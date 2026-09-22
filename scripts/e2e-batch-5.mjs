@@ -259,15 +259,35 @@ async function evidencias(ctx) {
 
   const despuesIntegrante = await afinidadDe(ctx.integrante.token);
   const despuesAutor = await afinidadDe(ctx.autor.token);
+
+  // §50 y §55: una evidencia no crea una experiencia más, mejora el respaldo
+  // de la que ya existe. Lo que §35 exige es que la señal se atribuya a quien
+  // la aportó, y eso se ve en el desglose, no en el puntaje.
+  const suyo = await req('GET', `/affinity/me/areas/${ctx.area.id}/breakdown`, {
+    token: ctx.integrante.token,
+  });
+  const ajeno = await req('GET', `/affinity/me/areas/${ctx.area.id}/breakdown`, {
+    token: ctx.autor.token,
+  });
+  const idEvidencia = evidencia.data?.id;
   check(
-    despuesIntegrante > antesIntegrante,
-    'B5.23 Su afinidad sube: el recálculo va a quien aportó (§35)',
-    `antes ${antesIntegrante} / después ${despuesIntegrante}`,
+    (suyo.data?.contributions ?? []).some((c) => c.sourceId === idEvidencia),
+    'B5.23 La evidencia figura en el desglose de quien la aportó (§35)',
+    (suyo.data?.contributions ?? []).map((c) => c.sourceId).join(','),
+  );
+  check(
+    !(ajeno.data?.contributions ?? []).some((c) => c.sourceId === idEvidencia),
+    'B5.23b Y NO en el del creador del proyecto (§35)',
   );
   check(
     despuesAutor === antesAutor,
-    'B5.24 La del creador NO cambia por una evidencia ajena (§35)',
+    'B5.24 La afinidad del creador NO cambia por una evidencia ajena (§35)',
     `antes ${antesAutor} / después ${despuesAutor}`,
+  );
+  check(
+    despuesIntegrante === antesIntegrante,
+    'B5.24b Ni la del propio integrante: una evidencia respalda, no es un proyecto más (§55)',
+    `antes ${antesIntegrante} / después ${despuesIntegrante}`,
   );
 
   section('§27 · El archivo sigue teniendo dueño');
