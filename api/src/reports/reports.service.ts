@@ -199,10 +199,6 @@ export class ReportsService {
     return [...bySemester.values()];
   }
 
-  directorAffinityMap() {
-    return this.affinityEngine.basicMap();
-  }
-
   async directorProjectsSummary() {
     const [total, byStatus, byArea] = await Promise.all([
       this.projects.count(),

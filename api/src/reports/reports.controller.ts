@@ -50,10 +50,26 @@ export class ReportsController {
     return this.reportsService.directorParticipationBySemester();
   }
 
+  /**
+   * Mapa de áreas de la carrera (§69), con el umbral de privacidad de §65.
+   *
+   * Había dos rutas para este mismo reporte: esta, que devolvía la
+   * distribución de cualquier área por pequeña que fuera, y una
+   * `affinity-map-v2` que sí aplicaba el umbral y a la que no llamaba nadie.
+   * La protección estaba escrita y no llegaba a la pantalla, mientras la
+   * puerta de al lado seguía abierta. Queda una sola ruta, la protegida.
+   */
   @Get('director/affinity-map')
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
-  directorAffinityMap() {
-    return this.reportsService.directorAffinityMap();
+  @ApiOperation({
+    summary: 'Mapa de áreas con afinidad y respaldo, con umbral de privacidad (§65, §69).',
+  })
+  directorAffinityMap(@Query('semesters') semesters?: string) {
+    const lista = (semesters ?? '')
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 8);
+    return this.analytics.directorAffinityMap(lista.length > 0 ? lista : undefined);
   }
 
   @Get('director/projects-summary')
@@ -117,19 +133,6 @@ export class ReportsController {
   })
   directorTrends() {
     return this.analytics.directorTrends();
-  }
-
-  @Get('director/affinity-map-v2')
-  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
-  @ApiOperation({
-    summary: 'Mapa de áreas con afinidad y respaldo, con umbral de privacidad (§65, §69).',
-  })
-  directorAffinityMapV2(@Query('semesters') semesters?: string) {
-    const lista = (semesters ?? '')
-      .split(',')
-      .map((s) => Number(s.trim()))
-      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 8);
-    return this.analytics.directorAffinityMap(lista.length > 0 ? lista : undefined);
   }
 
   // ---------- Sociedad cientifica (§65) ----------

@@ -236,7 +236,7 @@ export default function LandingPage() {
             <div className="social"><span><FiBell /></span><span><FiUsers /></span><span><FiAward /></span></div>
           </div>
         </div>
-        <div className="bottom">© Afinia · Perfil estudiantil dinámico — Implementación del 30% inicial</div>
+        <div className="bottom">© Afinia · Perfil estudiantil dinámico</div>
       </footer>
     </div>
   );

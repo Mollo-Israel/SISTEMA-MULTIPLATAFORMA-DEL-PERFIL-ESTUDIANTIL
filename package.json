@@ -20,8 +20,6 @@
     "seed:populate": "npm run seed:populate --workspace api",
     "web:dev": "npm run dev --prefix web",
     "mobile:start": "npm run start --prefix mobile",
-    "demo:e2e": "node scripts/e2e-demo.mjs",
-    "test:api": "node scripts/api-tests.mjs",
     "test:40": "node scripts/e2e-objectives-40.mjs",
     "mobile:typecheck": "npm run typecheck --prefix mobile",
     "web:build": "npm run build --prefix web",
@@ -38,7 +36,8 @@
     "test:b8": "node scripts/e2e-batch-8.mjs",
     "test:b9": "node scripts/e2e-batch-9.mjs",
     "test:b10": "node scripts/e2e-batch-10.mjs",
-    "test:b11": "node scripts/e2e-batch-11.mjs"
+    "test:b11": "node scripts/e2e-batch-11.mjs",
+    "test:all": "node scripts/e2e-objectives-40.mjs && node scripts/e2e-objective-5.mjs && node scripts/e2e-objective-6.mjs && node scripts/e2e-objective-7.mjs && node scripts/e2e-batch-1.mjs && node scripts/e2e-batch-2.mjs && node scripts/e2e-batch-3.mjs && node scripts/e2e-batch-4.mjs && node scripts/e2e-batch-5.mjs && node scripts/e2e-batch-6.mjs && node scripts/e2e-batch-7.mjs && node scripts/e2e-batch-8.mjs && node scripts/e2e-batch-9.mjs && node scripts/e2e-batch-10.mjs && node scripts/e2e-batch-11.mjs"
   },
   "engines": {
     "node": ">=20"

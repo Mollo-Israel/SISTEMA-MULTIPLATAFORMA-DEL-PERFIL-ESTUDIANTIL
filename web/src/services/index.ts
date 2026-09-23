@@ -525,7 +525,7 @@ export const analyticsService = {
     api.get<DirectorTrends>('/reports/director/trends').then((r) => r.data),
   directorAffinityMap: (semesters?: number[]) =>
     api
-      .get('/reports/director/affinity-map-v2', {
+      .get('/reports/director/affinity-map', {
         params: semesters?.length ? { semesters: semesters.join(',') } : undefined,
       })
       .then((r) => r.data),
@@ -789,8 +789,6 @@ export const affinityService = {
   mine: () => api.get<AffinityResult[]>('/affinity/me').then((r) => r.data),
   recalculateMine: () => api.post<AffinityResult[]>('/affinity/recalculate/me').then((r) => r.data),
   student: (studentId: string) => api.get<AffinityResult[]>(`/affinity/student/${studentId}`).then((r) => r.data),
-  basicMap: () => api.get('/affinity/map/basic').then((r) => r.data),
-
   summary: () => api.get<AffinitySummary>('/affinity/me/summary').then((r) => r.data),
   breakdown: (areaId: string) =>
     api.get<AffinityBreakdown>(`/affinity/me/areas/${areaId}/breakdown`).then((r) => r.data),
@@ -874,7 +872,6 @@ export const reportService = {
   teacherProjects: () => api.get('/reports/teacher/projects-summary').then((r) => r.data),
   directorOverview: () => api.get('/reports/director/overview').then((r) => r.data),
   participationBySemester: () => api.get('/reports/director/participation-by-semester').then((r) => r.data),
-  directorAffinityMap: () => api.get('/reports/director/affinity-map').then((r) => r.data),
   directorProjects: () => api.get('/reports/director/projects-summary').then((r) => r.data),
 };
 

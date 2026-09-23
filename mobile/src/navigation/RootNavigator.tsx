@@ -3,10 +3,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Pressable, Text, View } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import { Icon, TAB_ICON } from '../components/icons';
+import { Screen, Card, H1, Muted } from '../components/ui';
 import { colors } from '../theme';
 
 import LoginScreen from '../screens/LoginScreen';
-import ComingSoonScreen from '../screens/ComingSoonScreen';
 
 import HomeScreen from '../screens/student/HomeScreen';
 import ProfileScreen from '../screens/student/ProfileScreen';
@@ -179,11 +179,6 @@ function TeacherTabs() {
         component={TeacherReport}
         options={{ tabBarIcon: tabIcon('Reporte'), ...withLogout }}
       />
-      <Tab.Screen
-        name="Próximamente"
-        component={ComingSoonScreen}
-        options={{ tabBarIcon: tabIcon('Próximamente'), ...withLogout }}
-      />
     </Tab.Navigator>
   );
 }
@@ -195,11 +190,6 @@ function SocietyTabs() {
         name="Actividades"
         component={SocietyActivities}
         options={{ tabBarIcon: tabIcon('Actividades'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Próximamente"
-        component={ComingSoonScreen}
-        options={{ tabBarIcon: tabIcon('Próximamente'), ...withLogout }}
       />
     </Tab.Navigator>
   );
@@ -269,6 +259,21 @@ export default function RootNavigator() {
     case 'SCIENTIFIC_SOCIETY': return <SocietyTabs />;
     case 'CAREER_DIRECTOR': return <DirectorTabs />;
     case 'ADMIN': return <AdminTabs />;
-    default: return <ComingSoonScreen />;
+    // Los cinco roles del sistema están arriba. Si llega otro, la app no sabe
+    // qué mostrarle: lo dice, en vez de prometerle una versión futura.
+    default: return <RolSinPantalla />;
   }
+}
+
+function RolSinPantalla() {
+  return (
+    <Screen>
+      <H1>Sin acceso móvil</H1>
+      <Card title="Este rol no tiene pantallas en la aplicación">
+        <Muted>
+          Entre desde la versión web, que sí cubre todos los roles del sistema.
+        </Muted>
+      </Card>
+    </Screen>
+  );
 }

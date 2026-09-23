@@ -53,7 +53,6 @@ h3 { font-size: 1.02rem; }
 .nav-link:hover { background: rgba(255,255,255,0.08); }
 .nav-link.active { background: var(--white); color: var(--bordo); font-weight: 600; }
 .nav-link.disabled { opacity: 0.5; cursor: not-allowed; }
-.nav-link .soon { margin-left: auto; font-size: 0.6rem; background: rgba(255,255,255,0.2); padding: 1px 6px; border-radius: 8px; }
 .sidebar .user-box { padding: 0.9rem 1.1rem; border-top: 1px solid rgba(255,255,255,0.12); font-size: 0.8rem; }
 .sidebar .user-box .role { opacity: 0.75; font-size: 0.72rem; text-transform: capitalize; }
 

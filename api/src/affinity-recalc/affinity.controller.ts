@@ -186,10 +186,11 @@ export class AffinityController {
     return this.engine.getWeights();
   }
 
-  @Get('map/basic')
-  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
-  @ApiOperation({ summary: 'Conteo agregado de afinidades por area academica.' })
-  async basicMap() {
-    return this.engine.basicMap();
-  }
+  /*
+   * Aquí vivía `GET /affinity/map/basic`: el mismo mapa agregado por área que
+   * ya sirve `/reports/director/affinity-map`, para el mismo público y sin el
+   * umbral de §65. Dos puertas al mismo dato, una de ellas sin la protección.
+   * Se retiró; las comprobaciones de permiso que la cubrían se trasladaron a
+   * la ruta que queda.
+   */
 }

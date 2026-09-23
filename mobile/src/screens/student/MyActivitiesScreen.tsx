@@ -6,7 +6,8 @@ import {
   Screen, Card, Muted, ErrorText, EmptyState, Badge, Button, FadeIn, PageHeader,
   ResultCount, SearchInput, SkeletonCards,
 } from '../../components/ui';
-import { REGISTRATION_STATUS_LABEL, categoryLabel, lbl } from '../../constants';
+import { REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
+import { useCategoryLabel } from '../../hooks/useCategoryLabel';
 import { colors, registrationColor } from '../../theme';
 
 const normalize = (s: string) =>
@@ -20,6 +21,7 @@ const EXPLANATION: Record<string, string> = {
 };
 
 export default function MyActivitiesScreen() {
+  const categoryLabel = useCategoryLabel();
   const { data, loading, error, reload } = useAsync(() => activityService.myRegistrations(), []);
   const [query, setQuery] = useState('');
 

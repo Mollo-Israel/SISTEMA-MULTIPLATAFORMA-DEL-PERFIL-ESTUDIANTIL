@@ -1,7 +1,8 @@
 # Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
 
-Ingeniería en Sistemas Informáticos – Univalle. Implementación del **70 %**:
-los siete primeros objetivos específicos, completos de extremo a extremo.
+Ingeniería en Sistemas Informáticos – Univalle. Sistema completo según
+`AFINIA_100_ESPECIFICACION_DEFINITIVA.md`: los diez objetivos específicos, de
+extremo a extremo.
 
 Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficiales) que construye un perfil estudiantil dinámico a partir de intereses, habilidades, proyectos, actividades, participación, evidencias, constancias y áreas de afinidad.
 
@@ -32,11 +33,17 @@ Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficia
 
 | Rol | Qué hace en el sistema |
 |-----|------------------------|
-| **Estudiante** | Se registra, construye su perfil dinámico, se inscribe en actividades, registra proyectos, evidencias y certificados externos |
+| **Estudiante** | Construye su perfil dinámico, se inscribe en actividades, registra proyectos, evidencias y certificados externos, colabora con otros y consulta su trayectoria |
 | **Docente** | Consulta la oferta de actividades y los perfiles de **los semestres que el administrador le habilita** |
-| **Director de carrera** | Gestiona las **actividades académicas**, registra participación y emite las **constancias internas** |
-| **Sociedad científica** | Gestiona las **actividades extracurriculares** y registra participación |
+| **Director de carrera** | Gestiona las **actividades académicas**, registra participación, emite las **constancias internas** y consulta la analítica de la carrera |
+| **Sociedad científica** | Gestiona las **actividades extracurriculares**, registra participación y consulta las métricas de lo que organizó |
 | **Administrador** | Usuarios institucionales, roles y estados, semestres habilitados, catálogos y criterios de gamificación |
+
+**No hay registro público.** Ninguna cuenta se crea sola: el administrador la
+provisiona —una a una o importando el padrón— y la persona la activa desde el
+enlace que recibe por correo, eligiendo ahí su contraseña. Es lo que pide §12 de
+la especificación, y es lo que separa una identidad institucional de un correo
+cualquiera.
 
 ## Guía rápida para colaboradores
 
@@ -59,7 +66,7 @@ npm install --prefix mobile   # dependencias móvil (Expo)
 
 npm run db:up                 # levanta PostgreSQL en Docker
 npm run shared:build          # compila tipos compartidos
-npm run api:migrate           # crea las 26 tablas (12 migraciones)
+npm run api:migrate           # crea las 57 tablas (21 migraciones)
 npm run seed:populate         # POBLA la base con datos institucionales realistas
 ```
 
@@ -72,7 +79,7 @@ estados y **áreas de afinidad calculadas** con el motor real.
 
 ```bash
 # Terminal 1 — API (backend)
-npm run api:dev        # http://localhost:3000/api   ·   Swagger: http://localhost:3000/api/docs
+npm run api:dev        # http://localhost:3010/api   ·   Swagger: http://localhost:3010/api/docs
 
 # Terminal 2 — Web
 npm run web:dev        # http://localhost:5173
@@ -116,44 +123,51 @@ npm run mobile:start   # abre Expo; escanea el QR con Expo Go
 | Estudiante (ejemplo) | `ana.quispe@est.univalle.edu` | `Univalle2026*` |
 
 Hay 16 estudiantes con el patrón `nombre.apellido@est.univalle.edu` y contraseña
-`Univalle2026*`. Los estudiantes nuevos también pueden **registrarse** desde la web
-(requieren correo terminado en `univalle.edu`).
+`Univalle2026*`. Son las cuentas que deja el seed, ya activadas; una cuenta nueva
+se crea desde **Administración → Usuarios** o importando el padrón, y nace
+`PENDING_ACTIVATION` hasta que su dueño usa el enlace de activación.
 
 > Si reinicias el PC, basta con `npm run db:up` para recuperar la base (los datos persisten).
 > Para reconstruir la base desde cero: `npm run db:reset && npm run api:migrate && npm run seed:populate`.
 
-## Pruebas automáticas (opcional)
+## Pruebas automáticas
+
+Las suites hablan HTTP contra la API en marcha: comprueban el sistema, no sus
+piezas por separado.
 
 ```bash
 npm run api:dev      # en una terminal
 
 # en otra terminal:
-npm run test:40      # 235 verificaciones de los objetivos 1-4  -> 0 fallos
-npm run test:50      # 109 verificaciones del objetivo 5        -> 0 fallos
-npm run test:60      # 82 verificaciones del objetivo 6         -> 0 fallos
-npm run test:70      # 84 verificaciones del objetivo 7         -> 0 fallos
-npm run test:api     # 42 validaciones de backend               -> 0 fallos
-npm run demo:e2e     # flujo completo de 14 pasos               -> 0 fallos
+npm run test:all     # las 15 suites -> 1139 verificaciones, 0 fallos
 ```
 
-En total **577 verificaciones** contra la API real, sobre una base recreada desde cero.
+O una por una:
+
+| Script | Cubre | Verificaciones |
+|--------|-------|----------------|
+| `npm run test:40` | Objetivos 1 a 4 | 248 |
+| `npm run test:50` | Objetivo 5 — portafolio | 116 |
+| `npm run test:60` | Objetivo 6 — motor de afinidad | 86 |
+| `npm run test:70` | Objetivo 7 — recomendaciones | 89 |
+| `npm run test:b1` … `test:b11` | Los once batches de AFINIA 100 | 600 |
 
 ## Flujo principal (end-to-end)
 
-1. Admin confirma roles y áreas académicas (y puede crear áreas/habilidades).
-2. Estudiante se registra e inicia sesión.
+1. Admin provisiona la cuenta (o importa el padrón) y confirma roles y áreas académicas.
+2. La persona activa su cuenta desde el enlace del correo y elige su contraseña.
 3. Estudiante crea su perfil dinámico.
 4. Estudiante registra intereses (por área) y habilidades (con nivel).
-5. Docente publica actividad académica; sociedad científica, extracurricular.
+5. Director publica actividad académica; sociedad científica, extracurricular.
 6. Estudiante consulta actividades (web o móvil).
 7. Estudiante registra interés o inscripción.
 8. Docente/sociedad confirma participación (el estudiante no puede confirmar la suya).
-9. Estudiante registra proyecto académico.
-10. Estudiante adjunta evidencia (enlace o archivo).
-11. El motor de afinidad recalcula tras cada cambio relevante (backend).
-12. Estudiante visualiza sus áreas de afinidad.
-13. Docente consulta el perfil permitido (sin datos sensibles ni notas).
-14. Director consulta reportes básicos y mapa de afinidad.
+9. Estudiante registra proyecto académico y adjunta evidencia (enlace o archivo).
+10. El motor de validación comprueba lo adjuntado y le asigna un nivel de respaldo.
+11. El motor de afinidad recalcula tras cada cambio relevante, y su puntaje se puede abrir línea por línea.
+12. El estudiante recibe recomendaciones explicadas, colabora por QR, contactos y equipos, y ve su progreso.
+13. Docente consulta el perfil permitido de sus semestres (sin datos sensibles ni notas).
+14. Dirección y sociedad consultan analítica descriptiva, con umbral de privacidad.
 
 ## Scripts útiles (raíz)
 
@@ -165,99 +179,89 @@ En total **577 verificaciones** contra la API real, sobre una base recreada desd
 | `npm run api:migrate` | Aplica migraciones TypeORM |
 | `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
 | `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
-| `npm run test:40` | **235 verificaciones de los objetivos 1 a 4** |
-| `npm run test:50` | **109 verificaciones del objetivo 5 (portafolio)** |
-| `npm run test:60` | **82 verificaciones del objetivo 6 (motor de afinidad)** |
-| `npm run test:70` | **84 verificaciones del objetivo 7 (recomendaciones)** |
-| `npm run test:api` | 42 validaciones de backend contra la API |
-| `npm run demo:e2e` | Flujo completo de 14 pasos |
-| `npm run web:dev` | Servidor de desarrollo web |
+| `npm run test:all` | Las 15 suites de integración |
+| `npm run web:dev` / `web:build` | Servidor de desarrollo / compilación web |
 | `npm run mobile:start` | Inicia Expo (app móvil) |
+| `npm run mobile:typecheck` | Comprobación de tipos del móvil |
 
-## Alcance del 70 %
+## Alcance
 
-Los siete primeros objetivos específicos están implementados de extremo a extremo:
+Los diez objetivos específicos están implementados de extremo a extremo:
 
-1. **Usuarios, autenticación, roles y control de acceso.** Registro de estudiante
-   con rol asignado por el servidor, sesión por rol, alta de usuarios
-   institucionales, activación y desactivación efectiva (un usuario desactivado
-   pierde acceso de inmediato, aunque su token siga vigente), **semestres
-   habilitados por docente**, y catálogos con estado.
-2. **Perfil estudiantil dinámico.** Semestre, áreas de interés con prioridad,
-   habilidades con nivel, áreas de mejora, completitud automática y un resumen que
-   integra la trayectoria real. El docente solo consulta los semestres que tiene
-   habilitados.
+1. **Usuarios, autenticación, roles y control de acceso.** Identidad provisionada
+   por la institución con activación real, sesión por rol, desactivación efectiva
+   (un usuario desactivado pierde acceso de inmediato, aunque su token siga
+   vigente), **semestres habilitados por docente**, importación idempotente del
+   padrón y catálogos con estado.
+2. **Perfil estudiantil dinámico.** Semestre institucional que el estudiante no
+   puede cambiar, áreas de interés con prioridad, habilidades con nivel y su
+   origen —lo autodeclarado se muestra como autodeclarado—, áreas de mejora,
+   completitud automática y un resumen que integra la trayectoria real.
 3. **Actividades académicas y extracurriculares.** El director de carrera gestiona
    las académicas y la sociedad científica las extracurriculares, sobre un
    **catálogo de categorías administrable**, con estados, cupos, filtros por
    categoría, área, modalidad y fecha, detalle e inscripción desde la app móvil.
-4. **Participación, evidencias y certificados.** Registro de asistencia por el
-   responsable, **subida real de archivos** (PDF/PNG/JPG/WEBP, hasta 5 MB),
-   evidencias asociadas a proyecto, actividad o área, certificados externos con
-   archivo, y constancia interna emitida solo por el director sobre participación
-   confirmada y sin duplicados.
-5. **Portafolio de proyectos estudiantiles.** El estudiante registra proyectos con
-   área, tecnologías, enlaces, evidencias y **nivel de visibilidad** (privado, en
-   el perfil, o disponible para docentes); invita integrantes y **la pertenencia
-   se crea solo cuando el invitado acepta**; el docente consulta el portafolio de
-   sus semestres habilitados y registra retroalimentación orientativa, sin nota
-   ni aprobación.
-6. **Motor de afinidad estudiantil.** Calcula niveles de afinidad por área a
-   partir de intereses, habilidades, participación, proyectos, evidencias,
-   certificados y constancias, con **ponderaciones configuradas y auditables**.
-   Cada puntaje se puede abrir para ver **de dónde sale**, línea por línea, y la
-   suma del desglose es exactamente el puntaje. El nivel es relativo al propio
-   perfil del estudiante. Cuando no hay información suficiente el sistema lo
-   informa en lugar de mostrar una lista vacía, y cada cálculo queda registrado
-   en un historial. Es orientación, no evaluación: no hay nota ni aprobación.
-7. **Recomendaciones académicas ligeras.** A partir del perfil y de las afinidades,
-   el sistema sugiere actividades, oportunidades, cursos externos, recursos de
-   apoyo, áreas de fortalecimiento y posibles compañeros de equipo. **Cada
-   sugerencia explica por qué**, y su puntaje es exactamente la suma de sus
-   motivos. No son obligatorias: el estudiante guarda o descarta, y lo descartado
-   no vuelve. Cuando no hay con qué recomendar, el sistema distingue si falta
-   información en el perfil o si no hay nada disponible que coincida.
+4. **Participación, evidencias y certificados, con validación automática.**
+   Registro de asistencia por el responsable, **subida real de archivos**
+   verificados por su firma y no por lo que declare el cliente, evidencias
+   asociadas a proyecto, actividad o área, certificados externos, constancia
+   interna emitida solo por el director, y un motor que comprueba lo adjuntado y
+   le asigna un **nivel de respaldo** en vez de darlo por bueno.
+5. **Portafolio de proyectos estudiantiles.** Proyectos con área, tecnologías,
+   enlaces, evidencias y **nivel de visibilidad**; invitación de integrantes donde
+   **la pertenencia se crea solo cuando el invitado acepta**; el docente consulta
+   el portafolio de sus semestres habilitados y registra retroalimentación
+   orientativa, sin nota ni aprobación.
+6. **Motor de afinidad V2, explicable.** Calcula niveles por área a partir de
+   intereses, habilidades, participación, proyectos, evidencias, certificados y
+   constancias, con rendimientos decrecientes y topes por familia de señal. Cada
+   puntaje se abre para ver **de dónde sale**, línea por línea, y la suma del
+   desglose es exactamente el puntaje. Junto a la afinidad va el **respaldo**:
+   cuánto de eso está demostrado. Es orientación, no evaluación.
+7. **Recomendaciones académicas ligeras.** Actividades, oportunidades, cursos,
+   recursos de apoyo, áreas de fortalecimiento y posibles compañeros. **Cada
+   sugerencia explica por qué**, y su puntaje es la suma de sus motivos. El
+   estudiante guarda o descarta, y lo descartado no vuelve.
+8. **Colaboración.** Perfil público con enlace propio, **contactos por QR**,
+   equipos formados a partir de una necesidad declarada, y mensajería que solo se
+   abre entre quienes tienen una relación que la justifique.
+9. **Gamificación y trayectoria.** Puntos e insignias derivados de hechos reales
+   —nunca incrementados a ciegas—, resumen de trayectoria y **exportación a PDF**.
+10. **Reportes y analítica descriptiva.** Evolución del estudiante, tendencias de
+    la carrera, mapa de áreas, panel del docente limitado a su alcance y métricas
+    de la sociedad científica, todo con **umbral de privacidad** para no describir
+    grupos tan pequeños que describirlos sea señalar a una persona.
 
-Documentación del avance:
+### Documentación
 
-- [`docs/MATRIZ_TRAZABILIDAD_40.md`](docs/MATRIZ_TRAZABILIDAD_40.md) — requisito por requisito
-- [`docs/AVANCE_40_PORCIENTO.md`](docs/AVANCE_40_PORCIENTO.md) — qué se corrigió y qué se agregó
-- [`docs/DEMO_40_PORCIENTO.md`](docs/DEMO_40_PORCIENTO.md) — guion de demostración de 10–15 minutos
-- [`docs/AUDITORIA_FINAL_40_PORCIENTO.md`](docs/AUDITORIA_FINAL_40_PORCIENTO.md) — auditoría de cierre contra el documento
-- [`docs/CORRECCIONES_DOCUMENTO_FINAL_40.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_40.md) — correcciones pendientes en el Word
+Empiece por [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md): todo el
+sistema explicado con diagramas de flujo, sin necesidad de abrir el código.
 
-Objetivo 5 (50 %):
+Los batches de AFINIA 100, cada uno con lo que cambió y por qué:
 
-- [`docs/MATRIZ_TRAZABILIDAD_50.md`](docs/MATRIZ_TRAZABILIDAD_50.md) — RF1 a RF16, requisito por requisito
-- [`docs/AVANCE_50_PORCIENTO.md`](docs/AVANCE_50_PORCIENTO.md) — qué se corrigió y qué se agregó
-- [`docs/DEMO_50_PORCIENTO.md`](docs/DEMO_50_PORCIENTO.md) — guion de demostración de 8–10 minutos
-- [`docs/AUDITORIA_FINAL_50_PORCIENTO.md`](docs/AUDITORIA_FINAL_50_PORCIENTO.md) — auditoría de cierre de los 5 objetivos
-- [`docs/CORRECCIONES_DOCUMENTO_FINAL_50.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_50.md) — 6 correcciones pendientes en el Word
+- [`docs/BATCH_1_IDENTIDAD_Y_SEGURIDAD.md`](docs/BATCH_1_IDENTIDAD_Y_SEGURIDAD.md)
+- [`docs/BATCH_2_PERFIL_Y_ONBOARDING.md`](docs/BATCH_2_PERFIL_Y_ONBOARDING.md)
+- [`docs/BATCH_3_STORAGE_Y_VALIDACION.md`](docs/BATCH_3_STORAGE_Y_VALIDACION.md)
+- [`docs/BATCH_4_ACTIVIDADES.md`](docs/BATCH_4_ACTIVIDADES.md)
+- [`docs/BATCH_5_PROYECTOS.md`](docs/BATCH_5_PROYECTOS.md)
+- [`docs/BATCH_6_AFINIDAD_V2.md`](docs/BATCH_6_AFINIDAD_V2.md)
+- [`docs/BATCH_7_RECOMENDACIONES.md`](docs/BATCH_7_RECOMENDACIONES.md)
+- [`docs/BATCH_8_COLABORACION.md`](docs/BATCH_8_COLABORACION.md)
+- [`docs/BATCH_9_GAMIFICACION_Y_EXPORT.md`](docs/BATCH_9_GAMIFICACION_Y_EXPORT.md)
+- [`docs/BATCH_10_REPORTES_Y_ANALITICA.md`](docs/BATCH_10_REPORTES_Y_ANALITICA.md)
+- [`docs/BATCH_11_HARDENING.md`](docs/BATCH_11_HARDENING.md)
+- [`docs/BATCH_12_REGRESION_Y_LIMPIEZA.md`](docs/BATCH_12_REGRESION_Y_LIMPIEZA.md)
 
-Objetivo 6 (60 %):
+Las matrices de trazabilidad y los informes de avance del 40 % al 70 % siguen en
+[`docs/`](docs/). Son el registro de cómo se llegó hasta aquí, no la descripción
+del sistema actual: para eso está la especificación definitiva.
 
-- [`docs/MATRIZ_TRAZABILIDAD_60.md`](docs/MATRIZ_TRAZABILIDAD_60.md) — RF1 a RF17, requisito por requisito
-- [`docs/AVANCE_60_PORCIENTO.md`](docs/AVANCE_60_PORCIENTO.md) — qué se corrigió y qué se agregó
-- [`docs/DEMO_60_PORCIENTO.md`](docs/DEMO_60_PORCIENTO.md) — guion de demostración de 9–11 minutos
-- [`docs/AUDITORIA_FINAL_60_PORCIENTO.md`](docs/AUDITORIA_FINAL_60_PORCIENTO.md) — auditoría de cierre de los 6 objetivos
-- [`docs/CORRECCIONES_DOCUMENTO_FINAL_60.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_60.md) — 5 correcciones pendientes en el Word
+## Fuera del alcance, a propósito
 
-Objetivo 7 (70 %):
-
-- [`docs/MATRIZ_TRAZABILIDAD_70.md`](docs/MATRIZ_TRAZABILIDAD_70.md) — RF1 a RF18, requisito por requisito
-- [`docs/AVANCE_70_PORCIENTO.md`](docs/AVANCE_70_PORCIENTO.md) — qué se corrigió y qué se agregó
-- [`docs/DEMO_70_PORCIENTO.md`](docs/DEMO_70_PORCIENTO.md) — guion de demostración de 9–11 minutos
-- [`docs/AUDITORIA_FINAL_70_PORCIENTO.md`](docs/AUDITORIA_FINAL_70_PORCIENTO.md) — auditoría de cierre de los 7 objetivos
-- [`docs/CORRECCIONES_DOCUMENTO_FINAL_70.md`](docs/CORRECCIONES_DOCUMENTO_FINAL_70.md) — 6 correcciones pendientes en el Word
-
-Transversal:
-
-- [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md) — **empiece por aquí**: todo el
-  sistema explicado con diagramas de flujo, sin necesidad de abrir el código
-- [`docs/MEJORAS_UX.md`](docs/MEJORAS_UX.md) — buscadores, modales de confirmación, avisos
-  flotantes y animaciones en el panel web y la aplicación móvil, sin cambiar ninguna regla
-
-**Fuera del 70 %:** chat, contactos por QR, equipos avanzados, gamificación
-completa, motor de gamificación (los criterios ya se administran, pero todavía no
-se aplican), analítica avanzada, predicción de rendimiento, certificados oficiales
-e integración real con SIU y Teams.
+- **Predicción de rendimiento, abandono o éxito profesional.** No es que falte:
+  §64 la prohíbe. El sistema describe lo que ocurrió y se cuida de no sugerir que
+  anticipa nada.
+- **Certificados oficiales.** Los emite la universidad. Aquí solo hay constancias
+  internas de participación, que son otra cosa y lo dicen.
+- **Integración real con SIU y Teams.** El padrón entra por importación de archivo.
+- **Autoridad académica.** No hay notas, ni aprobación, ni evaluación de personas.

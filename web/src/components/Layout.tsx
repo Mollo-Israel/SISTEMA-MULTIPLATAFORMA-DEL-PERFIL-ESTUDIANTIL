@@ -122,12 +122,7 @@ export default function Layout() {
               <div className="nav-section">{group.section}</div>
               {group.items.map((item) => {
                 const Icon = ICONS[item.to] ?? FiClock;
-                return item.soon ? (
-                  <div key={item.label} className="nav-link disabled" title="Disponible en una próxima versión">
-                    <FiClock /> {item.label}
-                    <span className="soon">Próximamente</span>
-                  </div>
-                ) : (
+                return (
                   <NavLink
                     key={item.to}
                     to={item.to}

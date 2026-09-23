@@ -138,7 +138,7 @@ async function evolucion(ctx) {
 async function umbral(ctx) {
   objective('§65 · Un agregado de dos personas no es un agregado');
 
-  const mapa = await req('GET', '/reports/director/affinity-map-v2', {
+  const mapa = await req('GET', '/reports/director/affinity-map', {
     token: ctx.director.token,
   });
   check(mapa.status === 200, 'B10.11 La dirección consulta el mapa de áreas', msgOf(mapa));

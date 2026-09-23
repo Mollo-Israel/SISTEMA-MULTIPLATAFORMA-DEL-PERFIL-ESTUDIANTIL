@@ -20,9 +20,9 @@ import {
 import {
   ACTIVITY_STATUS_LABEL,
   ACTIVITY_TYPE_LABEL,
-  categoryLabel,
   lbl,
 } from '../../constants';
+import { useCategoryLabel } from '../../hooks/useCategoryLabel';
 import { colors } from '../../theme';
 
 const normalize = (s: string) =>
@@ -39,6 +39,7 @@ const FILTERS = [
  * La publicacion corresponde al director de carrera y a la sociedad cientifica.
  */
 export default function TeacherActivities() {
+  const categoryLabel = useCategoryLabel();
   const { data, loading, error, reload } = useAsync(() => activityService.list(), []);
   const [type, setType] = useState('');
   const [query, setQuery] = useState('');

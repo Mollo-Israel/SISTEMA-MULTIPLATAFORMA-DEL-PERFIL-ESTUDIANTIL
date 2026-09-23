@@ -51,5 +51,4 @@ export const TAB_ICON: Record<string, IconName> = {
   Usuarios: 'users',
   'Áreas': 'layers',
   // Comun
-  'Próximamente': 'more-horizontal',
 };

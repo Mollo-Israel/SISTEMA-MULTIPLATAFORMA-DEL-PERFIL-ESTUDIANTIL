@@ -50,27 +50,10 @@ export const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrador',
 };
 
-export const ACTIVITY_TYPES = [
-  { value: 'academica', label: 'Académica' },
-  { value: 'extracurricular', label: 'Extracurricular' },
-];
-
-export const ACTIVITY_CATEGORIES = [
-  { value: 'taller_academico', label: 'Taller académico' },
-  { value: 'clase_espejo', label: 'Clase espejo' },
-  { value: 'seminario', label: 'Seminario' },
-  { value: 'charla', label: 'Charla' },
-  { value: 'curso_externo_recomendado', label: 'Curso externo recomendado' },
-  { value: 'reto', label: 'Reto' },
-  { value: 'hackathon', label: 'Hackathon' },
-  { value: 'convocatoria', label: 'Convocatoria' },
-  { value: 'actividad_sociedad_cientifica', label: 'Actividad de sociedad científica' },
-  { value: 'club_estudio', label: 'Club de estudio' },
-  { value: 'tutoria', label: 'Tutoría' },
-  { value: 'investigacion', label: 'Investigación' },
-  { value: 'responsabilidad_social', label: 'Responsabilidad social' },
-  { value: 'integracion', label: 'Integración' },
-];
+/*
+ * Aquí vivían ACTIVITY_TYPES y ACTIVITY_CATEGORIES, copias en duro de lo que
+ * las pantallas ya piden al catálogo real. No las leía nadie.
+ */
 
 export const ACTIVITY_MODALITIES = [
   { value: 'presencial', label: 'Presencial' },
@@ -92,10 +75,8 @@ export const REGISTRATION_BADGE: Record<string, string> = {
   registered: 'badge-amber',
   confirmed: 'badge-green',
   absent: 'badge-red',
+  cancelled: 'badge-gray',
 };
-
-// Módulos del sistema completo que aún no entran en el 30%.
-export const COMING_SOON = ['Chat', 'Contactos QR', 'Equipos avanzados'];
 
 // Etiquetas en español para valores internos
 export const ACTIVITY_TYPE_LABEL: Record<string, string> = {
@@ -110,11 +91,19 @@ export const ACTIVITY_STATUS_LABEL: Record<string, string> = {
   finished: 'Finalizada',
   cancelled: 'Cancelada',
 };
+/*
+ * Las etiquetas salen del enum `RegistrationStatus` (§23), no del gusto de
+ * cada pantalla. Decían otra cosa: «absent» aparecía como «Rechazado», que le
+ * dice al estudiante que le negaron la inscripción cuando lo que ocurrió es
+ * que se inscribió y no asistió. Y «cancelled» no estaba, así que una baja se
+ * mostraba con el valor interno en crudo.
+ */
 export const REGISTRATION_STATUS_LABEL: Record<string, string> = {
   interested: 'Interesado',
-  registered: 'Pendiente',
-  confirmed: 'Confirmado',
-  absent: 'Rechazado',
+  registered: 'Inscrito',
+  confirmed: 'Participación confirmada',
+  absent: 'Ausente',
+  cancelled: 'Baja',
 };
 export const AFFINITY_LEVEL_LABEL: Record<string, string> = {
   low: 'Baja',
@@ -130,10 +119,5 @@ export const PROFILE_STATUS_LABEL: Record<string, string> = {
   incomplete: 'Incompleto',
   active: 'Activo',
   updated: 'Actualizado',
-};
-export const CONSTANCY_STATUS_LABEL: Record<string, string> = {
-  pending: 'Pendiente',
-  authorized: 'Autorizada',
-  rejected: 'Rechazada',
 };
 export const lbl = (map: Record<string, string>, v: string) => map[v] ?? v;

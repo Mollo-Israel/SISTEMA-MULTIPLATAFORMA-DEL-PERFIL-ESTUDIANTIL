@@ -3,7 +3,6 @@ import { RolNombre } from './constants';
 export interface NavItem {
   to: string;
   label: string;
-  soon?: boolean;
 }
 
 export interface NavGroup {
@@ -11,11 +10,12 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-const comingSoon: NavItem[] = [
-  { to: '#', label: 'Chat', soon: true },
-  { to: '#', label: 'Contactos QR', soon: true },
-  { to: '#', label: 'Equipos', soon: true },
-];
+/*
+ * Había aquí una sección «Próximamente» con Chat, Contactos QR y Equipos.
+ * Las tres funciones existen desde BATCH 8 y viven en «Colaboración»; la
+ * sección seguía anunciando como futuro algo que ya se entrega, y además se
+ * mostraba a docentes, dirección y administración, a quienes nunca les tocó.
+ */
 
 export const NAV: Record<string, NavGroup[]> = {
   [RolNombre.STUDENT]: [
@@ -39,7 +39,6 @@ export const NAV: Record<string, NavGroup[]> = {
       section: 'Comunidad',
       items: [{ to: '/student/activities', label: 'Actividades' }],
     },
-    { section: 'Próximamente', items: comingSoon },
   ],
   [RolNombre.TEACHER]: [
     {
@@ -53,7 +52,6 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/teacher/reports', label: 'Reportes del curso' },
       ],
     },
-    { section: 'Próximamente', items: comingSoon },
   ],
   [RolNombre.CAREER_DIRECTOR]: [
     {
@@ -67,7 +65,6 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/director/resources', label: 'Catálogo de recursos' },
       ],
     },
-    { section: 'Próximamente', items: comingSoon },
   ],
   [RolNombre.SCIENTIFIC_SOCIETY]: [
     {
@@ -78,7 +75,6 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/society/metrics', label: 'Métricas' },
       ],
     },
-    { section: 'Próximamente', items: comingSoon },
   ],
   [RolNombre.ADMIN]: [
     {
@@ -93,7 +89,6 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/gamification', label: 'Criterios de gamificación' },
       ],
     },
-    { section: 'Próximamente', items: comingSoon },
   ],
 };
 

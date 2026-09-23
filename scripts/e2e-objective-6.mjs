@@ -803,17 +803,20 @@ async function rf17Permisos(ctx) {
     '17.65 Un estudiante no usa la ruta institucional -> 403',
   );
   check(
-    (await req('GET', '/affinity/map/basic', { token: ctx.A.token })).status === 403,
+    (await req('GET', '/reports/director/affinity-map', { token: ctx.A.token })).status === 403,
     '17.66 El estudiante no accede al mapa agregado -> 403',
   );
   check(
-    (await req('GET', '/affinity/map/basic', { token: ctx.docente.token })).status === 403,
+    (await req('GET', '/reports/director/affinity-map', { token: ctx.docente.token })).status === 403,
     '17.67 El docente no accede al mapa agregado -> 403',
   );
-  const mapa = await req('GET', '/affinity/map/basic', { token: ctx.directorToken });
+  const mapa = await req('GET', '/reports/director/affinity-map', { token: ctx.directorToken });
   check(mapa.status === 200, '17.68 El director consulta el mapa agregado');
   check(
-    Array.isArray(mapa.data) && mapa.data.every((m) => m.byLevel && typeof m.students === 'number'),
+    Array.isArray(mapa.data?.areas)
+      && mapa.data.areas.every(
+        (m) => typeof m.students === 'number' && (m.suppressed || m.bySupportLevel),
+      ),
     '17.69 El mapa agrega estudiantes y niveles por area',
   );
   check(
