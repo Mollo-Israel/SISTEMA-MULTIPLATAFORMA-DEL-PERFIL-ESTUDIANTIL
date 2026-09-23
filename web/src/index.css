@@ -898,3 +898,8 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .mensaje p { margin: 0; }
 .mensaje .muted { font-size: 0.72rem; }
 @media (max-width: 720px) { .mensajeria-lista { flex: 1 1 100%; } }
+
+/* BATCH 10 · §64 y §65 — tendencias y umbral de privacidad. */
+.sin-desglose { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-style: italic; }
+.metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+.metrica-valor { font-size: 1.9rem; font-weight: 700; color: var(--bordo); line-height: 1.1; }

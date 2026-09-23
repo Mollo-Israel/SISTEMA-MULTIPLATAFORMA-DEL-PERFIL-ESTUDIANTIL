@@ -413,6 +413,126 @@ export const trajectoryService = {
   },
 };
 
+/**
+ * Analitica descriptiva (§63, §64, §65).
+ *
+ * Una fila puede venir «suprimida»: el grupo era mas pequeno que el umbral de
+ * §65 y su desglose no se publica. La pantalla muestra el motivo, porque un
+ * hueco sin explicar parece un error del sistema y esto es una decision.
+ */
+export interface NotaAnalitica {
+  minGroupSize: number;
+  privacy: string;
+  scope: string;
+}
+
+/**
+ * Una fila que puede venir sin desglose.
+ *
+ * Se modela como `Partial<T>` y no como una union porque eso es literalmente lo
+ * que llega: cuando el umbral de §65 actua, la fila conserva solo la etiqueta y
+ * el tamano del grupo. Una union obligaria a estrechar el tipo en cada celda y
+ * acabaria resolviendose con un `as` en cada pantalla.
+ */
+type Suprimible<T> = Partial<T> & { suppressed?: boolean; reason?: string };
+
+export interface DirectorTrends {
+  interestByArea: Suprimible<{
+    area: string;
+    students: number;
+    declaredLast90Days: number;
+    averagePriority: number;
+  }>[];
+  participation: Suprimible<{
+    period: string;
+    students: number;
+    registrations: number;
+    confirmed: number;
+  }>[];
+  areasBySemester: Suprimible<{
+    semester: number;
+    students: number;
+    areas: { area: string; students: number; averageAffinity: number; averageSupport: number }[];
+  }>[];
+  technologies: { technology: string; projects: number; students: number }[];
+  activities: {
+    activity: string;
+    type: string;
+    area: string | null;
+    registrations: number;
+    confirmed: number;
+  }[];
+  note: NotaAnalitica;
+}
+
+export interface SocietyMetrics {
+  activities: Suprimible<{
+    activityId: string;
+    title: string;
+    type: string;
+    status: string;
+    area: string | null;
+    category: string | null;
+    eventDate: string | null;
+    capacity: number | null;
+    registrations: number;
+    confirmed: number;
+  }>[];
+  totals: { activities: number; registrations: number; confirmed: number; students: number };
+  note: NotaAnalitica;
+}
+
+export interface StudentEvolution {
+  student: { profileId: string; name: string; semester: number | null };
+  periods: {
+    period: string;
+    engineVersion: number;
+    comparable: boolean;
+    areasCount: number;
+    signalsCount: number;
+    averageSupport: number;
+    areas: {
+      area: string | null;
+      academicAreaId: string;
+      affinityScore: number;
+      supportScore: number;
+      supportLevel: string;
+    }[];
+  }[];
+  areas: {
+    academicAreaId: string;
+    area: string | null;
+    points: {
+      period: string;
+      engineVersion: number;
+      affinityScore: number;
+      supportScore: number;
+      supportLevel: string;
+    }[];
+  }[];
+  note: NotaAnalitica;
+  message: string | null;
+}
+
+export const analyticsService = {
+  myEvolution: () =>
+    api.get<StudentEvolution>('/reports/me/evolution').then((r) => r.data),
+  studentEvolution: (studentId: string) =>
+    api.get<StudentEvolution>(`/reports/student/${studentId}/evolution`).then((r) => r.data),
+  teacherSupportSummary: () =>
+    api.get('/reports/teacher/support-summary').then((r) => r.data),
+  directorTrends: () =>
+    api.get<DirectorTrends>('/reports/director/trends').then((r) => r.data),
+  directorAffinityMap: (semesters?: number[]) =>
+    api
+      .get('/reports/director/affinity-map-v2', {
+        params: semesters?.length ? { semesters: semesters.join(',') } : undefined,
+      })
+      .then((r) => r.data),
+  societyMetrics: () =>
+    api.get<SocietyMetrics>('/reports/society/activities').then((r) => r.data),
+};
+
 export const activityService = {
   list: (params?: Record<string, string>) =>
     api.get<Activity[]>('/activities', { params }).then((r) => r.data),

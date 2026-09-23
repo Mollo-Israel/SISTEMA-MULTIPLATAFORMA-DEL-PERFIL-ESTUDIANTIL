@@ -37,6 +37,8 @@ import DirectorAffinityMap from './pages/director/AffinityMap';
 import DirectorActivitiesPage from './pages/director/Activities';
 import DirectorConstanciesPage from './pages/director/Constancies';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
+import DirectorTrendsPage from './pages/director/Trends';
+import SocietyMetricsPage from './pages/society/Metrics';
 
 import SocietyDashboard from './pages/society/Dashboard';
 import SocietyActivitiesPage from './pages/society/Activities';
@@ -119,11 +121,13 @@ export default function App() {
             <Route path="/director/constancies" element={<DirectorConstanciesPage />} />
             <Route path="/director/affinity" element={<DirectorAffinityMap />} />
             <Route path="/director/resources" element={<DirectorLearningResourcesPage />} />
+            <Route path="/director/trends" element={<DirectorTrendsPage />} />
           </Route>
 
           <Route element={guarded([SC], <Layout />)}>
             <Route path="/society" element={<SocietyDashboard />} />
             <Route path="/society/activities" element={<SocietyActivitiesPage />} />
+            <Route path="/society/metrics" element={<SocietyMetricsPage />} />
           </Route>
 
           <Route element={guarded([A], <Layout />)}>
