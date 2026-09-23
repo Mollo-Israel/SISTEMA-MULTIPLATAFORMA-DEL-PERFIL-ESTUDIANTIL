@@ -252,6 +252,9 @@ Los batches de AFINIA 100, cada uno con lo que cambió y por qué:
 - [`docs/BATCH_11_HARDENING.md`](docs/BATCH_11_HARDENING.md)
 - [`docs/BATCH_12_REGRESION_Y_LIMPIEZA.md`](docs/BATCH_12_REGRESION_Y_LIMPIEZA.md)
 
+El estado final punto por punto, con qué demuestra cada uno:
+[`docs/CHECKLIST_FINAL_AFINIA_100.md`](docs/CHECKLIST_FINAL_AFINIA_100.md).
+
 Las matrices de trazabilidad y los informes de avance del 40 % al 70 % siguen en
 [`docs/`](docs/). Son el registro de cómo se llegó hasta aquí, no la descripción
 del sistema actual: para eso está la especificación definitiva.
