@@ -39,13 +39,20 @@ export function resolveJwtSecret(config: ConfigService): string {
 }
 
 /**
- * Origenes permitidos por CORS. En desarrollo, sin configuracion, se aceptan
- * los puertos habituales de Vite y Expo mas cualquier origen de red local
- * (la app movil llega por IP LAN). En produccion solo se aceptan los origenes
- * declarados en CORS_ORIGINS.
+ * Origenes permitidos por CORS (§84, §100).
+ *
+ * Lee `WEB_ORIGINS`, que es el nombre que fija §100 y el que valida el chequeo
+ * de entorno. Antes leia `CORS_ORIGINS` y nadie los reconciliaba: quien
+ * configuraba el sistema siguiendo la especificacion definia `WEB_ORIGINS`, el
+ * arranque lo daba por bueno y CORS se quedaba aceptando cualquier origen sin
+ * que nada lo dijera. `CORS_ORIGINS` sigue funcionando como alias historico.
+ *
+ * En desarrollo, sin ninguno de los dos, se acepta cualquier origen y se avisa:
+ * la app movil llega por IP de red local y enumerarlas seria inutil. En
+ * produccion, sin lista, no se arranca.
  */
 export function resolveCorsOptions(config: ConfigService) {
-  const raw = config.get<string>('CORS_ORIGINS')?.trim();
+  const raw = (config.get<string>('WEB_ORIGINS') ?? config.get<string>('CORS_ORIGINS'))?.trim();
   const configured = raw
     ? raw
         .split(',')
@@ -55,6 +62,9 @@ export function resolveCorsOptions(config: ConfigService) {
 
   if (configured.length > 0) {
     if (configured.includes('*')) {
+      // Un comodin explicito se respeta, pero nunca con credenciales: las dos
+      // cosas juntas convierten cualquier pagina en un cliente autenticado.
+      logger.warn('WEB_ORIGINS incluye «*»: se acepta cualquier origen, sin credenciales.');
       return { origin: true, credentials: false };
     }
     return { origin: configured, credentials: true };
@@ -62,10 +72,11 @@ export function resolveCorsOptions(config: ConfigService) {
 
   if (isProduction(config)) {
     throw new Error(
-      'CORS_ORIGINS no está configurado. Declare los dominios permitidos antes de iniciar en producción.',
+      'WEB_ORIGINS no está configurado. Declare los dominios permitidos antes de '
+      + 'iniciar en producción.',
     );
   }
 
-  logger.warn('CORS_ORIGINS sin configurar: se permite cualquier origen (solo desarrollo).');
+  logger.warn('WEB_ORIGINS sin configurar: se permite cualquier origen (solo desarrollo).');
   return { origin: true, credentials: false };
 }

@@ -40,7 +40,10 @@ export class CreateExternalCertificateDto {
   @ApiProperty({ required: false, example: 'https://emisor.example.com/cert/123' })
   @IsOptional()
   @Transform(trim)
-  @IsUrl({}, { message: 'El enlace del certificado debe ser una URL válida.' })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    { message: 'El enlace del certificado debe ser una URL http o https válida.' },
+  )
   @MaxLength(500)
   certificateUrl?: string;
 

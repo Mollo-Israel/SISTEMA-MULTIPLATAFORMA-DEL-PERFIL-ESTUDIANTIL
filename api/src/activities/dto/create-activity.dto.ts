@@ -95,7 +95,10 @@ export class CreateActivityDto {
   @ApiProperty({ required: false, example: 'https://evento.example.com' })
   @IsOptional()
   @Transform(trim)
-  @IsUrl({}, { message: 'El enlace externo debe ser una URL válida.' })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    { message: 'El enlace externo debe ser una URL http o https válida.' },
+  )
   @MaxLength(500, { message: 'El enlace externo es demasiado largo.' })
   externalUrl?: string;
 

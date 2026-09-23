@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -27,6 +27,7 @@ import { EvidencesModule } from './evidences/evidences.module';
 import { ProjectFeedbackModule } from './project-feedback/project-feedback.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { GamificationModule } from './gamification/gamification.module';
+import { RequestIdMiddleware } from './common/request-context';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
@@ -84,4 +85,16 @@ import { RolesGuard } from './auth/guards/roles.guard';
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * §102: cada peticion entra con su identificador.
+   *
+   * Va como middleware y no como interceptor porque tiene que estar puesto
+   * antes de que cualquier cosa falle: un error en un guard ocurre antes de
+   * los interceptores, y sin identificador ese error no se puede rastrear,
+   * que es justo cuando mas falta hace.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

@@ -94,9 +94,30 @@ export class UsersController {
     return this.usersService.setTeacherSemesters(id, dto.semesters, admin.userId);
   }
 
+  /**
+   * Da de baja a un usuario (§85).
+   *
+   * No borra: §85 prefiere `status = INACTIVE` sobre el borrado, porque de un
+   * perfil estudiantil cuelga todo su historial en cascada. Se cierra el acceso
+   * y se revocan sus sesiones.
+   */
   @Delete(':id')
-  @HttpCode(204)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.usersService.remove(id);
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Da de baja a un usuario (§85).',
+    description:
+      'Cambia su estado a inactivo y revoca sus sesiones. La cuenta conserva su historial. '
+      + 'Para eliminarla de verdad, use ?hard=true; solo funciona en cuentas sin historial.',
+  })
+  async remove(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('hard') hard?: string,
+  ) {
+    if (hard === 'true') {
+      await this.usersService.remove(id, admin.userId);
+      return { deleted: true };
+    }
+    return this.usersService.deactivate(id, admin.userId);
   }
 }

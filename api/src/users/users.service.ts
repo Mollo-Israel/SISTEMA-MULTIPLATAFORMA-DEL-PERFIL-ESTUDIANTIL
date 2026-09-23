@@ -11,6 +11,7 @@ import * as bcrypt from 'bcryptjs';
 import { RolNombre, UserStatus } from '@perfil/shared';
 import { User } from '../entities/user.entity';
 import { TeacherSemesterAccess } from '../entities/teacher-semester-access.entity';
+import { StudentProfile } from '../entities/student-profile.entity';
 import { RolesService } from '../roles/roles.service';
 import { AuthSessionsService } from '../identity/auth-sessions.service';
 import { AccountTokensService } from '../identity/account-tokens.service';
@@ -243,11 +244,84 @@ export class UsersService {
       : { message: 'Enlace de activación reenviado.' };
   }
 
-  async remove(id: string): Promise<void> {
-    const result = await this.usersRepository.delete(id);
-    if (!result.affected) {
+  /**
+   * Da de baja una cuenta (§85).
+   *
+   * §85 lo dice sin rodeos: *preferir `status = INACTIVE` sobre hard delete*.
+   * La razon se ve mirando la base: de `student_profiles` cuelgan veintiocho
+   * tablas en cascada —afinidad, proyectos, evidencias, contribuciones, puntos,
+   * equipos—. Borrar una cuenta no es quitar a alguien de una lista: es destruir
+   * su historial academico completo, y ademas el de los proyectos en los que
+   * colaboro con otros.
+   *
+   * Dar de baja cierra el acceso, que es lo que se persigue el 99 % de las
+   * veces, y deja la historia intacta.
+   */
+  async deactivate(id: string, actorId: string): Promise<PublicUser> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: { role: true },
+    });
+    if (!user) {
       throw new NotFoundException(`Usuario no encontrado: ${id}`);
     }
+    if (user.status === UserStatus.INACTIVE) {
+      return toPublicUser(user);
+    }
+
+    user.status = UserStatus.INACTIVE;
+    await this.usersRepository.save(user);
+
+    // Cerrar las sesiones abiertas es parte de dar de baja: sin esto, el token
+    // de acceso vigente sigue funcionando hasta que caduque.
+    const revocadas = await this.sessions.revokeAllForUser(id);
+    await this.audit.record({
+      eventType: AuditEventType.USER_STATUS_CHANGED,
+      actorUserId: actorId,
+      entityType: 'user',
+      entityId: id,
+      metadata: { to: UserStatus.INACTIVE, sessionsRevoked: revocadas },
+    });
+
+    return toPublicUser(user);
+  }
+
+  /**
+   * Borra una cuenta de verdad (§85).
+   *
+   * Solo para cuentas sin historial: §85 lo reserva a *datos de prueba o
+   * cuentas sin historial bajo reglas controladas*. Si la cuenta tiene perfil
+   * estudiantil, se niega y explica que lo que corresponde es darla de baja.
+   *
+   * No se comprueba «tiene historial» contando filas por todas las tablas: la
+   * existencia del perfil es la condicion suficiente, porque es de el de donde
+   * cuelga todo lo demas.
+   */
+  async remove(id: string, actorId: string): Promise<void> {
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`Usuario no encontrado: ${id}`);
+    }
+
+    const tienePerfil = await this.usersRepository.manager
+      .getRepository(StudentProfile)
+      .exists({ where: { userId: id } });
+    if (tienePerfil) {
+      throw new ConflictException(
+        'Esta cuenta tiene historial académico y no puede eliminarse. '
+        + 'Dé de baja al usuario: conserva su trayectoria y cierra su acceso.',
+      );
+    }
+
+    await this.sessions.revokeAllForUser(id);
+    await this.audit.record({
+      eventType: AuditEventType.USER_STATUS_CHANGED,
+      actorUserId: actorId,
+      entityType: 'user',
+      entityId: id,
+      metadata: { hardDeleted: true, email: user.email, role: user.roleId },
+    });
+    await this.usersRepository.delete(id);
   }
 
   findByEmailWithPassword(email: string): Promise<User | null> {

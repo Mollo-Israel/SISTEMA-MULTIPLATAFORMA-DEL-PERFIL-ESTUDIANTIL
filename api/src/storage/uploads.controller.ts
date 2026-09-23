@@ -13,6 +13,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { HUMAN_ACCEPTED } from './file-signature';
 import { MAX_FILE_BYTES, UploadedFileView, UploadsService } from './uploads.service';
+import { OrphanFilesService } from './orphan-files.service';
 
 /**
  * Subida de archivos (especificacion §27).
@@ -28,7 +29,10 @@ import { MAX_FILE_BYTES, UploadedFileView, UploadsService } from './uploads.serv
 @ApiBearerAuth()
 @Controller('uploads')
 export class UploadsController {
-  constructor(private readonly uploads: UploadsService) {}
+  constructor(
+    private readonly uploads: UploadsService,
+    private readonly orphans: OrphanFilesService,
+  ) {}
 
   @Post()
   @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
@@ -56,5 +60,25 @@ export class UploadsController {
       throw new BadRequestException('Debe adjuntar un archivo en el campo "file".');
     }
     return this.uploads.store(user.userId, file);
+  }
+
+  /**
+   * Fuerza una vuelta de limpieza de huérfanos (§136).
+   *
+   * La limpieza corre sola cada pocas horas; esto existe para poder provocarla
+   * —al liberar espacio, o al comprobar en una prueba que hace lo que dice— sin
+   * esperar a que caiga la siguiente vuelta. Solo administración: es una tarea
+   * de mantenimiento, no una función del producto.
+   */
+  @Post('cleanup-orphans')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Elimina los archivos subidos que nunca llegaron a adjuntarse (§136).',
+    description:
+      'Solo alcanza a los que superan el periodo de gracia y a los que no menciona '
+      + 'ningún certificado, ninguna evidencia ni ningún duplicado.',
+  })
+  async cleanupOrphans(): Promise<{ removed: number }> {
+    return { removed: await this.orphans.limpiarTanda() };
   }
 }

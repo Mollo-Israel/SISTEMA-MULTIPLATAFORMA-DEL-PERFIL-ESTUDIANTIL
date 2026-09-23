@@ -14,6 +14,7 @@ import { UploadsController } from './uploads.controller';
 import { FilesController } from './files.controller';
 import { FileAccessService } from './file-access.service';
 import { UploadsService } from './uploads.service';
+import { OrphanFilesService } from './orphan-files.service';
 import { STORAGE_PORT } from './storage.port';
 
 /**
@@ -48,6 +49,7 @@ import { STORAGE_PORT } from './storage.port';
     LocalStorageDriver,
     FileAccessService,
     UploadsService,
+    OrphanFilesService,
     { provide: STORAGE_PORT, useExisting: LocalStorageDriver },
   ],
   exports: [STORAGE_PORT, UploadsService],

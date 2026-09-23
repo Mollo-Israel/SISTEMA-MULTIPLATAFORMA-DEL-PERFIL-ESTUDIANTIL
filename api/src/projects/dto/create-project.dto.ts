@@ -55,14 +55,20 @@ export class CreateProjectDto {
   @ApiProperty({ required: false, example: 'https://github.com/usuario/proyecto' })
   @IsOptional()
   @Transform(trim)
-  @IsUrl({}, { message: 'El repositorio debe ser una URL válida.' })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    { message: 'El repositorio debe ser una URL http o https válida.' },
+  )
   @MaxLength(500)
   repositoryUrl?: string;
 
   @ApiProperty({ required: false, example: 'https://demo.example.com' })
   @IsOptional()
   @Transform(trim)
-  @IsUrl({}, { message: 'La demo debe ser una URL válida.' })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    { message: 'La demo debe ser una URL http o https válida.' },
+  )
   @MaxLength(500)
   demoUrl?: string;
 

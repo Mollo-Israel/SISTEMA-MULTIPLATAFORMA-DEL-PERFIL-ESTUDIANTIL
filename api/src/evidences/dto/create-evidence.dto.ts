@@ -42,7 +42,10 @@ export class CreateEvidenceDto {
   @ApiProperty({ required: false, description: 'Obligatorio cuando evidenceType = link' })
   @IsOptional()
   @Transform(trim)
-  @IsUrl({}, { message: 'El enlace debe ser una URL válida.' })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    { message: 'El enlace debe ser una URL http o https válida.' },
+  )
   @MaxLength(500, { message: 'El enlace es demasiado largo.' })
   externalUrl?: string;
 

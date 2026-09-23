@@ -8,7 +8,11 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+import { HttpExceptionFilter } from './common/http-exception.filter';
+import { mensajesDeValidacion } from './common/validation-messages';
+import { RequestLoggingInterceptor } from './common/request-logging.interceptor';
 import { resolveCorsOptions } from './config/security.config';
 import { assertEnvironment } from './config/environment.check';
 
@@ -30,13 +34,30 @@ async function bootstrap() {
   // FilesController, que exige sesión y comprueba la autorización sobre la
   // entidad que contiene el archivo.
 
+  /*
+    * §84: límite del cuerpo. Las subidas van por `multipart` con su propio
+    * tope; esto acota el JSON, donde un cuerpo enorme no tiene ningún uso
+    * legítimo y sí sirve para agotar la memoria del proceso.
+    */
+  app.use(json({ limit: '256kb' }));
+  app.use(urlencoded({ extended: true, limit: '256kb' }));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // Los mensajes que la librería redacta sola vienen en inglés. Se
+      // traducen en un solo sitio: ponerlos decorador por decorador serían
+      // doscientas ediciones que además hay que repetir en cada DTO nuevo.
+      exceptionFactory: mensajesDeValidacion,
     }),
   );
+
+  // §103: una sola forma de error para toda la API. §102: el registro de cada
+  // petición, sin tocar cuerpos ni cabeceras.
+  app.useGlobalFilters(new HttpExceptionFilter(config));
+  app.useGlobalInterceptors(new RequestLoggingInterceptor());
   app.enableCors(resolveCorsOptions(config));
 
   // Necesario para que el rate limit y el registro de sesión vean la IP real
