@@ -2,10 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import {
-  ACTIVE_GAMIFICATION_TRIGGERS,
   AffinityLevel,
-  GAMIFICATION_POINTS,
   GAMIFICATION_TRIGGER_LABEL,
+  SYSTEM_GAMIFICATION_TRIGGERS,
   GamificationTrigger,
   ProjectBackingTier,
   RegistrationStatus,
@@ -16,6 +15,7 @@ import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { Contact, TeamMember } from '../entities/collaboration.entity';
+import { GamificationCriterion } from '../entities/gamification-criterion.entity';
 import {
   Badge,
   GamificationEvent,
@@ -31,6 +31,8 @@ interface Hecho {
   reason: string;
   sourceEntityType: string | null;
   sourceEntityId: string | null;
+  /** Área del hecho, para aplicar un criterio limitado a esa área. */
+  areaId?: string | null;
 }
 
 /**
@@ -71,7 +73,54 @@ export class GamificationService {
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
     @InjectRepository(Contact) private readonly contacts: Repository<Contact>,
     @InjectRepository(TeamMember) private readonly teamMembers: Repository<TeamMember>,
+    @InjectRepository(GamificationCriterion)
+    private readonly criteria: Repository<GamificationCriterion>,
   ) {}
+
+  /**
+   * Puntos de un hecho según los criterios que administra el administrador.
+   *
+   * Primero el criterio limitado al área del hecho, si hay uno activo; si no,
+   * el criterio general del hecho (el de código igual al hecho). Sin ninguno
+   * activo, el hecho no da puntos: desactivar un criterio es la forma de
+   * dejar de premiar algo. Lo ya otorgado no cambia: los puntos se copian al
+   * evento en el momento en que se reconoce.
+   */
+  async puntosPorHecho(): Promise<(trigger: GamificationTrigger, areaId?: string | null) => number> {
+    const activos = await this.criteria.find({ where: { isActive: true } });
+    return (trigger, areaId) => {
+      const delArea = areaId
+        ? activos.filter((c) => c.trigger === trigger && c.academicAreaId === areaId)
+        : [];
+      if (delArea.length > 0) return Math.max(...delArea.map((c) => c.points));
+      const general = activos.find((c) => c.trigger === trigger && !c.academicAreaId && c.code === trigger);
+      return general?.points ?? 0;
+    };
+  }
+
+  /**
+   * Registra un hecho reconocido por una persona (un reto docente) y pone al
+   * día el total y las insignias. Idempotente por su clave.
+   */
+  async award(
+    studentProfileId: string,
+    hecho: { trigger: GamificationTrigger; dedupeKey: string; reason: string; points: number;
+      sourceEntityType: string | null; sourceEntityId: string | null },
+  ): Promise<boolean> {
+    const insertado = await this.dataSource.transaction(async (manager) => {
+      const r = await manager
+        .createQueryBuilder()
+        .insert()
+        .into(GamificationEvent)
+        .values({ studentProfileId, ...hecho, reason: hecho.reason.slice(0, 300) })
+        .orIgnore()
+        .execute();
+      await this.recalcularTotal(manager, studentProfileId);
+      return r.identifiers.filter(Boolean).length > 0;
+    });
+    await this.otorgarInsignias(studentProfileId);
+    return insertado;
+  }
 
   /**
    * Pone al día los puntos de un estudiante.
@@ -90,7 +139,11 @@ export class GamificationService {
       ...(await this.colaboracionesAceptadas(studentProfileId, perfil.userId)),
       ...(await this.hitosDeTrayectoria(studentProfileId)),
     ];
-    if (hechos.length === 0) {
+    const puntos = await this.puntosPorHecho();
+    const valorados = hechos
+      .map((h) => ({ ...h, points: puntos(h.trigger, h.areaId) }))
+      .filter((h) => h.points > 0);
+    if (valorados.length === 0) {
       return { nuevos: 0, total: (await this.totalDe(studentProfileId)).totalPoints };
     }
 
@@ -100,11 +153,11 @@ export class GamificationService {
         .insert()
         .into(GamificationEvent)
         .values(
-          hechos.map((h) => ({
+          valorados.map((h) => ({
             studentProfileId,
             trigger: h.trigger,
             dedupeKey: h.dedupeKey,
-            points: GAMIFICATION_POINTS[h.trigger] ?? 0,
+            points: h.points,
             reason: h.reason.slice(0, 300),
             sourceEntityType: h.sourceEntityType,
             sourceEntityId: h.sourceEntityId,
@@ -137,6 +190,7 @@ export class GamificationService {
       reason: `Participación confirmada en «${r.activity?.title ?? 'una actividad'}»`,
       sourceEntityType: 'activity_registration',
       sourceEntityId: r.id,
+      areaId: r.activity?.academicAreaId ?? null,
     }));
   }
 
@@ -196,6 +250,7 @@ export class GamificationService {
         reason: `Tu primer proyecto con respaldo: «${primero.title}»`,
         sourceEntityType: 'project',
         sourceEntityId: primero.id,
+        areaId: primero.academicAreaId ?? null,
       });
     }
 
@@ -206,6 +261,7 @@ export class GamificationService {
         reason: `Proyecto corroborado: «${p.title}»`,
         sourceEntityType: 'project',
         sourceEntityId: p.id,
+        areaId: p.academicAreaId ?? null,
       });
     }
     return hechos;
@@ -287,6 +343,7 @@ export class GamificationService {
           + `${r.supportLevel === AffinityLevel.HIGH ? 'alto' : 'medio'}`,
         sourceEntityType: 'academic_area',
         sourceEntityId: r.academicAreaId,
+        areaId: r.academicAreaId,
       }));
   }
 
@@ -384,6 +441,7 @@ export class GamificationService {
    */
   async summary(studentProfileId: string) {
     await this.sync(studentProfileId);
+    const valor = await this.puntosPorHecho();
 
     const [total, eventos, catalogo, obtenidas, conteos] = await Promise.all([
       this.totalDe(studentProfileId),
@@ -429,11 +487,11 @@ export class GamificationService {
         occurredAt: e.occurredAt,
       })),
       /** Qué puede premiarse, para que nadie tenga que adivinarlo (§66). */
-      rules: ACTIVE_GAMIFICATION_TRIGGERS.map((t) => ({
+      rules: SYSTEM_GAMIFICATION_TRIGGERS.map((t) => ({
         trigger: t,
         label: GAMIFICATION_TRIGGER_LABEL[t] ?? t,
-        points: GAMIFICATION_POINTS[t] ?? 0,
-      })),
+        points: valor(t),
+      })).filter((r) => r.points > 0),
     };
   }
 }

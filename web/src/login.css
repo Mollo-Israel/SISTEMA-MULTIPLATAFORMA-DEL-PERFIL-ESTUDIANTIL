@@ -151,3 +151,25 @@ a.li-btn { text-decoration: none; }
 .li-links { display: flex; justify-content: flex-end; margin-top: -0.4rem; margin-bottom: 0.9rem; }
 .li-links a { font-size: 0.78rem; color: #a08a90; text-decoration: none; }
 .li-links a:hover { color: var(--li-bordo); text-decoration: underline; }
+
+/* ===== Activación con enlace o con código ===== */
+.li-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; padding: 0.3rem; margin-bottom: 1rem; background: #f6eef0; border-radius: 12px; }
+.li-tabs button {
+  display: flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.55rem 0.6rem;
+  border: none; border-radius: 9px; background: transparent; color: #7a5a62; font-weight: 600; font-size: 0.86rem; cursor: pointer;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+}
+.li-tabs button.on { background: #fff; color: var(--li-bordo); box-shadow: 0 2px 8px rgba(107,18,32,0.12); }
+.li-code input { letter-spacing: 0.35em; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.li-checking { display: flex; align-items: center; justify-content: center; gap: 0.7rem; padding: 2.5rem 0; color: #7a5a62; font-weight: 600; }
+.li-spin.dark { border-color: rgba(107,18,32,0.2); border-top-color: var(--li-bordo); }
+.li-who { display: block; margin-top: 0.35rem; font-size: 0.86rem; color: #6d5a5f; }
+.li-expiry { display: flex; align-items: center; gap: 0.35rem; margin: 0.5rem 0 0; font-size: 0.78rem; color: #8a6a10; }
+.li-verdict { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.4rem; font-size: 0.8rem; font-weight: 700; color: #1f7a4d; }
+.li-done-warn .ic { background: #fff3dd; color: #a8710f; }
+.li-tip { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0.9rem 0 0.4rem; padding: 0.65rem 0.8rem; border-radius: 10px; background: #f7f3f4; color: #6d5a5f; font-size: 0.8rem; line-height: 1.45; }
+.li-tip svg { flex-shrink: 0; margin-top: 2px; }
+.li-resend { display: flex; justify-content: center; margin-top: 0.9rem; font-size: 0.85rem; color: #8a7a80; }
+.li-resend span { display: inline-flex; align-items: center; gap: 0.35rem; font-variant-numeric: tabular-nums; }
+.li-link-btn { display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: none; color: var(--li-bordo); font-weight: 700; cursor: pointer; font-size: 0.86rem; }
+.li-link-btn:disabled { opacity: 0.6; cursor: not-allowed; }

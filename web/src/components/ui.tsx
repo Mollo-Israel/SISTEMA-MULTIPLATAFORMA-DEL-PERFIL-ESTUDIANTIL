@@ -147,6 +147,26 @@ interface AsyncViewProps<T> {
   children: (data: T) => ReactNode;
 }
 
+/**
+ * Se vuelve verdadero solo si `activo` dura más de `ms`.
+ *
+ * Una carga de 60 ms que enseña un esqueleto durante 60 ms no informa de
+ * nada: solo destella. Si la respuesta llega antes del umbral, el esqueleto
+ * no llega a pintarse.
+ */
+export function useDelayedFlag(activo: boolean, ms: number): boolean {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!activo) {
+      setVisible(false);
+      return;
+    }
+    const t = setTimeout(() => setVisible(true), ms);
+    return () => clearTimeout(t);
+  }, [activo, ms]);
+  return visible;
+}
+
 export function AsyncView<T>({
   loading,
   error,
@@ -159,7 +179,12 @@ export function AsyncView<T>({
   children,
 }: AsyncViewProps<T>) {
   const nothing = empty ?? <EmptyState message={emptyMessage} action={emptyAction} />;
-  if (loading) return <>{skeleton ?? <Loading />}</>;
+  // Al recargar con datos ya en pantalla se siguen mostrando: cambiar la
+  // tabla por un esqueleto y volver a la tabla medio segundo después era el
+  // parpadeo que se veía tras cada guardar.
+  const recargando = loading && data != null;
+  const mostrarEsqueleto = useDelayedFlag(loading && !recargando, 180);
+  if (loading && !recargando) return mostrarEsqueleto ? <>{skeleton ?? <Loading />}</> : <div className="async-wait" />;
   if (error) return <ErrorState message={error} />;
   if (!data) return <>{nothing}</>;
   if (isEmpty && isEmpty(data)) return <>{nothing}</>;

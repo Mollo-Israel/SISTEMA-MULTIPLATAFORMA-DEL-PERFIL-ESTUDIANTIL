@@ -43,14 +43,50 @@ export const ACTIVATION_RATE_LIMIT = {
   ttl: 60_000,
 };
 
-/** Duraciones y umbrales de identidad (especificacion §12, §14). */
+/**
+ * Duraciones y umbrales de identidad (especificacion §12, §14).
+ *
+ * La activación dura **72 horas** por omisión. Con 48 se quedaba corta: el
+ * alta suele hacerse un viernes o en vacaciones, y el estudiante que abre el
+ * correo el lunes encontraba el enlace vencido. La recuperación, en cambio, la
+ * pide el propio usuario cuando la necesita, así que una hora sobra.
+ */
 export const identityConfig = {
   accessTokenTtlMinutes: (c: ConfigService) => num(c, 'ACCESS_TOKEN_TTL_MINUTES', 15),
   refreshTokenTtlDays: (c: ConfigService) => num(c, 'REFRESH_TOKEN_TTL_DAYS', 7),
-  activationTtlHours: (c: ConfigService) => num(c, 'ACTIVATION_TOKEN_TTL_HOURS', 48),
-  passwordResetTtlMinutes: (c: ConfigService) => num(c, 'PASSWORD_RESET_TOKEN_TTL_MINUTES', 30),
+  activationTtlHours: (c: ConfigService) => num(c, 'ACTIVATION_TOKEN_TTL_HOURS', 72),
+  passwordResetTtlMinutes: (c: ConfigService) => num(c, 'PASSWORD_RESET_TOKEN_TTL_MINUTES', 60),
   resendCooldownSeconds: (c: ConfigService) => num(c, 'ACTIVATION_RESEND_COOLDOWN_SECONDS', 120),
+  /**
+   * Correos del mismo tipo por cuenta y por día.
+   *
+   * El cooldown corta la ráfaga; este tope corta el goteo. Veinte reenvíos a
+   * lo largo de un día bastan para que Outlook marque el remitente como spam,
+   * y desde ese momento tampoco llegan los correos legítimos de nadie.
+   */
+  maxSendsPerDay: (c: ConfigService) => num(c, 'ACCOUNT_EMAILS_MAX_PER_DAY', 5),
 };
+
+/**
+ * Dirección pública de la aplicación web, para construir los enlaces del correo.
+ *
+ * `WEB_APP_URL` si está; si no, el primer origen de `WEB_ORIGINS`, que en un
+ * despliegue normal es exactamente esa dirección.
+ */
+export function webAppUrl(config: ConfigService): string {
+  const explicita = config.get<string>('WEB_APP_URL')?.trim();
+  if (explicita) return explicita.replace(/\/+$/, '');
+  const primero = (config.get<string>('WEB_ORIGINS') ?? config.get<string>('CORS_ORIGINS') ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .find((o) => o && o !== '*');
+  return (primero ?? 'http://localhost:5173').replace(/\/+$/, '');
+}
+
+/** Zona horaria con la que se escriben las fechas en los correos. */
+export function appTimezone(config: ConfigService): string {
+  return config.get<string>('APP_TIMEZONE')?.trim() || 'America/La_Paz';
+}
 
 /**
  * Dominios de correo institucional autorizados (§11).

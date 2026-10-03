@@ -21,6 +21,15 @@ export class Skill {
   @Column({ type: 'varchar', length: 120 })
   name: string;
 
+  /**
+   * Identificador estable, único y legible (p. ej. «bases_de_datos»).
+   *
+   * El nombre puede corregirse; el código no cambia, y es lo que conviene
+   * usar para referirse a la habilidad desde importaciones o informes.
+   */
+  @Column({ type: 'varchar', length: 60, unique: true })
+  code: string;
+
   @Index()
   @Column({ name: 'academic_area_id', type: 'uuid', nullable: true })
   academicAreaId: string | null;

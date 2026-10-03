@@ -12,13 +12,15 @@ const FECHA = (v: string | null) =>
 /**
  * Progreso del estudiante (§66).
  *
- * Solo lectura: los puntos no se piden ni se canjean, se obtienen haciendo
- * cosas. Y no hay tabla de posiciones —§66 no la exige y publicarla convertiria
+ * Los puntos no se piden: se obtienen haciendo cosas, y se canjean por las
+ * recompensas de los docentes (en la web). Muestra el saldo y los puntos de la
+ * semana, el mes y el año. Y no hay tabla de posiciones —§66 no la exige y publicarla convertiria
  * un reconocimiento en una comparacion entre companeros—, asi que esta pantalla
  * no tiene con que compararse.
  */
 export default function ProgressScreen() {
   const { data, loading } = useAsync(() => gamificationService.myProgress(), []);
+  const wallet = useAsync(() => gamificationService.wallet(), []);
 
   if (loading) {
     return (
@@ -56,6 +58,24 @@ export default function ProgressScreen() {
           <Text style={styles.avisoTexto}>{p.note}</Text>
         </View>
       </Card>
+
+      {wallet.data && (
+        <Card title="Tus puntos">
+          <View style={styles.periodos}>
+            {([
+              [wallet.data.balance.available, 'para canjear'],
+              [wallet.data.periods.week, 'esta semana'],
+              [wallet.data.periods.month, 'este mes'],
+              [wallet.data.periods.year, 'este año'],
+            ] as [number, string][]).map(([n, label], i) => (
+              <View key={label} style={[styles.periodo, i === 0 && styles.periodoMain]}>
+                <Text style={[styles.periodoN, i === 0 && { color: colors.white }]}>{n}</Text>
+                <Text style={[styles.periodoL, i === 0 && { color: colors.white }]}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+      )}
 
       <Card title="Insignias">
         {p.badges.map((b) => (
@@ -105,6 +125,11 @@ export default function ProgressScreen() {
 }
 
 const styles = StyleSheet.create({
+  periodos: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  periodo: { flexBasis: '47%', flexGrow: 1, padding: 10, borderRadius: 12, backgroundColor: colors.gray50, borderWidth: 1, borderColor: colors.gray200 },
+  periodoMain: { backgroundColor: colors.bordo, borderColor: colors.bordo },
+  periodoN: { fontSize: 22, fontWeight: '800', color: colors.gray900 },
+  periodoL: { fontSize: 12, color: colors.gray500 },
   contenido: { padding: 16, gap: 12, paddingBottom: 32 },
   total: { fontSize: 40, fontWeight: '700', color: colors.bordo, lineHeight: 44 },
   aviso: {

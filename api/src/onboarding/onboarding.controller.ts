@@ -28,8 +28,8 @@ export class OnboardingController {
       'Devuelve las preguntas y sus opciones, con la versión del banco. '
       + 'Orienta preferencias: no evalúa conocimiento ni produce competencias.',
   })
-  questionnaire() {
-    return this.onboarding.questionnaire();
+  questionnaire(@CurrentUser() user: AuthenticatedUser) {
+    return this.onboarding.questionnaire(user.userId);
   }
 
   @Get('me')

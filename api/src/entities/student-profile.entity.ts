@@ -149,6 +149,23 @@ export class StudentProfile {
   @OneToMany(() => AffinityResult, (result) => result.studentProfile)
   affinityResults: AffinityResult[];
 
+  /**
+   * Cuándo empezó el estudiante su perfil.
+   *
+   * El alta crea el perfil con los datos institucionales; el estudiante lo
+   * reclama al completar lo suyo. Null: nadie lo ha tocado todavía.
+   */
+  @Column({ name: 'claimed_at', type: 'timestamptz', nullable: true })
+  claimedAt: Date | null;
+
+  /** Último paso alcanzado del asistente de bienvenida. */
+  @Column({ name: 'onboarding_step', type: 'varchar', length: 30, nullable: true })
+  onboardingStep: string | null;
+
+  /** Cuándo terminó la bienvenida. Hasta entonces, el resto del sistema espera. */
+  @Column({ name: 'onboarding_completed_at', type: 'timestamptz', nullable: true })
+  onboardingCompletedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

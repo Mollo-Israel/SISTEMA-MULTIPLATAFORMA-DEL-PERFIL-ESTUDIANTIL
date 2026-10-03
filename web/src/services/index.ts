@@ -36,6 +36,17 @@ import type {
   Registration,
   Skill,
   StudentProfile,
+  InvitationView,
+  MailRequestResult,
+  MailStatus,
+  TokenCheck,
+  OnboardingState,
+  OnboardingStepKey,
+  Wallet,
+  RewardItem,
+  ChallengeItem,
+  ScopePoints,
+  RedemptionItem,
 } from './types';
 
 export const authService = {
@@ -55,15 +66,38 @@ export const authService = {
  * Sustituyen al registro público: una cuenta la provisiona el administrador
  * y su titular la activa demostrando control del correo institucional.
  */
+/**
+ * Canje de un enlace o un código por una contraseña: con el `token` del enlace,
+ * o con el correo institucional y el `code` de seis dígitos.
+ */
+export interface ConsumeInput {
+  token?: string;
+  email?: string;
+  code?: string;
+  password: string;
+}
+
 export const activationService = {
   request: (email: string) =>
-    api.post<{ message: string }>('/activation/request', { email }).then((r) => r.data),
-  activate: (token: string, password: string) =>
-    api.post<{ message: string }>('/activation/activate', { token, password }).then((r) => r.data),
+    api.post<MailRequestResult>('/activation/request', { email }).then((r) => r.data),
+  check: (token: string, purpose: 'activation' | 'reset') =>
+    api.post<TokenCheck>('/activation/check', { token, purpose }).then((r) => r.data),
+  activate: (input: ConsumeInput) =>
+    api.post<{ message: string }>('/activation/activate', input).then((r) => r.data),
   forgotPassword: (email: string) =>
-    api.post<{ message: string }>('/activation/forgot-password', { email }).then((r) => r.data),
-  resetPassword: (token: string, password: string) =>
-    api.post<{ message: string }>('/activation/reset-password', { token, password }).then((r) => r.data),
+    api.post<MailRequestResult>('/activation/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (input: ConsumeInput) =>
+    api.post<{ message: string }>('/activation/reset-password', input).then((r) => r.data),
+};
+
+/** Diagnóstico del correo, solo administración. */
+export const mailService = {
+  status: () => api.get<MailStatus>('/mail/status').then((r) => r.data),
+  verify: () => api.post<MailStatus>('/mail/verify').then((r) => r.data),
+  test: (to?: string) =>
+    api
+      .post<{ message: string; sentTo: string; transport: 'smtp' | 'console' }>('/mail/test', to ? { to } : {})
+      .then((r) => r.data),
 };
 
 /** Importación de padrón institucional (§10). */
@@ -107,6 +141,16 @@ export const profileService = {
     api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
   setSkills: (items: { skillId: string; level: SkillLevel }[]) =>
     api.put('/profiles/me/skills', { items }).then((r) => r.data),
+  /** Reemplaza el conjunto de intereses: lo que no viene, se quita. */
+  replaceInterests: (items: { academicAreaId: string; priority: number }[]) =>
+    api.put('/profiles/me/interests', { items }).then((r) => r.data),
+
+  /** Bienvenida: estado, paso actual y cierre. */
+  onboarding: () => api.get<OnboardingState>('/profiles/me/onboarding').then((r) => r.data),
+  saveOnboardingStep: (step: OnboardingStepKey) =>
+    api.patch<OnboardingState>('/profiles/me/onboarding', { step }).then((r) => r.data),
+  completeOnboarding: () =>
+    api.post<OnboardingState>('/profiles/me/onboarding/complete').then((r) => r.data),
 
   /** Qué comparto en mi perfil compartible (§44). */
   visibility: () =>
@@ -381,6 +425,24 @@ export interface TrajectorySectionOption {
 
 export const gamificationService = {
   myProgress: () => api.get<GamificationSummary>('/gamification/me').then((r) => r.data),
+  /** Saldo canjeable, puntos por periodo y mis canjes. */
+  wallet: () => api.get<Wallet>('/gamification/me/wallet').then((r) => r.data),
+  rewards: () => api.get<RewardItem[]>('/gamification/rewards').then((r) => r.data),
+  redeem: (id: string) => api.post(`/gamification/rewards/${id}/redeem`).then((r) => r.data),
+  // --- personal: retos, recompensas y canjes
+  challenges: () => api.get<ChallengeItem[]>('/gamification/challenges').then((r) => r.data),
+  createChallenge: (data: Record<string, unknown>) => api.post<ChallengeItem>('/gamification/challenges', data).then((r) => r.data),
+  updateChallenge: (id: string, data: Record<string, unknown>) =>
+    api.patch<ChallengeItem>(`/gamification/challenges/${id}`, data).then((r) => r.data),
+  award: (id: string, studentProfileIds: string[]) =>
+    api.post<{ awarded: number; alreadyHad: number }>(`/gamification/challenges/${id}/award`, { studentProfileIds }).then((r) => r.data),
+  scopePoints: (period: 'week' | 'month' | 'year') =>
+    api.get<ScopePoints>('/gamification/scope-points', { params: { period } }).then((r) => r.data),
+  createReward: (data: Record<string, unknown>) => api.post('/gamification/rewards', data).then((r) => r.data),
+  updateReward: (id: string, data: Record<string, unknown>) => api.patch(`/gamification/rewards/${id}`, data).then((r) => r.data),
+  redemptions: () => api.get<RedemptionItem[]>('/gamification/redemptions').then((r) => r.data),
+  resolve: (id: string, status: 'delivered' | 'rejected', note?: string) =>
+    api.patch(`/gamification/redemptions/${id}`, { status, note }).then((r) => r.data),
 };
 
 export const trajectoryService = {
@@ -891,7 +953,7 @@ export const adminService = {
   ) => api.patch(`/profiles/${studentProfileId}/institutional-data`, data).then((r) => r.data),
   resendActivation: (id: string) =>
     api
-      .post<{ message: string; activationToken?: string }>(`/users/${id}/resend-activation`)
+      .post<{ message: string; invitation: InvitationView }>(`/users/${id}/resend-activation`)
       .then((r) => r.data),
   deleteUser: (id: string) => api.delete(`/users/${id}`).then((r) => r.data),
   roles: () => api.get('/roles').then((r) => r.data),

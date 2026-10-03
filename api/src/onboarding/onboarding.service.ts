@@ -18,8 +18,10 @@ import { AuditEventType, AuditService } from '../audit/audit.service';
 import {
   AREA_SYNONYMS,
   AreaTag,
+  buildQuestionnaire,
+  DEEP_DIVES,
+  MIN_ANSWERS,
   QUESTION_BY_CODE,
-  QUESTIONNAIRE,
   QUESTIONNAIRE_VERSION,
 } from './questionnaire';
 import { SubmitOnboardingDto, ConfirmOnboardingDto } from './dto/onboarding.dto';
@@ -49,13 +51,19 @@ export class OnboardingService {
    * preguntas, y devolverlas desde el servidor evita que web y móvil
    * mantengan cada uno su copia y acaben divergiendo.
    */
-  questionnaire() {
+  async questionnaire(userId: string) {
+    const { tags, nombres } = await this.declaredTags(userId);
+    const preguntas = buildQuestionnaire(tags);
     return {
       version: QUESTIONNAIRE_VERSION,
-      totalQuestions: QUESTIONNAIRE.length,
-      questions: QUESTIONNAIRE.map((q) => ({
+      totalQuestions: preguntas.length,
+      /** Mínimo de respuestas para calcular sugerencias. */
+      minAnswers: MIN_ANSWERS,
+      /** Las áreas declaradas que dieron pie a preguntas propias. */
+      basedOn: tags.map((t) => nombres.get(t)!).filter(Boolean),
+      questions: preguntas.map((q) => ({
         code: q.code,
-        text: q.text,
+        text: q.text.replace('{area}', nombres.get(this.tagDe(q.code) as AreaTag) ?? 'esa área'),
         help: q.help ?? null,
         type: q.type,
         maxChoices: q.maxChoices ?? null,
@@ -64,9 +72,71 @@ export class OnboardingService {
     };
   }
 
+  /**
+   * Las áreas que el estudiante ya declaró, traducidas a etiquetas del
+   * cuestionario: primero sus intereses por prioridad, luego sus áreas de
+   * mejora. Sin perfil, ninguna: recibe el cuestionario general.
+   */
+  private async declaredTags(
+    userId: string,
+  ): Promise<{ tags: AreaTag[]; nombres: Map<AreaTag, string> }> {
+    const profile = await this.profiles.findOne({ where: { userId } });
+    const nombres = new Map<AreaTag, string>();
+    if (!profile) return { tags: [], nombres };
+
+    const intereses = await this.interests.find({
+      where: { studentProfileId: profile.id },
+      order: { priority: 'ASC' },
+    });
+    const declaradas = [
+      ...intereses.map((i) => i.academicAreaId),
+      ...(profile.improvementAreaIds ?? []),
+    ];
+    if (declaradas.length === 0) return { tags: [], nombres };
+
+    // Se mira cada área que declaró, no «la primera del catálogo que coincide
+    // con cada etiqueta»: con dos áreas parecidas (dos de robótica, por
+    // ejemplo) la segunda se quedaba sin pregunta propia.
+    const catalogo = await this.areas.find({ where: { isActive: true } });
+    const porId = new Map(catalogo.map((a) => [a.id, a]));
+    const tags: AreaTag[] = [];
+    for (const id of declaradas) {
+      const area = porId.get(id);
+      const tag = area ? this.tagOfArea(area) : null;
+      if (!tag || tags.includes(tag)) continue;
+      tags.push(tag);
+      nombres.set(tag, area!.name);
+    }
+    return { tags, nombres };
+  }
+
+  /** La etiqueta del cuestionario que corresponde a un área del catálogo. */
+  private tagOfArea(area: AcademicArea): AreaTag | null {
+    const todas = Object.keys(DEEP_DIVES) as AreaTag[];
+    const sin = (t: AreaTag) => AREA_SYNONYMS[t].map((s) => this.normalize(s));
+    const etiquetas = (area.tags ?? []).map((t) => this.normalize(t));
+    const nombre = this.normalize(area.name);
+    // Mismo orden de señales que matchArea: etiquetas del catálogo, nombre
+    // exacto y, por último, nombre que contiene un sinónimo largo.
+    return (
+      todas.find((t) => sin(t).some((s) => etiquetas.includes(s)))
+      ?? todas.find((t) => sin(t).includes(nombre))
+      ?? todas.find((t) => sin(t).some((s) => s.length >= 5 && nombre.includes(s)))
+      ?? null
+    );
+  }
+
+  /** «dd_desarrollo_web» → «desarrollo-web». Solo para las de profundización. */
+  private tagDe(code: string): string | null {
+    return code.startsWith('dd_') ? code.slice(3).replace(/_/g, '-') : null;
+  }
+
   /** La ejecución vigente del estudiante, si respondió alguna vez. */
   async current(userId: string) {
-    const profile = await this.ownProfile(userId);
+    // Sin perfil todavía no hay nada que mostrar, y no es un error: la
+    // pantalla del cuestionario no debe romperse por eso.
+    const profile = await this.profiles.findOne({ where: { userId } });
+    if (!profile) return { run: null, pendingConfirmation: false };
     const run = await this.runs.findOne({
       where: { studentProfileId: profile.id, status: In([
         OnboardingRunStatus.COMPLETED,
@@ -88,7 +158,8 @@ export class OnboardingService {
 
   /** Historial completo, incluidas las repeticiones (§16). */
   async history(userId: string) {
-    const profile = await this.ownProfile(userId);
+    const profile = await this.profiles.findOne({ where: { userId } });
+    if (!profile) return [];
     const runs = await this.runs.find({
       where: { studentProfileId: profile.id },
       order: { createdAt: 'DESC' },
@@ -322,13 +393,13 @@ export class OnboardingService {
       }
     }
 
-    // Se exige responder el cuestionario entero: un resultado calculado sobre
-    // tres respuestas orientaría mal y el estudiante no tendría forma de
-    // saberlo.
-    if (vistas.size !== QUESTIONNAIRE.length) {
-      const faltan = QUESTIONNAIRE.filter((q) => !vistas.has(q.code)).map((q) => q.code);
+    // Se aceptan respuestas parciales: el cuestionario es opcional y quien lo
+    // deja a medias tiene derecho a aprovechar lo que contestó. Pero por debajo
+    // de un mínimo el resultado orientaría mal, y entonces se dice.
+    if (vistas.size < MIN_ANSWERS) {
       throw new BadRequestException(
-        `Faltan respuestas: ${faltan.join(', ')}. El cuestionario se responde completo.`,
+        `Responde al menos ${MIN_ANSWERS} preguntas para que las sugerencias tengan sentido `
+        + `(llevas ${vistas.size}). Puedes dejar el resto en blanco.`,
       );
     }
   }

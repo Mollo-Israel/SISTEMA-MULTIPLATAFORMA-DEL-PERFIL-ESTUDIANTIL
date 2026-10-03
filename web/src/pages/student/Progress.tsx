@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FiAward, FiDownload, FiFileText, FiInfo } from 'react-icons/fi';
+import { FiAward, FiDownload, FiFileText, FiGift, FiInfo } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
   gamificationService,
@@ -8,7 +8,8 @@ import {
   type TrajectorySectionOption,
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { useToast } from '../../components/feedback';
+import { useConfirm, useToast } from '../../components/feedback';
+import type { RewardItem, Wallet } from '../../services/types';
 import {
   AsyncView, Badge, Button, Card, EmptyState, PageHeader, SkeletonCards, Tabs,
 } from '../../components/ui';
@@ -23,7 +24,7 @@ const FECHA = (v: string | null) =>
  * dos lados: qué he hecho, y cómo se lo cuento a alguien de fuera.
  */
 export default function StudentProgressPage() {
-  const [tab, setTab] = useState<'progreso' | 'resumen'>('progreso');
+  const [tab, setTab] = useState<'progreso' | 'recompensas' | 'resumen'>('progreso');
 
   return (
     <div>
@@ -36,10 +37,11 @@ export default function StudentProgressPage() {
         onChange={(k) => setTab(k as typeof tab)}
         items={[
           { key: 'progreso', label: 'Puntos e insignias' },
+          { key: 'recompensas', label: 'Recompensas' },
           { key: 'resumen', label: 'Resumen de trayectoria' },
         ]}
       />
-      {tab === 'progreso' ? <Progreso /> : <Resumen />}
+      {tab === 'progreso' ? <Progreso /> : tab === 'recompensas' ? <Recompensas /> : <Resumen />}
     </div>
   );
 }
@@ -47,6 +49,23 @@ export default function StudentProgressPage() {
 // ---------------------------------------------------------------------------
 // §66 · Puntos e insignias
 // ---------------------------------------------------------------------------
+
+function Periodos() {
+  const w = useAsync(() => gamificationService.wallet(), []);
+  if (!w.data) return null;
+  const { balance, periods } = w.data;
+  return (
+    <div className="wallet-grid" style={{ marginBottom: '1rem' }}>
+      <div className="wallet-stat main">
+        <div className="n">{balance.available}</div>
+        <span className="muted">puntos para canjear</span>
+      </div>
+      <div className="wallet-stat"><div className="n">{periods.week}</div><span className="muted">esta semana</span></div>
+      <div className="wallet-stat"><div className="n">{periods.month}</div><span className="muted">este mes</span></div>
+      <div className="wallet-stat"><div className="n">{periods.year}</div><span className="muted">este año</span></div>
+    </div>
+  );
+}
 
 function Progreso() {
   const state = useAsync(() => gamificationService.myProgress(), []);
@@ -60,6 +79,7 @@ function Progreso() {
     >
       {(p: GamificationSummary) => (
         <>
+          <Periodos />
           <Card>
             <div className="flex between" style={{ alignItems: 'flex-start' }}>
               <div>
@@ -142,6 +162,123 @@ function Progreso() {
         </>
       )}
     </AsyncView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recompensas: los puntos se canjean por lo que ofrecen los docentes
+// ---------------------------------------------------------------------------
+
+const ESTADO_CANJE: Record<string, { label: string; tone: 'amber' | 'green' | 'gray' }> = {
+  pending: { label: 'Por entregar', tone: 'amber' },
+  delivered: { label: 'Entregado', tone: 'green' },
+  rejected: { label: 'Rechazado: puntos devueltos', tone: 'gray' },
+};
+
+function Recompensas() {
+  const wallet = useAsync(() => gamificationService.wallet(), []);
+  const catalogo = useAsync(() => gamificationService.rewards(), []);
+  const [canjeando, setCanjeando] = useState<string | null>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
+
+  const canjear = async (r: RewardItem) => {
+    const ok = await confirm({
+      title: `Canjear «${r.name}»`,
+      message: `Se descontarán ${r.cost} puntos de tu saldo. ${r.offeredBy ?? 'Quien la ofrece'} te la entregará; si la rechaza, los puntos vuelven.`,
+      confirmLabel: 'Canjear',
+    });
+    if (!ok) return;
+    setCanjeando(r.id);
+    try {
+      await gamificationService.redeem(r.id);
+      toast.success('¡Canje solicitado!', 'Verás aquí cuándo te la entregan.');
+      wallet.reload();
+      catalogo.reload();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setCanjeando(null);
+    }
+  };
+
+  const saldo = wallet.data?.balance.available ?? 0;
+
+  return (
+    <>
+      <AsyncView loading={wallet.loading} error={wallet.error} data={wallet.data} skeleton={<SkeletonCards count={1} />}>
+        {(w: Wallet) => (
+          <div className="wallet-grid" style={{ marginBottom: '1rem' }}>
+            <div className="wallet-stat main">
+              <div className="n">{w.balance.available}</div>
+              <span className="muted">disponibles</span>
+            </div>
+            <div className="wallet-stat"><div className="n">{w.balance.earned}</div><span className="muted">ganados en total</span></div>
+            <div className="wallet-stat"><div className="n">{w.balance.spent}</div><span className="muted">usados en canjes</span></div>
+          </div>
+        )}
+      </AsyncView>
+
+      <Card title="Qué puedes conseguir">
+        <AsyncView
+          loading={catalogo.loading}
+          error={catalogo.error}
+          data={catalogo.data}
+          skeleton={<SkeletonCards count={3} />}
+          isEmpty={(d) => d.length === 0}
+          empty={<EmptyState icon={<FiGift size={22} />} message="Tus docentes todavía no ofrecen recompensas. ¡Sigue sumando puntos!" />}
+        >
+          {(lista: RewardItem[]) => (
+            <div className="reward-grid">
+              {lista.map((r) => {
+                const agotada = r.stock !== null && r.stock <= 0;
+                const falta = r.cost - saldo;
+                return (
+                  <div key={r.id} className="reward-card">
+                    <div className="flex between" style={{ alignItems: 'flex-start' }}>
+                      <strong>{r.name}</strong>
+                      <span className="points-pill">{r.cost}</span>
+                    </div>
+                    <p className="muted small grow">{r.description}</p>
+                    <span className="muted small">
+                      {r.offeredBy ? `Ofrece ${r.offeredBy}` : ''}
+                      {r.stock !== null ? ` · quedan ${r.stock}` : ''}
+                    </span>
+                    <Button
+                      size="sm"
+                      icon={<FiGift size={13} />}
+                      disabled={agotada || falta > 0}
+                      loading={canjeando === r.id}
+                      onClick={() => canjear(r)}
+                    >
+                      {agotada ? 'Agotada' : falta > 0 ? `Te faltan ${falta} puntos` : 'Canjear'}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </AsyncView>
+      </Card>
+
+      <Card title="Mis canjes">
+        {(wallet.data?.redemptions ?? []).length === 0 ? (
+          <EmptyState message="Todavía no canjeaste nada." />
+        ) : (
+          wallet.data!.redemptions.map((c) => (
+            <div key={c.id} className="flex between evento">
+              <div>
+                <strong>{c.reward}</strong>
+                <div className="muted" style={{ fontSize: '0.78rem' }}>
+                  {FECHA(c.createdAt)} · {c.cost} puntos{c.note ? ` · ${c.note}` : ''}
+                </div>
+              </div>
+              <Badge tone={ESTADO_CANJE[c.status].tone}>{ESTADO_CANJE[c.status].label}</Badge>
+            </div>
+          ))
+        )}
+      </Card>
+    </>
   );
 }
 

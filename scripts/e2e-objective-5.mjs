@@ -14,8 +14,9 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
+import { leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
 
-const API = process.env.API_URL ?? 'http://localhost:3000/api';
+const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
 // §13: la politica exige 12 caracteres como minimo.
 const PWD = 'Afinia2026Seg*';
@@ -117,29 +118,16 @@ async function main() {
  * El administrador la crea, el titular la activa con el token y despues inicia
  * sesion. Es el mismo camino que recorre una persona real.
  */
-async function provisionarCuenta(adminToken, { firstName, lastName, email, role = 'STUDENT' }) {
-  const creado = await req('POST', '/users', {
-    token: adminToken,
-    body: { firstName, lastName, email, password: PWD, role },
+async function provisionarCuenta(
+  adminToken,
+  { firstName, lastName, email, role = 'STUDENT', semester },
+) {
+  // El código de activación se lee del buzón local, como lo leería el
+  // titular: la respuesta del administrador ya no lo trae.
+  const cuenta = await provisionAndActivate(adminToken, {
+    firstName, lastName, email, role, semester, password: PWD,
   });
-  if (creado.status !== 201) {
-    throw new Error(`No se pudo provisionar ${email} (${creado.status}): ${JSON.stringify(creado.data)}`);
-  }
-  const activationToken = creado.data?.activationToken;
-  if (!activationToken) {
-    throw new Error(`Sin token de activacion para ${email}. Las pruebas requieren un entorno sin SMTP.`);
-  }
-  const activado = await req('POST', '/activation/activate', {
-    body: { token: activationToken, password: PWD },
-  });
-  if (activado.status !== 200) {
-    throw new Error(`No se pudo activar ${email} (${activado.status}): ${JSON.stringify(activado.data)}`);
-  }
-  const login = await req('POST', '/auth/login', { body: { email, password: PWD } });
-  if (login.status !== 200) {
-    throw new Error(`No se pudo iniciar sesion como ${email} (${login.status}).`);
-  }
-  return { accessToken: login.data.accessToken, userId: creado.data.id, activationToken };
+  return { accessToken: cuenta.token, userId: cuenta.userId, activationToken: cuenta.activationToken };
 }
 
 async function prepararActores(ctx) {

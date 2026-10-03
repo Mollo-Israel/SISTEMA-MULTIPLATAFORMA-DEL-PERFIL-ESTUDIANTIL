@@ -17,7 +17,13 @@ import { OnboardingQuestionType } from '@perfil/shared';
  * ejecuciones antiguas conservan la suya, de modo que un resultado viejo se
  * sigue interpretando con el cuestionario con el que se respondió.
  */
-export const QUESTIONNAIRE_VERSION = 1;
+/**
+ * Versión 2: el cuestionario se adapta a las áreas que el estudiante ya
+ * declaró (preguntas de profundización) y acepta respuestas parciales a
+ * partir de `MIN_ANSWERS`. Las ejecuciones de la versión 1 se conservan y se
+ * siguen leyendo con su versión.
+ */
+export const QUESTIONNAIRE_VERSION = 2;
 
 /**
  * Las opciones no nombran áreas por UUID sino por estas etiquetas, que se
@@ -244,8 +250,123 @@ export const QUESTIONNAIRE: OnboardingQuestion[] = [
   ),
 ];
 
-/** Índice por código, para validar respuestas sin recorrer el arreglo. */
-export const QUESTION_BY_CODE = new Map(QUESTIONNAIRE.map((q) => [q.code, q]));
+/**
+ * Preguntas de profundización, una por área (versión 2).
+ *
+ * El cuestionario se responde **después** de declarar áreas de mejora e
+ * intereses. Preguntarle a quien ya dijo «me interesa la ciberseguridad» si le
+ * interesa la ciberseguridad no aporta nada; preguntarle qué lado de la
+ * ciberseguridad le atrae sí, y de paso descubre áreas vecinas. `{area}` se
+ * sustituye por el nombre del área tal como la llama la carrera.
+ */
+export const DEEP_DIVES: Record<AreaTag, OnboardingQuestion> = {
+  'desarrollo-web': single('dd_desarrollo_web', 'Dijiste que te interesa {area}. ¿Qué parte te llama más?', [
+    { code: 'interfaces', label: 'Las pantallas: que se vean bien y se entiendan', areas: [{ tag: 'diseno-ux', weight: 2 }, { tag: 'desarrollo-web', weight: 2 }] },
+    { code: 'servidor', label: 'Lo que no se ve: servidores, APIs y datos', areas: [{ tag: 'desarrollo-web', weight: 3 }, { tag: 'datos', weight: 1 }] },
+    { code: 'rendimiento', label: 'Que sea rápido y seguro', areas: [{ tag: 'ciberseguridad', weight: 2 }, { tag: 'infraestructura', weight: 1 }, { tag: 'desarrollo-web', weight: 1 }] },
+    { code: 'todo_web', label: 'Todavía no lo sé: quiero probar un poco de todo', areas: [{ tag: 'desarrollo-web', weight: 2 }] },
+  ]),
+  'desarrollo-movil': single('dd_desarrollo_movil', 'En {area}, ¿qué te gustaría lograr?', [
+    { code: 'cotidiana', label: 'Una app útil para el día a día', areas: [{ tag: 'desarrollo-movil', weight: 3 }, { tag: 'diseno-ux', weight: 1 }] },
+    { code: 'sensores', label: 'Una app que use la cámara, el GPS o los sensores', areas: [{ tag: 'desarrollo-movil', weight: 2 }, { tag: 'sistemas-embebidos', weight: 2 }] },
+    { code: 'offline', label: 'Una app que funcione sin internet y se sincronice', areas: [{ tag: 'desarrollo-movil', weight: 2 }, { tag: 'datos', weight: 1 }, { tag: 'infraestructura', weight: 1 }] },
+    { code: 'juego_movil', label: 'Un juego para el teléfono', areas: [{ tag: 'videojuegos', weight: 3 }, { tag: 'desarrollo-movil', weight: 1 }] },
+  ]),
+  datos: single('dd_datos', 'Con {area}, ¿qué te atrae más?', [
+    { code: 'ordenar', label: 'Que la información esté bien guardada y ordenada', areas: [{ tag: 'datos', weight: 3 }] },
+    { code: 'patrones', label: 'Descubrir patrones y tendencias', areas: [{ tag: 'datos', weight: 2 }, { tag: 'inteligencia-artificial', weight: 2 }] },
+    { code: 'visualizar', label: 'Contar historias con gráficos', areas: [{ tag: 'datos', weight: 2 }, { tag: 'diseno-ux', weight: 1 }] },
+    { code: 'escala', label: 'Que miles de consultas respondan al instante', areas: [{ tag: 'datos', weight: 2 }, { tag: 'infraestructura', weight: 2 }] },
+  ]),
+  'inteligencia-artificial': single('dd_inteligencia_artificial', 'En {area}, ¿qué te gustaría construir?', [
+    { code: 'lenguaje', label: 'Algo que entienda texto o voz', areas: [{ tag: 'inteligencia-artificial', weight: 3 }] },
+    { code: 'vision', label: 'Algo que reconozca imágenes', areas: [{ tag: 'inteligencia-artificial', weight: 3 }, { tag: 'sistemas-embebidos', weight: 1 }] },
+    { code: 'predecir', label: 'Algo que recomiende o anticipe', areas: [{ tag: 'inteligencia-artificial', weight: 2 }, { tag: 'datos', weight: 2 }] },
+    { code: 'por_dentro', label: 'Entender cómo funciona por dentro', areas: [{ tag: 'inteligencia-artificial', weight: 2 }, { tag: 'investigacion', weight: 2 }] },
+  ]),
+  ciberseguridad: single('dd_ciberseguridad', 'En {area}, ¿qué lado te atrae?', [
+    { code: 'atacar', label: 'Encontrar fallos antes que los malos', areas: [{ tag: 'ciberseguridad', weight: 3 }] },
+    { code: 'defender', label: 'Proteger redes y servidores', areas: [{ tag: 'ciberseguridad', weight: 2 }, { tag: 'redes', weight: 2 }] },
+    { code: 'forense', label: 'Investigar qué pasó tras un incidente', areas: [{ tag: 'ciberseguridad', weight: 2 }, { tag: 'investigacion', weight: 1 }, { tag: 'datos', weight: 1 }] },
+    { code: 'codigo_seguro', label: 'Escribir software seguro desde el principio', areas: [{ tag: 'ciberseguridad', weight: 2 }, { tag: 'desarrollo-web', weight: 2 }] },
+  ]),
+  redes: single('dd_redes', 'En {area}, ¿qué te gustaría dominar?', [
+    { code: 'disenar_red', label: 'Diseñar y configurar redes', areas: [{ tag: 'redes', weight: 3 }] },
+    { code: 'conectar', label: 'Conectar dispositivos entre sí', areas: [{ tag: 'redes', weight: 2 }, { tag: 'sistemas-embebidos', weight: 2 }] },
+    { code: 'nube_red', label: 'Servicios en la nube', areas: [{ tag: 'infraestructura', weight: 3 }, { tag: 'redes', weight: 1 }] },
+    { code: 'trafico', label: 'Proteger el tráfico de la red', areas: [{ tag: 'redes', weight: 2 }, { tag: 'ciberseguridad', weight: 2 }] },
+  ]),
+  infraestructura: single('dd_infraestructura', 'En {area}, ¿qué te atrae?', [
+    { code: 'automatizar', label: 'Automatizar despliegues', areas: [{ tag: 'infraestructura', weight: 3 }, { tag: 'gestion-proyectos', weight: 1 }] },
+    { code: 'aguantar', label: 'Que un sistema aguante a muchísima gente', areas: [{ tag: 'infraestructura', weight: 3 }, { tag: 'desarrollo-web', weight: 1 }] },
+    { code: 'servidores', label: 'Administrar servidores Linux', areas: [{ tag: 'infraestructura', weight: 2 }, { tag: 'redes', weight: 1 }] },
+    { code: 'costos', label: 'Vigilar costos y monitoreo', areas: [{ tag: 'infraestructura', weight: 2 }, { tag: 'gestion-proyectos', weight: 2 }] },
+  ]),
+  videojuegos: single('dd_videojuegos', 'En {area}, ¿qué parte te gustaría hacer?', [
+    { code: 'jugabilidad', label: 'Programar cómo se juega', areas: [{ tag: 'videojuegos', weight: 3 }] },
+    { code: 'niveles', label: 'Diseñar niveles y experiencia', areas: [{ tag: 'videojuegos', weight: 2 }, { tag: 'diseno-ux', weight: 2 }] },
+    { code: 'graficos', label: 'Gráficos y animación', areas: [{ tag: 'videojuegos', weight: 3 }, { tag: 'diseno-ux', weight: 1 }] },
+    { code: 'en_linea', label: 'Juegos en línea', areas: [{ tag: 'videojuegos', weight: 2 }, { tag: 'redes', weight: 2 }] },
+  ]),
+  'sistemas-embebidos': single('dd_sistemas_embebidos', 'Con {area}, ¿qué te llama?', [
+    { code: 'robots', label: 'Construir robots', areas: [{ tag: 'sistemas-embebidos', weight: 3 }] },
+    { code: 'iot', label: 'Sensores conectados a internet', areas: [{ tag: 'sistemas-embebidos', weight: 2 }, { tag: 'redes', weight: 2 }] },
+    { code: 'domotica', label: 'Automatizar cosas de la casa', areas: [{ tag: 'sistemas-embebidos', weight: 2 }, { tag: 'desarrollo-movil', weight: 1 }] },
+    { code: 'autonomos', label: 'Drones o vehículos autónomos', areas: [{ tag: 'sistemas-embebidos', weight: 3 }, { tag: 'inteligencia-artificial', weight: 1 }] },
+  ]),
+  'gestion-proyectos': single('dd_gestion_proyectos', 'En {area}, ¿qué te sale mejor?', [
+    { code: 'planificar', label: 'Planificar y medir el avance', areas: [{ tag: 'gestion-proyectos', weight: 3 }] },
+    { code: 'coordinar', label: 'Coordinar a las personas', areas: [{ tag: 'gestion-proyectos', weight: 3 }] },
+    { code: 'agil', label: 'Aplicar metodologías ágiles', areas: [{ tag: 'gestion-proyectos', weight: 2 }, { tag: 'desarrollo-web', weight: 1 }] },
+    { code: 'calidad', label: 'Cuidar la calidad y las pruebas', areas: [{ tag: 'gestion-proyectos', weight: 2 }, { tag: 'ciberseguridad', weight: 1 }] },
+  ]),
+  investigacion: single('dd_investigacion', 'En {area}, ¿qué te gustaría hacer?', [
+    { code: 'publicar', label: 'Escribir y publicar artículos', areas: [{ tag: 'investigacion', weight: 3 }] },
+    { code: 'experimentar', label: 'Experimentar con tecnologías nuevas', areas: [{ tag: 'investigacion', weight: 2 }, { tag: 'inteligencia-artificial', weight: 1 }] },
+    { code: 'estudio_datos', label: 'Analizar los datos de un estudio', areas: [{ tag: 'investigacion', weight: 2 }, { tag: 'datos', weight: 2 }] },
+    { code: 'problema_real', label: 'Resolver un problema real de una organización', areas: [{ tag: 'investigacion', weight: 2 }, { tag: 'gestion-proyectos', weight: 1 }] },
+  ]),
+  'diseno-ux': single('dd_diseno_ux', 'En {area}, ¿qué te atrae?', [
+    { code: 'facil', label: 'Que una aplicación sea fácil de usar', areas: [{ tag: 'diseno-ux', weight: 3 }] },
+    { code: 'pantallas', label: 'Dibujar pantallas e interfaces', areas: [{ tag: 'diseno-ux', weight: 3 }, { tag: 'desarrollo-web', weight: 1 }] },
+    { code: 'usuarios', label: 'Hablar con usuarios para entenderlos', areas: [{ tag: 'diseno-ux', weight: 2 }, { tag: 'investigacion', weight: 2 }] },
+    { code: 'detalles', label: 'Animaciones y detalles visuales', areas: [{ tag: 'diseno-ux', weight: 2 }, { tag: 'videojuegos', weight: 1 }] },
+  ]),
+};
+
+/** Mínimo de respuestas para calcular sugerencias: con menos, orientarían mal. */
+export const MIN_ANSWERS = 6;
+
+/** Cuántas áreas declaradas reciben pregunta propia. */
+const MAX_DEEP_DIVES = 4;
+
+/** Las ocho preguntas generales que siempre van. */
+const NUCLEO = QUESTIONNAIRE.slice(0, 8);
+
+/**
+ * El cuestionario de un estudiante concreto.
+ *
+ * Sin áreas declaradas, el general completo (12). Con áreas, primero una
+ * pregunta por cada una de sus áreas (hasta cuatro), luego las ocho generales,
+ * y se rellena con las restantes hasta llegar a diez: siempre entre 10 y 12
+ * preguntas, dentro del rango de §16.
+ */
+export function buildQuestionnaire(declaradas: AreaTag[]): OnboardingQuestion[] {
+  const tags = [...new Set(declaradas)].slice(0, MAX_DEEP_DIVES);
+  if (tags.length === 0) return QUESTIONNAIRE;
+  const propias = tags.map((t) => DEEP_DIVES[t]);
+  const resto = QUESTIONNAIRE.slice(NUCLEO.length);
+  const relleno = resto.slice(0, Math.max(0, 10 - NUCLEO.length - propias.length));
+  return [...propias, ...NUCLEO, ...relleno];
+}
+
+/**
+ * Índice por código de todo el banco, para validar respuestas sin recorrerlo.
+ * Incluye las de profundización: cualquiera de ellas pudo haberse servido.
+ */
+export const QUESTION_BY_CODE = new Map(
+  [...QUESTIONNAIRE, ...Object.values(DEEP_DIVES)].map((q) => [q.code, q]),
+);
 
 /**
  * Sinónimos con los que se busca cada etiqueta en el catálogo de áreas.

@@ -426,7 +426,7 @@ export class ImportsService {
     // deshacer un padrón ya aplicado (RNF09). Quien no reciba el correo puede
     // pedir el reenvío.
     for (const user of created) {
-      await this.activation.issueAndSendActivation(user);
+      await this.activation.queueActivation(user, adminUserId);
       await this.audit.record({
         actorUserId: adminUserId,
         eventType: AuditEventType.USER_PROVISIONED,

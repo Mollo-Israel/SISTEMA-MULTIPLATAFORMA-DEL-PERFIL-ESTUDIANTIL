@@ -22,6 +22,15 @@ export class AcademicArea {
   @Column({ type: 'varchar', length: 120 })
   name: string;
 
+  /**
+   * Identificador estable, único y legible (p. ej. «bases_de_datos»).
+   *
+   * El nombre puede corregirse; el código no cambia, y es lo que conviene
+   * usar para referirse al área desde importaciones o informes.
+   */
+  @Column({ type: 'varchar', length: 60, unique: true })
+  code: string;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   description: string | null;
 

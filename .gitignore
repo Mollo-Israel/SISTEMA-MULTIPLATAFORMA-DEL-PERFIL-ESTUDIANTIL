@@ -50,3 +50,6 @@ docs/respaldo-documento/
 
 # Respaldos lógicos de base de datos (no versionados)
 backups/
+
+# Copia local de los correos en desarrollo (contiene códigos de activación)
+.mail-outbox/

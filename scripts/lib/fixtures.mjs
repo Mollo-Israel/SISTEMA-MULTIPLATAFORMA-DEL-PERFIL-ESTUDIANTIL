@@ -6,9 +6,14 @@
  * activar, iniciar sesión— en lugar de saltárselo, de modo que las pruebas
  * ejercitan el mismo flujo que usará una persona.
  *
- * El token de activación llega en la respuesta porque el entorno de pruebas no
- * tiene SMTP configurado; en producción viaja solo por correo.
+ * El código de activación nunca llega en la respuesta del administrador: se
+ * lee de la copia local de correos (api/.mail-outbox), como el estudiante lo
+ * leería de su buzón.
  */
+
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const API = process.env.API_URL ?? 'http://localhost:3010/api';
 
@@ -38,6 +43,90 @@ export async function req(method, path, { token, body, raw } = {}) {
   return { status: res.status, data };
 }
 
+// ===========================================================================
+//  Correo: el código se lee del buzón local, nunca de la respuesta del admin
+// ===========================================================================
+
+const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/**
+ * Copia local de los correos que escribe la API fuera de producción.
+ *
+ * Antes la API le devolvía el código de activación al administrador para que
+ * las pruebas pudieran activar cuentas. Eso es justo lo que no puede ocurrir:
+ * el código solo debe llegar al buzón del titular. Ahora las pruebas hacen lo
+ * mismo que el estudiante —leer su correo—, solo que el «buzón» es una
+ * carpeta local.
+ */
+export const BUZON = process.env.MAIL_CAPTURE_DIR
+  ? resolve(process.env.MAIL_CAPTURE_DIR)
+  : join(RAIZ, 'api', '.mail-outbox');
+
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function analizarCorreo(m) {
+  const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(m.text ?? '')?.[1] ?? null;
+  const codigo = /c[oó]digo[^:\n]*:\s*(\d{3})\s?(\d{3})/i.exec(m.text ?? '');
+  return { ...m, token, code: codigo ? `${codigo[1]}${codigo[2]}` : null };
+}
+
+/**
+ * Espera el correo más reciente enviado a `email` desde `desde` (epoch ms).
+ *
+ * `tipo`: 'account_activation' | 'password_reset' | 'test'.
+ */
+export async function leerCorreo(email, { tipo, desde = 0, esperaMs = 10_000 } = {}) {
+  // La API guarda los correos en minúsculas; quien busca puede no hacerlo.
+  const buscado = email.toLowerCase();
+  const limite = Date.now() + esperaMs;
+  while (Date.now() < limite) {
+    if (existsSync(BUZON)) {
+      const archivos = readdirSync(BUZON).filter((f) => f.endsWith('.json')).sort().reverse();
+      for (const f of archivos) {
+        if (Number(f.split('-')[0]) < desde) break;
+        let m;
+        try {
+          m = JSON.parse(readFileSync(join(BUZON, f), 'utf8'));
+        } catch {
+          continue; // se está escribiendo justo ahora
+        }
+        if (m.to?.toLowerCase() === buscado && (!tipo || m.kind === tipo)) return analizarCorreo(m);
+      }
+    }
+    await dormir(40);
+  }
+  throw new Error(
+    `No llegó ningún correo${tipo ? ` de tipo ${tipo}` : ''} a ${email} en ${esperaMs / 1000} s. `
+    + `¿La API corre en esta máquina y escribe en ${BUZON}?`,
+  );
+}
+
+let correoComprobado = false;
+
+/**
+ * Las suites crean cientos de cuentas con correos inventados. Con un SMTP real
+ * eso serían cientos de correos a direcciones que no existen: rebotes, y el
+ * remitente marcado como spam. Se comprueba antes de crear nada.
+ */
+export async function asegurarCorreoDePrueba(adminToken) {
+  if (correoComprobado) return;
+  const estado = await req('GET', '/mail/status', { token: adminToken });
+  if (estado.status !== 200) {
+    throw new Error(`No se pudo consultar el estado del correo (${estado.status}).`);
+  }
+  if (!estado.data.safeForAutomatedTests) {
+    throw new Error(
+      'La API está enviando correo REAL (SMTP). Las pruebas crean cientos de cuentas con correos '
+      + 'inventados: con SMTP real serían cientos de rebotes y el remitente acabaría marcado como '
+      + 'spam. Arranque la API con MAIL_TRANSPORT=console (o sin SMTP_HOST) para correrlas.',
+    );
+  }
+  if (!estado.data.captureEnabled) {
+    throw new Error('La copia local de correos está desactivada (¿NODE_ENV=production?).');
+  }
+  correoComprobado = true;
+}
+
 /** Inicia sesión como administrador y devuelve su access token. */
 export async function loginAdmin() {
   const res = await req('POST', '/auth/login', { body: ADMIN_CREDENTIALS });
@@ -47,37 +136,39 @@ export async function loginAdmin() {
       + 'Ejecute: npm run api:migrate && npm run seed:populate',
     );
   }
+  await asegurarCorreoDePrueba(res.data.accessToken);
   return res.data.accessToken;
 }
 
 /**
  * Provisiona una cuenta, la activa y la deja lista para usar.
  *
- * Devuelve el mismo contrato que antes producía `/auth/register`
- * —`{ token, userId }`— más lo que ahora hace falta, para que migrar las
- * suites no obligue a reescribir sus aserciones.
+ * Hace el camino real: el administrador crea la cuenta, la invitación llega
+ * al buzón y el titular la activa con el enlace. Para estudiantes el semestre
+ * es obligatorio en el alta (§17.1): si la suite no lo indica, se usa el 1.
  */
-export async function provisionAndActivate(adminToken, { firstName, lastName, email, role, password = PWD }) {
-  const created = await req('POST', '/users', {
-    token: adminToken,
-    body: { firstName, lastName, email, password, role },
-  });
+export async function provisionAndActivate(
+  adminToken,
+  { firstName, lastName, email, role, password = PWD, semester, universityCode },
+) {
+  await asegurarCorreoDePrueba(adminToken);
+  const desde = Date.now();
+  const body = { firstName, lastName, email, role };
+  if (role === 'STUDENT') body.semester = semester ?? 1;
+  if (universityCode) body.universityCode = universityCode;
+
+  const created = await req('POST', '/users', { token: adminToken, body });
   if (created.status !== 201) {
     throw new Error(
       `No se pudo provisionar ${email} (${created.status}): ${JSON.stringify(created.data)}`,
     );
   }
 
-  const activationToken = created.data?.activationToken;
-  if (!activationToken) {
-    throw new Error(
-      `La API no devolvió token de activación para ${email}. `
-      + 'Las pruebas requieren un entorno sin SMTP configurado.',
-    );
-  }
+  const correo = await leerCorreo(email, { tipo: 'account_activation', desde });
+  if (!correo.token) throw new Error(`El correo de activación de ${email} no trae enlace.`);
 
   const activated = await req('POST', '/activation/activate', {
-    body: { token: activationToken, password },
+    body: { token: correo.token, password },
   });
   if (activated.status !== 200) {
     throw new Error(
@@ -96,7 +187,9 @@ export async function provisionAndActivate(adminToken, { firstName, lastName, em
     userId: created.data.id,
     email,
     name: `${firstName} ${lastName}`,
-    activationToken,
+    activationToken: correo.token,
+    activationCode: correo.code,
+    created: created.data,
   };
 }
 
@@ -136,6 +229,7 @@ export async function provisionStudent(adminToken, { firstName, lastName, email,
     lastName,
     email,
     role: 'STUDENT',
+    semester,
   });
 
   await req('POST', '/profiles/me', {

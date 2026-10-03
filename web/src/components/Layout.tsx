@@ -10,12 +10,12 @@ import {
   FiClock,
   FiCompass,
   FiFolder,
+  FiGift,
   FiGrid,
   FiLayers,
+  FiMail,
   FiMenu,
   FiPaperclip,
-  FiShield,
-  FiSliders,
   FiStar,
   FiTag,
   FiTarget,
@@ -32,7 +32,6 @@ import UserMenu from './UserMenu';
 const ICONS: Record<string, IconType> = {
   '/student': FiGrid,
   '/student/profile': FiUser,
-  '/student/interests': FiSliders,
   '/student/projects': FiFolder,
   '/student/evidences': FiPaperclip,
   '/student/affinity': FiTarget,
@@ -55,11 +54,14 @@ const ICONS: Record<string, IconType> = {
   '/society': FiGrid,
   '/society/activities': FiCalendar,
   '/admin': FiUsers,
-  '/admin/roles': FiShield,
+  '/admin/mail': FiMail,
   '/admin/areas': FiLayers,
   '/admin/skills': FiAward,
   '/admin/activity-categories': FiTag,
   '/admin/gamification': FiStar,
+  '/teacher/recognitions': FiGift,
+  '/director/recognitions': FiGift,
+  '/admin/recognitions': FiGift,
 };
 
 export default function Layout() {
@@ -160,9 +162,9 @@ export default function Layout() {
         <motion.div
           className="content"
           key={location.pathname}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
         >
           <Outlet />
         </motion.div>

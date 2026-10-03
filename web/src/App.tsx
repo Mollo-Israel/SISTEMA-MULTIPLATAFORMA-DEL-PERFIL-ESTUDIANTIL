@@ -14,8 +14,8 @@ import RequestTokenPage from './pages/auth/RequestTokenPage';
 
 import StudentDashboard from './pages/student/Dashboard';
 import StudentProfilePage from './pages/student/Profile';
-import InterestsSkillsPage from './pages/student/InterestsSkills';
-import StudentOnboardingPage from './pages/student/Onboarding';
+import WelcomeWizard from './pages/student/Welcome';
+import OnboardingGate from './components/OnboardingGate';
 import StudentPrivacyPage from './pages/student/Privacy';
 import StudentCollaborationPage from './pages/student/Collaboration';
 import StudentProgressPage from './pages/student/Progress';
@@ -38,6 +38,7 @@ import DirectorActivitiesPage from './pages/director/Activities';
 import DirectorConstanciesPage from './pages/director/Constancies';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorTrendsPage from './pages/director/Trends';
+import RecognitionsPage from './pages/staff/Recognitions';
 import SocietyMetricsPage from './pages/society/Metrics';
 
 import SocietyDashboard from './pages/society/Dashboard';
@@ -45,9 +46,8 @@ import SocietyActivitiesPage from './pages/society/Activities';
 
 import AdminUsersPage from './pages/admin/Users';
 import AdminImportsPage from './pages/admin/Imports';
-import AdminRolesPage from './pages/admin/Roles';
-import AdminAreasPage from './pages/admin/Areas';
-import AdminSkillsPage from './pages/admin/Skills';
+import AdminMailPage from './pages/admin/Mail';
+import AdminAreasSkillsPage from './pages/admin/AreasSkills';
 import AdminGamificationPage from './pages/admin/Gamification';
 import AdminActivityCategoriesPage from './pages/admin/ActivityCategories';
 
@@ -91,11 +91,30 @@ export default function App() {
           <Route path="/recuperar" element={<RequestTokenPage mode="reset" />} />
           <Route path="/restablecer" element={<SetPasswordPage mode="reset" />} />
 
-          <Route element={guarded([S], <Layout />)}>
+          {/* La bienvenida va a pantalla completa, fuera del menú: hasta
+              terminarla, el estudiante no ve el resto del sistema. */}
+          <Route
+            path="/student/bienvenida"
+            element={
+              <ProtectedRoute roles={[S]}>
+                <WelcomeWizard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            element={
+              <ProtectedRoute roles={[S]}>
+                <OnboardingGate>
+                  <Layout />
+                </OnboardingGate>
+              </ProtectedRoute>
+            }
+          >
             <Route path="/student" element={<StudentDashboard />} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
-            <Route path="/student/onboarding" element={<StudentOnboardingPage />} />
-            <Route path="/student/interests" element={<InterestsSkillsPage />} />
+            {/* Intereses y cuestionario viven ahora dentro de «Mi perfil». */}
+            <Route path="/student/onboarding" element={<Navigate to="/student/profile?tab=cuestionario" replace />} />
+            <Route path="/student/interests" element={<Navigate to="/student/profile?tab=intereses" replace />} />
             <Route path="/student/privacy" element={<StudentPrivacyPage />} />
             <Route path="/student/collaboration" element={<StudentCollaborationPage />} />
             <Route path="/student/progress" element={<StudentProgressPage />} />
@@ -113,6 +132,7 @@ export default function App() {
             <Route path="/teacher/students" element={<TeacherStudentsPage />} />
             <Route path="/teacher/projects" element={<TeacherStudentProjectsPage />} />
             <Route path="/teacher/reports" element={<TeacherReportsPage />} />
+            <Route path="/teacher/recognitions" element={<RecognitionsPage />} />
           </Route>
 
           <Route element={guarded([D], <Layout />)}>
@@ -122,6 +142,7 @@ export default function App() {
             <Route path="/director/affinity" element={<DirectorAffinityMap />} />
             <Route path="/director/resources" element={<DirectorLearningResourcesPage />} />
             <Route path="/director/trends" element={<DirectorTrendsPage />} />
+            <Route path="/director/recognitions" element={<RecognitionsPage />} />
           </Route>
 
           <Route element={guarded([SC], <Layout />)}>
@@ -133,11 +154,12 @@ export default function App() {
           <Route element={guarded([A], <Layout />)}>
             <Route path="/admin" element={<AdminUsersPage />} />
             <Route path="/admin/imports" element={<AdminImportsPage />} />
-            <Route path="/admin/roles" element={<AdminRolesPage />} />
-            <Route path="/admin/areas" element={<AdminAreasPage />} />
-            <Route path="/admin/skills" element={<AdminSkillsPage />} />
+            <Route path="/admin/mail" element={<AdminMailPage />} />
+            <Route path="/admin/areas" element={<AdminAreasSkillsPage />} />
+            <Route path="/admin/skills" element={<Navigate to="/admin/areas?tab=skills" replace />} />
             <Route path="/admin/activity-categories" element={<AdminActivityCategoriesPage />} />
             <Route path="/admin/gamification" element={<AdminGamificationPage />} />
+            <Route path="/admin/recognitions" element={<RecognitionsPage />} />
           </Route>
 
           <Route path="*" element={<RootRedirect />} />

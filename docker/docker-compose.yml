@@ -17,6 +17,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # Opcional: buzón de pruebas para ver los correos con su diseño real sin
+  # enviarlos a nadie. No arranca con db:up; se levanta con npm run mail:preview
+  # y se abre en http://localhost:8025 (ver docs/CORREO_REAL.md).
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: perfil_mailpit
+    profiles: ["correo"]
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   pgdata:
     name: perfil_pgdata

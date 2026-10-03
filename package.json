@@ -18,6 +18,8 @@
     "api:migrate": "npm run migration:run --workspace api",
     "seed": "npm run seed --workspace api",
     "seed:populate": "npm run seed:populate --workspace api",
+    "mail:test": "npm run mail:test --workspace api --",
+    "mail:preview": "docker compose -f docker/docker-compose.yml --profile correo up -d mailpit",
     "web:dev": "npm run dev --prefix web",
     "mobile:start": "npm run start --prefix mobile",
     "test:40": "node scripts/e2e-objectives-40.mjs",
@@ -37,7 +39,8 @@
     "test:b9": "node scripts/e2e-batch-9.mjs",
     "test:b10": "node scripts/e2e-batch-10.mjs",
     "test:b11": "node scripts/e2e-batch-11.mjs",
-    "test:all": "node scripts/e2e-objectives-40.mjs && node scripts/e2e-objective-5.mjs && node scripts/e2e-objective-6.mjs && node scripts/e2e-objective-7.mjs && node scripts/e2e-batch-1.mjs && node scripts/e2e-batch-2.mjs && node scripts/e2e-batch-3.mjs && node scripts/e2e-batch-4.mjs && node scripts/e2e-batch-5.mjs && node scripts/e2e-batch-6.mjs && node scripts/e2e-batch-7.mjs && node scripts/e2e-batch-8.mjs && node scripts/e2e-batch-9.mjs && node scripts/e2e-batch-10.mjs && node scripts/e2e-batch-11.mjs"
+    "test:qa": "node scripts/e2e-qa.mjs",
+    "test:all": "node scripts/e2e-objectives-40.mjs && node scripts/e2e-objective-5.mjs && node scripts/e2e-objective-6.mjs && node scripts/e2e-objective-7.mjs && node scripts/e2e-batch-1.mjs && node scripts/e2e-batch-2.mjs && node scripts/e2e-batch-3.mjs && node scripts/e2e-batch-4.mjs && node scripts/e2e-batch-5.mjs && node scripts/e2e-batch-6.mjs && node scripts/e2e-batch-7.mjs && node scripts/e2e-batch-8.mjs && node scripts/e2e-batch-9.mjs && node scripts/e2e-batch-10.mjs && node scripts/e2e-batch-11.mjs && node scripts/e2e-qa.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -35,15 +35,30 @@ export const authService = {
  * partir del padrón y su titular la activa demostrando que controla el
  * correo institucional.
  */
+/** Respuesta genérica de las solicitudes de correo: igual exista o no la cuenta. */
+export interface MailRequestResult {
+  message: string;
+  /** Segundos antes de poder pedir otro correo: el mismo para todos. */
+  retryAfterSeconds: number;
+}
+
+/** Canje por contraseña: con el enlace (`token`) o con correo y código de 6 dígitos. */
+export interface ConsumeInput {
+  token?: string;
+  email?: string;
+  code?: string;
+  password: string;
+}
+
 export const activationService = {
   request: (email: string) =>
-    api.post<{ message: string }>('/activation/request', { email }).then((r) => r.data),
-  activate: (token: string, password: string) =>
-    api.post<{ message: string }>('/activation/activate', { token, password }).then((r) => r.data),
+    api.post<MailRequestResult>('/activation/request', { email }).then((r) => r.data),
+  activate: (input: ConsumeInput) =>
+    api.post<{ message: string }>('/activation/activate', input).then((r) => r.data),
   forgotPassword: (email: string) =>
-    api.post<{ message: string }>('/activation/forgot-password', { email }).then((r) => r.data),
-  resetPassword: (token: string, password: string) =>
-    api.post<{ message: string }>('/activation/reset-password', { token, password }).then((r) => r.data),
+    api.post<MailRequestResult>('/activation/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (input: ConsumeInput) =>
+    api.post<{ message: string }>('/activation/reset-password', input).then((r) => r.data),
 };
 
 export const catalogService = {
@@ -89,7 +104,23 @@ export const profileService = {
     api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
   setSkills: (items: { skillId: string; level: 'basic' | 'intermediate' | 'advanced' }[]) =>
     api.put('/profiles/me/skills', { items }).then((r) => r.data),
+  /** Estado de la bienvenida: mientras no termine, la app muestra el asistente. */
+  onboarding: () => api.get<OnboardingState>('/profiles/me/onboarding').then((r) => r.data),
+  saveOnboardingStep: (step: string) =>
+    api.patch<OnboardingState>('/profiles/me/onboarding', { step }).then((r) => r.data),
+  completeOnboarding: () =>
+    api.post<OnboardingState>('/profiles/me/onboarding/complete').then((r) => r.data),
 };
+
+export interface OnboardingState {
+  completed: boolean;
+  completedAt: string | null;
+  step: string;
+  hasProfile: boolean;
+  claimed: boolean;
+  semester: number | null;
+  counts: { improvementAreas: number; interests: number; skills: number; questionnaireRuns: number };
+}
 
 export const activityService = {
   list: (params?: Record<string, string>) => api.get<any[]>('/activities', { params }).then((r) => r.data),
@@ -405,6 +436,15 @@ export interface GamificationSummary {
 
 export const gamificationService = {
   myProgress: () => api.get<GamificationSummary>('/gamification/me').then((r) => r.data),
+  /** Saldo canjeable y puntos de la semana, el mes y el año. */
+  wallet: () =>
+    api
+      .get<{
+        balance: { earned: number; spent: number; available: number };
+        periods: { week: number; month: number; year: number };
+        redemptions: { id: string; reward?: string; cost: number; status: string; createdAt: string }[];
+      }>('/gamification/me/wallet')
+      .then((r) => r.data),
 };
 
 export const affinityService = {

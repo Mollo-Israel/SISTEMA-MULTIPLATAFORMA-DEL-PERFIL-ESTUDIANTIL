@@ -25,6 +25,7 @@ import { ReplaceSkillsDto, SetSkillsDto } from './dto/set-skills.dto';
 import { SearchPeersDto } from './dto/search-peers.dto';
 import { SetInstitutionalDataDto } from './dto/institutional-data.dto';
 import { UpdateVisibilityDto } from './dto/visibility.dto';
+import { OnboardingStepDto } from './dto/onboarding-step.dto';
 
 @ApiTags('profiles')
 @ApiBearerAuth()
@@ -72,6 +73,36 @@ export class ProfilesController {
   })
   updateMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
     return this.profilesService.updateMyProfile(user.userId, dto);
+  }
+
+  // ---------------- Bienvenida ----------------
+
+  @Get('me/onboarding')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Estado de mi bienvenida.',
+    description: 'Si la terminé, por qué paso voy y qué tengo declarado. Funciona aunque aún no tenga perfil.',
+  })
+  onboardingState(@CurrentUser() user: AuthenticatedUser) {
+    return this.profilesService.onboardingState(user.userId);
+  }
+
+  @Patch('me/onboarding')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Guardar por qué paso de la bienvenida voy.' })
+  saveOnboardingStep(@CurrentUser() user: AuthenticatedUser, @Body() dto: OnboardingStepDto) {
+    return this.profilesService.saveOnboardingStep(user.userId, dto.step);
+  }
+
+  @Post('me/onboarding/complete')
+  @Roles(RolNombre.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Terminar la bienvenida.',
+    description: 'Exige perfil, al menos un área de mejora y al menos un interés. El cuestionario es opcional.',
+  })
+  completeOnboarding(@CurrentUser() user: AuthenticatedUser) {
+    return this.profilesService.completeOnboarding(user.userId);
   }
 
   // ---------------- Privacidad (§44) ----------------

@@ -11,7 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { ActivityType } from '@perfil/shared';
-import { cleanLine, cleanText } from '../../common/validation';
+import { cleanLine, cleanText, IsCatalogName } from '../../common/validation';
 
 /**
  * Alta de una categoria de actividad (RF4).
@@ -35,6 +35,7 @@ export class CreateActivityCategoryDto {
   @IsNotEmpty({ message: 'El nombre es obligatorio.' })
   @MinLength(3, { message: 'El nombre debe tener al menos 3 caracteres.' })
   @MaxLength(120, { message: 'El nombre no puede superar 120 caracteres.' })
+  @IsCatalogName()
   name: string;
 
   @ApiProperty({ required: false, example: 'Debate abierto entre varios ponentes.' })

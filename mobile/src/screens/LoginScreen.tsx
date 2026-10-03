@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
@@ -12,19 +12,21 @@ import { colors } from '../theme';
 /**
  * Pantallas de entrada (§9, §12, §13).
  *
- * No hay registro: la cuenta la provisiona la carrera desde el padrón
- * institucional y su titular la activa con el código que recibe por correo.
- * Los cuatro modos son los únicos caminos posibles hacia adentro.
+ * No hay registro: la cuenta la crea la universidad y su titular la activa
+ * con lo que recibe en su correo institucional. En el teléfono se usa el
+ * **código de seis dígitos** de ese correo: antes había que pegar un token de
+ * 43 caracteres, que en un móvil es casi imposible de copiar bien.
  */
 type Modo = 'login' | 'activar' | 'recuperar' | 'restablecer';
 
 const PASSWORD_MIN = 12;
+const INSTITUCIONAL = /^[a-z0-9._%+-]+@(?:[a-z0-9-]+\.)*univalle\.edu$/i;
 
 const TITULO: Record<Modo, { t: string; s: string }> = {
   login: { t: 'Afinia', s: 'Ingeniería en Sistemas · Univalle' },
-  activar: { t: 'Activa tu cuenta', s: 'Pega el código que recibiste por correo y define tu contraseña' },
+  activar: { t: 'Activa tu cuenta', s: 'Escribe el código de 6 dígitos de tu correo y elige tu contraseña' },
   recuperar: { t: 'Recuperar acceso', s: 'Te enviaremos un código a tu correo institucional' },
-  restablecer: { t: 'Nueva contraseña', s: 'Pega el código del correo y elige una contraseña nueva' },
+  restablecer: { t: 'Nueva contraseña', s: 'Escribe el código del correo y elige una contraseña nueva' },
 };
 
 function requisitos(p: string) {
@@ -38,15 +40,27 @@ function requisitos(p: string) {
   ];
 }
 
+function reloj(seg: number): string {
+  return `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}`;
+}
+
 export default function LoginScreen() {
   const { login } = useAuth();
   const [modo, setModo] = useState<Modo>('login');
-  const [form, setForm] = useState({ email: '', password: '', token: '', confirm: '' });
+  const [form, setForm] = useState({ email: '', password: '', code: '', confirm: '' });
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [espera, setEspera] = useState(0);
+
+  useEffect(() => {
+    if (espera <= 0) return;
+    const t = setTimeout(() => setEspera((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [espera]);
 
   const reqs = useMemo(() => requisitos(form.password), [form.password]);
+  const avance = Math.round((reqs.filter((r) => r.ok).length / reqs.length) * 100);
   const pideClave = modo === 'activar' || modo === 'restablecer';
 
   /** Cambia de modo limpiando los campos sensibles; `mensaje` sobrevive al cambio. */
@@ -54,35 +68,42 @@ export default function LoginScreen() {
     setModo(siguiente);
     setError(null);
     setAviso(mensaje);
-    setForm((f) => ({ ...f, password: '', token: '', confirm: '' }));
+    setForm((f) => ({ ...f, password: '', code: '', confirm: '' }));
+  };
+
+  const correoValido = (correo: string): string | null => {
+    if (!correo) return 'Escribe tu correo institucional.';
+    if (!INSTITUCIONAL.test(correo)) return 'Usa tu correo institucional (@univalle.edu o @est.univalle.edu).';
+    return null;
   };
 
   const submit = async () => {
     setError(null);
     setAviso(null);
+    const correo = form.email.trim().toLowerCase();
 
+    const malo = correoValido(correo);
+    if (malo) return setError(malo);
     if (pideClave) {
-      if (!form.token.trim()) return setError('Pega el código que recibiste por correo.');
-      if (!reqs.every((r) => r.ok)) return setError('La contraseña no cumple los requisitos.');
-      if (form.confirm !== form.password) return setError('Las contraseñas no coinciden.');
-    } else if (!form.email.trim()) {
-      return setError('Escribe tu correo institucional.');
+      if (!/^\d{6}$/.test(form.code.replace(/\s+/g, ''))) return setError('El código tiene 6 dígitos.');
+      if (!reqs.every((r) => r.ok)) return setError('La contraseña todavía no cumple todos los requisitos.');
+      if (form.confirm !== form.password) return setError('Las dos contraseñas no coinciden.');
     }
 
     setBusy(true);
     try {
-      const correo = form.email.trim().toLowerCase();
+      const entrada = { email: correo, code: form.code.replace(/\s+/g, ''), password: form.password };
       if (modo === 'login') {
         await login(correo, form.password);
       } else if (modo === 'recuperar') {
         const r = await activationService.forgotPassword(correo);
-        setAviso(r.message);
-        setModo('restablecer');
+        setEspera(r.retryAfterSeconds ?? 120);
+        cambiarModo('restablecer', r.message);
       } else if (modo === 'activar') {
-        await activationService.activate(form.token.trim(), form.password);
-        cambiarModo('login', 'Cuenta activada. Ya puedes iniciar sesión con tu nueva contraseña.');
+        await activationService.activate(entrada);
+        cambiarModo('login', '¡Tu cuenta está lista! Ya puedes iniciar sesión con tu nueva contraseña.');
       } else {
-        await activationService.resetPassword(form.token.trim(), form.password);
+        await activationService.resetPassword(entrada);
         cambiarModo('login', 'Contraseña actualizada. Inicia sesión con la nueva.');
       }
     } catch (e) {
@@ -94,12 +115,16 @@ export default function LoginScreen() {
 
   const pedirCodigo = async () => {
     const correo = form.email.trim().toLowerCase();
-    if (!correo) return setError('Escribe tu correo institucional para enviarte el código.');
+    const malo = correoValido(correo);
+    if (malo) return setError(malo);
     setBusy(true);
     setError(null);
     try {
-      const r = await activationService.request(correo);
+      const r = modo === 'restablecer'
+        ? await activationService.forgotPassword(correo)
+        : await activationService.request(correo);
       setAviso(r.message);
+      setEspera(r.retryAfterSeconds ?? 120);
     } catch (e) {
       setError(apiError(e, 'No se pudo enviar el código.'));
     } finally {
@@ -122,22 +147,21 @@ export default function LoginScreen() {
           {error && <ErrorText message={error} />}
           {aviso && <Success message={aviso} />}
 
-          {modo === 'login' || modo === 'recuperar' || modo === 'activar' ? (
-            <Field
-              label="Correo institucional"
-              value={form.email}
-              onChangeText={(t) => setForm({ ...form, email: t })}
-              placeholder="nombre.apellido@univalle.edu"
-              keyboardType="email-address"
-            />
-          ) : null}
+          <Field
+            label="Correo institucional"
+            value={form.email}
+            onChangeText={(t) => setForm({ ...form, email: t })}
+            placeholder="nombre.apellido@est.univalle.edu"
+            keyboardType="email-address"
+          />
 
           {pideClave && (
             <Field
-              label="Código del correo"
-              value={form.token}
-              onChangeText={(t) => setForm({ ...form, token: t })}
-              placeholder="Pega aquí el código"
+              label="Código de 6 dígitos"
+              value={form.code}
+              onChangeText={(t) => setForm({ ...form, code: t.replace(/[^\d]/g, '').slice(0, 6) })}
+              placeholder="000000"
+              keyboardType="numeric"
             />
           )}
 
@@ -158,6 +182,19 @@ export default function LoginScreen() {
                 onChangeText={(t) => setForm({ ...form, password: t })}
                 secureTextEntry
               />
+              {form.password.length > 0 && (
+                <View style={styles.barra}>
+                  <View
+                    style={[
+                      styles.barraLlena,
+                      {
+                        width: `${avance}%`,
+                        backgroundColor: avance === 100 ? colors.green : avance >= 50 ? colors.amber : colors.red,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
               <View style={styles.reqs}>
                 {reqs.map((r) => (
                   <View key={r.t} style={styles.req}>
@@ -183,17 +220,21 @@ export default function LoginScreen() {
             title={
               modo === 'login' ? 'Ingresar'
                 : modo === 'recuperar' ? 'Enviarme el código'
-                  : modo === 'activar' ? 'Activar cuenta'
+                  : modo === 'activar' ? 'Activar mi cuenta'
                     : 'Guardar contraseña'
             }
             onPress={submit}
             loading={busy}
           />
 
-          {modo === 'activar' && (
-            <Text style={styles.link} onPress={pedirCodigo}>
-              ¿No tienes el código? Reenviármelo
-            </Text>
+          {pideClave && (
+            espera > 0 ? (
+              <Text style={styles.espera}>Podrás pedir otro código en {reloj(espera)}</Text>
+            ) : (
+              <Text style={styles.link} onPress={pedirCodigo}>
+                ¿No te llegó? Envíame un código nuevo
+              </Text>
+            )
           )}
 
           {modo === 'login' ? (
@@ -205,8 +246,8 @@ export default function LoginScreen() {
                 Olvidé mi contraseña
               </Text>
               <Text style={styles.nota}>
-                Las cuentas las crea la carrera con el padrón institucional. No hay registro
-                público.
+                Las cuentas las crea la universidad: no hay registro público. La invitación llega a
+                tu correo institucional.
               </Text>
             </>
           ) : (
@@ -227,7 +268,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 19, fontWeight: '800', color: colors.bordo, textAlign: 'center' },
   subtitle: { fontSize: 12, color: colors.gray500, textAlign: 'center', marginBottom: 18 },
   link: { color: colors.bordo, textAlign: 'center', marginTop: 14, fontWeight: '600' },
+  espera: { color: colors.gray500, textAlign: 'center', marginTop: 14, fontSize: 12 },
   nota: { color: colors.gray500, fontSize: 11, textAlign: 'center', marginTop: 14, lineHeight: 16 },
+  barra: { height: 6, borderRadius: 3, backgroundColor: colors.gray100, overflow: 'hidden', marginTop: -6, marginBottom: 8 },
+  barraLlena: { height: 6, borderRadius: 3 },
   reqs: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, marginTop: -4 },
   req: { flexDirection: 'row', alignItems: 'center', width: '50%', marginBottom: 3 },
   reqText: { fontSize: 11, color: colors.gray500, marginLeft: 4 },

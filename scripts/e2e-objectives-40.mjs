@@ -14,8 +14,9 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
+import { leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
 
-const API = process.env.API_URL ?? 'http://localhost:3000/api';
+const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
 // §13: la politica exige 12 caracteres como minimo.
 const PWD = 'Afinia2026Seg*';
@@ -121,29 +122,16 @@ async function main() {
  * El administrador la crea, el titular la activa con el token y despues inicia
  * sesion. Es el mismo camino que recorre una persona real.
  */
-async function provisionarCuenta(adminToken, { firstName, lastName, email, role = 'STUDENT' }) {
-  const creado = await req('POST', '/users', {
-    token: adminToken,
-    body: { firstName, lastName, email, password: PWD, role },
+async function provisionarCuenta(
+  adminToken,
+  { firstName, lastName, email, role = 'STUDENT', semester },
+) {
+  // El código de activación se lee del buzón local, como lo leería el
+  // titular: la respuesta del administrador ya no lo trae.
+  const cuenta = await provisionAndActivate(adminToken, {
+    firstName, lastName, email, role, semester, password: PWD,
   });
-  if (creado.status !== 201) {
-    throw new Error(`No se pudo provisionar ${email} (${creado.status}): ${JSON.stringify(creado.data)}`);
-  }
-  const activationToken = creado.data?.activationToken;
-  if (!activationToken) {
-    throw new Error(`Sin token de activacion para ${email}. Las pruebas requieren un entorno sin SMTP.`);
-  }
-  const activado = await req('POST', '/activation/activate', {
-    body: { token: activationToken, password: PWD },
-  });
-  if (activado.status !== 200) {
-    throw new Error(`No se pudo activar ${email} (${activado.status}): ${JSON.stringify(activado.data)}`);
-  }
-  const login = await req('POST', '/auth/login', { body: { email, password: PWD } });
-  if (login.status !== 200) {
-    throw new Error(`No se pudo iniciar sesion como ${email} (${login.status}).`);
-  }
-  return { accessToken: login.data.accessToken, userId: creado.data.id, activationToken };
+  return { accessToken: cuenta.token, userId: cuenta.userId, activationToken: cuenta.activationToken };
 }
 
 /**
@@ -189,6 +177,7 @@ async function objective1(ctx) {
     `status ${registroPublico.status}`,
   );
 
+  const desdeProvision = Date.now();
   const provisionada = await req('POST', '/users', {
     token: ctx.admin,
     body: {
@@ -197,6 +186,7 @@ async function objective1(ctx) {
       email: studentEmail('est1'),
       password: PWD,
       role: 'STUDENT',
+      semester: 1,
     },
   });
   check(
@@ -231,6 +221,7 @@ async function objective1(ctx) {
       email: studentEmail('est1'),
       password: PWD,
       role: 'STUDENT',
+      semester: 1,
     },
   });
   check(dup.status === 409, '1.6 Correo duplicado -> 409', `status ${dup.status}`);
@@ -265,8 +256,15 @@ async function objective1(ctx) {
 
   section('RF02 · Activacion de cuenta');
 
-  const tokenActivacion = provisionada.data?.activationToken;
-  check(!!tokenActivacion, '1.9 El provisionamiento entrega un token de activacion');
+  // El código va al buzón institucional del titular, nunca al administrador.
+  check(
+    !JSON.stringify(provisionada.data ?? {}).includes('token'),
+    '1.9 El alta NO le entrega el código de activación al administrador',
+  );
+  const tokenActivacion = (
+    await leerCorreo(studentEmail('est1'), { tipo: 'account_activation', desde: desdeProvision })
+  ).token;
+  check(!!tokenActivacion, '1.9b La invitación llega al correo institucional del titular');
 
   const tokenFalso = await req('POST', '/activation/activate', {
     body: { token: 'x'.repeat(40), password: PWD },
@@ -349,13 +347,22 @@ async function objective1(ctx) {
    * sobre el alta sigan siendo las mismas.
    */
   const mkStaff = async (role, first, last, key) => {
+    const desde = Date.now();
     const r = await req('POST', '/users', {
       token: ctx.admin,
-      body: { firstName: first, lastName: last, email: email(key), password: PWD, role },
+      body: {
+        firstName: first,
+        lastName: last,
+        email: email(key),
+        password: PWD,
+        role,
+        ...(role === 'STUDENT' ? { semester: 1 } : {}),
+      },
     });
-    if (r.status === 201 && r.data?.activationToken) {
+    if (r.status === 201 && r.data?.status === 'pending_activation') {
+      const correo = await leerCorreo(email(key), { tipo: 'account_activation', desde });
       await req('POST', '/activation/activate', {
-        body: { token: r.data.activationToken, password: PWD },
+        body: { token: correo.token, password: PWD },
       });
     }
     return r;
@@ -522,6 +529,8 @@ async function objective1(ctx) {
       name: 'Participacion confirmada en taller',
       trigger: 'participacion_confirmada',
       points: 15,
+      // El criterio general del hecho ya existe: uno adicional se limita a un área.
+      academicAreaId: areaId,
     },
   });
   check(crit.status === 201, '4.8 Admin define criterio de gamificacion (persistente)', `status ${crit.status} ${msgOf(crit)}`);

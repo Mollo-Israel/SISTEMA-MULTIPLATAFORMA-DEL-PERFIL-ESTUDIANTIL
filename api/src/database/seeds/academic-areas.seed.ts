@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { AcademicArea } from '../../entities/academic-area.entity';
+import { slugCode } from '../../common/validation';
 
 const AREAS: { name: string; description: string; tags: string[] }[] = [
   {
@@ -49,7 +50,8 @@ export async function seedAcademicAreas(dataSource: DataSource): Promise<void> {
   for (const data of AREAS) {
     const existing = await repo.findOne({ where: { name: data.name } });
     if (!existing) {
-      await repo.save(repo.create(data));
+      // El código se deriva del nombre, igual que al crear desde la API.
+      await repo.save(repo.create({ ...data, code: slugCode(data.name) }));
     }
   }
 }

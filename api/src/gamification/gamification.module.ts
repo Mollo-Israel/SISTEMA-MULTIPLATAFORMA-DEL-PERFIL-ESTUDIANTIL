@@ -16,9 +16,18 @@ import {
   StudentBadge,
   StudentPoints,
 } from '../entities/gamification.entity';
+import { GamificationCriterion } from '../entities/gamification-criterion.entity';
+import {
+  GamificationChallenge,
+  GamificationReward,
+  RewardRedemption,
+} from '../entities/gamification-extra.entity';
+import { AccessModule } from '../access/access.module';
+import { GamificationExtrasService } from './gamification-extras.service';
 import { TrajectorySummaryService } from '../trajectory/trajectory-summary.service';
 import { GamificationService } from './gamification.service';
 import { GamificationController } from './gamification.controller';
+import { GamificationExtrasController } from './gamification-extras.controller';
 
 /**
  * Gamificación y resumen de trayectoria (§66, §67, §134).
@@ -48,10 +57,15 @@ import { GamificationController } from './gamification.controller';
       StudentPoints,
       Badge,
       StudentBadge,
+      GamificationCriterion,
+      GamificationChallenge,
+      GamificationReward,
+      RewardRedemption,
     ]),
+    AccessModule,
   ],
-  controllers: [GamificationController],
-  providers: [GamificationService, TrajectorySummaryService],
+  controllers: [GamificationController, GamificationExtrasController],
+  providers: [GamificationService, GamificationExtrasService, TrajectorySummaryService],
   exports: [GamificationService],
 })
 export class GamificationModule {}

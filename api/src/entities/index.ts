@@ -37,3 +37,5 @@ export * from './project-check.entity';
 export * from './learning-resource.entity';
 export * from './collaboration.entity';
 export * from './gamification.entity';
+export * from './mail-job.entity';
+export * from './gamification-extra.entity';

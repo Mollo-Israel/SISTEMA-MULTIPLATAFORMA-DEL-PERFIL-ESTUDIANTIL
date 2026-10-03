@@ -1,6 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsEmail, IsEnum, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsEmail,
+  IsEnum,
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { RolNombre, UserStatus } from '@perfil/shared';
 import { cleanLine, EMAIL_MSG, NAME_MSG, NAME_RE, PASSWORD_MSG, PASSWORD_RE, trimLower, UNIVALLE_RE } from '../../common/validation';
 
@@ -89,4 +99,28 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(UserStatus)
   status?: UserStatus;
+
+  /**
+   * Semestre institucional del estudiante (§17.1).
+   *
+   * Obligatorio al dar de alta a un estudiante a mano: es un dato que el
+   * estudiante no puede fijar, así que si no lo pone el administrador nadie lo
+   * pone, y sin él el perfil nunca llega a completarse.
+   */
+  @ApiProperty({ required: false, minimum: 1, maximum: 8, example: 3 })
+  @ValidateIf((o: CreateUserDto) => o.role === RolNombre.STUDENT || o.semester !== undefined)
+  @Type(() => Number)
+  @IsIn([1, 2, 3, 4, 5, 6, 7, 8], { message: 'Indique el semestre del estudiante (1 a 8).' })
+  semester?: number;
+
+  @ApiProperty({ required: false, example: '202100123' })
+  @IsOptional()
+  @Transform(cleanLine)
+  @IsString()
+  @MinLength(3, { message: 'El código universitario es demasiado corto.' })
+  @MaxLength(30, { message: 'El código universitario no puede superar 30 caracteres.' })
+  @Matches(/^[A-Za-z0-9._-]+$/, {
+    message: 'El código universitario solo admite letras, números, punto, guion y guion bajo.',
+  })
+  universityCode?: string;
 }

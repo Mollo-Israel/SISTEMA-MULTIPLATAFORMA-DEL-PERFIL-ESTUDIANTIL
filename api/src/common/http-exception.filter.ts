@@ -35,7 +35,20 @@ export interface RespuestaDeError {
   code: string;
   message: string;
   details?: unknown;
+  /** Mensajes agrupados por campo del formulario. */
+  fields?: Record<string, string[]>;
+  /** Segundos de espera, cuando el error es «demasiado pronto». */
+  retryAfterSeconds?: number;
   requestId?: string;
+}
+
+function esMapaDeCampos(valor: unknown): valor is Record<string, string[]> {
+  return (
+    typeof valor === 'object'
+    && valor !== null
+    && !Array.isArray(valor)
+    && Object.values(valor).every((v) => Array.isArray(v) && v.every((m) => typeof m === 'string'))
+  );
 }
 
 /**
@@ -97,13 +110,21 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (typeof respuesta === 'object' && respuesta !== null) {
         const objeto = respuesta as Record<string, unknown>;
         const mensajes = objeto.message;
+        // Errores por campo: el formulario los coloca debajo de cada casilla.
+        const fields = esMapaDeCampos(objeto.fields) ? objeto.fields : undefined;
+        const retryAfterSeconds =
+          typeof objeto.retryAfterSeconds === 'number' ? objeto.retryAfterSeconds : undefined;
         if (Array.isArray(mensajes)) {
           return {
             status,
             cuerpo: {
               code: CODIGO_POR_ESTADO[status] ?? 'VALIDATION_ERROR',
-              message: 'La información enviada no es válida.',
+              message:
+                mensajes.length === 1
+                  ? String(mensajes[0])
+                  : 'Revisa los campos marcados: hay datos que no son válidos.',
               details: mensajes,
+              ...(fields ? { fields } : {}),
               requestId,
             },
           };
@@ -113,6 +134,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
           cuerpo: {
             code: String(objeto.code ?? CODIGO_POR_ESTADO[status] ?? 'ERROR'),
             message: String(mensajes ?? exception.message),
+            ...(fields ? { fields } : {}),
+            ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
             requestId,
           },
         };

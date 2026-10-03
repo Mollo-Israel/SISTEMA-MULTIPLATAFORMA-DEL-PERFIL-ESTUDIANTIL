@@ -8,6 +8,8 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-1.mjs
  */
 
+import { asegurarCorreoDePrueba, leerCorreo } from './lib/fixtures.mjs';
+
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
 const PWD = 'Afinia2026Seg*';
@@ -235,27 +237,47 @@ async function importacion(ctx) {
 async function activacion(ctx) {
   objective('RF02 · Activación de cuenta');
 
-  section('El enlace llega y funciona una sola vez');
+  section('El enlace llega al buzón del titular, no al administrador');
+  // La invitación de la importación ya salió: se lee del buzón, como lo haría
+  // el estudiante.
+  const original = await leerCorreo(ctx.importado.email, { tipo: 'account_activation' });
+  const token1 = original.token;
+  check(!!token1, 'B2.1 La importación envió la invitación al correo institucional');
+
   const reenvio = await req('POST', `/users/${ctx.importado.id}/resend-activation`, {
     token: ctx.admin,
   });
-  const token1 = reenvio.data?.activationToken;
-  check(!!token1, 'B2.1 El administrador puede reenviar el enlace de activación');
+  check(
+    reenvio.status === 429 && (reenvio.data?.retryAfterSeconds ?? 0) > 0,
+    'B2.2 Reenviar enseguida se frena: evita llenar el buzón y caer en spam -> 429',
+    `status ${reenvio.status} · espera ${reenvio.data?.retryAfterSeconds}`,
+  );
 
   section('Un token nuevo invalida el anterior (§12)');
+  const espera = Math.min(Number(reenvio.data?.retryAfterSeconds ?? 0), 130);
+  if (espera > 0) {
+    console.log(`    … esperando ${espera} s, la pausa antispam entre envíos`);
+    await new Promise((r) => setTimeout(r, espera * 1000 + 300));
+  }
+  const desde = Date.now();
   const reenvio2 = await req('POST', `/users/${ctx.importado.id}/resend-activation`, {
     token: ctx.admin,
   });
-  const token2 = reenvio2.data?.activationToken;
-  check(!!token2 && token2 !== token1, 'B2.2 El reenvío emite un token distinto');
+  check(
+    reenvio2.status === 200 && !JSON.stringify(reenvio2.data ?? {}).includes('token'),
+    'B2.2b Pasada la pausa, el reenvío funciona y no le entrega el código al administrador',
+    `status ${reenvio2.status}`,
+  );
+  const token2 = (await leerCorreo(ctx.importado.email, { tipo: 'account_activation', desde })).token;
+  check(!!token2 && token2 !== token1, 'B2.2c El reenvío emite un token distinto');
 
   const conAnterior = await req('POST', '/activation/activate', {
     body: { token: token1, password: PWD },
   });
   check(
-    conAnterior.status === 400,
-    'B2.3 El token anterior queda revocado -> 400',
-    `status ${conAnterior.status}`,
+    conAnterior.status === 400 && /reciente|anulado/i.test(msgOf(conAnterior)),
+    'B2.3 El token anterior queda revocado, y se dice por qué -> 400',
+    `status ${conAnterior.status} · ${msgOf(conAnterior)}`,
   );
 
   section('Política de contraseña (§13)');
@@ -495,15 +517,25 @@ async function main() {
     process.exit(1);
   }
   const admin = adminLogin.data.accessToken;
+  await asegurarCorreoDePrueba(admin);
 
   // Actores auxiliares.
   const provisionar = async (key, first, last, role) => {
+    const desde = Date.now();
     const creado = await req('POST', '/users', {
       token: admin,
-      body: { firstName: first, lastName: last, email: correo(key), password: PWD, role },
+      body: {
+        firstName: first,
+        lastName: last,
+        email: correo(key),
+        password: PWD,
+        role,
+        ...(role === 'STUDENT' ? { semester: 1 } : {}),
+      },
     });
+    const invitacion = await leerCorreo(correo(key), { tipo: 'account_activation', desde });
     await req('POST', '/activation/activate', {
-      body: { token: creado.data.activationToken, password: PWD },
+      body: { token: invitacion.token, password: PWD },
     });
     const login = await req('POST', '/auth/login', { body: { email: correo(key), password: PWD } });
     return { token: login.data.accessToken, id: creado.data.id };

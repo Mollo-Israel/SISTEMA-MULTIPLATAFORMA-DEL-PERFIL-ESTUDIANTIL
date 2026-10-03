@@ -62,22 +62,33 @@ const TRADUCCION: Record<string, (campo: string) => string> = {
  * la librería redactó sola.
  */
 export function mensajesDeValidacion(errores: ValidationError[]): BadRequestException {
-  return new BadRequestException(recolectar(errores));
+  const porCampo: Record<string, string[]> = {};
+  const lista = recolectar(errores, '', porCampo);
+  // `message` sigue siendo la lista de siempre, para quien ya la leía; `fields`
+  // agrupa los mismos mensajes por campo, para que el formulario pueda poner
+  // cada error debajo de su casilla en lugar de uno general arriba.
+  return new BadRequestException({ message: lista, fields: porCampo });
 }
 
-function recolectar(errores: ValidationError[], prefijo = ''): string[] {
+function recolectar(
+  errores: ValidationError[],
+  prefijo: string,
+  porCampo: Record<string, string[]>,
+): string[] {
   const salida: string[] = [];
 
   for (const error of errores) {
     const campo = prefijo ? `${prefijo}.${error.property}` : error.property;
 
     for (const [restriccion, mensaje] of Object.entries(error.constraints ?? {})) {
-      salida.push(traducir(restriccion, campo, String(mensaje)));
+      const texto = traducir(restriccion, campo, String(mensaje));
+      salida.push(texto);
+      (porCampo[campo] ??= []).push(texto);
     }
 
     // Los DTO anidados llegan con sus propios errores dentro.
     if (error.children?.length) {
-      salida.push(...recolectar(error.children, campo));
+      salida.push(...recolectar(error.children, campo, porCampo));
     }
   }
 

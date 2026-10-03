@@ -9,11 +9,60 @@ export interface PublicUser {
   updatedAt: string;
   /** Solo para usuarios con rol docente. */
   semesters?: number[];
+  /** Semestre institucional. Solo para estudiantes. */
+  semester?: number | null;
+  /** Código universitario. Solo para estudiantes. */
+  universityCode?: string | null;
   /**
-   * Solo en desarrollo sin SMTP configurado: el enlace de activación que en
-   * producción llega por correo. Permite probar el alta sin servidor de correo.
+   * En qué quedó el último correo de cuenta. Nunca trae el enlace ni el
+   * código: esos solo viajan al buzón institucional del titular.
    */
-  activationToken?: string;
+  invitation?: InvitationView;
+}
+
+export interface InvitationView {
+  status: 'sent' | 'queued' | 'failed' | 'skipped';
+  sentTo?: string;
+  /** El correo está en modo simulado: no salió a ningún buzón. */
+  simulated?: boolean;
+  error?: string | null;
+  at?: string | null;
+}
+
+/** Estado del envío de correo, para el panel de administración. */
+export interface MailStatus {
+  transport: 'smtp' | 'console';
+  realDelivery: boolean;
+  safeForAutomatedTests: boolean;
+  host: string | null;
+  port: number | null;
+  secure: boolean | null;
+  authType: 'none' | 'login' | 'oauth2' | null;
+  user: string | null;
+  from: string;
+  replyTo: string | null;
+  allowedDomains: string[];
+  captureEnabled: boolean;
+  connection: 'ok' | 'error' | 'checking' | 'not_applicable';
+  lastError: string | null;
+  problems: string[];
+  warnings: string[];
+}
+
+/** Estado de un enlace de activación o recuperación. */
+export interface TokenCheck {
+  state: 'valid' | 'used' | 'expired' | 'replaced' | 'locked' | 'suspended' | 'invalid';
+  message: string | null;
+  firstName?: string;
+  email?: string;
+  expiresAt?: string;
+}
+
+/** Respuesta genérica de las solicitudes públicas de correo. */
+export interface MailRequestResult {
+  message: string;
+  /** Segundos antes de poder pedir otro: el mismo para todos. */
+  retryAfterSeconds: number;
 }
 
 /** Ciclo de vida de una cuenta (§12). Solo `active` puede operar. */
@@ -95,6 +144,8 @@ export interface ImportApplyResult {
 export interface AcademicArea {
   id: string;
   name: string;
+  /** Identificador estable y único (p. ej. «bases_de_datos»). */
+  code: string;
   description: string | null;
   tags: string[] | null;
   isActive: boolean;
@@ -133,6 +184,7 @@ export interface GamificationCriterion {
 export interface Skill {
   id: string;
   name: string;
+  code: string;
   academicAreaId: string | null;
   academicArea?: AcademicArea | null;
   isActive: boolean;
@@ -220,7 +272,31 @@ export interface OnboardingQuestion {
 export interface Questionnaire {
   version: number;
   totalQuestions: number;
+  /** Mínimo de respuestas para calcular sugerencias. */
+  minAnswers?: number;
+  /** Las áreas declaradas que dieron pie a preguntas propias. */
+  basedOn?: string[];
   questions: OnboardingQuestion[];
+}
+
+/** Pasos de la bienvenida, en orden. */
+export type OnboardingStepKey =
+  | 'welcome'
+  | 'profile'
+  | 'availability'
+  | 'interests'
+  | 'skills'
+  | 'questionnaire'
+  | 'done';
+
+export interface OnboardingState {
+  completed: boolean;
+  completedAt: string | null;
+  step: OnboardingStepKey;
+  hasProfile: boolean;
+  claimed: boolean;
+  semester: number | null;
+  counts: { improvementAreas: number; interests: number; skills: number; questionnaireRuns: number };
 }
 
 export interface SuggestedArea {
@@ -749,4 +825,51 @@ export interface InstitutionalProject {
 export interface InstitutionalPortfolio {
   scope: { restricted: boolean; semesters: number[] };
   projects: InstitutionalProject[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Gamificación: retos, recompensas y monedero                         */
+/* ------------------------------------------------------------------ */
+
+export interface Wallet {
+  balance: { earned: number; spent: number; available: number };
+  periods: { week: number; month: number; year: number };
+  redemptions: RedemptionItem[];
+}
+
+export interface RewardItem {
+  id: string;
+  name: string;
+  description: string | null;
+  cost: number;
+  stock: number | null;
+  isActive: boolean;
+  offeredBy: string | null;
+}
+
+export interface RedemptionItem {
+  id: string;
+  reward?: string;
+  cost: number;
+  status: 'pending' | 'delivered' | 'rejected';
+  note: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  student?: string | null;
+}
+
+export interface ChallengeItem {
+  id: string;
+  title: string;
+  description: string | null;
+  points: number;
+  academicAreaId: string | null;
+  academicArea?: AcademicArea | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface ScopePoints {
+  period: 'week' | 'month' | 'year';
+  students: { profileId: string; name: string; semester: number; points: number }[];
 }

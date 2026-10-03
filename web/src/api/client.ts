@@ -148,11 +148,51 @@ api.interceptors.response.use(
 export function apiError(error: unknown, fallback = 'Ocurrió un error.'): string {
   if (axios.isAxiosError(error)) {
     if (!error.response) return 'No se pudo conectar con el servidor. Verifica que la API esté activa.';
+    // Si la API detalló los errores, se muestran ellos y no el resumen: una
+    // pantalla que no los coloca por campo al menos los dice todos.
+    const details = error.response?.data?.details;
+    if (Array.isArray(details) && details.length > 0) {
+      return [...new Set(details.map(String))].join(' ');
+    }
     const message = error.response?.data?.message;
     if (Array.isArray(message)) return message.join(', ');
     if (typeof message === 'string') return message;
   }
   return fallback;
+}
+
+/**
+ * Errores de un formulario, separados por campo.
+ *
+ * La API devuelve `fields: { campo: [mensajes] }`; cada formulario pone el
+ * mensaje debajo de su casilla. Lo que no corresponde a ningún campo del
+ * formulario queda en `general`, para un aviso arriba.
+ */
+export function formErrors(
+  error: unknown,
+  knownFields: string[] = [],
+): { general: string | null; fields: Record<string, string> } {
+  const fields: Record<string, string> = {};
+  if (!axios.isAxiosError(error)) return { general: 'Ocurrió un error.', fields };
+  if (!error.response) {
+    return { general: 'No se pudo conectar con el servidor. Verifica que la API esté activa.', fields };
+  }
+  const data = error.response.data ?? {};
+  const porCampo = data.fields as Record<string, string[]> | undefined;
+  const sobrantes: string[] = [];
+  if (porCampo && typeof porCampo === 'object') {
+    for (const [campo, mensajes] of Object.entries(porCampo)) {
+      const raiz = campo.split('.')[0];
+      const texto = [...new Set((mensajes ?? []).map(String))].join(' ');
+      if (knownFields.length === 0 || knownFields.includes(raiz)) fields[raiz] = texto;
+      else sobrantes.push(texto);
+    }
+  }
+  const tieneCampos = Object.keys(fields).length > 0;
+  const general = tieneCampos
+    ? sobrantes.join(' ') || null
+    : apiError(error);
+  return { general, fields };
 }
 
 // Mapea los mensajes de validación del backend a errores por campo (auth).

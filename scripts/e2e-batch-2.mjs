@@ -70,7 +70,13 @@ async function datosInstitucionales(ctx) {
   });
   check(creado.status === 201, 'B2.1 El estudiante crea su perfil', msgOf(creado));
   ctx.profileId = creado.data?.id;
-  check(creado.data?.semester === null, 'B2.2 El perfil nace sin semestre: es dato del padrón');
+  // El semestre lo fija quien da de alta (§17.1). Antes el perfil nacía sin
+  // él y, como el estudiante no puede ponérselo, se quedaba incompleto.
+  check(
+    creado.data?.semester === 1,
+    'B2.2 El perfil nace con el semestre que fijó la administración en el alta',
+    `semester=${creado.data?.semester}`,
+  );
 
   section('§17.1 · Lo institucional no lo toca el estudiante');
   const intentoSemestre = await req('PATCH', '/profiles/me', {

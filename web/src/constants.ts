@@ -33,13 +33,25 @@ export const PROVISIONABLE_ROLES = [
 /** Semestres de la carrera. */
 export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 
+/**
+ * Hechos que dan puntos (§66). Solo los vigentes se pueden premiar; los
+ * retirados se muestran en gris en los criterios antiguos que los usan.
+ */
 export const GAMIFICATION_TRIGGERS = [
-  { value: 'participacion_confirmada', label: 'Participación confirmada' },
-  { value: 'proyecto_registrado', label: 'Proyecto registrado' },
-  { value: 'evidencia_adjunta', label: 'Evidencia adjunta' },
-  { value: 'certificado_externo', label: 'Certificado externo' },
-  { value: 'constancia_interna', label: 'Constancia interna' },
-  { value: 'perfil_completo', label: 'Perfil completo' },
+  { value: 'participacion_confirmada', label: 'Participación confirmada', hint: 'El responsable confirma que el estudiante asistió a una actividad.' },
+  { value: 'primer_proyecto_respaldado', label: 'Primer proyecto respaldado', hint: 'Su primer proyecto recibe respaldo de un docente.' },
+  { value: 'proyecto_corroborado', label: 'Proyecto corroborado', hint: 'Un docente corrobora o revisa uno de sus proyectos.' },
+  { value: 'colaboracion_aceptada', label: 'Colaboración aceptada', hint: 'Se suma a un equipo o su contribución es aceptada.' },
+  { value: 'hito_trayectoria', label: 'Hito de trayectoria', hint: 'Su respaldo en un área cruza un umbral.' },
+];
+
+export const RETIRED_GAMIFICATION_TRIGGERS = [
+  { value: 'proyecto_registrado', label: 'Proyecto registrado (retirado)' },
+  { value: 'evidencia_adjunta', label: 'Evidencia adjunta (retirado)' },
+  { value: 'certificado_externo', label: 'Certificado externo (retirado)' },
+  { value: 'constancia_interna', label: 'Constancia interna (retirado)' },
+  { value: 'perfil_completo', label: 'Perfil completo (retirado)' },
+  { value: 'reconocimiento_docente', label: 'Reto reconocido por un docente' },
 ];
 
 export const ROLE_LABEL: Record<string, string> = {

@@ -194,3 +194,149 @@ export function IsNotFutureDate(validationOptions?: ValidationOptions) {
     });
   };
 }
+
+// ===========================================================================
+//  Catálogos: nombres, etiquetas y códigos
+// ===========================================================================
+//
+// El cliente web tiene una copia exacta de estas reglas (web/src/lib/
+// validators.ts) para avisar mientras se escribe. Aquí es donde se decide.
+
+const LETRA = 'A-Za-zÀ-ÖØ-öø-ÿ';
+const contarLetras = (v: string) => (v.match(new RegExp(`[${LETRA}]`, 'g')) ?? []).length;
+
+/**
+ * Nombre de área, categoría o criterio: empieza por letra, tiene al menos tres
+ * letras y solo admite signos de puntuación entre palabras. Acepta «Industria
+ * 4.0» o «Gestión de Proyectos (PMI)»; rechaza «#!@#!@#» y «123213».
+ */
+export const CATALOG_NAME_RE = new RegExp(`^[${LETRA}]+(?:[ .,/&'()-]+[${LETRA}0-9]+)*\\)?$`);
+
+/**
+ * Nombre de habilidad o tecnología. Más permisivo, porque las tecnologías
+ * tienen nombres raros —«C++», «C#», «.NET», «Node.js», «UI/UX»—, pero exige
+ * al menos una letra y que los signos vayan entre palabras.
+ */
+export const SKILL_NAME_RE = new RegExp(
+  `^\\.?[${LETRA}0-9]+(?:[ ./&'()-]+[${LETRA}0-9]+)*\\)?(?:\\+\\+|#)?$`,
+);
+
+/** Etiqueta del motor: minúsculas, números y los signos de una tecnología. */
+export const TAG_RE = /^[a-z0-9áéíóúüñ][a-z0-9áéíóúüñ .+#-]{0,39}$/;
+
+/** Código interno: minúsculas, números y guion bajo, empezando por letra. */
+export const CODE_RE = /^[a-z][a-z0-9_]{2,59}$/;
+export const CODE_MSG =
+  'El código solo admite minúsculas, números y guion bajo, y empieza por letra (3 a 60 caracteres).';
+
+/** «Bases de Datos» → «bases_de_datos». Para sugerir y para rellenar códigos. */
+export function slugCode(nombre: string): string {
+  const base = nombre
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 56);
+  if (!base) return 'item';
+  return /^[a-z]/.test(base) ? base : `c_${base}`.slice(0, 56);
+}
+
+/**
+ * Decorador a partir de una función que devuelve el motivo del error o null.
+ *
+ * El mensaje se recalcula desde el valor en `defaultMessage`, en lugar de
+ * guardarlo entre una llamada y otra: así no hay estado compartido entre dos
+ * validaciones.
+ */
+function regla(
+  nombre: string,
+  validar: (v: string) => string | null,
+  validationOptions?: ValidationOptions,
+) {
+  const motivo = (value: unknown): string | null => {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== 'string') return 'Debe ser texto.';
+    return validar(value);
+  };
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: nombre,
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate: (value: unknown) => motivo(value) === null,
+        defaultMessage: (args?: { value: unknown }) => motivo(args?.value) ?? 'El valor no es válido.',
+      },
+    });
+  };
+}
+
+/** Nombre de catálogo (área, categoría, criterio) con un mensaje preciso. */
+export function IsCatalogName(validationOptions?: ValidationOptions) {
+  return regla(
+    'isCatalogName',
+    (v) => {
+      const t = v.trim();
+      if (/^[\d\s.,-]+$/.test(t)) return 'El nombre no puede ser solo números.';
+      if (!new RegExp(`^[${LETRA}]`).test(t)) return 'El nombre debe empezar por una letra.';
+      if (contarLetras(t) < 3) return 'El nombre debe contener al menos 3 letras.';
+      if (!CATALOG_NAME_RE.test(t)) {
+        return 'El nombre solo admite letras, números, espacios y signos de puntuación entre palabras.';
+      }
+      return null;
+    },
+    validationOptions,
+  );
+}
+
+/** Nombre de habilidad o tecnología. */
+export function IsSkillName(validationOptions?: ValidationOptions) {
+  return regla(
+    'isSkillName',
+    (v) => {
+      const t = v.trim();
+      if (contarLetras(t) === 0) return 'El nombre debe contener letras: no puede ser solo números o símbolos.';
+      if (!SKILL_NAME_RE.test(t)) {
+        return 'Use el nombre de la tecnología (p. ej. «React», «C#», «Node.js»): sin símbolos sueltos.';
+      }
+      return null;
+    },
+    validationOptions,
+  );
+}
+
+/** Pasa a minúsculas y limpia cada etiqueta antes de validarla. */
+export const lowerTags = ({ value }: { value: unknown }) => {
+  const limpio = trimUniqueArray({ value });
+  return Array.isArray(limpio)
+    ? limpio.map((t) => (typeof t === 'string' ? t.toLowerCase() : t))
+    : limpio;
+};
+
+/** Cada etiqueta, con el motivo exacto si alguna no sirve. */
+export function IsTagList(validationOptions?: ValidationOptions) {
+  const motivo = (value: unknown): string | null => {
+    if (value === undefined || value === null) return null;
+    if (!Array.isArray(value)) return 'Las etiquetas deben ser una lista.';
+    const mala = value.find(
+      (t) => typeof t !== 'string' || !TAG_RE.test(t) || contarLetras(t) === 0,
+    );
+    return mala === undefined
+      ? null
+      : `La etiqueta «${String(mala)}» no es válida: use palabras en minúscula (p. ej. «sql», «react»).`;
+  };
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isTagList',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate: (value: unknown) => motivo(value) === null,
+        defaultMessage: (args?: { value: unknown }) => motivo(args?.value) ?? 'Etiquetas no válidas.',
+      },
+    });
+  };
+}

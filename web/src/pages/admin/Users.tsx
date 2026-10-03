@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  FiCheck, FiEdit2, FiMail, FiPlus, FiSearch, FiSliders, FiSlash, FiUserPlus, FiUsers,
+  FiAlertTriangle, FiCheck, FiClock, FiEdit2, FiMail, FiPlus, FiSearch, FiSend, FiSliders, FiSlash,
+  FiUserPlus, FiUsers, FiXCircle,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { adminService } from '../../services';
+import { adminService, mailService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
-  AsyncView, Badge, Button, Card, CopyButton, EmptyState, Modal, PageHeader, ResultCount,
-  SearchInput, SkeletonTable,
+  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
+  SkeletonTable,
 } from '../../components/ui';
+import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
 import { ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, PROVISIONABLE_ROLES, SEMESTERS } from '../../constants';
 import { USER_STATUS_LABEL } from '../../services/types';
-import type { PublicUser, UserStatus } from '../../services/types';
+import type { InvitationView, PublicUser, UserStatus } from '../../services/types';
+import {
+  institutionalEmail, personName, universityCode, validate,
+} from '../../lib/validators';
 
 /** Color del estado en la tabla (§12). */
 const STATUS_TONE: Record<UserStatus, string> = {
@@ -22,13 +28,44 @@ const STATUS_TONE: Record<UserStatus, string> = {
   inactive: 'gray',
 };
 
-// Sin contraseña a propósito (§12): la define el titular al activar.
-const emptyForm = {
+const CAMPOS = ['firstName', 'lastName', 'email', 'role', 'semester', 'universityCode'] as const;
+type Campo = (typeof CAMPOS)[number];
+
+// Sin contraseña a propósito (§12): la elige el titular al activar.
+const emptyForm: Record<Campo, string> = {
   firstName: '',
   lastName: '',
   email: '',
-  role: RolNombre.TEACHER as string,
+  role: RolNombre.STUDENT,
+  semester: '',
+  universityCode: '',
 };
+
+function reglas(form: Record<Campo, string>) {
+  return validate(form, {
+    firstName: personName('nombre'),
+    lastName: personName('apellido'),
+    email: institutionalEmail,
+    semester: (v) => (form.role === RolNombre.STUDENT && !v ? 'Elige el semestre que cursa.' : null),
+    universityCode: form.role === RolNombre.STUDENT ? universityCode : undefined,
+  });
+}
+
+/** Qué decirle al administrador sobre la invitación que acaba de salir. */
+function describirInvitacion(inv?: InvitationView): { tono: 'ok' | 'warn' | 'error'; texto: string } {
+  if (!inv) return { tono: 'ok', texto: 'La cuenta quedó creada.' };
+  if (inv.status === 'failed') {
+    return { tono: 'error', texto: `La cuenta se creó, pero el correo no salió: ${inv.error ?? 'error del servidor de correo'}. Puede reenviarlo desde la lista.` };
+  }
+  if (inv.simulated) {
+    return {
+      tono: 'warn',
+      texto: 'El correo está en modo simulado: la invitación no llegó a ningún buzón. Configure el correo real en «Correo».',
+    };
+  }
+  if (inv.status === 'queued') return { tono: 'ok', texto: `La invitación para ${inv.sentTo} está en cola y saldrá en unos segundos.` };
+  return { tono: 'ok', texto: `Invitación enviada a ${inv.sentTo}. El titular elegirá su contraseña desde ese correo.` };
+}
 
 export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
@@ -37,52 +74,73 @@ export default function AdminUsersPage() {
     () => adminService.listUsers(applied || undefined),
     [applied],
   );
+  const correo = useAsync(() => mailService.status(), []);
 
   const [form, setForm] = useState(emptyForm);
   const [creating, setCreating] = useState(false);
+  const errores = useFormErrors(CAMPOS);
   const [editing, setEditing] = useState<PublicUser | null>(null);
   const [semesterTarget, setSemesterTarget] = useState<PublicUser | null>(null);
-  const [activationToken, setActivationToken] = useState<{ email: string; token: string } | null>(null);
   const toast = useToast();
+  const confirm = useConfirm();
 
-  const notify = (text: string, detail?: string) => toast.success(text, detail);
+  const esEstudiante = form.role === RolNombre.STUDENT;
+
+  const set = (campo: Campo, valor: string) => {
+    setForm((f) => ({ ...f, [campo]: valor }));
+    errores.clear(campo);
+  };
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
+    const locales = reglas(form);
+    if (Object.keys(locales).length > 0) {
+      errores.setErrors(locales);
+      errores.setGeneral(null);
+      return;
+    }
     setCreating(true);
     try {
-      const creado = await adminService.createUser(form);
-      setForm(emptyForm);
-      notify(
-        'Cuenta provisionada.',
-        `${form.email} recibió su enlace de activación y podrá definir su contraseña.`,
-      );
-      // Solo llega en desarrollo sin SMTP: permite continuar sin correo.
-      if (creado.activationToken) setActivationToken({ email: creado.email, token: creado.activationToken });
+      const body: Record<string, unknown> = {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim().toLowerCase(),
+        role: form.role,
+      };
+      if (esEstudiante) {
+        body.semester = Number(form.semester);
+        if (form.universityCode.trim()) body.universityCode = form.universityCode.trim();
+      }
+      const creado = await adminService.createUser(body);
+      setForm({ ...emptyForm, role: form.role });
+      errores.reset();
+      const aviso = describirInvitacion(creado.invitation);
+      const titulo = `Cuenta creada: ${creado.firstName} ${creado.lastName}`;
+      if (aviso.tono === 'error') toast.error(titulo, aviso.texto);
+      else if (aviso.tono === 'warn') toast.info(titulo, aviso.texto);
+      else toast.success(titulo, aviso.texto);
       reload();
     } catch (e2) {
-      toast.error(apiError(e2));
+      errores.fromApi(e2);
     } finally {
       setCreating(false);
     }
   };
-
-  const confirm = useConfirm();
 
   /**
    * Suspende o reactiva una cuenta (§12).
    *
    * Una cuenta pendiente no se puede "activar" desde aquí: activarla es un
    * acto de su titular, que demuestra control del correo. Lo que sí puede
-   * hacer el administrador es reenviarle el enlace.
+   * hacer el administrador es reenviarle la invitación.
    */
   const cambiarEstado = async (user: PublicUser, status: UserStatus) => {
     if (status !== 'active') {
       const ok = await confirm({
         title: `Suspender a ${user.firstName} ${user.lastName}`,
         message:
-          'Perderá el acceso de inmediato y se cerrarán todas sus sesiones abiertas. ' +
-          'Puede reactivar la cuenta cuando quiera.',
+          'Perderá el acceso de inmediato y se cerrarán todas sus sesiones abiertas. '
+          + 'No se borra nada: puede reactivar la cuenta cuando quiera.',
         confirmLabel: 'Suspender cuenta',
         tone: 'danger',
       });
@@ -90,7 +148,7 @@ export default function AdminUsersPage() {
     }
     try {
       await adminService.setStatus(user.id, status);
-      notify(
+      toast.success(
         status === 'active' ? 'Cuenta reactivada.' : 'Cuenta suspendida.',
         `${user.firstName} ${user.lastName}`,
       );
@@ -103,70 +161,128 @@ export default function AdminUsersPage() {
   const reenviar = async (user: PublicUser) => {
     try {
       const res = await adminService.resendActivation(user.id);
-      notify('Enlace reenviado.', res.message);
-      if (res.activationToken) setActivationToken({ email: user.email, token: res.activationToken });
+      const aviso = describirInvitacion(res.invitation);
+      if (aviso.tono === 'error') toast.error('No se pudo reenviar', aviso.texto);
+      else if (aviso.tono === 'warn') toast.info('Invitación generada', aviso.texto);
+      else toast.success('Invitación reenviada', aviso.texto);
+      reload();
     } catch (e2) {
-      toast.error(apiError(e2));
+      // 429: el reenvío está en pausa antispam; el mensaje dice cuánto falta.
+      toast.info('Todavía no', apiError(e2));
     }
   };
+
+  const simulado = correo.data?.transport === 'console';
 
   return (
     <div>
       <PageHeader
         title="Gestión de usuarios"
-        description="Alta y control de acceso de las cuentas institucionales. No existe registro público: toda cuenta se provisiona aquí o por importación de padrón, y su titular la activa desde el enlace que recibe."
+        description="Crea las cuentas de la universidad y controla su acceso. Nadie se registra solo: cada persona recibe una invitación en su correo institucional y desde ahí elige su contraseña."
       />
 
-      <Card title="Provisionar cuenta">
-        <form onSubmit={create}>
-          <div className="row">
-            <div className="field">
-              <label>Nombres</label>
-              <input
-                value={form.firstName}
-                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                placeholder="Carlos"
-                required
-              />
-            </div>
-            <div className="field">
-              <label>Apellidos</label>
-              <input
-                value={form.lastName}
-                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                placeholder="Pérez"
-                required
-              />
-            </div>
+      {simulado && (
+        <div className="notice notice-warn">
+          <FiAlertTriangle size={18} />
+          <div>
+            <strong>El correo está en modo simulado.</strong> Las invitaciones no llegan a los
+            buzones: se guardan en el registro de la API. <Link to="/admin/mail">Configurar el correo real</Link>
           </div>
+        </div>
+      )}
+
+      <Card title="Crear una cuenta">
+        <form onSubmit={create} noValidate>
+          <FormAlert message={errores.general} />
           <div className="row">
-            <div className="field">
-              <label>Correo institucional</label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="carlos.perez@univalle.edu"
-                required
-              />
-            </div>
-            <div className="field">
-              <label>Rol</label>
-              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <FormField label="Rol" required error={errores.errors.role}>
+              <select value={form.role} onChange={(e) => set('role', e.target.value)}>
                 {PROVISIONABLE_ROLES.map((r) => (
                   <option key={r} value={r}>
                     {ROLE_LABEL[r]}
                   </option>
                 ))}
               </select>
-            </div>
+            </FormField>
+            <FormField
+              label="Correo institucional"
+              required
+              error={errores.errors.email}
+              hint={esEstudiante ? 'Termina en @est.univalle.edu' : 'Termina en @univalle.edu'}
+            >
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => set('email', e.target.value)}
+                placeholder={esEstudiante ? 'ana.quispe@est.univalle.edu' : 'carlos.perez@univalle.edu'}
+                aria-invalid={!!errores.errors.email}
+              />
+            </FormField>
           </div>
+          <div className="row">
+            <FormField label="Nombres" required error={errores.errors.firstName}>
+              <input
+                value={form.firstName}
+                onChange={(e) => set('firstName', e.target.value)}
+                placeholder="Carlos"
+                aria-invalid={!!errores.errors.firstName}
+              />
+            </FormField>
+            <FormField
+              label="Apellidos"
+              required
+              error={errores.errors.lastName}
+              hint="Uno o dos apellidos."
+            >
+              <input
+                value={form.lastName}
+                onChange={(e) => set('lastName', e.target.value)}
+                placeholder="Pérez Rojas"
+                aria-invalid={!!errores.errors.lastName}
+              />
+            </FormField>
+          </div>
+          {esEstudiante && (
+            <div className="row">
+              <FormField
+                label="Semestre que cursa"
+                required
+                error={errores.errors.semester}
+                hint="Lo fija la universidad: el estudiante no puede cambiarlo."
+              >
+                <select
+                  value={form.semester}
+                  onChange={(e) => set('semester', e.target.value)}
+                  aria-invalid={!!errores.errors.semester}
+                >
+                  <option value="">Elige el semestre…</option>
+                  {SEMESTERS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}º semestre
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField
+                label="Código universitario"
+                error={errores.errors.universityCode}
+                hint="Opcional. Si lo tiene, evita duplicados al importar el padrón."
+              >
+                <input
+                  value={form.universityCode}
+                  onChange={(e) => set('universityCode', e.target.value)}
+                  placeholder="202100123"
+                  aria-invalid={!!errores.errors.universityCode}
+                />
+              </FormField>
+            </div>
+          )}
           <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
-            No se define contraseña: la cuenta queda pendiente de activación y su titular
-            elige la suya desde el enlace que recibe por correo.
+            No se define contraseña: la persona recibe una invitación en su correo institucional
+            y elige la suya. Usted nunca ve el enlace ni el código de activación.
           </p>
           <Button type="submit" loading={creating} icon={<FiUserPlus size={15} />}>
-            Provisionar cuenta
+            Crear cuenta y enviar invitación
           </Button>
         </form>
       </Card>
@@ -181,11 +297,7 @@ export default function AdminUsersPage() {
               setApplied(search);
             }}
           >
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Buscar por nombre o correo…"
-            />
+            <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o correo…" />
             <Button type="submit" variant="secondary" size="sm" icon={<FiSearch size={14} />}>
               Buscar
             </Button>
@@ -235,92 +347,69 @@ export default function AdminUsersPage() {
         >
           {(users) => (
             <>
-            <div style={{ marginBottom: '0.6rem' }}>
-              <ResultCount shown={users.length} total={users.length} noun="usuarios" />
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Correo</th>
-                  <th>Rol</th>
-                  <th>Semestres habilitados</th>
-                  <th>Estado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td>
-                      {u.firstName} {u.lastName}
-                    </td>
-                    <td className="muted">{u.email}</td>
-                    <td>{ROLE_LABEL[u.role] ?? u.role}</td>
-                    <td>
-                      {u.role === RolNombre.TEACHER ? (
-                        <div className="flex" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
-                          {u.semesters && u.semesters.length > 0 ? (
-                            u.semesters.map((s) => (
-                              <Badge key={s} tone="bordo">
-                                {s}º
-                              </Badge>
-                            ))
-                          ) : (
-                            <span className="muted">Sin semestres</span>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSemesterTarget(u)}
-                            icon={<FiSliders size={13} />}
-                          >
-                            Configurar
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <Badge tone={STATUS_TONE[u.status] ?? 'gray'}>
-                        {USER_STATUS_LABEL[u.status] ?? u.status}
-                      </Badge>
-                    </td>
-                    <td>
-                      <div className="flex" style={{ gap: '0.35rem' }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setEditing(u)}
-                          title="Editar datos"
-                        >
-                          <FiEdit2 />
-                        </button>
-                        {u.status === 'pending_activation' ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => reenviar(u)}
-                            icon={<FiMail size={13} />}
-                          >
-                            Reenviar enlace
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => cambiarEstado(u, u.status === 'active' ? 'suspended' : 'active')}
-                            icon={u.status === 'active' ? <FiSlash size={13} /> : <FiCheck size={13} />}
-                          >
-                            {u.status === 'active' ? 'Suspender' : 'Reactivar'}
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              <div style={{ marginBottom: '0.6rem' }}>
+                <ResultCount shown={users.length} total={users.length} noun="usuarios" />
+              </div>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Correo</th>
+                      <th>Rol</th>
+                      <th>Semestre</th>
+                      <th>Estado</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((u) => (
+                      <tr key={u.id}>
+                        <td>
+                          {u.firstName} {u.lastName}
+                        </td>
+                        <td className="muted">{u.email}</td>
+                        <td>{ROLE_LABEL[u.role] ?? u.role}</td>
+                        <td>
+                          <SemestreCelda user={u} onTeacher={() => setSemesterTarget(u)} onStudent={() => setEditing(u)} />
+                        </td>
+                        <td>
+                          <Badge tone={STATUS_TONE[u.status] ?? 'gray'}>
+                            {USER_STATUS_LABEL[u.status] ?? u.status}
+                          </Badge>
+                          {u.status === 'pending_activation' && <InvitacionLinea inv={u.invitation} />}
+                        </td>
+                        <td>
+                          <div className="flex" style={{ gap: '0.35rem' }}>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setEditing(u)}
+                              title="Editar datos"
+                              aria-label={`Editar a ${u.firstName} ${u.lastName}`}
+                            >
+                              <FiEdit2 />
+                            </button>
+                            {u.status === 'pending_activation' ? (
+                              <Button variant="secondary" size="sm" onClick={() => reenviar(u)} icon={<FiMail size={13} />}>
+                                Reenviar invitación
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => cambiarEstado(u, u.status === 'active' ? 'suspended' : 'active')}
+                                icon={u.status === 'active' ? <FiSlash size={13} /> : <FiCheck size={13} />}
+                              >
+                                {u.status === 'active' ? 'Suspender' : 'Reactivar'}
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </AsyncView>
@@ -332,37 +421,10 @@ export default function AdminUsersPage() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            notify('Usuario actualizado.');
+            toast.success('Usuario actualizado.');
             reload();
           }}
-          onError={(m) => toast.error(m)}
         />
-      )}
-
-      {activationToken && (
-        <Modal
-          title="Enlace de activación"
-          subtitle={activationToken.email}
-          onClose={() => setActivationToken(null)}
-        >
-          <p className="muted" style={{ marginTop: 0 }}>
-            No hay servidor de correo configurado en este entorno, así que el enlace se
-            muestra aquí. En producción llega únicamente al correo institucional y esta
-            ventana no aparece.
-          </p>
-          <div className="token-box">
-            <code>{activationToken.token}</code>
-            <CopyButton text={activationToken.token} label="Copiar código" />
-          </div>
-          <p className="muted" style={{ fontSize: '0.78rem' }}>
-            Debe pegarse en <strong>/activar</strong> para definir la contraseña.
-          </p>
-          <div className="flex" style={{ justifyContent: 'flex-end' }}>
-            <Button variant="secondary" onClick={() => setActivationToken(null)}>
-              Cerrar
-            </Button>
-          </div>
-        </Modal>
       )}
 
       {semesterTarget && (
@@ -371,7 +433,7 @@ export default function AdminUsersPage() {
           onClose={() => setSemesterTarget(null)}
           onSaved={(count) => {
             setSemesterTarget(null);
-            notify(
+            toast.success(
               count === 0
                 ? 'El docente quedó sin semestres habilitados.'
                 : `Semestres habilitados actualizados (${count}).`,
@@ -387,33 +449,126 @@ export default function AdminUsersPage() {
 
 /* ------------------------------------------------------------------ */
 
+function SemestreCelda({
+  user,
+  onTeacher,
+  onStudent,
+}: {
+  user: PublicUser;
+  onTeacher: () => void;
+  onStudent: () => void;
+}) {
+  if (user.role === RolNombre.TEACHER) {
+    return (
+      <div className="flex" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+        {user.semesters && user.semesters.length > 0 ? (
+          user.semesters.map((s) => (
+            <Badge key={s} tone="bordo">
+              {s}º
+            </Badge>
+          ))
+        ) : (
+          <span className="muted">Sin semestres</span>
+        )}
+        <Button variant="ghost" size="sm" onClick={onTeacher} icon={<FiSliders size={13} />}>
+          Configurar
+        </Button>
+      </div>
+    );
+  }
+  if (user.role === RolNombre.STUDENT) {
+    return user.semester ? (
+      <Badge tone="bordo">{user.semester}º semestre</Badge>
+    ) : (
+      <button type="button" className="link-warn" onClick={onStudent} title="Sin semestre, el perfil no puede completarse">
+        <FiAlertTriangle size={13} /> Asignar semestre
+      </button>
+    );
+  }
+  return <span className="muted">—</span>;
+}
+
+/** Una línea bajo el estado: en qué quedó la invitación de una cuenta pendiente. */
+function InvitacionLinea({ inv }: { inv?: InvitationView }) {
+  if (!inv) return <div className="inv-line muted">Sin invitación enviada</div>;
+  const cuando = inv.at ? new Date(inv.at).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  if (inv.status === 'failed') {
+    return (
+      <div className="inv-line inv-error" title={inv.error ?? undefined}>
+        <FiXCircle size={12} /> El correo falló{inv.error ? `: ${inv.error}` : ''}
+      </div>
+    );
+  }
+  if (inv.status === 'queued') {
+    return (
+      <div className="inv-line muted">
+        <FiClock size={12} /> Invitación en cola
+      </div>
+    );
+  }
+  if (inv.simulated) {
+    return (
+      <div className="inv-line inv-warn">
+        <FiAlertTriangle size={12} /> Invitación simulada {cuando && `· ${cuando}`}
+      </div>
+    );
+  }
+  return (
+    <div className="inv-line inv-ok">
+      <FiSend size={12} /> Invitación enviada {cuando && `· ${cuando}`}
+    </div>
+  );
+}
+
 function EditUserDialog({
   user,
   onClose,
   onSaved,
-  onError,
 }: {
   user: PublicUser;
   onClose: () => void;
   onSaved: () => void;
-  onError: (msg: string) => void;
 }) {
-  const [form, setForm] = useState({
+  const esEstudiante = user.role === RolNombre.STUDENT;
+  const [form, setForm] = useState<Record<Campo, string>>({
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
     role: user.role,
+    semester: user.semester ? String(user.semester) : '',
+    universityCode: user.universityCode ?? '',
   });
   const [saving, setSaving] = useState(false);
+  const errores = useFormErrors(CAMPOS);
+
+  const set = (campo: Campo, valor: string) => {
+    setForm((f) => ({ ...f, [campo]: valor }));
+    errores.clear(campo);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const locales = reglas(form);
+    if (Object.keys(locales).length > 0) {
+      errores.setErrors(locales);
+      return;
+    }
     setSaving(true);
     try {
-      await adminService.updateUser(user.id, form);
+      const body: Record<string, unknown> = {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim().toLowerCase(),
+      };
+      if (canChangeRole) body.role = form.role;
+      if (esEstudiante) {
+        body.semester = Number(form.semester);
+        body.universityCode = form.universityCode.trim() || undefined;
+      }
+      await adminService.updateUser(user.id, body);
       onSaved();
     } catch (e2) {
-      onError(apiError(e2));
+      errores.fromApi(e2);
       setSaving(false);
     }
   };
@@ -422,38 +577,44 @@ function EditUserDialog({
 
   return (
     <Modal title="Editar usuario" subtitle={user.email} onClose={onClose}>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} noValidate>
+        <FormAlert message={errores.general} />
         <div className="row">
-          <div className="field">
-            <label>Nombres</label>
-            <input
-              value={form.firstName}
-              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-              required
-            />
-          </div>
-          <div className="field">
-            <label>Apellidos</label>
-            <input
-              value={form.lastName}
-              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-              required
-            />
-          </div>
+          <FormField label="Nombres" required error={errores.errors.firstName}>
+            <input value={form.firstName} onChange={(e) => set('firstName', e.target.value)} />
+          </FormField>
+          <FormField label="Apellidos" required error={errores.errors.lastName}>
+            <input value={form.lastName} onChange={(e) => set('lastName', e.target.value)} />
+          </FormField>
         </div>
-        <div className="field">
-          <label>Correo institucional</label>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            required
-          />
-        </div>
-        <div className="field">
-          <label>Rol</label>
+        <FormField label="Correo institucional" required error={errores.errors.email}>
+          <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+        </FormField>
+        {esEstudiante && (
+          <div className="row">
+            <FormField
+              label="Semestre que cursa"
+              required
+              error={errores.errors.semester}
+              hint="Cambiarlo mueve al estudiante de alcance docente."
+            >
+              <select value={form.semester} onChange={(e) => set('semester', e.target.value)}>
+                <option value="">Elige el semestre…</option>
+                {SEMESTERS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}º semestre
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Código universitario" error={errores.errors.universityCode}>
+              <input value={form.universityCode} onChange={(e) => set('universityCode', e.target.value)} />
+            </FormField>
+          </div>
+        )}
+        <FormField label="Rol" error={errores.errors.role}>
           {canChangeRole ? (
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            <select value={form.role} onChange={(e) => set('role', e.target.value)}>
               {INSTITUTIONAL_ROLES.map((r) => (
                 <option key={r} value={r}>
                   {ROLE_LABEL[r]}
@@ -463,12 +624,12 @@ function EditUserDialog({
           ) : (
             <>
               <input value={ROLE_LABEL[user.role] ?? user.role} disabled />
-              <span className="muted" style={{ fontSize: '0.76rem' }}>
+              <span className="field-hint">
                 El rol de estudiante y el de administrador no se cambian desde esta pantalla.
               </span>
             </>
           )}
-        </div>
+        </FormField>
         <div className="flex" style={{ justifyContent: 'flex-end', gap: '0.5rem' }}>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancelar

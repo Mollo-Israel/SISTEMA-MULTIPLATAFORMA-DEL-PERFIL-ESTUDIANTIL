@@ -1,159 +1,182 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  FiFolder, FiCalendar, FiTarget, FiBarChart2, FiUpload, FiCheckCircle, FiCircle, FiCompass, FiHelpCircle,
+  FiArrowRight, FiAward, FiBarChart2, FiCalendar, FiCompass, FiFolder, FiUpload, FiUser, FiUsers,
 } from 'react-icons/fi';
 import { useAsync } from '../../hooks/useAsync';
+import { useAuth } from '../../auth/AuthContext';
 import { profileService } from '../../services';
-import { AsyncView, Card, PageHeader, SkeletonCards } from '../../components/ui';
-import { AffinityBars, CompletionDonut } from '../../components/charts';
-import { ACTIVITY_TYPE_LABEL, PROFILE_STATUS_LABEL, PROJECT_STATUS_LABEL, REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
+import { Card, SkeletonCards } from '../../components/ui';
+import { AffinityBars } from '../../components/charts';
+import { ACTIVITY_TYPE_LABEL, PROJECT_STATUS_LABEL, REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
+import type { ProfileSummary } from '../../services/types';
+import '../../welcome.css';
 
-const tile = { hidden: { opacity: 0, y: 16 }, show: (i = 0) => ({ opacity: 1, y: 0, transition: { delay: i * 0.06, duration: 0.4 } }) };
+const aparecer = {
+  hidden: { opacity: 0, y: 14 },
+  show: (i = 0) => ({ opacity: 1, y: 0, transition: { delay: i * 0.05, duration: 0.35 } }),
+};
 
-const QUICK = [
-  { to: '/student/projects', icon: <FiFolder />, t: 'Registrar proyecto', d: 'Documenta tus proyectos.' },
-  { to: '/student/evidences', icon: <FiUpload />, t: 'Subir evidencia', d: 'Respalda tu trayectoria.' },
-  { to: '/student/activities', icon: <FiCalendar />, t: 'Ver actividades', d: 'Talleres y eventos.' },
-  { to: '/student/affinity', icon: <FiBarChart2 />, t: 'Ver afinidades', d: 'Tus áreas destacadas.' },
-  { to: '/student/interests', icon: <FiTarget />, t: 'Intereses y habilidades', d: 'Actualiza tu perfil.' },
-  { to: '/student/recommendations', icon: <FiCompass />, t: 'Recomendaciones', d: 'Sugerencias para ti.' },
+const ATAJOS = [
+  { to: '/student/recommendations', icon: <FiCompass />, t: 'Para ti', d: 'Cursos, charlas y actividades que encajan contigo.', c: 'c1' },
+  { to: '/student/activities', icon: <FiCalendar />, t: 'Actividades', d: 'Talleres, charlas y eventos para inscribirte.', c: 'c2' },
+  { to: '/student/projects', icon: <FiFolder />, t: 'Mis proyectos', d: 'Lo que construiste, con tu aporte.', c: 'c3' },
+  { to: '/student/evidences', icon: <FiUpload />, t: 'Certificados y evidencias', d: 'Lo que demuestra lo que sabes.', c: 'c4' },
+  { to: '/student/collaboration', icon: <FiUsers />, t: 'Compañeros y equipos', d: 'Contactos por QR, equipos y mensajes.', c: 'c5' },
+  { to: '/student/progress', icon: <FiAward />, t: 'Mi progreso', d: 'Tus puntos, insignias y recompensas.', c: 'c6' },
 ];
 
+/** El paso más útil que le falta dar, dicho como lo diría una persona. */
+function siguientePaso(d: ProfileSummary): { titulo: string; texto: string; to: string; cta: string } {
+  if (d.projects.length === 0) {
+    return {
+      titulo: 'Registra tu primer proyecto',
+      texto: 'Un trabajo de materia, un proyecto personal o de un hackatón: cuéntanos qué hiciste y qué tecnologías usaste.',
+      to: '/student/projects',
+      cta: 'Registrar proyecto',
+    };
+  }
+  if (d.activities.length === 0) {
+    return {
+      titulo: 'Inscríbete en una actividad',
+      texto: 'Cuando el organizador confirme que participaste, quedará en tu trayectoria.',
+      to: '/student/activities',
+      cta: 'Ver actividades',
+    };
+  }
+  if (d.externalCertificates.length === 0 && d.evidences.length === 0) {
+    return {
+      titulo: 'Sube un certificado o una evidencia',
+      texto: 'Un curso que terminaste o una captura de tu trabajo ayudan a demostrar lo que sabes.',
+      to: '/student/evidences',
+      cta: 'Subir certificado',
+    };
+  }
+  return {
+    titulo: 'Mira lo que te recomendamos',
+    texto: 'Con lo que ya cargaste tenemos sugerencias pensadas para ti.',
+    to: '/student/recommendations',
+    cta: 'Ver recomendaciones',
+  };
+}
+
 export default function StudentDashboard() {
-  const summary = useAsync(() => profileService.summary().catch(() => null), []);
+  const { user } = useAuth();
+  const summary = useAsync(() => profileService.summary(), []);
+  const d = summary.data;
 
   return (
     <div>
-      <PageHeader
-        title="Mi panel"
-        description="Tu perfil se construye con lo que declaras y con tu actividad académica."
-      />
+      <motion.div className="home-hero" initial="hidden" animate="show" variants={aparecer}>
+        <div>
+          <span className="home-kicker">Tu espacio</span>
+          <h1>¡Hola{user?.firstName ? `, ${user.firstName}` : ''}!</h1>
+          <p>
+            {d?.profile.semester ? `${d.profile.semester}º semestre · ` : ''}
+            Aquí ves cómo va tu trayectoria y qué puedes hacer ahora.
+          </p>
+        </div>
+        <Link to="/student/profile" className="home-hero-btn">
+          <FiUser /> Mi perfil
+        </Link>
+      </motion.div>
 
-      {!summary.loading && !summary.data && (
-        <Card title="Aún no tienes perfil">
-          <p className="muted">Crea tu perfil dinámico para empezar a construir tu portafolio académico.</p>
-          <Link to="/student/profile" className="btn btn-primary mt">Crear mi perfil</Link>
-        </Card>
-      )}
-
-      <AsyncView
-        loading={summary.loading}
-        error={summary.error}
-        data={summary.data}
-        skeleton={<SkeletonCards count={3} />}
-        emptyMessage=""
-      >
-        {(d) => {
-          const checklist = [
-            { t: 'Definir semestre', done: !!d.profile.semester },
-            { t: 'Agregar descripción', done: !!d.profile.bio },
-            { t: 'Registrar intereses', done: d.interests.length > 0 },
-            { t: 'Declarar habilidades', done: d.skills.length > 0 },
-            { t: 'Áreas a mejorar', done: d.improvementAreas.length > 0 },
-          ];
-          const affinityData = d.affinities.map((a) => ({ area: a.area ?? '—', score: Number(a.score), level: a.level }));
-
-          return (
-            <>
-              <div className="dash-grid3">
-                {/* Completa tu perfil */}
-                <div className="chart-card">
-                  <h3>Completa tu perfil</h3>
-                  <CompletionDonut value={d.profile.completionPercentage} />
-                  <ul className="checklist">
-                    {checklist.map((c) => (
-                      <li key={c.t}>
-                        {c.done ? <FiCheckCircle className="done" /> : <FiCircle className="todo" />} {c.t}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link to="/student/profile" className="btn btn-primary btn-sm mt" style={{ width: '100%', justifyContent: 'center' }}>Completar perfil</Link>
-                </div>
-
-                {/* Áreas de afinidad */}
-                <div className="chart-card">
-                  <div className="flex between"><h3>Áreas de afinidad</h3><Link to="/student/affinity" className="btn btn-ghost btn-sm">Ver todo</Link></div>
-                  <AffinityBars data={affinityData} />
-                  {affinityData.length === 0 && <p className="muted">Agrega intereses, habilidades y proyectos, luego recalcula.</p>}
-                </div>
-
-                {/* Actividades recientes */}
-                <Card title="Actividades recientes">
-                  {d.activities.length === 0 ? <p className="muted">Aún no te inscribes en actividades.</p> : (
-                    d.activities.slice(0, 5).map((a) => (
-                      <div className="act-item" key={a.activityId}>
-                        <span className="ai"><FiCalendar /></span>
-                        <span className="grow"><b>{a.title}</b><span>{lbl(ACTIVITY_TYPE_LABEL, a.type ?? '')}</span></span>
-                        <span className="badge badge-bordo">{lbl(REGISTRATION_STATUS_LABEL, a.status)}</span>
-                      </div>
-                    ))
-                  )}
-                </Card>
-              </div>
-
-              <div className="dash-grid3" style={{ marginTop: '1rem' }}>
-                {/* Proyectos */}
-                <Card title="Proyectos registrados" actions={<Link to="/student/projects" className="btn btn-ghost btn-sm">Ver todos</Link>}>
-                  {d.projects.length === 0 ? <p className="muted">Sin proyectos.</p> : (
-                    d.projects.slice(0, 3).map((p) => (
-                      <div className="act-item" key={p.id}>
-                        <span className="ai"><FiFolder /></span>
-                        <span className="grow"><b>{p.title}</b><span>{(p.technologies ?? []).join(', ') || '—'}</span></span>
-                        <span className="badge badge-gray">{lbl(PROJECT_STATUS_LABEL, p.status)}</span>
-                      </div>
-                    ))
-                  )}
-                  <Link to="/student/projects" className="btn btn-secondary btn-sm mt" style={{ width: '100%', justifyContent: 'center' }}>Registrar proyecto</Link>
-                </Card>
-
-                {/* Evidencias y certificados */}
-                <Card title="Evidencias y certificados">
-                  <div className="ev-tiles">
-                    <div className="ev-tile"><div className="n">{d.evidences.length}</div><div className="l">Evidencias</div></div>
-                    <div className="ev-tile green"><div className="n">{d.externalCertificates.length}</div><div className="l">Certificados</div></div>
-                    <div className="ev-tile amber"><div className="n">{d.internalConstancies.length}</div><div className="l">Constancias</div></div>
-                    <div className="ev-tile"><div className="n">{d.interests.length + d.skills.length}</div><div className="l">Intereses + habilidades</div></div>
-                  </div>
-                  <Link to="/student/evidences" className="btn btn-secondary btn-sm mt" style={{ width: '100%', justifyContent: 'center' }}>Subir evidencia</Link>
-                </Card>
-
-                {/* Resumen */}
-                <Card title="Resumen del perfil">
-                  <p><strong>Semestre:</strong> {d.profile.semester ?? '—'}</p>
-                  <p><strong>Estado:</strong> {lbl(PROFILE_STATUS_LABEL, d.profile.status)}</p>
-                  <p><strong>Áreas a mejorar:</strong> {d.improvementAreas.map((a) => a.name).join(', ') || '—'}</p>
-                  <Link to="/student/affinity" className="btn btn-primary btn-sm mt" style={{ width: '100%', justifyContent: 'center' }}>Ver mis afinidades</Link>
-                </Card>
-              </div>
-
-              {/* Acciones rápidas */}
-              <h2 style={{ margin: '1.6rem 0 0.7rem' }}>Acciones rápidas</h2>
-              <div className="qa-grid">
-                {QUICK.map((q, i) => (
-                  <motion.div key={q.t + i} variants={tile} initial="hidden" animate="show" custom={i}>
-                    <Link to={q.to} className="qa-card">
-                      <span className="qi">{q.icon}</span>
-                      <b>{q.t}</b>
-                      <span>{q.d}</span>
-                    </Link>
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* Ayuda */}
-              <div className="help-banner">
-                <span className="hi"><FiHelpCircle /></span>
+      {summary.loading && !d ? (
+        <SkeletonCards count={3} />
+      ) : summary.error ? (
+        <Card><p className="muted">{summary.error}</p></Card>
+      ) : d ? (
+        <>
+          {(() => {
+            const paso = siguientePaso(d);
+            return (
+              <motion.div className="next-step" variants={aparecer} initial="hidden" animate="show" custom={1}>
+                <span className="ns-icon"><FiArrowRight /></span>
                 <div className="grow">
-                  <strong>¿Necesitas ayuda para avanzar?</strong>
-                  <div className="muted">Completa tu perfil y registra evidencias para mejorar tus áreas de afinidad.</div>
+                  <span className="ns-kicker">Tu siguiente paso</span>
+                  <strong>{paso.titulo}</strong>
+                  <p>{paso.texto}</p>
                 </div>
-                <Link to="/student/profile" className="btn btn-primary btn-sm">Completar perfil</Link>
+                <Link to={paso.to} className="btn btn-primary">{paso.cta}</Link>
+              </motion.div>
+            );
+          })()}
+
+          <div className="home-stats">
+            {[
+              { n: d.projects.length, l: 'proyectos', c: 'c3' },
+              { n: d.activities.length, l: 'actividades', c: 'c2' },
+              { n: d.externalCertificates.length + d.internalConstancies.length, l: 'certificados y constancias', c: 'c4' },
+              { n: d.skills.length, l: 'habilidades declaradas', c: 'c1' },
+            ].map((s, i) => (
+              <motion.div key={s.l} className={`home-stat ${s.c}`} variants={aparecer} initial="hidden" animate="show" custom={i + 2}>
+                <span className="n">{s.n}</span>
+                <span className="l">{s.l}</span>
+              </motion.div>
+            ))}
+          </div>
+
+          <div className="dash-grid3" style={{ marginTop: '1rem' }}>
+            <div className="chart-card">
+              <div className="flex between">
+                <h3>Tus áreas fuertes</h3>
+                <Link to="/student/affinity" className="btn btn-ghost btn-sm">Ver detalle</Link>
               </div>
-            </>
-          );
-        }}
-      </AsyncView>
+              {d.affinities.length > 0 ? (
+                <AffinityBars data={d.affinities.map((a) => ({ area: a.area ?? '—', score: Number(a.score), level: a.level }))} />
+              ) : (
+                <p className="muted">Aparecen a medida que cargas proyectos, actividades y certificados.</p>
+              )}
+            </div>
+
+            <Card title="Tus actividades">
+              {d.activities.length === 0 ? (
+                <p className="muted">Todavía no te inscribiste en ninguna.</p>
+              ) : (
+                d.activities.slice(0, 4).map((a) => (
+                  <div className="act-item" key={a.activityId}>
+                    <span className="ai"><FiCalendar /></span>
+                    <span className="grow"><b>{a.title}</b><span>{lbl(ACTIVITY_TYPE_LABEL, a.type ?? '')}</span></span>
+                    <span className="badge badge-bordo">{lbl(REGISTRATION_STATUS_LABEL, a.status)}</span>
+                  </div>
+                ))
+              )}
+            </Card>
+
+            <Card title="Tus proyectos">
+              {d.projects.length === 0 ? (
+                <p className="muted">Todavía no registraste ninguno.</p>
+              ) : (
+                d.projects.slice(0, 4).map((p) => (
+                  <div className="act-item" key={p.id}>
+                    <span className="ai"><FiFolder /></span>
+                    <span className="grow"><b>{p.title}</b><span>{(p.technologies ?? []).join(', ') || '—'}</span></span>
+                    <span className="badge badge-gray">{lbl(PROJECT_STATUS_LABEL, p.status)}</span>
+                  </div>
+                ))
+              )}
+            </Card>
+          </div>
+
+          <h2 className="home-h2">¿Qué quieres hacer?</h2>
+          <div className="qa-grid">
+            {ATAJOS.map((q, i) => (
+              <motion.div key={q.t} variants={aparecer} initial="hidden" animate="show" custom={i}>
+                <Link to={q.to} className={`qa-card tinted ${q.c}`}>
+                  <span className="qi">{q.icon}</span>
+                  <b>{q.t}</b>
+                  <span>{q.d}</span>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+
+          <p className="home-foot">
+            <FiBarChart2 /> Lo que declaras orienta tus recomendaciones; tus proyectos, actividades y
+            certificados son lo que demuestra tus áreas fuertes.
+          </p>
+        </>
+      ) : null}
     </div>
   );
 }

@@ -87,25 +87,121 @@ export class ProfilesService {
 
   async createMyProfile(userId: string, dto: CreateProfileDto): Promise<StudentProfile> {
     const existing = await this.profiles.findOne({ where: { userId } });
-    if (existing) {
+    if (existing?.claimedAt) {
       throw new ConflictException('El estudiante ya tiene un perfil creado.');
     }
     await this.assertAreasExist(dto.improvementAreaIds);
 
     // Ni semestre ni codigo universitario: §17.1 los declara
     // institucionales. Llegan por importacion de padron o los fija el
-    // administrador, nunca el propio estudiante.
-    const profile = this.profiles.create({
-      userId,
-      bio: dto.bio ?? null,
-      improvementAreaIds: dto.improvementAreaIds ?? null,
-      status: ProfileStatus.INCOMPLETE,
-      completionPercentage: 0,
-    });
+    // administrador al dar de alta, nunca el propio estudiante.
+    //
+    // Si la institución ya creó el perfil con esos datos, el estudiante lo
+    // completa; antes chocaba con él y el alta manual dejaba al estudiante
+    // sin forma de tener semestre.
+    const profile =
+      existing
+      ?? this.profiles.create({
+        userId,
+        status: ProfileStatus.INCOMPLETE,
+        completionPercentage: 0,
+      });
+    profile.bio = dto.bio ?? profile.bio ?? null;
+    profile.improvementAreaIds = dto.improvementAreaIds ?? profile.improvementAreaIds ?? null;
+    profile.claimedAt = new Date();
+    profile.onboardingStep = profile.onboardingStep ?? 'profile';
+
     const saved = await this.profiles.save(profile);
     await this.refreshCompletion(saved.id);
     await this.requestAffinity(saved.id);
     return this.getOwnProfile(userId);
+  }
+
+  // ---------------------------------------------------------------------
+  //  Asistente de bienvenida
+  // ---------------------------------------------------------------------
+
+  /**
+   * Dónde está el estudiante dentro de la bienvenida.
+   *
+   * La bienvenida son tres pasos —su perfil, sus intereses y habilidades, y el
+   * cuestionario opcional— y hasta terminarla la web no le muestra el resto
+   * del sistema: casi todo depende de tener el perfil, y entrar a pantallas
+   * vacías era justo lo que dejaba a un estudiante nuevo sin saber por dónde
+   * empezar.
+   */
+  async onboardingState(userId: string) {
+    const profile = await this.profiles.findOne({ where: { userId } });
+    if (!profile) {
+      return {
+        completed: false,
+        completedAt: null,
+        step: 'welcome',
+        hasProfile: false,
+        claimed: false,
+        semester: null,
+        counts: { improvementAreas: 0, interests: 0, skills: 0, questionnaireRuns: 0 },
+      };
+    }
+    const [interests, skills, runs] = await Promise.all([
+      this.interests.count({ where: { studentProfileId: profile.id } }),
+      this.skills.count({ where: { studentProfileId: profile.id } }),
+      this.profiles.manager.query(
+        'SELECT count(*)::int AS n FROM onboarding_runs WHERE student_profile_id = $1',
+        [profile.id],
+      ),
+    ]);
+    return {
+      completed: !!profile.onboardingCompletedAt,
+      completedAt: profile.onboardingCompletedAt,
+      step: profile.onboardingStep ?? (profile.claimedAt ? 'profile' : 'welcome'),
+      hasProfile: true,
+      claimed: !!profile.claimedAt,
+      semester: profile.semester,
+      counts: {
+        improvementAreas: profile.improvementAreaIds?.length ?? 0,
+        interests,
+        skills,
+        questionnaireRuns: Number(runs?.[0]?.n ?? 0),
+      },
+    };
+  }
+
+  /** Guarda por qué paso va, para retomarlo donde lo dejó. */
+  async saveOnboardingStep(userId: string, step: string) {
+    const profile = await this.profiles.findOne({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundException('Primero crea tu perfil: es el primer paso de la bienvenida.');
+    }
+    profile.onboardingStep = step;
+    await this.profiles.save(profile);
+    return this.onboardingState(userId);
+  }
+
+  /**
+   * Da la bienvenida por terminada.
+   *
+   * Exige lo mínimo para que el resto del sistema tenga algo con qué
+   * trabajar: el perfil reclamado, al menos un área donde quiere mejorar y al
+   * menos un interés. Las habilidades y el cuestionario son opcionales: un
+   * estudiante de primer semestre puede no tener habilidades que declarar.
+   */
+  async completeOnboarding(userId: string) {
+    const estado = await this.onboardingState(userId);
+    const faltan: string[] = [];
+    if (!estado.hasProfile || !estado.claimed) faltan.push('crear tu perfil');
+    if (estado.counts.improvementAreas === 0) faltan.push('elegir al menos un área donde quieres mejorar');
+    if (estado.counts.interests === 0) faltan.push('marcar al menos un área que te interese');
+    if (faltan.length > 0) {
+      throw new BadRequestException(`Para terminar la bienvenida falta ${faltan.join(', ')}.`);
+    }
+    if (!estado.completed) {
+      await this.profiles.update(
+        { userId },
+        { onboardingCompletedAt: new Date(), onboardingStep: 'done' },
+      );
+    }
+    return this.onboardingState(userId);
   }
 
   async getOwnProfile(userId: string): Promise<StudentProfile> {
@@ -220,6 +316,9 @@ export class ProfilesService {
 
   async updateMyProfile(userId: string, dto: UpdateProfileDto): Promise<StudentProfile> {
     const profile = await this.getOwnProfile(userId);
+    // Escribir en el perfil es reclamarlo: el que creó la institución pasa a
+    // ser del estudiante en cuanto este lo toca.
+    profile.claimedAt ??= new Date();
     if (dto.improvementAreaIds !== undefined) {
       await this.assertAreasExist(dto.improvementAreaIds);
       profile.improvementAreaIds = dto.improvementAreaIds;

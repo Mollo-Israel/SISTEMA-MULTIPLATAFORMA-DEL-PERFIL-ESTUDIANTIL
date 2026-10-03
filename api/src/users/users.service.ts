@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Not, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { RolNombre, UserStatus } from '@perfil/shared';
@@ -16,8 +18,13 @@ import { RolesService } from '../roles/roles.service';
 import { AuthSessionsService } from '../identity/auth-sessions.service';
 import { AccountTokensService } from '../identity/account-tokens.service';
 import { ActivationService } from '../identity/activation.service';
+import { AccountMailService } from '../identity/account-mail.service';
+import { MailService, maskEmail } from '../mail/mail.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
-import { PublicUser, toPublicUser } from './types/public-user';
+import { InvitationView, PublicUser, toPublicUser } from './types/public-user';
+
+/** Lo que el alta espera al correo antes de responder. Después, «en cola». */
+const ESPERA_INVITACION_MS = 6_000;
 
 interface CreateUserParams {
   firstName: string;
@@ -27,6 +34,9 @@ interface CreateUserParams {
   password?: string;
   role: RolNombre;
   status?: UserStatus;
+  /** Obligatorio para estudiantes: sin semestre el perfil no puede completarse. */
+  semester?: number;
+  universityCode?: string;
 }
 
 interface UpdateUserParams {
@@ -35,6 +45,8 @@ interface UpdateUserParams {
   email?: string;
   role?: RolNombre;
   status?: UserStatus;
+  semester?: number;
+  universityCode?: string;
 }
 
 /** Contexto minimo que los guards necesitan en cada peticion. */
@@ -56,12 +68,30 @@ export class UsersService {
     private readonly sessions: AuthSessionsService,
     private readonly accountTokens: AccountTokensService,
     private readonly activation: ActivationService,
+    private readonly accountMail: AccountMailService,
+    private readonly mail: MailService,
+    private readonly dataSource: DataSource,
     private readonly audit: AuditService,
   ) {}
 
   async create(params: CreateUserParams, actorUserId?: string): Promise<PublicUser> {
     const email = params.email.toLowerCase().trim();
     await this.assertEmailAvailable(email);
+
+    const esEstudiante = params.role === RolNombre.STUDENT;
+    // El semestre es un dato institucional (§17.1): el estudiante no puede
+    // fijarlo, así que si no lo pone quien crea la cuenta, nadie lo pone y el
+    // perfil se queda incompleto para siempre. Era exactamente lo que pasaba
+    // con las altas manuales.
+    if (esEstudiante && !params.semester) {
+      throw new BadRequestException({
+        message: 'Indique el semestre del estudiante.',
+        fields: { semester: ['Indique el semestre del estudiante (1 a 8).'] },
+      });
+    }
+    if (esEstudiante && params.universityCode) {
+      await this.assertUniversityCodeAvailable(params.universityCode);
+    }
 
     const role = await this.rolesService.findByName(params.role);
     // Sin contrasena declarada se guarda una aleatoria que nadie conoce: la
@@ -71,24 +101,33 @@ export class UsersService {
       10,
     );
 
-    const user = this.usersRepository.create({
-      firstName: params.firstName,
-      lastName: params.lastName,
-      email,
-      passwordHash,
-      roleId: role.id,
-      // §9.2: una cuenta nace provisionada. Quien la crea no fija la
-      // contrasena definitiva; la fija su titular al activar.
-      status: params.status ?? UserStatus.PENDING_ACTIVATION,
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const user = await manager.getRepository(User).save(
+        manager.getRepository(User).create({
+          firstName: params.firstName,
+          lastName: params.lastName,
+          email,
+          passwordHash,
+          roleId: role.id,
+          // §9.2: una cuenta nace provisionada. Quien la crea no fija la
+          // contrasena definitiva; la fija su titular al activar.
+          status: params.status ?? UserStatus.PENDING_ACTIVATION,
+        }),
+      );
+      // Igual que la importación de padrón: el perfil nace con sus datos
+      // institucionales, y el estudiante completa el resto al entrar.
+      if (esEstudiante) {
+        await manager.getRepository(StudentProfile).save(
+          manager.getRepository(StudentProfile).create({
+            userId: user.id,
+            semester: params.semester!,
+            universityCode: params.universityCode ?? null,
+          }),
+        );
+      }
+      return user;
     });
-    const saved = await this.usersRepository.save(user);
     saved.role = role;
-
-    // Una cuenta provisionada necesita su enlace para poder usarse.
-    let activationToken: string | null = null;
-    if (saved.status === UserStatus.PENDING_ACTIVATION) {
-      activationToken = await this.activation.issueAndSendActivation(saved);
-    }
 
     await this.audit.record({
       actorUserId: actorUserId ?? null,
@@ -98,9 +137,45 @@ export class UsersService {
       metadata: { email: saved.email, role: params.role, via: 'admin' },
     });
 
-    const result = toPublicUser(saved) as PublicUser & { activationToken?: string };
-    if (activationToken) result.activationToken = activationToken;
+    const result = toPublicUser(saved);
+    if (esEstudiante) {
+      result.semester = params.semester ?? null;
+      result.universityCode = params.universityCode ?? null;
+    }
+    // Una cuenta provisionada necesita su invitación para poder usarse. Se
+    // espera unos segundos al envío para decirle al administrador en qué
+    // quedó; nunca se le devuelve el enlace ni el código.
+    if (saved.status === UserStatus.PENDING_ACTIVATION) {
+      const jobId = await this.activation.queueActivation(saved, actorUserId ?? null);
+      result.invitation = await this.invitationOutcome(jobId, saved.email);
+    }
     return result;
+  }
+
+  /** Espera brevemente al envío y lo describe para el administrador. */
+  private async invitationOutcome(jobId: string, email: string): Promise<InvitationView> {
+    const final = await this.accountMail.waitFor(jobId, ESPERA_INVITACION_MS);
+    const simulated = this.mail.settings.transport === 'console';
+    if (final === 'sent') return { status: 'sent', sentTo: maskEmail(email), simulated, at: new Date() };
+    if (final === 'failed' || final === 'skipped') {
+      const job = await this.accountMail.findJob(jobId);
+      return { status: final, sentTo: maskEmail(email), simulated, error: job?.lastError ?? null };
+    }
+    return { status: 'queued', sentTo: maskEmail(email), simulated };
+  }
+
+  private async assertUniversityCodeAvailable(code: string, exceptProfileId?: string): Promise<void> {
+    const enUso = await this.dataSource.getRepository(StudentProfile).findOne({
+      where: exceptProfileId
+        ? { universityCode: code, id: Not(exceptProfileId) }
+        : { universityCode: code },
+    });
+    if (enUso) {
+      throw new ConflictException({
+        message: 'Ese código universitario ya pertenece a otro estudiante.',
+        fields: { universityCode: ['Ese código universitario ya pertenece a otro estudiante.'] },
+      });
+    }
   }
 
   /** Listado administrativo con busqueda por nombre, apellido o correo. */
@@ -131,6 +206,42 @@ export class UsersService {
         if (user.role === RolNombre.TEACHER) user.semesters = byTeacher.get(user.id) ?? [];
       }
     }
+
+    // Semestre y código de los estudiantes, también en lote.
+    const studentIds = result.filter((u) => u.role === RolNombre.STUDENT).map((u) => u.id);
+    if (studentIds.length > 0) {
+      const perfiles = await this.dataSource.getRepository(StudentProfile).find({
+        where: { userId: In(studentIds) },
+        select: { userId: true, semester: true, universityCode: true },
+      });
+      const porUsuario = new Map(perfiles.map((p) => [p.userId, p]));
+      for (const user of result) {
+        if (user.role !== RolNombre.STUDENT) continue;
+        user.semester = porUsuario.get(user.id)?.semester ?? null;
+        user.universityCode = porUsuario.get(user.id)?.universityCode ?? null;
+      }
+    }
+
+    // Para las cuentas sin activar, en qué quedó su invitación: es lo que el
+    // administrador necesita saber cuando alguien dice «no me llegó».
+    const pendientes = result
+      .filter((u) => u.status === UserStatus.PENDING_ACTIVATION)
+      .map((u) => u.id);
+    if (pendientes.length > 0) {
+      const ultimos = await this.accountMail.latestFor(pendientes);
+      const simulated = this.mail.settings.transport === 'console';
+      for (const user of result) {
+        const job = ultimos.get(user.id);
+        if (!job) continue;
+        user.invitation = {
+          status: job.status === 'pending' || job.status === 'sending' ? 'queued' : job.status,
+          sentTo: maskEmail(user.email),
+          simulated,
+          error: job.lastError,
+          at: job.sentAt ?? job.updatedAt,
+        };
+      }
+    }
     return result;
   }
 
@@ -151,7 +262,7 @@ export class UsersService {
     return { id: user.id, email: user.email, role: user.role.name, status: user.status };
   }
 
-  async update(id: string, params: UpdateUserParams): Promise<PublicUser> {
+  async update(id: string, params: UpdateUserParams, actorUserId?: string): Promise<PublicUser> {
     const user = await this.findEntityOrFail(id);
 
     if (params.email && params.email.toLowerCase().trim() !== user.email) {
@@ -173,7 +284,38 @@ export class UsersService {
     }
 
     const saved = await this.usersRepository.save(user);
-    return toPublicUser(saved);
+    const result = toPublicUser(saved);
+
+    // Datos institucionales del estudiante, desde la misma ventana de edición.
+    if (saved.role.name === RolNombre.STUDENT) {
+      const perfiles = this.dataSource.getRepository(StudentProfile);
+      let perfil = await perfiles.findOne({ where: { userId: saved.id } });
+      const cambiaSemestre = params.semester !== undefined && params.semester !== perfil?.semester;
+      const cambiaCodigo =
+        params.universityCode !== undefined && params.universityCode !== perfil?.universityCode;
+      if (cambiaSemestre || cambiaCodigo) {
+        if (cambiaCodigo && params.universityCode) {
+          await this.assertUniversityCodeAvailable(params.universityCode, perfil?.id);
+        }
+        const antes = { semester: perfil?.semester ?? null, universityCode: perfil?.universityCode ?? null };
+        perfil ??= perfiles.create({ userId: saved.id });
+        if (cambiaSemestre) perfil.semester = params.semester!;
+        if (cambiaCodigo) perfil.universityCode = params.universityCode || null;
+        perfil = await perfiles.save(perfil);
+        // Cambiar el semestre mueve al estudiante dentro o fuera del alcance de
+        // un docente: queda registrado quién lo hizo.
+        await this.audit.record({
+          actorUserId: actorUserId ?? null,
+          eventType: AuditEventType.INSTITUTIONAL_DATA_CHANGED,
+          entityType: 'student_profile',
+          entityId: perfil.id,
+          metadata: { antes, despues: { semester: perfil.semester, universityCode: perfil.universityCode } },
+        });
+      }
+      result.semester = perfil?.semester ?? null;
+      result.universityCode = perfil?.universityCode ?? null;
+    }
+    return result;
   }
 
   /**
@@ -220,18 +362,39 @@ export class UsersService {
   }
 
   /**
-   * Reenvia el enlace de activacion de una cuenta provisionada.
-   * Lo usa el administrador cuando el correo original no llego.
+   * Reenvía la invitación de una cuenta provisionada.
+   *
+   * Lo usa el administrador cuando el correo original no llegó. Respeta la
+   * misma espera y el mismo tope diario que el reenvío público: si no, el
+   * botón del administrador sería la vía para inundar un buzón —y para que
+   * Outlook marque a Afinia como spam—. Al administrador sí se le dice cuánto
+   * falta: él ya sabe que la cuenta existe.
    */
   async resendActivation(
     id: string,
     actorUserId: string | null,
-  ): Promise<{ message: string; activationToken?: string }> {
+  ): Promise<{ message: string; invitation: InvitationView }> {
     const user = await this.findEntityOrFail(id);
     if (user.status !== UserStatus.PENDING_ACTIVATION) {
       throw new BadRequestException('Esta cuenta ya está activada.');
     }
-    const token = await this.activation.issueAndSendActivation(user);
+
+    const puede = await this.accountMail.check(user.id, 'account_activation');
+    if (!puede.allowed) {
+      const mensaje =
+        puede.reason === 'already_queued'
+          ? 'Ya hay un envío en curso para esta cuenta. Espere unos segundos y actualice la lista.'
+          : puede.reason === 'daily_limit'
+            ? 'Esta cuenta ya recibió el máximo de invitaciones de hoy. Así se evita que el '
+              + 'proveedor marque los correos de Afinia como spam. Inténtelo mañana.'
+            : `Se envió una invitación hace muy poco. Podrá reenviarla en ${puede.retryAfterSeconds} s.`;
+      throw new HttpException(
+        { message: mensaje, retryAfterSeconds: puede.retryAfterSeconds },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const jobId = await this.activation.queueActivation(user, actorUserId);
     await this.audit.record({
       actorUserId,
       eventType: AuditEventType.ACTIVATION_REQUESTED,
@@ -239,9 +402,14 @@ export class UsersService {
       entityId: id,
       metadata: { via: 'admin' },
     });
-    return token
-      ? { message: 'Enlace de activación reenviado.', activationToken: token }
-      : { message: 'Enlace de activación reenviado.' };
+    const invitation = await this.invitationOutcome(jobId, user.email);
+    const message =
+      invitation.status === 'failed'
+        ? `No se pudo enviar la invitación: ${invitation.error ?? 'error del servidor de correo'}`
+        : invitation.simulated
+          ? 'Invitación generada en modo simulado: no salió a ningún buzón (ver docs/CORREO_REAL.md).'
+          : `Invitación enviada a ${invitation.sentTo}.`;
+    return { message, invitation };
   }
 
   /**

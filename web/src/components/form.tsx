@@ -1,0 +1,110 @@
+import { ReactNode, useCallback, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { FiAlertCircle } from 'react-icons/fi';
+import { formErrors } from '../api/client';
+
+/**
+ * Casilla de formulario con su etiqueta, su ayuda y su error.
+ *
+ * El error va debajo de la casilla que lo causa, no en un aviso general
+ * arriba: quien rellena un formulario de seis campos necesita saber cuál está
+ * mal, no solo que algo lo está.
+ */
+export function FormField({
+  label,
+  error,
+  hint,
+  required,
+  htmlFor,
+  children,
+  className,
+}: {
+  label: string;
+  error?: string | null;
+  hint?: ReactNode;
+  required?: boolean;
+  htmlFor?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`field ${error ? 'has-error' : ''} ${className ?? ''}`}>
+      <label htmlFor={htmlFor}>
+        {label}
+        {required && <span className="req" aria-hidden> *</span>}
+      </label>
+      {children}
+      <FieldError message={error} />
+      {!error && hint && <span className="field-hint">{hint}</span>}
+    </div>
+  );
+}
+
+/** Mensaje de error de una casilla, con una entrada suave. */
+export function FieldError({ message }: { message?: string | null }) {
+  return (
+    <AnimatePresence initial={false}>
+      {message && (
+        <motion.span
+          key={message}
+          className="field-error"
+          role="alert"
+          initial={{ opacity: 0, y: -3 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <FiAlertCircle size={13} /> {message}
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/** Aviso general del formulario, para lo que no corresponde a una casilla. */
+export function FormAlert({ message }: { message?: string | null }) {
+  if (!message) return null;
+  return (
+    <div className="form-alert" role="alert">
+      <FiAlertCircle size={15} /> <span>{message}</span>
+    </div>
+  );
+}
+
+/**
+ * Estado de errores de un formulario.
+ *
+ * `fromApi` reparte la respuesta de la API entre las casillas conocidas y el
+ * aviso general; `clear` quita el error de una casilla en cuanto se corrige.
+ */
+export function useFormErrors<K extends string>(campos: readonly K[]) {
+  const [errors, setErrors] = useState<Partial<Record<K, string>>>({});
+  const [general, setGeneral] = useState<string | null>(null);
+
+  const fromApi = useCallback(
+    (error: unknown) => {
+      const { general: g, fields } = formErrors(error, campos as unknown as string[]);
+      setErrors(fields as Partial<Record<K, string>>);
+      setGeneral(g);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [campos.join('|')],
+  );
+
+  const clear = useCallback((campo: K) => {
+    setErrors((prev) => {
+      if (!prev[campo]) return prev;
+      const next = { ...prev };
+      delete next[campo];
+      return next;
+    });
+    setGeneral(null);
+  }, []);
+
+  const reset = useCallback(() => {
+    setErrors({});
+    setGeneral(null);
+  }, []);
+
+  return { errors, setErrors, general, setGeneral, fromApi, clear, reset };
+}

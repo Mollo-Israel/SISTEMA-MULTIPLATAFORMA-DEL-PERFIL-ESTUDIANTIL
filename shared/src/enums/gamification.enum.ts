@@ -28,6 +28,12 @@ export enum GamificationTrigger {
   COLABORACION_ACEPTADA = 'colaboracion_aceptada',
   /** Un hito de trayectoria: el respaldo de un área cruza un umbral (§54). */
   HITO_TRAYECTORIA = 'hito_trayectoria',
+  /**
+   * Un reto que un docente definió y reconoció a un estudiante de su alcance.
+   * Lo verifica una persona responsable: no es una autodeclaración. Sus puntos
+   * los fija el propio reto.
+   */
+  RECONOCIMIENTO_DOCENTE = 'reconocimiento_docente',
 
   // ------------------------------------------------------------------
   // Disparadores del 40 % que §66 excluye. Se conservan porque hay
@@ -53,6 +59,16 @@ export const ACTIVE_GAMIFICATION_TRIGGERS: readonly GamificationTrigger[] = [
   GamificationTrigger.PROYECTO_CORROBORADO,
   GamificationTrigger.COLABORACION_ACEPTADA,
   GamificationTrigger.HITO_TRAYECTORIA,
+  GamificationTrigger.RECONOCIMIENTO_DOCENTE,
+];
+
+/** Hechos que el sistema detecta solo y que se puntúan con su criterio general. */
+export const SYSTEM_GAMIFICATION_TRIGGERS: readonly GamificationTrigger[] = [
+  GamificationTrigger.PARTICIPACION_CONFIRMADA,
+  GamificationTrigger.PRIMER_PROYECTO_RESPALDADO,
+  GamificationTrigger.PROYECTO_CORROBORADO,
+  GamificationTrigger.COLABORACION_ACEPTADA,
+  GamificationTrigger.HITO_TRAYECTORIA,
 ];
 
 /** Puntos de cada acción. Son el reconocimiento, no una medida de nadie. */
@@ -70,6 +86,7 @@ export const GAMIFICATION_TRIGGER_LABEL: Record<string, string> = {
   [GamificationTrigger.PROYECTO_CORROBORADO]: 'Proyecto corroborado',
   [GamificationTrigger.COLABORACION_ACEPTADA]: 'Colaboración aceptada',
   [GamificationTrigger.HITO_TRAYECTORIA]: 'Hito de trayectoria',
+  [GamificationTrigger.RECONOCIMIENTO_DOCENTE]: 'Reto reconocido por un docente',
 };
 
 /**

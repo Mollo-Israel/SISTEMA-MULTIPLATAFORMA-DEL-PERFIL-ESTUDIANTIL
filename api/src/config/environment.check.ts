@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
+import { readMailSettings } from '../mail/mail.settings';
 
 const logger = new Logger('Environment');
 
@@ -38,12 +39,26 @@ export function assertEnvironment(config: ConfigService): void {
         'SMTP_HOST no está definido: la activación y la recuperación no podrían enviarse.',
       );
     }
+    // Con el correo mal configurado, cada alta deja una cuenta que nadie podrá
+    // activar. Mejor no arrancar que descubrirlo con el primer estudiante.
+    const correo = readMailSettings(config);
+    if (correo.transport === 'console') {
+      problems.push('MAIL_TRANSPORT=console no es válido en producción: los correos no saldrían.');
+    }
+    problems.push(...correo.problems);
+    const web = config.get<string>('WEB_APP_URL')?.trim();
+    if (web && !/^https:\/\//i.test(web)) {
+      problems.push('WEB_APP_URL debe empezar por https:// en producción: es el enlace del correo.');
+    }
   } else {
     if (!config.get<string>('INSTITUTIONAL_EMAIL_DOMAINS')?.trim()) {
       warnings.push('INSTITUTIONAL_EMAIL_DOMAINS sin definir: no se restringe el dominio.');
     }
     if (!config.get<string>('SMTP_HOST')?.trim()) {
-      warnings.push('SMTP_HOST sin definir: los correos se escriben en el log.');
+      warnings.push(
+        'SMTP_HOST sin definir: los correos se SIMULAN (van al registro y a api/.mail-outbox). '
+          + 'Para enviarlos de verdad, ver docs/CORREO_REAL.md.',
+      );
     }
   }
 

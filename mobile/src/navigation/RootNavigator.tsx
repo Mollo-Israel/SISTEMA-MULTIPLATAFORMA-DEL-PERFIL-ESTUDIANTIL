@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import { Icon, TAB_ICON } from '../components/icons';
@@ -21,6 +22,9 @@ import ProjectsScreen from '../screens/student/ProjectsScreen';
 import ProjectDetailScreen from '../screens/student/ProjectDetailScreen';
 import AffinityScreen from '../screens/student/AffinityScreen';
 import RecommendationsScreen from '../screens/student/RecommendationsScreen';
+import WelcomeScreen from '../screens/student/WelcomeScreen';
+import { profileService } from '../services';
+import { Loading } from '../components/ui';
 
 import TeacherActivities from '../screens/teacher/TeacherActivities';
 import StudentSummary from '../screens/teacher/StudentSummary';
@@ -161,6 +165,38 @@ function StudentTabs() {
   );
 }
 
+/**
+ * La app del estudiante empieza por la bienvenida (correcciones de QA): hasta
+ * terminarla no ve las pestañas, igual que en la web. Si la consulta falla, no
+ * lo encierra: deja pasar y la bienvenida se le ofrecerá en la próxima sesión.
+ */
+function StudentGate() {
+  const [estado, setEstado] = useState<'cargando' | 'bienvenida' | 'listo'>('cargando');
+  useEffect(() => {
+    profileService
+      .onboarding()
+      .then((s) => setEstado(s.completed ? 'listo' : 'bienvenida'))
+      .catch(() => setEstado('listo'));
+  }, []);
+  if (estado === 'cargando') {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.gray50 }}>
+        <Loading />
+      </View>
+    );
+  }
+  if (estado === 'bienvenida') {
+    return (
+      <Stack.Navigator screenOptions={screenOptions}>
+        <Stack.Screen name="Bienvenida" options={{ title: 'Bienvenida' }}>
+          {() => <WelcomeScreen onDone={() => setEstado('listo')} />}
+        </Stack.Screen>
+      </Stack.Navigator>
+    );
+  }
+  return <StudentTabs />;
+}
+
 function TeacherTabs() {
   return (
     <Tab.Navigator screenOptions={screenOptions}>
@@ -254,7 +290,7 @@ export default function RootNavigator() {
     );
   }
   switch (user.role) {
-    case 'STUDENT': return <StudentTabs />;
+    case 'STUDENT': return <StudentGate />;
     case 'TEACHER': return <TeacherTabs />;
     case 'SCIENTIFIC_SOCIETY': return <SocietyTabs />;
     case 'CAREER_DIRECTOR': return <DirectorTabs />;

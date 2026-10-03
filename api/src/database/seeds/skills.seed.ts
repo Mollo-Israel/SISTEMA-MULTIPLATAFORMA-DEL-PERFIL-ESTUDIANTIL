@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import { AcademicArea } from '../../entities/academic-area.entity';
 import { Skill } from '../../entities/skill.entity';
+import { slugCode } from '../../common/validation';
 
 const SKILLS_BY_AREA: Record<string, string[]> = {
   'Desarrollo Web': ['JavaScript', 'TypeScript', 'React', 'Node.js', 'HTML y CSS'],
@@ -23,7 +24,11 @@ export async function seedSkills(dataSource: DataSource): Promise<void> {
       const existing = await skillRepo.findOne({ where: { name: skillName } });
       if (!existing) {
         await skillRepo.save(
-          skillRepo.create({ name: skillName, academicAreaId: area ? area.id : null }),
+          skillRepo.create({
+            name: skillName,
+            code: slugCode(skillName),
+            academicAreaId: area ? area.id : null,
+          }),
         );
       }
     }

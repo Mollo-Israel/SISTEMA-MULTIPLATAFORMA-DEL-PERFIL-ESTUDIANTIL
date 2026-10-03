@@ -15,11 +15,13 @@ import {
   MinLength,
 } from 'class-validator';
 import { GamificationTrigger } from '@perfil/shared';
-import { cleanLine, cleanText } from '../../common/validation';
+import { cleanLine, cleanText, IsCatalogName } from '../../common/validation';
 
 /**
- * Alta de un criterio de gamificacion (RF4). En el 40% el criterio se almacena
- * y administra, pero ningun modulo lo consume todavia.
+ * Alta de un criterio de gamificación (RF4).
+ *
+ * El criterio decide cuántos puntos da un hecho: el motor de gamificación los
+ * lee al reconocer cada hecho. Los puntos nunca alimentan la afinidad (§66).
  */
 export class CreateGamificationCriterionDto {
   @ApiProperty({ example: 'participacion_taller' })
@@ -39,6 +41,7 @@ export class CreateGamificationCriterionDto {
   @IsNotEmpty({ message: 'El nombre es obligatorio.' })
   @MinLength(3, { message: 'El nombre debe tener al menos 3 caracteres.' })
   @MaxLength(120, { message: 'El nombre no puede superar 120 caracteres.' })
+  @IsCatalogName()
   name: string;
 
   @ApiProperty({ required: false })
@@ -52,9 +55,9 @@ export class CreateGamificationCriterionDto {
   @IsEnum(GamificationTrigger, { message: 'El hecho que otorga el criterio no es válido.' })
   trigger: GamificationTrigger;
 
-  @ApiProperty({ example: 10, minimum: 0, maximum: 1000 })
-  @IsInt({ message: 'Los puntos deben ser un número entero.' })
-  @Min(0, { message: 'Los puntos no pueden ser negativos.' })
+  @ApiProperty({ example: 10, minimum: 1, maximum: 1000 })
+  @IsInt({ message: 'Los puntos deben ser un número entero, sin letras ni decimales.' })
+  @Min(1, { message: 'Un criterio debe otorgar al menos 1 punto.' })
   @Max(1000, { message: 'El máximo es 1000 puntos.' })
   points: number;
 

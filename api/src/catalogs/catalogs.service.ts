@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, In, Not, Repository } from 'typeorm';
-import { LearningResourceStatus } from '@perfil/shared';
+import { FindOptionsWhere, ILike, In, Not, Repository } from 'typeorm';
+import { GamificationTrigger, LearningResourceStatus, SYSTEM_GAMIFICATION_TRIGGERS } from '@perfil/shared';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
@@ -27,6 +27,15 @@ import {
   CreateLearningResourceDto,
   UpdateLearningResourceDto,
 } from './dto/learning-resource.dto';
+import { slugCode } from '../common/validation';
+
+/**
+ * Conflicto que señala el campo culpable, para que el formulario ponga el
+ * mensaje debajo de esa casilla y no en un aviso general.
+ */
+function conflicto(campo: string, mensaje: string): ConflictException {
+  return new ConflictException({ message: mensaje, fields: { [campo]: [mensaje] } });
+}
 
 @Injectable()
 export class CatalogsService {
@@ -89,7 +98,7 @@ export class CatalogsService {
       await this.assertCategoryNameFree(dto.name, id);
       category.name = dto.name;
     }
-    if (dto.description !== undefined) category.description = dto.description ?? null;
+    if (dto.description !== undefined) category.description = dto.description?.trim() || null;
     if (dto.appliesTo !== undefined) category.appliesTo = dto.appliesTo ?? null;
 
     if (dto.isActive !== undefined) {
@@ -137,13 +146,17 @@ export class CatalogsService {
   async createArea(dto: CreateAcademicAreaDto): Promise<AcademicArea> {
     const exists = await this.areas.findOne({ where: { name: ILike(dto.name) } });
     if (exists) {
-      throw new ConflictException('El área académica ya existe.');
+      throw conflicto('name', 'Ya existe un área académica con ese nombre.');
     }
+    const code = dto.code
+      ? await this.assertCodeFree(this.areas, dto.code, 'área')
+      : await this.freeCode(this.areas, slugCode(dto.name));
     return this.areas.save(
       this.areas.create({
         name: dto.name,
+        code,
         description: dto.description ?? null,
-        tags: dto.tags ?? null,
+        tags: dto.tags,
         isActive: true,
       }),
     );
@@ -159,14 +172,45 @@ export class CatalogsService {
         where: { name: ILike(dto.name), id: Not(id) },
       });
       if (duplicate) {
-        throw new ConflictException('Ya existe otra área académica con ese nombre.');
+        throw conflicto('name', 'Ya existe otra área académica con ese nombre.');
       }
       area.name = dto.name;
     }
-    if (dto.description !== undefined) area.description = dto.description ?? null;
-    if (dto.tags !== undefined) area.tags = dto.tags ?? null;
+    if (dto.code !== undefined && dto.code !== area.code) {
+      area.code = await this.assertCodeFree(this.areas, dto.code, 'área', id);
+    }
+    if (dto.description !== undefined) area.description = dto.description?.trim() || null;
+    // Las etiquetas pueden cambiarse, no vaciarse: sin ellas el motor no
+    // encuentra el área. El DTO ya exige al menos una si llegan.
+    if (Array.isArray(dto.tags)) area.tags = dto.tags;
     if (dto.isActive !== undefined) area.isActive = dto.isActive;
     return this.areas.save(area);
+  }
+
+  /** Comprueba que un código esté libre; devuelve el código para encadenar. */
+  private async assertCodeFree<T extends { id: string; code: string }>(
+    repo: Repository<T>,
+    code: string,
+    que: string,
+    exceptId?: string,
+  ): Promise<string> {
+    const where = (exceptId ? { code, id: Not(exceptId) } : { code }) as unknown as FindOptionsWhere<T>;
+    if (await repo.findOne({ where })) {
+      throw conflicto('code', `Ya existe otra ${que === 'área' ? 'área' : 'habilidad'} con el código «${code}».`);
+    }
+    return code;
+  }
+
+  /** El código sugerido, o el primero libre con sufijo: «redes», «redes_2»… */
+  private async freeCode<T extends { id: string; code: string }>(
+    repo: Repository<T>,
+    base: string,
+  ): Promise<string> {
+    let candidato = base;
+    for (let n = 2; await repo.findOne({ where: { code: candidato } as unknown as FindOptionsWhere<T> }); n++) {
+      candidato = `${base}_${n}`;
+    }
+    return candidato;
   }
 
   // ------------------------------------------------------------------
@@ -184,13 +228,17 @@ export class CatalogsService {
   async createSkill(dto: CreateSkillDto): Promise<Skill> {
     const exists = await this.skills.findOne({ where: { name: ILike(dto.name) } });
     if (exists) {
-      throw new ConflictException('La habilidad ya existe en el catálogo.');
+      throw conflicto('name', 'La habilidad ya existe en el catálogo.');
     }
-    await this.assertAreaExists(dto.academicAreaId);
+    await this.assertAreaExists(dto.academicAreaId, 'academicAreaId');
+    const code = dto.code
+      ? await this.assertCodeFree(this.skills, dto.code, 'habilidad')
+      : await this.freeCode(this.skills, slugCode(dto.name));
     return this.skills.save(
       this.skills.create({
         name: dto.name,
-        academicAreaId: dto.academicAreaId ?? null,
+        code,
+        academicAreaId: dto.academicAreaId,
         isActive: true,
       }),
     );
@@ -206,13 +254,16 @@ export class CatalogsService {
         where: { name: ILike(dto.name), id: Not(id) },
       });
       if (duplicate) {
-        throw new ConflictException('Ya existe otra habilidad con ese nombre.');
+        throw conflicto('name', 'Ya existe otra habilidad con ese nombre.');
       }
       skill.name = dto.name;
     }
+    if (dto.code !== undefined && dto.code !== skill.code) {
+      skill.code = await this.assertCodeFree(this.skills, dto.code, 'habilidad', id);
+    }
     if (dto.academicAreaId !== undefined) {
-      await this.assertAreaExists(dto.academicAreaId);
-      skill.academicAreaId = dto.academicAreaId ?? null;
+      await this.assertAreaExists(dto.academicAreaId, 'academicAreaId');
+      skill.academicAreaId = dto.academicAreaId;
     }
     if (dto.isActive !== undefined) skill.isActive = dto.isActive;
     return this.skills.save(skill);
@@ -230,11 +281,44 @@ export class CatalogsService {
     });
   }
 
+  /**
+   * Reglas de un criterio de gamificación (§66).
+   *
+   * - Los hechos que §66 excluye (intereses, autodeclaraciones, proyectos
+   *   vacíos) no se pueden premiar: un criterio con ellos no se activa.
+   * - Los retos docentes no van por criterios: cada reto lleva sus puntos.
+   * - Cada hecho tiene un criterio general (código = hecho). Uno adicional
+   *   solo tiene sentido limitado a un área: dos generales competirían.
+   */
+  private assertCriterionRules(
+    trigger: GamificationTrigger,
+    code: string,
+    areaId: string | null | undefined,
+    activo: boolean,
+  ) {
+    if (trigger === GamificationTrigger.RECONOCIMIENTO_DOCENTE) {
+      throw conflicto('trigger', 'Los retos docentes no usan criterios: cada reto define sus propios puntos.');
+    }
+    if (activo && !SYSTEM_GAMIFICATION_TRIGGERS.includes(trigger)) {
+      throw conflicto(
+        'trigger',
+        'Ese hecho no se puede premiar: §66 excluye intereses, autodeclaraciones, archivos y proyectos vacíos.',
+      );
+    }
+    if (!areaId && code !== trigger) {
+      throw conflicto(
+        'academicAreaId',
+        'Este hecho ya tiene su criterio general. Edítelo, o limite este nuevo criterio a un área.',
+      );
+    }
+  }
+
   async createCriterion(dto: CreateGamificationCriterionDto): Promise<GamificationCriterion> {
     const exists = await this.criteria.findOne({ where: { code: ILike(dto.code) } });
     if (exists) {
-      throw new ConflictException('Ya existe un criterio con ese código.');
+      throw conflicto('code', 'Ya existe un criterio con ese código.');
     }
+    this.assertCriterionRules(dto.trigger, dto.code, dto.academicAreaId, dto.isActive ?? true);
     await this.assertAreaExists(dto.academicAreaId);
     return this.criteria.save(
       this.criteria.create({
@@ -275,6 +359,7 @@ export class CatalogsService {
       criterion.academicAreaId = dto.academicAreaId ?? null;
     }
     if (dto.isActive !== undefined) criterion.isActive = dto.isActive;
+    this.assertCriterionRules(criterion.trigger, criterion.code, criterion.academicAreaId, criterion.isActive);
     return this.criteria.save(criterion);
   }
 
@@ -402,11 +487,12 @@ export class CatalogsService {
     }
   }
 
-  private async assertAreaExists(areaId?: string | null): Promise<void> {
+  private async assertAreaExists(areaId?: string | null, campo?: string): Promise<void> {
     if (!areaId) return;
     const exists = await this.areas.exists({ where: { id: areaId } });
     if (!exists) {
-      throw new BadRequestException('El área académica no existe.');
+      const mensaje = 'El área académica no existe.';
+      throw new BadRequestException(campo ? { message: mensaje, fields: { [campo]: [mensaje] } } : mensaje);
     }
   }
 }

@@ -25,9 +25,21 @@ export function passwordRequirements(password: string): PasswordRequirement[] {
   ];
 }
 
-/** Fuerza aproximada, solo para la barra de progreso. */
+/**
+ * Avance de la barra: qué parte de los requisitos se cumple.
+ *
+ * Con todos cumplidos la barra se llena. Antes contaba además un «bonus» por
+ * pasar de 16 caracteres, así que una contraseña válida de 12 se quedaba al
+ * 86 %: el usuario veía la barra sin completar y creía que le faltaba algo.
+ */
 export function passwordStrength(password: string): number {
-  const met = passwordRequirements(password).filter((r) => r.ok).length;
-  const largo = password.length >= 16 ? 1 : 0;
-  return Math.min(100, Math.round(((met + largo) / 7) * 100));
+  const reqs = passwordRequirements(password);
+  const met = reqs.filter((r) => r.ok).length;
+  return Math.round((met / reqs.length) * 100);
+}
+
+/** Cómo de robusta es, en palabras, una vez cumplidos los requisitos. */
+export function passwordVerdict(password: string): string | null {
+  if (!passwordRequirements(password).every((r) => r.ok)) return null;
+  return password.length >= 16 ? 'Contraseña muy segura' : 'Contraseña segura';
 }
