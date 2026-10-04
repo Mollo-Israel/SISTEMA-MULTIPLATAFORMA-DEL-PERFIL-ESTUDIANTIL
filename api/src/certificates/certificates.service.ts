@@ -7,9 +7,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, In, Repository } from 'typeorm';
 import { ValidationResourceType } from '@perfil/shared';
-import { ExternalCertificate } from '../entities/external-certificate.entity';
+import { ExternalCertificate, ExternalCertificateSkill } from '../entities/external-certificate.entity';
+import { Skill } from '../entities/skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
 import { UploadsService } from '../storage/uploads.service';
@@ -29,6 +30,9 @@ export class CertificatesService {
     private readonly certificates: Repository<ExternalCertificate>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
+    @InjectRepository(Skill) private readonly skillsRepo: Repository<Skill>,
+    @InjectRepository(ExternalCertificateSkill)
+    private readonly certificateSkills: Repository<ExternalCertificateSkill>,
     private readonly uploads: UploadsService,
     private readonly validation: ValidationService,
     @Inject(TRAJECTORY_RECALCULATION)
@@ -44,6 +48,7 @@ export class CertificatesService {
       throw new ConflictException('Ya registraste un certificado con ese nombre.');
     }
     await this.assertAreaExists(dto.academicAreaId);
+    await this.assertSkillsExist(dto.skillIds);
 
     // §27: solo se adjunta un archivo propio, y sus metadatos los resuelve
     // el servidor a partir del registro.
@@ -67,6 +72,7 @@ export class CertificatesService {
       fileSize: archivo?.sizeBytes ?? null,
     });
     const saved = await this.certificates.save(certificate);
+    if (dto.skillIds?.length) await this.replaceSkills(saved.id, dto.skillIds);
 
     // §26: el certificado existe desde ya; lo que puede corroborarse se
     // averigua aparte y sin hacer esperar a nadie.
@@ -83,7 +89,7 @@ export class CertificatesService {
     const profile = await this.requireProfile(userId);
     return this.certificates.find({
       where: { studentProfileId: profile.id },
-      relations: { academicArea: true },
+      relations: { academicArea: true, skills: { skill: true } },
       order: { createdAt: 'DESC' },
     });
   }
@@ -104,6 +110,10 @@ export class CertificatesService {
       certificate.academicAreaId = dto.academicAreaId ?? null;
     }
     if (dto.credentialId !== undefined) certificate.credentialId = dto.credentialId ?? null;
+    if (dto.skillIds !== undefined) {
+      await this.assertSkillsExist(dto.skillIds);
+      await this.replaceSkills(certificate.id, dto.skillIds ?? []);
+    }
 
     let reemplazado: string | null = null;
     if (dto.storedFileId !== undefined) {
@@ -145,6 +155,23 @@ export class CertificatesService {
       await this.uploads.remove(storedFileId);
     }
     await this.trajectory.requestRecalculation(certificate.studentProfileId);
+  }
+
+  /** Solo tecnologías activas del catálogo (§41, §23). */
+  private async assertSkillsExist(skillIds?: string[] | null): Promise<void> {
+    if (!skillIds?.length) return;
+    const activas = await this.skillsRepo.count({ where: { id: In(skillIds), isActive: true } });
+    if (activas !== skillIds.length) {
+      const m = 'Alguna tecnología no está en el catálogo o fue dada de baja.';
+      throw new BadRequestException({ message: m, fields: { skillIds: [m] } });
+    }
+  }
+
+  private async replaceSkills(certificateId: string, skillIds: string[]): Promise<void> {
+    await this.certificateSkills.delete({ certificateId });
+    if (skillIds.length) {
+      await this.certificateSkills.save(skillIds.map((skillId) => this.certificateSkills.create({ certificateId, skillId })));
+    }
   }
 
   private async assertAreaExists(areaId?: string | null): Promise<void> {

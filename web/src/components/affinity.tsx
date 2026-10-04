@@ -253,7 +253,7 @@ function AffinityDetail({ detail }: { detail: AffinityBreakdown }) {
               </tr>
             </thead>
             <tbody>
-              {detail.contributing.map(fila)}
+              {detail.contributing.map((c, i) => fila(c, i))}
               <tr>
                 <td colSpan={3}><strong>Total del área</strong></td>
                 <td style={{ textAlign: 'right' }}><strong>{detail.rawPoints}</strong></td>

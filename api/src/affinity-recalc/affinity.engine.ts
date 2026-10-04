@@ -793,7 +793,7 @@ export class AffinityEngineService {
         level: this.classify(score),
         supportScore,
         supportLevel: this.classifySupport(supportScore, familias),
-        supportFamilies: [...familias].sort(),
+        supportFamilies: [...familias].sort((a, b) => a.localeCompare(b)),
       });
     }
 

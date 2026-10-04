@@ -30,7 +30,7 @@ export default function TeacherReportsPage() {
           {(d: any) => (d.bySemester ?? []).length === 0 ? (
             <p className="muted">{d.group?.description ?? 'Sin datos.'}</p>
           ) : (
-            <div className="scroll-x">
+            <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
@@ -60,6 +60,7 @@ export default function TeacherReportsPage() {
           skeleton={<SkeletonTable rows={4} columns={4} />}
         >
           {(d: any) => d.groupAffinity.length === 0 ? <p className="muted">Sin datos.</p> : (
+            <div className="table-scroll">
             <table>
               <thead><tr><th>Área</th><th>Estudiantes</th><th>Promedio</th><th>Bajo/Medio/Alto</th></tr></thead>
               <tbody>
@@ -71,6 +72,7 @@ export default function TeacherReportsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </AsyncView>
       </Card>

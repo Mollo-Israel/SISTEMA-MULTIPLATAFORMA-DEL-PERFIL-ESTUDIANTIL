@@ -419,3 +419,43 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** prueba en emulador Android y en dispositivo físico (no hay SDK de Android ni `adb` en esta máquina). Procedimiento: instalar Android Studio, crear un AVD con API 34, `npm --prefix mobile run android` y recorrer bienvenida → actividad → proyecto → contacto; con Maestro, el mismo recorrido como flujo (ver BATCH 16).
 
 **Riesgos:** ninguno nuevo.
+
+## BATCH 7 (complemento) — Tecnologías del certificado externo
+
+**Estado:** completo
+
+**Objetivo:** §41 (`skills[]` del certificado), que había quedado pendiente.
+
+**Cambios:** tabla `external_certificate_skills` (clave compuesta, sin repetir); el alta y la edición aceptan `skillIds` (solo tecnologías activas del catálogo, hasta 15) y el listado las devuelve. Un certificado **con respaldo** (`SUPPORTED`/`CORROBORATED`) suma sus tecnologías a las «tecnologías respaldadas» con procedencia `certificate`; uno solo declarado, no (§22). Web: buscador de tecnologías en el formulario y su lista en cada certificado; móvil: la lista en cada certificado.
+
+**Migraciones:** `1780440000000-V2CertificateSkills`; `down`/`up` probados con respaldo.
+
+**Pruebas:** `e2e-v2` batch7 (6).
+
+## BATCH 16 — Pruebas, seguridad, rendimiento y calidad
+
+**Estado:** completo, con pendientes de herramientas que esta máquina no tiene (emulador Android, Firefox de Playwright, personas para SUS)
+
+**Objetivo:** §79, §86.
+
+**Cambios y resultados:**
+- **Unitarias** (`npm run test:unit`, runner nativo de Node con `ts-node`, sin Jest): 33 pruebas de reglas puras — afinidad V3 (topes, puntos, rendimiento decreciente), reparto de recomendaciones, política de contraseña, nombres de equipo, canales de contacto, saneamiento y validación de IA, video de ayuda, clasificación de habilidades, regla de cliente móvil y estructura del PDF por plantilla. **Encontraron un hueco real**: la validación de cifras de la IA ignoraba números de un dígito («Trabajé 2 años» pasaba); corregido.
+- **Navegador** (`npm run test:web`, Playwright con Edge, sin descargar navegadores): 22 comprobaciones — diálogo en portal, foco atrapado, Escape sin fondos huérfanos, movimiento reducido, tutorial y ayuda, menú por actor, pestañas por URL, sin errores de JavaScript, y 19 pantallas en 375 px. **Encontró un error real de maquetación**: en teléfonos el menú lateral oculto seguía ocupando 256 px (una regla `sticky` posterior pisaba el `fixed` del breakpoint) y el contenido quedaba con ~120 px; corregido, junto con dos tablas sin contenedor desplazable.
+- **Carga** (k6 en Docker, `node scripts/k6/run-k6.mjs`): login, listados, perfiles, recomendaciones y reportes con 25 estudiantes y 2 de Dirección. **Encontró un problema real**: el listado de actividades del estudiante pesaba 3 MB y traía datos que no le corresponden (correo, rol y estado del creador; comentario interno de la revisión de Dirección). Se agregó una **vista mínima del estudiante** y **compresión HTTP** (3 MB → 125 KB transferidos). Resultado: CRUD p95 1,76 s (≤ 3 s), login 0,49 s, reportes 0,86 s (≤ 5 s), 0 % de errores — cumple RNF05.
+- **OWASP ZAP** (Docker, escaneo activo autenticado con la sesión de un estudiante sobre la definición OpenAPI): 0 FAIL, 0 WARN, 118 reglas pasan; 4 alertas informativas analizadas en `docs/SEGURIDAD_V2.md`. Base respaldada antes y restaurada después.
+- **SonarQube** (Docker, servidor y escáner): primer análisis: 16 bugs y 2 vulnerabilidades; tras corregir los reales (cuatro ordenamientos sin comparador, dos botones de envío sin `type`, enlaces de la portada inalcanzables con teclado, `Math.random` como identificador, una condición constante y un `map` con índice no deseado): **0 bugs** (fiabilidad A), 1 vulnerabilidad que es un falso positivo documentado (SMTP con STARTTLS obligatorio), mantenibilidad A, duplicación 1,3 %.
+- **Dependencias**: web corregida sin cambios de versión mayor (`axios`, `form-data`); en la API las correcciones exigen NestJS 12 y Swagger 12 (mayores): documentado con mitigaciones y recomendación de migración planificada.
+- **Móvil**: el flujo de Maestro queda listo (`mobile/.maestro/flujo-estudiante.yaml`) para cuando haya emulador.
+- Documento `docs/SEGURIDAD_V2.md` con la revisión completa de §79.6, hallazgos corregidos, resultados y procedimientos de lo pendiente.
+
+**Migraciones:** ninguna (salvo la de certificados, arriba).
+
+**Archivos:** `api/test/{register.js,unit/rules.test.ts}`, `api/package.json` (`test:unit`, `build:e2e`), `api/src/main.ts` (compresión), `api/src/activities/activities.service.ts` (vista del estudiante), `api/src/ai/ai-text.ts`, `api/src/affinity-recalc/affinity.engine.ts`, `api/src/mail/mail-capture.ts`, `web/src/index.css`, `web/src/components/{ui.tsx,affinity.tsx,ActivityManager.tsx}`, `web/src/pages/{LandingPage.tsx,admin/Users.tsx,student/Evidences.tsx,student/Progress.tsx,teacher/Reports.tsx}`, `web/package-lock.json`, `scripts/{e2e-web.mjs,k6/*,zap/run-zap.mjs}`, `mobile/.maestro/flujo-estudiante.yaml`, `sonar-project.properties`, `package.json`, `.gitignore`, `docs/SEGURIDAD_V2.md`.
+
+**Resultados:** regresión completa: 19 suites, 1406 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 63, B9 49, B10 42, B11 46, QA 74, V2 153, IA 37, WEB 22), más 33 unitarias. API, web y móvil compilan; `expo-doctor` 18/18.
+
+**Regresiones:** ninguna.
+
+**Pendientes:** prueba en emulador/dispositivo Android con Maestro; Firefox en Playwright (`npx playwright install firefox`); SUS con usuarios reales; migraciones de versión mayor de NestJS y React Router.
+
+**Riesgos:** el listado de actividades no está paginado en el servidor; con los volúmenes reales (decenas por semestre) no es problema, y la vista mínima con compresión lo deja en una fracción. Si creciera, paginar con `limit`/`offset` y llevar la búsqueda de la web al servidor.

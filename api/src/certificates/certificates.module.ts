@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ExternalCertificate } from '../entities/external-certificate.entity';
+import { ExternalCertificate, ExternalCertificateSkill } from '../entities/external-certificate.entity';
+import { Skill } from '../entities/skill.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { StorageModule } from '../storage/storage.module';
@@ -10,7 +11,7 @@ import { CertificatesController } from './certificates.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ExternalCertificate, StudentProfile, AcademicArea]),
+    TypeOrmModule.forFeature([ExternalCertificate, ExternalCertificateSkill, Skill, StudentProfile, AcademicArea]),
     TrajectoryModule,
     StorageModule,
   ],

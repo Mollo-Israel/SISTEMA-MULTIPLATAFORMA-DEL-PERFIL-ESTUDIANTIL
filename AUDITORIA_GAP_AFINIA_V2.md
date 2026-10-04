@@ -223,10 +223,10 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 
 | Requisito | Estado | Observación |
 |---|---|---|
-| E2E de API (integración real con PostgreSQL) | IMPLEMENTADO | 16 suites |
-| Unitarias de reglas (afinidad V3, review, password, cooldown, scoring) | FALTANTE | se añaden con el runner nativo de Node sobre `@perfil/shared` y servicios puros |
-| Playwright (web) | FALTANTE | se intentará con el navegador Edge instalado |
-| Maestro/emulador, ZAP, k6, SonarQube | FALTANTE | requieren herramientas externas no instaladas en esta máquina; se dejan scripts y procedimiento, y se reporta como pendiente |
+| E2E de API (integración real con PostgreSQL) | IMPLEMENTADO | 18 suites de API + 1 de navegador (BATCH 16) |
+| Unitarias de reglas (afinidad V3, review, password, cooldown, scoring) | IMPLEMENTADO | BATCH 16: 33 pruebas con el runner nativo de Node |
+| Playwright (web) | IMPLEMENTADO | BATCH 16: 22 comprobaciones con Edge |
+| Maestro/emulador, ZAP, k6, SonarQube | PARCIAL | BATCH 16: ZAP, k6 y SonarQube ejecutados en Docker; Maestro/emulador pendiente (sin SDK de Android), flujo listo |
 
 ---
 

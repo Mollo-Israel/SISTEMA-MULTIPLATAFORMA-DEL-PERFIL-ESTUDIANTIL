@@ -1,0 +1,245 @@
+/**
+ * Pruebas unitarias de reglas puras (V2 §86, BATCH 16).
+ *
+ * Complementan las suites e2e: aquí se prueban las reglas deterministas sin
+ * base de datos ni servidor, con el runner nativo de Node.
+ *
+ *   npm --prefix api run test:unit
+ */
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  AFFINITY_CAPS,
+  AFFINITY_ENGINE_VERSION,
+  AFFINITY_MAX_RAW,
+  AFFINITY_POINTS_V3,
+  AiTaskType,
+  ContactChannelType,
+  CvAssistMode,
+  DIMINISHING,
+  RolNombre,
+  SUPPORT_CAPS,
+  diminishingFactor,
+} from '@perfil/shared';
+import { RULES, containsTerm, normalize } from '../../src/recommendations/recommendation.rules';
+import { passwordPolicyError } from '../../src/common/validation';
+import { checkTeamName, forbiddenTerms, normalizeWord } from '../../src/collaboration/team-name.rules';
+import { checkContactChannel } from '../../src/collaboration/contact-channel.rules';
+import { PROMPTS, VALIDATE, inputFingerprint, parseJsonLoose, sanitizeForAi } from '../../src/ai/ai-text';
+import { helpVideo } from '../../src/help/help-video';
+import { classifySkill } from '../../src/catalogs/skill-classification';
+import { assertClientAllowsRole } from '../../src/auth/auth.service';
+import { PDF_THEMES, PdfWriter } from '../../src/trajectory/pdf-writer';
+
+describe('Afinidad V3 (§45–§47)', () => {
+  it('es la versión 3 del motor', () => assert.equal(AFFINITY_ENGINE_VERSION, 3));
+
+  it('lo declarado no suma; los topes directos suman 100', () => {
+    assert.equal(AFFINITY_CAPS.PREFERENCE + AFFINITY_CAPS.INTEREST + AFFINITY_CAPS.SKILL, 0);
+    assert.equal(AFFINITY_CAPS.ACTIVITY + AFFINITY_CAPS.PROJECT + AFFINITY_CAPS.CERTIFICATE, AFFINITY_MAX_RAW);
+    assert.deepEqual([AFFINITY_CAPS.ACTIVITY, AFFINITY_CAPS.PROJECT, AFFINITY_CAPS.CERTIFICATE], [25, 50, 25]);
+  });
+
+  it('puntos por nivel de respaldo del proyecto: 0/10/18/22/0', () => {
+    const p = AFFINITY_POINTS_V3;
+    assert.deepEqual(
+      [p.PROJECT_DECLARED, p.PROJECT_SUPPORTED, p.PROJECT_CORROBORATED, p.PROJECT_REVIEWED, p.PROJECT_FLAGGED],
+      [0, 10, 18, 22, 0],
+    );
+    assert.deepEqual([p.CERTIFICATE_DECLARED, p.CERTIFICATE_SUPPORTED, p.CERTIFICATE_CORROBORATED], [0, 8, 15]);
+  });
+
+  it('rendimiento decreciente: la quinta actividad vale como la cuarta', () => {
+    assert.deepEqual([0, 1, 2, 3, 4, 9].map((i) => diminishingFactor(DIMINISHING.ACTIVITY, i)), [1, 0.7, 0.5, 0.3, 0.3, 0.3]);
+    assert.deepEqual([0, 1, 2, 3, 7].map((i) => diminishingFactor(DIMINISHING.PROJECT, i)), [1, 0.75, 0.5, 0.25, 0.25]);
+  });
+
+  it('el respaldo suma exactamente 100', () => {
+    assert.equal(SUPPORT_CAPS.ACTIVITY + SUPPORT_CAPS.PROJECT + SUPPORT_CAPS.CERTIFICATE + SUPPORT_CAPS.OTHER, 100);
+  });
+
+  it('la actividad satura en su tope: tres confirmadas no pasan de 25', () => {
+    const puntos = [0, 1, 2, 3, 4].reduce((s, i) => s + AFFINITY_POINTS_V3.ACTIVITY_CONFIRMED * diminishingFactor(DIMINISHING.ACTIVITY, i), 0);
+    assert.equal(Math.min(AFFINITY_CAPS.ACTIVITY, puntos), 25);
+  });
+});
+
+describe('Recomendaciones (§54, §60)', () => {
+  it('el reparto 35/25/20/10/10 suma 100', () => {
+    const r = RULES.ranking;
+    assert.deepEqual([r.explicitInterest, r.improvementArea, r.orientation, r.affinitySupport, r.context], [35, 25, 20, 10, 10]);
+    assert.equal(Object.values(r).reduce((s, v) => s + v, 0), 100);
+  });
+
+  it('coincide por palabra completa, sin tildes ni mayúsculas', () => {
+    const texto = normalize('Taller de Programación Móvil con React Native');
+    assert.equal(containsTerm(texto, normalize('react native')), true);
+    assert.equal(containsTerm(texto, normalize('movil')), true);
+    assert.equal(containsTerm(texto, 'act'), false);
+  });
+});
+
+describe('Política de contraseña (§13)', () => {
+  it('exige 12 caracteres y las cuatro clases', () => {
+    assert.notEqual(passwordPolicyError('Corta1*'), null);
+    assert.notEqual(passwordPolicyError('sinmayusculas123*'), null);
+    assert.notEqual(passwordPolicyError('Sin simbolo 1234'), null);
+    assert.equal(passwordPolicyError('Afinia2026Seg*'), null);
+  });
+
+  it('no puede contener el correo ni el código universitario', () => {
+    assert.match(passwordPolicyError('Juanperez2026*', { email: 'juanperez@est.univalle.edu' }) ?? '', /correo/);
+    assert.match(passwordPolicyError('Clave*A2026123456', { universityCode: '2026123456' }) ?? '', /código/);
+  });
+});
+
+describe('Nombres de equipo (§44)', () => {
+  const terms = forbiddenTerms('palabrota, frase prohibida');
+  const code = (n: string) => {
+    const r = checkTeamName(n, terms);
+    return r.ok ? 'OK' : r.code;
+  };
+
+  it('acepta nombres normales y técnicos', () => {
+    for (const n of ['Equipo Aurora', 'Computación Distribuida & IoT', 'C# y .NET (grupo 2)', 'ASP.NET Core']) {
+      assert.equal(code(n), 'OK', n);
+    }
+  });
+
+  it('bloquea términos prohibidos con números, letras sueltas o plural', () => {
+    for (const n of ['Equipo pendejo', 'Los P3ND3J0S', 'p u t a s', 'Equipo palabrota', 'La frase prohibida']) {
+      assert.equal(code(n), 'TEAM_NAME_FORBIDDEN', n);
+    }
+  });
+
+  it('bloquea contacto, longitud, caracteres y repeticiones', () => {
+    assert.equal(code('equipo@correo.com'), 'TEAM_NAME_CONTACT');
+    assert.equal(code('visita equipo.com'), 'TEAM_NAME_CONTACT');
+    assert.equal(code('Llama 7712 3456'), 'TEAM_NAME_CONTACT');
+    assert.equal(code('AB'), 'TEAM_NAME_LENGTH');
+    assert.equal(code('Equipo <b>'), 'TEAM_NAME_CHARACTERS');
+    assert.equal(code('Holaaaaaa'), 'TEAM_NAME_REPEATED');
+  });
+
+  it('normaliza leet y repeticiones', () => assert.equal(normalizeWord('P3NNDD3J00'), 'pendejo'));
+});
+
+describe('Canales de contacto (§59)', () => {
+  const c = (ch: ContactChannelType, v: string) => checkContactChannel(ch, v);
+  it('normaliza y da un enlace seguro', () => {
+    assert.deepEqual(c(ContactChannelType.WHATSAPP, '+591 712-34567'), { ok: true, value: '+59171234567', href: 'https://wa.me/59171234567' });
+    const li = c(ContactChannelType.LINKEDIN, 'linkedin.com/in/ana-perez');
+    assert.equal(li.ok && li.href, 'https://www.linkedin.com/in/ana-perez');
+    const t = c(ContactChannelType.TEAMS, 'Ana@Est.Univalle.edu');
+    assert.equal(t.ok && t.href, 'https://teams.microsoft.com/l/chat/0/0?users=ana%40est.univalle.edu');
+    const e = c(ContactChannelType.EMAIL, 'Ana@Correo.com');
+    assert.equal(e.ok && e.href, 'mailto:ana@correo.com');
+  });
+  it('rechaza lo inseguro o mal formado', () => {
+    for (const [ch, v] of [
+      [ContactChannelType.LINK, 'javascript:alert(1)'],
+      [ContactChannelType.LINK, 'http://sitio.com'],
+      [ContactChannelType.LINK, 'https://user:pass@sitio.com'],
+      [ContactChannelType.LINKEDIN, 'https://evil.com/in/ana'],
+      [ContactChannelType.WHATSAPP, '71234567'],
+      [ContactChannelType.TEAMS, 'https://evil.com/chat'],
+      [ContactChannelType.EMAIL, 'no-es-correo'],
+    ] as const) {
+      assert.equal(c(ch, v).ok, false, `${ch} ${v}`);
+    }
+  });
+});
+
+describe('Asistente de IA (§43, §61.3, §63)', () => {
+  it('saca correos, teléfonos, tokens y parámetros de URL antes de enviar', () => {
+    const s = sanitizeForAi('Soy ana@gmail.com, cel 77123456, Bearer abc.def.ghi y https://x.com/a?token=123 eyJhbGciOi.eyJzdWIi.sig', 4000);
+    assert.doesNotMatch(s, /ana@gmail|77123456|abc\.def|token=123|eyJhbGci/);
+    assert.match(s, /\[correo\]/);
+    assert.match(s, /https:\/\/x\.com\/a/);
+  });
+  it('recorta al máximo configurado', () => assert.equal(sanitizeForAi('hola '.repeat(40), 10).length, 10));
+  it('una cadena larga sin espacios se trata como posible clave', () => assert.equal(sanitizeForAi('a'.repeat(40), 100), '[clave]'));
+  it('la huella es estable y depende de la tarea', () => {
+    assert.equal(inputFingerprint(AiTaskType.CV_TEXT_ASSIST, 'x'), inputFingerprint(AiTaskType.CV_TEXT_ASSIST, 'x'));
+    assert.notEqual(inputFingerprint(AiTaskType.CV_TEXT_ASSIST, 'x'), inputFingerprint(AiTaskType.TAG_SUGGESTION, 'x'));
+    assert.match(inputFingerprint(AiTaskType.CV_TEXT_ASSIST, 'x'), /^[0-9a-f]{64}$/);
+  });
+  it('lee JSON aunque venga envuelto', () => {
+    assert.deepEqual(parseJsonLoose('Claro:\n```json\n{"tags":["a"]}\n```'), { tags: ['a'] });
+    assert.equal(parseJsonLoose('sin json'), null);
+    assert.equal(parseJsonLoose('[1,2]'), null);
+  });
+  it('descarta texto de CV con cifras que el original no tenía', () => {
+    const r = VALIDATE.cv({ texts: ['Trabajé 2 años en backend.', 'Trabajé en backend con NestJS.'] }, 'Trabajé en backend con NestJS.');
+    assert.deepEqual(r, { texts: ['Trabajé en backend con NestJS.'], discarded: 1 });
+    assert.equal(VALIDATE.cv({ texts: ['Lideré 40 personas.'] }, 'Trabajé en backend.'), null);
+  });
+  it('la narrativa solo puede citar cifras de los datos', () => {
+    assert.equal(VALIDATE.narrative({ narrative: 'Hubo 12 proyectos.' }, '- React: 12'), 'Hubo 12 proyectos.');
+    assert.equal(VALIDATE.narrative({ narrative: 'Hubo 99 proyectos.' }, '- React: 12'), null);
+  });
+  it('etiquetas en minúsculas, sin duplicados ni marcas', () => {
+    assert.deepEqual(VALIDATE.tags({ tags: ['React', 'react', '<b>x</b>', 'a'] }), { tags: ['react'] });
+  });
+  it('las instrucciones del CV prohíben inventar', () => {
+    assert.match(PROMPTS.cv('x', CvAssistMode.IMPROVE).system, /no inventes/i);
+  });
+});
+
+describe('Video de ayuda (§65)', () => {
+  it('YouTube se inserta sin cookies', () => {
+    assert.equal(helpVideo('https://www.youtube.com/watch?v=dQw4w9WgXcQ')?.embedUrl, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+    assert.equal(helpVideo('https://youtu.be/dQw4w9WgXcQ')?.embedUrl, 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+  });
+  it('otros proveedores, como enlace; http o basura, nada', () => {
+    assert.deepEqual(helpVideo('https://web.microsoftstream.com/video/abc'), { url: 'https://web.microsoftstream.com/video/abc', embedUrl: null });
+    assert.equal(helpVideo('http://youtube.com/watch?v=dQw4w9WgXcQ'), null);
+    assert.equal(helpVideo('no es url'), null);
+    assert.equal(helpVideo(''), null);
+  });
+});
+
+describe('Clasificación de habilidades (§23.3)', () => {
+  const areas = [
+    { id: 'm', name: 'Desarrollo Móvil', tags: ['desarrollo-movil'] },
+    { id: 'w', name: 'Desarrollo Web', tags: ['desarrollo-web'] },
+  ];
+  it('React Native va a Móvil por regla canónica, también por alias', () => {
+    const c = classifySkill('React Native', [], areas);
+    assert.equal(c.rule, 'canonical');
+    assert.deepEqual(c.areaIds, ['m']);
+    assert.deepEqual(classifySkill('RN', ['react native'], areas).areaIds, ['m']);
+  });
+});
+
+describe('App móvil solo Estudiante (§67)', () => {
+  it('rechaza personal desde el móvil y deja pasar la web', () => {
+    assert.throws(() => assertClientAllowsRole('mobile', RolNombre.TEACHER), /estudiantes/);
+    assert.doesNotThrow(() => assertClientAllowsRole('mobile', RolNombre.STUDENT));
+    assert.doesNotThrow(() => assertClientAllowsRole('web', RolNombre.ADMIN));
+    assert.doesNotThrow(() => assertClientAllowsRole(undefined, RolNombre.ADMIN));
+  });
+});
+
+describe('PDF del CV (§61)', () => {
+  for (const [nombre, tema] of Object.entries(PDF_THEMES)) {
+    it(`plantilla ${nombre}: PDF válido con tabla de referencias correcta`, () => {
+      const pdf = new PdfWriter('Prueba', tema).title('Título (x)').section('Sección').paragraph('Texto').build();
+      const s = pdf.toString('latin1');
+      assert.ok(s.startsWith('%PDF-1.4'));
+      assert.ok(s.trimEnd().endsWith('%%EOF'));
+      assert.match(s, /\(Título \\\(x\\\)\) Tj/);
+      // Cada entrada de la tabla xref apunta al inicio de su objeto.
+      const xref = Number(/startxref\n(\d+)/.exec(s)![1]);
+      assert.ok(s.slice(xref).startsWith('xref'));
+      const offsets = s.slice(xref).split('\n').slice(3).filter((l) => / 00000 n $/.test(l)).map((l) => Number(l.slice(0, 10)));
+      offsets.forEach((o, i) => assert.ok(s.slice(o).startsWith(`${i + 1} 0 obj`), `objeto ${i + 1}`));
+    });
+  }
+  it('la plantilla compacta usa Times y la moderna, color', () => {
+    const compacta = new PdfWriter('x', PDF_THEMES.compact).section('A').build().toString('latin1');
+    const moderna = new PdfWriter('x', PDF_THEMES.modern).section('A').build().toString('latin1');
+    assert.match(compacta, /\/Times-Roman/);
+    assert.match(moderna, / rg /);
+  });
+});

@@ -968,7 +968,63 @@ async function batch15(ctx) {
   check(renovarWeb.status === 200, 'V2.15.7 §67 Y esa misma sesión sigue sirviendo en la web', `status ${renovarWeb.status}`);
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch8, batch10, batch11, batch12, batch13, batch14, batch15 };
+// ===========================================================================
+//  BATCH 7 — Certificados externos con tecnologías (§41)
+// ===========================================================================
+async function batch7(ctx) {
+  objective('BATCH 7 · El certificado declara sus tecnologías; solo con respaldo cuentan');
+  const { execSync } = await import('node:child_process');
+  const psql = (sql) => execSync(
+    `docker exec perfil_postgres psql -U ${process.env.POSTGRES_USER ?? 'perfil_user'} -d ${process.env.POSTGRES_DB ?? 'perfil_estudiantil'} -tAc "${sql.replace(/"/g, '\\"')}"`,
+    { encoding: 'utf8' },
+  ).trim();
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Cert', lastName: 'Tecnologias', email: correoEst('b7cert'), role: 'STUDENT', semester: 6 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const catalogo = ((await req('GET', '/skills', { token: est.token })).data ?? []).filter((s) => s.isActive !== false);
+  const [s1, s2] = catalogo;
+
+  const cert = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: { certificateName: `Curso de contenedores ${TS}`, issuer: 'Plataforma externa', skillIds: [s1.id, s2.id] },
+  });
+  check(cert.status === 201, 'V2.7.1 §41 Se registra un certificado con sus tecnologías', json(cert.data));
+  const mios = (await req('GET', '/certificates/external/my', { token: est.token })).data ?? [];
+  const guardado = mios.find((c) => c.id === cert.data?.id);
+  check((guardado?.skills ?? []).map((s) => s.skill?.name).sort().join() === [s1.name, s2.name].sort().join(),
+    'V2.7.2 §41 El listado trae las tecnologías', json(guardado?.skills));
+
+  const malo = await req('POST', '/certificates/external', {
+    token: est.token, body: { certificateName: `Otro ${TS}`, issuer: 'X', skillIds: ['00000000-0000-4000-8000-000000000000'] },
+  });
+  const repetido = await req('POST', '/certificates/external', {
+    token: est.token, body: { certificateName: `Otro dos ${TS}`, issuer: 'X', skillIds: [s1.id, s1.id] },
+  });
+  check(malo.status === 400 && repetido.status === 400, 'V2.7.3 §41 Solo tecnologías del catálogo, sin repetir', `${malo.status}/${repetido.status}`);
+
+  const perfil = (await req('GET', '/profiles/me', { token: est.token })).data;
+  const respaldadas = async () => ((await req('GET', '/profiles/me/summary', { token: est.token })).data?.skills ?? []);
+  // Esperar a que la validación asíncrona deje su veredicto (sin archivo: DECLARED).
+  for (let i = 0; i < 20 && !psql(`select backing_tier from validation_records where resource_type='external_certificate' and resource_id='${cert.data?.id}'`); i++) {
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  const antes = await respaldadas();
+  check(!antes.some((s) => s.skillId === s1.id), 'V2.7.4 §41 §22 Un certificado solo declarado no respalda tecnologías', json(antes));
+
+  // Con respaldo (lo que daría la validación con un documento legible y coherente).
+  psql(`update validation_records set backing_tier='supported' where resource_type='external_certificate' and resource_id='${cert.data?.id}'`);
+  const despues = await respaldadas();
+  const conCert = despues.find((s) => s.skillId === s1.id);
+  check(!!conCert && (conCert.sources ?? []).includes('certificate'),
+    'V2.7.5 §41 Con respaldo, sus tecnologías cuentan como respaldadas, con su procedencia', json(conCert));
+
+  const cambio = await req('PATCH', `/certificates/external/${cert.data?.id}`, { token: est.token, body: { skillIds: [s2.id] } });
+  const ahora = ((await req('GET', '/certificates/external/my', { token: est.token })).data ?? []).find((c) => c.id === cert.data?.id);
+  check(cambio.status === 200 && (ahora?.skills ?? []).length === 1 && ahora.skills[0].skillId === s2.id,
+    'V2.7.6 §41 Editar reemplaza la lista de tecnologías', json(ahora?.skills));
+  void perfil;
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch7, batch8, batch10, batch11, batch12, batch13, batch14, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

@@ -1,0 +1,34 @@
+# Flujo representativo del estudiante en la app móvil (V2 §79.5).
+#
+# Requiere Android Emulator (o un dispositivo) con un Expo Development Build
+# instalado y la API accesible desde el emulador (10.0.2.2:3010). En esta
+# máquina no hay SDK de Android: el flujo queda listo para correr con
+#   maestro test mobile/.maestro/flujo-estudiante.yaml \
+#     -e EMAIL=estudiante@est.univalle.edu -e PASSWORD=...
+# La cuenta debe existir y haber terminado la bienvenida.
+appId: host.exp.exponent
+---
+- launchApp:
+    clearState: true
+- tapOn: "nombre.apellido@est.univalle.edu"
+- inputText: ${EMAIL}
+- tapOn:
+    id: "password"
+    optional: true
+- inputText: ${PASSWORD}
+- tapOn: "Ingresar"
+- assertVisible: "Inicio"
+# Actividades: ver el listado y abrir una.
+- tapOn: "Actividades"
+- assertVisible: "Actividades"
+# Afinidad: el detalle explica de dónde sale cada punto.
+- tapOn: "Afinidad"
+- assertVisible: "Mis afinidades"
+# Colaboración: canales de contacto (no hay chat, V2 §57).
+- tapOn: "Perfil"
+- tapOn: "Colaboración"
+- assertVisible: "Cómo contactarte"
+- assertNotVisible: "Mensajes"
+# Salir.
+- tapOn: "Salir"
+- assertVisible: "Ingresar"

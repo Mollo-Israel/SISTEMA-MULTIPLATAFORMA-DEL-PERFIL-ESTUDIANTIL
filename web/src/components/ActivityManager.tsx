@@ -513,7 +513,7 @@ export default function ActivityManager({
                         onClick={() =>
                           setForm({
                             ...form,
-                            semesterScope: on ? form.semesterScope.filter((x) => x !== n) : [...form.semesterScope, n].sort(),
+                            semesterScope: on ? form.semesterScope.filter((x) => x !== n) : [...form.semesterScope, n].sort((a, b) => a - b),
                           })}
                       >
                         {n}º

@@ -70,10 +70,10 @@ export default function LandingPage() {
           <div><b>Afinia</b><small>Perfil estudiantil dinámico</small></div>
         </div>
         <div className="lp-links">
-          <a onClick={() => scrollTo('inicio')} className="on">Inicio</a>
-          <a onClick={() => scrollTo('funciones')}>Funciones</a>
-          <a onClick={() => scrollTo('como')}>Cómo funciona</a>
-          <a onClick={() => scrollTo('preguntas')}>Preguntas</a>
+          <a href="#inicio" onClick={(e) => { e.preventDefault(); scrollTo('inicio'); }} className="on">Inicio</a>
+          <a href="#funciones" onClick={(e) => { e.preventDefault(); scrollTo('funciones'); }}>Funciones</a>
+          <a href="#como" onClick={(e) => { e.preventDefault(); scrollTo('como'); }}>Cómo funciona</a>
+          <a href="#preguntas" onClick={(e) => { e.preventDefault(); scrollTo('preguntas'); }}>Preguntas</a>
           {user
             ? <button className="lp-btn lp-btn-solid" onClick={goPanel}>Ir a mi panel <FiArrowRight /></button>
             : <button className="lp-btn lp-btn-solid" onClick={goLogin}><FiLogIn /> Iniciar sesión</button>}
@@ -221,10 +221,10 @@ export default function LandingPage() {
           </div>
           <div>
             <h5>Enlaces rápidos</h5>
-            <a onClick={() => scrollTo('inicio')}>Inicio</a>
-            <a onClick={() => scrollTo('funciones')}>Funciones</a>
-            <a onClick={() => scrollTo('como')}>Cómo funciona</a>
-            <a onClick={() => scrollTo('preguntas')}>Preguntas frecuentes</a>
+            <a href="#inicio" onClick={(e) => { e.preventDefault(); scrollTo('inicio'); }}>Inicio</a>
+            <a href="#funciones" onClick={(e) => { e.preventDefault(); scrollTo('funciones'); }}>Funciones</a>
+            <a href="#como" onClick={(e) => { e.preventDefault(); scrollTo('como'); }}>Cómo funciona</a>
+            <a href="#preguntas" onClick={(e) => { e.preventDefault(); scrollTo('preguntas'); }}>Preguntas frecuentes</a>
           </div>
           <div>
             <h5>Contacto</h5>

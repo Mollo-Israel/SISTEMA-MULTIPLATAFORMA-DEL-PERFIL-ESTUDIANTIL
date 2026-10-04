@@ -33,6 +33,7 @@ import type {
   Evidence,
   ExternalCertificate,
   Project,
+  Skill,
   StoredFile,
   ValidationVerdict,
 } from '../../services/types';
@@ -295,6 +296,11 @@ export default function StudentEvidencesPage() {
                       <td>
                         <strong>{c.certificateName}</strong>
                         {c.description && <div className="muted">{c.description}</div>}
+                        {(c.skills ?? []).length > 0 && (
+                          <div className="muted small">
+                            {(c.skills ?? []).map((s) => s.skill?.name).filter(Boolean).join(' · ')}
+                          </div>
+                        )}
                       </td>
                       <td className="muted">{c.issuer}</td>
                       <td className="muted">{c.academicArea?.name ?? '—'}</td>
@@ -603,7 +609,7 @@ function EvidenceForm({
           </div>
         </div>
 
-        <button className="btn btn-primary" disabled={saving}>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
           {saving ? 'Guardando…' : 'Registrar evidencia'}
         </button>
       </form>
@@ -631,6 +637,18 @@ function CertificateForm({
   });
   const [file, setFile] = useState<StoredFile | null>(null);
   const [saving, setSaving] = useState(false);
+  // V2 §41: tecnologías que el certificado acredita, del catálogo.
+  const [catalogo, setCatalogo] = useState<Skill[]>([]);
+  const [skillIds, setSkillIds] = useState<string[]>([]);
+  const [busqueda, setBusqueda] = useState('');
+  useEffect(() => {
+    catalogService.skills().then((s) => setCatalogo(s.filter((x) => x.isActive !== false))).catch(() => {});
+  }, []);
+  const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const sugeridas = busqueda.trim().length < 2 ? [] : catalogo
+    .filter((s) => !skillIds.includes(s.id))
+    .filter((s) => [s.name, ...(s.aliases ?? [])].some((n) => norm(n).includes(norm(busqueda.trim()))))
+    .slice(0, 12);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -645,6 +663,7 @@ function CertificateForm({
         certificateUrl: form.certificateUrl || undefined,
         credentialId: form.credentialId || undefined,
         storedFileId: file?.id,
+        skillIds: skillIds.length ? skillIds : undefined,
       });
       setForm({
         certificateName: '',
@@ -656,6 +675,8 @@ function CertificateForm({
         credentialId: '',
       });
       setFile(null);
+      setSkillIds([]);
+      setBusqueda('');
       onSaved();
     } catch (e2) {
       onError(apiError(e2));
@@ -745,13 +766,54 @@ function CertificateForm({
             />
           </div>
         </div>
+        <div className="field">
+          <label htmlFor="cert-skills">Tecnologías que acredita (opcional)</label>
+          {skillIds.length > 0 && (
+            <div className="chip-row" style={{ marginBottom: '0.4rem' }}>
+              {skillIds.map((id) => (
+                <button
+                  type="button"
+                  key={id}
+                  className="chip on"
+                  aria-label={`Quitar ${catalogo.find((s) => s.id === id)?.name ?? 'tecnología'}`}
+                  onClick={() => setSkillIds(skillIds.filter((x) => x !== id))}
+                >
+                  {catalogo.find((s) => s.id === id)?.name ?? id} ×
+                </button>
+              ))}
+            </div>
+          )}
+          <input
+            id="cert-skills"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Escribe para buscar: React, Docker, SQL…"
+          />
+          {sugeridas.length > 0 && (
+            <div className="chip-row" style={{ marginTop: '0.4rem' }}>
+              {sugeridas.map((s) => (
+                <button
+                  type="button"
+                  key={s.id}
+                  className="chip"
+                  onClick={() => { setSkillIds([...skillIds, s.id].slice(0, 15)); setBusqueda(''); }}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <span className="field-hint">
+            Cuentan como tecnologías respaldadas solo si el certificado queda con respaldo.
+          </span>
+        </div>
         <FilePicker
           file={file}
           onPicked={setFile}
           onError={onError}
           label="Archivo del certificado (opcional)"
         />
-        <button className="btn btn-primary" disabled={saving}>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
           {saving ? 'Guardando…' : 'Registrar certificado'}
         </button>
       </form>

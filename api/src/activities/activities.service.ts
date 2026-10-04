@@ -113,6 +113,35 @@ export interface ActivityWithCounts extends Activity {
   myRegistration?: { id: string; status: RegistrationStatus } | null;
 }
 
+/**
+ * Lo que un estudiante recibe de una actividad (V2 §80, minimización).
+ *
+ * El listado completo arrastraba la entidad del creador —con su correo, rol y
+ * estado— y los datos internos de la revisión de Dirección (comentario, quién
+ * y cuándo). Nada de eso le sirve para inscribirse y no es suyo de ver; además
+ * duplicaba el peso de la respuesta.
+ */
+function vistaEstudiante<T extends object>(actividad: T) {
+  const {
+    creator, category, academicArea,
+    reviewComment, reviewedById, reviewedAt, submittedAt, requiresReview, reviewStatus,
+    ...resto
+  } = actividad as T & {
+    creator?: { id: string; firstName: string; lastName: string } | null;
+    category?: { id: string; code: string; name: string; appliesTo?: string } | null;
+    academicArea?: { id: string; name: string } | null;
+    reviewComment?: unknown; reviewedById?: unknown; reviewedAt?: unknown;
+    submittedAt?: unknown; requiresReview?: unknown; reviewStatus?: unknown;
+  };
+  void reviewComment; void reviewedById; void reviewedAt; void submittedAt; void requiresReview; void reviewStatus;
+  return {
+    ...resto,
+    creator: creator ? { id: creator.id, firstName: creator.firstName, lastName: creator.lastName } : null,
+    category: category ? { id: category.id, code: category.code, name: category.name, appliesTo: category.appliesTo } : null,
+    academicArea: academicArea ? { id: academicArea.id, name: academicArea.name } : null,
+  };
+}
+
 @Injectable()
 export class ActivitiesService {
   constructor(
@@ -393,7 +422,7 @@ export class ActivitiesService {
   async findAll(
     user: AuthenticatedUser,
     filters: QueryActivitiesDto,
-  ): Promise<ActivityWithCounts[]> {
+  ): Promise<Array<ActivityWithCounts | ReturnType<typeof vistaEstudiante>>> {
     const where: FindOptionsWhere<Activity> = {};
     if (filters.type) where.type = filters.type;
     if (filters.categoryId) where.categoryId = filters.categoryId;
@@ -426,7 +455,7 @@ export class ActivitiesService {
 
     const conConteos = await this.attachCounts(visible);
     return user.role === RolNombre.STUDENT
-      ? this.attachMyRegistration(user.userId, conConteos)
+      ? (await this.attachMyRegistration(user.userId, conConteos)).map(vistaEstudiante)
       : conConteos;
   }
 
@@ -480,7 +509,7 @@ export class ActivitiesService {
     });
 
     return {
-      ...activity,
+      ...vistaEstudiante(activity),
       myRegistration: registration
         ? { id: registration.id, status: registration.status }
         : null,

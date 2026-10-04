@@ -687,7 +687,7 @@ function SemesterDialog({
   }, [teacher.id]);
 
   const toggle = (s: number) =>
-    setSelected((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s].sort()));
+    setSelected((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s].sort((a, b) => a - b)));
 
   const submit = async () => {
     setSaving(true);

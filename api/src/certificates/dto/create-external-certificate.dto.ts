@@ -1,6 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsDateString,
   IsNotEmpty,
   IsOptional,
@@ -90,4 +93,13 @@ export class CreateExternalCertificateDto {
   @IsOptional()
   @IsUUID('4', { message: 'El archivo debe identificarse por el id que devolvió la subida.' })
   storedFileId?: string;
+
+  /** V2 §41: tecnologías del catálogo que el certificado acredita. */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(15, { message: 'Como máximo 15 tecnologías por certificado.' })
+  @ArrayUnique({ message: 'No repitas tecnologías.' })
+  @IsUUID('4', { each: true, message: 'Elige tecnologías del catálogo.' })
+  skillIds?: string[];
 }

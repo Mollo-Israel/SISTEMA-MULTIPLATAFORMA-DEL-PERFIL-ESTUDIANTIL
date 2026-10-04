@@ -6,8 +6,8 @@ export interface BackedSkill {
   skillId: string;
   name: string;
   academicAreaId: string | null;
-  /** De qué familias sale: proyectos con contribución confirmada, actividades confirmadas. */
-  sources: ('project' | 'activity')[];
+  /** De qué familias sale: proyectos, actividades confirmadas y certificados con respaldo. */
+  sources: ('project' | 'activity' | 'certificate')[];
   /** Cuántos eventos distintos la respaldan. */
   evidenceCount: number;
 }
@@ -25,7 +25,10 @@ export interface BackedSkill {
  *     (§33, §34), en proyectos con respaldo (`SUPPORTED` o mejor; ni
  *     `DECLARED` ni `FLAGGED`, §36);
  *   - **actividades**: las tecnologías de actividades con participación
- *     `CONFIRMED` (§29).
+ *     `CONFIRMED` (§29);
+ *   - **certificados** (V2 §41): las tecnologías de un certificado externo
+ *     cuya validación lo dejó `SUPPORTED` o `CORROBORATED`. Uno solo
+ *     declarado no respalda nada.
  *
  * No es una certificación: dice dónde aparece la tecnología en la trayectoria
  * respaldada, no cuánto se domina (§5.2).
@@ -43,7 +46,7 @@ export class BackedSkillsService {
       skill_id: string;
       name: string;
       academic_area_id: string | null;
-      source: 'project' | 'activity';
+      source: 'project' | 'activity' | 'certificate';
       source_id: string;
     }[] = await this.dataSource.query(
       `SELECT sp.id AS profile_id, s.id AS skill_id, s.name, s.academic_area_id,
@@ -63,7 +66,18 @@ export class BackedSkillsService {
          JOIN activity_skills a_s ON a_s.activity_id = r.activity_id
          JOIN skills s ON s.id = a_s.skill_id
         WHERE r.student_profile_id = ANY($1)
-          AND r.status = 'confirmed'`,
+          AND r.status = 'confirmed'
+       UNION ALL
+       SELECT c.student_profile_id AS profile_id, s.id AS skill_id, s.name, s.academic_area_id,
+              'certificate' AS source, c.id AS source_id
+         FROM external_certificate_skills cs
+         JOIN external_certificates c ON c.id = cs.certificate_id
+         JOIN skills s ON s.id = cs.skill_id
+        WHERE c.student_profile_id = ANY($1)
+          AND EXISTS (
+            SELECT 1 FROM validation_records vr
+             WHERE vr.resource_type = 'external_certificate' AND vr.resource_id = c.id
+               AND vr.backing_tier IN ('supported', 'corroborated'))`,
       [profileIds],
     );
 

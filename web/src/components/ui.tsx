@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { FiInbox, FiSearch, FiX } from 'react-icons/fi';
@@ -460,7 +460,7 @@ export function Tabs({
   value: string;
   onChange: (key: string) => void;
 }) {
-  const id = useRef(`tabs-${Math.random().toString(36).slice(2)}`).current;
+  const id = `tabs-${useId().replace(/:/g, '')}`;
   return (
     <div className="tabs" role="tablist">
       {items.map((item) => {
@@ -503,12 +503,10 @@ export function ProgressBar({
   const safe = Math.max(0, Math.min(100, Math.round(value)));
   return (
     <div className="progress-block">
-      {(label || true) && (
-        <div className="flex between progress-label">
-          {label && <span>{label}</span>}
-          <strong>{safe}%</strong>
-        </div>
-      )}
+      <div className="flex between progress-label">
+        {label && <span>{label}</span>}
+        <strong>{safe}%</strong>
+      </div>
       <div className="progress" role="progressbar" aria-valuenow={safe} aria-valuemin={0} aria-valuemax={100}>
         <motion.div
           className={`bar-${tone}`}

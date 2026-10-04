@@ -54,3 +54,5 @@ backups/
 
 # Copia local de los correos en desarrollo (contiene códigos de activación)
 .mail-outbox/
+scripts/k6/out/
+scripts/zap/out/

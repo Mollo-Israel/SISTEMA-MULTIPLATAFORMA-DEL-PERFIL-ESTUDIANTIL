@@ -50,7 +50,8 @@ export class MailCapture {
   }
 
   private async podar(): Promise<void> {
-    const archivos = (await fs.readdir(this.dir)).filter((f) => f.endsWith('.json')).sort();
+    // Los nombres empiezan por la fecha: orden de texto = orden cronológico.
+    const archivos = (await fs.readdir(this.dir)).filter((f) => f.endsWith('.json')).sort((a, b) => a.localeCompare(b));
     const sobran = archivos.slice(0, Math.max(0, archivos.length - CONSERVAR));
     for (const f of sobran) {
       await fs.rm(join(this.dir, f), { force: true });

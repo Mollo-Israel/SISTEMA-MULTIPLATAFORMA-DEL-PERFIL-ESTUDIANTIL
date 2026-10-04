@@ -135,7 +135,7 @@ function Progreso() {
               Solo cosas hechas. Declarar un interés, adjuntar un archivo o registrar un proyecto
               vacío no suman: son declaraciones, no trayectoria.
             </p>
-            <div className="scroll-x">
+            <div className="table-scroll">
               <table>
                 <thead>
                   <tr><th>Acción</th><th style={{ textAlign: 'right' }}>Puntos</th></tr>

@@ -5,8 +5,11 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
+  PrimaryColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Skill } from './skill.entity';
 import { StudentProfile } from './student-profile.entity';
 import { AcademicArea } from './academic-area.entity';
 import { StoredFileRecord } from './stored-file.entity';
@@ -94,6 +97,28 @@ export class ExternalCertificate {
   @JoinColumn({ name: 'stored_file_id' })
   storedFile: StoredFileRecord | null;
 
+  /** V2 §41: las tecnologías que el certificado acredita haber trabajado. */
+  @OneToMany(() => ExternalCertificateSkill, (s) => s.certificate)
+  skills: ExternalCertificateSkill[];
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+}
+
+/** Tecnología de un certificado externo (V2 §41, `skills[]`). */
+@Entity('external_certificate_skills')
+export class ExternalCertificateSkill {
+  @PrimaryColumn({ name: 'certificate_id', type: 'uuid' })
+  certificateId: string;
+
+  @PrimaryColumn({ name: 'skill_id', type: 'uuid' })
+  skillId: string;
+
+  @ManyToOne(() => ExternalCertificate, (c) => c.skills, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'certificate_id' })
+  certificate: ExternalCertificate;
+
+  @ManyToOne(() => Skill, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'skill_id' })
+  skill: Skill;
 }

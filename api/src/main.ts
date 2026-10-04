@@ -7,6 +7,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import compression from 'compression';
 import helmet from 'helmet';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
@@ -29,6 +30,11 @@ async function bootstrap() {
   // §84: cabeceras de seguridad. `contentSecurityPolicy` se desactiva porque
   // esta API no sirve HTML; la CSP la aplica el cliente web en su propio host.
   app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+
+  // V2 BATCH 16: compresión de respuestas. La prueba de carga mostró listados
+  // de varios MB en JSON; comprimidos ocupan una fracción. Umbral de 1 KB: lo
+  // pequeño no gana nada y gasta CPU.
+  app.use(compression({ threshold: 1024 }));
 
   // Los archivos NO se sirven como estáticos (§83). La descarga pasa por
   // FilesController, que exige sesión y comprueba la autorización sobre la

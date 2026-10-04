@@ -812,6 +812,8 @@ export interface ExternalCertificate {
   fileName: string | null;
   mimeType: string | null;
   fileSize: number | null;
+  /** V2 §41: tecnologías que el certificado acredita. */
+  skills?: { skillId: string; skill?: { id: string; name: string } | null }[];
   createdAt: string;
 }
 

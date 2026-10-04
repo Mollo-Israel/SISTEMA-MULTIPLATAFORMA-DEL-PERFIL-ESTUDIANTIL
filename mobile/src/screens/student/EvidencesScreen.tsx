@@ -316,6 +316,12 @@ export default function EvidencesScreen() {
                   {c.issueDate ? ` · ${c.issueDate}` : ''}
                   {c.academicArea ? ` · ${c.academicArea.name}` : ''}
                 </Text>
+                {/* V2 §41: las tecnologías que el certificado acredita. */}
+                {(c.skills ?? []).length > 0 && (
+                  <Text style={styles.rowMeta}>
+                    {(c.skills ?? []).map((s: any) => s.skill?.name).filter(Boolean).join(' · ')}
+                  </Text>
+                )}
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
                   {(c.fileUrl || c.certificateUrl) && (
                     <View style={{ flex: 1 }}>

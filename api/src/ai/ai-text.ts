@@ -93,9 +93,14 @@ export const PROMPTS = {
 const str = (v: unknown, max: number): string | null =>
   typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
 
-/** Números de dos o más cifras de un texto, para comparar contra la fuente. */
+/**
+ * Números de un texto, para comparar contra la fuente. Todos, también los de
+ * una cifra: «2 años» de experiencia que el original no decía es justo lo que
+ * §61.3 prohíbe inventar. (Los números escritos en letras no se detectan; la
+ * instrucción al modelo también los prohíbe.)
+ */
 export function numbersIn(text: string): Set<string> {
-  return new Set((text.match(/\d+(?:[.,]\d+)?/g) ?? []).filter((n) => n.replace(/\D/g, '').length >= 2));
+  return new Set(text.match(/\d+(?:[.,]\d+)?/g) ?? []);
 }
 
 /**
