@@ -353,6 +353,22 @@ async function prepararEscenario(ctx) {
   });
   check(interes.status === 201, 'P.7 S1 declara preferencia, mejora, proyecto e interes', msgOf(interes));
 
+  // V2 §45.1: la trayectoria que cuenta es la respaldada. Cada uno la obtiene
+  // con participaciones confirmadas por Dirección.
+  const participar = async (quien, area, etiqueta) => {
+    const act = (await crearActividad(ctx.director, {
+      title: `Practica ${etiqueta} ${TS}`,
+      description: 'Participacion confirmada del escenario.',
+      type: 'academica', categoryId: ctx.cat.taller, areaId: area.id,
+    })).data;
+    await req('POST', `/activities/${act.id}/register`, { token: quien.token });
+    await req('PATCH', `/activities/${act.id}/confirm-participation`, {
+      token: ctx.director,
+      body: { studentProfileId: quien.profileId, status: 'confirmed' },
+    });
+  };
+  await participar(ctx.S1, ctx.areaPrincipal, 'S1');
+
   // S4 y S5: trayectoria en ambas areas. S5 ademas se excluye de las sugerencias.
   for (const s of [ctx.S4, ctx.S5]) {
     await req('PUT', '/profiles/me/preferred-areas', {
@@ -365,14 +381,7 @@ async function prepararEscenario(ctx) {
       },
     });
     for (const area of [ctx.areaPrincipal, ctx.areaSecundaria]) {
-      await req('POST', '/projects', {
-        token: s.token,
-        body: {
-          title: `Proyecto ${area.name} de ${s.name} ${TS}`,
-          description: 'Proyecto que aporta trayectoria.',
-          areaId: area.id, status: 'active', visibility: 'profile',
-        },
-      });
+      await participar(s, area, `${s.name} ${area.name}`);
     }
   }
   const oculta = await req('PATCH', '/profiles/me', {
@@ -442,9 +451,10 @@ async function rf18Generacion(ctx) {
   // §60 reparte el ranking en porcentajes: 50 % afinidad, 20 % interes
   // explicito, 20 % area de mejora y 10 % contexto. La prioridad 5 cobra algo
   // mas de la mitad de ese 20 %.
+  // V2 §54: 35 % interés explícito; la prioridad 5 cobra el 60 % de ese 35.
   check(
-    taller?.reasons.some((x) => x.code === 'preferred_area' && x.points === 12),
-    '18.15 Un área de preferencia con prioridad 5 aporta 12 de los 20 puntos de interés (§60)',
+    taller?.reasons.some((x) => x.code === 'preferred_area' && x.points === 21),
+    '18.15 Un área de interés con prioridad 5 aporta 21 de los 35 puntos de interés (V2 §54)',
     JSON.stringify(taller?.reasons),
   );
   check(
@@ -461,7 +471,7 @@ async function rf18Generacion(ctx) {
   );
   check(
     taller?.reasons.some((x) => x.code === 'affinity_area'),
-    '18.16 La afinidad calculada por el motor del Objetivo 6 tambien es motivo',
+    '18.16 La trayectoria respaldada (afinidad V3) tambien es motivo',
   );
   check(
     taller?.reasons.some((x) => x.code === 'free_interest_match' && /Canalizacion de datos/.test(x.label)),
@@ -617,14 +627,14 @@ async function rf18Validaciones(ctx) {
   check(reglas.status === 200 && !!reglas.data.rulesVersion, '18.56 Las reglas se consultan de solo lectura', reglas.status);
   const pesos = reglas.data?.ranking ?? [];
   check(
-    pesos.length === 4 && pesos.reduce((a, r) => a + r.weight, 0) === 100,
-    '18.57 El reparto publicado es el de §60 y suma 100',
+    pesos.length === 5 && pesos.reduce((a, r) => a + r.weight, 0) === 100,
+    '18.57 El reparto publicado es el de V2 §54 (cinco componentes) y suma 100',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    (reglas.data?.regimes ?? []).length === 2
+    (reglas.data?.regimes ?? []).length === 1
       && (reglas.data?.teammate ?? []).length >= 5,
-    '18.57b Y se publican los dos regímenes de §59 y las prioridades de §62',
+    '18.57b Y se publica el refuerzo de oportunidades avanzadas y las prioridades de compañeros',
     JSON.stringify([reglas.data?.regimes?.length, reglas.data?.teammate?.length]),
   );
   check(!!reglas.data.limits && !!reglas.data.minimumScore, '18.58 Tambien los limites y el puntaje minimo');

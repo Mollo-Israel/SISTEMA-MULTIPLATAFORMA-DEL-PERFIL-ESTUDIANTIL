@@ -58,6 +58,10 @@ export enum RecommendationReasonCode {
   FREE_INTEREST_MATCH = 'free_interest_match',
   /** Coincidencia con una habilidad declarada. */
   SKILL_MATCH = 'skill_match',
+  /** Trabaja una tecnología que el estudiante quiere mejorar (V2 §54). */
+  IMPROVE_SKILL_MATCH = 'improve_skill_match',
+  /** El área salió de su orientación académica y él la confirmó (V2 §54). */
+  ORIENTATION_CONFIRMED = 'orientation_confirmed',
   /** Companero con afinidad en las mismas areas. */
   SHARED_AFFINITY = 'shared_affinity',
   /** Companero fuerte justo donde el estudiante tiene poca trayectoria. */

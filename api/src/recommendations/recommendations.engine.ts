@@ -7,12 +7,14 @@ import {
   AffinityLevel,
   AvailabilityStatus,
   CollaborationMode,
+  InterestSource,
   LearningResourceStatus,
   LearningResourceType,
   RecommendationReasonCode,
   RecommendationStatus,
   RecommendationType,
   RegistrationStatus,
+  SkillInterestKind,
   UserStatus,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -94,6 +96,11 @@ interface Contexto {
   /** Tecnologías que le interesan o quiere mejorar (V2 §21). */
   skillNames: string[];
   skillIds: Set<string>;
+  /** Solo las de «me interesa» y solo las de «quiero mejorar» (V2 §54). */
+  interestSkills: { id: string; name: string }[];
+  improveSkills: { id: string; name: string }[];
+  /** Áreas confirmadas desde la orientación académica (V2 §54). */
+  orientationAreas: Set<string>;
   now: Date;
 }
 
@@ -201,15 +208,14 @@ export class RecommendationsEngine {
       .slice(0, RULES.regime.topAreas)
       .map(([id]) => id);
 
+    // V2 §54: la prioridad de las oportunidades avanzadas puede elevarse
+    // cuando la afinidad Y el respaldo del área son altos. No hay otro refuerzo.
     const regimeByArea = new Map<string, RecommendationRegime>();
     for (const areaId of strongAreas) {
       const info = affinityByArea.get(areaId)!;
-      regimeByArea.set(
-        areaId,
-        info.supportLevel === AffinityLevel.LOW
-          ? RecommendationRegime.BUILD_EXPERIENCE
-          : RecommendationRegime.ADVANCE,
-      );
+      if (info.level === AffinityLevel.HIGH && info.supportLevel === AffinityLevel.HIGH) {
+        regimeByArea.set(areaId, RecommendationRegime.ADVANCE);
+      }
     }
 
     const ctx: Contexto = {
@@ -223,6 +229,15 @@ export class RecommendationsEngine {
       freeInterestNames: freeRows.map((f) => f.name),
       skillNames: skillRows.filter((s) => s.skill).map((s) => s.skill.name),
       skillIds: new Set(skillRows.map((s) => s.skillId)),
+      interestSkills: skillRows
+        .filter((s) => s.skill && s.kind === SkillInterestKind.INTEREST)
+        .map((s) => ({ id: s.skillId, name: s.skill.name })),
+      improveSkills: skillRows
+        .filter((s) => s.skill && s.kind === SkillInterestKind.IMPROVE)
+        .map((s) => ({ id: s.skillId, name: s.skill.name })),
+      orientationAreas: new Set(
+        preferredRows.filter((p) => p.source === InterestSource.ONBOARDING).map((p) => p.academicAreaId),
+      ),
       now: generatedAt,
     };
 
@@ -272,109 +287,101 @@ export class RecommendationsEngine {
     areaId: string | null,
     haystack: string,
     contexto: { factor: number; label: string | null },
+    elementSkillIds: string[] = [],
   ): { score: number; reasons: RecommendationReason[] } {
     const reasons: RecommendationReason[] = [];
     const name = areaId ? ctx.areaName.get(areaId) : undefined;
-
-    // ---------------------------------------------------- 50 % afinidad
-    let affinity = 0;
-    if (areaId && name) {
-      const info = ctx.affinityByArea.get(areaId);
-      if (info && info.score > 0) {
-        affinity = RULES.ranking.affinity * (info.score / 100);
-        reasons.push({
-          code: RecommendationReasonCode.AFFINITY_AREA,
-          label:
-            `Tu afinidad con ${name} es ${LEVEL_LABEL[info.level]} `
-            + `(${info.score}/100)`,
-          points: this.redondear(affinity),
-        });
-      }
-    }
-
-    // -------------------------------------------- 20 % interes explicito
-    let interest = 0;
+    const suyas = new Set(elementSkillIds);
 
     /*
-     * El interes puede llegar por varios caminos -el area declarada, un
-     * interes escrito a mano, una habilidad- y todos son interes explicito del
-     * estudiante, asi que comparten el mismo 20 % de §60 en vez de sumarse por
-     * encima de el. Cada uno aporta lo que quepa en lo que queda, y por eso su
-     * motivo lleva lo que aporto **de verdad** y no lo que la regla le
-     * concederia en el vacio: de otro modo, la suma de los motivos no daria el
-     * puntaje y la explicacion seria falsa.
+     * Cada componente de V2 §54 tiene su techo y las señales de un mismo
+     * componente comparten ese techo en vez de sumarse por encima. El motivo
+     * lleva lo que aportó de verdad: la suma de los motivos es el puntaje.
      */
-    const anadirInteres = (
-      code: RecommendationReasonCode,
-      label: string,
-      factor: number,
-    ): void => {
-      const espacio = RULES.ranking.explicitInterest - interest;
-      if (espacio <= 0) return;
-      const aporte = Math.min(RULES.ranking.explicitInterest * factor, espacio);
-      if (aporte <= 0) return;
-      interest = this.redondear(interest + aporte);
-      reasons.push({ code, label, points: this.redondear(aporte) });
+    const acumulador = (techo: number) => {
+      let usado = 0;
+      return (code: RecommendationReasonCode, label: string, factor: number) => {
+        const aporte = Math.min(techo * factor, techo - usado);
+        if (aporte <= 0) return;
+        usado = this.redondear(usado + aporte);
+        reasons.push({ code, label, points: this.redondear(aporte) });
+      };
     };
+    const total = () => this.redondear(reasons.reduce((a, r) => a + r.points, 0));
 
+    // ------------------------------------------- 35 % interés explícito
+    const interes = acumulador(RULES.ranking.explicitInterest);
     if (areaId && name) {
       const priority = ctx.preferredByArea.get(areaId);
       if (priority) {
-        anadirInteres(
+        interes(
           RecommendationReasonCode.PREFERRED_AREA,
-          `${name} es un área de tu preferencia (prioridad ${priority})`,
+          `Marcaste ${name} como área de interés (prioridad ${priority})`,
           RULES.interestByPriority[Math.min(Math.max(priority, 1), 5) - 1],
         );
       }
     }
-
+    const techInteres = ctx.interestSkills.find((t) => suyas.has(t.id))
+      ?? ctx.interestSkills.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
+    if (techInteres) {
+      interes(
+        RecommendationReasonCode.SKILL_MATCH,
+        `Trabaja ${techInteres.name}, una tecnología que te interesa`,
+        suyas.has(techInteres.id) ? RULES.skillLinkFactor : RULES.skillMatchFactor,
+      );
+    }
     const libre = ctx.freeInterestNames.find((n) => matchesDeclaredTerm(haystack, n, 4));
     if (libre) {
-      anadirInteres(
-        RecommendationReasonCode.FREE_INTEREST_MATCH,
-        `Coincide con tu interés «${libre}»`,
-        RULES.freeInterestFactor,
-      );
+      interes(RecommendationReasonCode.FREE_INTEREST_MATCH, `Coincide con tu interés «${libre}»`, RULES.freeInterestFactor);
     }
 
-    const skill = ctx.skillNames.find((n) => matchesDeclaredTerm(haystack, n, 3));
-    if (skill) {
-      anadirInteres(
-        RecommendationReasonCode.SKILL_MATCH,
-        `Relacionado con tu habilidad ${skill}`,
-        RULES.skillMatchFactor,
-      );
-    }
-
-    // ------------------------------------------- 20 % area de mejora
-    let improvement = 0;
+    // --------------------------------------------- 25 % área de mejora
+    const mejora = acumulador(RULES.ranking.improvementArea);
     if (areaId && name && ctx.improvementIds.has(areaId)) {
-      improvement = RULES.ranking.improvementArea;
-      reasons.push({
-        code: RecommendationReasonCode.IMPROVEMENT_AREA,
-        label: `Quieres fortalecerte en ${name}`,
-        points: improvement,
-      });
+      mejora(RecommendationReasonCode.IMPROVEMENT_AREA, `Marcaste ${name} como área a fortalecer`, 1);
+    }
+    const techMejora = ctx.improveSkills.find((t) => suyas.has(t.id))
+      ?? ctx.improveSkills.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
+    if (techMejora) {
+      mejora(
+        RecommendationReasonCode.IMPROVE_SKILL_MATCH,
+        `Trabaja ${techMejora.name}, una tecnología que quieres mejorar`,
+        suyas.has(techMejora.id) ? RULES.skillLinkFactor : RULES.skillMatchFactor,
+      );
     }
 
-    // Sin un motivo de relevancia no hay recomendacion. El contexto solo
-    // refuerza algo que ya encaja con el perfil.
+    // ---------------------------------- 20 % orientación confirmada
+    if (areaId && name && ctx.orientationAreas.has(areaId)) {
+      acumulador(RULES.ranking.orientation)(
+        RecommendationReasonCode.ORIENTATION_CONFIRMED,
+        `Tu orientación académica sugirió ${name} y lo confirmaste`,
+        1,
+      );
+    }
+
+    // Sin una señal de lo que el estudiante quiere, no hay recomendación: la
+    // afinidad y el contexto solo ordenan lo que ya encaja con él.
     if (reasons.length === 0) return { score: 0, reasons: [] };
 
-    // ------------------------------------- 10 % disponibilidad y contexto
-    const context = RULES.ranking.context * contexto.factor;
-    if (context > 0 && contexto.label) {
-      reasons.push({
-        code: RecommendationReasonCode.CONTEXT_MATCH,
-        label: contexto.label,
-        points: this.redondear(context),
-      });
+    // ----------------------------- 10 % afinidad y respaldo contextual
+    if (areaId && name) {
+      const info = ctx.affinityByArea.get(areaId);
+      if (info && (info.score > 0 || info.supportScore > 0)) {
+        const factor = (info.score + info.supportScore) / 200;
+        acumulador(RULES.ranking.affinitySupport)(
+          RecommendationReasonCode.AFFINITY_AREA,
+          `Ya tienes trayectoria en ${name} (afinidad ${info.score}/100, respaldo ${SUPPORT_LABEL[info.supportLevel]})`,
+          factor,
+        );
+      }
     }
 
-    return {
-      score: this.redondear(affinity + interest + improvement + context),
-      reasons,
-    };
+    // ------------------------------------- 10 % disponibilidad y contexto
+    if (contexto.factor > 0 && contexto.label) {
+      acumulador(RULES.ranking.context)(RecommendationReasonCode.CONTEXT_MATCH, contexto.label, contexto.factor);
+    }
+
+    return { score: total(), reasons };
   }
 
   /**
@@ -429,7 +436,7 @@ export class RecommendationsEngine {
   ): Promise<{ elements: Produced[]; availableByArea: Map<string, number> }> {
     const candidates = await this.activities.find({
       where: { status: In(REGISTRABLE_STATUSES) },
-      relations: { category: true },
+      relations: { category: true, activitySkills: true },
     });
 
     // §61: los cursos y recursos ya no son actividades. Se excluyen aqui para
@@ -456,6 +463,10 @@ export class RecommendationsEngine {
     const available = open.filter((a) => {
       if (alreadyInvolved.has(a.id)) return false;
       if (a.capacity && (confirmedByActivity.get(a.id) ?? 0) >= a.capacity) return false;
+      // V2 §54 · filtro duro de semestre: una actividad dirigida a otros
+      // semestres no se le recomienda.
+      const alcance = a.semesterScope ?? [];
+      if (alcance.length > 0 && ctx.profile.semester && !alcance.includes(ctx.profile.semester)) return false;
       return true;
     });
 
@@ -472,7 +483,9 @@ export class RecommendationsEngine {
         [a.title, a.description, (a.tags ?? []).join(' '), a.category?.name].join(' '),
       );
       const contexto = this.activityContext(ctx, a);
-      const { score, reasons } = this.scoreElement(ctx, a.academicAreaId, haystack, contexto);
+      const { score, reasons } = this.scoreElement(
+        ctx, a.academicAreaId, haystack, contexto, (a.activitySkills ?? []).map((s) => s.skillId),
+      );
       if (reasons.length === 0) continue;
 
       const type = typeForCategory(a.category?.code);
@@ -585,13 +598,15 @@ export class RecommendationsEngine {
       const contexto = {
         factor: this.resourceContextFactor(ctx, r, porHabilidad),
         label: porHabilidad
-          ? 'Trabaja una habilidad que ya declaraste'
+          ? 'Trabaja una tecnología que marcaste'
           : ctx.profile.availability === AvailabilityStatus.LOOKING
             ? 'Puedes avanzarlo a tu ritmo'
             : null,
       };
 
-      const { score, reasons } = this.scoreElement(ctx, r.academicAreaId, haystack, contexto);
+      const { score, reasons } = this.scoreElement(
+        ctx, r.academicAreaId, haystack, contexto, (r.resourceSkills ?? []).map((s) => s.skillId),
+      );
       if (reasons.length === 0) continue;
 
       const type = typeForResource(r.resourceType);

@@ -211,30 +211,34 @@ async function reparto(ctx) {
     `${taller.reasons.reduce((a, x) => a + Number(x.points), 0)} vs ${taller.score}`,
   );
 
+  // V2 §54: 35 interés explícito, 25 área de mejora, 20 orientación,
+  // 10 afinidad/respaldo, 10 contexto.
   const afinidad = taller.reasons.find((x) => x.code === 'affinity_area');
   check(
-    !!afinidad && afinidad.points <= 50,
-    'B7.12 La afinidad nunca aporta más del 50 % que le concede §60',
+    !afinidad || afinidad.points <= 10.011,
+    'B7.12 La afinidad y el respaldo nunca aportan más del 10 % (V2 §54)',
     JSON.stringify(afinidad),
   );
   const interes = taller.reasons
     .filter((x) => ['preferred_area', 'free_interest_match', 'skill_match'].includes(x.code))
     .reduce((a, x) => a + Number(x.points), 0);
   check(
-    interes <= 20.011,
-    'B7.13 El interés explícito, venga por donde venga, no pasa del 20 % (§60)',
+    interes > 0 && interes <= 35.011,
+    'B7.13 El interés explícito, venga por donde venga, no pasa del 35 % (V2 §54)',
     `interés ${interes}`,
   );
-  const mejora = taller.reasons.find((x) => x.code === 'improvement_area');
+  const mejora = taller.reasons
+    .filter((x) => ['improvement_area', 'improve_skill_match'].includes(x.code))
+    .reduce((a, x) => a + Number(x.points), 0);
   check(
-    !mejora || mejora.points === 20,
-    'B7.14 El área de mejora aporta su 20 % entero o nada (§60)',
-    JSON.stringify(mejora),
+    mejora <= 25.011,
+    'B7.14 El área o tecnología a mejorar no pasa del 25 % (V2 §54)',
+    `mejora ${mejora}`,
   );
   const contexto = taller.reasons.find((x) => x.code === 'context_match');
   check(
     !contexto || contexto.points <= 10.011,
-    'B7.15 Y el contexto no pasa del 10 % (§60)',
+    'B7.15 Y el contexto no pasa del 10 % (V2 §54)',
     JSON.stringify(contexto),
   );
 
@@ -269,9 +273,9 @@ async function regimenes(ctx) {
   const respaldada = await afinidadDe(ctx.est.token, ctx.areaRespaldada.id);
 
   check(
-    fuerte?.supportLevel === 'low',
-    'B7.20 En su área declarada, el respaldo todavía es bajo',
-    `${fuerte?.supportScore} / ${fuerte?.supportLevel}`,
+    !fuerte,
+    'B7.20 En su área solo declarada no hay afinidad: lo declarado no suma (V2 §45.1)',
+    JSON.stringify(fuerte),
   );
   check(
     respaldada && respaldada.supportLevel !== 'low',
@@ -281,36 +285,34 @@ async function regimenes(ctx) {
 
   const { items } = await recomendaciones(ctx.est.token);
 
-  section('Afinidad con respaldo bajo: construir experiencia');
+  section('V2 §54 · Lo que recomienda es lo que el estudiante quiere');
   const taller = porObjetivo(items, ctx.tallerFuerte.id);
   check(
-    codigos(taller).includes('build_experience'),
-    'B7.22 Un taller de esa área se recomienda para construir experiencia (§59)',
+    codigos(taller).includes('preferred_area'),
+    'B7.22 Un taller de su área de interés se recomienda por ese interés (V2 §54)',
     JSON.stringify(codigos(taller)),
   );
   const practica = porObjetivo(items, ctx.practica.id);
   check(
-    !!practica && codigos(practica).includes('build_experience'),
-    'B7.23 Y también un laboratorio de prácticas del catálogo (§59, §61)',
+    !!practica && codigos(practica).includes('preferred_area'),
+    'B7.23 Y también un laboratorio de prácticas del catálogo (§25)',
     JSON.stringify(codigos(practica)),
   );
-  const documentacion = porObjetivo(items, ctx.documentacion.id);
   check(
-    !documentacion || !codigos(documentacion).includes('build_experience'),
-    'B7.24 Leer documentación NO cuenta como construir experiencia (§59)',
-    JSON.stringify(codigos(documentacion)),
+    items.every((i) => !codigos(i).includes('build_experience')),
+    'B7.24 Ya no hay refuerzo de «construir experiencia»: V2 §54 no lo contempla',
   );
 
-  section('Afinidad con respaldo ya construido: subir el nivel');
+  section('V2 §54 · El refuerzo de oportunidades avanzadas exige afinidad Y respaldo altos');
   const reto = porObjetivo(items, ctx.retoRespaldado.id);
   check(
-    !!reto && codigos(reto).includes('advance_level'),
-    'B7.25 En el área respaldada se prioriza un reto, no una introducción (§59)',
+    !!reto && codigos(reto).includes('affinity_area'),
+    'B7.25 En el área con trayectoria, el reto cita esa trayectoria como motivo',
     JSON.stringify(codigos(reto)),
   );
   check(
-    !codigos(reto).includes('build_experience'),
-    'B7.26 Y no se le propone construir lo que ya demostró',
+    !codigos(reto).includes('advance_level'),
+    'B7.26 Con afinidad o respaldo todavía no altos, no recibe refuerzo de nivel',
     JSON.stringify(codigos(reto)),
   );
 
@@ -461,8 +463,8 @@ async function recomputacion(ctx) {
 
   const despuesAfinidad = await afinidadDe(ctx.est.token, ctx.areaNueva.id);
   check(
-    !!despuesAfinidad && despuesAfinidad.rawPoints === 3,
-    'B7.46 La afinidad se recalculó sola (§57, §109)',
+    !despuesAfinidad,
+    'B7.46 Declarar el interés no crea afinidad (V2 §45.1)',
     JSON.stringify(despuesAfinidad),
   );
 
@@ -473,8 +475,8 @@ async function recomputacion(ctx) {
     'B7.47 Y las recomendaciones también, en la misma acción (§109)',
   );
   check(
-    codigos(nuevo).includes('preferred_area') && codigos(nuevo).includes('affinity_area'),
-    'B7.48 La recomendación nueva cita las dos señales que la originaron (§92)',
+    codigos(nuevo).includes('preferred_area') && !codigos(nuevo).includes('affinity_area'),
+    'B7.48 La recomendación nueva cita su motivo real: el interés, no una afinidad que no existe',
     JSON.stringify(codigos(nuevo)),
   );
 
@@ -516,20 +518,21 @@ async function noAislado(ctx) {
   const pesos = reglas.data?.ranking ?? [];
   check(
     pesos.reduce((a, r) => a + r.weight, 0) === 100,
-    'B7.52 El reparto publicado suma 100 (§60)',
+    'B7.52 El reparto publicado suma 100 (V2 §54)',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    pesos.find((r) => r.code === 'affinity_area')?.weight === 50
-      && pesos.find((r) => r.code === 'preferred_area')?.weight === 20
-      && pesos.find((r) => r.code === 'improvement_area')?.weight === 20
+    pesos.find((r) => r.code === 'preferred_area')?.weight === 35
+      && pesos.find((r) => r.code === 'improvement_area')?.weight === 25
+      && pesos.find((r) => r.code === 'orientation_confirmed')?.weight === 20
+      && pesos.find((r) => r.code === 'affinity_area')?.weight === 10
       && pesos.find((r) => r.code === 'context_match')?.weight === 10,
-    'B7.53 Y es exactamente el de §60: 50 / 20 / 20 / 10',
+    'B7.53 Y es exactamente el de V2 §54: 35 / 25 / 20 / 10 / 10',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    (reglas.data?.regimes ?? []).length === 2,
-    'B7.54 Los dos regímenes de §59 están publicados',
+    JSON.stringify((reglas.data?.regimes ?? []).map((r) => r.code)) === JSON.stringify(['advance_level']),
+    'B7.54 El único refuerzo publicado es el de oportunidades avanzadas (V2 §54)',
     JSON.stringify((reglas.data?.regimes ?? []).map((r) => r.code)),
   );
   check(

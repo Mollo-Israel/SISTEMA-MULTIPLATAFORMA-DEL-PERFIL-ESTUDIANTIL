@@ -223,8 +223,104 @@ async function batch3(ctx) {
 }
 
 // ===========================================================================
+//  BATCH 10 — Recomendaciones (§53, §54)
+// ===========================================================================
+async function batch10(ctx) {
+  objective('BATCH 10 · Recomendaciones: 35 interés · 25 mejora · 20 orientación · 10 afinidad · 10 contexto');
 
-const BATCHES = { batch2, batch3 };
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Olga', lastName: 'Rivero', email: correoEst('rec'), role: 'STUDENT', semester: 3,
+  });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const director = await provisionAndActivate(ctx.admin, {
+    firstName: 'Hugo', lastName: 'Director', email: correoStaff('recdir'), role: 'CAREER_DIRECTOR',
+  });
+
+  const categorias = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = categorias.find((c) => c.code === 'taller_academico') ?? categorias[0];
+
+  // Áreas y tecnologías propias del escenario: así ninguna actividad ajena
+  // compite por los mismos puestos de la lista.
+  const letras = (n) => String.fromCharCode(...String(TS + n).slice(-6).split('').map((d) => 65 + Number(d)));
+  const nuevaArea = async (nombre, tag) =>
+    (await req('POST', '/academic-areas', { token: ctx.admin, body: { name: `${nombre} ${letras(nombre.length)}`, tags: [tag] } })).data;
+  const nuevaSkill = async (nombre, area) =>
+    (await req('POST', '/skills', { token: ctx.admin, body: { name: `${nombre} ${letras(nombre.length + 7)}`, academicAreaId: area.id } })).data;
+  const aInteres = await nuevaArea('Robotica Movil', 'rosbot');
+  const aMejora = await nuevaArea('Teledeteccion', 'satelital');
+  const aTecInt = await nuevaArea('Bioinformatica Aplicada', 'genomica');
+  const aTecMej = await nuevaArea('Domotica', 'hogarintel');
+  const sInt = await nuevaSkill('Biopython', aTecInt);
+  const sMej = await nuevaSkill('Zigbee', aTecMej);
+
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: aInteres.id, priority: 1 }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { improvementAreaIds: [aMejora.id] } });
+  await req('PUT', '/profiles/me/skill-interests', {
+    token: est.token, body: { items: [{ skillId: sInt.id, kind: 'interest' }, { skillId: sMej.id, kind: 'improve' }] },
+  });
+
+  const crear = async (titulo, area, extra = {}) => {
+    const r = await req('POST', '/activities', {
+      token: director.token,
+      body: { title: `${titulo} ${TS}`, description: 'Actividad del escenario de recomendaciones.', type: 'academica', categoryId: taller.id, areaId: area.id, ...extra },
+    });
+    await req('PATCH', `/activities/${r.data?.id}`, { token: director.token, body: { status: 'open' } });
+    return r.data;
+  };
+  const actInteres = await crear('Taller de interes', aInteres);
+  const actMejora = await crear('Taller de mejora', aMejora);
+  const actTecInt = await crear('Practica tecnologica', aTecInt, { skillIds: [sInt.id] });
+  const actTecMej = await crear('Practica a mejorar', aTecMej, { skillIds: [sMej.id] });
+  const otroSemestre = await crear('Taller de septimo', aInteres, { semesterScope: [7] });
+
+  const leer = async () => {
+    const r = await req('GET', '/recommendations/me', { token: est.token });
+    return (r.data?.groups ?? []).flatMap((g) => g.items);
+  };
+  let items = await leer();
+  const de = (act) => items.find((i) => i.targetId === act.id);
+  const puntos = (item, code) => (item?.reasons ?? []).filter((r) => r.code === code).reduce((a, r) => a + r.points, 0);
+
+  check(puntos(de(actInteres), 'preferred_area') === 35, 'V2.10.1 §54 Interés explícito de prioridad 1: 35 puntos', JSON.stringify(de(actInteres)?.reasons));
+  check(puntos(de(actMejora), 'improvement_area') === 25, 'V2.10.2 §54 Área a fortalecer: 25 puntos', JSON.stringify(de(actMejora)?.reasons));
+  check(puntos(de(actTecInt), 'skill_match') > 0 && /te interesa/.test(de(actTecInt)?.reasons?.[0]?.label ?? ''),
+    'V2.10.3 §53 Tecnología de interés que la actividad trabaja: suma interés, con su motivo', JSON.stringify(de(actTecInt)?.reasons));
+  check(puntos(de(actTecMej), 'improve_skill_match') > 0, 'V2.10.4 §53 Tecnología a mejorar: suma en «mejora»', JSON.stringify(de(actTecMej)?.reasons));
+  check(!de(otroSemestre), 'V2.10.5 §54 Filtro duro: una actividad de otro semestre no se recomienda');
+  check(items.every((i) => (i.reasons ?? []).every((r) => r.code !== 'build_experience')),
+    'V2.10.6 §54 Sin refuerzos fuera de la regla');
+  check(items.filter((i) => ['activity', 'opportunity', 'resource', 'external_course'].includes(i.type))
+    .every((i) => Math.abs(i.reasons.reduce((a, r) => a + r.points, 0) - i.score) < 0.011 && i.score <= 100),
+  'V2.10.7 §53 Los motivos suman exactamente el puntaje, siempre ≤ 100');
+
+  // Orientación confirmada: el área sugerida y confirmada suma 20 (§54).
+  const q = (await req('GET', '/onboarding/questionnaire', { token: est.token })).data;
+  const run = await req('POST', '/onboarding/runs', {
+    token: est.token,
+    body: { answers: q.questions.map((x) => ({ questionCode: x.code, optionCodes: [x.options[0].code] })) },
+  });
+  const sugerida = run.data?.suggestedAreas?.[0];
+  if (sugerida) {
+    await req('POST', `/onboarding/runs/${run.data.id}/confirm`, { token: est.token, body: { academicAreaIds: [sugerida.academicAreaId] } });
+    const sugeridaArea = { id: sugerida.academicAreaId };
+    const actOrientacion = await crear('Taller orientado', sugeridaArea);
+    void actOrientacion;
+    items = await leer();
+    const delArea = items.filter((i) => i.area?.id === sugerida.academicAreaId && ['activity', 'opportunity', 'resource', 'external_course'].includes(i.type));
+    check(delArea.length > 0 && delArea.every((i) => puntos(i, 'orientation_confirmed') === 20),
+      'V2.10.8 §54 El área confirmada desde la orientación aporta 20', JSON.stringify(delArea.slice(0, 1).map((i) => i.reasons)));
+  } else {
+    check(false, 'V2.10.8 §54 El cuestionario debía sugerir al menos un área', JSON.stringify(run.data));
+  }
+
+  const reglas = (await req('GET', '/recommendations/rules', { token: est.token })).data;
+  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([35, 25, 20, 10, 10]),
+    'V2.10.9 §54 Las reglas publicadas son las de la especificación', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
+}
+
+// ===========================================================================
+
+const BATCHES = { batch2, batch3, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

@@ -139,3 +139,33 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** certificados con `skills[]` (§41) — se conserva el área del certificado como destino.
 
 **Riesgos:** los perfiles sin trayectoria respaldada ya no tienen áreas de afinidad (antes las tenían por sus intereses); es la regla V2, pero cambia lo que ven los usuarios existentes.
+
+---
+
+## BATCH 10 — Recomendaciones
+
+**Estado:** completo
+
+**Objetivo:** §53–§54.
+
+**Cambios:**
+- Reparto V2: 35 % interés explícito (áreas con prioridad, tecnologías «me interesa», intereses libres), 25 % área a fortalecer (área o tecnología «quiero mejorar»), 20 % orientación confirmada (áreas sugeridas por el cuestionario y confirmadas), 10 % afinidad y respaldo contextual, 10 % contexto. Cada componente tiene su techo; los motivos suman exactamente el puntaje.
+- La tecnología cuenta más si la actividad o el recurso la declaran (vínculo directo) que si solo aparece en el texto. Motivos nuevos: `improve_skill_match`, `orientation_confirmed`.
+- Filtro duro de semestre (§54): las actividades dirigidas a otros semestres no se recomiendan.
+- Refuerzos: solo el de oportunidades avanzadas cuando afinidad Y respaldo son altos (§54). Se retiró el refuerzo de «construir experiencia», que la V2 no contempla.
+- Sin una señal de lo que el estudiante quiere, la afinidad no basta para recomendar algo.
+- Reglas publicadas (`GET /recommendations/rules`) actualizadas.
+
+**Migraciones:** ninguna.
+
+**Archivos:** `shared/src/enums/recommendation.enum.ts`, `api/src/recommendations/{recommendation.rules,recommendations.engine,recommendations.service}.ts`, `scripts/e2e-batch-7.mjs`, `scripts/e2e-objective-7.mjs`, `scripts/e2e-v2.mjs`.
+
+**Pruebas:** `e2e-v2` batch10 (9): 35 por interés de prioridad 1, 25 por área a fortalecer, tecnología de interés y a mejorar con su motivo, filtro de semestre, sin refuerzos ajenos, invariante de suma, 20 por orientación confirmada, reglas publicadas. B7 y obj-7 adaptados a las reglas V2 (y con trayectoria respaldada real en sus escenarios).
+
+**Resultados:** V2 40/40, B7 57/57, obj-7 89/89, web compila.
+
+**Regresiones:** ninguna pendiente.
+
+**Pendientes:** el filtro de «visibilidad» por estado de revisión de la actividad llega con el BATCH 5.
+
+**Riesgos:** ninguno conocido.

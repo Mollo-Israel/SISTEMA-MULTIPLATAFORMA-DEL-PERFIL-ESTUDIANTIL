@@ -26,13 +26,15 @@ export const RULES = {
    * que suman 100 y que ninguna señal pesa mas de lo que §60 le concede.
    */
   ranking: {
-    /** Afinidad con el area del elemento. */
-    affinity: 50,
-    /** Interes explicito del estudiante en esa area. */
-    explicitInterest: 20,
-    /** El area es una de las que declaro querer mejorar. */
-    improvementArea: 20,
-    /** Disponibilidad y contexto: fecha, semestre, modalidad. */
+    /** V2 §54 · Interés explícito: áreas y tecnologías que le interesan. */
+    explicitInterest: 35,
+    /** V2 §54 · Área (o tecnología) que quiere fortalecer. */
+    improvementArea: 25,
+    /** V2 §54 · Áreas que salieron de su orientación y él confirmó. */
+    orientation: 20,
+    /** V2 §54 · Afinidad y respaldo contextual del área. */
+    affinitySupport: 10,
+    /** V2 §54 · Disponibilidad y contexto: fecha, semestre, modalidad. */
     context: 10,
   },
 
@@ -51,7 +53,10 @@ export const RULES = {
    * coincidencia puede equivocarse; una prioridad declarada no.
    */
   freeInterestFactor: 0.5,
-  skillMatchFactor: 0.35,
+  /** La actividad o el recurso declaran la tecnología (vínculo directo). */
+  skillLinkFactor: 0.6,
+  /** La tecnología aparece en el texto (coincidencia, puede equivocarse). */
+  skillMatchFactor: 0.4,
 
   /**
    * §60 · El 10 % de «disponibilidad/contexto», repartido.

@@ -177,50 +177,48 @@ export class RecommendationsService {
   getRules() {
     return {
       rulesVersion: RULES_VERSION,
-      /** §60 · Reparto del ranking inicial. Suma 100. */
+      /** V2 §54 · Reparto del ranking. Suma 100. */
       ranking: [
         {
-          code: 'affinity_area',
-          label: 'Afinidad con el área del elemento',
-          weight: RULES.ranking.affinity,
-          detail: 'Proporcional a tu puntaje de afinidad sobre 100.',
-        },
-        {
           code: 'preferred_area',
-          label: 'Interés explícito en esa área',
+          label: 'Interés explícito: áreas y tecnologías que te interesan',
           weight: RULES.ranking.explicitInterest,
           detail:
-            'Entero con prioridad 1 y algo más de la mitad con prioridad 5. Un interés '
-            + 'deducido del texto pesa menos que uno que declaraste.',
+            'Entero con prioridad 1 y algo más de la mitad con prioridad 5. Una tecnología de '
+            + 'interés que la actividad trabaja suma; si solo aparece en el texto, suma menos.',
         },
         {
           code: 'improvement_area',
-          label: 'Es un área en la que quieres mejorar',
+          label: 'Área o tecnología que quieres fortalecer',
           weight: RULES.ranking.improvementArea,
-          detail: 'Entero o nada: o la declaraste, o no.',
+          detail: 'El área marcada para fortalecer cuenta entera; una tecnología a mejorar, en parte.',
+        },
+        {
+          code: 'orientation_confirmed',
+          label: 'Orientación académica confirmada',
+          weight: RULES.ranking.orientation,
+          detail: 'Áreas que te sugirió el cuestionario y que tú decidiste sumar.',
+        },
+        {
+          code: 'affinity_area',
+          label: 'Afinidad y respaldo en esa área',
+          weight: RULES.ranking.affinitySupport,
+          detail: 'Ordena lo que ya encaja contigo: nunca recomienda algo por sí sola.',
         },
         {
           code: 'context_match',
           label: 'Disponibilidad y contexto',
           weight: RULES.ranking.context,
           detail:
-            'Fecha próxima, semestre al que va dirigida, modalidad compatible con cómo '
-            + 'prefieres participar y disponibilidad que declaraste.',
+            'Fecha próxima, modalidad compatible con cómo prefieres participar y disponibilidad '
+            + 'que declaraste. Las actividades de otros semestres no se recomiendan.',
         },
       ],
-      /** §59 · Lo que se recomienda cambia segun se pueda demostrar o no. */
+      /** V2 §54 · Las oportunidades avanzadas suben si afinidad y respaldo son altos. */
       regimes: [
         {
-          code: 'build_experience',
-          label: 'Afinidad con respaldo bajo',
-          detail:
-            'Se priorizan talleres, retos, prácticas y herramientas: lo que deja algo que '
-            + 'puedas demostrar después.',
-          bonus: RULES.regime.bonus,
-        },
-        {
           code: 'advance_level',
-          label: 'Afinidad con respaldo ya construido',
+          label: 'Afinidad alta con respaldo alto',
           detail:
             'Se priorizan convocatorias, hackathones, retos e investigación: lo que lleva '
             + 'más lejos a quien ya demostró.',
