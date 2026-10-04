@@ -6,9 +6,36 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import { ContactRequestStatus, ContactSource } from '@perfil/shared';
+import {
+  CONTACT_CHANNEL_LABEL,
+  ContactChannelType,
+  ContactRequestStatus,
+  ContactSource,
+} from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { Contact, ContactRequest } from '../entities/collaboration.entity';
+import { ContactNote, StudentContactChannel } from '../entities/contact-channel.entity';
+import { channelHref, checkContactChannel } from './contact-channel.rules';
+import { ContactChannelDto, ContactNoteDto } from './dto/collaboration.dto';
+
+/** Un canal tal como lo ve otra persona: etiqueta y enlace seguro. */
+export interface ChannelView {
+  channel: ContactChannelType;
+  label: string;
+  value: string;
+  href: string | null;
+  isPublic: boolean;
+}
+
+export function channelView(c: StudentContactChannel): ChannelView {
+  return {
+    channel: c.channel,
+    label: CONTACT_CHANNEL_LABEL[c.channel] ?? c.channel,
+    value: c.value,
+    href: channelHref(c.channel, c.value),
+    isPublic: c.isPublic,
+  };
+}
 
 /**
  * Contactos entre estudiantes (§45).
@@ -29,7 +56,88 @@ export class ContactsService {
     @InjectRepository(ContactRequest) private readonly requests: Repository<ContactRequest>,
     @InjectRepository(Contact) private readonly contacts: Repository<Contact>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
+    @InjectRepository(StudentContactChannel) private readonly channels: Repository<StudentContactChannel>,
+    @InjectRepository(ContactNote) private readonly notes: Repository<ContactNote>,
   ) {}
+
+  // =========================================================================
+  // V2 §59 · Canales de contacto
+  // =========================================================================
+
+  async myChannels(studentProfileId: string): Promise<ChannelView[]> {
+    const filas = await this.channels.find({ where: { studentProfileId }, order: { channel: 'ASC' } });
+    return filas.map(channelView);
+  }
+
+  /**
+   * Reemplaza los canales del estudiante. Cada valor se valida y normaliza
+   * según su canal; un canal que no viene, se quita.
+   */
+  async saveChannels(studentProfileId: string, entrada: ContactChannelDto[]): Promise<ChannelView[]> {
+    const vistos = new Set<string>();
+    const errores: Record<string, string[]> = {};
+    const limpios: { channel: ContactChannelType; value: string; isPublic: boolean }[] = [];
+    entrada.forEach((c, i) => {
+      if (vistos.has(c.channel)) {
+        errores[`channels.${i}.channel`] = ['Ese canal ya está en la lista.'];
+        return;
+      }
+      vistos.add(c.channel);
+      const r = checkContactChannel(c.channel, c.value);
+      if (!r.ok) errores[`channels.${i}.value`] = [r.message];
+      else limpios.push({ channel: c.channel, value: r.value, isPublic: !!c.isPublic });
+    });
+    if (Object.keys(errores).length) {
+      throw new BadRequestException({
+        message: Object.values(errores)[0][0],
+        fields: errores,
+      });
+    }
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(StudentContactChannel, { studentProfileId });
+      if (limpios.length) {
+        await manager.save(limpios.map((l) => manager.create(StudentContactChannel, { studentProfileId, ...l })));
+      }
+    });
+    return this.myChannels(studentProfileId);
+  }
+
+  /** Canales que el estudiante marcó para su perfil público (§58). */
+  async publicChannels(studentProfileId: string): Promise<ChannelView[]> {
+    const filas = await this.channels.find({ where: { studentProfileId, isPublic: true }, order: { channel: 'ASC' } });
+    return filas.map(channelView);
+  }
+
+  // =========================================================================
+  // V2 §56 · Nota personal sobre un contacto
+  // =========================================================================
+
+  async saveNote(ownerProfileId: string, otherProfileId: string, dto: ContactNoteDto) {
+    const [profileAId, profileBId] = this.pareja(ownerProfileId, otherProfileId);
+    const contacto = await this.contacts.findOne({ where: { profileAId, profileBId } });
+    if (!contacto) throw new NotFoundException('No existe ese contacto.');
+    if (dto.preferredChannel) {
+      const tiene = await this.channels.exists({
+        where: { studentProfileId: otherProfileId, channel: dto.preferredChannel },
+      });
+      if (!tiene) {
+        const m = 'Esa persona no comparte ese canal.';
+        throw new BadRequestException({ message: m, fields: { preferredChannel: [m] } });
+      }
+    }
+    const nota = (await this.notes.findOne({ where: { contactId: contacto.id, ownerProfileId } }))
+      ?? this.notes.create({ contactId: contacto.id, ownerProfileId });
+    if (dto.alias !== undefined) nota.alias = dto.alias?.trim() || null;
+    if (dto.context !== undefined) nota.context = dto.context?.trim() || null;
+    if (dto.preferredChannel !== undefined) nota.preferredChannel = dto.preferredChannel ?? null;
+    const guardada = await this.notes.save(nota);
+    return {
+      alias: guardada.alias,
+      context: guardada.context,
+      preferredChannel: guardada.preferredChannel,
+      updatedAt: guardada.updatedAt,
+    };
+  }
 
   /** Los dos identificadores en el orden canónico de la tabla. */
   private pareja(a: string, b: string): [string, string] {
@@ -187,8 +295,19 @@ export class ContactsService {
       order: { createdAt: 'DESC' },
     });
 
+    const otros = filas.map((c) => (c.profileAId === studentProfileId ? c.profileBId : c.profileAId));
+    const [canales, notas]: [StudentContactChannel[], ContactNote[]] = await Promise.all([
+      otros.length
+        ? this.channels.find({ where: { studentProfileId: In(otros) }, order: { channel: 'ASC' } })
+        : Promise.resolve([]),
+      filas.length
+        ? this.notes.find({ where: { contactId: In(filas.map((c) => c.id)), ownerProfileId: studentProfileId } })
+        : Promise.resolve([]),
+    ]);
+
     return filas.map((c) => {
       const otro = c.profileAId === studentProfileId ? c.profileB : c.profileA;
+      const nota = notas.find((n) => n.contactId === c.id);
       return {
         contactId: c.id,
         profileId: otro.id,
@@ -197,11 +316,18 @@ export class ContactsService {
         availability: otro.availability,
         source: c.source,
         since: c.createdAt,
+        // §59: los contactos aceptados ven todos los canales que la otra
+        // persona compartió; el correo institucional, nunca por omisión.
+        channels: canales.filter((k) => k.studentProfileId === otro.id).map(channelView),
+        // §56: la nota es de quien consulta, no de la pareja.
+        note: nota
+          ? { alias: nota.alias, context: nota.context, preferredChannel: nota.preferredChannel }
+          : { alias: null, context: null, preferredChannel: null },
       };
     });
   }
 
-  /** Perfiles con los que ya hay contacto. Lo usa la mensajería (§42.1). */
+  /** Perfiles con los que ya hay contacto. */
   async contactIdsOf(studentProfileId: string): Promise<Set<string>> {
     const filas = await this.contacts.find({
       where: [{ profileAId: studentProfileId }, { profileBId: studentProfileId }],

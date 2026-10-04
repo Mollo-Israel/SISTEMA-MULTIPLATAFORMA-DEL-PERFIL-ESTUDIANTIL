@@ -36,5 +36,7 @@ import { ReportsController } from './reports.controller';
   ],
   controllers: [ReportsController],
   providers: [ReportsService, AnalyticsService, AnalyticsPrivacyService],
+  // El asistente de IA redacta sobre estas cifras; no las calcula (V2 §63).
+  exports: [AnalyticsService],
 })
 export class ReportsModule {}

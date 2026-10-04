@@ -5,15 +5,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import {
   AffinityLevel,
   AvailabilityRequirement,
   AvailabilityStatus,
-  ConversationKind,
   TEAM_SUGGESTION_WEIGHTS,
   TeamInvitationStatus,
+  TeamNameStatus,
   TeamNeedStatus,
   TeamStatus,
   TeamSuggestionReason,
@@ -22,9 +23,10 @@ import {
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { BackedSkillsService } from '../backed-skills/backed-skills.service';
+import { AiService } from '../ai/ai.service';
+import { AuditEventType, AuditService } from '../audit/audit.service';
+import { checkTeamName, forbiddenTerms } from './team-name.rules';
 import {
-  Conversation,
-  ConversationMember,
   Team,
   TeamInvitation,
   TeamMember,
@@ -67,11 +69,57 @@ export class TeamsService {
     private readonly invitations: Repository<TeamInvitation>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
-    @InjectRepository(Conversation) private readonly conversations: Repository<Conversation>,
-    @InjectRepository(ConversationMember)
-    private readonly conversationMembers: Repository<ConversationMember>,
     private readonly backedSkills: BackedSkillsService,
+    private readonly ai: AiService,
+    private readonly audit: AuditService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * §44: reglas primero —longitud, caracteres, contacto, términos prohibidos—
+   * y, si pasan, la IA opcional busca ambigüedad. Lo que las reglas rechazan
+   * no se guarda; lo que la IA marca se guarda pero no se comparte.
+   */
+  private async moderarNombre(raw: string, actorUserId: string, teamId: string | null) {
+    const regla = checkTeamName(raw, forbiddenTerms(this.config.get<string>('TEAM_NAME_FORBIDDEN_TERMS')));
+    if (!regla.ok) {
+      await this.audit.record({
+        actorUserId,
+        eventType: AuditEventType.TEAM_NAME_MODERATED,
+        entityType: 'team',
+        entityId: teamId,
+        metadata: { resultado: 'rechazado', regla: regla.code },
+      });
+      throw new BadRequestException({ code: regla.code, message: regla.message, fields: { name: [regla.message] } });
+    }
+    const ia = await this.ai.moderateTeamName(regla.name, actorUserId, teamId);
+    if (ia.flagged) {
+      await this.audit.record({
+        actorUserId,
+        eventType: AuditEventType.TEAM_NAME_MODERATED,
+        entityType: 'team',
+        entityId: teamId,
+        metadata: { resultado: 'marcado' },
+      });
+    }
+    return {
+      name: regla.name,
+      status: ia.flagged ? TeamNameStatus.FLAGGED : TeamNameStatus.OK,
+      reason: ia.flagged
+        ? [ia.reason ?? 'El asistente lo consideró ambiguo.', ia.suggestion ? `Sugerencia: ${ia.suggestion}.` : '']
+            .filter(Boolean).join(' ').slice(0, 300)
+        : null,
+    };
+  }
+
+  private assertNombreCompartible(equipo: Team) {
+    if (equipo.nameStatus === TeamNameStatus.FLAGGED) {
+      throw new ConflictException({
+        code: 'TEAM_NAME_FLAGGED',
+        message: 'Corrige el nombre del equipo antes de invitar: quedó marcado para revisión.',
+      });
+    }
+  }
 
   // =========================================================================
   // §46 · Necesidades
@@ -377,17 +425,21 @@ export class TeamsService {
    * equipo (§42.2). Todo junto: un equipo sin su responsable dentro, o con una
    * conversación a la que él no pertenece, es un estado que no debería existir.
    */
-  async createTeam(ownerProfileId: string, needId: string, name: string) {
+  async createTeam(ownerProfileId: string, needId: string, rawName: string, actorUserId: string) {
     const need = await this.ownNeed(ownerProfileId, needId);
     const existente = await this.teams.findOne({ where: { teamNeedId: need.id } });
     if (existente) {
       throw new ConflictException('Esa necesidad ya tiene un equipo.');
     }
+    const { name, status: nameStatus, reason: nameFlagReason } =
+      await this.moderarNombre(rawName, actorUserId, null);
 
     return this.dataSource.transaction(async (manager) => {
       const equipo = await manager.save(
         manager.create(Team, {
           name,
+          nameStatus,
+          nameFlagReason,
           ownerProfileId,
           teamNeedId: need.id,
           status: TeamStatus.FORMING,
@@ -400,20 +452,26 @@ export class TeamsService {
           role: 'Responsable',
         }),
       );
-      const conversacion = await manager.save(
-        manager.create(Conversation, {
-          kind: ConversationKind.TEAM,
-          teamId: equipo.id,
-        }),
-      );
-      await manager.save(
-        manager.create(ConversationMember, {
-          conversationId: conversacion.id,
-          studentProfileId: ownerProfileId,
-        }),
-      );
-      return { id: equipo.id, name: equipo.name, status: equipo.status, needId: need.id };
+      return {
+        id: equipo.id,
+        name: equipo.name,
+        status: equipo.status,
+        needId: need.id,
+        nameStatus: equipo.nameStatus,
+        nameFlagReason: equipo.nameFlagReason,
+      };
     });
+  }
+
+  /** §44: corregir el nombre vuelve a pasar por la moderación completa. */
+  async renameTeam(ownerProfileId: string, teamId: string, rawName: string, actorUserId: string) {
+    const equipo = await this.ownTeam(ownerProfileId, teamId);
+    const { name, status, reason } = await this.moderarNombre(rawName, actorUserId, equipo.id);
+    equipo.name = name;
+    equipo.nameStatus = status;
+    equipo.nameFlagReason = reason;
+    await this.teams.save(equipo);
+    return { id: equipo.id, name: equipo.name, nameStatus: equipo.nameStatus, nameFlagReason: equipo.nameFlagReason };
   }
 
   /** §47: invitar es un acto de una persona, nunca del motor. */
@@ -424,6 +482,7 @@ export class TeamsService {
     message?: string,
   ) {
     const equipo = await this.ownTeam(ownerProfileId, teamId);
+    this.assertNombreCompartible(equipo);
     if (invitedProfileId === ownerProfileId) {
       throw new BadRequestException('Ya formas parte del equipo.');
     }
@@ -468,7 +527,8 @@ export class TeamsService {
       relations: { team: { need: true, owner: { user: true } } },
       order: { createdAt: 'DESC' },
     });
-    return filas.map((i) => ({
+    // §44: un equipo con el nombre marcado no se muestra a terceros.
+    return filas.filter((i) => i.team?.nameStatus !== TeamNameStatus.FLAGGED).map((i) => ({
       id: i.id,
       message: i.message,
       createdAt: i.createdAt,
@@ -515,6 +575,9 @@ export class TeamsService {
 
     const equipo = invitacion.team;
     if (!equipo) throw new NotFoundException('El equipo ya no existe.');
+    if (equipo.nameStatus === TeamNameStatus.FLAGGED) {
+      throw new NotFoundException('Invitación no encontrada.');
+    }
     await this.assertHaySitio(equipo);
 
     await this.dataSource.transaction(async (manager) => {
@@ -524,18 +587,6 @@ export class TeamsService {
       await manager.save(
         manager.create(TeamMember, { teamId: equipo.id, studentProfileId }),
       );
-      const conversacion = await manager.findOne(Conversation, {
-        where: { teamId: equipo.id },
-      });
-      if (conversacion) {
-        await manager
-          .createQueryBuilder()
-          .insert()
-          .into(ConversationMember)
-          .values({ conversationId: conversacion.id, studentProfileId })
-          .orIgnore()
-          .execute();
-      }
     });
 
     return { status: TeamInvitationStatus.ACCEPTED, teamId: equipo.id };
@@ -568,6 +619,9 @@ export class TeamsService {
       resultado.push({
         id: equipo.id,
         name: equipo.name,
+        nameStatus: equipo.nameStatus,
+        nameFlagReason: equipo.nameFlagReason,
+        needId: equipo.teamNeedId,
         status: equipo.status,
         purpose: equipo.need?.purpose ?? null,
         isOwner: equipo.ownerProfileId === studentProfileId,

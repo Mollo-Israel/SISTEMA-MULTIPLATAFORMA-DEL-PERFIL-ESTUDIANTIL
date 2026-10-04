@@ -123,8 +123,12 @@ export class AccountMailService implements OnModuleInit, OnApplicationShutdown {
 
   /** Encola un correo de cuenta y despierta al worker. Devuelve el id del envío. */
   async enqueue(userId: string, kind: MailJobKind, requestedBy: string | null): Promise<string> {
+    // `next_attempt_at` lo pone la base (DEFAULT now()): el reclamo compara
+    // contra now() de PostgreSQL, y con la hora de Node bastaba que el reloj de
+    // la base fuera unos milisegundos atrasado para que el envío recién
+    // encolado no se viera elegible y esperara a la vuelta siguiente.
     const job = await this.jobs.save(
-      this.jobs.create({ userId, kind, status: 'pending', requestedBy, nextAttemptAt: new Date() }),
+      this.jobs.create({ userId, kind, status: 'pending', requestedBy }),
     );
     this.despertar();
     return job.id;
@@ -298,9 +302,13 @@ export class AccountMailService implements OnModuleInit, OnApplicationShutdown {
         return this.terminar(job, 'failed', motivo);
       }
       const espera = ESPERAS_MS[Math.min(job.attempts - 1, ESPERAS_MS.length - 1)];
-      await this.jobs.update(
-        { id: job.id },
-        { status: 'pending', lastError: motivo, nextAttemptAt: new Date(Date.now() + espera) },
+      // Mismo reloj que el reclamo: el de la base.
+      await this.jobs.query(
+        `UPDATE mail_jobs
+            SET status = 'pending', last_error = $2, next_attempt_at = now() + ($3 || ' milliseconds')::interval,
+                updated_at = now()
+          WHERE id = $1`,
+        [job.id, motivo, String(espera)],
       );
       this.logger.warn(
         `Correo a reintentar en ${Math.round(espera / 60_000)} min (intento ${job.attempts}): ${motivo}`,

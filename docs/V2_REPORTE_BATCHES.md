@@ -233,3 +233,84 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 
 **Riesgos:** la Administración también pasa por revisión al crear actividades; se eligió así porque §6.5 la deja fuera de las decisiones académicas.
 
+## BATCH 6 — Evidencias y validación
+
+**Estado:** completo (sin cambios de código)
+
+**Objetivo:** §39–§42.
+
+**Cambios:** ninguno. La auditoría ya los marcaba como implementados (evidencias por proyecto/actividad, archivo con autorización, validación asíncrona con niveles de respaldo, verificación externa de enlaces y repositorio). Se verifican en cada regresión: suites B3, B5, B6, B11 y objectives-40.
+
+**Pendientes:** ninguno.
+
+## BATCH 7 — Proyectos y asignación por `skills_used`
+
+**Estado:** completo (entregado en el BATCH 9)
+
+**Objetivo:** §32–§38.
+
+**Cambios:** la única brecha (asignar el proyecto al área según las tecnologías confirmadas por cada integrante) se cerró dentro del BATCH 9, porque la necesitaba la afinidad V3. El responsable como integrante del proyecto también se entregó ahí.
+
+**Pendientes:** ninguno.
+
+## BATCH 8 — Asistente de IA y moderación de nombres de equipo
+
+**Estado:** completo
+
+**Objetivo:** §5.3, §43, §44, §84, RNF09.
+
+**Cambios:**
+- Puerto `AiAssistancePort` con dos adaptadores elegidos por entorno: `none` (por omisión; todo funciona igual y las pantallas no muestran la ayuda) y `openai_compatible` (`POST {AI_BASE_URL}/chat/completions`, Bearer opcional, tiempo límite `AI_TIMEOUT_MS`, entrada recortada a `AI_MAX_INPUT_CHARS`). Configuración incompleta ⇒ `none`.
+- Seis tareas de §43.2, cada una con sus roles: etiquetas de actividad y área sugerida para una habilidad (Docente/Sociedad/Dirección/Administración), resumen de evidencias y explicación de inconsistencias (con el **mismo acceso** que ver el proyecto, TeacherScope incluido), ayuda de redacción del CV (Estudiante), narrativa de tendencias (Dirección) y moderación (interna, nadie la pide).
+- Las reglas van antes que la IA: una regla canónica de habilidad o un proyecto sin inconsistencias se responden sin llamar al modelo, incluso con la IA apagada.
+- Validación determinista de cada respuesta: etiquetas normalizadas; el área sugerida debe existir en el catálogo; el texto del CV y la narrativa se descartan si traen cifras que la fuente no tenía (§61.3, §63).
+- Privacidad (§43.4): antes de salir se quitan correos, teléfonos, tokens, claves y parámetros de URL; de las evidencias solo viajan metadatos (tipo, descripción, nombre de archivo, dominio del enlace). Se guarda la **huella** SHA-256 de la entrada, no la entrada.
+- `ai_assistance_runs`: proveedor, modelo, tarea, huella, resultado, estado, error, latencia, objetivo, quién pidió y quién aceptó. Aceptar (`POST /ai/runs/:id/accept`) solo registra la adopción: no aplica nada; el formulario guarda por su camino normal. Auditoría `AI_SUGGESTION_CREATED/ACCEPTED` sin contenido. Tope de pedidos por persona y minuto (`AI_RATE_LIMIT_PER_MINUTE`).
+- Moderación de nombres de equipo (§44): primero reglas (3–60 caracteres, caracteres permitidos, sin enlaces/correos/teléfonos, sin repeticiones, términos prohibidos por palabra completa —también con números por letras, letras separadas y plurales—, lista base + `TEAM_NAME_FORBIDDEN_TERMS`); luego la IA opcional marca lo ambiguo. Marcado ⇒ no se puede invitar y las invitaciones pendientes dejan de mostrarse hasta corregir el nombre (`PATCH /teams/:id`). Si la IA falla, no bloquea. Sin falsos positivos con «Computación» ni con nombres técnicos como «C# y .NET».
+- Web: componente `AiAssist` (no aparece sin proveedor) en etiquetas de actividad, área sugerida de una habilidad, explicación y resumen del proyecto, y lectura narrativa de Tendencias. En Equipos se agregó lo que faltaba en la pantalla: **formar el equipo**, **invitar** desde los candidatos, aviso de nombre marcado y renombrar.
+- Seguridad/operación encontrados en la regresión:
+  - La cola de correo encolaba con la hora de Node y reclamaba con `now()` de PostgreSQL: con el reloj de la VM de Docker unos milisegundos atrasado, el envío recién encolado no era elegible y esperaba al siguiente encolado o al temporizador (B11/QA fallaron por un correo que tardó 18 s). Ahora la hora la pone la base en el encolado y en los reintentos.
+  - La prueba de QA usaba un nombre de área con solo 676 variantes y chocó con una corrida anterior; ahora usa cinco letras.
+
+**Migraciones:** `1780420000000-V2AiAssistant` (`ai_assistance_runs` con checks de estado, tarea y aceptación; `teams.name_status` y `name_flag_reason`). `down`/`up` probados con respaldo y restauración.
+
+**Archivos:** `shared/src/enums/ai.enum.ts`, `api/src/ai/*` (puerto, adaptadores, `ai-text.ts`, servicio, controlador, módulo), `api/src/entities/ai-assistance-run.entity.ts`, `api/src/collaboration/{team-name.rules.ts,teams.service.ts,collaboration.controller.ts,collaboration.module.ts}`, `api/src/reports/reports.module.ts`, `api/src/audit/audit.service.ts`, `api/src/identity/account-mail.service.ts`, `web/src/components/AiAssist.tsx`, `web/src/components/ActivityManager.tsx`, `web/src/pages/{admin/AreasSkills,student/Projects,student/Collaboration,director/Trends}.tsx`, `web/src/services/index.ts`, `.env.example`, `package.json`, `api/package.json` (`build:e2e`), `scripts/e2e-v2.mjs`, `scripts/e2e-ai-provider.mjs`, `scripts/e2e-batch-8.mjs`, `scripts/e2e-qa.mjs`.
+
+**Pruebas:**
+- `e2e-v2` batch8 (15), con `AI_PROVIDER=none`: arranque sin IA, «no disponible» sin error ni registro, roles por tarea, tarea fuera de lista, regla antes que IA, acceso al proyecto aun sin IA, aceptación ajena, registro solo para Administración y sin contenido, nueve rechazos de nombre, sin falsos positivos, nombres técnicos, renombrar, auditoría sin el nombre.
+- `e2e-ai-provider` (32), nueva: levanta un proveedor simulado y una segunda API con `openai_compatible` (en `dist-e2e`, sin tocar la API de desarrollo). Verifica protocolo, Bearer y modelo; que correo y teléfono no salen; instrucción contra inventar; registro con huella y sin entrada; aceptación; que aceptar no toca la afinidad; descarte de cifras inventadas; etiquetas; área del catálogo y rechazo de área inventada; resumen con solo metadatos; TeacherScope; explicación sin cambiar el respaldo; narrativa con cifras verificables; tiempo agotado; proveedor caído sin filtrar la clave; moderación con IA, bloqueo de invitaciones, corrección y caída de la IA sin bloquear.
+
+**Resultados:** regresión completa: 18 suites, 1331 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 70, B9 49, B10 42, B11 46, QA 74, V2 98, IA 32). API y móvil `tsc` limpios; web compila en producción.
+
+**Regresiones:** B8 antigua usaba `Equipo del panel <timestamp de 13 dígitos>`: la regla nueva lo toma, con razón, por teléfono; se acortó el sufijo. Lo demás está en «Seguridad/operación».
+
+**Pendientes:** ninguno del batch. La ayuda de redacción del CV ya existe en la API; su pantalla llega con el BATCH 12.
+
+**Riesgos:** la lista base de términos prohibidos es corta a propósito (palabra completa, sin falsos positivos); cada institución la amplía con `TEAM_NAME_FORBIDDEN_TERMS`. La calidad de las sugerencias depende del modelo configurado; las reglas deterministas no.
+
+## BATCH 11 — Retiro del chat, canales de contacto y nota por contacto
+
+**Estado:** completo
+
+**Objetivo:** §56, §57, §58, §59 (C7).
+
+**Cambios:**
+- Chat retirado (§57): `MessagingService` eliminado; las rutas `conversations*` responden **410 Gone** con `CHAT_RETIRED` y un motivo que orienta a los canales de contacto; crear un equipo o aceptar una invitación ya no abre conversación. La pestaña «Mensajes» desaparece de la web (el móvil no la tenía).
+- Datos históricos: las tablas `conversations`, `conversation_members` y `messages` se conservan sin acceso funcional y con un `COMMENT` que explica por qué siguen ahí (no hay hard drop sin auditoría). Hoy guardan 51 conversaciones y 189 mensajes.
+- Canales de contacto (§59): Teams (cuenta o enlace de teams.microsoft.com), WhatsApp (con código de país), LinkedIn (`linkedin.com/in/…`), correo de contacto y otro enlace (solo `https`). Cada valor se valida y normaliza, y se deriva un único enlace seguro (`https:`/`mailto:`). Uno por tipo, todos opcionales. Los ven los contactos aceptados; en el perfil público solo los marcados y sin el valor crudo (§58). El correo institucional no aparece si el estudiante no lo escribe.
+- Nota por contacto (§56): alias, contexto y canal preferido, **personal** de quien la escribe; el canal preferido debe ser uno que el otro comparte.
+- Web: tarjeta «Cómo contactarte» en Colaboración, columna «Contactar» con los canales (el preferido primero), edición de la nota, y canales públicos en el perfil compartible. Se corrigió el tipo del perfil público (`skills` ya no tiene nivel autodeclarado).
+
+**Migraciones:** `1780430000000-V2ContactChannelsAndChatRetirement` (`student_contact_channels`, `contact_notes`, comentarios en las tablas del chat). `down`/`up` probados con respaldo: los mensajes históricos se conservan en ambos sentidos.
+
+**Archivos:** `shared/src/enums/collaboration.enum.ts`, `api/src/entities/contact-channel.entity.ts`, `api/src/collaboration/{contact-channel.rules.ts,contacts.service.ts,public-profile.service.ts,teams.service.ts,collaboration.controller.ts,collaboration.module.ts,dto/collaboration.dto.ts}`, `api/src/collaboration/messaging.service.ts` (eliminado), `web/src/pages/student/Collaboration.tsx`, `web/src/pages/PublicProfile.tsx`, `web/src/services/index.ts`, `scripts/e2e-v2.mjs`, `scripts/e2e-batch-8.mjs`.
+
+**Pruebas:** `e2e-v2` batch11 (12): rutas de chat en 410; seis formatos inseguros o inválidos rechazados; normalización y enlaces; un canal por tipo; visibilidad solo para contactos; sin correo institucional; nota con canal válido y solo entre contactos; nota personal; perfil público solo con los marcados; deshacer el contacto oculta los canales; quitar todos. La suite B8 antigua cambió su sección de mensajería por la verificación del retiro (410 en las cuatro rutas, motivo, autenticación, contactos y equipos siguen funcionando).
+
+**Resultados:** regresión completa tras B11: 18 suites, 1336 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 63, B9 49, B10 42, B11 46, QA 74, V2 110, IA 32). API y móvil `tsc` limpios; web compila en producción.
+
+**Regresiones:** ninguna fuera de las pruebas de mensajería, reescritas a propósito.
+
+**Pendientes:** ninguno.
+
+**Riesgos:** quien tenga un cliente antiguo verá 410 en lugar de su chat; es el comportamiento buscado.

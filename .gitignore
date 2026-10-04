@@ -5,6 +5,7 @@ node_modules/
 
 # Builds
 dist/
+dist-e2e/
 build/
 .expo/
 web-build/

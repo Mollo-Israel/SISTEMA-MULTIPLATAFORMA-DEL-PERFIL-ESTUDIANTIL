@@ -192,7 +192,10 @@ async function formularios(ctx) {
   check(area.status === 400 && area.data?.fields?.name, 'QA.26 Área: nombre con números o símbolos -> error en «nombre»', json(area.data?.fields));
   check(area.data?.fields?.tags, 'QA.27 Área: etiquetas obligatorias', json(area.data?.fields));
 
-  const nombre = `Robótica Educativa ${String.fromCharCode(65 + (TS % 26))}${String.fromCharCode(65 + ((TS >> 5) % 26))}`;
+  // Cinco letras del instante (base 26): con dos había solo 676 nombres y,
+  // tras varias corridas, chocaba con un área de una corrida anterior.
+  const letras = Array.from({ length: 5 }, (_, i) => String.fromCharCode(65 + (Math.floor(TS / 26 ** i) % 26))).join('');
+  const nombre = `Robótica Educativa ${letras}`;
   const creada = await req('POST', '/academic-areas', {
     token: ctx.admin,
     body: { name: nombre, tags: ['robotica', 'arduino'] },

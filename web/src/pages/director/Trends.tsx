@@ -1,6 +1,7 @@
 import { FiEyeOff, FiInfo } from 'react-icons/fi';
 import { analyticsService, type DirectorTrends } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import AiAssist from '../../components/AiAssist';
 import {
   AsyncView, Badge, Card, EmptyState, PageHeader, SkeletonCards,
 } from '../../components/ui';
@@ -41,6 +42,14 @@ export default function DirectorTrendsPage() {
               <FiInfo size={16} />
               <span>{t.note.scope}</span>
             </div>
+
+            {/* V2 §63: la IA redacta sobre estas cifras; no calcula ni inventa. */}
+            <AiAssist
+              task="ANALYTICS_NARRATIVE"
+              label="Lectura narrativa"
+              request={() => ({})}
+              render={(r) => <p style={{ margin: 0 }}>{r.narrative}</p>}
+            />
 
             <Card title="Interés declarado por área">
               <p className="muted" style={{ marginTop: 0 }}>

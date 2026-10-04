@@ -22,6 +22,7 @@ import {
 } from '../../services';
 import { useAuth } from '../../auth/AuthContext';
 import ProjectContribution from '../../components/ProjectContribution';
+import AiAssist from '../../components/AiAssist';
 import {
   PROJECT_BACKING_HELP,
   PROJECT_BACKING_LABEL,
@@ -322,6 +323,14 @@ export default function StudentProjectsPage() {
                       {(p.backingReasons ?? []).map((r) => <li key={r}>{r}</li>)}
                     </ul>
                   )}
+                  {p.backingTier === 'flagged' && (
+                    <AiAssist
+                      task="INCONSISTENCY_EXPLANATION"
+                      label="Explicar en palabras simples"
+                      request={() => ({ projectId: p.id })}
+                      render={(r) => <p style={{ margin: 0 }}>{r.explanation}</p>}
+                    />
+                  )}
                 </div>
               )}
 
@@ -443,6 +452,14 @@ export default function StudentProjectsPage() {
                 <strong className="flex" style={{ gap: '0.4rem' }}>
                   <FiPaperclip size={14} /> Evidencias ({p.evidences?.length ?? 0})
                 </strong>
+                {(p.evidences ?? []).length > 0 && (
+                  <AiAssist
+                    task="EVIDENCE_SUMMARY"
+                    label="Resumir evidencias"
+                    request={() => ({ projectId: p.id })}
+                    render={(r) => <p style={{ margin: 0 }}>{r.summary}</p>}
+                  />
+                )}
 
                 {(p.evidences ?? []).length > 0 && (
                   <ul className="plain-list">

@@ -545,7 +545,204 @@ async function batch5(ctx) {
 
 // ===========================================================================
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch10 };
+// ===========================================================================
+//  BATCH 8 — Asistente de IA (sin proveedor) y moderación de nombres de equipo
+// ===========================================================================
+async function batch8(ctx) {
+  objective('BATCH 8 · La IA es opcional y no decide; los nombres de equipo se moderan por reglas');
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Iris', lastName: 'Asistida', email: correoEst('ai1'), role: 'STUDENT', semester: 6 });
+  const otro = await provisionAndActivate(ctx.admin, { firstName: 'Tomas', lastName: 'Invitado', email: correoEst('ai2'), role: 'STUDENT', semester: 6 });
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Delia', lastName: 'Directora', email: correoStaff('aidir'), role: 'CAREER_DIRECTOR' });
+  for (const s of [est, otro]) {
+    s.profileId = (await req('POST', '/profiles/me', { token: s.token, body: {} })).data?.id
+      ?? (await req('GET', '/profiles/me', { token: s.token })).data?.id;
+  }
+
+  const st = await req('GET', '/ai/status', { token: est.token });
+  check(st.status === 200 && st.data?.enabled === false && st.data?.provider === 'none' && (st.data?.tasks ?? []).length === 0,
+    'V2.8.1 §84 Con AI_PROVIDER=none el sistema arranca y declara la IA apagada', json(st.data));
+
+  const cv = await req('POST', '/ai/suggestions', {
+    token: est.token, body: { task: 'CV_TEXT_ASSIST', text: 'Trabajé en el backend del proyecto de inventario con NestJS y PostgreSQL.', mode: 'improve' },
+  });
+  check(cv.status === 201 && cv.data?.available === false && !cv.data?.runId,
+    'V2.8.2 §84 Pedir ayuda sin proveedor responde «no disponible», sin error ni registro', json(cv.data));
+
+  const narrativa = await req('POST', '/ai/suggestions', { token: est.token, body: { task: 'ANALYTICS_NARRATIVE' } });
+  const moderar = await req('POST', '/ai/suggestions', { token: director.token, body: { task: 'CONTENT_MODERATION_FLAG', text: 'x' } });
+  const cvDirector = await req('POST', '/ai/suggestions', { token: director.token, body: { task: 'CV_TEXT_ASSIST', text: 'Texto cualquiera de prueba para el CV.' } });
+  check(narrativa.status === 403 && moderar.status === 403 && cvDirector.status === 403,
+    'V2.8.3 §43.2 Cada tarea tiene sus roles; la moderación no se pide desde fuera', `${narrativa.status}/${moderar.status}/${cvDirector.status}`);
+
+  const invalida = await req('POST', '/ai/suggestions', { token: est.token, body: { task: 'APPROVE_ACTIVITY' } });
+  check(invalida.status === 400, 'V2.8.4 §43.2 Una tarea fuera de la lista se rechaza', `status ${invalida.status}`);
+
+  const regla = await req('POST', '/ai/suggestions', { token: ctx.admin, body: { task: 'TAG_SUGGESTION', target: 'skill', text: 'React Native' } });
+  check(regla.status === 201 && regla.data?.ok === true && regla.data?.source === 'rule' && !!regla.data?.result?.areaId,
+    'V2.8.5 §23.3 Lo que una regla resuelve no necesita IA, ni siquiera apagada', json(regla.data));
+
+  const proyecto = await req('POST', '/projects', {
+    token: est.token,
+    body: { title: `Proyecto asistido ${TS}`, description: 'Proyecto para probar la IA.', technologies: ['NestJS'], status: 'active' },
+  });
+  const explicacion = await req('POST', '/ai/suggestions', { token: est.token, body: { task: 'INCONSISTENCY_EXPLANATION', projectId: proyecto.data?.id } });
+  check(explicacion.status === 201 && explicacion.data?.source === 'rule',
+    'V2.8.6 §43 Sin inconsistencias registradas, la explicación la da la regla', json(explicacion.data));
+  const ajena = await req('POST', '/ai/suggestions', { token: otro.token, body: { task: 'EVIDENCE_SUMMARY', projectId: proyecto.data?.id } });
+  check(ajena.status === 403, 'V2.8.7 §43 La IA no abre puertas: el proyecto ajeno sigue cerrado', `status ${ajena.status}`);
+
+  const aceptarAjena = await req('POST', '/ai/runs/00000000-0000-4000-8000-000000000000/accept', { token: est.token });
+  check(aceptarAjena.status === 404, 'V2.8.8 §43.3 No se acepta una sugerencia inexistente o ajena', `status ${aceptarAjena.status}`);
+  const runsAdmin = await req('GET', '/ai/runs', { token: ctx.admin });
+  const runsEst = await req('GET', '/ai/runs', { token: est.token });
+  check(runsAdmin.status === 200 && Array.isArray(runsAdmin.data) && runsEst.status === 403,
+    'V2.8.9 §43.3 El registro de ejecuciones es de soporte (solo Administración)', `${runsAdmin.status}/${runsEst.status}`);
+  check((runsAdmin.data ?? []).every((r) => !('result' in r) && !('input' in r)),
+    'V2.8.10 §43.4 El registro de soporte muestra metadatos, no contenido');
+
+  // ----------------------------------------------------------- §44
+  const nuevaNecesidad = async (k) => (await req('POST', '/team-needs', {
+    token: est.token, body: { purpose: `Necesidad ${k} ${TS}`, maxMembers: 3 },
+  })).data?.id;
+  const crearEquipo = async (name) => {
+    const id = await nuevaNecesidad(name.slice(0, 12));
+    return req('POST', `/team-needs/${id}/team`, { token: est.token, body: { name } });
+  };
+  const rechazos = [
+    ['Equipo pendejo', 'TEAM_NAME_FORBIDDEN'],
+    ['Los P3ND3J0S', 'TEAM_NAME_FORBIDDEN'],
+    ['p u t a s', 'TEAM_NAME_FORBIDDEN'],
+    ['Escríbenos a equipo@correo.com', 'TEAM_NAME_CONTACT'],
+    ['Visiten www.equipo.xyz', 'TEAM_NAME_CONTACT'],
+    ['Llama al 7712 3456', 'TEAM_NAME_CONTACT'],
+    ['AB', 'TEAM_NAME_LENGTH'],
+    ['Equipo <script>', 'TEAM_NAME_CHARACTERS'],
+    ['Equipooooooo', 'TEAM_NAME_REPEATED'],
+  ];
+  const obtenidos = [];
+  for (const [nombre] of rechazos) obtenidos.push(await crearEquipo(nombre));
+  check(obtenidos.every((r, i) => r.status === 400 && r.data?.code === rechazos[i][1]),
+    'V2.8.11 §44 Reglas: términos prohibidos (también con números o letras sueltas), contacto, longitud, caracteres, repeticiones',
+    obtenidos.map((r, i) => `${rechazos[i][0]}=${r.status}/${r.data?.code}`).filter((_, i) => obtenidos[i].data?.code !== rechazos[i][1]).join(' | '));
+
+  const valido = await crearEquipo('Computación Distribuida & IoT');
+  check(valido.status === 201 && valido.data?.nameStatus === 'ok',
+    'V2.8.12 §44 Sin falsos positivos: «Computación» no choca con un término prohibido', json(valido.data));
+  const tecnico = await crearEquipo('C# y .NET (grupo 2)');
+  check(tecnico.status === 201, 'V2.8.13 §23.4 Nombres técnicos con signos válidos se aceptan', json(tecnico.data));
+
+  const renombrar = await req('PATCH', `/teams/${valido.data?.id}`, { token: est.token, body: { name: 'Equipo idiota' } });
+  const renombrarBien = await req('PATCH', `/teams/${valido.data?.id}`, { token: est.token, body: { name: 'Equipo Aurora' } });
+  const renombrarAjeno = await req('PATCH', `/teams/${valido.data?.id}`, { token: otro.token, body: { name: 'Equipo Robado' } });
+  check(renombrar.status === 400 && renombrarBien.status === 200 && renombrarBien.data?.name === 'Equipo Aurora' && renombrarAjeno.status === 403,
+    'V2.8.14 §44 Renombrar vuelve a moderar, y solo lo hace el responsable', `${renombrar.status}/${renombrarBien.status}/${renombrarAjeno.status}`);
+
+  const auditoria = await req('GET', `/audit/events?eventType=TEAM_NAME_MODERATED&actorUserId=${est.userId}&limit=50`, { token: ctx.admin });
+  const filas = Array.isArray(auditoria.data) ? auditoria.data : [];
+  check(auditoria.status === 200 && filas.filter((f) => f.metadata?.resultado === 'rechazado').length >= rechazos.length
+    && !JSON.stringify(filas).includes('pendejo'),
+    'V2.8.15 §69 Cada rechazo queda en la auditoría con la regla, sin el nombre', `status ${auditoria.status}, filas ${filas.length}`);
+}
+
+// ===========================================================================
+//  BATCH 11 — Chat retirado, canales de contacto y nota por contacto
+// ===========================================================================
+async function batch11(ctx) {
+  objective('BATCH 11 · Sin chat; cada uno comparte sus canales y anota a sus contactos');
+  const nuevo = async (k, nombre) => {
+    const c = await provisionAndActivate(ctx.admin, { firstName: nombre, lastName: 'Contacto', email: correoEst(`b11${k}`), role: 'STUDENT', semester: 5 });
+    c.profileId = (await req('POST', '/profiles/me', { token: c.token, body: {} })).data?.id;
+    return c;
+  };
+  const ana = await nuevo('ana', 'Ana');
+  const beto = await nuevo('beto', 'Beto');
+  const ciro = await nuevo('ciro', 'Ciro');
+
+  const chat = await req('GET', '/conversations', { token: ana.token });
+  const nueva = await req('POST', '/conversations/direct', { token: ana.token, body: { profileId: beto.profileId } });
+  check(chat.status === 410 && nueva.status === 410 && chat.data?.code === 'CHAT_RETIRED',
+    'V2.11.1 §57 Las rutas de chat responden 410 Gone', `${chat.status}/${nueva.status}`);
+
+  const malos = [
+    ['whatsapp', '71234567', 'sin código de país'],
+    ['linkedin', 'https://evil.com/in/ana', 'dominio ajeno'],
+    ['link', 'javascript:alert(1)', 'javascript:'],
+    ['link', 'http://sitio.com', 'http sin cifrar'],
+    ['email', 'no-es-correo', 'correo inválido'],
+    ['teams', 'https://evil.com/chat', 'enlace no de Teams'],
+  ];
+  const resp = [];
+  for (const [channel, value] of malos) {
+    resp.push(await req('PUT', '/profiles/me/contact-channels', { token: ana.token, body: { channels: [{ channel, value }] } }));
+  }
+  check(resp.every((r) => r.status === 400 && r.data?.fields?.['channels.0.value']),
+    'V2.11.2 §59 Cada canal valida su formato y se rechaza lo inseguro', resp.map((r, i) => `${malos[i][2]}=${r.status}`).join(' '));
+
+  const guardar = await req('PUT', '/profiles/me/contact-channels', {
+    token: ana.token,
+    body: {
+      channels: [
+        { channel: 'whatsapp', value: '+591 712-34567', isPublic: false },
+        { channel: 'linkedin', value: 'linkedin.com/in/ana-contacto', isPublic: true },
+        { channel: 'teams', value: 'Ana.Contacto@est.univalle.edu' },
+      ],
+    },
+  });
+  const porCanal = Object.fromEntries((guardar.data ?? []).map((c) => [c.channel, c]));
+  check(guardar.status === 200 && porCanal.whatsapp?.value === '+59171234567' && porCanal.whatsapp?.href === 'https://wa.me/59171234567'
+    && porCanal.linkedin?.href === 'https://www.linkedin.com/in/ana-contacto'
+    && porCanal.teams?.href?.startsWith('https://teams.microsoft.com/l/chat/0/0?users=ana.contacto%40'),
+    'V2.11.3 §59 Se normalizan y cada uno da un único enlace seguro', json(guardar.data));
+  const duplicado = await req('PUT', '/profiles/me/contact-channels', {
+    token: ana.token, body: { channels: [{ channel: 'email', value: 'a@b.com' }, { channel: 'email', value: 'c@d.com' }] },
+  });
+  check(duplicado.status === 400, 'V2.11.4 §59 Un canal por tipo', `status ${duplicado.status}`);
+
+  // Contacto Ana <-> Beto
+  const enlace = (await req('GET', '/profiles/me/public-link', { token: ana.token })).data;
+  // §45: el contacto se pide desde el perfil compartido, así que Ana lo publica.
+  const publicar = await req('PUT', '/profiles/me/visibility', { token: ana.token, body: { publicProfileEnabled: true, fields: { bio: true } } });
+  const sol = await req('POST', '/contacts/requests', { token: beto.token, body: { slug: enlace?.slug } });
+  await req('PATCH', `/contacts/requests/${sol.data?.id}`, { token: ana.token, body: { decision: 'accept' } });
+
+  const deBeto = (await req('GET', '/contacts', { token: beto.token })).data ?? [];
+  const anaParaBeto = deBeto.find((c) => c.profileId === ana.profileId);
+  check(anaParaBeto?.channels?.length === 3 && anaParaBeto.channels.every((c) => c.href),
+    'V2.11.5 §59 Un contacto aceptado ve todos los canales que compartió el otro', json(anaParaBeto?.channels));
+  const deCiro = await req('GET', '/contacts', { token: ciro.token });
+  check(!(deCiro.data ?? []).some((c) => c.profileId === ana.profileId), 'V2.11.6 §56 Quien no es contacto no los ve');
+
+  const sinCorreo = JSON.stringify(anaParaBeto ?? {});
+  check(!sinCorreo.includes(ana.email), 'V2.11.7 §59 El correo institucional no se expone por omisión');
+
+  const nota = await req('PATCH', `/contacts/${ana.profileId}/note`, {
+    token: beto.token, body: { alias: 'Ana del lab', context: 'Hackatón 2026', preferredChannel: 'linkedin' },
+  });
+  const notaMala = await req('PATCH', `/contacts/${ana.profileId}/note`, { token: beto.token, body: { preferredChannel: 'email' } });
+  const notaAjena = await req('PATCH', `/contacts/${ana.profileId}/note`, { token: ciro.token, body: { alias: 'x' } });
+  check(nota.status === 200 && nota.data?.alias === 'Ana del lab' && notaMala.status === 400 && notaAjena.status === 404,
+    'V2.11.8 §56 Alias, contexto y canal preferido; solo entre contactos y con un canal que el otro comparte',
+    `${nota.status}/${notaMala.status}/${notaAjena.status}`);
+  const vistaBeto = ((await req('GET', '/contacts', { token: beto.token })).data ?? []).find((c) => c.profileId === ana.profileId);
+  const vistaAna = ((await req('GET', '/contacts', { token: ana.token })).data ?? []).find((c) => c.profileId === beto.profileId);
+  check(vistaBeto?.note?.alias === 'Ana del lab' && vistaBeto?.note?.preferredChannel === 'linkedin' && vistaAna?.note?.alias === null,
+    'V2.11.9 §56 La nota es personal: Ana no ve cómo la anotó Beto', json([vistaBeto?.note, vistaAna?.note]));
+
+  const publico = await req('GET', `/public/profiles/${enlace?.slug}`);
+  const canalesPublicos = publico.data?.contactChannels ?? [];
+  check(publicar.status === 200 && publico.status === 200 && canalesPublicos.length === 1
+    && canalesPublicos[0].channel === 'linkedin' && !('value' in canalesPublicos[0]),
+    'V2.11.10 §58 En el perfil público solo aparecen los canales marcados como públicos', `status ${publico.status} ${json(canalesPublicos)}`);
+
+  await req('DELETE', `/contacts/${ana.profileId}`, { token: beto.token });
+  const trasDeshacer = ((await req('GET', '/contacts', { token: beto.token })).data ?? []).find((c) => c.profileId === ana.profileId);
+  check(!trasDeshacer, 'V2.11.11 §56 Deshecho el contacto, sus canales dejan de verse');
+
+  const quitar = await req('PUT', '/profiles/me/contact-channels', { token: ana.token, body: { channels: [] } });
+  check(quitar.status === 200 && (quitar.data ?? []).length === 0, 'V2.11.12 §59 Todos los canales son opcionales y se pueden quitar');
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch8, batch10, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

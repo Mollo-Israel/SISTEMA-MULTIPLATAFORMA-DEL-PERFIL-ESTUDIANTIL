@@ -5,6 +5,7 @@
   "description": "API central NestJS del Sistema de Perfil Estudiantil Dinámico",
   "scripts": {
     "build": "nest build",
+    "build:e2e": "tsc -p tsconfig.build.json --outDir dist-e2e",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",

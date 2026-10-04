@@ -1,15 +1,17 @@
 import {
+  All,
   Body,
   Controller,
   Delete,
   Get,
+  GoneException,
   HttpCode,
   NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
-  Query,
+  Put,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -23,24 +25,24 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { PublicProfileService } from './public-profile.service';
 import { ContactsService } from './contacts.service';
 import { TeamsService } from './teams.service';
-import { MessagingService } from './messaging.service';
 import {
   CreateContactRequestDto,
   CreateTeamDto,
   CreateTeamNeedDto,
   DecideContactRequestDto,
   DecideTeamInvitationDto,
+  ContactNoteDto,
   InviteToTeamDto,
-  OpenDirectConversationDto,
-  SendMessageDto,
+  SaveContactChannelsDto,
   UpdateTeamNeedDto,
 } from './dto/collaboration.dto';
 
 /**
  * Colaboración entre estudiantes (§42 a §47).
  *
- * Todo lo de aquí es del Estudiante: contactos, equipos y mensajería son
- * relaciones entre pares. Un docente o la dirección no participan, y por eso no
+ * Todo lo de aquí es del Estudiante: contactos y equipos son relaciones entre
+ * pares. El chat se retiró (V2 §57): la comunicación sale por los canales que
+ * cada uno comparte (§59). Un docente o la dirección no participan, y por eso no
  * hay rutas suyas en este controlador; su acceso a la información académica
  * sigue gobernado por el alcance de siempre (RN-23), que es otra cosa.
  *
@@ -54,7 +56,6 @@ export class CollaborationController {
     private readonly publicProfiles: PublicProfileService,
     private readonly contacts: ContactsService,
     private readonly teams: TeamsService,
-    private readonly messaging: MessagingService,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
   ) {}
 
@@ -255,7 +256,19 @@ export class CollaborationController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateTeamDto,
   ) {
-    return this.teams.createTeam(await this.profileId(user), id, dto.name);
+    return this.teams.createTeam(await this.profileId(user), id, dto.name, user.userId);
+  }
+
+  @ApiBearerAuth()
+  @Patch('teams/:id')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Corrige el nombre del equipo; vuelve a moderarse (V2 §44).' })
+  async renameTeam(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateTeamDto,
+  ) {
+    return this.teams.renameTeam(await this.profileId(user), id, dto.name, user.userId);
   }
 
   @ApiBearerAuth()
@@ -304,52 +317,53 @@ export class CollaborationController {
   }
 
   // =========================================================================
-  // §42 · Mensajería
+  // V2 §59 · Canales de contacto · §56 · Nota por contacto
   // =========================================================================
 
   @ApiBearerAuth()
-  @Get('conversations')
+  @Get('profiles/me/contact-channels')
   @Roles(RolNombre.STUDENT)
-  @ApiOperation({ summary: 'Conversaciones del estudiante (§42).' })
-  async conversations(@CurrentUser() user: AuthenticatedUser) {
-    return this.messaging.list(await this.profileId(user));
+  @ApiOperation({ summary: 'Canales de contacto que comparto (V2 §59).' })
+  async myChannels(@CurrentUser() user: AuthenticatedUser) {
+    return this.contacts.myChannels(await this.profileId(user));
   }
 
   @ApiBearerAuth()
-  @Post('conversations/direct')
+  @Put('profiles/me/contact-channels')
   @Roles(RolNombre.STUDENT)
-  @ApiOperation({
-    summary: 'Abre la conversación con un contacto (§42.1).',
-    description: 'Exige contacto aceptado: sin él no hay canal.',
-  })
-  async openDirect(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: OpenDirectConversationDto,
-  ) {
-    return this.messaging.openDirect(await this.profileId(user), dto.profileId);
+  @ApiOperation({ summary: 'Reemplaza mis canales de contacto; cada uno se valida por formato.' })
+  async saveChannels(@CurrentUser() user: AuthenticatedUser, @Body() dto: SaveContactChannelsDto) {
+    return this.contacts.saveChannels(await this.profileId(user), dto.channels);
   }
 
   @ApiBearerAuth()
-  @Get('conversations/:id/messages')
+  @Patch('contacts/:profileId/note')
   @Roles(RolNombre.STUDENT)
-  @ApiOperation({ summary: 'Mensajes de una conversación propia.' })
-  async messages(
+  @ApiOperation({ summary: 'Alias, contexto y canal preferido de un contacto (V2 §56). Solo los ve quien los escribe.' })
+  async saveNote(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query('before') before?: string,
+    @Param('profileId', ParseUUIDPipe) profileId: string,
+    @Body() dto: ContactNoteDto,
   ) {
-    return this.messaging.messagesOf(await this.profileId(user), id, before);
+    return this.contacts.saveNote(await this.profileId(user), profileId, dto);
   }
 
+  // =========================================================================
+  // V2 §57 · Chat retirado
+  // =========================================================================
+
+  /**
+   * Las rutas de mensajería responden 410 Gone: un cliente antiguo recibe un
+   * motivo claro en lugar de un 404 que parezca un error. Las conversaciones
+   * históricas se conservan en la base, sin acceso.
+   */
   @ApiBearerAuth()
-  @Post('conversations/:id/messages')
-  @Roles(RolNombre.STUDENT)
-  @ApiOperation({ summary: 'Envía un mensaje (§42).' })
-  async send(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: SendMessageDto,
-  ) {
-    return this.messaging.send(await this.profileId(user), id, dto.body);
+  @All(['conversations', 'conversations/*'])
+  @ApiOperation({ summary: 'Retirado (V2 §57): Afinia no tiene chat interno.' })
+  chatRetired(): never {
+    throw new GoneException({
+      code: 'CHAT_RETIRED',
+      message: 'Afinia ya no tiene chat interno. Usa los canales de contacto que comparte cada persona.',
+    });
   }
 }

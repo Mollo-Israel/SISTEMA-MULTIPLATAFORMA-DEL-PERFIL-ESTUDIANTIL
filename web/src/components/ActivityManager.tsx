@@ -4,6 +4,7 @@ import {
   FiCalendar, FiCheck, FiEdit2, FiPlus, FiSave, FiSearch, FiSend, FiUserX, FiUsers, FiX,
 } from 'react-icons/fi';
 import { useAuth } from '../auth/AuthContext';
+import AiAssist from './AiAssist';
 import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
 import type { AcademicArea, Activity, ActivityCategoryItem, Participant } from '../services/types';
@@ -463,6 +464,21 @@ export default function ActivityManager({
                   value={form.tags}
                   onChange={(e) => setForm({ ...form, tags: e.target.value })}
                   placeholder="react, arquitectura, backend"
+                />
+                <AiAssist
+                  task="TAG_SUGGESTION"
+                  label="Sugerir etiquetas"
+                  request={() => ({ target: 'activity', text: `${form.title}\n${form.description}` })}
+                  render={(r) => (
+                    <div className="chip-row">
+                      {(r.tags as string[]).map((t) => <span key={t} className="chip">{t}</span>)}
+                    </div>
+                  )}
+                  onUse={(r) => {
+                    const actuales = form.tags.split(',').map((t) => t.trim()).filter(Boolean);
+                    setForm({ ...form, tags: [...new Set([...actuales, ...(r.tags as string[])])].join(', ') });
+                  }}
+                  useLabel="Agregar etiquetas"
                 />
               </div>
               {!necesitaRevision && (

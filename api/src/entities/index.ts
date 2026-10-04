@@ -41,3 +41,5 @@ export * from './gamification.entity';
 export * from './mail-job.entity';
 export * from './gamification-extra.entity';
 export * from './activity-review.entity';
+export * from './ai-assistance-run.entity';
+export * from './contact-channel.entity';

@@ -18,3 +18,4 @@ export * from './enums/onboarding.enum';
 export * from './enums/validation.enum';
 export * from './enums/project-backing.enum';
 export * from './enums/skill-interest.enum';
+export * from './enums/ai.enum';

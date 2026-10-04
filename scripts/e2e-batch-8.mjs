@@ -331,128 +331,36 @@ async function contactos(ctx) {
 //  §42 · Mensajería contextual
 // ===========================================================================
 async function mensajeria(ctx) {
-  objective('§42 · Una conversación existe porque hay una relación detrás');
+  // V2 §57 retiró el chat. Lo que antes probaba la mensajería ahora prueba
+  // que está retirada de verdad: ninguna ruta lee ni escribe conversaciones.
+  objective('V2 §57 · El chat interno está retirado');
 
-  section('§42.1 · Sin contacto no hay canal');
-  const sinContacto = await req('POST', '/conversations/direct', {
-    token: ctx.carla.token,
-    body: { profileId: ctx.ana.profileId },
-  });
+  section('Las rutas responden 410 con un motivo, no 404');
+  const intentos = [
+    await req('GET', '/conversations', { token: ctx.bruno.token }),
+    await req('POST', '/conversations/direct', { token: ctx.bruno.token, body: { profileId: ctx.ana.profileId } }),
+    await req('GET', '/conversations/00000000-0000-4000-8000-000000000000/messages', { token: ctx.bruno.token }),
+    await req('POST', '/conversations/00000000-0000-4000-8000-000000000000/messages', { token: ctx.bruno.token, body: { body: 'Hola' } }),
+  ];
   check(
-    sinContacto.status === 403,
-    'B8.34 Escribir a quien no es contacto -> 403 (§42.1)',
-    `status ${sinContacto.status}`,
+    intentos.every((r) => r.status === 410 && r.data?.code === 'CHAT_RETIRED'),
+    'B8.34 Listar, abrir, leer y escribir conversaciones -> 410 CHAT_RETIRED (§57)',
+    intentos.map((r) => r.status).join('/'),
   );
-
-  const abierta = await req('POST', '/conversations/direct', {
-    token: ctx.bruno.token,
-    body: { profileId: ctx.ana.profileId },
-  });
-  check(abierta.status === 201 || abierta.status === 200,
-    'B8.35 Entre contactos sí', msgOf(abierta));
-  ctx.conversacionId = abierta.data?.id;
-
-  const otraVez = await req('POST', '/conversations/direct', {
-    token: ctx.ana.token,
-    body: { profileId: ctx.bruno.profileId },
-  });
   check(
-    otraVez.data?.id === ctx.conversacionId,
-    'B8.36 Abrirla desde el otro lado devuelve la misma, no una nueva',
-    `${ctx.conversacionId} vs ${otraVez.data?.id}`,
+    /canales de contacto/i.test(intentos[0].data?.message ?? ''),
+    'B8.35 El motivo orienta a los canales de contacto (§59)',
+    intentos[0].data?.message,
   );
+  const sinSesion = await req('GET', '/conversations');
+  check(sinSesion.status === 401, 'B8.36 Sin sesión sigue pidiendo autenticación', `status ${sinSesion.status}`);
 
-  section('Enviar y leer');
-  const enviado = await req('POST', `/conversations/${ctx.conversacionId}/messages`, {
-    token: ctx.bruno.token,
-    body: { body: 'Hola, ¿seguimos con el laboratorio?' },
-  });
-  check(enviado.status === 201, 'B8.37 Bruno escribe un mensaje', msgOf(enviado));
-
-  const vacio = await req('POST', `/conversations/${ctx.conversacionId}/messages`, {
-    token: ctx.bruno.token,
-    body: { body: '   ' },
-  });
+  section('La colaboración sigue: contactos');
+  const contactos = await req('GET', '/contacts', { token: ctx.bruno.token });
   check(
-    vacio.status === 400,
-    'B8.38 Un mensaje vacío se rechaza -> 400',
-    `status ${vacio.status}`,
+    contactos.status === 200 && (contactos.data ?? []).some((c) => c.profileId === ctx.ana.profileId),
+    'B8.37 Bruno y Ana siguen siendo contactos sin necesidad de chat',
   );
-
-  const leidos = await req('GET', `/conversations/${ctx.conversacionId}/messages`, {
-    token: ctx.ana.token,
-  });
-  check(
-    (leidos.data ?? []).some((m) => m.body.includes('laboratorio')),
-    'B8.39 Ana lo lee',
-  );
-
-  section('§107 · canAccessConversation');
-  const ajena = await req('GET', `/conversations/${ctx.conversacionId}/messages`, {
-    token: ctx.carla.token,
-  });
-  check(
-    ajena.status === 404,
-    'B8.40 Quien no participa no la ve, ni sabe que existe -> 404 (§107)',
-    `status ${ajena.status}`,
-  );
-
-  const escribirAjena = await req('POST', `/conversations/${ctx.conversacionId}/messages`, {
-    token: ctx.carla.token,
-    body: { body: 'No debería poder.' },
-  });
-  check(
-    escribirAjena.status === 404,
-    'B8.41 Ni escribir en ella -> 404',
-    `status ${escribirAjena.status}`,
-  );
-
-  section('§42 · Los mensajes no alimentan nada');
-  const afinidadAntes = (await req('GET', '/affinity/me/summary', { token: ctx.bruno.token }))
-    .data?.totalScore ?? 0;
-  for (let i = 0; i < 8; i++) {
-    await req('POST', `/conversations/${ctx.conversacionId}/messages`, {
-      token: ctx.bruno.token,
-      body: { body: `Mensaje de relleno número ${i}` },
-    });
-  }
-  const afinidadDespues = (await req('GET', '/affinity/me/summary', { token: ctx.bruno.token }))
-    .data?.totalScore ?? 0;
-  check(
-    afinidadAntes === afinidadDespues,
-    'B8.42 Ocho mensajes más NO cambian la afinidad (§42)',
-    `${afinidadAntes} -> ${afinidadDespues}`,
-  );
-
-  const desglose = await req('GET', `/affinity/me/areas/${ctx.area.id}/breakdown`, {
-    token: ctx.bruno.token,
-  });
-  check(
-    !(desglose.data?.contributions ?? []).some((c) =>
-      JSON.stringify(c).toLowerCase().includes('mensaje')),
-    'B8.43 Y no aparecen como señal en el desglose (§42)',
-  );
-
-  section('Deshacer el contacto cierra el canal');
-  await req('DELETE', `/contacts/${ctx.ana.profileId}`, { token: ctx.bruno.token });
-  const trasDeshacer = await req('GET', `/conversations/${ctx.conversacionId}/messages`, {
-    token: ctx.bruno.token,
-  });
-  check(
-    trasDeshacer.status === 404,
-    'B8.44 Sin la relación que lo justifica, la conversación deja de ser accesible (§42.1)',
-    `status ${trasDeshacer.status}`,
-  );
-
-  // Se rehace el contacto para el resto del escenario.
-  const nueva = await req('POST', '/contacts/requests', {
-    token: ctx.bruno.token,
-    body: { slug: ctx.slugAna },
-  });
-  await req('PATCH', `/contacts/requests/${nueva.data.id}`, {
-    token: ctx.ana.token,
-    body: { decision: 'accept' },
-  });
 }
 
 // ===========================================================================
@@ -530,7 +438,7 @@ async function equipos(ctx) {
   section('§46 · El equipo');
   const equipo = await req('POST', `/team-needs/${ctx.necesidadId}/team`, {
     token: ctx.ana.token,
-    body: { name: `Equipo del panel ${TS}` },
+    body: { name: `Equipo del panel ${String(TS).slice(-4)}` },
   });
   check(equipo.status === 201, 'B8.56 Ana crea el equipo', msgOf(equipo));
   ctx.equipoId = equipo.data?.id;
@@ -590,18 +498,16 @@ async function equipos(ctx) {
     'B8.65 Sin «ranking de mejores estudiantes» (§93)',
   );
 
-  section('§42.2 · La conversación del equipo');
+  section('V2 §57 · Un equipo ya no abre conversación');
   const conversaciones = await req('GET', '/conversations', { token: ctx.bruno.token });
-  const delEquipo = (conversaciones.data ?? []).find((c) => c.teamId === ctx.equipoId);
   check(
-    !!delEquipo,
-    'B8.66 Aceptar la invitación le abre la conversación del equipo (§42.2)',
+    conversaciones.status === 410,
+    'B8.66 Aceptar la invitación no abre chat: la ruta está retirada (§57)',
+    `status ${conversaciones.status}`,
   );
-
-  const deCarla = await req('GET', '/conversations', { token: ctx.carla.token });
   check(
-    !(deCarla.data ?? []).some((c) => c.teamId === ctx.equipoId),
-    'B8.67 Quien no es del equipo no la tiene (§42.2)',
+    (misEquipos.data ?? []).some((t) => t.id === ctx.equipoId),
+    'B8.67 El equipo existe igual: la colaboración no depende del chat',
   );
 
   section('El cupo se respeta al aceptar, no solo al invitar');

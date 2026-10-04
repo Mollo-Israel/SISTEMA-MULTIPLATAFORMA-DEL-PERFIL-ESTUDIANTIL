@@ -10,6 +10,7 @@ import {
   SkeletonTable, Tabs,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
+import AiAssist from '../../components/AiAssist';
 import { useConfirm, useToast } from '../../components/feedback';
 import {
   catalogName, code as codeRule, optionalText, parseTags, skillName, suggestCode, tagList, validate,
@@ -475,6 +476,20 @@ function SkillForm({
         </select>
       </FormField>
     </div>
+    {clasificacion?.rule === 'none' && value.name.trim().length >= 2 && (
+      <AiAssist
+        task="TAG_SUGGESTION"
+        label="Sugerir área con IA"
+        request={() => ({ target: 'skill', text: value.name })}
+        render={(r) => (
+          <p style={{ margin: 0 }}>
+            <strong>{r.areaName}</strong>{r.reason ? ` — ${r.reason}` : ''}
+          </p>
+        )}
+        onUse={(r) => r.areaId && set('academicAreaId', r.areaId)}
+        useLabel="Usar esta área"
+      />
+    )}
     <FormField label="Alias" error={errors.aliases} hint="Otros nombres de la misma tecnología, separados por coma: «ReactJS, React.js».">
       <input value={value.aliases} onChange={(e) => set('aliases', e.target.value)} placeholder="ReactJS, React.js" />
     </FormField>

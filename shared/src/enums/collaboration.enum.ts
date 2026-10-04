@@ -124,3 +124,27 @@ export const PUBLIC_SLUG_ALPHABET = '23456789bcdfghjkmnpqrstvwxyz';
 
 /** Límite de un mensaje (§42). Lo bastante para hablar, no para un informe. */
 export const MESSAGE_MAX_LENGTH = 2000;
+
+/**
+ * Canales de contacto externos (V2 §59). Afinia no tiene chat (§57): enlaza al
+ * canal que el estudiante decidió compartir.
+ */
+export enum ContactChannelType {
+  TEAMS = 'teams',
+  WHATSAPP = 'whatsapp',
+  LINKEDIN = 'linkedin',
+  EMAIL = 'email',
+  LINK = 'link',
+}
+
+export const CONTACT_CHANNEL_LABEL: Record<ContactChannelType, string> = {
+  [ContactChannelType.TEAMS]: 'Microsoft Teams',
+  [ContactChannelType.WHATSAPP]: 'WhatsApp',
+  [ContactChannelType.LINKEDIN]: 'LinkedIn',
+  [ContactChannelType.EMAIL]: 'Correo de contacto',
+  [ContactChannelType.LINK]: 'Otro enlace',
+};
+
+/** Límites de la nota personal sobre un contacto (V2 §56). */
+export const CONTACT_ALIAS_MAX = 60;
+export const CONTACT_CONTEXT_MAX = 300;

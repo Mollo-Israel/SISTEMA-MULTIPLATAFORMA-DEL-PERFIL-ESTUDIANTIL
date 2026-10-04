@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { StudentContactChannel } from '../entities/contact-channel.entity';
+import { channelView } from './contacts.service';
 import { randomInt } from 'crypto';
 import { Repository } from 'typeorm';
 import {
@@ -46,6 +48,8 @@ export class PublicProfileService {
     @InjectRepository(AffinitySnapshot) private readonly snapshots: Repository<AffinitySnapshot>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     private readonly backedSkills: BackedSkillsService,
+      @InjectRepository(StudentContactChannel)
+    private readonly channels: Repository<StudentContactChannel>,
   ) {}
 
   /** Base pública desde la que se sirve la web, para componer el enlace. */
@@ -201,6 +205,18 @@ export class PublicProfileService {
             calculatedAt: snapshot.calculatedAt,
           }
         : null;
+    }
+
+    // §58, §59: solo los canales que el estudiante marcó como públicos.
+    const canales = await this.channels.find({
+      where: { studentProfileId: perfil.id, isPublic: true },
+      order: { channel: 'ASC' },
+    });
+    if (canales.length) {
+      salida.contactChannels = canales.map((c) => {
+        const v = channelView(c);
+        return { channel: v.channel, label: v.label, href: v.href };
+      });
     }
 
     return salida;

@@ -16,10 +16,14 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsBoolean, ValidateNested } from 'class-validator';
 import {
   AvailabilityRequirement,
+  CONTACT_ALIAS_MAX,
+  CONTACT_CONTEXT_MAX,
+  ContactChannelType,
   ContactSource,
-  MESSAGE_MAX_LENGTH,
   TeamNeedStatus,
 } from '@perfil/shared';
 
@@ -190,18 +194,50 @@ export class DecideTeamInvitationDto {
   decision: 'accept' | 'decline';
 }
 
-export class OpenDirectConversationDto {
-  @ApiProperty()
-  @IsUUID('4', { message: 'Seleccione a un contacto.' })
-  profileId: string;
+/** Un canal de contacto (V2 §59). El formato lo valida el servicio por canal. */
+export class ContactChannelDto {
+  @ApiProperty({ enum: ContactChannelType })
+  @IsEnum(ContactChannelType, { message: 'Canal no válido.' })
+  channel: ContactChannelType;
+
+  @ApiProperty({ example: '+591 71234567' })
+  @IsString()
+  @MaxLength(300)
+  value: string;
+
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean;
 }
 
-export class SendMessageDto {
-  @ApiProperty({ maxLength: MESSAGE_MAX_LENGTH })
+export class SaveContactChannelsDto {
+  @ApiProperty({ type: [ContactChannelDto] })
+  @IsArray()
+  @ArrayMaxSize(5)
+  @ValidateNested({ each: true })
+  @Type(() => ContactChannelDto)
+  channels: ContactChannelDto[];
+}
+
+/** Nota personal sobre un contacto (V2 §56). */
+export class ContactNoteDto {
+  @ApiProperty({ required: false, maxLength: CONTACT_ALIAS_MAX })
+  @IsOptional()
+  @Transform(limpiar)
   @IsString()
-  @IsNotEmpty({ message: 'El mensaje no puede estar vacío.' })
-  @MaxLength(MESSAGE_MAX_LENGTH, {
-    message: `El mensaje no puede superar ${MESSAGE_MAX_LENGTH} caracteres.`,
-  })
-  body: string;
+  @MaxLength(CONTACT_ALIAS_MAX, { message: `El alias no puede superar ${CONTACT_ALIAS_MAX} caracteres.` })
+  alias?: string | null;
+
+  @ApiProperty({ required: false, maxLength: CONTACT_CONTEXT_MAX })
+  @IsOptional()
+  @Transform(limpiar)
+  @IsString()
+  @MaxLength(CONTACT_CONTEXT_MAX, { message: `El contexto no puede superar ${CONTACT_CONTEXT_MAX} caracteres.` })
+  context?: string | null;
+
+  @ApiProperty({ required: false, enum: ContactChannelType, nullable: true })
+  @IsOptional()
+  @IsEnum(ContactChannelType, { message: 'Canal no válido.' })
+  preferredChannel?: ContactChannelType | null;
 }

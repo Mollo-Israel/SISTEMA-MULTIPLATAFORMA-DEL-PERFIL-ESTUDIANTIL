@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  FiCheck, FiCopy, FiLink, FiMessageSquare, FiRefreshCw, FiSend, FiUserPlus, FiUsers, FiX,
+  FiAlertTriangle, FiCheck, FiCopy, FiEdit2, FiLink, FiMessageSquare, FiRefreshCw, FiSend, FiUserPlus, FiUsers, FiX,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
   collaborationService,
+  type ContactChannelType,
+  type ContactChannelView,
   type ContactView,
-  type ConversationView,
-  type MessageView,
   type PublicLinkView,
   type TeamNeedView,
   type TeamSuggestionsView,
@@ -30,13 +30,16 @@ const DISPONIBILIDAD: Record<string, string> = {
 /**
  * Colaboración del estudiante (§43 a §47).
  *
- * Una sola pantalla con cuatro pestañas porque las cuatro cosas son la misma
- * historia contada en orden: comparto mi perfil, alguien me contacta, formamos
- * un equipo, hablamos. Separarlas en cuatro entradas de menú obligaría a
- * recorrerlas para entender de qué va.
+ * Una sola pantalla con tres pestañas porque las tres cosas son la misma
+ * historia contada en orden: comparto mi perfil y cómo contactarme, alguien me
+ * contacta, formamos un equipo. Separarlas en tres entradas de menú obligaría
+ * a recorrerlas para entender de qué va.
+ *
+ * V2 §57 retiró el chat: la pestaña de mensajes ya no existe y cada contacto
+ * muestra los canales externos que la otra persona eligió compartir (§59).
  */
 export default function StudentCollaborationPage() {
-  const [tab, setTab] = useState<'enlace' | 'contactos' | 'equipos' | 'mensajes'>('enlace');
+  const [tab, setTab] = useState<'enlace' | 'contactos' | 'equipos'>('enlace');
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -53,14 +56,17 @@ export default function StudentCollaborationPage() {
           { key: 'enlace', label: 'Mi enlace y QR' },
           { key: 'contactos', label: 'Contactos' },
           { key: 'equipos', label: 'Equipos' },
-          { key: 'mensajes', label: 'Mensajes' },
         ]}
       />
 
-      {tab === 'enlace' && <MiEnlace toast={toast} confirm={confirm} />}
+      {tab === 'enlace' && (
+        <>
+          <MiEnlace toast={toast} confirm={confirm} />
+          <MisCanales toast={toast} />
+        </>
+      )}
       {tab === 'contactos' && <Contactos toast={toast} confirm={confirm} />}
       {tab === 'equipos' && <Equipos toast={toast} />}
-      {tab === 'mensajes' && <Mensajes toast={toast} />}
     </div>
   );
 }
@@ -169,6 +175,113 @@ function MiEnlace({ toast, confirm }: { toast: any; confirm: any }) {
 }
 
 // ---------------------------------------------------------------------------
+// V2 §59 · Canales de contacto
+// ---------------------------------------------------------------------------
+
+const CANALES: { channel: ContactChannelType; label: string; placeholder: string; help: string }[] = [
+  { channel: 'teams', label: 'Microsoft Teams', placeholder: 'tu.cuenta@est.univalle.edu', help: 'Tu cuenta de Teams (correo) o un enlace de teams.microsoft.com.' },
+  { channel: 'whatsapp', label: 'WhatsApp', placeholder: '+591 71234567', help: 'Con código de país.' },
+  { channel: 'linkedin', label: 'LinkedIn', placeholder: 'linkedin.com/in/tu-nombre', help: 'El enlace de tu perfil.' },
+  { channel: 'email', label: 'Correo de contacto', placeholder: 'nombre@correo.com', help: 'El que quieras compartir; el institucional no se muestra si no lo escribes aquí.' },
+  { channel: 'link', label: 'Otro enlace', placeholder: 'https://tu-portafolio.dev', help: 'Solo enlaces https.' },
+];
+
+function MisCanales({ toast }: { toast: any }) {
+  const [valores, setValores] = useState<Record<string, { value: string; isPublic: boolean }>>({});
+  const [errores, setErrores] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+
+  const aplicar = (lista: ContactChannelView[]) =>
+    setValores(Object.fromEntries(lista.map((c) => [c.channel, { value: c.value, isPublic: c.isPublic }])));
+
+  useEffect(() => {
+    collaborationService.myChannels().then(aplicar).catch((e) => toast.error(apiError(e)));
+    // eslint-disable-next-line
+  }, []);
+
+  const guardar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const lista = CANALES
+      .filter((c) => (valores[c.channel]?.value ?? '').trim())
+      .map((c) => ({ channel: c.channel, value: valores[c.channel].value.trim(), isPublic: !!valores[c.channel].isPublic }));
+    setGuardando(true);
+    setErrores({});
+    try {
+      aplicar(await collaborationService.saveChannels(lista));
+      toast.success('Canales guardados.', 'Tus contactos ya los ven.');
+    } catch (err: any) {
+      // El servidor indica el canal con problema: channels.<i>.value.
+      const fields: Record<string, string[]> = err?.response?.data?.fields ?? {};
+      const porCanal: Record<string, string> = {};
+      Object.entries(fields).forEach(([k, v]) => {
+        const idx = Number(k.split('.')[1]);
+        if (lista[idx]) porCanal[lista[idx].channel] = v[0];
+      });
+      setErrores(porCanal);
+      toast.error(apiError(err));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Card title="Cómo contactarte">
+      <p className="muted" style={{ marginTop: 0 }}>
+        Afinia no tiene chat: tus contactos te escriben por el canal que elijas. Todos son opcionales.
+        Lo que marques como público aparece también en tu perfil compartible.
+      </p>
+      <form onSubmit={guardar}>
+        {CANALES.map((c) => (
+          <div key={c.channel} className="field">
+            <label htmlFor={`canal-${c.channel}`}>{c.label}</label>
+            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                id={`canal-${c.channel}`}
+                style={{ flex: '1 1 240px' }}
+                value={valores[c.channel]?.value ?? ''}
+                placeholder={c.placeholder}
+                maxLength={300}
+                aria-invalid={!!errores[c.channel]}
+                onChange={(e) => setValores({ ...valores, [c.channel]: { value: e.target.value, isPublic: valores[c.channel]?.isPublic ?? false } })}
+              />
+              <label className="check-field" style={{ fontSize: '0.82rem' }}>
+                <input
+                  type="checkbox"
+                  checked={!!valores[c.channel]?.isPublic}
+                  disabled={!(valores[c.channel]?.value ?? '').trim()}
+                  onChange={(e) => setValores({ ...valores, [c.channel]: { value: valores[c.channel]?.value ?? '', isPublic: e.target.checked } })}
+                />
+                <span>Mostrar en mi perfil público</span>
+              </label>
+            </div>
+            {errores[c.channel]
+              ? <small className="field-error">{errores[c.channel]}</small>
+              : <small className="muted">{c.help}</small>}
+          </div>
+        ))}
+        <Button type="submit" loading={guardando}>Guardar canales</Button>
+      </form>
+    </Card>
+  );
+}
+
+function CanalesDe({ canales, preferido }: { canales: ContactChannelView[]; preferido: ContactChannelType | null }) {
+  if (canales.length === 0) return <span className="muted">No compartió canales</span>;
+  const orden = [...canales].sort((a, b) => Number(b.channel === preferido) - Number(a.channel === preferido));
+  return (
+    <div className="chip-row">
+      {orden.map((c) => (c.href ? (
+        <a key={c.channel} className={`chip ${c.channel === preferido ? 'on' : ''}`} href={c.href} target="_blank" rel="noopener noreferrer">
+          {c.label}
+        </a>
+      ) : (
+        <span key={c.channel} className="chip">{c.label}</span>
+      )))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // §45 · Contactos
 // ---------------------------------------------------------------------------
 
@@ -228,10 +341,33 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
     }
   };
 
+  const [editando, setEditando] = useState<string | null>(null);
+  const [nota, setNota] = useState<{ alias: string; context: string; preferredChannel: string }>({ alias: '', context: '', preferredChannel: '' });
+
+  const abrirNota = (c: ContactView) => {
+    setEditando(c.profileId);
+    setNota({ alias: c.note.alias ?? '', context: c.note.context ?? '', preferredChannel: c.note.preferredChannel ?? '' });
+  };
+
+  const guardarNota = async (c: ContactView) => {
+    try {
+      await collaborationService.saveContactNote(c.profileId, {
+        alias: nota.alias.trim() || null,
+        context: nota.context.trim() || null,
+        preferredChannel: (nota.preferredChannel || null) as ContactChannelType | null,
+      });
+      toast.success('Nota guardada.', 'Solo tú la ves.');
+      setEditando(null);
+      await cargar();
+    } catch (err) {
+      toast.error(apiError(err));
+    }
+  };
+
   const eliminar = async (c: ContactView) => {
     const ok = await confirm({
       title: `Deshacer el contacto con ${c.name}`,
-      message: 'Dejarán de poder escribirse. Cualquiera de los dos puede volver a solicitarlo.',
+      message: 'Dejarán de ver sus canales de contacto. Cualquiera de los dos puede volver a solicitarlo.',
       confirmLabel: 'Deshacer',
       tone: 'danger',
     });
@@ -340,22 +476,60 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
           <div className="scroll-x">
             <table>
               <thead>
-                <tr><th>Estudiante</th><th>Semestre</th><th>Disponibilidad</th><th /></tr>
+                <tr><th>Estudiante</th><th>Semestre</th><th>Disponibilidad</th><th>Contactar</th><th /></tr>
               </thead>
               <tbody>
                 {contactos.map((c) => (
-                  <tr key={c.contactId}>
-                    <td>{c.name}</td>
-                    <td className="muted">{c.semester ?? '—'}</td>
-                    <td className="muted">
-                      {DISPONIBILIDAD[c.availability ?? 'unspecified']}
-                    </td>
-                    <td>
-                      <Button size="sm" variant="danger" onClick={() => eliminar(c)}>
-                        Deshacer
-                      </Button>
-                    </td>
-                  </tr>
+                  <Fragment key={c.contactId}>
+                    <tr>
+                      <td>
+                        {c.note.alias ? <><strong>{c.note.alias}</strong><div className="muted small">{c.name}</div></> : c.name}
+                        {c.note.context && <div className="muted small">{c.note.context}</div>}
+                      </td>
+                      <td className="muted">{c.semester ?? '—'}</td>
+                      <td className="muted">
+                        {DISPONIBILIDAD[c.availability ?? 'unspecified']}
+                      </td>
+                      <td><CanalesDe canales={c.channels} preferido={c.note.preferredChannel} /></td>
+                      <td>
+                        <div className="flex" style={{ gap: '0.3rem' }}>
+                          <Button size="sm" variant="ghost" icon={<FiEdit2 size={13} />} onClick={() => abrirNota(c)}>
+                            Nota
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => eliminar(c)}>
+                            Deshacer
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                    {editando === c.profileId && (
+                      <tr>
+                        <td colSpan={5}>
+                          <div className="grid-2">
+                            <div className="field">
+                              <label>Alias</label>
+                              <input value={nota.alias} maxLength={60} onChange={(e) => setNota({ ...nota, alias: e.target.value })} placeholder="Ana del lab de redes" />
+                            </div>
+                            <div className="field">
+                              <label>Canal preferido</label>
+                              <select value={nota.preferredChannel} onChange={(e) => setNota({ ...nota, preferredChannel: e.target.value })}>
+                                <option value="">Sin preferencia</option>
+                                {c.channels.map((k) => <option key={k.channel} value={k.channel}>{k.label}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="field">
+                            <label>Contexto</label>
+                            <input value={nota.context} maxLength={300} onChange={(e) => setNota({ ...nota, context: e.target.value })} placeholder="Nos conocimos en el hackatón 2026." />
+                          </div>
+                          <div className="flex" style={{ gap: '0.4rem' }}>
+                            <Button size="sm" onClick={() => guardarNota(c)}>Guardar nota</Button>
+                            <Button size="sm" variant="ghost" onClick={() => setEditando(null)}>Cancelar</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -379,6 +553,11 @@ function Equipos({ toast }: { toast: any }) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const [form, setForm] = useState({ purpose: '', maxMembers: 4, skillIds: [] as string[] });
   const [creando, setCreando] = useState(false);
+  /** Nombre en edición: del equipo nuevo (clave = necesidad) o de uno existente. */
+  const [nombres, setNombres] = useState<Record<string, string>>({});
+  const [renombrando, setRenombrando] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  const equipoDe = (needId: string) => equipos.find((t) => t.needId === needId) ?? null;
 
   const cargar = async () => {
     try {
@@ -429,6 +608,52 @@ function Equipos({ toast }: { toast: any }) {
       setSugerencias(await collaborationService.teamSuggestions(needId));
     } catch (e) {
       toast.error(apiError(e));
+    }
+  };
+
+  /** §46: el equipo nace de una necesidad propia; §44: su nombre se modera. */
+  const formarEquipo = async (needId: string) => {
+    setOcupado(needId);
+    try {
+      const t = await collaborationService.createTeam(needId, (nombres[needId] ?? '').trim());
+      if (t.nameStatus === 'flagged') {
+        toast.error('El equipo se creó, pero su nombre quedó marcado.', 'Corrígelo para poder invitar.');
+      } else {
+        toast.success('Equipo creado.', 'Ahora puedes invitar a quien complemente.');
+      }
+      await cargar();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const renombrar = async (t: TeamView) => {
+    setOcupado(t.id);
+    try {
+      const r = await collaborationService.renameTeam(t.id, (nombres[t.id] ?? '').trim());
+      if (r.nameStatus === 'flagged') toast.error('El nombre nuevo también quedó marcado.', r.nameFlagReason ?? undefined);
+      else toast.success('Nombre actualizado.');
+      setRenombrando(null);
+      await cargar();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  /** §47: invitar lo decide una persona, candidato por candidato. */
+  const invitar = async (teamId: string, profileId: string) => {
+    setOcupado(profileId);
+    try {
+      await collaborationService.inviteToTeam(teamId, profileId);
+      toast.success('Invitación enviada.');
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(null);
     }
   };
 
@@ -532,6 +757,27 @@ function Equipos({ toast }: { toast: any }) {
                 <span key={s.skillId} className="chip">{s.name}</span>
               ))}
             </div>
+            {!equipoDe(n.id) && (
+              <div className="flex mt" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+                <input
+                  aria-label="Nombre del equipo"
+                  placeholder="Nombre del equipo"
+                  maxLength={60}
+                  value={nombres[n.id] ?? ''}
+                  onChange={(e) => setNombres({ ...nombres, [n.id]: e.target.value })}
+                  style={{ maxWidth: 280 }}
+                />
+                <Button
+                  size="sm"
+                  icon={<FiUsers size={13} />}
+                  loading={ocupado === n.id}
+                  disabled={(nombres[n.id] ?? '').trim().length < 3}
+                  onClick={() => formarEquipo(n.id)}
+                >
+                  Formar equipo
+                </Button>
+              </div>
+            )}
             <Button size="sm" variant="secondary" onClick={() => verCandidatos(n.id)}>
               {abierta === n.id ? 'Ocultar candidatos' : 'Ver candidatos'}
             </Button>
@@ -552,7 +798,20 @@ function Equipos({ toast }: { toast: any }) {
                         <strong>{c.name}</strong>
                         {c.semester && <span className="muted"> · {c.semester}.º semestre</span>}
                       </div>
-                      <Badge tone="bordo">{Math.round(c.score)}/100</Badge>
+                      <div className="flex" style={{ gap: '0.4rem' }}>
+                        <Badge tone="bordo">{Math.round(c.score)}/100</Badge>
+                        {equipoDe(n.id) && equipoDe(n.id)!.nameStatus === 'ok' && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon={<FiUserPlus size={13} />}
+                            loading={ocupado === c.profileId}
+                            onClick={() => invitar(equipoDe(n.id)!.id, c.profileId)}
+                          >
+                            Invitar
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <ul className="plain-list">
                       {c.reasons.map((r, i) => (
@@ -578,6 +837,29 @@ function Equipos({ toast }: { toast: any }) {
               </Badge>
             </div>
             {t.purpose && <p className="muted" style={{ margin: 0 }}>{t.purpose}</p>}
+            {t.nameStatus === 'flagged' && (
+              <p className="notice-error" role="alert">
+                <FiAlertTriangle size={13} /> El nombre quedó marcado para revisión y no se muestra a otras
+                personas hasta corregirlo.{t.nameFlagReason ? ` ${t.nameFlagReason}` : ''}
+              </p>
+            )}
+            {t.isOwner && (renombrando === t.id ? (
+              <div className="flex mt" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+                <input
+                  aria-label="Nuevo nombre del equipo"
+                  maxLength={60}
+                  value={nombres[t.id] ?? t.name}
+                  onChange={(e) => setNombres({ ...nombres, [t.id]: e.target.value })}
+                  style={{ maxWidth: 280 }}
+                />
+                <Button size="sm" loading={ocupado === t.id} onClick={() => renombrar(t)}>Guardar</Button>
+                <Button size="sm" variant="ghost" onClick={() => setRenombrando(null)}>Cancelar</Button>
+              </div>
+            ) : (
+              <Button size="sm" variant="ghost" icon={<FiEdit2 size={13} />} onClick={() => setRenombrando(t.id)}>
+                {t.nameStatus === 'flagged' ? 'Corregir nombre' : 'Cambiar nombre'}
+              </Button>
+            ))}
             <div className="grid-2 mt">
               <div>
                 <span className="muted">Cubierto</span>
@@ -609,114 +891,5 @@ function Equipos({ toast }: { toast: any }) {
         ))}
       </Card>
     </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// §42 · Mensajes
-// ---------------------------------------------------------------------------
-
-function Mensajes({ toast }: { toast: any }) {
-  const [conversaciones, setConversaciones] = useState<ConversationView[] | null>(null);
-  const [abierta, setAbierta] = useState<string | null>(null);
-  const [mensajes, setMensajes] = useState<MessageView[]>([]);
-  const [texto, setTexto] = useState('');
-  const [enviando, setEnviando] = useState(false);
-
-  useEffect(() => {
-    collaborationService
-      .conversations()
-      .then(setConversaciones)
-      .catch((e) => { toast.error(apiError(e)); setConversaciones([]); });
-    // eslint-disable-next-line
-  }, []);
-
-  const abrir = async (id: string) => {
-    setAbierta(id);
-    try {
-      setMensajes(await collaborationService.messages(id));
-    } catch (e) {
-      toast.error(apiError(e));
-    }
-  };
-
-  const enviar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!abierta || !texto.trim()) return;
-    setEnviando(true);
-    try {
-      await collaborationService.sendMessage(abierta, texto.trim());
-      setTexto('');
-      setMensajes(await collaborationService.messages(abierta));
-    } catch (err) {
-      toast.error(apiError(err));
-    } finally {
-      setEnviando(false);
-    }
-  };
-
-  const actual = useMemo(
-    () => (conversaciones ?? []).find((c) => c.id === abierta) ?? null,
-    [conversaciones, abierta],
-  );
-
-  return (
-    <Card title="Conversaciones">
-      <p className="muted" style={{ marginTop: 0 }}>
-        Solo con tus contactos y con los equipos a los que perteneces. Lo que escribas aquí no
-        cuenta para tu afinidad ni sirve como prueba de lo que hiciste: eso vive en la bitácora de
-        cada proyecto.
-      </p>
-
-      {!conversaciones && <Loading />}
-      {conversaciones && conversaciones.length === 0 && (
-        <EmptyState
-          icon={<FiMessageSquare size={22} />}
-          message="Todavía no tienes conversaciones. Acepta un contacto o súmate a un equipo."
-        />
-      )}
-
-      <div className="mensajeria">
-        <div className="mensajeria-lista">
-          {(conversaciones ?? []).map((c) => (
-            <button
-              type="button"
-              key={c.id}
-              className={`conversacion ${abierta === c.id ? 'on' : ''}`}
-              onClick={() => abrir(c.id)}
-            >
-              <strong>{c.title}</strong>
-              <span className="muted">{c.kind === 'team' ? 'Equipo' : 'Directo'}</span>
-            </button>
-          ))}
-        </div>
-
-        {actual && (
-          <div className="mensajeria-hilo">
-            <h4 style={{ marginTop: 0 }}>{actual.title}</h4>
-            <div className="mensajes">
-              {mensajes.map((m) => (
-                <div key={m.id} className={`mensaje ${m.mine ? 'mio' : ''}`}>
-                  {!m.mine && <span className="muted">{m.sender.name}</span>}
-                  <p>{m.body}</p>
-                </div>
-              ))}
-              {mensajes.length === 0 && <p className="muted">Sin mensajes todavía.</p>}
-            </div>
-            <form onSubmit={enviar} className="flex" style={{ gap: '0.5rem' }}>
-              <input
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                placeholder="Escribe un mensaje…"
-                maxLength={2000}
-              />
-              <Button type="submit" loading={enviando} icon={<FiSend size={15} />}>
-                Enviar
-              </Button>
-            </form>
-          </div>
-        )}
-      </div>
-    </Card>
   );
 }

@@ -1067,3 +1067,11 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 /* V2 §27: casilla dentro de una fila de formulario. */
 .check-field { display: flex; flex-direction: row; align-items: center; gap: 0.5rem; cursor: pointer; }
 .check-field input { width: auto; }
+
+/* V2 §43: sugerencias de IA, siempre separadas de lo guardado. */
+.ai-assist { margin: 0.3rem 0; }
+.ai-assist-card {
+  margin-top: 0.4rem; padding: 0.6rem 0.75rem; border-radius: 10px;
+  border: 1px dashed var(--bordo); background: var(--bordo-100);
+}
+.link-button { background: none; border: 0; padding: 0; color: var(--bordo); text-decoration: underline; cursor: pointer; font: inherit; }

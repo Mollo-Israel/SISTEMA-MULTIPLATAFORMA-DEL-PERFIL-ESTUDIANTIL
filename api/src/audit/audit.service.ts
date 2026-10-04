@@ -50,6 +50,11 @@ export const AuditEventType = {
   CONFIG_CHANGED: 'CONFIG_CHANGED',
   /** V2 §23.3: el administrador guardó una habilidad fuera del área sugerida. */
   SKILL_CLASSIFICATION_OVERRIDE: 'SKILL_CLASSIFICATION_OVERRIDE',
+  /** V2 §43, §69: asistente de IA (sin el contenido). */
+  AI_SUGGESTION_CREATED: 'AI_SUGGESTION_CREATED',
+  AI_SUGGESTION_ACCEPTED: 'AI_SUGGESTION_ACCEPTED',
+  /** V2 §44: nombre de equipo rechazado o marcado. */
+  TEAM_NAME_MODERATED: 'TEAM_NAME_MODERATED',
 } as const;
 
 export type AuditEventTypeValue = (typeof AuditEventType)[keyof typeof AuditEventType];

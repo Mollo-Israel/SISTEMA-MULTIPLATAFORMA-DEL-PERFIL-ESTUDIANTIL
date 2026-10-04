@@ -9,9 +9,6 @@ import { StudentSkillInterest } from '../entities/student-skill-interest.entity'
 import {
   Contact,
   ContactRequest,
-  Conversation,
-  ConversationMember,
-  Message,
   Team,
   TeamInvitation,
   TeamMember,
@@ -22,8 +19,9 @@ import {
 import { PublicProfileService } from './public-profile.service';
 import { ContactsService } from './contacts.service';
 import { TeamsService } from './teams.service';
-import { MessagingService } from './messaging.service';
+import { ContactNote, StudentContactChannel } from '../entities/contact-channel.entity';
 import { CollaborationController } from './collaboration.controller';
+import { AiModule } from '../ai/ai.module';
 
 /**
  * Colaboración entre estudiantes (§42 a §47, §133).
@@ -51,13 +49,14 @@ import { CollaborationController } from './collaboration.controller';
       Team,
       TeamMember,
       TeamInvitation,
-      Conversation,
-      ConversationMember,
-      Message,
+      StudentContactChannel,
+      ContactNote,
     ]),
+    // §44: la IA es la segunda barrera de los nombres de equipo, nunca la única.
+    AiModule,
   ],
   controllers: [CollaborationController],
-  providers: [PublicProfileService, ContactsService, TeamsService, MessagingService],
+  providers: [PublicProfileService, ContactsService, TeamsService],
   exports: [ContactsService, TeamsService],
 })
 export class CollaborationModule {}

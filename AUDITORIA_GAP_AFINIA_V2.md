@@ -159,9 +159,9 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 
 | Requisito | Estado | Observación |
 |---|---|---|
-| `AiAssistancePort`, `AI_PROVIDER=none` funcional | FALTANTE | |
-| Tareas, registro de ejecución, aceptación explícita | FALTANTE | |
-| Moderación de nombres de equipo (reglas + lista configurable + IA opcional) | FALTANTE | |
+| `AiAssistancePort`, `AI_PROVIDER=none` funcional | IMPLEMENTADO | BATCH 8 (`none` y `openai_compatible`) |
+| Tareas, registro de ejecución, aceptación explícita | IMPLEMENTADO | BATCH 8 (`ai_assistance_runs`, `POST /ai/runs/:id/accept`) |
+| Moderación de nombres de equipo (reglas + lista configurable + IA opcional) | IMPLEMENTADO | BATCH 8 |
 
 ### Afinidad, respaldo, recálculo (§45–§52, §81)
 
@@ -189,10 +189,10 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 | Requisito | Estado | Observación |
 |---|---|---|
 | Contactos con solicitud/aceptación | IMPLEMENTADO | |
-| Alias, contexto, canal preferido en contacto | PARCIAL | |
-| Chat | OBSOLETO | C7 |
+| Alias, contexto, canal preferido en contacto | IMPLEMENTADO | BATCH 11 (`contact_notes`, personal por dueño) |
+| Chat | RETIRADO | C7 · BATCH 11: rutas 410 `CHAT_RETIRED`, sin UI, tablas conservadas con comentario y sin acceso |
 | Perfil público opt-in, slug rotable, QR solo URL, sin datos sensibles | IMPLEMENTADO | |
-| Canales de contacto (Teams, WhatsApp, LinkedIn, correo de contacto, enlace) | FALTANTE | |
+| Canales de contacto (Teams, WhatsApp, LinkedIn, correo de contacto, enlace) | IMPLEMENTADO | BATCH 11 (validados, enlace seguro, públicos solo si se marcan) |
 | Perfil dinámico vs trayectoria separados | PARCIAL | revisar textos de UI |
 
 ### CV, paneles, ayuda, UX, móvil (§61–§67)

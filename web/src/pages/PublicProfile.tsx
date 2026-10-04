@@ -148,6 +148,16 @@ export default function PublicProfilePage() {
         </Card>
       )}
 
+      {(perfil.contactChannels ?? []).length > 0 && (
+        <Card title="Contacto">
+          <div className="chip-row">
+            {perfil.contactChannels!.map((c) => (c.href ? (
+              <a key={c.channel} className="chip" href={c.href} target="_blank" rel="noopener noreferrer">{c.label}</a>
+            ) : null))}
+          </div>
+        </Card>
+      )}
+
       <p className="muted" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
         Afinia · Perfil compartible. Solo se muestra lo que su dueño decidió publicar.
       </p>

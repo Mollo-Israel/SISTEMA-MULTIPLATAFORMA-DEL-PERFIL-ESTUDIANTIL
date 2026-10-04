@@ -19,6 +19,7 @@ import {
   TeamInvitationStatus,
   TeamNeedStatus,
   TeamStatus,
+  TeamNameStatus,
 } from '@perfil/shared';
 import { AcademicArea } from './academic-area.entity';
 import { Activity } from './activity.entity';
@@ -288,6 +289,13 @@ export class Team {
     default: TeamStatus.FORMING,
   })
   status: TeamStatus;
+
+  /** V2 §44: un nombre marcado no se comparte hasta corregirlo. */
+  @Column({ name: 'name_status', type: 'varchar', length: 20, default: TeamNameStatus.OK })
+  nameStatus: TeamNameStatus;
+
+  @Column({ name: 'name_flag_reason', type: 'varchar', length: 300, nullable: true })
+  nameFlagReason: string | null;
 
   @OneToMany(() => TeamMember, (m) => m.team)
   members: TeamMember[];

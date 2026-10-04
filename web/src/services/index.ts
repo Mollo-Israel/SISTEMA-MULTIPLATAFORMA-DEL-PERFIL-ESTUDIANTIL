@@ -254,7 +254,8 @@ export interface PublicProfileView {
   collaborationModes?: string[];
   collaborationInterests?: string[];
   areas?: { area: string | null; score?: number; supportLevel?: string }[];
-  skills?: { name: string; level: string }[];
+  /** Solo tecnologías respaldadas, con su procedencia (V2 §22). */
+  skills?: { name: string; sources?: string[] }[];
   projects?: {
     title: string;
     description: string | null;
@@ -267,6 +268,8 @@ export interface PublicProfileView {
     averageSupport: number;
     calculatedAt: string;
   } | null;
+  /** Solo los canales que su dueño marcó como públicos (V2 §58, §59). */
+  contactChannels?: { channel: string; label: string; href: string | null }[];
 }
 
 export interface PublicLinkView {
@@ -280,6 +283,24 @@ export interface PublicLinkView {
   qrPayload: string;
 }
 
+export type ContactChannelType = 'teams' | 'whatsapp' | 'linkedin' | 'email' | 'link';
+
+/** Un canal de contacto ya validado, con su enlace seguro (V2 §59). */
+export interface ContactChannelView {
+  channel: ContactChannelType;
+  label: string;
+  value: string;
+  href: string | null;
+  isPublic: boolean;
+}
+
+/** Lo que el usuario anota de un contacto; solo lo ve él (V2 §56). */
+export interface ContactNoteView {
+  alias: string | null;
+  context: string | null;
+  preferredChannel: ContactChannelType | null;
+}
+
 export interface ContactView {
   contactId: string;
   profileId: string;
@@ -288,6 +309,8 @@ export interface ContactView {
   availability: string | null;
   source: string;
   since: string;
+  channels: ContactChannelView[];
+  note: ContactNoteView;
 }
 
 export interface TeamNeedView {
@@ -321,6 +344,10 @@ export interface TeamSuggestionsView {
 export interface TeamView {
   id: string;
   name: string;
+  /** V2 §44: `flagged` = no se comparte hasta corregirlo. */
+  nameStatus: 'ok' | 'flagged';
+  nameFlagReason: string | null;
+  needId: string | null;
   status: string;
   purpose: string | null;
   isOwner: boolean;
@@ -330,23 +357,6 @@ export interface TeamView {
   missingSkills: { skillId: string; name: string | null }[];
   openings: number;
   members: { profileId: string; name: string; role: string | null; availability: string | null }[];
-}
-
-export interface ConversationView {
-  id: string;
-  kind: 'direct' | 'team';
-  teamId: string | null;
-  title: string;
-  participants: { profileId: string; name: string }[];
-  lastMessageAt: string | null;
-}
-
-export interface MessageView {
-  id: string;
-  body: string;
-  createdAt: string;
-  mine: boolean;
-  sender: { profileId: string; name: string };
 }
 
 export const collaborationService = {
@@ -384,20 +394,22 @@ export const collaborationService = {
   createTeam: (needId: string, name: string) =>
     api.post(`/team-needs/${needId}/team`, { name }).then((r) => r.data),
   myTeams: () => api.get<TeamView[]>('/teams/mine').then((r) => r.data),
+  renameTeam: (teamId: string, name: string) =>
+    api.patch<{ id: string; name: string; nameStatus: 'ok' | 'flagged'; nameFlagReason: string | null }>(
+      `/teams/${teamId}`, { name },
+    ).then((r) => r.data),
   inviteToTeam: (teamId: string, invitedProfileId: string, message?: string) =>
     api.post(`/teams/${teamId}/invitations`, { invitedProfileId, message }).then((r) => r.data),
   myTeamInvitations: () => api.get<any[]>('/teams/invitations/mine').then((r) => r.data),
   decideTeamInvitation: (id: string, decision: 'accept' | 'decline') =>
     api.patch(`/teams/invitations/${id}`, { decision }).then((r) => r.data),
 
-  // §42
-  conversations: () => api.get<ConversationView[]>('/conversations').then((r) => r.data),
-  openDirect: (profileId: string) =>
-    api.post<ConversationView>('/conversations/direct', { profileId }).then((r) => r.data),
-  messages: (id: string) =>
-    api.get<MessageView[]>(`/conversations/${id}/messages`).then((r) => r.data),
-  sendMessage: (id: string, body: string) =>
-    api.post<MessageView>(`/conversations/${id}/messages`, { body }).then((r) => r.data),
+  // V2 §59 y §56 (el chat se retiró, §57)
+  myChannels: () => api.get<ContactChannelView[]>('/profiles/me/contact-channels').then((r) => r.data),
+  saveChannels: (channels: { channel: ContactChannelType; value: string; isPublic: boolean }[]) =>
+    api.put<ContactChannelView[]>('/profiles/me/contact-channels', { channels }).then((r) => r.data),
+  saveContactNote: (profileId: string, note: Partial<ContactNoteView>) =>
+    api.patch<ContactNoteView>(`/contacts/${profileId}/note`, note).then((r) => r.data),
 };
 
 /** Gamificación (§66). Los puntos reconocen hechos; no alimentan la afinidad. */
@@ -1012,4 +1024,39 @@ export const adminService = {
     api.post<GamificationCriterion>('/gamification-criteria', data).then((r) => r.data),
   updateCriterion: (id: string, data: Record<string, unknown>) =>
     api.patch<GamificationCriterion>(`/gamification-criteria/${id}`, data).then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// V2 §43 · Asistente de IA (opcional). Sugiere; nada cambia hasta guardarlo.
+// ---------------------------------------------------------------------------
+export type AiTask =
+  | 'TAG_SUGGESTION'
+  | 'EVIDENCE_SUMMARY'
+  | 'INCONSISTENCY_EXPLANATION'
+  | 'CV_TEXT_ASSIST'
+  | 'ANALYTICS_NARRATIVE';
+
+export interface AiStatus {
+  enabled: boolean;
+  provider: string;
+  model: string | null;
+  tasks: { task: AiTask; label: string }[];
+  disclaimer: string;
+}
+
+export interface AiSuggestionResult {
+  available: boolean;
+  ok: boolean;
+  source?: 'ai' | 'rule';
+  runId?: string;
+  result?: Record<string, any>;
+  message?: string;
+  disclaimer?: string;
+}
+
+export const aiService = {
+  status: () => api.get<AiStatus>('/ai/status').then((r) => r.data),
+  suggest: (body: { task: AiTask } & Record<string, unknown>) =>
+    api.post<AiSuggestionResult>('/ai/suggestions', body).then((r) => r.data),
+  accept: (runId: string) => api.post(`/ai/runs/${runId}/accept`).then((r) => r.data),
 };
