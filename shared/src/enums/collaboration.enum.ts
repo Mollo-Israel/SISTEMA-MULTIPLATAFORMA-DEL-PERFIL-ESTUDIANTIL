@@ -63,11 +63,10 @@ export enum TeamInvitationStatus {
 }
 
 /**
- * Clase de conversación (§42).
+ * Clase de conversación del chat **retirado** (V2 §57).
  *
- * `DIRECT` exige contacto aceptado; `TEAM`, pertenencia aceptada al equipo. No
- * hay una tercera: una conversación sin relación previa detrás sería un canal
- * abierto para escribir a cualquiera.
+ * Solo la usa la entidad de las conversaciones históricas, que se conservan
+ * sin acceso funcional. No se crean conversaciones nuevas.
  */
 export enum ConversationKind {
   DIRECT = 'direct',
@@ -122,8 +121,6 @@ export const PUBLIC_SLUG_LENGTH = 12;
  */
 export const PUBLIC_SLUG_ALPHABET = '23456789bcdfghjkmnpqrstvwxyz';
 
-/** Límite de un mensaje (§42). Lo bastante para hablar, no para un informe. */
-export const MESSAGE_MAX_LENGTH = 2000;
 
 /**
  * Canales de contacto externos (V2 §59). Afinia no tiene chat (§57): enlaza al

@@ -459,3 +459,34 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** prueba en emulador/dispositivo Android con Maestro; Firefox en Playwright (`npx playwright install firefox`); SUS con usuarios reales; migraciones de versión mayor de NestJS y React Router.
 
 **Riesgos:** el listado de actividades no está paginado en el servidor; con los volúmenes reales (decenas por semestre) no es problema, y la vista mínima con compresión lo deja en una fracción. Si creciera, paginar con `limit`/`offset` y llevar la búsqueda de la web al servidor.
+
+## BATCH 17 — Limpieza y documentación
+
+**Estado:** completo
+
+**Objetivo:** §80, §86 (BATCH 17), §88 punto 32.
+
+**Cambios:**
+- Código muerto: estilos del chat retirado, la constante `MESSAGE_MAX_LENGTH` y el DTO del nivel autodeclarado (`set-skills.dto.ts`, sin uso desde que la ruta responde 410). `ConversationKind` se conserva solo para la entidad de las conversaciones históricas, y lo dice.
+- Swagger: las 228 rutas tienen resumen (faltaban 27) y todos los controladores tienen etiqueta.
+- `README.md` reescrito para la V2: roles y flujo actuales, sin registro público ni chat, variables nuevas, todas las suites y herramientas (`test:unit`, `test:v2`, `test:ai`, `test:web`, `test:load`, `test:security`).
+- `docs/EL_SISTEMA_COMPLETO.md` reescrito: describía la etapa del 70 % (registro público, nivel de habilidad, afinidad relativa, chat). §80: la documentación no describe lo que no existe.
+- `docs/MATRIZ_TRAZABILIDAD_V2.md`: RF01–RF25 y RNF01–RNF10 → caso de uso → módulo → rutas → pantallas → pruebas → evidencia.
+- `docs/CAMBIOS_DOCUMENTO_GRADO_V2.md`: qué cambiar en el documento de grado, sección por sección (actores, reglas de negocio con texto propuesto, correspondencia de RF, RNF, casos de uso, diagramas de clases, secuencia, contexto, componentes y despliegue). **El `.docx` no se tocó**; hay respaldo en `docs/respaldo-documento/`.
+- `AUDITORIA_GAP_AFINIA_V2.md`: cada fila con su estado final; queda una sola PARCIAL (emulador Android).
+
+**Migraciones:** ninguna.
+
+**Pruebas:** regresión final: 19 suites, 1406 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 63, B9 49, B10 42, B11 46, QA 74, V2 153, IA 37, WEB 22) y 33 unitarias. API, web y móvil compilan.
+
+**Regresiones:** ninguna.
+
+**Pendientes (de toda la V2):**
+1. Prueba en emulador o dispositivo Android con Maestro (sin SDK en esta máquina; flujo listo en `mobile/.maestro/`).
+2. Firefox en Playwright (`npx playwright install firefox`).
+3. Evaluación SUS con usuarios.
+4. Migraciones de versión mayor: NestJS 10 → 11/12 (vulnerabilidades de `multer`, `js-yaml`, `lodash` en dependencias) y React Router 6 → 7.
+5. Aplicar al documento de grado los cambios de `docs/CAMBIOS_DOCUMENTO_GRADO_V2.md` (decisión de los autores).
+6. Confirmar con el propietario la extensión de retos y recompensas (C9).
+
+**Riesgos:** ninguno nuevo.

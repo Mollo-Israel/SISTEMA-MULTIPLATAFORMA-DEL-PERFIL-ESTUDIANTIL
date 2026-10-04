@@ -34,6 +34,7 @@ export class ProfilesController {
   constructor(private readonly profilesService: ProfilesService) {}
 
   @Get('students')
+  @ApiOperation({ summary: 'Estudiantes que el usuario puede consultar (alcance docente).' })
   @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   listStudents(@CurrentUser() user: AuthenticatedUser, @Query('search') search?: string) {
     return this.profilesService.listStudents(user, search);
@@ -52,12 +53,14 @@ export class ProfilesController {
   }
 
   @Post('me')
+  @ApiOperation({ summary: 'Crea el perfil del estudiante autenticado.' })
   @Roles(RolNombre.STUDENT)
   createMyProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateProfileDto) {
     return this.profilesService.createMyProfile(user.userId, dto);
   }
 
   @Get('me')
+  @ApiOperation({ summary: 'Perfil del estudiante autenticado.' })
   @Roles(RolNombre.STUDENT)
   getMyProfile(@CurrentUser() user: AuthenticatedUser) {
     return this.profilesService.getOwnProfile(user.userId);
@@ -277,12 +280,14 @@ export class ProfilesController {
   }
 
   @Get('me/summary')
+  @ApiOperation({ summary: 'Perfil dinámico: tecnologías respaldadas, intereses y trayectoria.' })
   @Roles(RolNombre.STUDENT)
   getMySummary(@CurrentUser() user: AuthenticatedUser) {
     return this.profilesService.getSummary(user.userId);
   }
 
   @Get(':studentId/allowed')
+  @ApiOperation({ summary: 'Perfil permitido de un estudiante del alcance del docente.' })
   @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   getAllowedView(
     @CurrentUser() user: AuthenticatedUser,

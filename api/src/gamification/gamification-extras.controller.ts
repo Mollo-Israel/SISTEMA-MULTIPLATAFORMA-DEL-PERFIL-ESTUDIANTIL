@@ -196,6 +196,7 @@ export class GamificationExtrasController {
   }
 
   @Patch('challenges/:id')
+  @ApiOperation({ summary: 'Actualiza un reto.' })
   @Roles(...PERSONAL)
   updateChallenge(
     @CurrentUser() user: AuthenticatedUser,
@@ -237,12 +238,14 @@ export class GamificationExtrasController {
   }
 
   @Post('rewards')
+  @ApiOperation({ summary: 'Crea una recompensa canjeable.' })
   @Roles(...PERSONAL)
   createReward(@CurrentUser() user: AuthenticatedUser, @Body() dto: RewardDto) {
     return this.extras.createReward(user, dto);
   }
 
   @Patch('rewards/:id')
+  @ApiOperation({ summary: 'Actualiza una recompensa canjeable.' })
   @Roles(...PERSONAL)
   updateReward(
     @CurrentUser() user: AuthenticatedUser,

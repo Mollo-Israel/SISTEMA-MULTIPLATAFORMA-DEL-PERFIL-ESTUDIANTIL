@@ -279,6 +279,7 @@ export class ProjectsController {
   }
 
   @Delete(':id/evidences/:evidenceId')
+  @ApiOperation({ summary: 'Quita una evidencia del proyecto.' })
   @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
   @HttpCode(204)
   removeEvidence(

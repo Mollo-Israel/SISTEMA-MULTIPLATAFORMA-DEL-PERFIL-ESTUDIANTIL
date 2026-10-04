@@ -44,11 +44,13 @@ export class UsersController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Detalle de una cuenta.' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Actualiza datos de una cuenta (el código universitario no se borra).' })
   update(
     @CurrentUser() admin: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

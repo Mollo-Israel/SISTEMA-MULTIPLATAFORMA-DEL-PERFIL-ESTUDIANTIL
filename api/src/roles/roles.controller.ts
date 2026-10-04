@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesService } from './roles.service';
@@ -11,6 +11,7 @@ export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @Get()
+  @ApiOperation({ summary: 'Roles fijos del sistema.' })
   @Roles(RolNombre.ADMIN)
   findAll() {
     return this.rolesService.findAll();

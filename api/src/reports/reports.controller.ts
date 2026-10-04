@@ -19,18 +19,21 @@ export class ReportsController {
   // ---------- Docente ----------
 
   @Get('teacher/overview')
+  @ApiOperation({ summary: 'Panel académico del docente, con resumen por semestre (V2 §62).' })
   @Roles(RolNombre.TEACHER, RolNombre.ADMIN)
   teacherOverview(@CurrentUser() user: AuthenticatedUser) {
     return this.reportsService.teacherOverview(user);
   }
 
   @Get('teacher/affinity-summary')
+  @ApiOperation({ summary: 'Afinidad agregada de los semestres del docente.' })
   @Roles(RolNombre.TEACHER, RolNombre.ADMIN)
   teacherAffinitySummary(@CurrentUser() user: AuthenticatedUser) {
     return this.reportsService.teacherAffinitySummary(user);
   }
 
   @Get('teacher/projects-summary')
+  @ApiOperation({ summary: 'Proyectos de los semestres del docente, agregados.' })
   @Roles(RolNombre.TEACHER, RolNombre.ADMIN)
   teacherProjectsSummary(@CurrentUser() user: AuthenticatedUser) {
     return this.reportsService.teacherProjectsSummary(user);
@@ -47,12 +50,14 @@ export class ReportsController {
   // ---------- Director ----------
 
   @Get('director/overview')
+  @ApiOperation({ summary: 'Panel general de Dirección.' })
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   directorOverview() {
     return this.reportsService.directorOverview();
   }
 
   @Get('director/participation-by-semester')
+  @ApiOperation({ summary: 'Participación por semestre (agregada).' })
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   directorParticipationBySemester() {
     return this.reportsService.directorParticipationBySemester();
@@ -81,6 +86,7 @@ export class ReportsController {
   }
 
   @Get('director/projects-summary')
+  @ApiOperation({ summary: 'Proyectos de la carrera, agregados.' })
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   directorProjectsSummary() {
     return this.reportsService.directorProjectsSummary();

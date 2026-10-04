@@ -59,10 +59,10 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 | Requisito | Estado | Observación |
 |---|---|---|
 | Puerto interno 5432, host por `POSTGRES_PORT` | IMPLEMENTADO | `docker-compose.yml` |
-| `.env.example` sugiere 5435 | INCORRECTO | sugiere 5432 |
-| Scripts con `--env-file .env` | FALTANTE | |
-| `db:wait`, `db:rebuild` | FALTANTE | existen `db:up/down/reset/logs` |
-| Sin hardcodes (puertos, dominios, TTL, IA, GitHub) | PARCIAL | faltan `AI_*`, `HELP_VIDEO_URL` |
+| `.env.example` sugiere 5435 | IMPLEMENTADO | BATCH 1 |
+| Scripts con `--env-file .env` | IMPLEMENTADO | BATCH 1 |
+| `db:wait`, `db:rebuild` | IMPLEMENTADO | BATCH 1 |
+| Sin hardcodes (puertos, dominios, TTL, IA, GitHub) | IMPLEMENTADO | BATCH 1, 8, 14 (`AI_*`, `HELP_VIDEO_URL`, `TEAM_NAME_FORBIDDEN_TERMS`, `GAMIFICATION_ACTIVITY_MAX_POINTS`) |
 
 ### Identidad, activación, recuperación, sesiones, SMTP (§11–§19)
 
@@ -71,44 +71,44 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 | Sin registro público; padrón, alta manual, seed admin | IMPLEMENTADO | |
 | Estados PENDING_ACTIVATION/ACTIVE/SUSPENDED/INACTIVE, sin hard delete | IMPLEMENTADO | |
 | Alta manual con semestre obligatorio | IMPLEMENTADO | corrección de QA |
-| Alta manual con código universitario obligatorio | INCORRECTO | opcional (C4) |
+| Alta manual con código universitario obligatorio | IMPLEMENTADO | C4 · BATCH 2 |
 | Padrón CSV con NEW/UPDATE/UNCHANGED/CONFLICT/INVALID, idempotente, sin desactivar ausentes | IMPLEMENTADO | `imports.service.ts` |
 | Dominios institucionales configurables; admin sin códigos | IMPLEMENTADO | |
 | Enlace + código, solo hashes, 1 uso, nuevo invalida anterior | IMPLEMENTADO | |
-| TTL 48 h / 30 min / 10 intentos | INCORRECTO | C3 |
+| TTL 48 h / 30 min / 10 intentos | IMPLEMENTADO | C3 · BATCH 1-2 |
 | Reenvío: genérico, cooldown, límite diario, rate limit, auditoría | IMPLEMENTADO | |
 | Recuperación revoca sesiones | IMPLEMENTADO | |
-| Política de contraseña igual en servidor y web; barra completa | PARCIAL | falta «no contener el código universitario» y máximo 128 explícito en la web |
+| Política de contraseña igual en servidor y web; barra completa | IMPLEMENTADO | BATCH 2; pruebas unitarias en BATCH 16 |
 | Access 15 min + refresh rotatorio, revocación por cambio de clave/suspensión, logout | IMPLEMENTADO | |
-| Refresh HttpOnly en web | FALTANTE | C12 |
+| Refresh HttpOnly en web | IMPLEMENTADO | C12 · BATCH 2 (cookie `afinia_rt`) |
 | `MailPort`, SMTP real, variables, estado de intento | IMPLEMENTADO | estados internos `pending/sending/sent/failed`: se exponen como QUEUED/SENT_TO_SMTP/FAILED |
-| Documentación SPF/DKIM/DMARC, rebotes, Outlook | PARCIAL | `docs/CORREO_REAL.md` cubre SPF/DKIM; ampliar DMARC, rebotes y prueba con Outlook |
+| Documentación SPF/DKIM/DMARC, rebotes, Outlook | IMPLEMENTADO | BATCH 2: `docs/CORREO_REAL.md` §8.1 |
 
 ### Onboarding y datos declarados (§20–§22)
 
 | Requisito | Estado | Observación |
 |---|---|---|
 | Asistente guiado que bloquea hasta terminar | IMPLEMENTADO | web (`OnboardingGate`) y móvil |
-| Secuencia de 5 pasos de §20.1 | INCORRECTO | C5 |
-| Confirmación visual de datos institucionales | PARCIAL | se muestra el semestre; falta paso de confirmación explícito |
-| Privacidad básica dentro de la bienvenida | FALTANTE | |
-| Decisión de disponibilidad obligatoria | PARCIAL | paso existe pero no es obligatorio |
+| Secuencia de 5 pasos de §20.1 | IMPLEMENTADO | C5 · BATCH 3 |
+| Confirmación visual de datos institucionales | IMPLEMENTADO | BATCH 3 |
+| Privacidad básica dentro de la bienvenida | IMPLEMENTADO | BATCH 3 |
+| Decisión de disponibilidad obligatoria | IMPLEMENTADO | BATCH 3 (el servidor la exige) |
 | Cuestionario opcional, guardar avance, repetir, adaptativo | IMPLEMENTADO | |
 | Sugerencias confirmadas antes de ser preferencias | IMPLEMENTADO | `runs/:id/confirm` |
-| Interés por tecnología | FALTANTE | C2 |
-| Nivel autodeclarado de habilidad | OBSOLETO | C2 |
-| Lo declarado no aporta afinidad | INCORRECTO | C1 |
+| Interés por tecnología | IMPLEMENTADO | C2 · BATCH 3 (`student_skill_interests`) |
+| Nivel autodeclarado de habilidad | RETIRADO | C2 · BATCH 3: `PUT /profiles/me/skills` responde 410; 403 filas migradas como historia |
+| Lo declarado no aporta afinidad | IMPLEMENTADO | C1 · BATCH 9 |
 
 ### Catálogos (§23–§25)
 
 | Requisito | Estado | Observación |
 |---|---|---|
 | Área: code, nombre, etiquetas obligatorias, descripción opcional, baja lógica | IMPLEMENTADO | corrección de QA |
-| Nombre de área único normalizado | PARCIAL | se valida por `ILIKE`; falta índice único normalizado |
+| Nombre de área único normalizado | IMPLEMENTADO | BATCH 4 (índice único sobre `lower(btrim(name))`) |
 | Skill: área obligatoria, code único, baja lógica | IMPLEMENTADO | |
-| Skill: `aliases[]` | FALTANTE | |
-| Validación semántica (reglas canónicas que bloquean, aviso, sugerencia) | FALTANTE | |
-| Nombres técnicos (C++, C#, .NET, Node.js, CI/CD) | PARCIAL | falta `/` en la regla de nombres |
+| Skill: `aliases[]` | IMPLEMENTADO | BATCH 4 |
+| Validación semántica (reglas canónicas que bloquean, aviso, sugerencia) | IMPLEMENTADO | BATCH 4 (+ sugerencia opcional de IA, BATCH 8) |
+| Nombres técnicos (C++, C#, .NET, Node.js, CI/CD) | IMPLEMENTADO | BATCH 4 |
 | Categorías: code, name, applies_to obligatorio (BOTH por defecto) | IMPLEMENTADO | BOTH se guarda como `null`; se mantiene, documentado |
 | Recursos externos (catálogo controlado) | IMPLEMENTADO | `learning_resources` |
 | Sin pantalla de roles | IMPLEMENTADO | |
@@ -168,21 +168,21 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 | Requisito | Estado | Observación |
 |---|---|---|
 | Motor determinista, versionado, explicable | IMPLEMENTADO | versión 2 |
-| Fórmula V3 (25/50/25 directa, sin declarados) | FALTANTE | C1 |
-| Asignación de proyecto a área por `skills_used` del integrante | PARCIAL | revisar y alinear en V3 |
+| Fórmula V3 (25/50/25 directa, sin declarados) | IMPLEMENTADO | C1 · BATCH 9; unitarias en BATCH 16 |
+| Asignación de proyecto a área por `skills_used` del integrante | IMPLEMENTADO | BATCH 9 |
 | Support V3 (8/+4, 0/8/15/20, 0/8/15, otros 10; HIGH con 2 familias) | IMPLEMENTADO | mismos valores que la V2 |
 | Contribuciones persistidas y snapshots | IMPLEMENTADO | |
 | Recálculo central automático | IMPLEMENTADO | `TrajectoryRecalculationService` |
-| Migración V2→V3 sin sobrescribir historia | FALTANTE | |
+| Migración V2→V3 sin sobrescribir historia | IMPLEMENTADO | BATCH 9 (snapshots V2 conservados) |
 
 ### Recomendaciones (§53–§55)
 
 | Requisito | Estado | Observación |
 |---|---|---|
 | Determinista, explicable, filtros duros | IMPLEMENTADO | |
-| Pesos 35/25/20/10/10 | INCORRECTO | pesos de AFINIA 100 |
-| Uso de intereses por tecnología | FALTANTE | depende de C2 |
-| Equipos: 50/20/15/15, sin popularidad, sin invitación automática | PARCIAL | revisar pesos |
+| Pesos 35/25/20/10/10 | IMPLEMENTADO | BATCH 10 |
+| Uso de intereses por tecnología | IMPLEMENTADO | BATCH 10 |
+| Equipos: 50/20/15/15, sin popularidad, sin invitación automática | IMPLEMENTADO | `TEAM_SUGGESTION_WEIGHTS` = 50/20/15/15; invitar es manual (B8, V2.8) |
 
 ### Colaboración (§56–§60)
 
@@ -193,7 +193,7 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 | Chat | RETIRADO | C7 · BATCH 11: rutas 410 `CHAT_RETIRED`, sin UI, tablas conservadas con comentario y sin acceso |
 | Perfil público opt-in, slug rotable, QR solo URL, sin datos sensibles | IMPLEMENTADO | |
 | Canales de contacto (Teams, WhatsApp, LinkedIn, correo de contacto, enlace) | IMPLEMENTADO | BATCH 11 (validados, enlace seguro, públicos solo si se marcan) |
-| Perfil dinámico vs trayectoria separados | PARCIAL | revisar textos de UI |
+| Perfil dinámico vs trayectoria separados | IMPLEMENTADO | «Mi perfil» (dinámico) y «Mi progreso» con «CV / Exportar» (trayectoria), BATCH 12 y 14 |
 
 ### CV, paneles, ayuda, UX, móvil (§61–§67)
 
@@ -215,8 +215,8 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 
 | Requisito | Estado | Observación |
 |---|---|---|
-| Eventos críticos sin datos sensibles | PARCIAL | faltan los de revisión de actividad, IA y perfil público |
-| Constraints mínimos de §73 | PARCIAL | faltan nombres normalizados únicos de área/skill y unicidad de interés por tecnología |
+| Eventos críticos sin datos sensibles | IMPLEMENTADO | revisión de actividad (B5), IA y moderación (B8), perfil público (`VISIBILITY_CHANGED`) |
+| Constraints mínimos de §73 | IMPLEMENTADO | nombres únicos normalizados (B4), `uq_student_skill_interest` (B3), checks en tablas nuevas |
 | Transacciones de §74 | IMPLEMENTADO | |
 
 ### Pruebas (§79)
@@ -253,3 +253,9 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 
 El BATCH 6 no requiere cambios de código: §39–§42 están implementados (ver tabla). Se
 verifica en la regresión.
+
+---
+
+## 5. Estado al cierre de la V2 (BATCH 17)
+
+Todas las filas de este documento quedaron en IMPLEMENTADO, RETIRADO o EXTENSIÓN, salvo una PARCIAL: la prueba en emulador o dispositivo Android con Maestro, que necesita un SDK de Android que esta máquina no tiene (el flujo está listo en `mobile/.maestro/`). El detalle de cada batch está en `docs/V2_REPORTE_BATCHES.md`; la trazabilidad, en `docs/MATRIZ_TRAZABILIDAD_V2.md`.

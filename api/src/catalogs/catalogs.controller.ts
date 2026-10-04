@@ -71,6 +71,7 @@ export class CatalogsController {
   }
 
   @Post('academic-areas')
+  @ApiOperation({ summary: 'Crea un área académica (nombre único normalizado).' })
   @Roles(RolNombre.ADMIN)
   createArea(@Body() dto: CreateAcademicAreaDto) {
     return this.catalogsService.createArea(dto);
@@ -105,6 +106,7 @@ export class CatalogsController {
   }
 
   @Post('skills')
+  @ApiOperation({ summary: 'Crea una habilidad con alias; valida el área por reglas canónicas (V2 §23.3).' })
   @Roles(RolNombre.ADMIN)
   createSkill(@Body() dto: CreateSkillDto, @CurrentUser() user: AuthenticatedUser) {
     return this.catalogsService.createSkill(dto, user.userId);
@@ -186,12 +188,14 @@ export class CatalogsController {
   }
 
   @Post('gamification-criteria')
+  @ApiOperation({ summary: 'Crea un criterio global de puntos.' })
   @Roles(RolNombre.ADMIN)
   createCriterion(@Body() dto: CreateGamificationCriterionDto) {
     return this.catalogsService.createCriterion(dto);
   }
 
   @Patch('gamification-criteria/:id')
+  @ApiOperation({ summary: 'Actualiza un criterio global de puntos.' })
   @Roles(RolNombre.ADMIN)
   updateCriterion(
     @Param('id', ParseUUIDPipe) id: string,

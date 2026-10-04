@@ -1,280 +1,167 @@
-# Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
+# Afinia — Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
 
-Ingeniería en Sistemas Informáticos – Univalle. Sistema completo según
-`AFINIA_100_ESPECIFICACION_DEFINITIVA.md`: los diez objetivos específicos, de
-extremo a extremo.
+Ingeniería en Sistemas Informáticos – Universidad Privada del Valle. Implementa la
+*Especificación Maestra Final V2* (`AFINIA_ESPECIFICACION_MAESTRA_FINAL_V2_2026-10-03.md`).
 
-Plataforma complementaria (no reemplaza SIU, Teams, notas ni certificados oficiales) que construye un perfil estudiantil dinámico a partir de intereses, habilidades, proyectos, actividades, participación, evidencias, constancias y áreas de afinidad.
+Plataforma **complementaria** —no reemplaza al SIU, a Teams, las notas ni los
+certificados oficiales— que construye el perfil de cada estudiante a partir de
+lo que **hizo y está respaldado**: actividades con participación confirmada,
+proyectos con evidencias y certificados externos. De ahí salen su **afinidad**
+por área, su **respaldo** y **recomendaciones** explicadas.
 
 ## Stack
 
 | Capa | Tecnología |
 |------|-----------|
-| API central | NestJS + TypeScript + TypeORM |
-| Base de datos | PostgreSQL (vía Docker) |
-| Frontend web | React + Vite |
-| App móvil | React Native + Expo |
+| API central | NestJS 10 + TypeScript + TypeORM 0.3 (solo migraciones) |
+| Base de datos | PostgreSQL 16 en Docker |
+| Web (todos los roles) | React 18 + Vite |
+| Móvil (solo Estudiante) | React Native 0.81 + Expo SDK 54 |
 | Tipos compartidos | Paquete `shared/` |
-| Autenticación | JWT + control de acceso por roles |
+| Autenticación | JWT corto + refresh rotatorio (cookie HttpOnly en la web) |
+| IA (opcional) | Puerto `none` / `openai_compatible` |
 
-## Estructura del monorepo
+## Estructura
 
 ```
 .
-├── api/      API central NestJS (consumida por web y móvil)
+├── api/      API central NestJS (web y móvil la consumen)
 ├── web/      Frontend React
 ├── mobile/   App React Native + Expo
-├── shared/   Tipos, enums y DTOs compartidos
-├── docker/   docker-compose para PostgreSQL
-└── docs/     Documentación y diagnóstico técnico
+├── shared/   Tipos, enumeraciones y escalas compartidas
+├── docker/   docker-compose de PostgreSQL (y Mailpit opcional)
+├── scripts/  Suites de verificación, k6 y ZAP
+└── docs/     Documentación
 ```
 
-## Roles y responsabilidades
+## Roles
 
-| Rol | Qué hace en el sistema |
-|-----|------------------------|
-| **Estudiante** | Construye su perfil dinámico, se inscribe en actividades, registra proyectos, evidencias y certificados externos, colabora con otros y consulta su trayectoria |
-| **Docente** | Consulta la oferta de actividades y los perfiles de **los semestres que el administrador le habilita** |
-| **Director de carrera** | Gestiona las **actividades académicas**, registra participación, emite las **constancias internas** y consulta la analítica de la carrera |
-| **Sociedad científica** | Gestiona las **actividades extracurriculares**, registra participación y consulta las métricas de lo que organizó |
-| **Administrador** | Usuarios institucionales, roles y estados, semestres habilitados, catálogos y criterios de gamificación |
+| Rol | Qué hace |
+|-----|---------|
+| **Estudiante** (web y móvil) | Completa la bienvenida, declara intereses por tecnología, se inscribe en actividades, registra proyectos, evidencias y certificados, consulta afinidad, respaldo y recomendaciones, comparte su perfil y sus canales de contacto, forma equipos y descarga su CV |
+| **Docente** (web) | Propone actividades académicas, confirma participación y consulta estudiantes, proyectos, Panel académico y necesidades de equipo **de sus semestres habilitados** |
+| **Dirección de carrera** (web) | **Aprueba, observa o rechaza** las actividades propuestas, publica las propias, autoriza constancias y consulta analítica descriptiva |
+| **Sociedad científica** (web) | Propone actividades extracurriculares (las aprueba Dirección), confirma participación y ve métricas de sus actividades |
+| **Administración** (web) | Provisiona cuentas e importa el padrón, gestiona roles, estados, alcance docente, catálogos, recursos, criterios de puntos y consulta la auditoría |
 
-**No hay registro público.** Ninguna cuenta se crea sola: el administrador la
-provisiona —una a una o importando el padrón— y la persona la activa desde el
-enlace que recibe por correo, eligiendo ahí su contraseña. Es lo que pide §12 de
-la especificación, y es lo que separa una identidad institucional de un correo
-cualquiera.
+**No hay registro público**: la institución provisiona cada cuenta y su titular
+la activa desde el correo. **La app móvil es del Estudiante**: la API no emite
+sesión a otro rol desde el móvil. **No hay chat**: los estudiantes comparten sus
+canales (Teams, WhatsApp, LinkedIn, correo o un enlace).
 
-## Guía rápida para colaboradores
+## Puesta en marcha
 
-Requisitos previos:
-- **Node 18+** y **npm**
-- **Docker Desktop** (para PostgreSQL) — debe estar abierto
-- Para la app móvil: **Expo Go** (Play Store / App Store) o un emulador
-
-Los tres clientes (API, web, móvil) consumen la **misma API** con el **mismo JWT**.
-
-### Paso 1 — Preparación (una sola vez)
+Requisitos: **Node 20+**, **npm**, **Docker Desktop** abierto y, para el móvil,
+**Expo Go** o un emulador.
 
 ```bash
-# En la raíz del proyecto:
-cp .env.example .env          # variables de entorno (valores por defecto sirven en desarrollo)
+cp .env.example .env          # valores de desarrollo listos; ver comentarios en el archivo
+npm install                   # workspaces: shared + api
+npm install --prefix web
+npm install --prefix mobile
 
-npm install                   # dependencias backend (workspaces: shared + api)
-npm install --prefix web      # dependencias web
-npm install --prefix mobile   # dependencias móvil (Expo)
-
-npm run db:up                 # levanta PostgreSQL en Docker (puerto POSTGRES_PORT del .env)
-npm run db:wait               # espera a que PostgreSQL acepte conexiones
-npm run shared:build          # compila tipos compartidos
-npm run api:migrate           # aplica las migraciones
-npm run seed:populate         # POBLA la base con datos institucionales realistas
+npm run db:up                 # PostgreSQL en Docker (puerto POSTGRES_PORT, sugerido 5435)
+npm run db:wait               # espera a que acepte conexiones
+npm run shared:build
+npm run api:migrate
+npm run seed:populate         # datos institucionales de ejemplo
 ```
 
-> Todos los scripts de Docker leen el `.env` de la raíz de forma explícita
-> (`docker compose --env-file .env ...`): el puerto, el usuario y la contraseña
-> de la base salen de ahí y de ningún otro sitio. `.env.example` sugiere
-> `POSTGRES_PORT=5435` para no chocar con un PostgreSQL instalado en la máquina.
-
-`seed:populate` deja la base lista con **21 usuarios** (1 administrador, 2 docentes,
-1 director, 1 sociedad científica y 16 estudiantes), 9 actividades, 8 proyectos con
-evidencias, 6 certificados externos, constancias internas, participaciones en sus tres
-estados y **áreas de afinidad calculadas** con el motor real.
-
-### Paso 2 — Levantar los 3 servicios (una terminal cada uno)
+Luego, en tres terminales:
 
 ```bash
-# Terminal 1 — API (backend)
-npm run api:dev        # http://localhost:3010/api   ·   Swagger: http://localhost:3010/api/docs
-
-# Terminal 2 — Web
+npm run api:dev        # http://localhost:3010/api   (Swagger en /api/docs con SWAGGER_ENABLED=true)
 npm run web:dev        # http://localhost:5173
-
-# Terminal 3 — Móvil (Expo)
-npm run mobile:start   # abre Expo; escanea el QR con Expo Go
+npm run mobile:start   # Expo
 ```
 
-> **Móvil:** la dirección de la API ya **no se configura a mano**. La app la
-> deduce del mismo equipo que sirvió el paquete, así que funciona igual en un
-> celular físico, en el emulador de Android y en el simulador de iOS, y
-> sigue funcionando al cambiar de red.
->
-> Solo hace falta que el celular esté en la **misma Wi‑Fi** que el equipo y que
-> la API esté levantada en el puerto **3010**.
->
-> Si aun así no conecta, el mensaje de error indica a qué dirección intentó
-> llegar. Dos salidas:
-> - `cd mobile && npx expo start --tunnel` — evita la red local por completo.
-> - `EXPO_PUBLIC_API_URL=http://TU_IP:3010/api` — fuerza una dirección concreta.
->
-> Si el celular alcanza Expo (puerto 8081) pero no la API (3010), es el
-> cortafuegos de Windows: hay que permitir Node.js en redes privadas.
->
-> ⚠️ **Revise primero `mobile/.env`.** Si tiene una `EXPO_PUBLIC_API_URL`
-> escrita a mano, esa gana sobre la detección automática, y queda obsoleta en
-> cuanto cambia la IP del equipo. El síntoma es un error de conexión contra una
-> dirección que ya no existe. Comente esa línea y reinicie con
-> `npx expo start -c`: las variables se incrustan al empaquetar, así que no
-> basta con guardar el archivo.
+`npm run db:rebuild` reconstruye la base desde cero (borra el volumen, migra y
+siembra lo mínimo).
 
-### Cuentas para iniciar sesión
+> **Móvil.** La app deduce la dirección de la API del equipo que sirvió el
+> paquete; el celular debe estar en la misma Wi‑Fi y la API en el puerto 3010.
+> Si no conecta: `npx expo start --tunnel`, o `EXPO_PUBLIC_API_URL=http://TU_IP:3010/api`.
+> Revise que `mobile/.env` no tenga una dirección vieja escrita a mano.
+
+### Cuentas de ejemplo (tras `seed:populate`)
 
 | Rol | Correo | Contraseña |
 |-----|--------|-----------|
-| Administrador (único) | `ADMIN_EMAIL` del `.env` | `ADMIN_PASSWORD` del `.env` |
+| Administración | `ADMIN_EMAIL` del `.env` | `ADMIN_PASSWORD` del `.env` |
 | Docente (semestres 1–4) | `carlos.perez@univalle.edu` | `Univalle2026*` |
 | Docente (semestres 5–8) | `maria.gutierrez@univalle.edu` | `Univalle2026*` |
-| Director de carrera | `jorge.vargas@univalle.edu` | `Univalle2026*` |
+| Dirección de carrera | `jorge.vargas@univalle.edu` | `Univalle2026*` |
 | Sociedad científica | `lucia.fernandez@univalle.edu` | `Univalle2026*` |
-| Estudiante (ejemplo) | `ana.quispe@est.univalle.edu` | `Univalle2026*` |
+| Estudiante | `ana.quispe@est.univalle.edu` | `Univalle2026*` |
 
-Hay 16 estudiantes con el patrón `nombre.apellido@est.univalle.edu` y contraseña
-`Univalle2026*`. Son las cuentas que deja el seed, ya activadas; una cuenta nueva
-se crea desde **Administración → Usuarios** o importando el padrón, y nace
-`PENDING_ACTIVATION` hasta que su dueño usa el enlace de activación.
+Una cuenta nueva se crea desde **Administración → Usuarios** o importando el
+padrón, y queda pendiente hasta que su titular la activa.
 
-> Si reinicias el PC, basta con `npm run db:up` para recuperar la base (los datos persisten).
-> Para reconstruir la base desde cero: `npm run db:rebuild` (borra el volumen, espera a que la
-> base esté lista, migra y siembra lo mínimo) y, si quiere datos de ejemplo, `npm run seed:populate`.
+### Variables de entorno destacadas
 
-## Pruebas automáticas
+Todas están documentadas en `.env.example`. Las de la V2:
 
-Las suites hablan HTTP contra la API en marcha: comprueban el sistema, no sus
-piezas por separado.
+| Variable | Para qué |
+|---|---|
+| `ACTIVATION_TOKEN_TTL_HOURS`, `PASSWORD_RESET_TOKEN_TTL_MINUTES`, `ACTIVATION_CODE_MAX_ATTEMPTS` | Vigencias (48 h / 30 min) e intentos (10) |
+| `REFRESH_COOKIE_SAMESITE`, `REFRESH_COOKIE_SECURE` | Cookie del refresh en la web |
+| `AI_PROVIDER`, `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_INPUT_CHARS`, `AI_RATE_LIMIT_PER_MINUTE` | Asistente de IA (con `none` todo funciona) |
+| `TEAM_NAME_FORBIDDEN_TERMS` | Términos prohibidos adicionales en nombres de equipo |
+| `GAMIFICATION_ACTIVITY_MAX_POINTS` | Tope de puntos por actividad |
+| `HELP_VIDEO_URL` | Video del centro de ayuda |
+
+## Pruebas
+
+Las suites hablan HTTP con la API en marcha y una base real.
 
 ```bash
-npm run api:dev      # en una terminal
-
-# en otra terminal:
-npm run test:all     # las 15 suites -> 1139 verificaciones, 0 fallos
+npm run api:dev          # en una terminal
+npm run test:all         # en otra: unitarias + 18 suites de API + IA simulada + navegador
 ```
 
-O una por una:
+| Script | Qué prueba |
+|--------|-----------|
+| `npm run test:unit` | Reglas puras (afinidad V3, recomendaciones, contraseña, moderación, canales, IA, PDF) |
+| `npm run test:v2` | Los batches de la V2 (`node scripts/e2e-v2.mjs batch5` corre uno) |
+| `npm run test:ai` | Asistente de IA contra un proveedor `openai_compatible` simulado |
+| `npm run test:web` | Web en Microsoft Edge con Playwright (sin descargar navegadores) |
+| `npm run test:40` … `test:70`, `test:b1` … `test:b11`, `test:qa` | Suites de regresión de las etapas anteriores |
+| `npm run test:load` | Carga con k6 en Docker (RNF05) |
+| `npm run test:security` | OWASP ZAP en Docker: **escaneo activo**, solo contra una base de desarrollo respaldada |
 
-| Script | Cubre | Verificaciones |
-|--------|-------|----------------|
-| `npm run test:40` | Objetivos 1 a 4 | 248 |
-| `npm run test:50` | Objetivo 5 — portafolio | 116 |
-| `npm run test:60` | Objetivo 6 — motor de afinidad | 86 |
-| `npm run test:70` | Objetivo 7 — recomendaciones | 89 |
-| `npm run test:b1` … `test:b11` | Los once batches de AFINIA 100 | 600 |
+Última corrida completa: 19 suites y 1406 comprobaciones sin fallos, más 33
+unitarias. Detalle en [`docs/V2_REPORTE_BATCHES.md`](docs/V2_REPORTE_BATCHES.md)
+y [`docs/SEGURIDAD_V2.md`](docs/SEGURIDAD_V2.md).
 
-## Flujo principal (end-to-end)
+## Flujo principal
 
-1. Admin provisiona la cuenta (o importa el padrón) y confirma roles y áreas académicas.
-2. La persona activa su cuenta desde el enlace del correo y elige su contraseña.
-3. Estudiante crea su perfil dinámico.
-4. Estudiante registra intereses (por área) y habilidades (con nivel).
-5. Director publica actividad académica; sociedad científica, extracurricular.
-6. Estudiante consulta actividades (web o móvil).
-7. Estudiante registra interés o inscripción.
-8. Docente/sociedad confirma participación (el estudiante no puede confirmar la suya).
-9. Estudiante registra proyecto académico y adjunta evidencia (enlace o archivo).
-10. El motor de validación comprueba lo adjuntado y le asigna un nivel de respaldo.
-11. El motor de afinidad recalcula tras cada cambio relevante, y su puntaje se puede abrir línea por línea.
-12. El estudiante recibe recomendaciones explicadas, colabora por QR, contactos y equipos, y ve su progreso.
-13. Docente consulta el perfil permitido de sus semestres (sin datos sensibles ni notas).
-14. Dirección y sociedad consultan analítica descriptiva, con umbral de privacidad.
+1. Administración provisiona la cuenta (o importa el padrón).
+2. El titular la activa desde el correo y elige su contraseña.
+3. El estudiante completa la bienvenida: confirma sus datos, declara intereses por área y tecnología, decide su disponibilidad y su privacidad.
+4. Docente o sociedad proponen una actividad; Dirección la aprueba y se publica.
+5. El estudiante se inscribe; el responsable confirma su participación (y, si está habilitada, emite la constancia).
+6. El estudiante registra proyectos, confirma qué tecnologías usó y adjunta evidencias; la validación asigna el respaldo.
+7. El motor de afinidad V3 recalcula: 25 actividades + 50 proyectos + 25 certificados, sin lo declarado, con desglose.
+8. Recibe recomendaciones explicadas (35/25/20/10/10), colabora con contactos y equipos y descarga su CV.
+9. Docente, Dirección y sociedad consultan paneles descriptivos, con umbral de privacidad.
 
-## Scripts útiles (raíz)
+## Documentación
 
-| Script | Descripción |
-|--------|-------------|
-| `npm run db:up` / `db:down` | Levanta/apaga PostgreSQL (Docker) |
-| `npm run db:wait` | Espera a que PostgreSQL acepte conexiones |
-| `npm run db:reset` | Reinicia PostgreSQL desde cero (borra el volumen) |
-| `npm run db:rebuild` | `db:reset` → espera → migraciones → seed base |
-| `npm run db:logs` | Registro de PostgreSQL |
-| `npm run api:build` / `api:dev` | Compila / ejecuta la API |
-| `npm run api:migrate` | Aplica migraciones TypeORM |
-| `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
-| `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
-| `npm run test:all` | Todas las suites de integración |
-| `npm run web:dev` / `web:build` | Servidor de desarrollo / compilación web |
-| `npm run mobile:start` | Inicia Expo (app móvil) |
-| `npm run mobile:typecheck` | Comprobación de tipos del móvil |
+- [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md) — el sistema explicado con diagramas.
+- [`docs/MATRIZ_TRAZABILIDAD_V2.md`](docs/MATRIZ_TRAZABILIDAD_V2.md) — RF/RNF → módulo → rutas → pantallas → pruebas.
+- [`docs/V2_REPORTE_BATCHES.md`](docs/V2_REPORTE_BATCHES.md) — qué se hizo en cada batch de la V2, con pruebas y resultados.
+- [`AUDITORIA_GAP_AFINIA_V2.md`](AUDITORIA_GAP_AFINIA_V2.md) — la auditoría inicial y el estado final de cada punto.
+- [`docs/SEGURIDAD_V2.md`](docs/SEGURIDAD_V2.md) — seguridad, rendimiento, calidad y pendientes.
+- [`docs/CAMBIOS_DOCUMENTO_GRADO_V2.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V2.md) — qué cambiar en el documento de grado para que describa este sistema.
+- [`docs/CORREO_REAL.md`](docs/CORREO_REAL.md) — envío real de correo y entregabilidad.
 
-## Alcance
-
-Los diez objetivos específicos están implementados de extremo a extremo:
-
-1. **Usuarios, autenticación, roles y control de acceso.** Identidad provisionada
-   por la institución con activación real, sesión por rol, desactivación efectiva
-   (un usuario desactivado pierde acceso de inmediato, aunque su token siga
-   vigente), **semestres habilitados por docente**, importación idempotente del
-   padrón y catálogos con estado.
-2. **Perfil estudiantil dinámico.** Semestre institucional que el estudiante no
-   puede cambiar, áreas de interés con prioridad, habilidades con nivel y su
-   origen —lo autodeclarado se muestra como autodeclarado—, áreas de mejora,
-   completitud automática y un resumen que integra la trayectoria real.
-3. **Actividades académicas y extracurriculares.** El director de carrera gestiona
-   las académicas y la sociedad científica las extracurriculares, sobre un
-   **catálogo de categorías administrable**, con estados, cupos, filtros por
-   categoría, área, modalidad y fecha, detalle e inscripción desde la app móvil.
-4. **Participación, evidencias y certificados, con validación automática.**
-   Registro de asistencia por el responsable, **subida real de archivos**
-   verificados por su firma y no por lo que declare el cliente, evidencias
-   asociadas a proyecto, actividad o área, certificados externos, constancia
-   interna emitida solo por el director, y un motor que comprueba lo adjuntado y
-   le asigna un **nivel de respaldo** en vez de darlo por bueno.
-5. **Portafolio de proyectos estudiantiles.** Proyectos con área, tecnologías,
-   enlaces, evidencias y **nivel de visibilidad**; invitación de integrantes donde
-   **la pertenencia se crea solo cuando el invitado acepta**; el docente consulta
-   el portafolio de sus semestres habilitados y registra retroalimentación
-   orientativa, sin nota ni aprobación.
-6. **Motor de afinidad V2, explicable.** Calcula niveles por área a partir de
-   intereses, habilidades, participación, proyectos, evidencias, certificados y
-   constancias, con rendimientos decrecientes y topes por familia de señal. Cada
-   puntaje se abre para ver **de dónde sale**, línea por línea, y la suma del
-   desglose es exactamente el puntaje. Junto a la afinidad va el **respaldo**:
-   cuánto de eso está demostrado. Es orientación, no evaluación.
-7. **Recomendaciones académicas ligeras.** Actividades, oportunidades, cursos,
-   recursos de apoyo, áreas de fortalecimiento y posibles compañeros. **Cada
-   sugerencia explica por qué**, y su puntaje es la suma de sus motivos. El
-   estudiante guarda o descarta, y lo descartado no vuelve.
-8. **Colaboración.** Perfil público con enlace propio, **contactos por QR**,
-   equipos formados a partir de una necesidad declarada, y mensajería que solo se
-   abre entre quienes tienen una relación que la justifique.
-9. **Gamificación y trayectoria.** Puntos e insignias derivados de hechos reales
-   —nunca incrementados a ciegas—, resumen de trayectoria y **exportación a PDF**.
-10. **Reportes y analítica descriptiva.** Evolución del estudiante, tendencias de
-    la carrera, mapa de áreas, panel del docente limitado a su alcance y métricas
-    de la sociedad científica, todo con **umbral de privacidad** para no describir
-    grupos tan pequeños que describirlos sea señalar a una persona.
-
-### Documentación
-
-Empiece por [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md): todo el
-sistema explicado con diagramas de flujo, sin necesidad de abrir el código.
-
-Los batches de AFINIA 100, cada uno con lo que cambió y por qué:
-
-- [`docs/BATCH_1_IDENTIDAD_Y_SEGURIDAD.md`](docs/BATCH_1_IDENTIDAD_Y_SEGURIDAD.md)
-- [`docs/BATCH_2_PERFIL_Y_ONBOARDING.md`](docs/BATCH_2_PERFIL_Y_ONBOARDING.md)
-- [`docs/BATCH_3_STORAGE_Y_VALIDACION.md`](docs/BATCH_3_STORAGE_Y_VALIDACION.md)
-- [`docs/BATCH_4_ACTIVIDADES.md`](docs/BATCH_4_ACTIVIDADES.md)
-- [`docs/BATCH_5_PROYECTOS.md`](docs/BATCH_5_PROYECTOS.md)
-- [`docs/BATCH_6_AFINIDAD_V2.md`](docs/BATCH_6_AFINIDAD_V2.md)
-- [`docs/BATCH_7_RECOMENDACIONES.md`](docs/BATCH_7_RECOMENDACIONES.md)
-- [`docs/BATCH_8_COLABORACION.md`](docs/BATCH_8_COLABORACION.md)
-- [`docs/BATCH_9_GAMIFICACION_Y_EXPORT.md`](docs/BATCH_9_GAMIFICACION_Y_EXPORT.md)
-- [`docs/BATCH_10_REPORTES_Y_ANALITICA.md`](docs/BATCH_10_REPORTES_Y_ANALITICA.md)
-- [`docs/BATCH_11_HARDENING.md`](docs/BATCH_11_HARDENING.md)
-- [`docs/BATCH_12_REGRESION_Y_LIMPIEZA.md`](docs/BATCH_12_REGRESION_Y_LIMPIEZA.md)
-
-El estado final punto por punto, con qué demuestra cada uno:
-[`docs/CHECKLIST_FINAL_AFINIA_100.md`](docs/CHECKLIST_FINAL_AFINIA_100.md).
-
-Las matrices de trazabilidad y los informes de avance del 40 % al 70 % siguen en
-[`docs/`](docs/). Son el registro de cómo se llegó hasta aquí, no la descripción
-del sistema actual: para eso está la especificación definitiva.
+Los documentos `AVANCE_*`, `MATRIZ_TRAZABILIDAD_40…70`, `BATCH_*` y
+`CHECKLIST_FINAL_AFINIA_100.md` son el registro de etapas anteriores, no la
+descripción del sistema actual.
 
 ## Fuera del alcance, a propósito
 
-- **Predicción de rendimiento, abandono o éxito profesional.** No es que falte:
-  §64 la prohíbe. El sistema describe lo que ocurrió y se cuida de no sugerir que
-  anticipa nada.
-- **Certificados oficiales.** Los emite la universidad. Aquí solo hay constancias
-  internas de participación, que son otra cosa y lo dicen.
-- **Integración real con SIU y Teams.** El padrón entra por importación de archivo.
-- **Autoridad académica.** No hay notas, ni aprobación, ni evaluación de personas.
+- Predecir rendimiento, abandono o éxito profesional.
+- Emitir certificados oficiales o acreditar competencias.
+- Reemplazar al SIU o a Teams; chat interno; registro público.
+- Que la IA decida algo: solo sugiere.

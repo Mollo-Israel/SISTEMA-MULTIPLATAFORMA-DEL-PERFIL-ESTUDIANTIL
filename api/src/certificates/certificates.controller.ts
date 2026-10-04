@@ -9,7 +9,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -26,16 +26,19 @@ export class CertificatesController {
   constructor(private readonly certificatesService: CertificatesService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Registra un certificado externo con sus tecnologías (V2 §41).' })
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateExternalCertificateDto) {
     return this.certificatesService.create(user.userId, dto);
   }
 
   @Get('my')
+  @ApiOperation({ summary: 'Certificados externos propios, con sus tecnologías.' })
   findMine(@CurrentUser() user: AuthenticatedUser) {
     return this.certificatesService.findMine(user.userId);
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Actualiza un certificado propio; se vuelve a validar.' })
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -45,6 +48,7 @@ export class CertificatesController {
   }
 
   @Delete(':id')
+  @ApiOperation({ summary: 'Elimina un certificado propio y su archivo.' })
   @HttpCode(204)
   remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.certificatesService.remove(user.userId, id);
