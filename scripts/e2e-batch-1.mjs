@@ -8,7 +8,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-1.mjs
  */
 
-import { asegurarCorreoDePrueba, leerCorreo } from './lib/fixtures.mjs';
+import { asegurarCorreoDePrueba, leerCorreo, codigoUniversitario } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -530,7 +530,7 @@ async function main() {
         email: correo(key),
         password: PWD,
         role,
-        ...(role === 'STUDENT' ? { semester: 1 } : {}),
+        ...(role === 'STUDENT' ? { semester: 1, universityCode: codigoUniversitario() } : {}),
       },
     });
     const invitacion = await leerCorreo(correo(key), { tipo: 'account_activation', desde });

@@ -319,8 +319,83 @@ async function batch10(ctx) {
 }
 
 // ===========================================================================
+//  BATCH 4 — Catálogos (§23, §24, §73)
+// ===========================================================================
+async function batch4(ctx) {
+  objective('BATCH 4 · Catálogos: alias, clasificación semántica y nombres únicos');
+  const letras = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 65 + Number(d)));
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const movil = areas.find((a) => a.name === 'Desarrollo Móvil');
+  const web = areas.find((a) => a.name === 'Desarrollo Web');
 
-const BATCHES = { batch2, batch3, batch10 };
+  const rn = await req('GET', '/skills/classify?name=React%20Native', { token: ctx.admin });
+  check(rn.status === 200 && rn.data?.rule === 'canonical' && rn.data?.areaIds?.includes(movil?.id),
+    'V2.4.1 §23.3 «React Native» tiene regla canónica: Desarrollo Móvil', json(rn.data));
+
+  const bloqueada = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: `Kit Movil ${letras}`, aliases: ['SwiftUI'], academicAreaId: web.id },
+  });
+  check(bloqueada.status === 409 && bloqueada.data?.code === 'CLASSIFICATION_BLOCKED' && bloqueada.data?.fields?.academicAreaId,
+    'V2.4.2 §23.3 Guardar una tecnología canónica de móvil en Web se bloquea, aunque llegue por un alias', json(bloqueada.data));
+  const conMotivo = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: `Kit Movil ${letras}`, aliases: ['SwiftUI'], academicAreaId: web.id, overrideReason: 'Lo usamos en la web de la carrera.' },
+  });
+  check(conMotivo.status === 409, 'V2.4.3 §23.3 Contra una regla dura no vale ni un motivo', `status ${conMotivo.status}`);
+
+  const area = (await req('POST', '/academic-areas', {
+    token: ctx.admin, body: { name: `Robotica Educativa ${letras}`, tags: [`legokit${letras.toLowerCase()}`] },
+  })).data;
+  const nombre = `Legokit${letras.toLowerCase()} Studio`;
+  const sugerida = await req('GET', `/skills/classify?name=${encodeURIComponent(nombre)}`, { token: ctx.admin });
+  check(sugerida.data?.rule === 'suggested' && sugerida.data?.areaIds?.includes(area.id),
+    'V2.4.4 §23.3 Para una tecnología sin regla, se sugiere el área por sus etiquetas', json(sugerida.data));
+
+  const otra = areas.find((a) => a.name === 'Redes') ?? areas[0];
+  const sinMotivo = await req('POST', '/skills', { token: ctx.admin, body: { name: nombre, academicAreaId: otra.id } });
+  check(sinMotivo.status === 409 && sinMotivo.data?.code === 'CLASSIFICATION_CONFIRMATION_REQUIRED'
+    && (sinMotivo.data?.details?.suggestedAreaIds ?? []).includes(area.id),
+  'V2.4.5 §23.3 Guardarla en otra área pide confirmar con motivo, y dice cuál se sugería', json(sinMotivo.data));
+  const motivada = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: nombre, academicAreaId: otra.id, overrideReason: 'Se usa para enseñar redes con robots.' },
+  });
+  check(motivada.status === 201, 'V2.4.6 §23.3 Con motivo, el administrador decide', json(motivada.data));
+  const auditoria = await req('GET', '/audit/events?eventType=SKILL_CLASSIFICATION_OVERRIDE', { token: ctx.admin });
+  const registros = auditoria.data?.items ?? auditoria.data ?? [];
+  check(registros.some((e) => e.metadata?.name === nombre && /robots/.test(e.metadata?.reason ?? '')),
+    'V2.4.7 §23.3 Y la decisión queda auditada con su motivo', json(registros.slice?.(0, 1)));
+
+  const enArea = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: `${nombre} Pro`, aliases: [`Legokit Pro ${letras}`], academicAreaId: area.id },
+  });
+  check(enArea.status === 201 && enArea.data?.aliases?.length === 1, 'V2.4.8 §23.2 La habilidad guarda sus alias', json(enArea.data));
+  const aliasAjeno = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: `Otra ${letras}`, aliases: ['PostgreSQL'], academicAreaId: area.id },
+  });
+  check(aliasAjeno.status === 409 && aliasAjeno.data?.fields?.aliases,
+    'V2.4.9 §23.2 Un alias no puede ser el nombre de otra habilidad', json(aliasAjeno.data?.fields));
+
+  const tecnicos = [];
+  for (const n of ['C++', 'C#', '.NET', 'Node.js', 'CI/CD']) {
+    const r = await req('GET', `/skills/classify?name=${encodeURIComponent(n)}`, { token: ctx.admin });
+    tecnicos.push(r.status);
+  }
+  const nombreTecnico = await req('POST', '/skills', { token: ctx.admin, body: { name: `CI/CD ${letras}`, academicAreaId: area.id } });
+  check(tecnicos.every((st) => st === 200) && nombreTecnico.status !== 400,
+    'V2.4.10 §23.4 Nombres técnicos reales (C++, C#, .NET, Node.js, CI/CD) se aceptan', `${tecnicos} / ${nombreTecnico.status}`);
+
+  const duplicada = await req('POST', '/academic-areas', {
+    token: ctx.admin, body: { name: `  robotica   educativa ${letras.toLowerCase()} `, tags: ['x'] },
+  });
+  check(duplicada.status === 409 || duplicada.status === 400,
+    'V2.4.11 §23.1 El nombre de un área es único sin importar mayúsculas ni espacios', `status ${duplicada.status}`);
+
+  const sinArea = await req('POST', '/skills', { token: ctx.admin, body: { name: `Huérfana ${letras}` } });
+  check(sinArea.status === 400 && sinArea.data?.fields?.academicAreaId, 'V2.4.12 §23.2 Una habilidad sin área no existe', json(sinArea.data?.fields));
+}
+
+// ===========================================================================
+
+const BATCHES = { batch2, batch3, batch4, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

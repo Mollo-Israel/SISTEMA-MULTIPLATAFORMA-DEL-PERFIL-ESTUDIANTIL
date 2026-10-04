@@ -72,7 +72,7 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 
 **Pruebas:** `e2e-v2` batch2 (15 comprobaciones: código obligatorio y único, cookie HttpOnly con atributos, rotación, logout, móvil con token en cuerpo, contraseña con código/correo/longitud); preflight CORS con credenciales; regresión de objectives-40, B1, B2, B11, QA.
 
-**Resultados:** V2 15/15; objectives-40, B1, B2, B11 y QA sin fallos; web compila; móvil `tsc` limpio.
+**Resultados:** V2 15/15; objectives-40, B2, B11 y QA sin fallos; web compila; móvil `tsc` limpio. **Corrección posterior:** B1 se reportó aquí «sin fallos» por contar solo las comprobaciones fallidas; en realidad se interrumpía en su preparación (su alta propia de estudiantes no enviaba el código universitario). Se detectó y corrigió en el BATCH 4 (56/56). Desde entonces la regresión cuenta también las correctas y el código de salida.
 
 **Regresiones:** objectives-40 3.5 fallaba por el código obligatorio (prueba actualizada, no el sistema).
 
@@ -169,3 +169,36 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** el filtro de «visibilidad» por estado de revisión de la actividad llega con el BATCH 5.
 
 **Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 4 — Catálogos
+
+**Estado:** completo
+
+**Objetivo:** §23, §24, §73.
+
+**Cambios:**
+- `skills.aliases[]`: otros nombres de la misma tecnología; un alias no puede ser el nombre ni el alias de otra habilidad.
+- Validación semántica de la clasificación (§23.3), en `skill-classification.ts`:
+  - reglas canónicas para tecnologías inequívocas (React Native → Desarrollo Móvil, PostgreSQL → Datos, Docker → Infraestructura, etc.); si el catálogo tiene el área canónica, guardar en otra se **bloquea** (409 `CLASSIFICATION_BLOCKED`), también cuando la tecnología llega por un alias, y ni un motivo lo permite;
+  - para el resto, sugerencia por etiquetas de las áreas; guardar en otra pide **confirmación con motivo** (409 `CLASSIFICATION_CONFIRMATION_REQUIRED` con las áreas sugeridas) y, con motivo, se guarda y se audita (`SKILL_CLASSIFICATION_OVERRIDE`);
+  - `GET /skills/classify` para que la pantalla avise antes de guardar.
+- Web: alias, aviso en vivo con la regla o la sugerencia, botón «Usar …» y campo de motivo cuando hace falta.
+- Unicidad de nombre normalizado en la base para áreas, habilidades y categorías (§73).
+- El filtro de errores reenvía `details` estructurados construidos por el servicio (también lo usa la bienvenida para `missing`).
+- Nombres técnicos (C++, C#, .NET, Node.js, CI/CD) verificados como válidos.
+
+**Migraciones:** `1780400000000-V2CatalogSemantics` (alias e índices únicos normalizados; se comprobó antes que no hubiera duplicados). `down` probado.
+
+**Archivos:** `api/src/catalogs/{skill-classification.ts,catalogs.service.ts,catalogs.controller.ts,dto/*-skill.dto.ts}`, `api/src/entities/skill.entity.ts`, `api/src/audit/audit.service.ts`, `api/src/common/http-exception.filter.ts`, `api/src/profiles/profiles.service.ts`, `web/src/pages/admin/AreasSkills.tsx`, `web/src/services/*`, `web/src/index.css`, `scripts/e2e-v2.mjs`, `scripts/e2e-batch-1.mjs`, `scripts/e2e-batch-7.mjs`.
+
+**Pruebas:** `e2e-v2` batch4 (12): regla canónica, bloqueo por alias, sin excepción con motivo, sugerencia por etiquetas, confirmación con áreas sugeridas, guardado con motivo, auditoría, alias guardados, alias ajeno rechazado, nombres técnicos, unicidad normalizada, área obligatoria.
+
+**Resultados:** regresión completa: 17 suites, 1243 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 70, B9 49, B10 42, B11 46, QA 74, V2 52). Web compila, móvil `tsc` limpio.
+
+**Regresiones:** B7 creaba «OpenGL» en un área sin la etiqueta `opengl` mientras otras áreas sí la tenían: la clasificación pedía motivo, como corresponde; se ajustó el escenario.
+
+**Pendientes:** ninguno.
+
+**Riesgos:** las reglas canónicas son una lista cerrada en código; ampliarla es un cambio versionado, no un parámetro.

@@ -31,6 +31,10 @@ export class Skill {
   code: string;
 
   @Index()
+  /** Otros nombres de la misma tecnología (V2 §23.2): «ReactJS» para React. */
+  @Column({ type: 'text', array: true, default: () => "'{}'" })
+  aliases: string[];
+
   @Column({ name: 'academic_area_id', type: 'uuid', nullable: true })
   academicAreaId: string | null;
 

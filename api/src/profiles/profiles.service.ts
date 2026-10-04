@@ -273,7 +273,7 @@ export class ProfilesService {
     if (estado.missing.length > 0) {
       throw new BadRequestException({
         message: `Para terminar la bienvenida falta ${estado.missing.join(', ')}.`,
-        missing: estado.missing,
+        details: { missing: estado.missing },
       });
     }
     if (!estado.completed) {

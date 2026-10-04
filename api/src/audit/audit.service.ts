@@ -43,6 +43,8 @@ export const AuditEventType = {
   VISIBILITY_CHANGED: 'VISIBILITY_CHANGED',
   // Configuracion
   CONFIG_CHANGED: 'CONFIG_CHANGED',
+  /** V2 §23.3: el administrador guardó una habilidad fuera del área sugerida. */
+  SKILL_CLASSIFICATION_OVERRIDE: 'SKILL_CLASSIFICATION_OVERRIDE',
 } as const;
 
 export type AuditEventTypeValue = (typeof AuditEventType)[keyof typeof AuditEventType];

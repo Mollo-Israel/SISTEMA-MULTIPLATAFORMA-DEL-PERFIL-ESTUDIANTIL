@@ -26,6 +26,7 @@ import type {
   ProjectMemberDetailed,
   ValidationVerdict,
   Questionnaire,
+  SkillClassification,
   SkillInterest,
   SkillInterestKind,
   UserStatus,
@@ -977,6 +978,11 @@ export const adminService = {
   updateArea: (id: string, data: Record<string, unknown>) =>
     api.patch(`/academic-areas/${id}`, data).then((r) => r.data),
   createSkill: (data: Record<string, unknown>) => api.post('/skills', data).then((r) => r.data),
+  /** Área sugerida para una tecnología (V2 §23.3). No guarda nada. */
+  classifySkill: (name: string, aliases: string[]) =>
+    api
+      .get<SkillClassification>('/skills/classify', { params: { name, aliases: aliases.join(',') } })
+      .then((r) => r.data),
 
   // Categorias de actividad (RF4)
   createActivityCategory: (data: Record<string, unknown>) =>

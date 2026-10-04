@@ -590,7 +590,7 @@ async function preparar() {
       body: { name: `${nombre} ${TS}`, description: `Área del escenario ${nombre}.`, tags },
     })).data;
 
-  const areaFuerte = await crearArea('Computacion Grafica', ['shaders', 'render']);
+  const areaFuerte = await crearArea('Computacion Grafica', ['shaders', 'render', 'opengl']);
   const areaRespaldada = await crearArea('Redes Industriales', ['modbus', 'scada']);
   const areaMejora = await crearArea('Criptografia Aplicada', ['cifrado']);
   const areaNueva = await crearArea('Bioinformatica', ['genoma']);

@@ -91,17 +91,34 @@ export class CatalogsController {
     return this.catalogsService.findSkills(user.role === RolNombre.ADMIN);
   }
 
+  @Get('skills/classify')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Área sugerida para una tecnología (V2 §23.3).',
+    description: 'Regla canónica, sugerencia por etiquetas o ninguna. No guarda nada.',
+  })
+  classifySkill(@Query('name') name = '', @Query('aliases') aliases = '') {
+    return this.catalogsService.classify(
+      String(name).slice(0, 120),
+      String(aliases).split(',').map((a) => a.trim()).filter(Boolean).slice(0, 10),
+    );
+  }
+
   @Post('skills')
   @Roles(RolNombre.ADMIN)
-  createSkill(@Body() dto: CreateSkillDto) {
-    return this.catalogsService.createSkill(dto);
+  createSkill(@Body() dto: CreateSkillDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.catalogsService.createSkill(dto, user.userId);
   }
 
   @Patch('skills/:id')
   @Roles(RolNombre.ADMIN)
   @ApiOperation({ summary: 'Editar una habilidad o cambiar su estado.' })
-  updateSkill(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSkillDto) {
-    return this.catalogsService.updateSkill(id, dto);
+  updateSkill(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSkillDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.catalogsService.updateSkill(id, dto, user.userId);
   }
 
   // ---------------- Catalogo de recursos y cursos externos (§61) ----------------

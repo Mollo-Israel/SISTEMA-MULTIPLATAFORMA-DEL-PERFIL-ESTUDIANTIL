@@ -186,6 +186,8 @@ export interface GamificationCriterion {
 export interface Skill {
   id: string;
   name: string;
+  /** Otros nombres de la misma tecnología (V2 §23.2). */
+  aliases?: string[];
   code: string;
   academicAreaId: string | null;
   academicArea?: AcademicArea | null;
@@ -199,6 +201,13 @@ export const SKILL_INTEREST_LABEL: Record<SkillInterestKind, string> = {
   interest: 'Me interesa',
   improve: 'Quiero mejorar',
 };
+
+export interface SkillClassification {
+  rule: 'canonical' | 'suggested' | 'none';
+  areaIds: string[];
+  areaNames: string[];
+  reason: string | null;
+}
 
 export interface SkillInterest {
   skillId: string;

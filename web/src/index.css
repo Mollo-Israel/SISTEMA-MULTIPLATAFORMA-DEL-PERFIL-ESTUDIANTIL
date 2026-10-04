@@ -933,6 +933,7 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .notice a { font-weight: 600; text-decoration: underline; }
 .notice-warn { background: #fff6e5; color: #6b4a0e; border: 1px solid #f3d9a4; }
 .notice-info { background: #eef4ff; color: #1d3c78; border: 1px solid #c9daf8; }
+.notice-error { background: #fdecec; color: #7a1c1c; border: 1px solid #f3b8b8; }
 .notice-ok { background: #e8f6ee; color: #155b38; border: 1px solid #bfe3cd; }
 
 .table-scroll { width: 100%; overflow-x: auto; }

@@ -4,7 +4,7 @@ import { FiAlertTriangle, FiEdit2, FiGrid, FiPlus, FiSearch, FiTool } from 'reac
 import { apiError } from '../../api/client';
 import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import type { AcademicArea, Skill } from '../../services/types';
+import type { AcademicArea, Skill, SkillClassification } from '../../services/types';
 import {
   AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
   SkeletonTable, Tabs,
@@ -374,16 +374,56 @@ function EditAreaDialog({ area, onClose, onSaved }: { area: AcademicArea; onClos
 //  Habilidades
 // ===========================================================================
 
-const CAMPOS_SKILL = ['name', 'code', 'academicAreaId'] as const;
+const CAMPOS_SKILL = ['name', 'code', 'academicAreaId', 'aliases', 'overrideReason'] as const;
 type CampoSkill = (typeof CAMPOS_SKILL)[number];
-const skillVacia: Record<CampoSkill, string> = { name: '', code: '', academicAreaId: '' };
+const skillVacia: Record<CampoSkill, string> = { name: '', code: '', academicAreaId: '', aliases: '', overrideReason: '' };
+
+const aliasesDe = (v: string) => v.split(',').map((a) => a.trim()).filter(Boolean);
 
 function reglasSkill(f: Record<CampoSkill, string>) {
   return validate(f, {
     name: skillName,
     code: codeRule,
     academicAreaId: (v) => (v ? null : 'Elige el área: es la que recibe el puntaje de esta habilidad.'),
+    aliases: (v) => {
+      const lista = aliasesDe(v);
+      if (lista.length > 10) return 'Como máximo 10 alias.';
+      const malo = lista.find((a) => skillName(a));
+      return malo ? `«${malo}» no es un nombre de tecnología válido.` : null;
+    },
+    overrideReason: (v) => (v.trim() && v.trim().length < 10 ? 'Explica el motivo en al menos 10 caracteres.' : null),
   });
+}
+
+/** Cuerpo de alta/edición: alias como lista y el motivo solo si se escribió. */
+function cuerpoSkill(f: Record<CampoSkill, string>) {
+  return {
+    name: f.name.trim(),
+    code: f.code.trim(),
+    academicAreaId: f.academicAreaId,
+    aliases: aliasesDe(f.aliases),
+    ...(f.overrideReason.trim() ? { overrideReason: f.overrideReason.trim() } : {}),
+  };
+}
+
+/**
+ * Clasificación sugerida en vivo (V2 §23.3): regla canónica o coincidencia
+ * por etiquetas. Se pide al servidor, que es quien decide al guardar.
+ */
+function useClasificacion(nombre: string, aliases: string) {
+  const [c, setC] = useState<SkillClassification | null>(null);
+  useEffect(() => {
+    const n = nombre.trim();
+    if (n.length < 2) {
+      setC(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      adminService.classifySkill(n, aliasesDe(aliases)).then(setC).catch(() => setC(null));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [nombre, aliases]);
+  return c;
 }
 
 function SkillForm({
@@ -409,7 +449,11 @@ function SkillForm({
     onChange(next);
     onFieldTouched(campo);
   };
+  const clasificacion = useClasificacion(value.name, value.aliases);
+  const fuera = !!clasificacion && clasificacion.rule !== 'none' && !!value.academicAreaId
+    && !clasificacion.areaIds.includes(value.academicAreaId);
   return (
+    <>
     <div className="row">
       <FormField label="Nombre" required error={errors.name} hint="El nombre de la tecnología: «React», «C#», «Node.js».">
         <input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="GraphQL" />
@@ -431,6 +475,33 @@ function SkillForm({
         </select>
       </FormField>
     </div>
+    <FormField label="Alias" error={errors.aliases} hint="Otros nombres de la misma tecnología, separados por coma: «ReactJS, React.js».">
+      <input value={value.aliases} onChange={(e) => set('aliases', e.target.value)} placeholder="ReactJS, React.js" />
+    </FormField>
+    {clasificacion && clasificacion.rule !== 'none' && (
+      <div className={`notice ${fuera ? (clasificacion.rule === 'canonical' ? 'notice-error' : 'notice-warn') : 'notice-info'}`}>
+        <FiAlertTriangle size={18} />
+        <div>
+          <strong>{clasificacion.rule === 'canonical' ? 'Regla del catálogo' : 'Sugerencia'}:</strong> {clasificacion.reason}
+          {fuera && clasificacion.rule === 'canonical' && ' No se podrá guardar en otra área.'}
+          {!value.academicAreaId || fuera ? (
+            <div style={{ marginTop: '0.35rem' }}>
+              {clasificacion.areaIds.map((id, i) => (
+                <Button key={id} type="button" size="sm" variant="secondary" onClick={() => set('academicAreaId', id)}>
+                  Usar {clasificacion.areaNames[i]}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    )}
+    {(fuera && clasificacion?.rule === 'suggested') || errors.overrideReason ? (
+      <FormField label="Motivo para guardarla en esta área" error={errors.overrideReason} hint="Queda registrado en la auditoría.">
+        <textarea value={value.overrideReason} onChange={(e) => set('overrideReason', e.target.value)} placeholder="Por qué pertenece al área elegida…" />
+      </FormField>
+    ) : null}
+    </>
   );
 }
 
@@ -471,11 +542,7 @@ function SkillsPanel({
     }
     setSaving(true);
     try {
-      await adminService.createSkill({
-        name: form.name.trim(),
-        code: form.code.trim(),
-        academicAreaId: form.academicAreaId,
-      });
+      await adminService.createSkill(cuerpoSkill(form));
       toast.success('Habilidad creada.', form.name.trim());
       setForm({ ...skillVacia, academicAreaId: form.academicAreaId });
       setCodeTouched(false);
@@ -640,6 +707,8 @@ function EditSkillDialog({
     name: skill.name,
     code: skill.code,
     academicAreaId: skill.academicAreaId ?? '',
+    aliases: (skill.aliases ?? []).join(', '),
+    overrideReason: '',
   });
   const [codeTouched, setCodeTouched] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -666,11 +735,7 @@ function EditSkillDialog({
     }
     setSaving(true);
     try {
-      await adminService.updateSkill(skill.id, {
-        name: form.name.trim(),
-        code: form.code.trim(),
-        academicAreaId: form.academicAreaId,
-      });
+      await adminService.updateSkill(skill.id, cuerpoSkill(form));
       onSaved();
     } catch (e2) {
       errores.fromApi(e2);

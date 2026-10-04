@@ -28,6 +28,8 @@ import {
   UpdateLearningResourceDto,
 } from './dto/learning-resource.dto';
 import { slugCode } from '../common/validation';
+import { AuditEventType, AuditService } from '../audit/audit.service';
+import { classifySkill, Classification, normalizeTerm } from './skill-classification';
 
 /**
  * Conflicto que señala el campo culpable, para que el formulario ponga el
@@ -42,6 +44,7 @@ export class CatalogsService {
   constructor(
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(Skill) private readonly skills: Repository<Skill>,
+    private readonly audit: AuditService,
     @InjectRepository(GamificationCriterion)
     private readonly criteria: Repository<GamificationCriterion>,
     @InjectRepository(ActivityCategory)
@@ -225,12 +228,79 @@ export class CatalogsService {
     });
   }
 
-  async createSkill(dto: CreateSkillDto): Promise<Skill> {
+  /** Clasificación sugerida para una tecnología (V2 §23.3), sin guardar nada. */
+  async classify(name: string, aliases: string[]): Promise<Classification> {
+    const areas = await this.areas.find();
+    return classifySkill(name, aliases, areas);
+  }
+
+  /**
+   * Aplica la validación semántica (V2 §23.3) antes de guardar.
+   *
+   * - Regla canónica y área distinta → 409 sin opción.
+   * - Sugerencia distinta del área elegida → 409 salvo que venga un motivo,
+   *   que se audita.
+   */
+  private async assertClassification(
+    name: string,
+    aliases: string[],
+    areaId: string,
+    overrideReason: string | undefined,
+    actorUserId: string | null,
+    skillId: string | null,
+  ): Promise<void> {
+    const c = await this.classify(name, aliases);
+    if (c.rule === 'none' || c.areaIds.includes(areaId)) return;
+    if (c.rule === 'canonical') {
+      throw new ConflictException({
+        code: 'CLASSIFICATION_BLOCKED',
+        message: c.reason,
+        fields: { academicAreaId: [`${c.reason} No se puede clasificar en otra área.`] },
+        details: { suggestedAreaIds: c.areaIds, suggestedAreaNames: c.areaNames },
+      });
+    }
+    if (!overrideReason) {
+      throw new ConflictException({
+        code: 'CLASSIFICATION_CONFIRMATION_REQUIRED',
+        message: `${c.reason} Si de verdad pertenece al área elegida, indica el motivo.`,
+        fields: { academicAreaId: [`${c.reason} Para guardarla en otra área, indica el motivo.`] },
+        details: { suggestedAreaIds: c.areaIds, suggestedAreaNames: c.areaNames },
+      });
+    }
+    await this.audit.record({
+      actorUserId,
+      eventType: AuditEventType.SKILL_CLASSIFICATION_OVERRIDE,
+      entityType: 'skill',
+      entityId: skillId ?? undefined,
+      metadata: { name, chosenAreaId: areaId, suggestedAreaIds: c.areaIds, reason: overrideReason },
+    });
+  }
+
+  /** Un alias no puede ser el nombre (o alias) de otra habilidad. */
+  private async assertAliasesFree(aliases: string[], exceptId?: string): Promise<string[]> {
+    const limpios = [...new Map(aliases.map((a) => [normalizeTerm(a), a])).values()];
+    if (limpios.length === 0) return [];
+    const otras = await this.skills.find(exceptId ? { where: { id: Not(exceptId) } } : {});
+    const ocupados = new Map<string, string>();
+    for (const o of otras) {
+      ocupados.set(normalizeTerm(o.name), o.name);
+      for (const al of o.aliases ?? []) ocupados.set(normalizeTerm(al), o.name);
+    }
+    const choque = limpios.find((a) => ocupados.has(normalizeTerm(a)));
+    if (choque) {
+      throw conflicto('aliases', `«${choque}» ya identifica a la habilidad «${ocupados.get(normalizeTerm(choque))}».`);
+    }
+    return limpios;
+  }
+
+  async createSkill(dto: CreateSkillDto, actorUserId: string | null = null): Promise<Skill> {
     const exists = await this.skills.findOne({ where: { name: ILike(dto.name) } });
     if (exists) {
       throw conflicto('name', 'La habilidad ya existe en el catálogo.');
     }
     await this.assertAreaExists(dto.academicAreaId, 'academicAreaId');
+    const aliases = await this.assertAliasesFree(dto.aliases ?? []);
+    await this.assertClassification(dto.name, aliases, dto.academicAreaId, dto.overrideReason, actorUserId, null);
     const code = dto.code
       ? await this.assertCodeFree(this.skills, dto.code, 'habilidad')
       : await this.freeCode(this.skills, slugCode(dto.name));
@@ -238,13 +308,14 @@ export class CatalogsService {
       this.skills.create({
         name: dto.name,
         code,
+        aliases,
         academicAreaId: dto.academicAreaId,
         isActive: true,
       }),
     );
   }
 
-  async updateSkill(id: string, dto: UpdateSkillDto): Promise<Skill> {
+  async updateSkill(id: string, dto: UpdateSkillDto, actorUserId: string | null = null): Promise<Skill> {
     const skill = await this.skills.findOne({ where: { id } });
     if (!skill) {
       throw new NotFoundException('Habilidad no encontrada.');
@@ -261,9 +332,18 @@ export class CatalogsService {
     if (dto.code !== undefined && dto.code !== skill.code) {
       skill.code = await this.assertCodeFree(this.skills, dto.code, 'habilidad', id);
     }
+    if (dto.aliases !== undefined) {
+      skill.aliases = await this.assertAliasesFree(dto.aliases, id);
+    }
     if (dto.academicAreaId !== undefined) {
       await this.assertAreaExists(dto.academicAreaId, 'academicAreaId');
       skill.academicAreaId = dto.academicAreaId;
+    }
+    // Se revalida si cambió algo de lo que decide la clasificación.
+    if (dto.name !== undefined || dto.aliases !== undefined || dto.academicAreaId !== undefined) {
+      await this.assertClassification(
+        skill.name, skill.aliases ?? [], skill.academicAreaId as string, dto.overrideReason, actorUserId, skill.id,
+      );
     }
     if (dto.isActive !== undefined) skill.isActive = dto.isActive;
     return this.skills.save(skill);

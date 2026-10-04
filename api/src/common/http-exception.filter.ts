@@ -135,6 +135,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
             code: String(objeto.code ?? CODIGO_POR_ESTADO[status] ?? 'ERROR'),
             message: String(mensajes ?? exception.message),
             ...(fields ? { fields } : {}),
+            // Datos estructurados que construye el propio servicio (p. ej. el
+            // área sugerida): nunca una traza ni un error de base.
+            ...(objeto.details !== undefined ? { details: objeto.details } : {}),
             ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
             requestId,
           },
