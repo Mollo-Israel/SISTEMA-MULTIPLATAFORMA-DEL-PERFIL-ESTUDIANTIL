@@ -21,7 +21,7 @@
  */
 
 import {
-  PWD, leerCorreo, loginAdmin, provisionAndActivate, req,
+  PWD, codigoUniversitario, leerCorreo, loginAdmin, provisionAndActivate, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -59,7 +59,7 @@ async function activacion(ctx) {
   const desde = Date.now();
   const alta = await req('POST', '/users', {
     token: ctx.admin,
-    body: { firstName: 'Ana', lastName: 'Quispe', email, role: 'STUDENT', semester: 3 },
+    body: { firstName: 'Ana', lastName: 'Quispe', email, role: 'STUDENT', semester: 3, universityCode: codigoUniversitario() },
   });
   check(alta.status === 201, 'QA.1 El administrador da de alta al estudiante con su semestre', `status ${alta.status}`);
   const texto = JSON.stringify(alta.data ?? {});
@@ -111,7 +111,7 @@ async function reenvioYCodigo(ctx) {
   const desde = Date.now();
   await req('POST', '/users', {
     token: ctx.admin,
-    body: { firstName: 'Luis', lastName: 'Mamani', email, role: 'STUDENT', semester: 2 },
+    body: { firstName: 'Luis', lastName: 'Mamani', email, role: 'STUDENT', semester: 2, universityCode: codigoUniversitario() },
   });
   const primero = await leerCorreo(email, { tipo: 'account_activation', desde });
 
@@ -163,6 +163,19 @@ async function formularios(ctx) {
   });
   check(sinSemestre.status === 400 && sinSemestre.data?.fields?.semester,
     'QA.24 Estudiante sin semestre: error en el campo «semestre»', json(sinSemestre.data));
+  check(sinSemestre.data?.fields?.universityCode,
+    'QA.24b Ni sin código universitario (V2 §12): error en ese campo', json(sinSemestre.data?.fields));
+  const codigo = codigoUniversitario();
+  const conCodigo = await req('POST', '/users', {
+    token: ctx.admin,
+    body: { firstName: 'Eva', lastName: 'Rojas', email: correoEst('cod1'), role: 'STUDENT', semester: 2, universityCode: codigo },
+  });
+  const codigoRepetido = await req('POST', '/users', {
+    token: ctx.admin,
+    body: { firstName: 'Eva', lastName: 'Rojas', email: correoEst('cod2'), role: 'STUDENT', semester: 2, universityCode: codigo },
+  });
+  check(conCodigo.status === 201 && codigoRepetido.status === 409 && codigoRepetido.data?.fields?.universityCode,
+    'QA.24c El código universitario es único', `${conCodigo.status}/${codigoRepetido.status}`);
 
   const malos = await req('POST', '/users', {
     token: ctx.admin,

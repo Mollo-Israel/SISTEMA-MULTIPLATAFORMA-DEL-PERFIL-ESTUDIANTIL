@@ -85,9 +85,13 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
       .finally(() => setChecking(false));
   }, [tokenUrl, mode]);
 
-  const reqs = useMemo(() => passwordRequirements(password), [password]);
-  const strength = passwordStrength(password);
-  const verdict = passwordVerdict(password);
+  // Con el código, la persona escribió su correo: se aplica la misma regla
+  // que el servidor («no contener tu correo»). Con el enlace solo se conoce
+  // enmascarado, y esa comprobación la hace el servidor.
+  const contexto = via === 'code' ? { email } : {};
+  const reqs = useMemo(() => passwordRequirements(password, contexto), [password, via, email]); // eslint-disable-line react-hooks/exhaustive-deps
+  const strength = passwordStrength(password, contexto);
+  const verdict = passwordVerdict(password, contexto);
 
   const limpiar = (campo: string) => {
     setErrors((x) => ({ ...x, [campo]: '' }));

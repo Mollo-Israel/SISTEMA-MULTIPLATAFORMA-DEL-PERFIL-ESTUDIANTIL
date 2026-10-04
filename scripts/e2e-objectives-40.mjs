@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
-import { leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
+import { codigoUniversitario, leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -187,6 +187,7 @@ async function objective1(ctx) {
       password: PWD,
       role: 'STUDENT',
       semester: 1,
+      universityCode: `O40${TS}`,
     },
   });
   check(
@@ -222,6 +223,7 @@ async function objective1(ctx) {
       password: PWD,
       role: 'STUDENT',
       semester: 1,
+      universityCode: `O40${TS}B`,
     },
   });
   check(dup.status === 409, '1.6 Correo duplicado -> 409', `status ${dup.status}`);
@@ -356,7 +358,7 @@ async function objective1(ctx) {
         email: email(key),
         password: PWD,
         role,
-        ...(role === 'STUDENT' ? { semester: 1 } : {}),
+        ...(role === 'STUDENT' ? { semester: 1, universityCode: codigoUniversitario() } : {}),
       },
     });
     if (r.status === 201 && r.data?.status === 'pending_activation') {

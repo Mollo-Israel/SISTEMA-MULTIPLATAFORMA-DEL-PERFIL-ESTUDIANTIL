@@ -208,6 +208,26 @@ primer estudiante que no recibe su invitación.
 En producción no se guarda ninguna copia local de los correos: el código de
 activación solo existe en el buzón de su destinatario.
 
+### 8.1. Entregabilidad (V2 §19)
+
+Antes de abrir el sistema a los estudiantes, con el dominio desde el que se
+envía (por ejemplo `afinia.univalle.edu` o el dominio de la universidad):
+
+| Registro / tarea | Qué es | Cómo se comprueba |
+|---|---|---|
+| **SPF** | Registro DNS `TXT` que dice qué servidores pueden enviar en nombre del dominio (`v=spf1 include:<proveedor> -all`). | `nslookup -type=txt dominio` muestra el `v=spf1`. |
+| **DKIM** | Firma criptográfica de cada correo; el proveedor da una clave pública para publicar en DNS. | En un correo recibido, «Mostrar original» → `DKIM: PASS`. |
+| **DMARC** | Política para correos que fallan SPF/DKIM. Empezar con `v=DMARC1; p=none; rua=mailto:dmarc@dominio` para observar, y pasar a `p=quarantine` cuando los informes salgan limpios. | `nslookup -type=txt _dmarc.dominio`. |
+| **Remitente verificado** | `SMTP_FROM` debe ser una dirección del dominio autenticado (con Gmail y Outlook, la misma cuenta de `SMTP_USER`). | «Correo → Probar» en Administración. |
+| **Rebotes** | Un correo a una dirección inexistente vuelve como rebote al remitente. Revise ese buzón (o el panel del proveedor) tras importar un padrón: un rebote suele ser un error tipográfico en el padrón. | Panel del proveedor / buzón de `SMTP_FROM`. |
+| **Reputación** | No enviar ráfagas: la API ya limita el ritmo (`SMTP_MAX_PER_MINUTE`), espera 2 minutos entre reenvíos y corta a 5 por día. | Panel del proveedor (tasa de rebote < 2 %). |
+| **Prueba con Outlook** | Envíe una invitación de prueba a una cuenta `@est.univalle.edu` real y confirme que llega a «Bandeja de entrada», no a «Correo no deseado», y que el botón y el código se ven bien. | Manual, antes de cada despliegue que cambie el remitente. |
+
+Afinia registra el estado de cada intento (`QUEUED`, `SENT_TO_SMTP`, `FAILED`).
+`SENT_TO_SMTP` significa que el servidor de correo **aceptó** el mensaje; si
+después lo rebota, eso solo se ve en el proveedor. Por eso el sistema nunca dice
+«entregado».
+
 ---
 
 ## 9. Las pruebas automáticas y el correo real

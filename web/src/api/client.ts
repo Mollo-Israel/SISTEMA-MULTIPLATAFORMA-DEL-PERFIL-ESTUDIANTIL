@@ -1,34 +1,62 @@
 import axios from 'axios';
 
-const TOKEN_KEY = 'afinia_access';
-const REFRESH_KEY = 'afinia_refresh';
-
 /**
- * Almacen de sesion (§14).
+ * Almacén de sesión (V2 §18).
  *
- * El access token vive en memoria y solo se respalda en localStorage para
- * sobrevivir a una recarga; dura minutos, asi que su exposicion es acotada.
- * El refresh token es el que de verdad importa y es revocable desde el
- * servidor: cerrar sesion o suspender la cuenta lo invalidan de inmediato.
+ * El access token vive **solo en memoria**: dura 15 minutos y una recarga lo
+ * pierde, que es lo que se busca. El refresh token ni siquiera llega a
+ * JavaScript: la API lo guarda en una cookie HttpOnly que el navegador envía
+ * solo a `/api/auth`. En `localStorage` queda únicamente una marca sin valor
+ * secreto («hay una sesión que intentar renovar»), para no pedir una
+ * renovación inútil a quien nunca inició sesión.
  */
+const SESSION_HINT = 'afinia_session';
+let accessToken: string | null = null;
+
+// Restos de la versión anterior, que guardaba los tokens en localStorage.
+try {
+  localStorage.removeItem('afinia_access');
+  localStorage.removeItem('afinia_refresh');
+} catch {
+  /* almacenamiento no disponible */
+}
+
 export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (token: string) => localStorage.setItem(TOKEN_KEY, token),
-  getRefresh: () => localStorage.getItem(REFRESH_KEY),
-  setRefresh: (token: string) => localStorage.setItem(REFRESH_KEY, token),
-  setPair: (access: string, refresh: string) => {
-    localStorage.setItem(TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_KEY, refresh);
+  get: () => accessToken,
+  set: (token: string) => {
+    accessToken = token;
+    try {
+      localStorage.setItem(SESSION_HINT, '1');
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  },
+  hasSession: () => {
+    try {
+      return localStorage.getItem(SESSION_HINT) === '1';
+    } catch {
+      return false;
+    }
   },
   clear: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
+    accessToken = null;
+    try {
+      localStorage.removeItem(SESSION_HINT);
+    } catch {
+      /* almacenamiento no disponible */
+    }
   },
 };
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api',
 });
+
+/** Opciones de las llamadas de sesión: cookie HttpOnly en vez de token en el cuerpo. */
+export const SESSION_REQUEST = {
+  withCredentials: true,
+  headers: { 'X-Session-Transport': 'cookie' },
+} as const;
 
 /**
  * Peticiones en curso. La barra de progreso superior se suscribe aqui, de modo
@@ -85,19 +113,17 @@ export const setUnauthorizedHandler = (handler: () => void) => {
  * esto cada una pediria su propio refresh y, como el token rota, solo la
  * primera funcionaria: el resto cerraria la sesion del usuario.
  */
-let refreshing: Promise<string | null> | null = null;
+let refreshing: Promise<{ accessToken: string; user: unknown } | null> | null = null;
 
-async function renovarSesion(): Promise<string | null> {
-  const refreshToken = tokenStore.getRefresh();
-  if (!refreshToken) return null;
+/** Canjea la cookie de sesión por un access token nuevo. */
+export async function renovarSesion(): Promise<{ accessToken: string; user: unknown } | null> {
+  if (!tokenStore.hasSession()) return null;
   try {
     // Cliente aparte: este no debe pasar por los interceptores, o un 401 en
     // la propia renovacion entraria en bucle.
-    const { data } = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {
-      refreshToken,
-    });
-    tokenStore.setPair(data.accessToken, data.refreshToken);
-    return data.accessToken as string;
+    const { data } = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {}, SESSION_REQUEST);
+    tokenStore.set(data.accessToken);
+    return { accessToken: data.accessToken as string, user: data.user };
   } catch {
     tokenStore.clear();
     return null;
@@ -124,7 +150,7 @@ api.interceptors.response.use(
       && !original._reintentado
       && !url.includes('/auth/refresh')
       && !url.includes('/auth/login')
-      && !!tokenStore.getRefresh();
+      && tokenStore.hasSession();
 
     if (esRenovable) {
       original._reintentado = true;

@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsEnum,
   IsIn,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Matches,
@@ -113,10 +114,15 @@ export class CreateUserDto {
   @IsIn([1, 2, 3, 4, 5, 6, 7, 8], { message: 'Indique el semestre del estudiante (1 a 8).' })
   semester?: number;
 
+  /**
+   * Código universitario (V2 §12): obligatorio y único para un estudiante. Es
+   * el identificador institucional con el que el padrón lo reconoce después.
+   */
   @ApiProperty({ required: false, example: '202100123' })
-  @IsOptional()
+  @ValidateIf((o: CreateUserDto) => o.role === RolNombre.STUDENT || o.universityCode !== undefined)
   @Transform(cleanLine)
-  @IsString()
+  @IsString({ message: 'El código universitario es obligatorio.' })
+  @IsNotEmpty({ message: 'El código universitario es obligatorio.' })
   @MinLength(3, { message: 'El código universitario es demasiado corto.' })
   @MaxLength(30, { message: 'El código universitario no puede superar 30 caracteres.' })
   @Matches(/^[A-Za-z0-9._-]+$/, {

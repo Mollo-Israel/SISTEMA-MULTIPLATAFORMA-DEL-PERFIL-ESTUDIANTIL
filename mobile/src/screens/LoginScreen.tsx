@@ -29,8 +29,13 @@ const TITULO: Record<Modo, { t: string; s: string }> = {
   restablecer: { t: 'Nueva contraseña', s: 'Escribe el código del correo y elige una contraseña nueva' },
 };
 
-function requisitos(p: string) {
-  return [
+/** Misma política que el servidor (V2 §17), incluida la regla del correo. */
+function requisitos(p: string, email: string) {
+  const correo = email.toLowerCase().trim();
+  const local = correo.split('@')[0] ?? '';
+  const lower = p.toLowerCase();
+  const conCorreo = correo.includes('@') && (lower === correo || (local.length >= 4 && lower.includes(local)));
+  const reglas = [
     { t: `${PASSWORD_MIN}+ caracteres`, ok: p.length >= PASSWORD_MIN && p.length <= 128 },
     { t: 'Una mayúscula', ok: /[A-Z]/.test(p) },
     { t: 'Una minúscula', ok: /[a-z]/.test(p) },
@@ -38,6 +43,8 @@ function requisitos(p: string) {
     { t: 'Un símbolo', ok: /[^A-Za-z0-9\s]/.test(p) },
     { t: 'Sin espacios', ok: p.length > 0 && !/\s/.test(p) },
   ];
+  if (correo.includes('@')) reglas.push({ t: 'Sin tu correo', ok: p.length > 0 && !conCorreo });
+  return reglas;
 }
 
 function reloj(seg: number): string {
@@ -59,7 +66,7 @@ export default function LoginScreen() {
     return () => clearTimeout(t);
   }, [espera]);
 
-  const reqs = useMemo(() => requisitos(form.password), [form.password]);
+  const reqs = useMemo(() => requisitos(form.password, form.email), [form.password, form.email]);
   const avance = Math.round((reqs.filter((r) => r.ok).length / reqs.length) * 100);
   const pideClave = modo === 'activar' || modo === 'restablecer';
 

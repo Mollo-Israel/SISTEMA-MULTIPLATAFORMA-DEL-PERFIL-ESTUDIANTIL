@@ -21,6 +21,8 @@ export interface PublicUser {
 }
 
 export interface InvitationView {
+  /** Estado del intento (V2 §19): aceptado por SMTP no es «entregado». */
+  deliveryState?: 'QUEUED' | 'SENT_TO_SMTP' | 'FAILED';
   status: 'sent' | 'queued' | 'failed' | 'skipped';
   sentTo?: string;
   /** El correo está en modo simulado: no salió a ningún buzón. */
@@ -77,8 +79,8 @@ export const USER_STATUS_LABEL: Record<UserStatus, string> = {
 
 export interface AuthResult {
   accessToken: string;
-  /** Token de larga duración y revocable con el que se renueva el acceso (§14). */
-  refreshToken: string;
+  /** Solo para clientes sin cookie (móvil). La web lo recibe en una cookie HttpOnly. */
+  refreshToken?: string;
   /** Vida del access token en segundos. */
   expiresIn: number;
   user: PublicUser;

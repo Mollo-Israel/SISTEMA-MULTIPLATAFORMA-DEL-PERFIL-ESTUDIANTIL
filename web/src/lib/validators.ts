@@ -162,6 +162,14 @@ export const universityCode: Validator = (v) => {
   return null;
 };
 
+/** Código universitario obligatorio: alta manual de un estudiante (V2 §12). */
+export const requiredUniversityCode: Validator = (v) => {
+  const t = (v ?? '').trim();
+  if (!t) return 'El código universitario es obligatorio.';
+  if (!UNIVERSITY_CODE_RE.test(t)) return 'De 3 a 30 caracteres: letras, números, punto, guion o guion bajo.';
+  return null;
+};
+
 /** Sugiere un código a partir de un nombre: «Bases de Datos» → «bases_de_datos». */
 export function suggestCode(nombre: string): string {
   return nombre

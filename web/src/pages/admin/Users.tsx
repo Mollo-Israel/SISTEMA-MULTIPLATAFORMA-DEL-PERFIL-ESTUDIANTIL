@@ -17,7 +17,7 @@ import { ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, PROVISIONABLE_ROLES, SEMEST
 import { USER_STATUS_LABEL } from '../../services/types';
 import type { InvitationView, PublicUser, UserStatus } from '../../services/types';
 import {
-  institutionalEmail, personName, universityCode, validate,
+  institutionalEmail, personName, requiredUniversityCode, universityCode, validate,
 } from '../../lib/validators';
 
 /** Color del estado en la tabla (§12). */
@@ -47,7 +47,7 @@ function reglas(form: Record<Campo, string>) {
     lastName: personName('apellido'),
     email: institutionalEmail,
     semester: (v) => (form.role === RolNombre.STUDENT && !v ? 'Elige el semestre que cursa.' : null),
-    universityCode: form.role === RolNombre.STUDENT ? universityCode : undefined,
+    universityCode: form.role === RolNombre.STUDENT ? requiredUniversityCode : undefined,
   });
 }
 
@@ -265,8 +265,9 @@ export default function AdminUsersPage() {
               </FormField>
               <FormField
                 label="Código universitario"
+                required
                 error={errores.errors.universityCode}
-                hint="Opcional. Si lo tiene, evita duplicados al importar el padrón."
+                hint="Identifica al estudiante en el padrón; no puede repetirse."
               >
                 <input
                   value={form.universityCode}

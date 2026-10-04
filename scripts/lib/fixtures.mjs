@@ -64,6 +64,13 @@ export const BUZON = process.env.MAIL_CAPTURE_DIR
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
+let secuenciaCodigo = 0;
+/** Código universitario único para las altas de prueba (V2 §12 lo exige). */
+export function codigoUniversitario() {
+  secuenciaCodigo += 1;
+  return `T${Date.now().toString(36)}${secuenciaCodigo}`.toUpperCase();
+}
+
 function analizarCorreo(m) {
   const token = /[?&]token=([A-Za-z0-9_-]+)/.exec(m.text ?? '')?.[1] ?? null;
   const codigo = /c[oó]digo[^:\n]*:\s*(\d{3})\s?(\d{3})/i.exec(m.text ?? '');
@@ -154,8 +161,12 @@ export async function provisionAndActivate(
   await asegurarCorreoDePrueba(adminToken);
   const desde = Date.now();
   const body = { firstName, lastName, email, role };
-  if (role === 'STUDENT') body.semester = semester ?? 1;
-  if (universityCode) body.universityCode = universityCode;
+  if (role === 'STUDENT') {
+    body.semester = semester ?? 1;
+    body.universityCode = universityCode ?? codigoUniversitario();
+  } else if (universityCode) {
+    body.universityCode = universityCode;
+  }
 
   const created = await req('POST', '/users', { token: adminToken, body });
   if (created.status !== 201) {

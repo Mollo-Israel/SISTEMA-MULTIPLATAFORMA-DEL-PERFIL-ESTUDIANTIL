@@ -1,4 +1,4 @@
-import { api } from '../api/client';
+import { api, SESSION_REQUEST } from '../api/client';
 import type {
   AcademicArea,
   InstitutionalPortfolio,
@@ -51,11 +51,10 @@ import type {
 
 export const authService = {
   login: (email: string, password: string) =>
-    api.post<AuthResult>('/auth/login', { email, password }).then((r) => r.data),
+    api.post<AuthResult>('/auth/login', { email, password }, SESSION_REQUEST).then((r) => r.data),
   me: () => api.get<PublicUser>('/auth/me').then((r) => r.data),
   /** Cierra la sesión en el servidor, no solo en el navegador (§14). */
-  logout: (refreshToken: string) =>
-    api.post('/auth/logout', { refreshToken }).then((r) => r.data),
+  logout: () => api.post('/auth/logout', {}, SESSION_REQUEST).then((r) => r.data),
   sessions: () => api.get('/auth/sessions').then((r) => r.data),
   logoutAll: () => api.delete('/auth/sessions').then((r) => r.data),
 };

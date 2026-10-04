@@ -21,7 +21,7 @@ import { ActivationService } from '../identity/activation.service';
 import { AccountMailService } from '../identity/account-mail.service';
 import { MailService, maskEmail } from '../mail/mail.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
-import { InvitationView, PublicUser, toPublicUser } from './types/public-user';
+import { deliveryStateOf, InvitationView, PublicUser, toPublicUser } from './types/public-user';
 
 /** Lo que el alta espera al correo antes de responder. Después, «en cola». */
 const ESPERA_INVITACION_MS = 6_000;
@@ -87,6 +87,13 @@ export class UsersService {
       throw new BadRequestException({
         message: 'Indique el semestre del estudiante.',
         fields: { semester: ['Indique el semestre del estudiante (1 a 8).'] },
+      });
+    }
+    // V2 §12: el código universitario también es obligatorio en el alta manual.
+    if (esEstudiante && !params.universityCode?.trim()) {
+      throw new BadRequestException({
+        message: 'El código universitario es obligatorio.',
+        fields: { universityCode: ['El código universitario es obligatorio.'] },
       });
     }
     if (esEstudiante && params.universityCode) {
@@ -156,12 +163,16 @@ export class UsersService {
   private async invitationOutcome(jobId: string, email: string): Promise<InvitationView> {
     const final = await this.accountMail.waitFor(jobId, ESPERA_INVITACION_MS);
     const simulated = this.mail.settings.transport === 'console';
-    if (final === 'sent') return { status: 'sent', sentTo: maskEmail(email), simulated, at: new Date() };
+    if (final === 'sent') {
+      return { status: 'sent', deliveryState: 'SENT_TO_SMTP', sentTo: maskEmail(email), simulated, at: new Date() };
+    }
     if (final === 'failed' || final === 'skipped') {
       const job = await this.accountMail.findJob(jobId);
-      return { status: final, sentTo: maskEmail(email), simulated, error: job?.lastError ?? null };
+      return {
+        status: final, deliveryState: 'FAILED', sentTo: maskEmail(email), simulated, error: job?.lastError ?? null,
+      };
     }
-    return { status: 'queued', sentTo: maskEmail(email), simulated };
+    return { status: 'queued', deliveryState: 'QUEUED', sentTo: maskEmail(email), simulated };
   }
 
   private async assertUniversityCodeAvailable(code: string, exceptProfileId?: string): Promise<void> {
@@ -235,6 +246,7 @@ export class UsersService {
         if (!job) continue;
         user.invitation = {
           status: job.status === 'pending' || job.status === 'sending' ? 'queued' : job.status,
+          deliveryState: deliveryStateOf(job.status),
           sentTo: maskEmail(user.email),
           simulated,
           error: job.lastError,
@@ -293,6 +305,13 @@ export class UsersService {
       const cambiaSemestre = params.semester !== undefined && params.semester !== perfil?.semester;
       const cambiaCodigo =
         params.universityCode !== undefined && params.universityCode !== perfil?.universityCode;
+      if (cambiaCodigo && !params.universityCode?.trim()) {
+        // Se puede corregir, pero no dejar vacío (V2 §12).
+        throw new BadRequestException({
+          message: 'El código universitario es obligatorio.',
+          fields: { universityCode: ['El código universitario es obligatorio.'] },
+        });
+      }
       if (cambiaSemestre || cambiaCodigo) {
         if (cambiaCodigo && params.universityCode) {
           await this.assertUniversityCodeAvailable(params.universityCode, perfil?.id);

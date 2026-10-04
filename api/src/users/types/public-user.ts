@@ -24,8 +24,22 @@ export interface PublicUser {
   invitation?: InvitationView;
 }
 
+/**
+ * Estado mínimo del intento de envío que pide la V2 (§19). `SENT_TO_SMTP`
+ * significa que el servidor de correo lo aceptó, no que llegó al buzón: Afinia
+ * no puede saber eso, y no debe afirmarlo.
+ */
+export type DeliveryState = 'QUEUED' | 'SENT_TO_SMTP' | 'FAILED';
+
+export function deliveryStateOf(status: string): DeliveryState {
+  if (status === 'sent') return 'SENT_TO_SMTP';
+  if (status === 'failed' || status === 'skipped') return 'FAILED';
+  return 'QUEUED';
+}
+
 export interface InvitationView {
   status: 'sent' | 'queued' | 'failed' | 'skipped';
+  deliveryState: DeliveryState;
   /** Correo enmascarado al que se envió. */
   sentTo?: string;
   /** El correo no salió a ningún buzón: el sistema está en modo simulado. */
