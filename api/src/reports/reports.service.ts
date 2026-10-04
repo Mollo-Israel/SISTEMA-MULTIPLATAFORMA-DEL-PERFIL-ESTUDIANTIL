@@ -52,7 +52,7 @@ export class ReportsService {
     const scope = await this.teacherScope.scopeFor(user);
     if (isEmptyScope(scope)) return this.emptyTeacherOverview();
 
-    const [total, byStatus, incomplete, topInterests, topTechnologies, participation] =
+    const [total, byStatus, incomplete, topInterests, topTechnologies, participation, bySemester] =
       await Promise.all([
         this.countProfiles(scope),
         this.profileStatusCounts(scope),
@@ -60,6 +60,7 @@ export class ReportsService {
         this.topInterestAreas(10, scope),
         this.topTechnologies(10, scope),
         this.participationCounts(scope),
+        this.semesterBreakdown(scope),
       ]);
 
     return {
@@ -68,6 +69,7 @@ export class ReportsService {
       topInterests,
       topTechnologies,
       participation,
+      bySemester,
       group: {
         label: scope ? `Semestres ${scope.join(', ')}` : 'Cohorte general',
         description: scope
@@ -91,6 +93,7 @@ export class ReportsService {
         },
       },
       incompleteStudents: { count: 0, list: [] as unknown[] },
+      bySemester: [] as unknown[],
       topInterests: [] as unknown[],
       topTechnologies: [] as unknown[],
       participation: {
@@ -225,6 +228,46 @@ export class ReportsService {
       );
     }
     return qb.getCount();
+  }
+
+  /**
+   * V2 §62: el panel docente se agrupa por semestre. Por cada semestre del
+   * alcance: estudiantes, perfiles activos, participaciones confirmadas,
+   * proyectos abiertos a docentes y necesidades de equipo abiertas. Son
+   * cifras de Afinia, no de una asignatura: no se afirma nada oficial.
+   */
+  private async semesterBreakdown(scope: Scope) {
+    const filas: {
+      semester: number; students: string; active: string; confirmed: string;
+      visible_projects: string; open_needs: string;
+    }[] = await this.profiles.query(
+      `SELECT sp.semester AS semester,
+              COUNT(*) AS students,
+              COUNT(*) FILTER (WHERE sp.status <> 'incomplete') AS active,
+              (SELECT COUNT(*) FROM activity_registrations r
+                 JOIN student_profiles s2 ON s2.id = r.student_profile_id
+                WHERE s2.semester = sp.semester AND r.status = 'confirmed') AS confirmed,
+              (SELECT COUNT(*) FROM projects p
+                 JOIN student_profiles s3 ON s3.id = p.created_by_profile_id
+                WHERE s3.semester = sp.semester AND p.visibility = 'teachers') AS visible_projects,
+              (SELECT COUNT(*) FROM team_needs n
+                 JOIN student_profiles s4 ON s4.id = n.owner_profile_id
+                WHERE s4.semester = sp.semester AND n.status = 'open') AS open_needs
+         FROM student_profiles sp
+        WHERE sp.semester IS NOT NULL
+          AND ($1::int[] IS NULL OR sp.semester = ANY($1::int[]))
+        GROUP BY sp.semester
+        ORDER BY sp.semester`,
+      [scope ?? null],
+    );
+    return filas.map((f) => ({
+      semester: Number(f.semester),
+      students: num(f.students),
+      activeProfiles: num(f.active),
+      confirmedParticipations: num(f.confirmed),
+      projectsVisibleToTeachers: num(f.visible_projects),
+      openTeamNeeds: num(f.open_needs),
+    }));
   }
 
   private async profileStatusCounts(scope: Scope) {

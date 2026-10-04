@@ -2,16 +2,55 @@ import { useAsync } from '../../hooks/useAsync';
 import { reportService } from '../../services';
 import { AsyncView, Badge, Card, PageHeader, SkeletonTable } from '../../components/ui';
 
+/**
+ * Panel académico del docente (V2 §62). Antes se llamaba «Reportes del curso»,
+ * pero Afinia no tiene datos de una asignatura oficial: describe a los
+ * estudiantes de los semestres habilitados para el docente, agrupados por
+ * semestre.
+ */
 export default function TeacherReportsPage() {
+  const overview = useAsync(() => reportService.teacherOverview(), []);
   const affinity = useAsync(() => reportService.teacherAffinity(), []);
   const projects = useAsync(() => reportService.teacherProjects(), []);
 
   return (
     <div>
       <PageHeader
-        title="Reportes del curso"
-        description="Reportes descriptivos. No generan ranking de estudiantes ni evalúan rendimiento."
+        title="Panel académico"
+        description="Resumen descriptivo de los estudiantes de tus semestres habilitados. No es el registro de una asignatura, no genera ranking de estudiantes ni evalúa rendimiento."
       />
+
+      <Card title="Resumen por semestre">
+        <AsyncView
+          loading={overview.loading}
+          error={overview.error}
+          data={overview.data}
+          skeleton={<SkeletonTable rows={3} columns={6} />}
+        >
+          {(d: any) => (d.bySemester ?? []).length === 0 ? (
+            <p className="muted">{d.group?.description ?? 'Sin datos.'}</p>
+          ) : (
+            <div className="scroll-x">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Semestre</th><th>Estudiantes</th><th>Perfiles activos</th>
+                    <th>Participaciones confirmadas</th><th>Proyectos abiertos a docentes</th><th>Necesidades de equipo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.bySemester.map((f: any) => (
+                    <tr key={f.semester}>
+                      <td>{f.semester}.º</td><td>{f.students}</td><td>{f.activeProfiles}</td>
+                      <td>{f.confirmedParticipations}</td><td>{f.projectsVisibleToTeachers}</td><td>{f.openTeamNeeds}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </AsyncView>
+      </Card>
 
       <Card title="Áreas de afinidad del grupo">
         <AsyncView

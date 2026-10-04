@@ -1075,3 +1075,32 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
   border: 1px dashed var(--bordo); background: var(--bordo-100);
 }
 .link-button { background: none; border: 0; padding: 0; color: var(--bordo); text-decoration: underline; cursor: pointer; font: inherit; }
+.ai-choices { margin: 0 0 0.4rem; padding-left: 1.1rem; }
+.ai-choices li { margin-bottom: 0.5rem; }
+
+/* V2 §61: plantillas del CV y vista previa. */
+.cv-templates { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6rem; }
+.cv-template {
+  display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-start; text-align: left;
+  padding: 0.7rem; border-radius: 10px; border: 1.5px solid var(--gray-200);
+  background: var(--white); cursor: pointer; font: inherit; color: inherit;
+}
+.cv-template.on { border-color: var(--bordo); box-shadow: 0 0 0 3px var(--bordo-100); }
+.cv-template-sample { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-bottom: 0.3rem; }
+.cv-template-sample i { display: block; height: 6px; border-radius: 3px; background: #d4d4d4; }
+.cv-template-sample i:first-child { width: 55%; height: 9px; background: #555; }
+.cv-template-modern .cv-template-sample i:first-child { background: var(--bordo); }
+.cv-template-compact .cv-template-sample { gap: 2px; }
+.cv-preview {
+  background: #fff; color: #111; padding: 1.4rem 1.6rem; border-radius: 8px;
+  border: 1px solid #e3e3e3; max-width: 760px; font-family: Helvetica, Arial, sans-serif;
+}
+.cv-preview h3 { margin: 0 0 0.2rem; font-size: 1.25rem; }
+.cv-preview h4 { margin: 1rem 0 0.35rem; font-size: 0.98rem; }
+.cv-preview ul { margin: 0; padding-left: 1.1rem; }
+.cv-preview .cv-sub { margin: 0 0 0.6rem; color: #444; }
+.cv-preview .cv-disclaimer { margin-top: 1.2rem; font-size: 0.75rem; color: #555; border-top: 1px solid #ddd; padding-top: 0.5rem; }
+.cv-modern h3, .cv-modern h4 { color: #7a1b2a; }
+.cv-modern h4 { border-bottom: 1px solid #7a1b2a; padding-bottom: 0.15rem; }
+.cv-compact { font-family: 'Times New Roman', Times, serif; font-size: 0.92rem; padding: 1rem 1.2rem; }
+.cv-compact h4 { text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #999; margin-top: 0.7rem; }

@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
   AffinityLevel,
+  AiRunStatus,
+  AiTaskType,
+  CONTACT_CHANNEL_LABEL,
+  CV_TEMPLATES,
+  CvTemplate,
   ConstancyStatus,
   RegistrationStatus,
   TRAJECTORY_DISCLAIMER,
@@ -19,7 +24,20 @@ import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { BackedSkillsService } from '../backed-skills/backed-skills.service';
-import { PdfWriter } from './pdf-writer';
+import { PDF_THEMES, PdfWriter } from './pdf-writer';
+import { StudentBadge } from '../entities/gamification.entity';
+import { StudentContactChannel } from '../entities/contact-channel.entity';
+import { AiAssistanceRun } from '../entities/ai-assistance-run.entity';
+
+/** Opciones del CV (V2 §61): plantilla y presentación propia. */
+export interface CvOptions {
+  template?: CvTemplate;
+  /** Presentación escrita por el estudiante o adoptada de una sugerencia. */
+  summaryText?: string | null;
+  /** Si la presentación vino de la IA, la ejecución que el estudiante aceptó. */
+  summaryAiRunId?: string | null;
+  userId?: string;
+}
 
 const NIVEL: Record<AffinityLevel, string> = {
   [AffinityLevel.HIGH]: 'alto',
@@ -52,8 +70,34 @@ export class TrajectorySummaryService {
     @InjectRepository(InternalConstancy)
     private readonly constancies: Repository<InternalConstancy>,
     @InjectRepository(ProjectEvidence) private readonly evidences: Repository<ProjectEvidence>,
+    @InjectRepository(StudentBadge) private readonly badges: Repository<StudentBadge>,
+    @InjectRepository(StudentContactChannel)
+    private readonly channels: Repository<StudentContactChannel>,
+    @InjectRepository(AiAssistanceRun) private readonly aiRuns: Repository<AiAssistanceRun>,
     private readonly backedSkills: BackedSkillsService,
   ) {}
+
+  /**
+   * V2 §61.3: un texto generado se exporta solo si su autor lo aprobó. Si la
+   * presentación viene de una sugerencia, esa sugerencia tiene que ser suya,
+   * de redacción del CV y aceptada.
+   */
+  private async assertTextoAprobado(opts: CvOptions): Promise<void> {
+    if (!opts.summaryAiRunId) return;
+    const run = await this.aiRuns.findOne({ where: { id: opts.summaryAiRunId } });
+    if (
+      !run
+      || run.requestedById !== opts.userId
+      || run.taskType !== AiTaskType.CV_TEXT_ASSIST
+      || run.status !== AiRunStatus.COMPLETED
+      || !run.acceptedAt
+    ) {
+      throw new ConflictException({
+        code: 'CV_TEXT_NOT_APPROVED',
+        message: 'Acepta la sugerencia antes de usarla en tu CV.',
+      });
+    }
+  }
 
   /** Las secciones disponibles, para que la pantalla no las invente. */
   sections() {
@@ -63,6 +107,7 @@ export class TrajectorySummaryService {
         label: TRAJECTORY_SECTION_LABEL[s],
       })),
       disclaimer: TRAJECTORY_DISCLAIMER,
+      templates: CV_TEMPLATES,
     };
   }
 
@@ -73,7 +118,8 @@ export class TrajectorySummaryService {
    * confundiría más que ayudaría, y quien no eligió nada probablemente aún no
    * sabe qué puede elegir.
    */
-  async build(studentProfileId: string, pedidas: TrajectorySection[]) {
+  async build(studentProfileId: string, pedidas: TrajectorySection[], opts: CvOptions = {}) {
+    await this.assertTextoAprobado(opts);
     const perfil = await this.profiles.findOne({
       where: { id: studentProfileId },
       relations: { user: true },
@@ -88,6 +134,7 @@ export class TrajectorySummaryService {
     const salida: Record<string, unknown> = {
       generatedAt: new Date(),
       disclaimer: TRAJECTORY_DISCLAIMER,
+      template: opts.template ?? CvTemplate.CLASSIC,
       sections: [...incluye],
       student: {
         name: perfil.user ? `${perfil.user.firstName} ${perfil.user.lastName}` : 'Estudiante',
@@ -96,7 +143,10 @@ export class TrajectorySummaryService {
       },
     };
 
-    if (incluye.has(TrajectorySection.BIO)) salida.bio = perfil.bio;
+    // La presentación propia reemplaza a la biografía del perfil, que es otra
+    // cosa (§60): el perfil dinámico no tiene por qué ser el texto del CV.
+    const propia = (opts.summaryText ?? '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim();
+    if (incluye.has(TrajectorySection.BIO)) salida.bio = propia || perfil.bio;
 
     const necesitaAfinidad =
       incluye.has(TrajectorySection.AREAS)
@@ -223,6 +273,27 @@ export class TrajectorySummaryService {
       }));
     }
 
+    if (incluye.has(TrajectorySection.BADGES)) {
+      const filas = await this.badges.find({
+        where: { studentProfileId },
+        relations: { badge: true },
+        order: { awardedAt: 'ASC' },
+      });
+      // Reconocimientos internos de Afinia, sin valor académico (§31).
+      salida.badges = filas.map((b) => ({
+        name: b.badge?.name ?? 'Insignia',
+        description: b.badge?.description ?? null,
+        awardedAt: b.awardedAt,
+      }));
+    }
+
+    if (incluye.has(TrajectorySection.CONTACT)) {
+      // «Contacto autorizado» (§61.1): solo los canales que el estudiante ya
+      // decidió compartir. El correo institucional no entra por omisión.
+      const filas = await this.channels.find({ where: { studentProfileId }, order: { channel: 'ASC' } });
+      salida.contact = filas.map((c) => ({ label: CONTACT_CHANNEL_LABEL[c.channel] ?? c.channel, value: c.value }));
+    }
+
     return salida;
   }
 
@@ -236,9 +307,13 @@ export class TrajectorySummaryService {
   async buildPdf(
     studentProfileId: string,
     pedidas: TrajectorySection[],
+    opts: CvOptions = {},
   ): Promise<{ filename: string; buffer: Buffer }> {
-    const datos = (await this.build(studentProfileId, pedidas)) as any;
-    const pdf = new PdfWriter('Resumen de Trayectoria Académica Complementaria');
+    const datos = (await this.build(studentProfileId, pedidas, opts)) as any;
+    const pdf = new PdfWriter(
+      'Resumen de Trayectoria Académica Complementaria',
+      PDF_THEMES[(opts.template ?? CvTemplate.CLASSIC) as CvTemplate] ?? PDF_THEMES.classic,
+    );
 
     pdf.title('Resumen de Trayectoria Académica Complementaria');
     pdf.subtitle(
@@ -305,6 +380,17 @@ export class TrajectorySummaryService {
       for (const e of datos.evidences) {
         pdf.bullet(e.context ? `${e.description ?? 'Evidencia'} — ${e.context}` : e.description);
       }
+    }
+
+    if (Array.isArray(datos.badges) && datos.badges.length > 0) {
+      pdf.section('Insignias de Afinia');
+      for (const b of datos.badges) pdf.bullet(`${b.name} (${this.fecha(b.awardedAt)})`);
+      pdf.paragraph('Reconocimientos internos de participación; no tienen valor académico.');
+    }
+
+    if (Array.isArray(datos.contact) && datos.contact.length > 0) {
+      pdf.section('Contacto');
+      for (const c of datos.contact) pdf.bullet(`${c.label}: ${c.value}`);
     }
 
     pdf.note(`Generado el ${this.fecha(datos.generatedAt)}.`);

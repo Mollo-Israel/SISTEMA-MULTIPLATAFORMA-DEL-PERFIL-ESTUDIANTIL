@@ -9,7 +9,7 @@
  */
 
 import {
-  API, PWD, codigoUniversitario, loginAdmin, provisionAndActivate, req,
+  API, PWD, aprobarActividad, codigoUniversitario, loginAdmin, provisionAndActivate, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -742,7 +742,146 @@ async function batch11(ctx) {
   check(quitar.status === 200 && (quitar.data ?? []).length === 0, 'V2.11.12 §59 Todos los canales son opcionales y se pueden quitar');
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch8, batch10, batch11 };
+// ===========================================================================
+//  BATCH 12 — CV con plantillas, presentación aprobada y descargo
+// ===========================================================================
+
+/** PDF por POST, como lo descarga la web; devuelve el texto latin1 del archivo. */
+async function cvPdf(token, body) {
+  const res = await fetch(`${API}/trajectory-summary/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const buf = Buffer.from(await res.arrayBuffer());
+  let data = null;
+  if (!res.ok) { try { data = JSON.parse(buf.toString('utf8')); } catch { /* binario */ } }
+  return { status: res.status, type: res.headers.get('content-type'), text: buf.toString('latin1'), data };
+}
+
+async function batch12(ctx) {
+  objective('BATCH 12 · CV: plantillas, secciones nuevas, presentación aprobada y descargo');
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Clara', lastName: 'Curricular', email: correoEst('cv1'), role: 'STUDENT', semester: 7 });
+  await req('POST', '/profiles/me', { token: est.token, body: { bio: 'Biografía del perfil dinámico.' } });
+  await req('PUT', '/profiles/me/contact-channels', {
+    token: est.token, body: { channels: [{ channel: 'linkedin', value: 'linkedin.com/in/clara-curricular' }] },
+  });
+
+  const secciones = await req('GET', '/trajectory-summary/sections', { token: est.token });
+  const claves = (secciones.data?.sections ?? []).map((s) => s.key);
+  check(claves.includes('badges') && claves.includes('contact'),
+    'V2.12.1 §61.1 Se pueden elegir insignias y contacto autorizado', json(claves));
+  check((secciones.data?.templates ?? []).map((t) => t.key).join() === 'classic,modern,compact',
+    'V2.12.2 §61.2 Hay tres plantillas estáticas', json(secciones.data?.templates));
+  const DESCARGO = 'Documento generado a partir de información registrada en Afinia. No constituye historial académico oficial, certificación institucional ni acreditación profesional de competencias.';
+  check(secciones.data?.disclaimer === DESCARGO, 'V2.12.3 §61.4 El descargo es el texto exacto de la especificación');
+
+  const vista = await req('POST', '/trajectory-summary/preview', {
+    token: est.token, body: { sections: ['bio', 'contact'], template: 'modern', summaryText: 'Estudiante de séptimo semestre con interés en backend.' },
+  });
+  check(vista.status === 201 && vista.data?.template === 'modern' && vista.data?.bio === 'Estudiante de séptimo semestre con interés en backend.',
+    'V2.12.4 §61.3 Una presentación propia reemplaza la biografía, sin aprobación aparte', json(vista.data?.bio));
+  check((vista.data?.contact ?? []).some((c) => c.label === 'LinkedIn' && c.value.includes('clara-curricular')) && !JSON.stringify(vista.data).includes(est.email),
+    'V2.12.5 §61.1 El contacto son los canales que compartió; el correo institucional no entra', json(vista.data?.contact));
+  const sinTexto = await req('POST', '/trajectory-summary/preview', { token: est.token, body: { sections: ['bio'] } });
+  check(sinTexto.data?.bio === 'Biografía del perfil dinámico.', 'V2.12.6 §60 Sin presentación propia se usa la biografía');
+
+  const pdfs = {};
+  for (const t of ['classic', 'modern', 'compact']) {
+    pdfs[t] = await cvPdf(est.token, { sections: ['bio', 'contact', 'badges'], template: t, summaryText: 'Presentación (con paréntesis) para el PDF.' });
+  }
+  check(Object.values(pdfs).every((p) => p.status === 201 && p.type?.includes('application/pdf') && p.text.startsWith('%PDF-')),
+    'V2.12.7 §61 Las tres plantillas generan un PDF', Object.values(pdfs).map((p) => p.status).join('/'));
+  check(Object.values(pdfs).every((p) => p.text.includes('No constituye historial acad')),
+    'V2.12.8 §61.4 El descargo va dentro del PDF en todas las plantillas');
+  check(pdfs.compact.text.includes('/Times-Roman') && !pdfs.classic.text.includes('/Times-Roman')
+    && / rg /.test(pdfs.modern.text) && !/ rg /.test(pdfs.classic.text),
+    'V2.12.9 §61.2 Las plantillas cambian tipografía y color, no el contenido');
+  check(pdfs.classic.text.includes('\\(con par') && pdfs.modern.text.includes('linkedin.com/in/clara-curricular'),
+    'V2.12.10 §61 La presentación y el contacto llegan al PDF, con caracteres escapados');
+
+  const inventado = await cvPdf(est.token, { sections: ['bio'], summaryText: 'Texto que dice venir de la IA.', summaryAiRunId: '00000000-0000-4000-8000-000000000000' });
+  check(inventado.status === 409 && inventado.data?.code === 'CV_TEXT_NOT_APPROVED',
+    'V2.12.11 §61.3 Un texto atribuido a una sugerencia no aceptada no se exporta', `status ${inventado.status}`);
+
+  const largo = await cvPdf(est.token, { sections: ['bio'], summaryText: 'x'.repeat(1201) });
+  const plantillaMala = await cvPdf(est.token, { sections: ['bio'], template: 'canva' });
+  check(largo.status === 400 && plantillaMala.status === 400, 'V2.12.12 §61.2 Largo máximo y solo plantillas existentes', `${largo.status}/${plantillaMala.status}`);
+
+  const viejo = await fetch(`${API}/trajectory-summary/pdf?sections=bio&template=compact`, { headers: { Authorization: `Bearer ${est.token}` } });
+  const textoViejo = Buffer.from(await viejo.arrayBuffer()).toString('latin1');
+  check(viejo.status === 200 && textoViejo.includes('/Times-Roman'), 'V2.12.13 La descarga por enlace sigue funcionando, también con plantilla');
+
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Doc', lastName: 'Cv', email: correoStaff('cvdoc'), role: 'TEACHER' });
+  const ajeno = await cvPdf(docente.token, { sections: ['bio'] });
+  check(ajeno.status === 403, 'V2.12.14 §61 El CV es solo del estudiante', `status ${ajeno.status}`);
+}
+
+// ===========================================================================
+//  BATCH 13 — Paneles: docente por semestre, dirección y sociedad
+// ===========================================================================
+async function batch13(ctx) {
+  objective('BATCH 13 · Panel académico por semestre, recursos consultados y métricas de sociedad');
+  const staff = async (key, role, semesters) => {
+    const c = await provisionAndActivate(ctx.admin, { firstName: 'Pan', lastName: 'El', email: correoStaff(`b13${key}`), role });
+    if (semesters) await req('PUT', `/users/${c.userId}/semesters`, { token: ctx.admin, body: { semesters } });
+    return c;
+  };
+  const docente = await staff('doc', 'TEACHER', [3, 4]);
+  const sinAlcance = await staff('doc0', 'TEACHER');
+  const director = await staff('dir', 'CAREER_DIRECTOR');
+  const sociedad = await staff('soc', 'SCIENTIFIC_SOCIETY');
+
+  const panel = await req('GET', '/reports/teacher/overview', { token: docente.token });
+  const semestres = (panel.data?.bySemester ?? []).map((f) => f.semester);
+  check(panel.status === 200 && semestres.length > 0 && semestres.every((n) => n === 3 || n === 4),
+    'V2.13.1 §62 El panel docente se agrupa por semestre y solo con los suyos', json(semestres));
+  const fila = panel.data?.bySemester?.[0] ?? {};
+  check(['students', 'activeProfiles', 'confirmedParticipations', 'projectsVisibleToTeachers', 'openTeamNeeds']
+    .every((k) => Number.isInteger(fila[k])), 'V2.13.2 §62 Con estudiantes, perfiles activos, participación, proyectos visibles y necesidades de equipo', json(fila));
+  const total = (panel.data?.bySemester ?? []).reduce((s, f) => s + f.students, 0);
+  check(total === panel.data?.students?.total, 'V2.13.3 §62 La suma por semestre cuadra con el total del alcance', `${total} vs ${panel.data?.students?.total}`);
+  const vacio = await req('GET', '/reports/teacher/overview', { token: sinAlcance.token });
+  check((vacio.data?.bySemester ?? []).length === 0, 'V2.13.4 §28 Sin semestres habilitados, el panel no muestra a nadie');
+
+  const tendencias = await req('GET', '/reports/director/trends', { token: director.token });
+  check(tendencias.status === 200 && Array.isArray(tendencias.data?.resources)
+    && tendencias.data.resources.every((r) => Number.isInteger(r.opened) && r.opened > 0),
+    'V2.13.5 §63 Dirección ve los recursos más consultados (personas que los abrieron)', json(tendencias.data?.resources?.slice(0, 2)));
+  const noDirector = await req('GET', '/reports/director/trends', { token: docente.token });
+  check(noDirector.status === 403, 'V2.13.6 §63 Las tendencias de la carrera son de Dirección', `status ${noDirector.status}`);
+
+  // Sociedad: dos actividades, una estudiante que vuelve y otra ausente.
+  const cats = (await req('GET', '/activity-categories', { token: sociedad.token })).data ?? [];
+  const cat = cats.find((c) => c.appliesTo === 'extracurricular') ?? cats[0];
+  const crear = async (t) => {
+    const a = await req('POST', '/activities', { token: sociedad.token, body: { title: `${t} ${TS}`, type: 'extracurricular', categoryId: cat.id } });
+    await aprobarActividad(sociedad.token, director.token, a.data.id);
+    return a.data.id;
+  };
+  const a1 = await crear('Club de robótica');
+  const a2 = await crear('Club de robótica II');
+  const nuevo = async (k) => {
+    const c = await provisionAndActivate(ctx.admin, { firstName: 'Est', lastName: k, email: correoEst(`b13${k}`), role: 'STUDENT', semester: 3 });
+    c.profileId = (await req('POST', '/profiles/me', { token: c.token, body: {} })).data?.id;
+    return c;
+  };
+  const vuelve = await nuevo('vuelve');
+  const falta = await nuevo('falta');
+  for (const [est, act, estado] of [[vuelve, a1, 'confirmed'], [vuelve, a2, 'confirmed'], [falta, a1, 'absent']]) {
+    await req('POST', `/activities/${act}/register`, { token: est.token });
+    await req('PATCH', `/activities/${act}/confirm-participation`, { token: sociedad.token, body: { studentProfileId: est.profileId, status: estado } });
+  }
+  const m = await req('GET', '/reports/society/activities', { token: sociedad.token });
+  check(m.status === 200 && m.data?.totals?.confirmed === 2 && m.data?.totals?.absent === 1 && m.data?.totals?.returningStudents === 1,
+    'V2.13.7 §64 Inscritos, confirmados, ausentes y quiénes volvieron', json(m.data?.totals));
+  check((m.data?.byCategory ?? []).some((c) => c.activities === 2 && c.confirmed === 2 && c.absent === 1),
+    'V2.13.8 §64 Métricas comparables por categoría', json(m.data?.byCategory));
+  const ajenas = (m.data?.activities ?? []).every((a) => [a1, a2].includes(a.activityId));
+  check(ajenas, 'V2.13.9 §64 Solo sobre sus actividades');
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch8, batch10, batch11, batch12, batch13 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

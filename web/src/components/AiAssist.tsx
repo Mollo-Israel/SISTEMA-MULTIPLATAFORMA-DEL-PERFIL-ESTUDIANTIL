@@ -33,6 +33,7 @@ export default function AiAssist({
   render,
   onUse,
   useLabel = 'Usar sugerencia',
+  choices,
 }: {
   task: AiTask;
   label: string;
@@ -40,8 +41,10 @@ export default function AiAssist({
   request: () => Record<string, unknown> | null;
   render: (result: Record<string, any>) => ReactNode;
   /** Sin `onUse` la sugerencia es solo de lectura (un resumen, una explicación). */
-  onUse?: (result: Record<string, any>) => void;
+  onUse?: (result: Record<string, any>, runId: string | undefined, choice: number) => void;
   useLabel?: string;
+  /** Si la sugerencia trae alternativas, cada una con su botón «Usar». */
+  choices?: (result: Record<string, any>) => string[];
 }) {
   const status = useAiStatus();
   const toast = useToast();
@@ -63,11 +66,12 @@ export default function AiAssist({
     }
   };
 
-  const usar = async () => {
+  const usar = async (choice = 0) => {
     if (!r?.result) return;
     try {
+      // Aceptar deja constancia de quién adoptó la sugerencia (§43.3).
       if (r.runId) await aiService.accept(r.runId);
-      onUse?.(r.result);
+      onUse?.(r.result, r.runId, choice);
       setR(null);
     } catch (e) {
       toast.error(apiError(e));
@@ -83,13 +87,24 @@ export default function AiAssist({
         <div className="ai-assist-card" role="status">
           {r.ok && r.result ? (
             <>
-              {render(r.result)}
+              {choices && onUse ? (
+                <ol className="ai-choices">
+                  {choices(r.result).map((texto, i) => (
+                    <li key={i}>
+                      <p style={{ margin: '0 0 0.3rem' }}>{texto}</p>
+                      <Button type="button" size="sm" icon={<FiCheck size={13} />} onClick={() => usar(i)}>
+                        {useLabel}
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+              ) : render(r.result)}
               <small className="muted">
                 {r.source === 'rule' ? 'Resuelto por una regla de Afinia.' : (r.disclaimer ?? status.disclaimer)}
               </small>
               <div className="flex" style={{ gap: '0.4rem', marginTop: '0.4rem' }}>
-                {onUse && (
-                  <Button type="button" size="sm" icon={<FiCheck size={13} />} onClick={usar}>{useLabel}</Button>
+                {onUse && !choices && (
+                  <Button type="button" size="sm" icon={<FiCheck size={13} />} onClick={() => usar()}>{useLabel}</Button>
                 )}
                 <Button type="button" size="sm" variant="ghost" icon={<FiX size={13} />} onClick={() => setR(null)}>
                   {onUse ? 'Descartar' : 'Cerrar'}

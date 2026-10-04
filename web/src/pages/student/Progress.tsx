@@ -4,9 +4,12 @@ import { apiError } from '../../api/client';
 import {
   gamificationService,
   trajectoryService,
+  type CvRequest,
+  type CvTemplateOption,
   type GamificationSummary,
   type TrajectorySectionOption,
 } from '../../services';
+import AiAssist from '../../components/AiAssist';
 import { useAsync } from '../../hooks/useAsync';
 import { useConfirm, useToast } from '../../components/feedback';
 import type { RewardItem, Wallet } from '../../services/types';
@@ -283,14 +286,75 @@ function Recompensas() {
 }
 
 // ---------------------------------------------------------------------------
-// §67 · Resumen de trayectoria
+// §67 y V2 §61 · CV / Resumen de trayectoria
 // ---------------------------------------------------------------------------
+
+const NIVEL: Record<string, string> = { high: 'alto', medium: 'medio', low: 'bajo' };
+
+/**
+ * La vista previa se dibuja con la misma información que irá al PDF, y con el
+ * aire de la plantilla elegida. Antes se mostraba el JSON crudo: correcto,
+ * pero nadie revisa un CV leyendo llaves y comillas.
+ */
+function CvPreview({ d }: { d: Record<string, any> }) {
+  const lista = (titulo: string, items: (string | null | undefined)[]) =>
+    items.filter(Boolean).length > 0 && (
+      <section>
+        <h4>{titulo}</h4>
+        <ul>{items.filter(Boolean).map((t, i) => <li key={i}>{t}</li>)}</ul>
+      </section>
+    );
+  return (
+    <article className={`cv-preview cv-${d.template ?? 'classic'}`} aria-label="Vista previa del CV">
+      <h3>Resumen de Trayectoria Académica Complementaria</h3>
+      <p className="cv-sub">
+        {d.student?.name}{d.student?.semester ? ` · ${d.student.semester}.º semestre` : ''} · {d.student?.career}
+      </p>
+      {d.bio && (<section><h4>Presentación</h4><p>{d.bio}</p></section>)}
+      {lista('Áreas principales', (d.areas ?? []).map((a: any) => [
+        a.area,
+        a.score !== undefined ? `afinidad ${a.score}/100` : null,
+        a.supportLevel ? `respaldo ${NIVEL[a.supportLevel] ?? a.supportLevel} (${a.supportScore}/100)` : null,
+      ].filter(Boolean).join(' · ')))}
+      {(d.projects ?? []).length > 0 && (
+        <section>
+          <h4>Proyectos</h4>
+          <ul>
+            {d.projects.map((p: any, i: number) => (
+              <li key={i}>
+                <strong>{p.title}</strong> — {p.role}
+                {p.contribution && <div>Contribución: {p.contribution}</div>}
+                {(p.technologies ?? []).length > 0 && <div className="muted">Tecnologías: {p.technologies.join(', ')}</div>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {(d.skills ?? []).length > 0 && (
+        <section><h4>Tecnologías y habilidades</h4><p>{d.skills.map((x: any) => x.name).join(' · ')}</p></section>
+      )}
+      {lista('Actividades con participación confirmada', (d.activities ?? []).map((a: any) => (a.date ? `${a.title} (${FECHA(a.date)})` : a.title)))}
+      {lista('Certificados externos', (d.certificates ?? []).map((c: any) => `${c.name} — ${c.issuer}`))}
+      {lista('Constancias internas', (d.constancies ?? []).map((c: any) => c.description))}
+      {lista('Evidencias', (d.evidences ?? []).map((e: any) => (e.context ? `${e.description ?? 'Evidencia'} — ${e.context}` : e.description)))}
+      {lista('Insignias de Afinia', (d.badges ?? []).map((b: any) => `${b.name} (${FECHA(b.awardedAt)})`))}
+      {lista('Contacto', (d.contact ?? []).map((c: any) => `${c.label}: ${c.value}`))}
+      <p className="cv-disclaimer">{d.disclaimer}</p>
+    </article>
+  );
+}
 
 function Resumen() {
   const [opciones, setOpciones] = useState<TrajectorySectionOption[]>([]);
+  const [plantillas, setPlantillas] = useState<CvTemplateOption[]>([]);
+  const [plantilla, setPlantilla] = useState<CvTemplateOption['key']>('classic');
   const [disclaimer, setDisclaimer] = useState('');
-  const [elegidas, setElegidas] = useState<string[]>(['basic', 'areas', 'projects', 'activities']);
-  const [vista, setVista] = useState<Record<string, unknown> | null>(null);
+  const [elegidas, setElegidas] = useState<string[]>(['basic', 'bio', 'areas', 'projects', 'activities']);
+  const [presentacion, setPresentacion] = useState('');
+  /** Ejecución de IA aceptada de la que salió la presentación, si salió de una. */
+  const [runId, setRunId] = useState<string | undefined>(undefined);
+  const [modo, setModo] = useState<'improve' | 'summarize' | 'alternatives'>('improve');
+  const [vista, setVista] = useState<Record<string, any> | null>(null);
   const [cargando, setCargando] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const toast = useToast();
@@ -298,7 +362,7 @@ function Resumen() {
   useEffect(() => {
     trajectoryService
       .sections()
-      .then((r) => { setOpciones(r.sections); setDisclaimer(r.disclaimer); })
+      .then((r) => { setOpciones(r.sections); setDisclaimer(r.disclaimer); setPlantillas(r.templates ?? []); })
       .catch((e) => toast.error(apiError(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -307,10 +371,17 @@ function Resumen() {
     setElegidas((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]);
 
+  const pedido = (): CvRequest => ({
+    sections: elegidas,
+    template: plantilla,
+    summaryText: presentacion.trim() || undefined,
+    summaryAiRunId: presentacion.trim() ? runId : undefined,
+  });
+
   const previsualizar = async () => {
     setCargando(true);
     try {
-      setVista(await trajectoryService.preview(elegidas));
+      setVista(await trajectoryService.preview(pedido()));
     } catch (e) {
       toast.error(apiError(e));
     } finally {
@@ -321,7 +392,7 @@ function Resumen() {
   const descargar = async () => {
     setDescargando(true);
     try {
-      const { blob, filename } = await trajectoryService.pdf(elegidas);
+      const { blob, filename } = await trajectoryService.pdf(pedido());
       const url = URL.createObjectURL(blob);
       const enlace = document.createElement('a');
       enlace.href = url;
@@ -337,9 +408,29 @@ function Resumen() {
 
   return (
     <>
+      <Card title="Plantilla">
+        <div className="cv-templates" role="radiogroup" aria-label="Plantilla del CV">
+          {plantillas.map((t) => (
+            <button
+              type="button"
+              key={t.key}
+              role="radio"
+              aria-checked={plantilla === t.key}
+              className={`cv-template cv-template-${t.key} ${plantilla === t.key ? 'on' : ''}`}
+              onClick={() => { setPlantilla(t.key); setVista(null); }}
+            >
+              <span className="cv-template-sample" aria-hidden="true"><i /><i /><i /></span>
+              <strong>{t.label}</strong>
+              <small className="muted">{t.description}</small>
+            </button>
+          ))}
+        </div>
+      </Card>
+
       <Card title="Qué quieres incluir">
         <p className="muted" style={{ marginTop: 0 }}>
           Tú decides qué entra. Los datos básicos van siempre: un resumen sin nombre no es de nadie.
+          Todo sale de lo registrado en Afinia; nada se agrega por su cuenta.
         </p>
         <div className="chip-row">
           {opciones.map((o) => {
@@ -358,8 +449,56 @@ function Resumen() {
             );
           })}
         </div>
+      </Card>
 
-        <div className="flex mt" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+      {elegidas.includes('bio') && (
+        <Card title="Presentación">
+          <p className="muted" style={{ marginTop: 0 }}>
+            Opcional. Si la dejas vacía se usa la biografía de tu perfil. Si pides ayuda, la propuesta
+            no entra al CV hasta que la elijas, y luego puedes editarla.
+          </p>
+          <div className="field">
+            <label htmlFor="cv-presentacion">Texto de presentación</label>
+            <textarea
+              id="cv-presentacion"
+              rows={5}
+              maxLength={1200}
+              value={presentacion}
+              onChange={(e) => setPresentacion(e.target.value)}
+              placeholder="Estudiante de Ingeniería de Sistemas con interés en desarrollo web…"
+            />
+            <small className="muted">{presentacion.length}/1200</small>
+          </div>
+          <div className="flex" style={{ gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={modo} onChange={(e) => setModo(e.target.value as typeof modo)} aria-label="Tipo de ayuda" style={{ maxWidth: 220 }}>
+              <option value="improve">Mejorar redacción</option>
+              <option value="summarize">Resumir</option>
+              <option value="alternatives">Proponer alternativas</option>
+            </select>
+            <AiAssist
+              task="CV_TEXT_ASSIST"
+              label="Pedir ayuda de redacción"
+              request={() => {
+                if (presentacion.trim().length < 20) {
+                  toast.error('Escribe al menos un par de oraciones para que la ayuda tenga de dónde partir.');
+                  return null;
+                }
+                return { text: presentacion, mode: modo };
+              }}
+              render={(r) => <p style={{ margin: 0 }}>{(r.texts as string[])[0]}</p>}
+              choices={(r) => r.texts as string[]}
+              onUse={(r, id, i) => {
+                setPresentacion((r.texts as string[])[i] ?? '');
+                setRunId(id);
+              }}
+              useLabel="Usar esta"
+            />
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
           <Button
             variant="secondary"
             loading={cargando}
@@ -384,7 +523,7 @@ function Resumen() {
 
       {vista && (
         <Card title="Vista previa">
-          <pre className="vista-resumen">{JSON.stringify(vista, null, 2)}</pre>
+          <CvPreview d={vista} />
         </Card>
       )}
     </>

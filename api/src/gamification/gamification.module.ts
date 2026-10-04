@@ -24,6 +24,8 @@ import {
   RewardRedemption,
 } from '../entities/gamification-extra.entity';
 import { AccessModule } from '../access/access.module';
+import { StudentContactChannel } from '../entities/contact-channel.entity';
+import { AiAssistanceRun } from '../entities/ai-assistance-run.entity';
 import { GamificationExtrasService } from './gamification-extras.service';
 import { TrajectorySummaryService } from '../trajectory/trajectory-summary.service';
 import { GamificationService } from './gamification.service';
@@ -63,6 +65,8 @@ import { GamificationExtrasController } from './gamification-extras.controller';
       GamificationReward,
       RewardRedemption,
       ActivityGamificationRule,
+      StudentContactChannel,
+      AiAssistanceRun,
     ]),
     AccessModule,
   ],

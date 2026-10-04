@@ -13,8 +13,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Response } from 'express';
 import { Repository } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
-import { ArrayUnique, IsArray, IsEnum, IsOptional } from 'class-validator';
-import { RolNombre, TrajectorySection } from '@perfil/shared';
+import { ArrayUnique, IsArray, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { CV_SUMMARY_MAX, CvTemplate, RolNombre, TrajectorySection } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
@@ -30,6 +30,24 @@ export class BuildTrajectorySummaryDto {
   @ArrayUnique({ message: 'No repita secciones.' })
   @IsEnum(TrajectorySection, { each: true, message: 'Sección no válida.' })
   sections?: TrajectorySection[];
+
+  /** V2 §61.2. */
+  @ApiProperty({ enum: CvTemplate, required: false })
+  @IsOptional()
+  @IsEnum(CvTemplate, { message: 'Plantilla no válida.' })
+  template?: CvTemplate;
+
+  /** V2 §61.3: presentación propia o una sugerencia ya aceptada. */
+  @ApiProperty({ required: false, maxLength: CV_SUMMARY_MAX })
+  @IsOptional()
+  @IsString()
+  @MaxLength(CV_SUMMARY_MAX, { message: `La presentación no puede superar ${CV_SUMMARY_MAX} caracteres.` })
+  summaryText?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsUUID('4')
+  summaryAiRunId?: string;
 }
 
 /**
@@ -98,7 +116,36 @@ export class GamificationController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: BuildTrajectorySummaryDto,
   ) {
-    return this.summary.build(await this.profileId(user), dto.sections ?? []);
+    return this.summary.build(await this.profileId(user), dto.sections ?? [], this.opciones(user, dto));
+  }
+
+  /** Lo mismo que la vista previa, en PDF y con plantilla (V2 §61). */
+  @Post('trajectory-summary/pdf')
+  @Roles(RolNombre.STUDENT)
+  @Header('Content-Type', 'application/pdf')
+  @ApiOperation({ summary: 'CV en PDF con plantilla y presentación aprobada (V2 §61).' })
+  async pdfPost(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+    @Body() dto: BuildTrajectorySummaryDto,
+  ) {
+    const { filename, buffer } = await this.summary.buildPdf(
+      await this.profileId(user),
+      dto.sections ?? [],
+      this.opciones(user, dto),
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(buffer.length));
+    res.end(buffer);
+  }
+
+  private opciones(user: AuthenticatedUser, dto: BuildTrajectorySummaryDto) {
+    return {
+      template: dto.template,
+      summaryText: dto.summaryText ?? null,
+      summaryAiRunId: dto.summaryAiRunId ?? null,
+      userId: user.userId,
+    };
   }
 
   /**
@@ -116,6 +163,7 @@ export class GamificationController {
     @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
     @Query('sections') sections?: string,
+    @Query('template') template?: string,
   ) {
     const elegidas = (sections ?? '')
       .split(',')
@@ -123,9 +171,13 @@ export class GamificationController {
       .filter((s): s is TrajectorySection =>
         (Object.values(TrajectorySection) as string[]).includes(s));
 
+    const plantilla = (Object.values(CvTemplate) as string[]).includes(template ?? '')
+      ? (template as CvTemplate)
+      : undefined;
     const { filename, buffer } = await this.summary.buildPdf(
       await this.profileId(user),
       elegidas,
+      { template: plantilla, userId: user.userId },
     );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', String(buffer.length));

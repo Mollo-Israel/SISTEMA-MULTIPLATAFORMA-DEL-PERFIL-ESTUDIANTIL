@@ -195,6 +195,24 @@ async function pruebas() {
   check(psql(`select accepted_by from ai_assistance_runs where id='${cv.data?.runId}'`) === est.userId,
     'IA.12 §43.3 accepted_by queda con quien la adoptó');
 
+  // §61.3: una sugerencia sin aceptar no llega al CV; aceptada, sí.
+  const otraCv = await req('POST', '/ai/suggestions', { token: est.token, body: { task: 'CV_TEXT_ASSIST', text: original, mode: 'summarize' } });
+  const texto = otraCv.data?.result?.texts?.[0];
+  const cvPdf = (body) => fetch(`${process.env.API_URL}/trajectory-summary/pdf`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${est.token}` }, body: JSON.stringify(body),
+  });
+  const sinAceptar = await cvPdf({ sections: ['bio'], summaryText: texto, summaryAiRunId: otraCv.data?.runId });
+  await req('POST', `/ai/runs/${otraCv.data?.runId}/accept`, { token: est.token });
+  const aceptadaPdf = await cvPdf({ sections: ['bio'], summaryText: texto, summaryAiRunId: otraCv.data?.runId });
+  const contenido = Buffer.from(await aceptadaPdf.arrayBuffer()).toString('latin1');
+  check(sinAceptar.status === 409 && aceptadaPdf.status === 201 && contenido.includes('Desarroll'),
+    'IA.13b §61.3 El texto generado entra al CV solo después de aceptarlo', `${sinAceptar.status}/${aceptadaPdf.status}`);
+  const ajenaPdf = await fetch(`${process.env.API_URL}/trajectory-summary/pdf`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${otro.token}` },
+    body: JSON.stringify({ sections: ['bio'], summaryText: texto, summaryAiRunId: otraCv.data?.runId }),
+  });
+  check(ajenaPdf.status === 409, 'IA.13c §61.3 La aprobación de otro no sirve', `status ${ajenaPdf.status}`);
+
   proveedor.inventar = true;
   const inventa = await req('POST', '/ai/suggestions', { token: est.token, body: { task: 'CV_TEXT_ASSIST', text: original, mode: 'alternatives' } });
   proveedor.inventar = false;
@@ -249,6 +267,13 @@ async function pruebas() {
   const narrativaFalsa = await req('POST', '/ai/suggestions', { token: director.token, body: { task: 'ANALYTICS_NARRATIVE' } });
   proveedor.inventar = false;
   check(narrativaFalsa.data?.ok === false, 'IA.23 §63 Una cifra que no está en los datos invalida la narrativa', json(narrativaFalsa.data));
+
+  const sociedad = await nuevo('soc', 'SCIENTIFIC_SOCIETY');
+  const narrativaSoc = await req('POST', '/ai/suggestions', { token: sociedad.token, body: { task: 'ANALYTICS_NARRATIVE' } });
+  check(narrativaSoc.data?.ok && /actividades/.test(narrativaSoc.data?.result?.figures ?? '') && !/Tecnologías más usadas/.test(narrativaSoc.data?.result?.figures ?? ''),
+    'IA.23b §64 La Sociedad recibe narrativa solo sobre sus actividades', json(narrativaSoc.data?.result));
+  const narrativaDoc = await req('POST', '/ai/suggestions', { token: docenteDentro.token, body: { task: 'ANALYTICS_NARRATIVE' } });
+  check(narrativaDoc.status === 403, 'IA.23c El docente no pide narrativa de la carrera', `status ${narrativaDoc.status}`);
 
   objective('RNF09 · Fallos del proveedor');
   proveedor.demoraMs = 2500;

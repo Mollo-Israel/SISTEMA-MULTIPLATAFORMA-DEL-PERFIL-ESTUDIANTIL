@@ -35,7 +35,8 @@ const TASK_ROLES: Record<AiTaskType, RolNombre[]> = {
   [AiTaskType.EVIDENCE_SUMMARY]: [RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.ADMIN],
   [AiTaskType.INCONSISTENCY_EXPLANATION]: [RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.ADMIN],
   [AiTaskType.CV_TEXT_ASSIST]: [RolNombre.STUDENT],
-  [AiTaskType.ANALYTICS_NARRATIVE]: [RolNombre.CAREER_DIRECTOR],
+  // Dirección sobre las tendencias de la carrera; Sociedad sobre sus actividades (§63, §64).
+  [AiTaskType.ANALYTICS_NARRATIVE]: [RolNombre.CAREER_DIRECTOR, RolNombre.SCIENTIFIC_SOCIETY],
   [AiTaskType.CONTENT_MODERATION_FLAG]: [],
 };
 
@@ -270,15 +271,27 @@ export class AiService {
         };
       }
       case AiTaskType.ANALYTICS_NARRATIVE: {
-        // Las cifras salen de consultas deterministas (§63); la IA solo las redacta.
-        const t = await this.analytics.directorTrends();
+        // Las cifras salen de consultas deterministas (§63, §64); la IA solo las redacta.
         const lineas = (titulo: string, filas: unknown, campos: [string, string]) =>
           `${titulo}:\n${(Array.isArray(filas) ? filas : []).slice(0, 6)
             .map((f: Record<string, unknown>) => `- ${f[campos[0]]}: ${f[campos[1]]}`).join('\n')}`;
-        const cifras = s([
-          lineas('Tecnologías más usadas en proyectos', t.technologies, ['technology', 'projects']),
-          lineas('Actividades con más participación', t.activities, ['activity', 'confirmed']),
-        ].join('\n'));
+        let cifras: string;
+        if (user.role === RolNombre.SCIENTIFIC_SOCIETY) {
+          // Solo sus actividades: es lo único que §64 le deja ver.
+          const m = await this.analytics.societyMetrics(user);
+          cifras = s([
+            `Totales: ${m.totals.activities} actividades, ${m.totals.registrations} inscripciones, `
+              + `${m.totals.confirmed} confirmadas, ${m.totals.absent} ausencias, `
+              + `${m.totals.returningStudents} estudiantes que volvieron`,
+            lineas('Confirmadas por categoría', m.byCategory, ['category', 'confirmed']),
+          ].join('\n'));
+        } else {
+          const t = await this.analytics.directorTrends();
+          cifras = s([
+            lineas('Tecnologías más usadas en proyectos', t.technologies, ['technology', 'projects']),
+            lineas('Actividades con más participación', t.activities, ['activity', 'confirmed']),
+          ].join('\n'));
+        }
         return {
           task: dto.task, input: cifras, targetType: 'analytics', targetId: null,
           prompt: PROMPTS.analytics(cifras),

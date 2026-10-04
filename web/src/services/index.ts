@@ -444,6 +444,21 @@ export interface TrajectorySectionOption {
   label: string;
 }
 
+/** Plantilla del CV (V2 §61.2). */
+export interface CvTemplateOption {
+  key: 'classic' | 'modern' | 'compact';
+  label: string;
+  description: string;
+}
+
+/** Lo que se pide al armar el CV: secciones, plantilla y presentación aprobada. */
+export interface CvRequest {
+  sections: string[];
+  template?: CvTemplateOption['key'];
+  summaryText?: string;
+  summaryAiRunId?: string;
+}
+
 export const gamificationService = {
   myProgress: () => api.get<GamificationSummary>('/gamification/me').then((r) => r.data),
   /** Saldo canjeable, puntos por periodo y mis canjes. */
@@ -469,13 +484,13 @@ export const gamificationService = {
 export const trajectoryService = {
   sections: () =>
     api
-      .get<{ sections: TrajectorySectionOption[]; disclaimer: string }>(
+      .get<{ sections: TrajectorySectionOption[]; disclaimer: string; templates: CvTemplateOption[] }>(
         '/trajectory-summary/sections',
       )
       .then((r) => r.data),
-  preview: (sections: string[]) =>
+  preview: (body: CvRequest) =>
     api
-      .post<Record<string, unknown>>('/trajectory-summary/preview', { sections })
+      .post<Record<string, any>>('/trajectory-summary/preview', body)
       .then((r) => r.data),
   /**
    * Descarga el PDF.
@@ -483,10 +498,9 @@ export const trajectoryService = {
    * Va como blob y no como un enlace directo porque la ruta exige la sesión, y
    * un `<a href>` no lleva la cabecera de autorización.
    */
-  pdf: async (sections: string[]) => {
-    const res = await api.get(`/trajectory-summary/pdf?sections=${sections.join(',')}`, {
-      responseType: 'blob',
-    });
+  pdf: async (body: CvRequest) => {
+    // POST: la presentación puede ser larga para viajar en la URL.
+    const res = await api.post('/trajectory-summary/pdf', body, { responseType: 'blob' });
     const disposition = String(res.headers['content-disposition'] ?? '');
     const encontrado = /filename="([^"]+)"/.exec(disposition);
     return {
@@ -545,6 +559,8 @@ export interface DirectorTrends {
     registrations: number;
     confirmed: number;
   }[];
+  /** V2 §63: recursos recomendados que más estudiantes abrieron o guardaron. */
+  resources?: { title: string; type: string; opened: number; saved: number }[];
   note: NotaAnalitica;
 }
 
@@ -560,8 +576,16 @@ export interface SocietyMetrics {
     capacity: number | null;
     registrations: number;
     confirmed: number;
+    absent?: number;
   }>[];
-  totals: { activities: number; registrations: number; confirmed: number; students: number };
+  totals: {
+    activities: number; registrations: number; confirmed: number; students: number;
+    /** V2 §64. */
+    absent?: number;
+    returningStudents?: number;
+  };
+  /** V2 §64: métricas comparables por categoría. */
+  byCategory?: { category: string; activities: number; registrations: number; confirmed: number; absent: number }[];
   note: NotaAnalitica;
 }
 

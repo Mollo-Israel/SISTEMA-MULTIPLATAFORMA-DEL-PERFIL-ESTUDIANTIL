@@ -357,8 +357,9 @@ async function resumen(ctx) {
   const secciones = await req('GET', '/trajectory-summary/sections', { token: ctx.est.token });
   check(secciones.status === 200, 'B9.29 Las secciones disponibles se consultan', msgOf(secciones));
   check(
-    (secciones.data?.sections ?? []).length === 12,
-    'B9.30 Son las doce que enumera §67',
+    // V2 §61.1 suma insignias y contacto autorizado a las doce de §67.
+    (secciones.data?.sections ?? []).length === 14,
+    'B9.30 Son las doce de §67 más insignias y contacto (V2 §61.1)',
     String((secciones.data?.sections ?? []).length),
   );
   check(

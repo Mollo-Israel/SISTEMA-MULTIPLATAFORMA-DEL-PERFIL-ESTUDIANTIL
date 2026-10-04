@@ -199,12 +199,12 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 
 | Requisito | Estado | Observación |
 |---|---|---|
-| CV PDF con selección y disclaimer | IMPLEMENTADO | una sola plantilla |
-| 2–3 plantillas | FALTANTE | |
-| Asistencia IA de redacción con aprobación | FALTANTE | depende de §43 |
-| Panel docente por semestre, sin datos oficiales de asignatura | PARCIAL | renombrar (C10) |
-| Analítica de Dirección descriptiva, umbral de privacidad | IMPLEMENTADO | |
-| Métricas de Sociedad solo de sus actividades | IMPLEMENTADO | |
+| CV PDF con selección y disclaimer | IMPLEMENTADO | BATCH 12: + insignias y contacto autorizado; descargo exacto de §61.4 |
+| 2–3 plantillas | IMPLEMENTADO | BATCH 12: clásica, moderna, compacta |
+| Asistencia IA de redacción con aprobación | IMPLEMENTADO | BATCH 12 (`CV_TEXT_NOT_APPROVED` si la sugerencia no fue aceptada) |
+| Panel docente por semestre, sin datos oficiales de asignatura | IMPLEMENTADO | C10 · BATCH 13: «Panel académico» con resumen por semestre |
+| Analítica de Dirección descriptiva, umbral de privacidad | IMPLEMENTADO | BATCH 13: + recursos más consultados |
+| Métricas de Sociedad solo de sus actividades | IMPLEMENTADO | BATCH 13: + ausentes, repetición y por categoría; narrativa IA opcional |
 | Tutorial reabrible, centro de ayuda por actor, `HELP_VIDEO_URL` | FALTANTE | |
 | UX estudiante, sin parpadeo, validación por campo | IMPLEMENTADO | corrección de QA |
 | `prefers-reduced-motion` | PARCIAL | CSS sí; framer-motion no |

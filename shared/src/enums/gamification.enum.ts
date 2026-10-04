@@ -120,6 +120,10 @@ export enum TrajectorySection {
   EVIDENCES = 'evidences',
   AFFINITY = 'affinity',
   SUPPORT = 'support',
+  /** V2 §61.1: insignias obtenidas. */
+  BADGES = 'badges',
+  /** V2 §61.1: «contacto autorizado», los canales que el estudiante comparte. */
+  CONTACT = 'contact',
 }
 
 export const TRAJECTORY_SECTIONS: readonly TrajectorySection[] = [
@@ -135,6 +139,8 @@ export const TRAJECTORY_SECTIONS: readonly TrajectorySection[] = [
   TrajectorySection.EVIDENCES,
   TrajectorySection.AFFINITY,
   TrajectorySection.SUPPORT,
+  TrajectorySection.BADGES,
+  TrajectorySection.CONTACT,
 ];
 
 export const TRAJECTORY_SECTION_LABEL: Record<TrajectorySection, string> = {
@@ -150,7 +156,29 @@ export const TRAJECTORY_SECTION_LABEL: Record<TrajectorySection, string> = {
   [TrajectorySection.EVIDENCES]: 'Evidencias',
   [TrajectorySection.AFFINITY]: 'Afinidad',
   [TrajectorySection.SUPPORT]: 'Nivel de respaldo',
+  [TrajectorySection.BADGES]: 'Insignias',
+  [TrajectorySection.CONTACT]: 'Contacto',
 };
+
+/**
+ * Plantillas del CV (V2 §61.2): pocas, estáticas y mantenibles. No es un
+ * diseñador libre: cambian tipografía, color de acento y densidad, no qué se
+ * afirma.
+ */
+export enum CvTemplate {
+  CLASSIC = 'classic',
+  MODERN = 'modern',
+  COMPACT = 'compact',
+}
+
+export const CV_TEMPLATES: readonly { key: CvTemplate; label: string; description: string }[] = [
+  { key: CvTemplate.CLASSIC, label: 'Clásica', description: 'Sobria, en blanco y negro, con secciones amplias.' },
+  { key: CvTemplate.MODERN, label: 'Moderna', description: 'Títulos en el color de la carrera y líneas de separación.' },
+  { key: CvTemplate.COMPACT, label: 'Compacta', description: 'Tipografía con serifa y menos espacio: más contenido por página.' },
+];
+
+/** Largo máximo de la presentación escrita o asistida para el CV. */
+export const CV_SUMMARY_MAX = 1200;
 
 /**
  * Advertencia obligatoria del resumen (§67).

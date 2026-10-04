@@ -133,6 +133,18 @@ export default function DirectorTrendsPage() {
                 vacio="Todavía no hay actividades con inscripciones."
               />
             </Card>
+
+            <Card title="Recursos más consultados">
+              <Tabla
+                filas={t.resources ?? []}
+                columnas={[
+                  { clave: 'title', titulo: 'Recurso' },
+                  { clave: 'opened', titulo: 'Estudiantes que lo abrieron', numerica: true },
+                  { clave: 'saved', titulo: 'Lo guardaron', numerica: true },
+                ]}
+                vacio="Todavía nadie abrió un recurso recomendado."
+              />
+            </Card>
           </>
         )}
       </AsyncView>

@@ -188,12 +188,14 @@ export class AnalyticsService {
       areasPorSemestre,
       tecnologias,
       actividades,
+      recursos,
     ] = await Promise.all([
       this.evolucionInteresPorArea(),
       this.evolucionParticipacion(),
       this.areasPredominantesPorSemestre(),
       this.tecnologiasEnProyectos(),
       this.actividadesConMasParticipacion(),
+      this.recursosMasConsultados(),
     ]);
 
     return {
@@ -202,6 +204,7 @@ export class AnalyticsService {
       areasBySemester: areasPorSemestre,
       technologies: tecnologias,
       activities: actividades,
+      resources: recursos,
       note: this.privacy.notice,
     };
   }
@@ -359,6 +362,26 @@ export class AnalyticsService {
     }));
   }
 
+  /**
+   * Recursos más consultados (V2 §63): recursos y cursos externos
+   * recomendados que los estudiantes abrieron o guardaron. Cuenta personas,
+   * no clics: abrir dos veces el mismo recurso es una consulta.
+   */
+  private async recursosMasConsultados() {
+    const filas: { title: string; type: string; opened: string; saved: string }[] = await this.projects.query(
+      `SELECT r.title AS title, r.type AS type,
+              COUNT(DISTINCT r.student_profile_id) FILTER (WHERE r.viewed_at IS NOT NULL OR r.status IN ('viewed', 'saved')) AS opened,
+              COUNT(DISTINCT r.student_profile_id) FILTER (WHERE r.status = 'saved') AS saved
+         FROM recommendations r
+        WHERE r.type IN ('resource', 'external_course')
+        GROUP BY r.title, r.type
+       HAVING COUNT(DISTINCT r.student_profile_id) FILTER (WHERE r.viewed_at IS NOT NULL OR r.status IN ('viewed', 'saved')) > 0
+        ORDER BY opened DESC, saved DESC, r.title
+        LIMIT 10`,
+    );
+    return filas.map((f) => ({ title: f.title, type: f.type, opened: num(f.opened), saved: num(f.saved) }));
+  }
+
   /** Actividades con mayor participación confirmada (§64). */
   private async actividadesConMasParticipacion() {
     const filas = await this.registrations
@@ -412,7 +435,8 @@ export class AnalyticsService {
     if (suyas.length === 0) {
       return {
         activities: [],
-        totals: { activities: 0, registrations: 0, confirmed: 0, students: 0 },
+        totals: { activities: 0, registrations: 0, confirmed: 0, absent: 0, students: 0, returningStudents: 0 },
+        byCategory: [],
         note: this.privacy.notice,
       };
     }
@@ -426,11 +450,27 @@ export class AnalyticsService {
         `COUNT(*) FILTER (WHERE r.status = '${RegistrationStatus.CONFIRMED}')`,
         'confirmed',
       )
+      .addSelect(
+        `COUNT(*) FILTER (WHERE r.status = '${RegistrationStatus.ABSENT}')`,
+        'absent',
+      )
       .where('r.activity_id IN (:...ids)', { ids })
       .groupBy('r.activity_id')
       .getRawMany();
     const porActividad = new Map(
-      conteos.map((c) => [c.activityId, { registros: num(c.registrations), confirmados: num(c.confirmed) }]),
+      conteos.map((c) => [c.activityId, {
+        registros: num(c.registrations), confirmados: num(c.confirmed), ausentes: num(c.absent),
+      }]),
+    );
+
+    // V2 §64, «repetición»: estudiantes que volvieron, con participación
+    // confirmada en dos o más actividades de esta sociedad.
+    const repiten = await this.registrations.query(
+      `SELECT COUNT(*) AS students FROM (
+         SELECT student_profile_id FROM activity_registrations
+          WHERE activity_id = ANY($1::uuid[]) AND status = 'confirmed'
+          GROUP BY student_profile_id HAVING COUNT(*) >= 2) t`,
+      [ids],
     );
 
     const distintos = await this.registrations
@@ -440,7 +480,7 @@ export class AnalyticsService {
       .getRawOne();
 
     const filas = suyas.map((a) => {
-      const c = porActividad.get(a.id) ?? { registros: 0, confirmados: 0 };
+      const c = porActividad.get(a.id) ?? { registros: 0, confirmados: 0, ausentes: 0 };
       return {
         activityId: a.id,
         title: a.title,
@@ -452,8 +492,22 @@ export class AnalyticsService {
         capacity: a.capacity,
         registrations: c.registros,
         confirmed: c.confirmados,
+        absent: c.ausentes,
       };
     });
+
+    // Métricas comparables por categoría (§64): cuántas actividades de cada
+    // tipo y cómo respondieron. Son totales de la sociedad, no de personas.
+    const categorias = new Map<string, { category: string; activities: number; registrations: number; confirmed: number; absent: number }>();
+    for (const f of filas) {
+      const k = f.category ?? 'Sin categoría';
+      const c = categorias.get(k) ?? { category: k, activities: 0, registrations: 0, confirmed: 0, absent: 0 };
+      c.activities += 1;
+      c.registrations += f.registrations;
+      c.confirmed += f.confirmed;
+      c.absent += f.absent;
+      categorias.set(k, c);
+    }
 
     return {
       // §65 aplica también aquí: una actividad con dos inscritos no se
@@ -467,8 +521,11 @@ export class AnalyticsService {
         activities: suyas.length,
         registrations: filas.reduce((s, f) => s + f.registrations, 0),
         confirmed: filas.reduce((s, f) => s + f.confirmed, 0),
+        absent: filas.reduce((s, f) => s + f.absent, 0),
         students: num(distintos?.students),
+        returningStudents: num(repiten?.[0]?.students),
       },
+      byCategory: [...categorias.values()].sort((a, b) => b.confirmed - a.confirmed),
       note: this.privacy.notice,
     };
   }

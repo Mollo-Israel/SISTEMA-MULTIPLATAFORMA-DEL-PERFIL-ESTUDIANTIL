@@ -314,3 +314,58 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** ninguno.
 
 **Riesgos:** quien tenga un cliente antiguo verá 410 en lugar de su chat; es el comportamiento buscado.
+
+## BATCH 12 — CV: plantillas, presentación asistida y descargo
+
+**Estado:** completo
+
+**Objetivo:** §60, §61, RF23; «Mi progreso» (§66, ya existente).
+
+**Cambios:**
+- Tres plantillas estáticas (§61.2): **clásica** (Helvetica, negro), **moderna** (títulos en bordó y líneas bajo cada sección) y **compacta** (Times, menos espacio). El escritor PDF propio recibe un tema (tipografía, acento, escala, margen, línea, mayúsculas); el contenido es el mismo en las tres.
+- Secciones nuevas (§61.1): **insignias** (con la aclaración de que no tienen valor académico) y **contacto autorizado** (los canales que el estudiante comparte; el correo institucional no entra).
+- Presentación del CV: el estudiante puede escribir una propia (reemplaza la biografía del perfil dinámico, §60) o pedir ayuda de redacción (mejorar, resumir o tres alternativas). Si el texto viene de una sugerencia, el CV exige que sea **suya, de redacción de CV y aceptada**; si no, 409 `CV_TEXT_NOT_APPROVED` (§61.3). Las alternativas con cifras que el texto original no tenía ya se descartaban en el BATCH 8.
+- Descargo: se verificó que es el texto exacto de §61.4 y va dentro del PDF en las tres plantillas.
+- `POST /trajectory-summary/pdf` (la presentación no cabe bien en una URL); el `GET` existente se mantiene y acepta `template`.
+- Web: elección de plantilla con muestra, presentación con ayuda de IA y elección entre alternativas, y una **vista previa con el aspecto de la plantilla** en lugar del JSON crudo que se mostraba.
+- «Mi progreso» ya cumplía: puntos, insignias con avance, criterios e historial.
+
+**Migraciones:** ninguna.
+
+**Archivos:** `shared/src/enums/gamification.enum.ts`, `api/src/trajectory/{pdf-writer.ts,trajectory-summary.service.ts}`, `api/src/gamification/{gamification.controller.ts,gamification.module.ts}`, `web/src/components/AiAssist.tsx`, `web/src/pages/student/Progress.tsx`, `web/src/services/index.ts`, `web/src/index.css`, `scripts/e2e-v2.mjs`, `scripts/e2e-ai-provider.mjs`, `scripts/e2e-batch-9.mjs`.
+
+**Pruebas:** `e2e-v2` batch12 (14): secciones nuevas, tres plantillas, descargo exacto, presentación propia, contacto sin correo institucional, biografía por defecto, PDF de las tres plantillas, descargo dentro del PDF, tipografía y color por plantilla, escape de paréntesis, rechazo de sugerencia no aceptada, largo máximo y plantilla inexistente, descarga por enlace con plantilla, solo el estudiante. `e2e-ai-provider` (+2): la sugerencia entra al CV solo aceptada, y la aceptación de otro no sirve.
+
+**Resultados:** ver BATCH 13 (regresión conjunta).
+
+**Regresiones:** B9.30 contaba exactamente doce secciones; ahora son catorce por §61.1 y la prueba lo dice.
+
+**Pendientes:** ninguno.
+
+**Riesgos:** las plantillas usan las tipografías estándar del formato PDF (sin incrustar): se ven igual en cualquier lector, pero no admiten caracteres fuera de WinAnsi.
+
+## BATCH 13 — Paneles y analítica
+
+**Estado:** completo
+
+**Objetivo:** §62, §63, §64, §65 (C10).
+
+**Cambios:**
+- Docente (§62): «Reportes del curso» pasa a **Panel académico** (Afinia no tiene datos de una asignatura oficial) y suma el **resumen por semestre** de su alcance: estudiantes, perfiles activos, participaciones confirmadas, proyectos abiertos a docentes y necesidades de equipo abiertas. Sin semestres habilitados, no muestra a nadie.
+- Dirección (§63): **recursos más consultados**, contando personas que abrieron o guardaron cada recurso o curso recomendado (no clics).
+- Sociedad (§64): **ausencias**, **estudiantes que volvieron** (confirmados en dos o más de sus actividades) y **métricas por categoría**; el estado de cada actividad se muestra en palabras. Solo sobre sus actividades y con el umbral de privacidad de §65.
+- Narrativa de IA opcional también para la Sociedad, con las cifras de sus actividades únicamente; el docente no la tiene.
+
+**Migraciones:** ninguna.
+
+**Archivos:** `api/src/reports/{reports.service.ts,analytics.service.ts}`, `api/src/ai/ai.service.ts`, `web/src/pages/teacher/Reports.tsx`, `web/src/pages/director/Trends.tsx`, `web/src/pages/society/Metrics.tsx`, `web/src/navigation.ts`, `web/src/services/index.ts`, `scripts/e2e-v2.mjs`, `scripts/e2e-ai-provider.mjs`.
+
+**Pruebas:** `e2e-v2` batch13 (9): agrupación por semestre solo del alcance, campos del resumen, suma igual al total, docente sin alcance, recursos consultados, tendencias solo para Dirección, ausentes y repetición, por categoría, solo actividades propias. `e2e-ai-provider` (+2): narrativa de Sociedad solo con sus cifras; el docente no la pide.
+
+**Resultados (B12 + B13):** regresión completa: 18 suites, 1363 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 63, B9 49, B10 42, B11 46, QA 74, V2 133, IA 36). API y móvil `tsc` limpios; web compila en producción.
+
+**Regresiones:** ninguna.
+
+**Pendientes:** la pantalla móvil del docente aún dice «Reporte del curso»; el BATCH 15 retira del móvil todo lo que no es del Estudiante.
+
+**Riesgos:** ninguno nuevo.

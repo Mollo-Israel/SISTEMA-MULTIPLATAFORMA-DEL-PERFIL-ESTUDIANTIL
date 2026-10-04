@@ -14,9 +14,11 @@
  *
  * ## Alcance
  *
- * Texto en las catorce tipografías estándar del formato —se usan Helvetica y
- * Helvetica-Bold—, paginación automática y saltos de línea por ancho. Sin
- * imágenes, sin colores, sin tablas. Es lo que §67 pide.
+ * Texto en las catorce tipografías estándar del formato —Helvetica o Times,
+ * normal y negrita—, paginación automática y saltos de línea por ancho. Sin
+ * imágenes ni tablas. Desde la V2 (§61.2) hay un **tema** por plantilla:
+ * tipografía, color de acento, densidad y una línea bajo cada sección. El
+ * contenido es el mismo en todas; cambia la presentación.
  *
  * Las tipografías estándar no se embeben: todo lector de PDF las tiene. Eso es
  * lo que permite que el archivo pese unos pocos kilobytes.
@@ -25,7 +27,36 @@
 /** Tamaño de página A4 en puntos. */
 const ANCHO = 595.28;
 const ALTO = 841.89;
-const MARGEN = 56;
+
+/** Presentación de una plantilla (V2 §61.2). */
+export interface PdfTheme {
+  regular: 'Helvetica' | 'Times-Roman';
+  bold: 'Helvetica-Bold' | 'Times-Bold';
+  /** Color de título y secciones, RGB de 0 a 1; null = negro. */
+  accent: [number, number, number] | null;
+  /** Factor sobre los tamaños base. */
+  scale: number;
+  margin: number;
+  /** Línea fina bajo cada título de sección. */
+  sectionRule: boolean;
+  sectionUppercase: boolean;
+}
+
+export const PDF_THEMES = {
+  classic: {
+    regular: 'Helvetica', bold: 'Helvetica-Bold', accent: null, scale: 1, margin: 56,
+    sectionRule: false, sectionUppercase: false,
+  },
+  modern: {
+    // Bordó de la Universidad del Valle.
+    regular: 'Helvetica', bold: 'Helvetica-Bold', accent: [0.478, 0.106, 0.165], scale: 1, margin: 60,
+    sectionRule: true, sectionUppercase: false,
+  },
+  compact: {
+    regular: 'Times-Roman', bold: 'Times-Bold', accent: null, scale: 0.9, margin: 44,
+    sectionRule: true, sectionUppercase: true,
+  },
+} as const satisfies Record<string, PdfTheme>;
 
 /** Anchos aproximados de Helvetica, en milésimas de em. */
 const ANCHO_MEDIO = 0.5;
@@ -66,7 +97,11 @@ interface Bloque {
 export class PdfWriter {
   private readonly bloques: Bloque[] = [];
 
-  constructor(private readonly titulo: string) {}
+  private readonly tema: PdfTheme;
+
+  constructor(private readonly titulo: string, tema: PdfTheme = PDF_THEMES.classic) {
+    this.tema = tema;
+  }
 
   title(texto: string): this {
     this.bloques.push({ texto, estilo: 'titulo', sangria: 0 });
@@ -79,7 +114,11 @@ export class PdfWriter {
   }
 
   section(texto: string): this {
-    this.bloques.push({ texto, estilo: 'seccion', sangria: 0 });
+    this.bloques.push({
+      texto: this.tema.sectionUppercase ? texto.toLocaleUpperCase('es') : texto,
+      estilo: 'seccion',
+      sangria: 0,
+    });
     return this;
   }
 
@@ -119,9 +158,9 @@ export class PdfWriter {
       `<< /Type /Pages /Kids [${idsPagina.map((id) => `${id} 0 R`).join(' ')}] `
       + `/Count ${paginas.length} >>`,
     );
-    objetos.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+    objetos.push(`<< /Type /Font /Subtype /Type1 /BaseFont /${this.tema.regular} /Encoding /WinAnsiEncoding >>`);
     objetos.push(
-      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+      `<< /Type /Font /Subtype /Type1 /BaseFont /${this.tema.bold} /Encoding /WinAnsiEncoding >>`,
     );
 
     paginas.forEach((contenido, i) => {
@@ -144,7 +183,10 @@ export class PdfWriter {
   private paginar(): string[] {
     const paginas: string[] = [];
     let actual: string[] = [];
+    const MARGEN = this.tema.margin;
+    const k = this.tema.scale;
     let y = ALTO - MARGEN;
+    const acento = this.tema.accent ? `${this.tema.accent.map((c) => c.toFixed(3)).join(' ')}` : null;
 
     const cerrar = () => {
       if (actual.length > 0) paginas.push(actual.join('\n'));
@@ -153,10 +195,17 @@ export class PdfWriter {
     };
 
     for (const bloque of this.bloques) {
-      const estilo = ESTILOS[bloque.estilo];
+      const base = ESTILOS[bloque.estilo];
+      const estilo = {
+        ...base,
+        size: +(base.size * k).toFixed(2),
+        spaceBefore: base.spaceBefore * k,
+        spaceAfter: base.spaceAfter * k,
+      };
       const alto = estilo.size * 1.35;
       const anchoUtil = ANCHO - MARGEN * 2 - bloque.sangria;
       const lineas = this.partir(bloque.texto, estilo.size, anchoUtil);
+      const coloreado = !!acento && (bloque.estilo === 'titulo' || bloque.estilo === 'seccion');
 
       y -= estilo.spaceBefore;
       // Un bloque nunca se parte entre páginas por su primera línea: un título
@@ -166,11 +215,19 @@ export class PdfWriter {
       for (const linea of lineas) {
         if (y - alto < MARGEN) cerrar();
         actual.push(
-          `BT /${estilo.bold ? 'F2' : 'F1'} ${estilo.size} Tf `
+          `BT ${coloreado ? `${acento} rg ` : ''}/${estilo.bold ? 'F2' : 'F1'} ${estilo.size} Tf `
           + `${(MARGEN + bloque.sangria).toFixed(2)} ${y.toFixed(2)} Td `
-          + `(${this.escapar(linea)}) Tj ET`,
+          + `(${this.escapar(linea)}) Tj ${coloreado ? '0 0 0 rg ' : ''}ET`,
         );
         y -= alto;
+      }
+      if (bloque.estilo === 'seccion' && this.tema.sectionRule) {
+        // Línea fina bajo el título, del ancho útil.
+        const yl = y + alto * 0.55;
+        actual.push(
+          `${acento ?? '0.6 0.6 0.6'} RG 0.6 w ${MARGEN.toFixed(2)} ${yl.toFixed(2)} m `
+          + `${(ANCHO - MARGEN).toFixed(2)} ${yl.toFixed(2)} l S 0 0 0 RG`,
+        );
       }
       y -= estilo.spaceAfter;
     }
