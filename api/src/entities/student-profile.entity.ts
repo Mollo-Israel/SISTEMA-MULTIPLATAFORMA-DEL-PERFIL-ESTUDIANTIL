@@ -166,6 +166,21 @@ export class StudentProfile {
   @Column({ name: 'onboarding_completed_at', type: 'timestamptz', nullable: true })
   onboardingCompletedAt: Date | null;
 
+  /** Paso 1 de la bienvenida V2 (§20.2): vio y confirmó sus datos institucionales. */
+  @Column({ name: 'institutional_confirmed_at', type: 'timestamptz', nullable: true })
+  institutionalConfirmedAt: Date | null;
+
+  /** Revisó su configuración básica de privacidad (§20.2). */
+  @Column({ name: 'privacy_reviewed_at', type: 'timestamptz', nullable: true })
+  privacyReviewedAt: Date | null;
+
+  /**
+   * Decidió su disponibilidad (§20.2), aunque sea «prefiero no decirlo». Sin
+   * esta marca no se distingue esa decisión del valor por omisión.
+   */
+  @Column({ name: 'availability_decided_at', type: 'timestamptz', nullable: true })
+  availabilityDecidedAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

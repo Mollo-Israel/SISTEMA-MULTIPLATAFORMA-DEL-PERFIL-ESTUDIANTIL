@@ -21,7 +21,7 @@ import {
 } from '@perfil/shared';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import {
   Conversation,
   ConversationMember,
@@ -66,11 +66,11 @@ export class TeamsService {
     @InjectRepository(TeamInvitation)
     private readonly invitations: Repository<TeamInvitation>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
-    @InjectRepository(StudentSkill) private readonly skills: Repository<StudentSkill>,
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
     @InjectRepository(Conversation) private readonly conversations: Repository<Conversation>,
     @InjectRepository(ConversationMember)
     private readonly conversationMembers: Repository<ConversationMember>,
+    private readonly backedSkills: BackedSkillsService,
   ) {}
 
   // =========================================================================
@@ -210,14 +210,12 @@ export class TeamsService {
     if (equipo) {
       const integrantes = await this.members.find({ where: { teamId: equipo.id } });
       integrantes.forEach((m) => dentro.add(m.studentProfileId));
-      const suyas = await this.skills.find({
-        where: { studentProfileId: In([...dentro]) },
-      });
+      const suyas = [...(await this.backedSkills.forProfiles([...dentro])).values()].flat();
       cubiertasPorElEquipo = new Set(
         suyas.map((s) => s.skillId).filter((id) => requeridas.has(id)),
       );
     } else {
-      const propias = await this.skills.find({ where: { studentProfileId: ownerProfileId } });
+      const propias = await this.backedSkills.forProfile(ownerProfileId);
       cubiertasPorElEquipo = new Set(
         propias.map((s) => s.skillId).filter((id) => requeridas.has(id)),
       );
@@ -253,11 +251,10 @@ export class TeamsService {
     if (candidatos.length === 0) return { need: this.vistaNecesidad(need, true), candidates: [] };
 
     const ids = candidatos.map((c) => c.profileId);
-    const [skillsCandidatos, afinidades] = await Promise.all([
-      this.skills.find({
-        where: { studentProfileId: In(ids) },
-        relations: { skill: true },
-      }),
+    // V2 §55: solo habilidades respaldadas por trayectoria (proyectos con
+    // contribución confirmada, actividades confirmadas), nunca declaradas.
+    const [porCandidato, afinidades] = await Promise.all([
+      this.backedSkills.forProfiles(ids),
       areas.size > 0
         ? this.affinities.find({
             where: { studentProfileId: In(ids), academicAreaId: In([...areas]) },
@@ -265,12 +262,6 @@ export class TeamsService {
         : Promise.resolve([] as AffinityResult[]),
     ]);
 
-    const porCandidato = new Map<string, StudentSkill[]>();
-    for (const s of skillsCandidatos) {
-      const lista = porCandidato.get(s.studentProfileId) ?? [];
-      lista.push(s);
-      porCandidato.set(s.studentProfileId, lista);
-    }
     const afinidadPorCandidato = new Map<string, AffinityResult[]>();
     for (const a of afinidades) {
       const lista = afinidadPorCandidato.get(a.studentProfileId) ?? [];
@@ -289,8 +280,8 @@ export class TeamsService {
           const proporcion = cubre.length / faltantes.length;
           motivos.push({
             code: TeamSuggestionReason.SKILL_COVERAGE,
-            label: `Cubre ${cubre.length} de ${faltantes.length} habilidades que faltan: `
-              + cubre.map((s) => s.skill?.name).filter(Boolean).slice(0, 3).join(', '),
+            label: `Experiencia respaldada en ${cubre.length} de ${faltantes.length} habilidades que faltan: `
+              + cubre.map((s) => s.name).slice(0, 3).join(', '),
             points: this.redondear(TEAM_SUGGESTION_WEIGHTS.SKILL_COVERAGE * proporcion),
           });
         }
@@ -571,9 +562,7 @@ export class TeamsService {
         name: s.skill?.name ?? null,
       }));
       const ids = (equipo.members ?? []).map((m) => m.studentProfileId);
-      const suyas = ids.length
-        ? await this.skills.find({ where: { studentProfileId: In(ids) } })
-        : [];
+      const suyas = ids.length ? [...(await this.backedSkills.forProfiles(ids)).values()].flat() : [];
       const cubiertas = new Set(suyas.map((s) => s.skillId));
 
       resultado.push({

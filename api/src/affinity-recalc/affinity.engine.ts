@@ -21,7 +21,6 @@ import {
   LEVEL_THRESHOLDS,
   ProjectBackingTier,
   RegistrationStatus,
-  SkillLevel,
   SUPPORT_CAPS,
   SUPPORT_POINTS,
   ValidationResourceType,
@@ -29,7 +28,6 @@ import {
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { Project } from '../entities/project.entity';
@@ -286,7 +284,6 @@ export class AffinityEngineService {
     private readonly dataSource: DataSource,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(StudentInterest) private readonly interests: Repository<StudentInterest>,
-    @InjectRepository(StudentSkill) private readonly skills: Repository<StudentSkill>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
@@ -377,27 +374,8 @@ export class AffinityEngineService {
       });
     });
 
-    const studentSkills = await this.skills.find({
-      where: { studentProfileId },
-      relations: { skill: true },
-    });
-    studentSkills.forEach((s) => {
-      if (!s.skill?.academicAreaId) return;
-      const code = this.skillWeightCode(s.level);
-      add({
-        areaId: s.skill.academicAreaId,
-        family: AffinitySignalFamily.PREFERENCE,
-        weightCode: code,
-        matchType: AffinityMatchType.DECLARED,
-        sourceEntityType: AffinitySourceEntityType.STUDENT_SKILL,
-        sourceId: s.id,
-        base: weightOf.get(code) ?? 0,
-        affinityBucket: 'skill',
-        reason:
-          `Habilidad autodeclarada: ${s.skill.name} `
-          + `(nivel ${this.skillLevelLabel(s.level)})`,
-      });
-    });
+    // V2 §22: la autoevaluación de nivel (`student_skills`) ya no alimenta la
+    // afinidad. La tabla se conserva como histórico; aquí no se lee.
 
     // §20: se registra para poder decir que se tuvo en cuenta y no sumo.
     (profile.improvementAreaIds ?? []).forEach((id) =>
@@ -1348,18 +1326,7 @@ export class AffinityEngineService {
     return tabla[indice];
   }
 
-  private skillWeightCode(level: SkillLevel): AffinityWeightCode {
-    if (level === SkillLevel.ADVANCED) return AffinityWeightCode.SKILL_ADVANCED;
-    if (level === SkillLevel.INTERMEDIATE) return AffinityWeightCode.SKILL_INTERMEDIATE;
-    return AffinityWeightCode.SKILL_BASIC;
-  }
 
-  /** Etiqueta legible del nivel autodeclarado (§21.1). */
-  private skillLevelLabel(level: SkillLevel): string {
-    if (level === SkillLevel.ADVANCED) return 'avanzado';
-    if (level === SkillLevel.INTERMEDIATE) return 'intermedio';
-    return 'basico';
-  }
 
   private activityWeightCode(status: RegistrationStatus): AffinityWeightCode | null {
     if (status === RegistrationStatus.INTERESTED) return AffinityWeightCode.ACTIVITY_INTERESTED;

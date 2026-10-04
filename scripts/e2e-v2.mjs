@@ -133,8 +133,98 @@ async function batch2(ctx) {
 }
 
 // ===========================================================================
+//  BATCH 3 — Bienvenida V2 y datos declarados
+// ===========================================================================
+async function batch3(ctx) {
+  objective('BATCH 3 · Bienvenida guiada, intereses por tecnología, sin nivel autodeclarado');
 
-const BATCHES = { batch2 };
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Lara', lastName: 'Saavedra', email: correoEst('bienvenida'), role: 'STUDENT', semester: 5,
+  });
+  const t = est.token;
+
+  let estado = await req('GET', '/profiles/me/onboarding', { token: t });
+  check(estado.data?.completed === false && estado.data?.missing?.length === 4,
+    'V2.3.1 §20.2 Una cuenta nueva tiene pendientes los 4 obligatorios', json(estado.data?.missing));
+  check(estado.data?.semester === 5 && typeof estado.data?.universityCode === 'string',
+    'V2.3.2 §20.2 La bienvenida muestra semestre y código para confirmarlos', json(estado.data));
+
+  const temprano = await req('POST', '/profiles/me/onboarding/complete', { token: t });
+  check(temprano.status === 400 && /confirmar tus datos/.test(temprano.data?.message ?? '') && /privacidad/.test(temprano.data?.message ?? ''),
+    'V2.3.3 §20.2 No se puede terminar sin lo obligatorio, y dice qué falta', json(temprano.data));
+
+  const pasoViejo = await req('PATCH', '/profiles/me/onboarding', { token: t, body: { step: 'skills' } });
+  check(pasoViejo.status === 400 || pasoViejo.status === 404,
+    'V2.3.4 §20.1 El paso «habilidades» ya no existe', `status ${pasoViejo.status}`);
+
+  const confirmado = await req('POST', '/profiles/me/onboarding/institutional-confirmation', {
+    token: t, body: { bio: 'Me gusta el desarrollo web.' },
+  });
+  check(confirmado.status === 200 && confirmado.data?.institutionalConfirmed === true,
+    'V2.3.5 §20.2 Paso 1: confirma sus datos institucionales', json(confirmado.data));
+
+  const catalogo = (await req('GET', '/skills', { token: t })).data ?? [];
+  const [s1, s2] = catalogo.filter((s) => s.isActive !== false);
+  const viejo = await req('PUT', '/profiles/me/skills', { token: t, body: { items: [{ skillId: s1.id, level: 'advanced' }] } });
+  check(viejo.status === 410, 'V2.3.6 §22 El nivel autodeclarado se retiró -> 410', `status ${viejo.status}`);
+
+  const malTipo = await req('PUT', '/profiles/me/skill-interests', { token: t, body: { items: [{ skillId: s1.id, kind: 'advanced' }] } });
+  check(malTipo.status === 400, 'V2.3.7 §21 Solo «me interesa» o «quiero mejorar»', `status ${malTipo.status}`);
+
+  const antes = (await req('GET', '/affinity/me/summary', { token: t })).data;
+  const techs = await req('PUT', '/profiles/me/skill-interests', {
+    token: t,
+    body: { items: [{ skillId: s1.id, kind: 'interest' }, { skillId: s2.id, kind: 'improve' }, { skillId: s1.id, kind: 'interest' }] },
+  });
+  check(techs.status === 200 && techs.data?.length === 2
+    && techs.data.some((x) => x.skillId === s1.id && x.kind === 'interest')
+    && techs.data.some((x) => x.skillId === s2.id && x.kind === 'improve'),
+  'V2.3.8 §21 Tecnologías de interés y de mejora, sin duplicados', json(techs.data));
+  await new Promise((r) => setTimeout(r, 600));
+  const despues = (await req('GET', '/affinity/me/summary', { token: t })).data;
+  const suma = (r) => (r?.areas ?? []).reduce((a, x) => a + Number(x.score ?? 0), 0);
+  check(suma(despues) === suma(antes), 'V2.3.9 §21 Declarar tecnologías no cambia la afinidad', `${suma(antes)} -> ${suma(despues)}`);
+
+  const resumen = (await req('GET', '/profiles/me/summary', { token: t })).data;
+  check(Array.isArray(resumen?.skillInterests) && resumen.skillInterests.length === 2,
+    'V2.3.10 §21 El resumen trae las tecnologías de interés', json(resumen?.skillInterests));
+  check(Array.isArray(resumen?.skills) && resumen.skills.every((x) => !('level' in x)),
+    'V2.3.11 §22 «skills» son las respaldadas, sin nivel autodeclarado', json(resumen?.skills));
+
+  await req('PATCH', '/profiles/me', { token: t, body: { availability: 'unspecified' } });
+  estado = await req('GET', '/profiles/me/onboarding', { token: t });
+  check(estado.data?.availabilityDecided === true,
+    'V2.3.12 §20.2 Elegir «prefiero no decirlo» cuenta como decisión de disponibilidad', json(estado.data));
+
+  const privacidad = await req('POST', '/profiles/me/onboarding/privacy', {
+    token: t, body: { peerDiscoverable: true, publicProfileEnabled: false },
+  });
+  check(privacidad.status === 200 && privacidad.data?.privacyReviewed === true,
+    'V2.3.13 §20.2 Paso 4: privacidad básica revisada', json(privacidad.data));
+
+  const fin = await req('POST', '/profiles/me/onboarding/complete', { token: t });
+  check(fin.status === 200 && fin.data?.completed === true && fin.data?.missing?.length === 0,
+    'V2.3.14 §20 Con lo obligatorio, la bienvenida termina (cuestionario opcional)', json(fin.data));
+
+  // Solo una tecnología de interés, sin áreas: también vale (§20.2 «al menos un interés»).
+  const otro = await provisionAndActivate(ctx.admin, {
+    firstName: 'Ivo', lastName: 'Cuellar', email: correoEst('soloTech'), role: 'STUDENT', semester: 1,
+  });
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: otro.token, body: {} });
+  await req('PUT', '/profiles/me/skill-interests', { token: otro.token, body: { items: [{ skillId: s2.id, kind: 'interest' }] } });
+  await req('PATCH', '/profiles/me', { token: otro.token, body: { availability: 'looking' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: otro.token, body: { peerDiscoverable: false, publicProfileEnabled: false } });
+  const finOtro = await req('POST', '/profiles/me/onboarding/complete', { token: otro.token });
+  check(finOtro.status === 200, 'V2.3.15 §20.2 Basta un interés por tecnología (sin áreas)', json(finOtro.data));
+
+  const semestre = await req('PATCH', '/profiles/me', { token: t, body: { semester: 8 } });
+  const tras = (await req('GET', '/profiles/me', { token: t })).data;
+  check(tras?.semester === 5, 'V2.3.16 §6.1 El estudiante no puede cambiar su semestre', `status ${semestre.status}, semestre ${tras?.semester}`);
+}
+
+// ===========================================================================
+
+const BATCHES = { batch2, batch3 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

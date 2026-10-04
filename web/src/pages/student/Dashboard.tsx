@@ -107,7 +107,7 @@ export default function StudentDashboard() {
               { n: d.projects.length, l: 'proyectos', c: 'c3' },
               { n: d.activities.length, l: 'actividades', c: 'c2' },
               { n: d.externalCertificates.length + d.internalConstancies.length, l: 'certificados y constancias', c: 'c4' },
-              { n: d.skills.length, l: 'habilidades declaradas', c: 'c1' },
+              { n: d.skills.length, l: 'tecnologías con respaldo', c: 'c1' },
             ].map((s, i) => (
               <motion.div key={s.l} className={`home-stat ${s.c}`} variants={aparecer} initial="hidden" animate="show" custom={i + 2}>
                 <span className="n">{s.n}</span>

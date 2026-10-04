@@ -5,7 +5,7 @@ import { AffinityResult } from '../entities/affinity-result.entity';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { Project } from '../entities/project.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { StudentSkillInterest } from '../entities/student-skill-interest.entity';
 import {
   Contact,
   ContactRequest,
@@ -38,7 +38,7 @@ import { CollaborationController } from './collaboration.controller';
   imports: [
     TypeOrmModule.forFeature([
       StudentProfile,
-      StudentSkill,
+      StudentSkillInterest,
       AcademicArea,
       AffinityResult,
       AffinitySnapshot,

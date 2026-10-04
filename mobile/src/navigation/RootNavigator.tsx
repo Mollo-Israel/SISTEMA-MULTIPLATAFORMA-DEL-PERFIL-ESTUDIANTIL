@@ -82,7 +82,7 @@ function PerfilStack() {
     <Stack.Navigator screenOptions={{ ...screenOptions, headerShown: true }}>
       <Stack.Screen name="MiPerfil" component={ProfileScreen} options={{ title: 'Perfil', ...withLogout }} />
       <Stack.Screen name="Intereses" component={InterestsScreen} options={{ title: 'Intereses' }} />
-      <Stack.Screen name="Habilidades" component={SkillsScreen} options={{ title: 'Habilidades' }} />
+      <Stack.Screen name="Habilidades" component={SkillsScreen} options={{ title: 'Tecnologías' }} />
       <Stack.Screen name="Evidencias" component={EvidencesScreen} options={{ title: 'Evidencias' }} />
       <Stack.Screen
         name="Colaboracion"

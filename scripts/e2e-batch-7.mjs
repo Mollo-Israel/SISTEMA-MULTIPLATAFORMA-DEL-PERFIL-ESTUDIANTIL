@@ -648,9 +648,9 @@ async function preparar() {
       ],
     },
   });
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: est.token,
-    body: { items: [{ skillId: skillFuerte.id, level: 'intermediate' }] },
+    body: { items: [{ skillId: skillFuerte.id, kind: 'interest' }] },
   });
   await req('PATCH', '/profiles/me', {
     token: est.token,
@@ -754,12 +754,28 @@ async function preparar() {
   });
 
   // ------------------------------------------------------- los compañeros
-  await req('PUT', '/profiles/me/skills', {
+  // V2 §55: de un compañero cuentan las tecnologías RESPALDADAS. El
+  // complementario las obtiene como se obtienen de verdad: participando —con
+  // confirmación del responsable— en una actividad que las trabaja.
+  const practica = await crearActividad(director.token, {
+    title: `Práctica de tecnologías ${TS}`,
+    description: 'Actividad con tecnologías concretas.',
+    type: 'academica',
+    categoryId: taller.id,
+    areaId: areaFuerte.id,
+    skillIds: [skillFuerte.id, skillAjena.id],
+  });
+  await req('POST', `/activities/${practica.id}/register`, { token: complementario.token });
+  await req('PATCH', `/activities/${practica.id}/confirm-participation`, {
+    token: director.token,
+    body: { studentProfileId: complementario.profileId, status: 'confirmed' },
+  });
+  await req('PUT', '/profiles/me/skill-interests', {
     token: complementario.token,
     body: {
       items: [
-        { skillId: skillFuerte.id, level: 'advanced' },
-        { skillId: skillAjena.id, level: 'advanced' },
+        { skillId: skillFuerte.id, kind: 'interest' },
+        { skillId: skillAjena.id, kind: 'interest' },
       ],
     },
   });
@@ -772,9 +788,9 @@ async function preparar() {
     body: { availability: 'looking' },
   });
 
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: oculto.token,
-    body: { items: [{ skillId: skillAjena.id, level: 'advanced' }] },
+    body: { items: [{ skillId: skillAjena.id, kind: 'interest' }] },
   });
   await req('PUT', '/profiles/me/interests', {
     token: oculto.token,

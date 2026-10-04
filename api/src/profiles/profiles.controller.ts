@@ -1,3 +1,4 @@
+import { ConfirmInstitutionalDto, OnboardingPrivacyDto, ReplaceSkillInterestsDto } from './dto/skill-interests.dto';
 import {
   Body,
   Controller,
@@ -21,7 +22,6 @@ import { CreateFreeInterestDto, UpdateFreeInterestDto } from './dto/free-interes
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ReplaceInterestsDto, SetInterestsDto } from './dto/set-interests.dto';
-import { ReplaceSkillsDto, SetSkillsDto } from './dto/set-skills.dto';
 import { SearchPeersDto } from './dto/search-peers.dto';
 import { SetInstitutionalDataDto } from './dto/institutional-data.dto';
 import { UpdateVisibilityDto } from './dto/visibility.dto';
@@ -94,12 +94,31 @@ export class ProfilesController {
     return this.profilesService.saveOnboardingStep(user.userId, dto.step);
   }
 
+  @Post('me/onboarding/institutional-confirmation')
+  @Roles(RolNombre.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Paso 1: confirmo mis datos institucionales.',
+    description: 'Semestre y código universitario se ven, no se editan (V2 §6.1, §20.2). Acepta una bio opcional.',
+  })
+  confirmInstitutional(@CurrentUser() user: AuthenticatedUser, @Body() dto: ConfirmInstitutionalDto) {
+    return this.profilesService.confirmInstitutionalData(user.userId, dto.bio);
+  }
+
+  @Post('me/onboarding/privacy')
+  @Roles(RolNombre.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Paso 4: mi privacidad básica (V2 §20.2).' })
+  onboardingPrivacy(@CurrentUser() user: AuthenticatedUser, @Body() dto: OnboardingPrivacyDto) {
+    return this.profilesService.saveOnboardingPrivacy(user.userId, dto);
+  }
+
   @Post('me/onboarding/complete')
   @Roles(RolNombre.STUDENT)
   @HttpCode(200)
   @ApiOperation({
     summary: 'Terminar la bienvenida.',
-    description: 'Exige perfil, al menos un área de mejora y al menos un interés. El cuestionario es opcional.',
+    description: 'Exige lo obligatorio de V2 §20.2: datos confirmados, un interés o área de mejora, disponibilidad y privacidad. El cuestionario es opcional.',
   })
   completeOnboarding(@CurrentUser() user: AuthenticatedUser) {
     return this.profilesService.completeOnboarding(user.userId);
@@ -224,16 +243,37 @@ export class ProfilesController {
     return this.profilesService.replaceInterests(user.userId, dto.items);
   }
 
+  // ---------------- Tecnologías de interés (V2 §21, §22) ----------------
+
+  @Get('me/skill-interests')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Tecnologías que me interesan o quiero mejorar.' })
+  getSkillInterests(@CurrentUser() user: AuthenticatedUser) {
+    return this.profilesService.getSkillInterests(user.userId);
+  }
+
+  @Put('me/skill-interests')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Reemplazar mis tecnologías de interés.',
+    description: 'Declarativo: alimenta recomendaciones y colaboración, nunca la afinidad (V2 §21).',
+  })
+  replaceSkillInterests(@CurrentUser() user: AuthenticatedUser, @Body() dto: ReplaceSkillInterestsDto) {
+    return this.profilesService.replaceSkillInterests(user.userId, dto.items);
+  }
+
   @Post('me/skills')
   @Roles(RolNombre.STUDENT)
-  addSkills(@CurrentUser() user: AuthenticatedUser, @Body() dto: SetSkillsDto) {
-    return this.profilesService.addSkills(user.userId, dto.items);
+  @ApiOperation({ summary: 'Retirado: nivel autodeclarado (V2 §22). Responde 410.', deprecated: true })
+  addSkills() {
+    return this.profilesService.retiredSelfSkillLevel();
   }
 
   @Put('me/skills')
   @Roles(RolNombre.STUDENT)
-  replaceSkills(@CurrentUser() user: AuthenticatedUser, @Body() dto: ReplaceSkillsDto) {
-    return this.profilesService.replaceSkills(user.userId, dto.items);
+  @ApiOperation({ summary: 'Retirado: nivel autodeclarado (V2 §22). Responde 410.', deprecated: true })
+  replaceSkills() {
+    return this.profilesService.retiredSelfSkillLevel();
   }
 
   @Get('me/summary')

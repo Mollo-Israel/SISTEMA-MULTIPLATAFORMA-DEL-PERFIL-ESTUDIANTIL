@@ -79,3 +79,33 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** prueba de la sesión con cookie en un navegador real (Playwright, BATCH 16).
 
 **Riesgos:** si la web y la API se despliegan en sitios distintos hay que poner `REFRESH_COOKIE_SAMESITE=none` y HTTPS; sin `WEB_ORIGINS` configurado, CORS no admite credenciales y la web no puede iniciar sesión (en producción la API ya exige `WEB_ORIGINS`).
+
+---
+
+## BATCH 3 — Onboarding y preferencias
+
+**Estado:** completo (con 9 aserciones obsoletas de afinidad antigua que se reescriben en el BATCH 9, adelantado; ver «Regresiones»)
+
+**Objetivo:** §20–§22, §82.
+
+**Cambios:**
+- Bienvenida V2 de 5 pasos (perfil base con confirmación de datos institucionales → intereses → áreas y tecnologías a mejorar → disponibilidad, colaboración y privacidad → orientación opcional), en web y móvil. El servidor exige lo obligatorio de §20.2 y devuelve `missing` en palabras.
+- Nuevas marcas en el perfil: `institutional_confirmed_at`, `privacy_reviewed_at`, `availability_decided_at` («prefiero no decirlo» cuenta como decisión).
+- Intereses por tecnología (`student_skill_interests`: «me interesa» / «quiero mejorar», con procedencia). Endpoints `GET/PUT /profiles/me/skill-interests`.
+- Nivel autodeclarado retirado: `POST/PUT /profiles/me/skills` responden **410**; UI de nivel eliminada en web y móvil (`LevelPicker` borrado); `student_skills` se conserva como histórico y el motor de afinidad deja de leerla.
+- `BackedSkillsService` (global): tecnologías respaldadas = `skills_used` confirmadas en proyectos SUPPORTED o mejor + tecnologías de actividades CONFIRMED. Sustituye a la autoevaluación en perfil compartible, CV, vista docente, compañeros sugeridos, equipos (§55) y analítica de Dirección («tecnologías presentes en proyectos», §63).
+- Recomendaciones propias usan los intereses por tecnología.
+
+**Migraciones:** `1780380000000-V2OnboardingAndSkillInterests` (tabla y enums nuevos; 403 autoevaluaciones migradas como interés con procedencia `historical_self_assessment`; columnas de la bienvenida con backfill para los 451 perfiles que ya la habían terminado). `down` probado y reaplicado sin pérdida.
+
+**Archivos:** `shared/src/enums/skill-interest.enum.ts`, `api/src/entities/student-skill-interest.entity.ts`, `api/src/backed-skills/*`, `api/src/profiles/*`, `api/src/collaboration/{public-profile,teams}.service.ts`, `api/src/recommendations/recommendations.engine.ts`, `api/src/reports/reports.service.ts`, `api/src/trajectory/trajectory-summary.service.ts`, `api/src/affinity-recalc/affinity.engine.ts`, `web/src/pages/student/{Welcome,Profile,Dashboard}.tsx`, `web/src/components/Declarations.tsx`, `web/src/pages/{PublicProfile,teacher/Students}.tsx`, `mobile/src/screens/student/{WelcomeScreen,SkillsScreen}.tsx`, suites.
+
+**Pruebas:** `e2e-v2` batch3 (16): pendientes iniciales, datos visibles, cierre bloqueado con motivo, paso viejo inexistente, confirmación, 410, validación de tipo, sin duplicados, interés no cambia afinidad, resumen, disponibilidad «prefiero no decirlo», privacidad, cierre, basta un interés por tecnología, el estudiante no cambia su semestre. Suites antiguas adaptadas: B2 §21 reescrita a la regla V2; QA bienvenida con los requisitos V2; B7 y B8 preparan el respaldo real (participación confirmada en actividades con esas tecnologías).
+
+**Resultados:** V2 31/31; objectives-40, obj5, obj7, B2, B3, B4, B5, B7, B8, B9, B10, B11, QA sin fallos.
+
+**Regresiones:** obj-6 §17 (7 aserciones) y B6.6/B6.7 verifican la aritmética de la afinidad V2 antigua, donde el nivel autodeclarado sumaba puntos. La V2 lo prohíbe (§22, §45.1), así que son reglas obsoletas; se reescriben contra la fórmula V3 en el BATCH 9.
+
+**Pendientes:** orientación académica en el móvil (BATCH 15).
+
+**Riesgos:** los intereses por área siguen sumando afinidad en el motor antiguo hasta el BATCH 9.

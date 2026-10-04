@@ -431,54 +431,41 @@ async function confirmacion(ctx) {
 //  §21 · Autoevaluación y experiencia respaldada
 // ===========================================================================
 async function habilidades(ctx) {
-  objective('§21 · Autoevaluación de tres niveles y experiencia respaldada');
+  // V2 §21–§22: la autoevaluación de nivel se retiró. Esta sección verifica
+  // la regla nueva; la anterior (tres niveles) quedó obsoleta por la V2.
+  objective('§21 (V2 §22) · Sin nivel autodeclarado: intereses por tecnología y respaldo aparte');
 
   const catalogo = await req('GET', '/skills', { token: ctx.est.token });
   const skill = (catalogo.data ?? [])[0];
   check(!!skill, 'B2.45 Hay catálogo de habilidades');
 
-  section('§21.1 · Tres niveles');
+  section('V2 §22 · El nivel autodeclarado ya no se acepta');
   const valido = await req('PUT', '/profiles/me/skills', {
     token: ctx.est.token,
     body: { items: [{ skillId: skill.id, level: 'intermediate' }] },
   });
-  check(valido.status === 200, 'B2.46 Se acepta un nivel del vocabulario', msgOf(valido));
+  check(valido.status === 410, 'B2.46 Declarar un nivel responde 410 (retirado por la V2)', `status ${valido.status}`);
 
-  const numerico = await req('PUT', '/profiles/me/skills', {
+  const interes = await req('PUT', '/profiles/me/skill-interests', {
     token: ctx.est.token,
-    body: { items: [{ skillId: skill.id, level: 4 }] },
+    body: { items: [{ skillId: skill.id, kind: 'interest' }] },
   });
-  check(
-    numerico.status === 400,
-    'B2.47 La escala numérica anterior ya no se acepta -> 400',
-    `status ${numerico.status}`,
-  );
+  check(interes.status === 200, 'B2.47 En su lugar se declara interés por la tecnología', msgOf(interes));
 
-  const inventado = await req('PUT', '/profiles/me/skills', {
+  const inventado = await req('PUT', '/profiles/me/skill-interests', {
     token: ctx.est.token,
-    body: { items: [{ skillId: skill.id, level: 'experto' }] },
+    body: { items: [{ skillId: skill.id, kind: 'experto' }] },
   });
-  check(
-    inventado.status === 400,
-    'B2.48 Un nivel inventado se rechaza -> 400',
-    `status ${inventado.status}`,
-  );
+  check(inventado.status === 400, 'B2.48 Un tipo inventado se rechaza -> 400', `status ${inventado.status}`);
 
-  section('§21.2 · Lo declarado no se confunde con lo respaldado');
+  section('V2 §21 · Lo declarado no se confunde con lo respaldado');
   const resumen = await req('GET', '/profiles/me/summary', { token: ctx.est.token });
-  const fila = (resumen.data?.skills ?? [])[0];
-  check(!!fila, 'B2.49 El resumen incluye la habilidad declarada');
-  check(fila?.selfAssessed === true, 'B2.50 Va etiquetada como autodeclarada (§21.1)');
-  check(
-    fila?.backing && typeof fila.backing.total === 'number',
-    'B2.51 Junto a ella viaja la experiencia que la respalda (§21.2)',
-    JSON.stringify(fila?.backing ?? {}),
-  );
-  check(
-    fila?.backing?.total === 0,
-    'B2.52 Sin proyectos ni actividades, el respaldo es cero aunque el nivel sea alto',
-    `respaldo ${fila?.backing?.total}`,
-  );
+  check((resumen.data?.skillInterests ?? []).some((x) => x.skillId === skill.id),
+    'B2.49 El resumen incluye la tecnología de interés');
+  check((resumen.data?.skills ?? []).every((x) => !('level' in x)),
+    'B2.50 Las tecnologías del resumen no traen nivel autodeclarado');
+  check(!(resumen.data?.skills ?? []).some((x) => x.skillId === skill.id),
+    'B2.51 Interesarse por una tecnología no la vuelve «respaldada»');
 
   const proyecto = await req('POST', '/projects', {
     token: ctx.est.token,
@@ -490,19 +477,13 @@ async function habilidades(ctx) {
       visibility: 'teachers',
     },
   });
-  check(proyecto.status === 201, 'B2.53 El estudiante registra un proyecto con esa tecnología', msgOf(proyecto));
+  check(proyecto.status === 201, 'B2.52 El estudiante registra un proyecto con esa tecnología', msgOf(proyecto));
 
-  const conRespaldo = await req('GET', '/profiles/me/summary', { token: ctx.est.token });
-  const filaTras = (conRespaldo.data?.skills ?? []).find((s) => s.skillId === skill.id);
+  const conProyecto = await req('GET', '/profiles/me/summary', { token: ctx.est.token });
   check(
-    (filaTras?.backing?.projects ?? 0) >= 1,
-    'B2.54 El proyecto cuenta como respaldo de esa habilidad',
-    `proyectos ${filaTras?.backing?.projects}`,
-  );
-  check(
-    filaTras?.level === 'intermediate',
-    'B2.55 El respaldo no altera la autoevaluación: son dos cosas distintas',
-    `nivel ${filaTras?.level}`,
+    !(conProyecto.data?.skills ?? []).some((x) => x.skillId === skill.id),
+    'B2.53 Un proyecto solo declarado (DECLARED) no respalda tecnologías (V2 §36)',
+    JSON.stringify(conProyecto.data?.skills ?? []).slice(0, 120),
   );
 }
 

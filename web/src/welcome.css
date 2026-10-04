@@ -197,3 +197,17 @@
   .wz-blob { animation: none; }
   .wz-area, .wz-btn, .qz-opt { transition: none; }
 }
+
+/* ---- V2: tecnologías de interés, datos institucionales, privacidad ---- */
+.wz-chip.other { border-style: dashed; color: #8a6d74; }
+.wz-chip small { font-weight: 500; opacity: 0.8; }
+.wz-search { display: flex; align-items: center; gap: 0.5rem; border: 1.5px solid #efe3e6; border-radius: 12px; padding: 0.5rem 0.8rem; margin: 0.6rem 0 0.8rem; background: #fff; color: #8a6d74; }
+.wz-search input { border: none; outline: none; flex: 1; font: inherit; background: transparent; color: #3b2a2e; }
+.wz-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6rem; margin: 0.8rem 0 1rem; }
+.wz-fact { border: 1.5px solid #efe3e6; border-radius: 14px; padding: 0.75rem 0.9rem; background: #fff; }
+.wz-fact small { display: block; color: #8a6d74; font-size: 0.78rem; }
+.wz-fact strong { font-size: 1.05rem; color: #3b2a2e; }
+.wz-toggle { display: flex; align-items: flex-start; gap: 0.75rem; border: 1.5px solid #efe3e6; border-radius: 14px; padding: 0.8rem 0.9rem; margin-bottom: 0.6rem; background: #fff; cursor: pointer; }
+.wz-toggle input { margin-top: 0.2rem; width: 18px; height: 18px; accent-color: var(--wz-bordo); }
+.wz-toggle span small { display: block; color: #8a6d74; font-weight: 400; margin-top: 0.15rem; }
+.wz-missing { margin: 0.6rem 0 0; padding-left: 1.1rem; color: #8a2a3a; font-size: 0.9rem; }

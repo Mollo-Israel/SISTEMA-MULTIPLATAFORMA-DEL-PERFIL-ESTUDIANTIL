@@ -4,7 +4,7 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentFreeInterest } from '../entities/student-free-interest.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { StudentSkillInterest } from '../entities/student-skill-interest.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
@@ -33,7 +33,7 @@ import { RecommendationsController } from './recommendations.controller';
       AffinityResult,
       StudentInterest,
       StudentFreeInterest,
-      StudentSkill,
+      StudentSkillInterest,
       AcademicArea,
       Activity,
       ActivityRegistration,

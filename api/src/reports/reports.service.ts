@@ -4,7 +4,6 @@ import { Repository } from 'typeorm';
 import { ProfileStatus, RegistrationStatus } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
 import { Project } from '../entities/project.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
@@ -32,7 +31,6 @@ export class ReportsService {
   constructor(
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(StudentInterest) private readonly interests: Repository<StudentInterest>,
-    @InjectRepository(StudentSkill) private readonly skills: Repository<StudentSkill>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     @InjectRepository(Activity) private readonly activities: Repository<Activity>,
     @InjectRepository(ActivityRegistration)
@@ -407,19 +405,24 @@ export class ReportsService {
     return rows.map((r) => ({ activity: r.activity, type: r.type, registrations: num(r.registrations) }));
   }
 
+  /**
+   * Tecnologías presentes en proyectos (V2 §63): las que los integrantes
+   * confirmaron haber usado, contadas una vez por proyecto. Ya no se cuenta la
+   * autoevaluación retirada (§22).
+   */
   private async skillDistribution(limit: number) {
-    const rows = await this.skills
-      .createQueryBuilder('ss')
-      .leftJoin('ss.skill', 's')
-      .leftJoin('s.academicArea', 'a')
-      .select('s.name', 'skill')
-      .addSelect('a.name', 'area')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('s.name')
-      .addGroupBy('a.name')
-      .orderBy('count', 'DESC')
-      .limit(limit)
-      .getRawMany();
+    const rows: { skill: string; area: string | null; count: string }[] = await this.profiles.manager.query(
+      `SELECT s.name AS skill, a.name AS area, COUNT(DISTINCT pm.project_id) AS count
+         FROM project_member_skills pms
+         JOIN project_members pm ON pm.id = pms.project_member_id
+         JOIN skills s ON s.id = pms.skill_id
+         LEFT JOIN academic_areas a ON a.id = s.academic_area_id
+        WHERE pm.contribution_confirmed_at IS NOT NULL
+        GROUP BY s.name, a.name
+        ORDER BY count DESC, s.name ASC
+        LIMIT $1`,
+      [limit],
+    );
     return rows.map((r) => ({ skill: r.skill, area: r.area ?? null, count: num(r.count) }));
   }
 

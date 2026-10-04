@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  FiArrowLeft, FiArrowRight, FiAward, FiCheck, FiCompass, FiHeart, FiLogOut, FiSkipForward,
-  FiStar, FiTarget, FiUser, FiUsers, FiZap,
+  FiArrowLeft, FiArrowRight, FiAward, FiCheck, FiCompass, FiHeart, FiLogOut, FiShield, FiSkipForward,
+  FiTarget, FiUser, FiUsers, FiZap,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
@@ -13,38 +13,38 @@ import {
 } from '../../services/types';
 import type {
   AcademicArea, AvailabilityStatus, CollaborationInterest, CollaborationMode, OnboardingStepKey,
-  Skill, SkillLevel,
+  Skill, SkillInterestKind,
 } from '../../services/types';
 import { useToast } from '../../components/feedback';
 import QuestionnaireRunner from '../../components/QuestionnaireRunner';
-import { AreaChooser, InterestChooser, SkillChooser } from '../../components/Declarations';
+import { AreaChooser, InterestChooser, SkillInterestChooser } from '../../components/Declarations';
 import '../../welcome.css';
 
 const AVAILABILITIES: AvailabilityStatus[] = ['looking', 'open', 'busy', 'unspecified'];
 const MODES: CollaborationMode[] = ['remote', 'in_person', 'hybrid'];
 const COLLAB_INTERESTS: CollaborationInterest[] = ['projects', 'research', 'competitions', 'study_groups', 'volunteering'];
 
-/** Los tres pasos que se ven, y los pasos internos de cada uno. */
-const ETAPAS: { titulo: string; icono: typeof FiUser; pasos: OnboardingStepKey[] }[] = [
-  { titulo: 'Tu perfil', icono: FiUser, pasos: ['profile', 'availability'] },
-  { titulo: 'Intereses y habilidades', icono: FiHeart, pasos: ['interests', 'skills'] },
-  { titulo: 'Cuestionario', icono: FiCompass, pasos: ['questionnaire'] },
+/** Los cinco pasos de la bienvenida V2 (§20.1). */
+const ETAPAS: { titulo: string; icono: typeof FiUser; paso: OnboardingStepKey; resumen: string }[] = [
+  { titulo: 'Tus datos', icono: FiUser, paso: 'profile', resumen: 'Confirma tu semestre y tu código.' },
+  { titulo: 'Lo que te interesa', icono: FiHeart, paso: 'interests', resumen: 'Áreas y tecnologías que te llaman.' },
+  { titulo: 'Lo que quieres mejorar', icono: FiTarget, paso: 'improvement', resumen: 'Dónde quieres crecer.' },
+  { titulo: 'Colaboración y privacidad', icono: FiUsers, paso: 'availability', resumen: 'Cómo trabajas y qué compartes.' },
+  { titulo: 'Orientación', icono: FiCompass, paso: 'questionnaire', resumen: 'Opcional: unas preguntas para afinar.' },
 ];
-const ORDEN: OnboardingStepKey[] = ['welcome', 'profile', 'availability', 'interests', 'skills', 'questionnaire', 'done'];
+const ORDEN: OnboardingStepKey[] = ['welcome', 'profile', 'interests', 'improvement', 'availability', 'questionnaire', 'done'];
 
 /**
- * Bienvenida del estudiante: tres pasos antes de ver el resto del sistema.
+ * Bienvenida del estudiante (V2 §20).
  *
- * 1. **Tu perfil** — en qué áreas quiere mejorar y cómo le gusta trabajar.
- * 2. **Intereses y habilidades** — qué le interesa y qué tecnologías maneja.
- * 3. **Cuestionario** — opcional; sus preguntas se adaptan a lo declarado.
+ * Cinco pasos antes de ver el resto del sistema; el último es opcional. Lo
+ * obligatorio (§20.2) lo exige también el servidor: confirmar los datos
+ * institucionales, al menos un interés o área de mejora, decidir la
+ * disponibilidad y revisar la privacidad.
  *
- * Todo lo que se declara aquí orienta las recomendaciones de cursos, charlas y
- * actividades. Lo que el sistema da por demostrado —el respaldo— sale después
- * de proyectos, actividades confirmadas y certificados, no de esta pantalla.
- *
- * Cada paso se guarda al avanzar, así que cerrar el navegador a mitad no
- * pierde nada: la próxima vez se retoma donde quedó.
+ * Todo lo declarado aquí orienta recomendaciones y colaboración. La afinidad
+ * no sale de esta pantalla: sale de actividades confirmadas, proyectos y
+ * certificados con respaldo (§21, §45.1).
  */
 export default function WelcomeWizard() {
   const { user, logout } = useAuth();
@@ -56,20 +56,24 @@ export default function WelcomeWizard() {
   const [dir, setDir] = useState(1);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [faltan, setFaltan] = useState<string[]>([]);
 
   const [tienePerfil, setTienePerfil] = useState(false);
   const [semestre, setSemestre] = useState<number | null>(null);
+  const [codigo, setCodigo] = useState<string | null>(null);
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
 
-  const [mejora, setMejora] = useState<string[]>([]);
   const [bio, setBio] = useState('');
-  const [disponibilidad, setDisponibilidad] = useState<AvailabilityStatus>('unspecified');
+  const [intereses, setIntereses] = useState<Record<string, number>>({});
+  const [mejora, setMejora] = useState<string[]>([]);
+  const [tecnologias, setTecnologias] = useState<Record<string, SkillInterestKind>>({});
+  const [disponibilidad, setDisponibilidad] = useState<AvailabilityStatus | null>(null);
   const [modos, setModos] = useState<CollaborationMode[]>([]);
   const [quiero, setQuiero] = useState<CollaborationInterest[]>([]);
   const [horas, setHoras] = useState(4);
-  const [intereses, setIntereses] = useState<Record<string, number>>({});
-  const [niveles, setNiveles] = useState<Record<string, SkillLevel>>({});
+  const [descubrible, setDescubrible] = useState(true);
+  const [compartible, setCompartible] = useState(false);
   const [respondioCuestionario, setRespondioCuestionario] = useState(false);
   const [enCuestionario, setEnCuestionario] = useState(false);
 
@@ -90,25 +94,28 @@ export default function WelcomeWizard() {
         setSkills(s.filter((x) => x.isActive));
         setTienePerfil(estado.hasProfile);
         setSemestre(estado.semester);
+        setCodigo(estado.universityCode ?? null);
         setRespondioCuestionario(estado.counts.questionnaireRuns > 0);
+        setFaltan(estado.missing ?? []);
 
         if (estado.hasProfile) {
-          const [perfil, resumen] = await Promise.all([
+          const [perfil, resumen, techs] = await Promise.all([
             profileService.getMine(),
             profileService.summary().catch(() => null),
+            profileService.skillInterests().catch(() => []),
           ]);
           setMejora(perfil.improvementAreaIds ?? []);
           setBio(perfil.bio ?? '');
-          setDisponibilidad(perfil.availability ?? 'unspecified');
+          if (estado.availabilityDecided) setDisponibilidad(perfil.availability ?? 'unspecified');
           setModos(perfil.collaborationPreferences?.modes ?? []);
           setQuiero(perfil.collaborationPreferences?.interests ?? []);
           if (perfil.collaborationPreferences?.hoursPerWeek) setHoras(perfil.collaborationPreferences.hoursPerWeek);
-          if (resumen) {
-            setIntereses(Object.fromEntries(resumen.interests.map((i) => [i.academicAreaId, i.priority])));
-            setNiveles(Object.fromEntries(resumen.skills.map((k) => [k.skillId, k.level])));
-          }
+          setDescubrible(perfil.peerDiscoverable ?? true);
+          setCompartible(perfil.publicProfileEnabled ?? false);
+          if (resumen) setIntereses(Object.fromEntries(resumen.interests.map((i) => [i.academicAreaId, i.priority])));
+          setTecnologias(Object.fromEntries(techs.map((t) => [t.skillId, t.kind])));
         }
-        const retomar = estado.claimed && ORDEN.includes(estado.step) ? estado.step : 'welcome';
+        const retomar = estado.institutionalConfirmed && ORDEN.includes(estado.step) ? estado.step : 'welcome';
         setPaso(retomar === 'done' ? 'questionnaire' : retomar);
       } catch (e) {
         setError(apiError(e));
@@ -136,8 +143,6 @@ export default function WelcomeWizard() {
       await accion();
       await irA(siguiente);
     } catch (e) {
-      // Las comprobaciones propias lanzan un Error con el mensaje listo; las
-      // de la API traen el suyo en la respuesta.
       const propio = e instanceof Error && !(e as { isAxiosError?: boolean }).isAxiosError;
       setError(propio ? (e as Error).message : apiError(e));
     } finally {
@@ -145,27 +150,17 @@ export default function WelcomeWizard() {
     }
   };
 
-  // ------------------------------------------------------------- pasos
-  const guardarPerfil = () =>
-    guardar(async () => {
-      if (mejora.length === 0) throw new Error('Elige al menos un área donde quieras mejorar.');
-      const datos = { bio: bio.trim() || undefined, improvementAreaIds: mejora };
-      if (tienePerfil) {
-        const p = await profileService.update(datos);
-        // Si era el perfil que creó la institución, actualizarlo lo reclama.
-        if (!p) throw new Error('No se pudo guardar tu perfil.');
-      } else {
-        await profileService.create(datos);
-        setTienePerfil(true);
-      }
-    }, 'availability');
+  const guardarTecnologias = () =>
+    profileService.replaceSkillInterests(
+      Object.entries(tecnologias).map(([skillId, kind]) => ({ skillId, kind })),
+    );
 
-  const guardarDisponibilidad = () =>
+  // ------------------------------------------------------------- pasos
+  const confirmarDatos = () =>
     guardar(async () => {
-      await profileService.update({
-        availability: disponibilidad,
-        collaborationPreferences: { modes: modos, interests: quiero, hoursPerWeek: horas, notes: null },
-      });
+      const estado = await profileService.confirmInstitutional(bio.trim() || undefined);
+      setTienePerfil(true);
+      setFaltan(estado.missing);
     }, 'interests');
 
   const guardarIntereses = () =>
@@ -173,15 +168,34 @@ export default function WelcomeWizard() {
       const items = Object.entries(intereses)
         .filter(([, p]) => p > 0)
         .map(([academicAreaId, priority]) => ({ academicAreaId, priority }));
-      if (items.length === 0) throw new Error('Marca al menos un área que te interese.');
       await profileService.replaceInterests(items);
-    }, 'skills');
+      await guardarTecnologias();
+    }, 'improvement');
 
-  const guardarHabilidades = () =>
+  const totalDeclarado =
+    Object.values(intereses).filter(Boolean).length + mejora.length + Object.keys(tecnologias).length;
+
+  const guardarMejora = () =>
     guardar(async () => {
-      await profileService.setSkills(
-        Object.entries(niveles).map(([skillId, level]) => ({ skillId, level })),
-      );
+      if (totalDeclarado === 0) {
+        throw new Error('Elige al menos un interés o un área que quieras mejorar: es lo que usamos para recomendarte.');
+      }
+      await profileService.update({ improvementAreaIds: mejora });
+      await guardarTecnologias();
+    }, 'availability');
+
+  const guardarColaboracion = () =>
+    guardar(async () => {
+      if (!disponibilidad) throw new Error('Elige tu disponibilidad (puedes elegir «Prefiero no decirlo»).');
+      await profileService.update({
+        availability: disponibilidad,
+        collaborationPreferences: { modes: modos, interests: quiero, hoursPerWeek: horas, notes: null },
+      });
+      const estado = await profileService.onboardingPrivacy({
+        peerDiscoverable: descubrible,
+        publicProfileEnabled: compartible,
+      });
+      setFaltan(estado.missing);
     }, 'questionnaire');
 
   const terminar = async () => {
@@ -193,19 +207,22 @@ export default function WelcomeWizard() {
       navigate('/student', { replace: true });
     } catch (e) {
       setError(apiError(e));
+      const estado = await profileService.onboarding().catch(() => null);
+      if (estado) setFaltan(estado.missing);
       setGuardando(false);
     }
   };
 
   // ------------------------------------------------------------- derivados
   const nombre = user?.firstName ?? '';
-  const etapaActual = ETAPAS.findIndex((e) => e.pasos.includes(paso));
+  const etapaActual = ETAPAS.findIndex((e) => e.paso === paso);
 
-  /** Las habilidades de las áreas que ya eligió van primero. */
+  /** Las tecnologías de las áreas que ya eligió van primero. */
   const destacadas = useMemo(
     () => new Set([...Object.keys(intereses).filter((k) => intereses[k] > 0), ...mejora]),
     [intereses, mejora],
   );
+  const cuenta = (k: SkillInterestKind) => Object.values(tecnologias).filter((x) => x === k).length;
 
   if (cargando) {
     return (
@@ -214,6 +231,12 @@ export default function WelcomeWizard() {
       </div>
     );
   }
+
+  const Atras = ({ a }: { a: OnboardingStepKey }) => (
+    <button type="button" className="wz-btn ghost" onClick={() => irA(a)}>
+      <FiArrowLeft /> Atrás
+    </button>
+  );
 
   return (
     <div className="wz-shell">
@@ -250,10 +273,10 @@ export default function WelcomeWizard() {
             key={paso + (enCuestionario ? '-q' : '')}
             className="wz-card"
             custom={dir}
-            initial={{ opacity: 0, x: 40 * dir }}
+            initial={{ opacity: 0, x: 24 * dir }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -40 * dir }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, x: -24 * dir }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             {error && <div className="wz-error" role="alert">{error}</div>}
 
@@ -262,9 +285,9 @@ export default function WelcomeWizard() {
               <div className="wz-hero">
                 <motion.div
                   className="wz-hero-icon"
-                  initial={{ scale: 0.6, rotate: -12 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: 'spring', stiffness: 220, damping: 12 }}
+                  initial={{ scale: 0.7 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 220, damping: 14 }}
                 >
                   <FiZap />
                 </motion.div>
@@ -273,26 +296,15 @@ export default function WelcomeWizard() {
                   Afinia te ayuda a encontrar cursos, charlas, actividades y compañeros que encajan
                   contigo. Para eso necesitamos conocerte un poco.
                 </p>
-                {semestre && <p className="wz-pill">Estás en {semestre}º semestre</p>}
                 <div className="wz-preview">
                   {ETAPAS.map((e, i) => {
                     const Icono = e.icono;
                     return (
-                      <motion.div
-                        key={e.titulo}
-                        className="wz-preview-item"
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.15 + i * 0.1 }}
-                      >
-                        <span className={`n c${i}`}><Icono /></span>
+                      <div key={e.titulo} className="wz-preview-item">
+                        <span className={`n c${i % 3}`}><Icono /></span>
                         <strong>{e.titulo}</strong>
-                        <span>
-                          {i === 0 && 'Qué quieres mejorar y cómo te gusta trabajar.'}
-                          {i === 1 && 'Qué te interesa y qué tecnologías manejas.'}
-                          {i === 2 && 'Opcional: unas preguntas para afinar tus recomendaciones.'}
-                        </span>
-                      </motion.div>
+                        <span>{e.resumen}</span>
+                      </div>
                     );
                   })}
                 </div>
@@ -305,51 +317,106 @@ export default function WelcomeWizard() {
               </div>
             )}
 
-            {/* ------------------------------------------- áreas de mejora */}
+            {/* ------------------------------------- 1 · datos institucionales */}
             {paso === 'profile' && (
               <>
-                <h2>¿En qué áreas quieres mejorar?</h2>
+                <h2>¿Son correctos tus datos?</h2>
                 <p className="lead">
-                  Elige una o varias. Te recomendaremos cursos y actividades para crecer en ellas.
+                  Los registró la universidad. No los puedes cambiar tú: si algo no es correcto, avisa a
+                  la administración de la carrera.
                 </p>
-                <AreaChooser areas={areas} value={mejora} onChange={setMejora} />
+                <div className="wz-facts">
+                  <div className="wz-fact"><small>Nombre</small><strong>{user ? `${user.firstName} ${user.lastName}` : '—'}</strong></div>
+                  <div className="wz-fact"><small>Correo institucional</small><strong>{user?.email ?? '—'}</strong></div>
+                  <div className="wz-fact"><small>Semestre</small><strong>{semestre ? `${semestre}º` : 'Sin asignar'}</strong></div>
+                  <div className="wz-fact"><small>Código universitario</small><strong>{codigo ?? 'Sin asignar'}</strong></div>
+                </div>
                 <label className="wz-label" htmlFor="wz-bio">Cuéntanos de ti en una o dos frases <em>(opcional)</em></label>
                 <textarea
                   id="wz-bio"
                   className="wz-input"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  maxLength={500}
+                  maxLength={1000}
                   placeholder="Por ejemplo: me gusta crear apps y quiero aprender más de bases de datos."
                 />
                 <div className="wz-actions">
-                  <button type="button" className="wz-btn ghost" onClick={() => irA('welcome')}>
-                    <FiArrowLeft /> Atrás
+                  <Atras a="welcome" />
+                  <button type="button" className="wz-btn" onClick={confirmarDatos} disabled={guardando}>
+                    {guardando ? 'Guardando…' : 'Mis datos son correctos'} <FiArrowRight />
                   </button>
-                  <button type="button" className="wz-btn" onClick={guardarPerfil} disabled={guardando || mejora.length === 0}>
+                </div>
+              </>
+            )}
+
+            {/* ------------------------------------------- 2 · lo que interesa */}
+            {paso === 'interests' && (
+              <>
+                <h2>¿Qué te interesa?</h2>
+                <p className="lead">Marca cuánto te interesa cada área. Deja en blanco las que no.</p>
+                <InterestChooser areas={areas} value={intereses} onChange={setIntereses} />
+                <span className="wz-label">Tecnologías que te interesan <em>(opcional)</em></span>
+                <SkillInterestChooser
+                  areas={areas}
+                  skills={skills}
+                  value={tecnologias}
+                  onChange={setTecnologias}
+                  kind="interest"
+                  destacadas={destacadas}
+                />
+                <div className="wz-actions">
+                  <Atras a="profile" />
+                  <button type="button" className="wz-btn" onClick={guardarIntereses} disabled={guardando}>
                     {guardando ? 'Guardando…' : 'Siguiente'} <FiArrowRight />
                   </button>
                 </div>
               </>
             )}
 
-            {/* --------------------------------------------- disponibilidad */}
+            {/* ------------------------------------------- 3 · lo que mejorar */}
+            {paso === 'improvement' && (
+              <>
+                <h2>¿Qué quieres mejorar?</h2>
+                <p className="lead">
+                  Elige las áreas donde quieres crecer. Te recomendaremos cursos y actividades para ellas.
+                </p>
+                <AreaChooser areas={areas} value={mejora} onChange={setMejora} />
+                <span className="wz-label">Tecnologías que quieres mejorar <em>(opcional)</em></span>
+                <SkillInterestChooser
+                  areas={areas}
+                  skills={skills}
+                  value={tecnologias}
+                  onChange={setTecnologias}
+                  kind="improve"
+                  destacadas={destacadas}
+                />
+                <div className="wz-actions">
+                  <Atras a="interests" />
+                  <button type="button" className="wz-btn" onClick={guardarMejora} disabled={guardando}>
+                    {guardando ? 'Guardando…' : 'Siguiente'} <FiArrowRight />
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ------------------------------- 4 · colaboración y privacidad */}
             {paso === 'availability' && (
               <>
-                <h2>¿Cómo te gusta trabajar?</h2>
+                <h2>Colaboración y privacidad</h2>
                 <p className="lead">Nos ayuda a sugerirte compañeros y equipos. No es un compromiso.</p>
 
                 <span className="wz-label">¿Buscas con quién trabajar?</span>
-                <div className="wz-chips">
+                <div className="wz-chips" role="radiogroup" aria-label="Disponibilidad">
                   {AVAILABILITIES.map((d) => (
                     <button
                       type="button"
                       key={d}
+                      role="radio"
                       className={`wz-chip ${disponibilidad === d ? 'on' : ''}`}
                       onClick={() => setDisponibilidad(d)}
-                      aria-pressed={disponibilidad === d}
+                      aria-checked={disponibilidad === d}
                     >
-                      {AVAILABILITY_LABEL[d]}
+                      {d === 'unspecified' ? 'Prefiero no decirlo' : AVAILABILITY_LABEL[d]}
                     </button>
                   ))}
                 </div>
@@ -403,91 +470,46 @@ export default function WelcomeWizard() {
                   className="wz-range"
                 />
 
+                <span className="wz-label"><FiShield /> Tu privacidad</span>
+                <label className="wz-toggle">
+                  <input type="checkbox" checked={descubrible} onChange={(e) => setDescubrible(e.target.checked)} />
+                  <span>
+                    Aparecer como posible compañero en las sugerencias de otros estudiantes
+                    <small>Solo se muestra tu nombre, semestre y lo que tu trayectoria respalda.</small>
+                  </span>
+                </label>
+                <label className="wz-toggle">
+                  <input type="checkbox" checked={compartible} onChange={(e) => setCompartible(e.target.checked)} />
+                  <span>
+                    Activar mi perfil compartible (enlace y QR)
+                    <small>Tú eliges después qué se ve. Tu correo y tu código nunca se muestran.</small>
+                  </span>
+                </label>
+
                 <div className="wz-actions">
-                  <button type="button" className="wz-btn ghost" onClick={() => irA('profile')}>
-                    <FiArrowLeft /> Atrás
-                  </button>
-                  <button type="button" className="wz-btn" onClick={guardarDisponibilidad} disabled={guardando}>
+                  <Atras a="improvement" />
+                  <button type="button" className="wz-btn" onClick={guardarColaboracion} disabled={guardando}>
                     {guardando ? 'Guardando…' : 'Siguiente'} <FiArrowRight />
                   </button>
                 </div>
               </>
             )}
 
-            {/* ------------------------------------------------- intereses */}
-            {paso === 'interests' && (
-              <>
-                <h2>¿Qué áreas te interesan?</h2>
-                <p className="lead">Marca cuánto te interesa cada una. Deja en blanco las que no.</p>
-                <InterestChooser areas={areas} value={intereses} onChange={setIntereses} />
-                <div className="wz-actions">
-                  <button type="button" className="wz-btn ghost" onClick={() => irA('availability')}>
-                    <FiArrowLeft /> Atrás
-                  </button>
-                  <button
-                    type="button"
-                    className="wz-btn"
-                    onClick={guardarIntereses}
-                    disabled={guardando || Object.values(intereses).every((p) => !p)}
-                  >
-                    {guardando ? 'Guardando…' : 'Siguiente'} <FiArrowRight />
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* ----------------------------------------------- habilidades */}
-            {paso === 'skills' && (
-              <>
-                <h2>¿Qué tecnologías manejas?</h2>
-                <p className="lead">
-                  Toca una tecnología y elige tu nivel. Es lo que tú declaras: más adelante, tus
-                  proyectos y certificados lo irán respaldando.
-                </p>
-                <SkillChooser
-                  areas={areas}
-                  skills={skills}
-                  value={niveles}
-                  onChange={setNiveles}
-                  destacadas={destacadas}
-                />
-                <div className="wz-actions">
-                  <button type="button" className="wz-btn ghost" onClick={() => irA('interests')}>
-                    <FiArrowLeft /> Atrás
-                  </button>
-                  <div className="wz-actions-right">
-                    {Object.keys(niveles).length === 0 && (
-                      <button type="button" className="wz-btn soft" onClick={guardarHabilidades} disabled={guardando}>
-                        Todavía no manejo ninguna
-                      </button>
-                    )}
-                    {Object.keys(niveles).length > 0 && (
-                      <button type="button" className="wz-btn" onClick={guardarHabilidades} disabled={guardando}>
-                        {guardando ? 'Guardando…' : `Guardar ${Object.keys(niveles).length}`} <FiArrowRight />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* ---------------------------------------------- cuestionario */}
+            {/* ---------------------------------------------- 5 · orientación */}
             {paso === 'questionnaire' && !enCuestionario && (
               <div className="wz-hero small">
                 <div className="wz-hero-icon alt"><FiCompass /></div>
-                <h2>Un cuestionario corto, si quieres</h2>
+                <h2>Orientación académica, si quieres</h2>
                 <p className="lead">
-                  Son unas 10 preguntas sobre lo que te gusta, y las primeras parten de lo que ya nos
-                  contaste. No hay respuestas correctas y no es un examen: solo afina tus
-                  recomendaciones. Puedes dejarlo a medias o hacerlo más tarde desde tu perfil.
+                  Unas 10 preguntas sobre lo que te gusta; las primeras parten de lo que ya nos contaste.
+                  No es un examen ni mide lo que sabes: te sugiere intereses y tú decides si los sumas.
+                  Puedes dejarlo a medias o hacerlo más tarde desde tu perfil.
                 </p>
                 {respondioCuestionario && (
                   <p className="wz-pill">Ya lo respondiste antes: puedes repetirlo si quieres.</p>
                 )}
                 <div className="wz-actions center">
-                  <button type="button" className="wz-btn ghost" onClick={() => irA('skills')}>
-                    <FiArrowLeft /> Atrás
-                  </button>
+                  <Atras a="availability" />
                   <button type="button" className="wz-btn soft" onClick={() => irA('done')}>
                     <FiSkipForward /> Saltar por ahora
                   </button>
@@ -515,28 +537,31 @@ export default function WelcomeWizard() {
               <div className="wz-hero">
                 <motion.div
                   className="wz-hero-icon ok"
-                  initial={{ scale: 0.4 }}
+                  initial={{ scale: 0.6 }}
                   animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 11 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 14 }}
                 >
                   <FiAward />
                 </motion.div>
                 <h1>¡Listo{nombre ? `, ${nombre}` : ''}!</h1>
                 <p className="lead">Tu perfil ya tiene lo necesario para empezar a recomendarte cosas.</p>
                 <div className="wz-summary">
+                  <div><FiHeart /> <strong>{Object.values(intereses).filter(Boolean).length}</strong> área(s) de interés</div>
                   <div><FiTarget /> <strong>{mejora.length}</strong> área(s) para mejorar</div>
-                  <div><FiHeart /> <strong>{Object.values(intereses).filter(Boolean).length}</strong> interés(es)</div>
-                  <div><FiZap /> <strong>{Object.keys(niveles).length}</strong> habilidad(es)</div>
-                  <div><FiUsers /> {AVAILABILITY_LABEL[disponibilidad]}</div>
+                  <div><FiZap /> <strong>{cuenta('interest') + cuenta('improve')}</strong> tecnología(s)</div>
+                  <div><FiUsers /> {disponibilidad ? (disponibilidad === 'unspecified' ? 'Prefiero no decirlo' : AVAILABILITY_LABEL[disponibilidad]) : 'Sin decidir'}</div>
                 </div>
+                {faltan.length > 0 && (
+                  <ul className="wz-missing" aria-label="Lo que falta">
+                    {faltan.map((f) => <li key={f}>Falta {f}.</li>)}
+                  </ul>
+                )}
                 <p className="wz-note">
-                  Siguiente paso: registra un proyecto o inscríbete en una actividad. Eso es lo que va
-                  demostrando tus áreas fuertes.
+                  Siguiente paso: inscríbete en una actividad o registra un proyecto. Eso es lo que va
+                  construyendo tu trayectoria.
                 </p>
                 <div className="wz-actions center">
-                  <button type="button" className="wz-btn ghost" onClick={() => irA('questionnaire')}>
-                    <FiArrowLeft /> Atrás
-                  </button>
+                  <Atras a="questionnaire" />
                   <button type="button" className="wz-btn big" onClick={terminar} disabled={guardando}>
                     {guardando ? 'Un momento…' : 'Ir a mi inicio'} <FiArrowRight />
                   </button>

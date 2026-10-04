@@ -1,3 +1,4 @@
+import { BackedSkillsModule } from './backed-skills/backed-skills.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -54,6 +55,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
       ],
     }),
     AuditModule,
+    BackedSkillsModule,
     MailModule,
     IdentityModule,
     ImportsModule,

@@ -264,7 +264,8 @@ async function bienvenida(ctx) {
   check(paso.status === 200 && paso.data?.step === 'interests', 'QA.39 El paso queda guardado para retomarlo', json(paso.data));
 
   const sinIntereses = await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
-  check(sinIntereses.status === 400 && /inter/i.test(sinIntereses.data?.message ?? ''), 'QA.40 Sin intereses todavía no termina', json(sinIntereses.data));
+  check(sinIntereses.status === 400 && /privacidad/i.test(sinIntereses.data?.message ?? ''),
+    'QA.40 Sin confirmar datos, disponibilidad y privacidad todavía no termina (V2 §20.2)', json(sinIntereses.data));
 
   await req('PUT', '/profiles/me/interests', {
     token: est.token,
@@ -282,8 +283,12 @@ async function bienvenida(ctx) {
     body: { items: elegidas.map((a) => ({ academicAreaId: a.id, priority: 4 })) },
   });
 
+  // V2 §20.2: confirmar datos, decidir disponibilidad y revisar privacidad.
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: est.token, body: {} });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: est.token, body: { peerDiscoverable: true, publicProfileEnabled: false } });
   const fin = await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
-  check(fin.status === 201 || fin.status === 200, 'QA.42 Con perfil e intereses, la bienvenida termina', json(fin.data));
+  check(fin.status === 201 || fin.status === 200, 'QA.42 Con lo obligatorio de la V2, la bienvenida termina', json(fin.data));
   check(fin.data?.completed === true, 'QA.43 Y queda marcada como completada', json(fin.data));
 
   objective('Cuestionario · cambia según las áreas declaradas');

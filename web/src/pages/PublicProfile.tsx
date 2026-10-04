@@ -106,7 +106,7 @@ export default function PublicProfilePage() {
       )}
 
       {(perfil.skills ?? []).length > 0 && (
-        <Card title="Tecnologías y habilidades">
+        <Card title="Tecnologías con respaldo">
           <div className="chip-row">
             {perfil.skills!.map((s, i) => (
               <span key={`${s.name}-${i}`} className="chip">{s.name}</span>

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { StudentSkillInterest } from '../entities/student-skill-interest.entity';
 import { Project } from '../entities/project.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
@@ -23,7 +23,7 @@ import { ReportsController } from './reports.controller';
     TypeOrmModule.forFeature([
       StudentProfile,
       StudentInterest,
-      StudentSkill,
+      StudentSkillInterest,
       Project,
       Activity,
       ActivityRegistration,

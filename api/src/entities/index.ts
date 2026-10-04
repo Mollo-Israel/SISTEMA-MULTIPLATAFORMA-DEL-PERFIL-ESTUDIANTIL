@@ -4,6 +4,7 @@ export * from './student-profile.entity';
 export * from './academic-area.entity';
 export * from './skill.entity';
 export * from './student-skill.entity';
+export * from './student-skill-interest.entity';
 export * from './student-interest.entity';
 export * from './project.entity';
 export * from './project-member.entity';

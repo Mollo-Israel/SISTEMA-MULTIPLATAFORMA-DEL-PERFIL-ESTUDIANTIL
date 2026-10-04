@@ -76,9 +76,9 @@ async function accionesValidas(ctx) {
     token: ctx.est.token,
     body: { items: [{ academicAreaId: ctx.area.id, priority: 1 }] },
   });
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: ctx.est.token,
-    body: { items: [{ skillId: ctx.skill.id, level: 'advanced' }] },
+    body: { items: [{ skillId: ctx.skill.id, kind: 'interest' }] },
   });
   const trasDeclarar = await progreso(ctx.est.token);
   check(

@@ -14,7 +14,7 @@ import {
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { Project } from '../entities/project.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { encodeQr, qrToSvg } from './qr-encoder';
 
@@ -45,7 +45,7 @@ export class PublicProfileService {
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
     @InjectRepository(AffinitySnapshot) private readonly snapshots: Repository<AffinitySnapshot>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
-    @InjectRepository(StudentSkill) private readonly skills: Repository<StudentSkill>,
+    private readonly backedSkills: BackedSkillsService,
   ) {}
 
   /** Base pública desde la que se sirve la web, para componer el enlace. */
@@ -155,13 +155,11 @@ export class PublicProfileService {
     }
 
     if (visible[PublicProfileField.SKILLS]) {
-      const filas = await this.skills.find({
-        where: { studentProfileId: perfil.id },
-        relations: { skill: true },
-      });
-      salida.skills = filas
-        .filter((s) => s.skill)
-        .map((s) => ({ name: s.skill.name, level: s.level }));
+      // Solo tecnologías respaldadas por trayectoria (V2 §22, §58): ya no se
+      // publica un nivel autodeclarado.
+      salida.skills = (await this.backedSkills.forProfile(perfil.id))
+        .slice(0, 20)
+        .map((s) => ({ name: s.name, sources: s.sources }));
     }
 
     if (visible[PublicProfileField.PROJECTS]) {

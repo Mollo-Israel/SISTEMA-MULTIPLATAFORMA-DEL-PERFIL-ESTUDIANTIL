@@ -1,12 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiCheck, FiStar } from 'react-icons/fi';
-import type { AcademicArea, Skill, SkillLevel } from '../services/types';
+import { FiCheck, FiSearch, FiStar } from 'react-icons/fi';
+import type { AcademicArea, Skill, SkillInterestKind } from '../services/types';
+import { SKILL_INTEREST_LABEL } from '../services/types';
 import { areaVisual } from '../lib/areaIcons';
 import '../welcome.css';
 
 /**
- * Lo que el estudiante declara de sí mismo: áreas, intereses y habilidades.
+ * Lo que el estudiante declara de sí mismo: áreas y tecnologías que le
+ * interesan o quiere mejorar. Es declarativo: orienta recomendaciones, nunca
+ * la afinidad (V2 §21). Ya no se declara un nivel de habilidad (V2 §22).
  *
  * Los mismos selectores en la bienvenida y en «Mi perfil», para que declarar
  * algo se vea y se sienta igual la primera vez y todas las siguientes.
@@ -24,12 +27,6 @@ export function nivelDeInteres(prioridad: number): number {
   if (!prioridad) return 0;
   return prioridad <= 2 ? 1 : prioridad <= 4 ? 3 : 5;
 }
-
-export const NIVEL_SKILL: { value: SkillLevel; label: string }[] = [
-  { value: 'basic', label: 'Básico' },
-  { value: 'intermediate', label: 'Intermedio' },
-  { value: 'advanced', label: 'Avanzado' },
-];
 
 export function AreaChooser({
   areas,
@@ -103,29 +100,41 @@ export function InterestChooser({
   );
 }
 
-export function SkillChooser({
+/**
+ * Tecnologías de interés (V2 §21): un toque marca la tecnología con el tipo
+ * del paso actual («me interesa» o «quiero mejorar»); otro toque la quita. Si
+ * ya estaba con el otro tipo, se ve indicado y el toque la cambia.
+ */
+export function SkillInterestChooser({
   areas,
   skills,
   value,
   onChange,
+  kind,
   destacadas,
   alto = true,
 }: {
   areas: AcademicArea[];
   skills: Skill[];
-  value: Record<string, SkillLevel>;
-  onChange: (v: Record<string, SkillLevel>) => void;
-  /** Áreas cuyas habilidades se muestran primero. */
+  value: Record<string, SkillInterestKind>;
+  onChange: (v: Record<string, SkillInterestKind>) => void;
+  /** Qué marca un toque en esta pantalla. */
+  kind: SkillInterestKind;
+  /** Áreas cuyas tecnologías se muestran primero. */
   destacadas: Set<string>;
   /** Con scroll propio (bienvenida) o a lo largo de la página (perfil). */
   alto?: boolean;
 }) {
+  const [filtro, setFiltro] = useState('');
   const grupos = useMemo(() => {
+    const q = filtro.trim().toLowerCase();
     const porArea = new Map<string, Skill[]>();
-    skills.forEach((s) => {
-      const k = s.academicAreaId ?? 'sin-area';
-      porArea.set(k, [...(porArea.get(k) ?? []), s]);
-    });
+    skills
+      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .forEach((s) => {
+        const k = s.academicAreaId ?? 'sin-area';
+        porArea.set(k, [...(porArea.get(k) ?? []), s]);
+      });
     return [...porArea.entries()]
       .map(([areaId, lista]) => ({
         areaId,
@@ -134,46 +143,52 @@ export function SkillChooser({
         destacada: destacadas.has(areaId),
       }))
       .sort((a, b) => Number(b.destacada) - Number(a.destacada) || a.nombre.localeCompare(b.nombre));
-  }, [skills, areas, destacadas]);
+  }, [skills, areas, destacadas, filtro]);
+
+  const tocar = (id: string) => {
+    const next = { ...value };
+    if (next[id] === kind) delete next[id];
+    else next[id] = kind;
+    onChange(next);
+  };
 
   return (
-    <div className="wz-skillgroups" style={alto ? undefined : { maxHeight: 'none', overflow: 'visible' }}>
-      {grupos.map((g) => (
-        <div key={g.areaId} className={`wz-group ${g.destacada ? 'mine' : ''}`}>
-          <h4>
-            {g.nombre}
-            {g.destacada && <span className="tag"><FiStar size={11} /> de tus áreas</span>}
-          </h4>
-          <div className="wz-skills">
-            {g.lista.map((s) => {
-              const nivel = value[s.id];
-              return (
-                <div key={s.id} className={`wz-skill ${nivel ? 'on' : ''}`}>
-                  <span className="nm">{s.name}</span>
-                  <div className="lv">
-                    {NIVEL_SKILL.map((n) => (
-                      <button
-                        type="button"
-                        key={n.value}
-                        className={nivel === n.value ? 'on' : ''}
-                        onClick={() => {
-                          const next = { ...value };
-                          if (next[s.id] === n.value) delete next[s.id];
-                          else next[s.id] = n.value;
-                          onChange(next);
-                        }}
-                        aria-pressed={nivel === n.value}
-                      >
-                        {n.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+    <>
+      <label className="wz-search">
+        <FiSearch />
+        <input value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="Buscar tecnología…" />
+      </label>
+      <div className="wz-skillgroups" style={alto ? undefined : { maxHeight: 'none', overflow: 'visible' }}>
+        {grupos.map((g) => (
+          <div key={g.areaId} className={`wz-group ${g.destacada ? 'mine' : ''}`}>
+            <h4>
+              {g.nombre}
+              {g.destacada && <span className="tag"><FiStar size={11} /> de tus áreas</span>}
+            </h4>
+            <div className="wz-chips">
+              {g.lista.map((s) => {
+                const actual = value[s.id];
+                const on = actual === kind;
+                const otro = actual && actual !== kind;
+                return (
+                  <button
+                    type="button"
+                    key={s.id}
+                    className={`wz-chip ${on ? 'on' : ''} ${otro ? 'other' : ''}`}
+                    onClick={() => tocar(s.id)}
+                    aria-pressed={on}
+                    title={otro ? `Marcada como «${SKILL_INTEREST_LABEL[actual]}». Toca para cambiarla.` : undefined}
+                  >
+                    {on && <FiCheck size={12} />} {s.name}
+                    {otro && <small> · {SKILL_INTEREST_LABEL[actual]}</small>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+        {grupos.length === 0 && <p className="muted">No hay tecnologías que coincidan con «{filtro}».</p>}
+      </div>
+    </>
   );
 }

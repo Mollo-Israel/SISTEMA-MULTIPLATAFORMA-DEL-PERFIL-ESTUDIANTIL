@@ -19,7 +19,8 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentFreeInterest } from '../entities/student-free-interest.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { StudentSkillInterest } from '../entities/student-skill-interest.entity';
+import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
@@ -90,6 +91,7 @@ interface Contexto {
   improvementIds: Set<string>;
   areaName: Map<string, string>;
   freeInterestNames: string[];
+  /** Tecnologías que le interesan o quiere mejorar (V2 §21). */
   skillNames: string[];
   skillIds: Set<string>;
   now: Date;
@@ -120,7 +122,9 @@ export class RecommendationsEngine {
     @InjectRepository(StudentInterest) private readonly preferred: Repository<StudentInterest>,
     @InjectRepository(StudentFreeInterest)
     private readonly freeInterests: Repository<StudentFreeInterest>,
-    @InjectRepository(StudentSkill) private readonly studentSkills: Repository<StudentSkill>,
+    @InjectRepository(StudentSkillInterest)
+    private readonly skillInterests: Repository<StudentSkillInterest>,
+    private readonly backedSkills: BackedSkillsService,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(Activity) private readonly activities: Repository<Activity>,
     @InjectRepository(ActivityRegistration)
@@ -142,7 +146,8 @@ export class RecommendationsEngine {
       this.affinities.find({ where: { studentProfileId: profileId } }),
       this.preferred.find({ where: { studentProfileId: profileId } }),
       this.freeInterests.find({ where: { studentProfileId: profileId } }),
-      this.studentSkills.find({
+      // V2 §21: tecnologías que le interesan o quiere mejorar (declarativo).
+      this.skillInterests.find({
         where: { studentProfileId: profileId },
         relations: { skill: true },
       }),
@@ -810,17 +815,19 @@ export class RecommendationsEngine {
     // El descarte de las habilidades que el estudiante ya declara se hace abajo
     // y no en el WHERE: con un perfil sin habilidades, la lista a excluir
     // quedaria vacia y `NOT IN ()` no es SQL valido.
-    const peerSkills = await this.studentSkills.find({
-      where: { studentProfileId: In(peerIds) },
-      relations: { skill: true },
-    });
-    const skillsByPeer = new Map<string, StudentSkill[]>();
-    for (const s of peerSkills) {
-      if (!s.skill?.academicAreaId || !areasQueImportan.has(s.skill.academicAreaId)) continue;
-      if (ctx.skillIds.has(s.skillId)) continue;
-      const list = skillsByPeer.get(s.studentProfileId) ?? [];
-      list.push(s);
-      skillsByPeer.set(s.studentProfileId, list);
+    // V2 §55: del compañero cuentan sus tecnologías RESPALDADAS, y se
+    // descartan las que el estudiante ya tiene respaldadas.
+    const [peerBacked, propias] = await Promise.all([
+      this.backedSkills.forProfiles(peerIds),
+      this.backedSkills.forProfile(ctx.profile.id),
+    ]);
+    const yaTengo = new Set(propias.map((s) => s.skillId));
+    const skillsByPeer = new Map<string, { skillId: string; name: string; academicAreaId: string | null }[]>();
+    for (const [peerId, lista] of peerBacked) {
+      const utiles = lista.filter(
+        (s) => s.academicAreaId && areasQueImportan.has(s.academicAreaId) && !yaTengo.has(s.skillId),
+      );
+      if (utiles.length) skillsByPeer.set(peerId, utiles);
     }
 
     const result: Produced[] = [];
@@ -837,7 +844,7 @@ export class RecommendationsEngine {
       for (const s of faltantes) {
         reasons.push({
           code: RecommendationReasonCode.MISSING_SKILL,
-          label: `Declara ${s.skill.name}, que tú todavía no declaras`,
+          label: `Tiene experiencia respaldada en ${s.name}, que tú todavía no`,
           points: RULES.teammate.missingSkillPoints,
         });
       }
@@ -909,7 +916,7 @@ export class RecommendationsEngine {
         targetId: peer.profileId,
         academicAreaId:
           (complementary[0] ?? shared[0])?.academicAreaId
-          ?? faltantes[0]?.skill?.academicAreaId
+          ?? faltantes[0]?.academicAreaId
           ?? null,
         title: peer.name,
         description: semester ? `Estudiante de ${semester}.º semestre` : 'Estudiante de la carrera',

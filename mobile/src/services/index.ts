@@ -102,8 +102,15 @@ export const profileService = {
     api.patch<any>(`/profiles/me/free-interests/${id}`, data).then((r) => r.data),
   removeFreeInterest: (id: string) =>
     api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
-  setSkills: (items: { skillId: string; level: 'basic' | 'intermediate' | 'advanced' }[]) =>
-    api.put('/profiles/me/skills', { items }).then((r) => r.data),
+  /** Tecnologías que me interesan o quiero mejorar (V2 §21). Reemplazo completo. */
+  skillInterests: () =>
+    api.get<{ skillId: string; skill: string | null; kind: SkillInterestKind }[]>('/profiles/me/skill-interests').then((r) => r.data),
+  replaceSkillInterests: (items: { skillId: string; kind: SkillInterestKind }[]) =>
+    api.put('/profiles/me/skill-interests', { items }).then((r) => r.data),
+  confirmInstitutional: (bio?: string) =>
+    api.post<OnboardingState>('/profiles/me/onboarding/institutional-confirmation', { bio }).then((r) => r.data),
+  onboardingPrivacy: (data: { peerDiscoverable: boolean; publicProfileEnabled: boolean }) =>
+    api.post<OnboardingState>('/profiles/me/onboarding/privacy', data).then((r) => r.data),
   /** Estado de la bienvenida: mientras no termine, la app muestra el asistente. */
   onboarding: () => api.get<OnboardingState>('/profiles/me/onboarding').then((r) => r.data),
   saveOnboardingStep: (step: string) =>
@@ -112,6 +119,8 @@ export const profileService = {
     api.post<OnboardingState>('/profiles/me/onboarding/complete').then((r) => r.data),
 };
 
+export type SkillInterestKind = 'interest' | 'improve';
+
 export interface OnboardingState {
   completed: boolean;
   completedAt: string | null;
@@ -119,7 +128,12 @@ export interface OnboardingState {
   hasProfile: boolean;
   claimed: boolean;
   semester: number | null;
-  counts: { improvementAreas: number; interests: number; skills: number; questionnaireRuns: number };
+  universityCode?: string | null;
+  institutionalConfirmed: boolean;
+  privacyReviewed: boolean;
+  availabilityDecided: boolean;
+  counts: { improvementAreas: number; interests: number; skillInterests: number; skillsToImprove: number; questionnaireRuns: number };
+  missing: string[];
 }
 
 export const activityService = {

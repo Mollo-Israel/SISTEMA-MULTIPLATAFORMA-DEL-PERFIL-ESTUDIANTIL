@@ -103,9 +103,9 @@ async function preferencias(ctx) {
   );
 
   section('§51.1 · La habilidad autodeclarada pesa poco, a propósito');
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: est.token,
-    body: { items: [{ skillId: ctx.skillA.id, level: 'advanced' }] },
+    body: { items: [{ skillId: ctx.skillA.id, kind: 'interest' }] },
   });
   s = await resumen(est.token);
   check(
@@ -114,9 +114,9 @@ async function preferencias(ctx) {
     `crudo ${crudo(s, areaA.id)}`,
   );
 
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: est.token,
-    body: { items: [{ skillId: ctx.skillA.id, level: 'basic' }] },
+    body: { items: [{ skillId: ctx.skillA.id, kind: 'interest' }] },
   });
   s = await resumen(est.token);
   check(

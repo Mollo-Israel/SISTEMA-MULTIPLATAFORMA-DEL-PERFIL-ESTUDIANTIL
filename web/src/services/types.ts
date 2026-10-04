@@ -192,14 +192,30 @@ export interface Skill {
   isActive: boolean;
 }
 
-/** Autoevaluación en tres niveles (§21.1). Siempre autodeclarada. */
-export type SkillLevel = 'basic' | 'intermediate' | 'advanced';
+/** Interés por una tecnología (V2 §21): «me interesa» o «quiero mejorar». */
+export type SkillInterestKind = 'interest' | 'improve';
 
-export const SKILL_LEVEL_LABEL: Record<SkillLevel, string> = {
-  basic: 'Básico',
-  intermediate: 'Intermedio',
-  advanced: 'Avanzado',
+export const SKILL_INTEREST_LABEL: Record<SkillInterestKind, string> = {
+  interest: 'Me interesa',
+  improve: 'Quiero mejorar',
 };
+
+export interface SkillInterest {
+  skillId: string;
+  skill: string | null;
+  academicAreaId: string | null;
+  kind: SkillInterestKind;
+  source: 'declared' | 'orientation' | 'historical_self_assessment';
+}
+
+/** Tecnología respaldada por trayectoria (V2 §34): dónde aparece, no cuánto se domina. */
+export interface BackedSkill {
+  skillId: string;
+  skill: string | null;
+  academicAreaId?: string | null;
+  sources: ('project' | 'activity')[];
+  evidenceCount: number;
+}
 
 /** Disponibilidad declarada para colaborar (§17.2). */
 export type AvailabilityStatus = 'looking' | 'open' | 'busy' | 'unspecified';
@@ -251,6 +267,7 @@ export interface StudentProfile {
   availability: AvailabilityStatus;
   collaborationPreferences: CollaborationPreferences | null;
   peerDiscoverable: boolean;
+  publicProfileEnabled?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -285,9 +302,9 @@ export interface Questionnaire {
 export type OnboardingStepKey =
   | 'welcome'
   | 'profile'
-  | 'availability'
   | 'interests'
-  | 'skills'
+  | 'improvement'
+  | 'availability'
   | 'questionnaire'
   | 'done';
 
@@ -298,7 +315,19 @@ export interface OnboardingState {
   hasProfile: boolean;
   claimed: boolean;
   semester: number | null;
-  counts: { improvementAreas: number; interests: number; skills: number; questionnaireRuns: number };
+  universityCode?: string | null;
+  institutionalConfirmed: boolean;
+  privacyReviewed: boolean;
+  availabilityDecided: boolean;
+  counts: {
+    improvementAreas: number;
+    interests: number;
+    skillInterests: number;
+    skillsToImprove: number;
+    questionnaireRuns: number;
+  };
+  /** Lo obligatorio que falta para terminar (V2 §20.2), en palabras. */
+  missing: string[];
 }
 
 export interface SuggestedArea {
@@ -617,18 +646,10 @@ export interface ProfileSummary {
     academicAreaId: string; area: string | null; priority: number;
     source?: 'onboarding' | 'manual';
   }[];
-  /** Autoevaluación (§21.1) junto a la experiencia que la respalda (§21.2). */
-  skills: {
-    skillId: string;
-    skill: string | null;
-    academicAreaId?: string | null;
-    level: SkillLevel;
-    selfAssessed?: boolean;
-    backing?: {
-      projects: number; activities: number; certificates: number;
-      evidences: number; total: number;
-    };
-  }[];
+  /** Tecnologías respaldadas por trayectoria (V2 §22). Sin nivel autodeclarado. */
+  skills: BackedSkill[];
+  /** Tecnologías que le interesan o quiere mejorar (declarativo). */
+  skillInterests?: SkillInterest[];
   projects: { id: string; title: string; status: string; technologies: string[] | null }[];
   evidences: unknown[];
   activities: { activityId: string; title: string | null; type: string | null; status: string }[];

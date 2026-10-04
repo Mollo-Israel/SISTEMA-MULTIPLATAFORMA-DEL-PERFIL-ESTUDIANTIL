@@ -665,6 +665,35 @@ async function preparar() {
     return { ...cuenta, profileId: perfil.data?.id };
   };
 
+  // V2 §55: las sugerencias de equipo usan tecnologías RESPALDADAS. Cada
+  // candidato las obtiene con una participación confirmada por Dirección en
+  // una actividad que trabaja esa tecnología.
+  const director = await provisionAndActivate(admin, {
+    firstName: 'Elsa', lastName: 'Directora', email: `b8.dir.${TS}@univalle.edu`, role: 'CAREER_DIRECTOR',
+  });
+  const categorias = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const categoria = categorias.find((c) => c.isActive !== false && c.appliesTo !== 'extracurricular') ?? categorias[0];
+  const respaldar = async (cuenta, skillId) => {
+    const act = await req('POST', '/activities', {
+      token: director.token,
+      body: {
+        title: `Práctica ${TS} ${Math.random().toString(36).slice(2, 6)}`,
+        description: 'Actividad práctica con una tecnología concreta.',
+        type: 'academica',
+        categoryId: categoria.id,
+        areaId: area.id,
+        skillIds: [skillId],
+      },
+    });
+    if (act.status !== 201) throw new Error(`No se pudo crear la práctica: ${JSON.stringify(act.data)}`);
+    await req('PATCH', `/activities/${act.data.id}`, { token: director.token, body: { status: 'open' } });
+    await req('POST', `/activities/${act.data.id}/register`, { token: cuenta.token });
+    await req('PATCH', `/activities/${act.data.id}/confirm-participation`, {
+      token: director.token,
+      body: { studentProfileId: cuenta.profileId, status: 'confirmed' },
+    });
+  };
+
   const ana = await estudiante('ana', 'Ana', 'Zambrana', 6);
   const bruno = await estudiante('bruno', 'Bruno', 'Iriarte', 6);
   const carla = await estudiante('carla', 'Carla', 'Mendieta', 6);
@@ -681,9 +710,9 @@ async function preparar() {
   });
 
   // Bruno cubre una de las dos habilidades que faltan y está disponible.
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: bruno.token,
-    body: { items: [{ skillId: skillA.id, level: 'advanced' }] },
+    body: { items: [{ skillId: skillA.id, kind: 'interest' }] },
   });
   await req('PUT', '/profiles/me/interests', {
     token: bruno.token,
@@ -691,28 +720,33 @@ async function preparar() {
   });
   await req('PATCH', '/profiles/me', { token: bruno.token, body: { availability: 'looking' } });
 
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: carla.token,
-    body: { items: [{ skillId: skillB.id, level: 'intermediate' }] },
+    body: { items: [{ skillId: skillB.id, kind: 'interest' }] },
   });
   await req('PATCH', '/profiles/me', { token: carla.token, body: { availability: 'open' } });
 
   // Lucía cubre habilidades pero declaró no tener margen.
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: ocupada.token,
-    body: { items: [{ skillId: skillA.id, level: 'advanced' }] },
+    body: { items: [{ skillId: skillA.id, kind: 'interest' }] },
   });
   await req('PATCH', '/profiles/me', { token: ocupada.token, body: { availability: 'busy' } });
 
   // Mateo cubre habilidades pero no quiere aparecer en sugerencias.
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: oculto.token,
-    body: { items: [{ skillId: skillB.id, level: 'advanced' }] },
+    body: { items: [{ skillId: skillB.id, kind: 'interest' }] },
   });
   await req('PATCH', '/profiles/me', {
     token: oculto.token,
     body: { availability: 'looking', peerDiscoverable: false },
   });
+
+  await respaldar(bruno, skillA.id);
+  await respaldar(carla, skillB.id);
+  await respaldar(ocupada, skillA.id);
+  await respaldar(oculto, skillB.id);
 
   return { admin, area, skillA, skillB, ana, bruno, carla, ocupada, oculto };
 }

@@ -15,12 +15,13 @@ import type {
   CollaborationMode,
   OnboardingRun,
   Skill,
-  SkillLevel,
+  BackedSkill,
+  SkillInterestKind,
   StudentProfile,
 } from '../../services/types';
 import { Badge, Button, Card, PageHeader, ProgressBar, SkeletonCards, Tabs } from '../../components/ui';
 import { useToast } from '../../components/feedback';
-import { AreaChooser, InterestChooser, SkillChooser } from '../../components/Declarations';
+import { AreaChooser, InterestChooser, SkillInterestChooser } from '../../components/Declarations';
 import QuestionnaireRunner from '../../components/QuestionnaireRunner';
 
 const AVAILABILITIES: AvailabilityStatus[] = ['looking', 'open', 'busy', 'unspecified'];
@@ -303,7 +304,8 @@ function InteresesTab({
   onSaved: () => void;
 }) {
   const [intereses, setIntereses] = useState<Record<string, number>>({});
-  const [niveles, setNiveles] = useState<Record<string, SkillLevel>>({});
+  const [tecnologias, setTecnologias] = useState<Record<string, SkillInterestKind>>({});
+  const [respaldadas, setRespaldadas] = useState<BackedSkill[]>([]);
   const [cargando, setCargando] = useState(true);
   const [guardandoI, setGuardandoI] = useState(false);
   const [guardandoS, setGuardandoS] = useState(false);
@@ -314,7 +316,8 @@ function InteresesTab({
       .summary()
       .then((r) => {
         setIntereses(Object.fromEntries(r.interests.map((i) => [i.academicAreaId, i.priority])));
-        setNiveles(Object.fromEntries(r.skills.map((k) => [k.skillId, k.level])));
+        setTecnologias(Object.fromEntries((r.skillInterests ?? []).map((k) => [k.skillId, k.kind])));
+        setRespaldadas(r.skills ?? []);
       })
       .catch(() => {})
       .finally(() => setCargando(false));
@@ -347,8 +350,10 @@ function InteresesTab({
   const guardarSkills = async () => {
     setGuardandoS(true);
     try {
-      await profileService.setSkills(Object.entries(niveles).map(([skillId, level]) => ({ skillId, level })));
-      toast.success('Habilidades guardadas.');
+      await profileService.replaceSkillInterests(
+        Object.entries(tecnologias).map(([skillId, kind]) => ({ skillId, kind })),
+      );
+      toast.success('Tecnologías guardadas.');
       onSaved();
     } catch (e) {
       toast.error(apiError(e));
@@ -373,24 +378,54 @@ function InteresesTab({
         <InterestChooser areas={areas} value={intereses} onChange={setIntereses} />
       </Card>
       <Card
-        title="¿Qué tecnologías manejas?"
+        title="Tecnologías que te interesan o quieres mejorar"
         actions={
           <Button size="sm" loading={guardandoS} onClick={guardarSkills} icon={<FiSave size={14} />}>
-            Guardar habilidades
+            Guardar tecnologías
           </Button>
         }
       >
         <p className="muted" style={{ marginTop: 0 }}>
-          Es lo que tú declaras. Tus proyectos, actividades y certificados lo irán respaldando.
+          Nos ayudan a recomendarte cursos, charlas y compañeros. No cambian tu afinidad: esa sale de lo
+          que haces y queda respaldado.
         </p>
-        <SkillChooser
+        <h4 className="subtitle">Me interesan</h4>
+        <SkillInterestChooser
           areas={areas}
           skills={skills}
-          value={niveles}
-          onChange={setNiveles}
+          value={tecnologias}
+          onChange={setTecnologias}
+          kind="interest"
           destacadas={destacadas}
           alto={false}
         />
+        <h4 className="subtitle">Quiero mejorar</h4>
+        <SkillInterestChooser
+          areas={areas}
+          skills={skills}
+          value={tecnologias}
+          onChange={setTecnologias}
+          kind="improve"
+          destacadas={destacadas}
+          alto={false}
+        />
+      </Card>
+      <Card title="Tecnologías respaldadas por tu trayectoria">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Aparecen solas cuando confirmas tu contribución en un proyecto con respaldo o cuando se confirma
+          tu participación en una actividad. No se declaran: se construyen.
+        </p>
+        {respaldadas.length === 0 ? (
+          <p className="muted">Todavía ninguna. Registra un proyecto o inscríbete en una actividad.</p>
+        ) : (
+          <div className="tag-chips">
+            {respaldadas.map((r) => (
+              <span key={r.skillId} className="tag-chip" title={r.sources.map((x) => (x === 'project' ? 'proyecto' : 'actividad')).join(' y ')}>
+                {r.skill} · {r.evidenceCount}
+              </span>
+            ))}
+          </div>
+        )}
       </Card>
     </>
   );

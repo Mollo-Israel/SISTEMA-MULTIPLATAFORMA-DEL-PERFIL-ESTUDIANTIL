@@ -629,20 +629,21 @@ async function objective2(ctx) {
     '2.7 Area inexistente -> 400',
   );
 
+  // V2 §22: ya no hay nivel autodeclarado; se declaran tecnologías de interés.
   const skillItems = sqlSkill && sqlSkill.id !== reactSkill.id
-    ? [{ skillId: reactSkill.id, level: 'advanced' }, { skillId: sqlSkill.id, level: 'intermediate' }]
-    : [{ skillId: reactSkill.id, level: 'advanced' }];
-  const skillsRes = await req('PUT', '/profiles/me/skills', { token: student, body: { items: skillItems } });
-  check(skillsRes.status === 200, '2.8 Registra habilidades con nivel', msgOf(skillsRes));
+    ? [{ skillId: reactSkill.id, kind: 'interest' }, { skillId: sqlSkill.id, kind: 'improve' }]
+    : [{ skillId: reactSkill.id, kind: 'interest' }];
+  const skillsRes = await req('PUT', '/profiles/me/skill-interests', { token: student, body: { items: skillItems } });
+  check(skillsRes.status === 200, '2.8 Registra tecnologías de interés (V2 §21)', msgOf(skillsRes));
   check(
-    (await req('PUT', '/profiles/me/skills', {
+    (await req('PUT', '/profiles/me/skill-interests', {
       token: student,
-      body: { items: [{ skillId: reactSkill.id, level: 'experto' }] },
+      body: { items: [{ skillId: reactSkill.id, kind: 'experto' }] },
     })).status === 400,
-    '2.9 Nivel de habilidad no valido -> 400',
+    '2.9 Tipo de interés no válido -> 400',
   );
-  // Se restauran las habilidades validas tras el intento invalido.
-  await req('PUT', '/profiles/me/skills', { token: student, body: { items: skillItems } });
+  // Se restauran las tecnologías válidas tras el intento inválido.
+  await req('PUT', '/profiles/me/skill-interests', { token: student, body: { items: skillItems } });
 
   // --- Consulta, edicion y persistencia ---
   section('Consulta, edicion y persistencia');
@@ -688,7 +689,7 @@ async function objective2(ctx) {
   check(summary.status === 200, '2.16 El estudiante consulta su resumen dinamico');
   const sd = summary.data ?? {};
   check(sd.interests?.length === 2, '2.17 El resumen integra las areas de interes');
-  check(sd.skills?.length >= 1, '2.18 El resumen integra las habilidades');
+  check(sd.skillInterests?.length >= 1, '2.18 El resumen integra las tecnologías de interés (V2 §21)');
   check(sd.improvementAreas?.length === 2, '2.19 El resumen integra las areas de mejora');
   check(Array.isArray(sd.projects), '2.20 El resumen incluye la seccion de proyectos');
   check(Array.isArray(sd.activities), '2.21 El resumen incluye la seccion de actividades');

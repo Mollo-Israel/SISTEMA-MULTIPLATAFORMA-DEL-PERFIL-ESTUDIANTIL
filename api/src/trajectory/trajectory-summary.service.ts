@@ -18,7 +18,7 @@ import { Project } from '../entities/project.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { PdfWriter } from './pdf-writer';
 
 const NIVEL: Record<AffinityLevel, string> = {
@@ -45,7 +45,6 @@ export class TrajectorySummaryService {
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     @InjectRepository(ProjectMember) private readonly members: Repository<ProjectMember>,
-    @InjectRepository(StudentSkill) private readonly skills: Repository<StudentSkill>,
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
     @InjectRepository(ExternalCertificate)
@@ -53,6 +52,7 @@ export class TrajectorySummaryService {
     @InjectRepository(InternalConstancy)
     private readonly constancies: Repository<InternalConstancy>,
     @InjectRepository(ProjectEvidence) private readonly evidences: Repository<ProjectEvidence>,
+    private readonly backedSkills: BackedSkillsService,
   ) {}
 
   /** Las secciones disponibles, para que la pantalla no las invente. */
@@ -165,13 +165,13 @@ export class TrajectorySummaryService {
     }
 
     if (incluye.has(TrajectorySection.TECHNOLOGIES)) {
-      const filas = await this.skills.find({
-        where: { studentProfileId },
-        relations: { skill: true },
-      });
-      salida.skills = filas
-        .filter((s) => s.skill)
-        .map((s) => ({ name: s.skill.name, level: s.level }));
+      // «Tecnologías respaldadas» (V2 §61.1): las que la trayectoria
+      // respalda, nunca una autoevaluación. El CV no inventa (§61.3).
+      salida.skills = (await this.backedSkills.forProfile(studentProfileId)).map((s) => ({
+        name: s.name,
+        sources: s.sources,
+        evidenceCount: s.evidenceCount,
+      }));
     }
 
     if (incluye.has(TrajectorySection.ACTIVITIES)) {

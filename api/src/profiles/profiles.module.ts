@@ -1,3 +1,4 @@
+import { StudentSkillInterest } from '../entities/student-skill-interest.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -25,6 +26,7 @@ import { ProfilesController } from './profiles.controller';
       StudentInterest,
       StudentFreeInterest,
       StudentSkill,
+      StudentSkillInterest,
       AcademicArea,
       Skill,
       Project,

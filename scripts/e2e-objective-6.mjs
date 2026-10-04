@@ -280,9 +280,9 @@ async function rf17Calculo(ctx) {
   );
 
   section('Habilidad autodeclarada (peso segun nivel, §21.1)');
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: A.token,
-    body: { items: [{ skillId: skill.id, level: 'advanced' }] },
+    body: { items: [{ skillId: skill.id, kind: 'interest' }] },
   });
   s = await summaryOf(A.token);
   check(
@@ -291,9 +291,9 @@ async function rf17Calculo(ctx) {
     `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
 
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: A.token,
-    body: { items: [{ skillId: skill.id, level: 'basic' }] },
+    body: { items: [{ skillId: skill.id, kind: 'interest' }] },
   });
   s = await summaryOf(A.token);
   check(
@@ -302,9 +302,9 @@ async function rf17Calculo(ctx) {
     `crudo ${rawOf(s, areaPrincipal.id)}`,
   );
   // Se restaura el nivel alto para el resto del escenario.
-  await req('PUT', '/profiles/me/skills', {
+  await req('PUT', '/profiles/me/skill-interests', {
     token: A.token,
-    body: { items: [{ skillId: skill.id, level: 'advanced' }] },
+    body: { items: [{ skillId: skill.id, kind: 'interest' }] },
   });
 
   section('Area en la que desea mejorar (0 puntos, §20)');

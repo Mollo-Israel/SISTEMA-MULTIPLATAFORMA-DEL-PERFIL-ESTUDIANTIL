@@ -26,7 +26,8 @@ import type {
   ProjectMemberDetailed,
   ValidationVerdict,
   Questionnaire,
-  SkillLevel,
+  SkillInterest,
+  SkillInterestKind,
   UserStatus,
   VisibilitySettings,
   ProfileSummary,
@@ -138,8 +139,10 @@ export const profileService = {
     api.patch<FreeInterest>(`/profiles/me/free-interests/${id}`, data).then((r) => r.data),
   removeFreeInterest: (id: string) =>
     api.delete(`/profiles/me/free-interests/${id}`).then((r) => r.data),
-  setSkills: (items: { skillId: string; level: SkillLevel }[]) =>
-    api.put('/profiles/me/skills', { items }).then((r) => r.data),
+  /** Tecnologías de interés (V2 §21). Reemplazo completo. */
+  skillInterests: () => api.get<SkillInterest[]>('/profiles/me/skill-interests').then((r) => r.data),
+  replaceSkillInterests: (items: { skillId: string; kind: SkillInterestKind }[]) =>
+    api.put<SkillInterest[]>('/profiles/me/skill-interests', { items }).then((r) => r.data),
   /** Reemplaza el conjunto de intereses: lo que no viene, se quita. */
   replaceInterests: (items: { academicAreaId: string; priority: number }[]) =>
     api.put('/profiles/me/interests', { items }).then((r) => r.data),
@@ -150,6 +153,12 @@ export const profileService = {
     api.patch<OnboardingState>('/profiles/me/onboarding', { step }).then((r) => r.data),
   completeOnboarding: () =>
     api.post<OnboardingState>('/profiles/me/onboarding/complete').then((r) => r.data),
+  /** Paso 1: confirmo mis datos institucionales (bio opcional). */
+  confirmInstitutional: (bio?: string) =>
+    api.post<OnboardingState>('/profiles/me/onboarding/institutional-confirmation', { bio }).then((r) => r.data),
+  /** Paso 4: privacidad básica. */
+  onboardingPrivacy: (data: { peerDiscoverable: boolean; publicProfileEnabled: boolean }) =>
+    api.post<OnboardingState>('/profiles/me/onboarding/privacy', data).then((r) => r.data),
 
   /** Qué comparto en mi perfil compartible (§44). */
   visibility: () =>

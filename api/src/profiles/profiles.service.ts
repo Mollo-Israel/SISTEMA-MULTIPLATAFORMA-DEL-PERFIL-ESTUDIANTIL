@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  GoneException,
   Inject,
   Injectable,
   NotFoundException,
@@ -17,12 +18,14 @@ import {
   PublicProfileField,
   RegistrationStatus,
   RolNombre,
+  SkillInterestKind,
+  SkillInterestSource,
   UserStatus,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentFreeInterest } from '../entities/student-free-interest.entity';
-import { StudentSkill } from '../entities/student-skill.entity';
+import { StudentSkillInterest } from '../entities/student-skill-interest.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { Project } from '../entities/project.entity';
@@ -38,10 +41,10 @@ import { CreateFreeInterestDto, UpdateFreeInterestDto } from './dto/free-interes
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { InterestItemDto } from './dto/set-interests.dto';
-import { SkillItemDto } from './dto/set-skills.dto';
 import { SetInstitutionalDataDto } from './dto/institutional-data.dto';
 import { UpdateVisibilityDto } from './dto/visibility.dto';
 import { AuditEventType, AuditService } from '../audit/audit.service';
+import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
@@ -66,7 +69,8 @@ export class ProfilesService {
     @InjectRepository(StudentInterest) private readonly interests: Repository<StudentInterest>,
     @InjectRepository(StudentFreeInterest)
     private readonly freeInterests: Repository<StudentFreeInterest>,
-    @InjectRepository(StudentSkill) private readonly skills: Repository<StudentSkill>,
+    @InjectRepository(StudentSkillInterest)
+    private readonly skillInterests: Repository<StudentSkillInterest>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(Skill) private readonly skillCatalog: Repository<Skill>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
@@ -83,6 +87,7 @@ export class ProfilesService {
     private readonly trajectory: TrajectoryRecalculationPort,
     private readonly teacherScope: TeacherScopeService,
     private readonly audit: AuditService,
+    private readonly backedSkills: BackedSkillsService,
   ) {}
 
   async createMyProfile(userId: string, dto: CreateProfileDto): Promise<StudentProfile> {
@@ -140,17 +145,24 @@ export class ProfilesService {
         hasProfile: false,
         claimed: false,
         semester: null,
-        counts: { improvementAreas: 0, interests: 0, skills: 0, questionnaireRuns: 0 },
+        universityCode: null,
+        institutionalConfirmed: false,
+        privacyReviewed: false,
+        availabilityDecided: false,
+        counts: { improvementAreas: 0, interests: 0, skillInterests: 0, skillsToImprove: 0, questionnaireRuns: 0 },
+        missing: this.faltantesBienvenida(null, 0, 0, 0),
       };
     }
-    const [interests, skills, runs] = await Promise.all([
+    const [interests, skillInterests, skillsToImprove, runs] = await Promise.all([
       this.interests.count({ where: { studentProfileId: profile.id } }),
-      this.skills.count({ where: { studentProfileId: profile.id } }),
+      this.skillInterests.count({ where: { studentProfileId: profile.id, kind: SkillInterestKind.INTEREST } }),
+      this.skillInterests.count({ where: { studentProfileId: profile.id, kind: SkillInterestKind.IMPROVE } }),
       this.profiles.manager.query(
         'SELECT count(*)::int AS n FROM onboarding_runs WHERE student_profile_id = $1',
         [profile.id],
       ),
     ]);
+    const improvementAreas = profile.improvementAreaIds?.length ?? 0;
     return {
       completed: !!profile.onboardingCompletedAt,
       completedAt: profile.onboardingCompletedAt,
@@ -158,20 +170,52 @@ export class ProfilesService {
       hasProfile: true,
       claimed: !!profile.claimedAt,
       semester: profile.semester,
+      universityCode: profile.universityCode,
+      institutionalConfirmed: !!profile.institutionalConfirmedAt,
+      privacyReviewed: !!profile.privacyReviewedAt,
+      availabilityDecided: !!profile.availabilityDecidedAt,
       counts: {
-        improvementAreas: profile.improvementAreaIds?.length ?? 0,
+        improvementAreas,
         interests,
-        skills,
+        skillInterests,
+        skillsToImprove,
         questionnaireRuns: Number(runs?.[0]?.n ?? 0),
       },
+      missing: this.faltantesBienvenida(profile, interests, improvementAreas, skillInterests + skillsToImprove),
     };
+  }
+
+  /**
+   * Lo obligatorio de la bienvenida V2 (§20.2), en lenguaje del estudiante:
+   *
+   *   - confirmar sus datos institucionales;
+   *   - al menos un interés o un área de mejora (área o tecnología);
+   *   - revisar su privacidad básica;
+   *   - decidir su disponibilidad (aunque sea «prefiero no decirlo»).
+   *
+   * La biografía y el cuestionario son opcionales.
+   */
+  private faltantesBienvenida(
+    profile: StudentProfile | null,
+    interests: number,
+    improvementAreas: number,
+    skillInterests: number,
+  ): string[] {
+    const faltan: string[] = [];
+    if (!profile?.institutionalConfirmedAt) faltan.push('confirmar tus datos institucionales');
+    if (interests + improvementAreas + skillInterests === 0) {
+      faltan.push('elegir al menos un interés o un área que quieras mejorar');
+    }
+    if (!profile?.availabilityDecidedAt) faltan.push('indicar tu disponibilidad para colaborar');
+    if (!profile?.privacyReviewedAt) faltan.push('revisar tu privacidad');
+    return faltan;
   }
 
   /** Guarda por qué paso va, para retomarlo donde lo dejó. */
   async saveOnboardingStep(userId: string, step: string) {
     const profile = await this.profiles.findOne({ where: { userId } });
     if (!profile) {
-      throw new NotFoundException('Primero crea tu perfil: es el primer paso de la bienvenida.');
+      throw new NotFoundException('Primero confirma tus datos: es el primer paso de la bienvenida.');
     }
     profile.onboardingStep = step;
     await this.profiles.save(profile);
@@ -179,21 +223,58 @@ export class ProfilesService {
   }
 
   /**
-   * Da la bienvenida por terminada.
-   *
-   * Exige lo mínimo para que el resto del sistema tenga algo con qué
-   * trabajar: el perfil reclamado, al menos un área donde quiere mejorar y al
-   * menos un interés. Las habilidades y el cuestionario son opcionales: un
-   * estudiante de primer semestre puede no tener habilidades que declarar.
+   * Paso 1 (§20.2): el estudiante vio su semestre y su código universitario y
+   * confirma que son correctos. No puede cambiarlos (§6.1); si no lo son, lo
+   * corrige la administración. Reclama el perfil que creó el alta.
    */
+  async confirmInstitutionalData(userId: string, bio?: string) {
+    let profile = await this.profiles.findOne({ where: { userId } });
+    if (!profile) {
+      await this.createMyProfile(userId, { bio } as CreateProfileDto);
+      profile = await this.getOwnProfile(userId);
+    } else if (bio !== undefined) {
+      profile.bio = bio || null;
+    }
+    profile.claimedAt ??= new Date();
+    profile.institutionalConfirmedAt ??= new Date();
+    if (!profile.onboardingStep || profile.onboardingStep === 'welcome') profile.onboardingStep = 'interests';
+    await this.profiles.save(profile);
+    await this.refreshCompletion(profile.id);
+    return this.onboardingState(userId);
+  }
+
+  /**
+   * Paso 4 (§20.2): privacidad básica. Si aparece como posible compañero en
+   * las sugerencias de otros y si activa su perfil compartible. Ambas cosas
+   * se pueden cambiar después en «Privacidad».
+   */
+  async saveOnboardingPrivacy(
+    userId: string,
+    dto: { peerDiscoverable: boolean; publicProfileEnabled: boolean },
+  ) {
+    const profile = await this.getOwnProfile(userId);
+    profile.peerDiscoverable = dto.peerDiscoverable;
+    profile.publicProfileEnabled = dto.publicProfileEnabled;
+    profile.privacyReviewedAt = new Date();
+    await this.profiles.save(profile);
+    await this.audit.record({
+      actorUserId: userId,
+      eventType: AuditEventType.VISIBILITY_CHANGED,
+      entityType: 'student_profile',
+      entityId: profile.id,
+      metadata: { publicProfileEnabled: dto.publicProfileEnabled, peerDiscoverable: dto.peerDiscoverable, origen: 'bienvenida' },
+    });
+    return this.onboardingState(userId);
+  }
+
+  /** Da la bienvenida por terminada si está lo obligatorio de §20.2. */
   async completeOnboarding(userId: string) {
     const estado = await this.onboardingState(userId);
-    const faltan: string[] = [];
-    if (!estado.hasProfile || !estado.claimed) faltan.push('crear tu perfil');
-    if (estado.counts.improvementAreas === 0) faltan.push('elegir al menos un área donde quieres mejorar');
-    if (estado.counts.interests === 0) faltan.push('marcar al menos un área que te interese');
-    if (faltan.length > 0) {
-      throw new BadRequestException(`Para terminar la bienvenida falta ${faltan.join(', ')}.`);
+    if (estado.missing.length > 0) {
+      throw new BadRequestException({
+        message: `Para terminar la bienvenida falta ${estado.missing.join(', ')}.`,
+        missing: estado.missing,
+      });
     }
     if (!estado.completed) {
       await this.profiles.update(
@@ -325,7 +406,11 @@ export class ProfilesService {
     }
     if (dto.bio !== undefined) profile.bio = dto.bio;
     if (dto.peerDiscoverable !== undefined) profile.peerDiscoverable = dto.peerDiscoverable;
-    if (dto.availability !== undefined) profile.availability = dto.availability;
+    if (dto.availability !== undefined) {
+      profile.availability = dto.availability;
+      // Decidir —aunque sea «prefiero no decirlo»— es lo que pide §20.2.
+      profile.availabilityDecidedAt = new Date();
+    }
     if (dto.collaborationPreferences !== undefined) {
       profile.collaborationPreferences = {
         modes: dto.collaborationPreferences.modes ?? [],
@@ -391,53 +476,79 @@ export class ProfilesService {
     });
   }
 
-  async addSkills(userId: string, items: SkillItemDto[]): Promise<StudentSkill[]> {
-    const profile = await this.getOwnProfile(userId);
-    await this.assertSkillsExist(items.map((i) => i.skillId));
-    for (const item of items) {
-      const existing = await this.skills.findOne({
-        where: { studentProfileId: profile.id, skillId: item.skillId },
-      });
-      if (existing) {
-        existing.level = item.level;
-        await this.skills.save(existing);
-      } else {
-        await this.skills.save(
-          this.skills.create({
-            studentProfileId: profile.id,
-            skillId: item.skillId,
-            level: item.level,
-          }),
-        );
-      }
-    }
-    await this.afterProfileChange(profile.id);
-    return this.skills.find({
-      where: { studentProfileId: profile.id },
-      relations: { skill: true },
-    });
+  /**
+   * Nivel autodeclarado de habilidad: retirado (V2 §22).
+   *
+   * El estudiante ya no declara «básico / intermedio / avanzado» como señal de
+   * competencia. Las llamadas antiguas reciben 410 con la ruta nueva, en vez
+   * de seguir escribiendo una tabla que ningún motor debe leer.
+   */
+  retiredSelfSkillLevel(): never {
+    throw new GoneException(
+      'El nivel autodeclarado de habilidades se retiró (especificación V2 §22). '
+        + 'Declara qué tecnologías te interesan o quieres mejorar en /profiles/me/skill-interests.',
+    );
   }
 
-  async replaceSkills(userId: string, items: SkillItemDto[]): Promise<StudentSkill[]> {
+  async getSkillInterests(userId: string) {
     const profile = await this.getOwnProfile(userId);
-    await this.assertSkillsExist(items.map((i) => i.skillId));
-    await this.skills.delete({ studentProfileId: profile.id });
-    if (items.length > 0) {
-      await this.skills.save(
-        items.map((item) =>
-          this.skills.create({
-            studentProfileId: profile.id,
-            skillId: item.skillId,
-            level: item.level,
-          }),
-        ),
+    return this.listSkillInterests(profile.id);
+  }
+
+  private listSkillInterests(profileId: string) {
+    return this.skillInterests
+      .find({
+        where: { studentProfileId: profileId },
+        relations: { skill: true },
+        order: { createdAt: 'ASC' },
+      })
+      .then((filas) =>
+        filas.map((f) => ({
+          skillId: f.skillId,
+          skill: f.skill?.name ?? null,
+          academicAreaId: f.skill?.academicAreaId ?? null,
+          kind: f.kind,
+          source: f.source,
+        })),
       );
-    }
-    await this.afterProfileChange(profile.id);
-    return this.skills.find({
-      where: { studentProfileId: profile.id },
-      relations: { skill: true },
+  }
+
+  /**
+   * Reemplaza la lista de tecnologías de interés (V2 §21). Reemplazo completo,
+   * como con las áreas: así quitar una es simplemente no enviarla.
+   */
+  async replaceSkillInterests(
+    userId: string,
+    items: { skillId: string; kind: SkillInterestKind }[],
+  ) {
+    const profile = await this.getOwnProfile(userId);
+    const unicos = new Map(items.map((i) => [i.skillId, i.kind]));
+    await this.assertSkillsExist([...unicos.keys()]);
+    const previos = new Map(
+      (await this.skillInterests.find({ where: { studentProfileId: profile.id } })).map((p) => [p.skillId, p]),
+    );
+    await this.skillInterests.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(StudentSkillInterest);
+      await repo.delete({ studentProfileId: profile.id });
+      if (unicos.size > 0) {
+        await repo.save(
+          [...unicos.entries()].map(([skillId, kind]) =>
+            repo.create({
+              studentProfileId: profile.id,
+              skillId,
+              kind,
+              // Conservar la procedencia de lo que ya estaba: una preferencia
+              // migrada o confirmada desde la orientación sigue siéndolo.
+              source: previos.get(skillId)?.source ?? SkillInterestSource.DECLARED,
+            }),
+          ),
+        );
+      }
     });
+    profile.claimedAt ??= new Date();
+    await this.profiles.save(profile);
+    await this.refreshCompletion(profile.id);
+    return this.listSkillInterests(profile.id);
   }
 
   // ---------------------------------------------------------------------
@@ -603,6 +714,7 @@ export class ProfilesService {
     if (dto.publicProfileEnabled !== undefined) {
       profile.publicProfileEnabled = dto.publicProfileEnabled;
     }
+    profile.privacyReviewedAt = new Date();
     if (dto.fields) {
       const actual = { ...DEFAULT_PUBLIC_VISIBILITY, ...(profile.publicVisibilityConfig ?? {}) };
       for (const field of PUBLIC_PROFILE_FIELDS) {
@@ -700,7 +812,7 @@ export class ProfilesService {
     profile: StudentProfile,
     options: { includeInternal: boolean },
   ) {
-    const [interests, freeInterests, skills, ownedProjects, memberships, certificates, affinities] =
+    const [interests, freeInterests, backed, ownedProjects, memberships, certificates, affinities] =
       await Promise.all([
         this.interests.find({
           where: { studentProfileId: profile.id },
@@ -711,11 +823,7 @@ export class ProfilesService {
           where: { studentProfileId: profile.id },
           order: { createdAt: 'ASC' },
         }),
-        this.skills.find({
-          where: { studentProfileId: profile.id },
-          relations: { skill: true },
-          order: { level: 'DESC' },
-        }),
+        this.backedSkills.forProfile(profile.id),
         this.projects.find({ where: { createdByProfileId: profile.id } }),
         this.projectMembers.find({
           where: { userId: profile.userId },
@@ -789,23 +897,20 @@ export class ProfilesService {
         source: i.source,
       })),
       /**
-       * Habilidades autodeclaradas (§21.1) junto a la experiencia que las
-       * respalda (§21.2).
-       *
-       * Los dos números viajan separados a propósito: `level` es lo que el
-       * estudiante dice de sí mismo y `backing` es lo que puede demostrar.
-       * Mezclarlos daría un único número que no significaría ninguna de las
-       * dos cosas.
+       * Tecnologías respaldadas por trayectoria (V2 §22, §34): las que el
+       * estudiante usó en proyectos con respaldo (contribución confirmada) o
+       * en actividades con participación confirmada. Ya no hay nivel
+       * autodeclarado.
        */
-      skills: skills.map((s) => ({
-        skillId: s.skillId,
-        skill: s.skill?.name ?? null,
-        academicAreaId: s.skill?.academicAreaId ?? null,
-        /** Autoevaluación. Siempre etiquetada como tal. */
-        level: s.level,
-        selfAssessed: true,
-        backing: this.backingFor(s, projects, registrations, certificates, evidences),
+      skills: backed.map((b) => ({
+        skillId: b.skillId,
+        skill: b.name,
+        academicAreaId: b.academicAreaId,
+        sources: b.sources,
+        evidenceCount: b.evidenceCount,
       })),
+      /** Tecnologías que le interesan o quiere mejorar (declarativo, V2 §21). */
+      skillInterests: await this.listSkillInterests(profile.id),
       projects: projects.map((p) => ({
         id: p.id,
         title: p.title,
@@ -889,7 +994,7 @@ export class ProfilesService {
 
     const [interestCount, skillCount] = await Promise.all([
       this.interests.count({ where: { studentProfileId: profileId } }),
-      this.skills.count({ where: { studentProfileId: profileId } }),
+      this.skillInterests.count({ where: { studentProfileId: profileId } }),
     ]);
 
     // El semestre sigue contando porque un perfil sin el esta incompleto de
@@ -915,60 +1020,6 @@ export class ProfilesService {
 
   private async requestAffinity(profileId: string): Promise<void> {
     await this.trajectory.requestRecalculation(profileId);
-  }
-
-  /**
-   * Experiencia registrada que respalda una habilidad autodeclarada (§21.2).
-   *
-   * Cuenta dos cosas distintas y las suma: los proyectos que nombran la
-   * tecnología explícitamente, y todo lo que ocurrió dentro del área a la que
-   * pertenece la habilidad —actividades confirmadas, certificados y
-   * evidencias—. Un proyecto que use «React» respalda React aunque su área sea
-   * otra; una actividad de desarrollo web respalda las habilidades de esa área
-   * aunque no nombre ninguna.
-   *
-   * No emite juicio: informa de cuánto hay detrás. Quien mire decide si esa
-   * cantidad sostiene el nivel declarado.
-   */
-  private backingFor(
-    studentSkill: StudentSkill,
-    projects: Project[],
-    registrations: ActivityRegistration[],
-    certificates: ExternalCertificate[],
-    evidences: ProjectEvidence[],
-  ) {
-    const nombre = studentSkill.skill?.name?.toLowerCase().trim() ?? '';
-    const areaId = studentSkill.skill?.academicAreaId ?? null;
-
-    const proyectos = projects.filter((p) => {
-      const porTecnologia =
-        nombre.length > 0
-        && (p.technologies ?? []).some((t) => t.toLowerCase().trim() === nombre);
-      return porTecnologia || (areaId !== null && p.academicAreaId === areaId);
-    }).length;
-
-    const actividades = areaId === null
-      ? 0
-      : registrations.filter(
-        (r) => r.status === RegistrationStatus.CONFIRMED
-          && r.activity?.academicAreaId === areaId,
-      ).length;
-
-    const certificados = areaId === null
-      ? 0
-      : certificates.filter((c) => c.academicAreaId === areaId).length;
-
-    const evidencias = areaId === null
-      ? 0
-      : evidences.filter((e) => e.academicAreaId === areaId).length;
-
-    return {
-      projects: proyectos,
-      activities: actividades,
-      certificates: certificados,
-      evidences: evidencias,
-      total: proyectos + actividades + certificados + evidencias,
-    };
   }
 
   private async resolveAreas(ids: string[] | null) {

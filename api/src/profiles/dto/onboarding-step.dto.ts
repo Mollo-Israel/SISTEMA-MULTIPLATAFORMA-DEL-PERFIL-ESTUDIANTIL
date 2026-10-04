@@ -1,18 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsIn } from 'class-validator';
 
-/** Pasos de la bienvenida, en orden. */
-export const ONBOARDING_STEPS = [
-  'welcome',
-  'profile',
-  'availability',
-  'interests',
-  'skills',
-  'questionnaire',
-  'done',
-] as const;
+import { ONBOARDING_STEPS_V2, OnboardingStepV2 } from '@perfil/shared';
 
-export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+/** Pasos de la bienvenida V2 (§20.1), en orden. */
+export const ONBOARDING_STEPS = ONBOARDING_STEPS_V2;
+export type OnboardingStep = OnboardingStepV2;
 
 export class OnboardingStepDto {
   @ApiProperty({ enum: ONBOARDING_STEPS })

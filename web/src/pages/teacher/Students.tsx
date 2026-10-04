@@ -227,17 +227,17 @@ export default function TeacherStudentsPage() {
               )}
             </div>
             <div>
-              <strong>Habilidades</strong>
+              <strong>Tecnologías con respaldo</strong>
               {view.skills?.length ? (
                 <div className="tag-list mt">
                   {view.skills.map((s: any) => (
                     <Badge key={s.skillId} tone="gray">
-                      {s.skill} · nivel {s.level}
+                      {s.skill}
                     </Badge>
                   ))}
                 </div>
               ) : (
-                <p className="muted">Sin habilidades declaradas.</p>
+                <p className="muted">Aún sin tecnologías respaldadas por proyectos o actividades.</p>
               )}
             </div>
           </div>
