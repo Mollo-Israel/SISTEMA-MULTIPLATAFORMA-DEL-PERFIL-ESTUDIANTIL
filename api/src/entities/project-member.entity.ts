@@ -44,6 +44,14 @@ export class ProjectMember {
   @Column({ type: 'varchar', length: 80, nullable: true })
   role: string | null;
 
+  /**
+   * Fila del responsable del proyecto (V2 §34, §48): existe para que también
+   * él confirme las tecnologías que usó. No es un integrante «aceptado» y no
+   * eleva el respaldo del proyecto.
+   */
+  @Column({ name: 'is_owner', type: 'boolean', default: false })
+  isOwner: boolean;
+
   @Column({ type: 'text', nullable: true })
   contribution: string | null;
 

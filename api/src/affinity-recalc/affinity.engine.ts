@@ -7,6 +7,7 @@ import {
   AFFINITY_ENGINE_VERSION,
   AFFINITY_EXCLUDED_REASON,
   AFFINITY_MAX_RAW,
+  AFFINITY_POINTS_V3,
   AffinityCalculationStatus,
   AffinityLevel,
   AffinityMatchType,
@@ -105,45 +106,39 @@ interface Contribution extends Senal {
  * silenciosamente incompleta.
  */
 const DEFAULT_WEIGHTS: Record<AffinityWeightCode, number> = {
-  // ----------------------------------------------------- §51.1 intereses
-  [AffinityWeightCode.INTEREST_PRIORITY_1]: 5,
-  [AffinityWeightCode.INTEREST_PRIORITY_2]: 4,
-  [AffinityWeightCode.INTEREST_PRIORITY_3]: 3,
-  [AffinityWeightCode.INTEREST_PRIORITY_4]: 2,
-  [AffinityWeightCode.INTEREST_PRIORITY_5]: 1,
-  /** V1. Sin prioridad, todos los intereses valian lo mismo. Ya no se usa. */
+  // ------------------------------------------- V3 §45.1 · lo declarado: 0
+  // Intereses, habilidades declaradas y áreas de mejora se registran para
+  // poder explicar que se tuvieron en cuenta, pero no suman afinidad.
+  [AffinityWeightCode.INTEREST_PRIORITY_1]: 0,
+  [AffinityWeightCode.INTEREST_PRIORITY_2]: 0,
+  [AffinityWeightCode.INTEREST_PRIORITY_3]: 0,
+  [AffinityWeightCode.INTEREST_PRIORITY_4]: 0,
+  [AffinityWeightCode.INTEREST_PRIORITY_5]: 0,
   [AffinityWeightCode.INTEREST]: 0,
-  // --------------------------------------------------- §51.1 habilidades
-  [AffinityWeightCode.SKILL_BASIC]: 0.5,
-  [AffinityWeightCode.SKILL_INTERMEDIATE]: 1,
-  [AffinityWeightCode.SKILL_ADVANCED]: 1.5,
-  // §20: querer aprender algo no es tener afinidad con ello.
+  [AffinityWeightCode.SKILL_BASIC]: 0,
+  [AffinityWeightCode.SKILL_INTERMEDIATE]: 0,
+  [AffinityWeightCode.SKILL_ADVANCED]: 0,
   [AffinityWeightCode.IMPROVEMENT_AREA]: 0,
-  // --------------------------------------------------- §51.2 actividades
-  // §23 y §51.2: interes e inscripcion son intencion, no experiencia.
+  // ------------------------------------------------ V3 §47.1 · actividades
   [AffinityWeightCode.ACTIVITY_INTERESTED]: 0,
   [AffinityWeightCode.ACTIVITY_REGISTERED]: 0,
-  [AffinityWeightCode.ACTIVITY_CONFIRMED]: 4,
-  // ----------------------------------------------------- §51.3 proyectos
-  [AffinityWeightCode.PROJECT_DECLARED]: 2,
-  [AffinityWeightCode.PROJECT_SUPPORTED]: 6,
-  [AffinityWeightCode.PROJECT_CORROBORATED]: 10,
-  [AffinityWeightCode.PROJECT_REVIEWED]: 12,
-  // §51.3: FLAGGED vale 0 hasta resolver la inconsistencia.
-  [AffinityWeightCode.PROJECT_FLAGGED]: 0,
-  /** V1. Puntuaban por rol, no por respaldo. Ya no se usan. */
+  [AffinityWeightCode.ACTIVITY_CONFIRMED]: AFFINITY_POINTS_V3.ACTIVITY_CONFIRMED,
+  // -------------------------------------------------- V3 §47.2 · proyectos
+  [AffinityWeightCode.PROJECT_DECLARED]: AFFINITY_POINTS_V3.PROJECT_DECLARED,
+  [AffinityWeightCode.PROJECT_SUPPORTED]: AFFINITY_POINTS_V3.PROJECT_SUPPORTED,
+  [AffinityWeightCode.PROJECT_CORROBORATED]: AFFINITY_POINTS_V3.PROJECT_CORROBORATED,
+  [AffinityWeightCode.PROJECT_REVIEWED]: AFFINITY_POINTS_V3.PROJECT_REVIEWED,
+  [AffinityWeightCode.PROJECT_FLAGGED]: AFFINITY_POINTS_V3.PROJECT_FLAGGED,
   [AffinityWeightCode.PROJECT_OWNED]: 0,
   [AffinityWeightCode.PROJECT_MEMBER]: 0,
-  // -------------------------------------------------- §51.4 certificados
-  [AffinityWeightCode.CERTIFICATE_DECLARED]: 1,
-  [AffinityWeightCode.CERTIFICATE_SUPPORTED]: 3,
-  [AffinityWeightCode.CERTIFICATE_CORROBORATED]: 6,
-  /** V1. Un unico peso sin mirar que se pudo corroborar. Ya no se usa. */
+  // ----------------------------------------------- V3 §47.3 · certificados
+  [AffinityWeightCode.CERTIFICATE_DECLARED]: AFFINITY_POINTS_V3.CERTIFICATE_DECLARED,
+  [AffinityWeightCode.CERTIFICATE_SUPPORTED]: AFFINITY_POINTS_V3.CERTIFICATE_SUPPORTED,
+  [AffinityWeightCode.CERTIFICATE_CORROBORATED]: AFFINITY_POINTS_V3.CERTIFICATE_CORROBORATED,
   [AffinityWeightCode.CERTIFICATE]: 0,
-  // ------------------------------------------------------------- §50, §55
-  // Ninguna de las dos suma afinidad: la evidencia mejora el respaldo del
-  // proyecto y la constancia el de la participacion. Se registran con valor
-  // cero para que el desglose diga que se tuvieron en cuenta.
+  // ------------------------------------------------------------ §46, §50
+  // La evidencia mejora el respaldo del proyecto y la constancia el de la
+  // participación; ninguna crea un evento de afinidad.
   [AffinityWeightCode.EVIDENCE]: 0,
   [AffinityWeightCode.CONSTANCY]: 0,
 };
@@ -366,11 +361,9 @@ export class AffinityEngineService {
         matchType: AffinityMatchType.DECLARED,
         sourceEntityType: AffinitySourceEntityType.STUDENT_INTEREST,
         sourceId: i.id,
-        base: weightOf.get(code) ?? 0,
-        affinityBucket: 'interest',
-        reason:
-          `Interes declarado con prioridad ${i.priority}: `
-          + `${areaName.get(i.academicAreaId) ?? 'area'}`,
+        // V3 §45.1: el interés orienta recomendaciones; no suma afinidad.
+        base: 0,
+        reason: `${areaName.get(i.academicAreaId) ?? 'Área'}: ${AFFINITY_EXCLUDED_REASON.interest}`,
       });
     });
 
@@ -462,49 +455,74 @@ export class AffinityEngineService {
       const membership = membershipByProject.get(project.id);
 
       // §33: mientras el integrante no confirme su contribucion, lo que figura
-      // en ella lo escribio otra persona. El proyecto propio no lo necesita:
-      // lo declaro su autor.
-      if (!isOwned && membership && !membership.contributionConfirmedAt) {
+      // en ella lo escribio otra persona.
+      if (!isOwned && (!membership || !membership.contributionConfirmedAt)) {
         continue;
       }
 
-      // §34: las tecnologias del integrante son las suyas, no las del proyecto.
-      const tecnologiasPropias = (membership?.memberSkills ?? [])
-        .map((s) => s.skill?.name)
-        .filter((n): n is string => !!n);
-      const tecnologias = !isOwned && tecnologiasPropias.length > 0
-        ? tecnologiasPropias
-        : project.technologies;
-
-      const declared = !!project.academicAreaId;
-      const projectAreas = declared
-        ? [project.academicAreaId as string]
-        : this.inferAreasByTech(tecnologias, areas);
-      areasByProject.set(project.id, projectAreas);
-      proyectosContados.push(project);
-
+      // V3 §48: el proyecto pertenece, para este estudiante, a las áreas de
+      // las tecnologías que ÉL confirmó haber usado (`skills_used`). Ni las
+      // tecnologías generales del proyecto ni su área principal atribuyen
+      // experiencia a nadie.
+      const habilidades = (membership?.memberSkills ?? []).filter((s) => s.skill);
+      const areasPropias = [
+        ...new Set(
+          habilidades.map((s) => s.skill!.academicAreaId).filter((a): a is string => !!a),
+        ),
+      ];
       const tier = project.backingTier ?? ProjectBackingTier.DECLARED;
       const code = PROJECT_CODE[tier];
       const rol = isOwned ? 'propio' : 'como integrante';
-      const detalle = !isOwned && tecnologiasPropias.length > 0
-        ? ` (${tecnologiasPropias.slice(0, 4).join(', ')})`
-        : '';
+      proyectosContados.push(project);
 
-      projectAreas.forEach((areaId) =>
+      if (areasPropias.length > 0) {
+        areasByProject.set(project.id, areasPropias);
+        for (const areaId of areasPropias) {
+          const nombres = habilidades
+            .filter((s) => s.skill!.academicAreaId === areaId)
+            .map((s) => s.skill!.name)
+            .slice(0, 4)
+            .join(', ');
+          add({
+            areaId,
+            family: AffinitySignalFamily.PROJECT,
+            weightCode: code,
+            matchType: AffinityMatchType.DECLARED,
+            sourceEntityType: AffinitySourceEntityType.PROJECT,
+            sourceId: project.id,
+            base: weightOf.get(code) ?? 0,
+            supportBase: PROJECT_SUPPORT[tier],
+            affinityBucket: 'project',
+            supportBucket: 'project',
+            scale: DIMINISHING.PROJECT,
+            reason: `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title} (${nombres})`,
+          });
+        }
+        continue;
+      }
+
+      // Sin tecnologías propias confirmadas no hay afinidad (§48), pero el
+      // respaldo del proyecto sigue contando en su área principal: la
+      // trayectoria existe aunque falte decir con qué se hizo.
+      const fallback = project.academicAreaId
+        ? [project.academicAreaId]
+        : this.inferAreasByTech(project.technologies, areas);
+      areasByProject.set(project.id, fallback);
+      fallback.forEach((areaId) =>
         add({
           areaId,
           family: AffinitySignalFamily.PROJECT,
           weightCode: code,
-          matchType: declared ? AffinityMatchType.DECLARED : AffinityMatchType.TAG,
+          matchType: project.academicAreaId ? AffinityMatchType.DECLARED : AffinityMatchType.TAG,
           sourceEntityType: AffinitySourceEntityType.PROJECT,
           sourceId: project.id,
-          base: weightOf.get(code) ?? 0,
+          base: 0,
           supportBase: PROJECT_SUPPORT[tier],
-          affinityBucket: 'project',
           supportBucket: 'project',
           scale: DIMINISHING.PROJECT,
           reason:
-            `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title}${detalle}`,
+            `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title}. `
+            + AFFINITY_EXCLUDED_REASON.project_without_skills,
         }),
       );
     }
@@ -702,9 +720,8 @@ export class AffinityEngineService {
     for (const [areaId, indices] of porArea) {
       // ------------------------------------------------------- afinidad
       let rawPoints = 0;
-      const buckets: AffinityBucket[] = [
-        'interest', 'skill', 'activity', 'project', 'certificate',
-      ];
+      // V3 §47: tres familias con tope propio (25 / 50 / 25).
+      const buckets: AffinityBucket[] = ['activity', 'project', 'certificate'];
       for (const bucket of buckets) {
         const propios = this.ordenar(indices, contributions, (c) =>
           c.affinityBucket === bucket ? c.base : null);
@@ -725,10 +742,7 @@ export class AffinityEngineService {
         rawPoints = this.redondear(rawPoints + acumulado);
       }
 
-      // §51.1: preferencias suman como mucho 14 entre intereses y habilidades.
-      // Los topes por separado ya lo garantizan (10 + 4); la comprobacion
-      // sobra en la practica y esta para que deje de sobrar el dia que alguien
-      // cambie uno de los dos numeros sin mirar el otro.
+      // V3 §47.4: nunca más de 100.
       rawPoints = Math.min(rawPoints, AFFINITY_MAX_RAW);
 
       // -------------------------------------------------------- respaldo
@@ -770,7 +784,8 @@ export class AffinityEngineService {
         if (INDEPENDENT_SUPPORT_FAMILIES.includes(familia)) familias.add(familia);
       });
 
-      const score = Math.round(Math.min(100, (rawPoints / AFFINITY_MAX_RAW) * 100));
+      // V3 §47.4: escala directa, sin normalizar contra nada.
+      const score = Math.round(Math.min(100, rawPoints));
       areas.push({
         academicAreaId: areaId,
         rawPoints,
@@ -870,8 +885,9 @@ export class AffinityEngineService {
       message:
         status === AffinityCalculationStatus.CALCULATED
           ? 'Afinidades calculadas a partir de la informacion de tu perfil.'
-          : 'Todavia no hay informacion suficiente para orientarte. Declara intereses y ' +
-            'habilidades, registra proyectos o participa en actividades y vuelve a consultar.',
+          : 'Todavía no hay trayectoria respaldada. La afinidad crece cuando se confirma tu ' +
+            'participación en actividades, cuando tus proyectos tienen respaldo y confirmas las ' +
+            'tecnologías que usaste, o con certificados con respaldo.',
       calculatedAt: snapshot?.calculatedAt ?? null,
       rulesVersion: snapshot?.rulesVersion ?? null,
       engineVersion: snapshot?.engineVersion ?? AFFINITY_ENGINE_VERSION,
@@ -1295,10 +1311,13 @@ export class AffinityEngineService {
     manager: DataSource['manager'],
     studentProfileId: string,
   ): Promise<void> {
+    // V2 §81: las instantáneas de versiones anteriores del motor son historia
+    // y no se podan; la retención solo actúa sobre las de la versión actual.
     const obsolete = await manager
       .createQueryBuilder(AffinitySnapshot, 'snapshot')
       .select('snapshot.id', 'id')
       .where('snapshot.student_profile_id = :studentProfileId', { studentProfileId })
+      .andWhere('snapshot.engine_version = :version', { version: AFFINITY_ENGINE_VERSION })
       .orderBy('snapshot.calculated_at', 'DESC')
       .addOrderBy('snapshot.id', 'DESC')
       .offset(SNAPSHOT_RETENTION)

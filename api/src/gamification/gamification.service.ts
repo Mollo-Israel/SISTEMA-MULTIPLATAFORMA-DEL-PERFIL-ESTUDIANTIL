@@ -306,7 +306,8 @@ export class GamificationService {
     );
 
     contribuciones
-      .filter((m) => m.contributionConfirmedAt)
+      // La fila del responsable no es una colaboración (V2 §31: nada por autodeclararse).
+      .filter((m) => m.contributionConfirmedAt && !m.isOwner)
       .forEach((m) =>
         hechos.push({
           trigger: GamificationTrigger.COLABORACION_ACEPTADA,

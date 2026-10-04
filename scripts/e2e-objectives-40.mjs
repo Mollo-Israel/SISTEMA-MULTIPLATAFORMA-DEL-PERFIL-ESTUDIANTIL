@@ -700,7 +700,7 @@ async function objective2(ctx) {
     sd.projects.length === 0 && sd.activities.length === 0,
     '2.25 Las secciones sin datos llegan vacias (sin informacion inventada)',
   );
-  check(sd.affinities.length > 0, '2.26 La afinidad ya se calculo con lo declarado');
+  check(sd.affinities.length === 0, '2.26 Lo declarado no produce afinidad: sin trayectoria respaldada no hay áreas (V2 §45.1)');
 
   // --- Privacidad y alcance ---
   section('Privacidad y alcance de consulta');

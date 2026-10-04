@@ -361,6 +361,18 @@ async function run() {
     const invitedB = studentProfiles[(i * 2 + 3) % studentProfiles.length];
     const invitedC = studentProfiles[(i * 2 + 5) % studentProfiles.length];
 
+    // V2 §34: el responsable también tiene su fila de integrante.
+    const owner = studentProfiles.find((sp) => sp.id === pr.createdByProfileId);
+    if (owner && !(await memberRepo.findOne({ where: { projectId: pr.id, userId: owner.userId } }))) {
+      await memberRepo.save(memberRepo.create({
+        projectId: pr.id,
+        userId: owner.userId,
+        role: 'Responsable',
+        contributionConfirmedAt: pr.createdAt,
+        isOwner: true,
+      }));
+    }
+
     // a) Invitacion ACEPTADA -> genera integrante real
     if (invitedA && invitedA.id !== pr.createdByProfileId) {
       const exists = await invitationRepo.findOne({

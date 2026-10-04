@@ -40,7 +40,7 @@ const faqs = [
   { q: '¿Reemplaza a SIU o a Teams?', a: 'No. Es una plataforma complementaria que centraliza tu información académica y extracurricular; no reemplaza notas oficiales ni la comunicación institucional.' },
   { q: '¿Qué tipo de información puedo registrar?', a: 'Intereses, habilidades, proyectos con evidencias, actividades, certificados externos y constancias internas autorizadas.' },
   { q: '¿Quién ve mi perfil y mis actividades?', a: 'Tú gestionas tu perfil. Docentes y dirección solo acceden a una vista permitida, sin datos personales sensibles ni notas.' },
-  { q: '¿Cómo se calcula la afinidad?', a: 'Con reglas, etiquetas y puntuación sobre tus intereses, habilidades, proyectos, evidencias y participación. No usa IA generativa ni predice rendimiento.' },
+  { q: '¿Cómo se calcula la afinidad?', a: 'Con reglas deterministas sobre tu trayectoria respaldada: participaciones confirmadas, proyectos con respaldo y certificados. Tus intereses orientan las recomendaciones, no la afinidad. No usa IA para decidir ni predice rendimiento.' },
 ];
 
 export default function LandingPage() {

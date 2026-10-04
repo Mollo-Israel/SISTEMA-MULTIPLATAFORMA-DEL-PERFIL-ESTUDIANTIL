@@ -41,7 +41,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 const HINTS = [
   'Declara tus áreas de preferencia',
-  'Agrega tus intereses y habilidades',
+  'Marca tus intereses y las tecnologías que quieres mejorar',
   'Indica en qué áreas quieres mejorar',
   'Participa en una actividad o registra un proyecto',
 ];

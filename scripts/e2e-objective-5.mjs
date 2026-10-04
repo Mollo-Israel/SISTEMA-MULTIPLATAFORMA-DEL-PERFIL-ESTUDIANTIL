@@ -16,6 +16,13 @@
 import { Buffer } from 'node:buffer';
 import { leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
 
+/**
+ * Integrantes aceptados, sin la fila del responsable. Desde la V2 (§34, §48)
+ * el responsable tiene su propia fila para confirmar las tecnologías que usó,
+ * pero no es un integrante invitado.
+ */
+const integrantes = (lista) => (lista ?? []).filter((m) => !m.isOwner);
+
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
 // §13: la politica exige 12 caracteres como minimo.
@@ -402,7 +409,7 @@ async function rf14(ctx) {
   section('Antes de aceptar no hay pertenencia');
   const membersBefore = await req('GET', `/projects/${projectId}/members`, { token: A.token });
   check(
-    membersBefore.status === 200 && membersBefore.data.length === 0,
+    membersBefore.status === 200 && integrantes(membersBefore.data).length === 0,
     '14.9 Con la invitacion pendiente el proyecto NO tiene integrantes',
   );
   const portfolioB = await req('GET', '/projects/my', { token: B.token });
@@ -440,7 +447,7 @@ async function rf14(ctx) {
   check(rejected.status === 200 && rejected.data?.status === 'rejected', '14.15 El invitado rechaza la invitacion');
   const membersAfterReject = await req('GET', `/projects/${projectId}/members`, { token: A.token });
   check(
-    membersAfterReject.data.length === 0,
+    integrantes(membersAfterReject.data).length === 0,
     '14.16 Rechazar NO crea integrante',
   );
   const portfolioC = await req('GET', '/projects/my', { token: C.token });
@@ -466,9 +473,9 @@ async function rf14(ctx) {
   check(accepted.status === 200 && accepted.data?.status === 'accepted', '14.19 El invitado acepta', msgOf(accepted));
 
   const membersAfter = await req('GET', `/projects/${projectId}/members`, { token: A.token });
-  check(membersAfter.data.length === 1, '14.20 Se crea el integrante al aceptar');
+  check(integrantes(membersAfter.data).length === 1, '14.20 Se crea el integrante al aceptar');
   check(
-    membersAfter.data[0]?.role === 'Desarrollador Backend',
+    integrantes(membersAfter.data)[0]?.role === 'Desarrollador Backend',
     '14.21 El rol propuesto queda persistido en la pertenencia',
   );
 
@@ -561,7 +568,7 @@ async function rf15(ctx) {
     '15.10 El detalle incluye las tecnologias',
   );
   const membersView = await req('GET', `/projects/${projectId}/members`, { token: docente.token });
-  check(membersView.status === 200 && membersView.data.length === 1, '15.11 El docente ve los integrantes');
+  check(membersView.status === 200 && integrantes(membersView.data).length === 1, '15.11 El docente ve los integrantes');
 
   section('Filtros del portafolio institucional');
   const byTech = await req('GET', '/projects/institutional?technology=Docker', { token: docente.token });

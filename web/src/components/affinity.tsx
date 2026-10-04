@@ -20,7 +20,7 @@ import { Badge, Loading } from './ui';
 
 /** Familias de prueba de §53 y §54, en las palabras del estudiante. */
 export const FAMILY_LABEL: Record<string, string> = {
-  preference: 'Lo que declaras',
+  preference: 'Lo que declaras (no suma afinidad)',
   activity: 'Actividades',
   project: 'Proyectos',
   external_certificate: 'Certificados externos',
@@ -86,10 +86,9 @@ export function AffinityInsufficient({
       <p className="muted">{message}</p>
       {!forTeacher && (
         <ul className="plain-list" style={{ textAlign: 'left', maxWidth: 420, margin: '0.8rem auto 0' }}>
-          <li>Registrar un proyecto en tu portafolio</li>
-          <li>Adjuntar un certificado externo</li>
-          <li>Participar en una actividad y que te confirmen</li>
-          <li>Declarar tus intereses y habilidades</li>
+          <li>Participar en una actividad y que el responsable confirme tu participación</li>
+          <li>Registrar un proyecto, conseguirle respaldo y confirmar las tecnologías que usaste</li>
+          <li>Adjuntar un certificado externo que se pueda comprobar</li>
         </ul>
       )}
     </div>

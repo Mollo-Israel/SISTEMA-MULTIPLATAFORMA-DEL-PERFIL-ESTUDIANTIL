@@ -141,6 +141,7 @@ export class ProjectMembersService {
       name: m.user ? `${m.user.firstName} ${m.user.lastName}` : null,
       role: m.role,
       contribution: m.contribution,
+      isOwner: m.isOwner,
       joinedAt: m.createdAt,
     }));
   }
@@ -153,6 +154,9 @@ export class ProjectMembersService {
     });
     if (!member) {
       throw new NotFoundException('El integrante no pertenece a este proyecto.');
+    }
+    if (member.isOwner) {
+      throw new BadRequestException('El responsable del proyecto no se puede retirar.');
     }
     const profile = await this.profiles.findOne({ where: { userId: member.userId } });
     await this.members.delete(member.id);

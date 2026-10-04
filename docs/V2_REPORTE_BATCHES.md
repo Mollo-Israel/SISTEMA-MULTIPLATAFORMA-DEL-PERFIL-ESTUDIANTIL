@@ -109,3 +109,33 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** orientación académica en el móvil (BATCH 15).
 
 **Riesgos:** los intereses por área siguen sumando afinidad en el motor antiguo hasta el BATCH 9.
+
+---
+
+## BATCH 9 — Afinidad V3 (adelantado; incluye la parte de BATCH 7 que necesita)
+
+**Estado:** completo (B7 y obj-7, que prueban recomendaciones, se adaptan en el BATCH 10 siguiente)
+
+**Objetivo:** §45–§52, §81; y de §33/§34/§48 lo necesario para atribuir proyectos al integrante correcto.
+
+**Por qué se adelantó:** el BATCH 3 retiró el nivel autodeclarado y las suites de afinidad antigua dejaron de tener sentido; reescribirlas para V2 y luego para V3 era trabajo doble.
+
+**Cambios:**
+- Motor V3 (`AFFINITY_ENGINE_VERSION = 3`): lo declarado (intereses, áreas de mejora, tecnologías de interés) se registra con 0 y motivo; actividades confirmadas 10 con multiplicadores 1/0,7/0,5/0,3 y tope 25; proyectos 0/10/18/22/0 con 1/0,75/0,5/0,25 y tope 50; certificados 0/8/15 con tope 25; `score = round(min(100, suma))`, sin normalizar. Respaldo sin cambios (ya era el de §49). Textos de web y móvil sobre la afinidad actualizados.
+- §48: el proyecto suma afinidad en las áreas de las `skills_used` que el propio integrante confirmó; sin ellas, 0 de afinidad (con motivo) y el respaldo cuenta en el área del proyecto.
+- El responsable de cada proyecto tiene ahora su fila de integrante (`is_owner`) para confirmar sus tecnologías; no cuenta como «integrante aceptado» para el respaldo (§36) ni como colaboración en gamificación; no se puede retirar. La semilla también la crea.
+- §81: las instantáneas de versiones anteriores no se podan (la retención solo actúa sobre la versión vigente). El recálculo de arranque llevó los resultados vigentes a V3; las 5380 instantáneas V2 siguen intactas.
+
+**Migraciones:** `1780390000000-V2ProjectOwnerMembership` (855 filas de responsable), `1780390100000-V3AffinityWeights` (pesos V3; `down` restaura los V2). Ambas revertidas y reaplicadas.
+
+**Archivos:** `shared/src/enums/affinity-engine.ts`, `api/src/affinity-recalc/affinity.engine.ts`, `api/src/entities/project-member.entity.ts`, `api/src/projects/{projects,project-backing,project-members}.service.ts`, `api/src/gamification/gamification.service.ts`, `api/src/database/seeds/populate.seed.ts`, `web/src/components/affinity.tsx`, `web/src/pages/student/{Affinity,Recommendations}.tsx`, `web/src/pages/LandingPage.tsx`, `mobile/src/screens/student/AffinityScreen.tsx`.
+
+**Pruebas:** `e2e-batch-6` reescrita como suite de afinidad V3 (50): lo declarado no suma, escala 100, 10/22/25 con tope, respaldo 8/18/20, constancia sin doble conteo, proyecto vacío 0, SUPPORTED sin tecnologías 0 de afinidad y 8 de respaldo, con tecnologías 10, evidencias que no multiplican, integrante que suma en el área de SU tecnología y no en la del responsable, certificado declarado 0, diversidad, determinismo, pesos publicados, historia V2 conservada junto a la V3. `e2e-objective-6` §17 reescrita a V3 (83). Ajustes: obj-5 (la fila del responsable no es un integrante invitado), objectives-40 2.26, B10 (la afinidad del escenario sale de participaciones confirmadas).
+
+**Resultados:** B6 50/50, obj-6 83/83, obj-5 116/116, B10 42/42, objectives-40 sin fallos.
+
+**Regresiones:** B7 (6) y obj-7 (4) esperan sugerencias de compañeros y recomendaciones basadas en afinidad producida por intereses declarados; se rehacen en el BATCH 10 con los pesos de §54.
+
+**Pendientes:** certificados con `skills[]` (§41) — se conserva el área del certificado como destino.
+
+**Riesgos:** los perfiles sin trayectoria respaldada ya no tienen áreas de afinidad (antes las tenían por sus intereses); es la regla V2, pero cambia lo que ven los usuarios existentes.

@@ -190,14 +190,14 @@ export default function AffinityScreen() {
 
           {insufficient ? (
             /* RF17, salida de fallo: no basta con mostrar una lista vacia. */
-            <Card title="Todavia no podemos orientarte">
+            <Card title="Todavía no hay trayectoria respaldada">
               <Text style={styles.body}>{summary.message}</Text>
               <View style={styles.hintBox}>
-                <Text style={styles.hintTitle}>Lo que mas aporta:</Text>
-                <Text style={styles.hint}>· Registrar un proyecto en tu portafolio</Text>
-                <Text style={styles.hint}>· Adjuntar un certificado externo</Text>
+                <Text style={styles.hintTitle}>Lo que construye tu afinidad:</Text>
                 <Text style={styles.hint}>· Participar en una actividad y que te confirmen</Text>
-                <Text style={styles.hint}>· Declarar tus intereses y habilidades</Text>
+                <Text style={styles.hint}>· Un proyecto con respaldo y las tecnologías que usaste</Text>
+                <Text style={styles.hint}>· Un certificado externo que se pueda comprobar</Text>
+                <Text style={styles.hint}>Tus intereses orientan las recomendaciones, no la afinidad.</Text>
               </View>
             </Card>
           ) : (

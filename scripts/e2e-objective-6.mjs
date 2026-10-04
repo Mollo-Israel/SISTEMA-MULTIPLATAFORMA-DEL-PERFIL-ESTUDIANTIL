@@ -237,89 +237,31 @@ async function prepararActores(ctx) {
 //  RF17 · Calculo de la afinidad, senal por senal
 // ===========================================================================
 async function rf17Calculo(ctx) {
-  objective('RF17 · Calculo de la afinidad — cada ponderacion, por separado');
+  // Especificación V2 §45–§47: afinidad V3. Lo declarado no suma; solo la
+  // trayectoria respaldada (participación confirmada, proyecto con respaldo
+  // atribuido por las tecnologías del integrante, certificado con respaldo).
+  objective('RF17 · Calculo de la afinidad V3 — señal por señal');
   const { A, areaPrincipal, areaSecundaria, skill } = ctx;
 
   section('Punto de partida');
   const inicial = await summaryOf(A.token);
-  check(
-    inicial?.status === 'insufficient_data',
-    '17.1 Un perfil recien creado no tiene con que orientar',
-    `status ${inicial?.status}`,
-  );
+  check(inicial?.status === 'insufficient_data', '17.1 Un perfil recien creado no tiene trayectoria que medir', `status ${inicial?.status}`);
   check(inicial?.areas?.length === 0, '17.2 Sin areas calculadas al inicio');
 
-  section('Intereses declarados, ponderados por prioridad (§51.1)');
+  section('Lo declarado orienta, no suma (V2 §45.1)');
   const interes = await req('PUT', '/profiles/me/interests', {
     token: A.token,
-    body: {
-      items: [
-        { academicAreaId: areaPrincipal.id, priority: 5 },
-        { academicAreaId: areaSecundaria.id, priority: 2 },
-      ],
-    },
+    body: { items: [{ academicAreaId: areaPrincipal.id, priority: 5 }, { academicAreaId: areaSecundaria.id, priority: 2 }] },
   });
   check(interes.status === 200, '17.3 El estudiante declara dos intereses', msgOf(interes));
-
+  await req('PUT', '/profiles/me/skill-interests', { token: A.token, body: { items: [{ skillId: skill.id, kind: 'interest' }] } });
+  await req('PATCH', '/profiles/me', { token: A.token, body: { improvementAreaIds: [areaPrincipal.id] } });
   let s = await summaryOf(A.token);
-  check(s?.status === 'calculated', '17.4 El estado pasa a calculado');
-  check(
-    rawOf(s, areaPrincipal.id) === 1,
-    '17.5 Un interes de prioridad 5 aporta 1 punto (§51.1)',
-    `crudo ${rawOf(s, areaPrincipal.id)}`,
-  );
-  check(
-    rawOf(s, areaSecundaria.id) === 4,
-    '17.6 Uno de prioridad 2 aporta 4: el orden del estudiante es informacion (§51.1)',
-    `crudo ${rawOf(s, areaSecundaria.id)}`,
-  );
-  check(
-    s?.signalsCount === 2,
-    '17.7 El resumen cuenta las senales consideradas',
-    `senales ${s?.signalsCount}`,
-  );
+  check(s?.status === 'insufficient_data' && (s?.areas ?? []).length === 0,
+    '17.4 Intereses, tecnologías de interés y áreas de mejora no producen afinidad', JSON.stringify(s?.areas));
+  check(s?.signalsCount >= 3, '17.5 Pero se tuvieron en cuenta: el resumen cuenta las señales consideradas', `senales ${s?.signalsCount}`);
 
-  section('Habilidad autodeclarada (peso segun nivel, §21.1)');
-  await req('PUT', '/profiles/me/skill-interests', {
-    token: A.token,
-    body: { items: [{ skillId: skill.id, kind: 'interest' }] },
-  });
-  s = await summaryOf(A.token);
-  check(
-    rawOf(s, areaPrincipal.id) === 2.5,
-    '17.8 Una habilidad avanzada aporta 1,5 puntos (1 + 1,5 = 2,5) (§51.1)',
-    `crudo ${rawOf(s, areaPrincipal.id)}`,
-  );
-
-  await req('PUT', '/profiles/me/skill-interests', {
-    token: A.token,
-    body: { items: [{ skillId: skill.id, kind: 'interest' }] },
-  });
-  s = await summaryOf(A.token);
-  check(
-    rawOf(s, areaPrincipal.id) === 1.5,
-    '17.9 En nivel basico aporta 0,5: el nivel lo declaro el propio estudiante',
-    `crudo ${rawOf(s, areaPrincipal.id)}`,
-  );
-  // Se restaura el nivel alto para el resto del escenario.
-  await req('PUT', '/profiles/me/skill-interests', {
-    token: A.token,
-    body: { items: [{ skillId: skill.id, kind: 'interest' }] },
-  });
-
-  section('Area en la que desea mejorar (0 puntos, §20)');
-  await req('PATCH', '/profiles/me', {
-    token: A.token,
-    body: { improvementAreaIds: [areaPrincipal.id] },
-  });
-  s = await summaryOf(A.token);
-  check(
-    rawOf(s, areaPrincipal.id) === 2.5,
-    '17.10 El area de mejora NO suma afinidad: querer aprender algo no es tener afinidad (§20)',
-    `crudo ${rawOf(s, areaPrincipal.id)}`,
-  );
-
-  section('Proyecto propio, ponderado por su nivel de respaldo (§51.3)');
+  section('Proyecto propio: respaldo y tecnologías del integrante (V2 §47.2, §48)');
   const proyecto = await req('POST', '/projects', {
     token: A.token,
     body: {
@@ -331,41 +273,30 @@ async function rf17Calculo(ctx) {
       visibility: 'teachers',
     },
   });
-  check(proyecto.status === 201, '17.11 El estudiante registra un proyecto', msgOf(proyecto));
+  check(proyecto.status === 201, '17.6 El estudiante registra un proyecto', msgOf(proyecto));
   ctx.proyectoId = proyecto.data?.id;
-
+  await req('PUT', `/projects/${ctx.proyectoId}/my-contribution`, {
+    token: A.token, body: { role: 'Responsable', contribution: 'Diseño del orquestador', skillIds: [skill.id] },
+  });
   s = await summaryOf(A.token);
-  check(
-    rawOf(s, areaPrincipal.id) === 4.5,
-    '17.12 Un proyecto recien creado esta DECLARED y aporta 2 puntos (2,5 + 2 = 4,5) (§51.3)',
-    `crudo ${rawOf(s, areaPrincipal.id)}`,
-  );
-  check(
-    areaOf(s, areaPrincipal.id)?.supportScore === 0,
-    '17.12b Y no aporta respaldo: todavia no hay nada que corroborar (§53.2)',
-    `respaldo ${areaOf(s, areaPrincipal.id)?.supportScore}`,
-  );
+  check(rawOf(s, areaPrincipal.id) === 0, '17.7 Un proyecto DECLARED vale 0, aunque tenga tecnologías confirmadas (§47.2)', `crudo ${rawOf(s, areaPrincipal.id)}`);
 
-  section('Evidencia academica: mejora el respaldo, no crea experiencia (§55)');
+  const evProyecto = await req('POST', `/projects/${ctx.proyectoId}/evidences`, {
+    token: A.token,
+    body: { evidenceType: 'link', description: 'Capturas del orquestador.', externalUrl: 'https://ejemplo.univalle.edu/orquestador' },
+  });
+  check(evProyecto.status === 201 || evProyecto.status === 200, '17.8 Adjunta una evidencia al proyecto', msgOf(evProyecto));
+  s = await summaryOf(A.token);
+  check(rawOf(s, areaPrincipal.id) === 10 && areaOf(s, areaPrincipal.id)?.supportScore === 8,
+    '17.9 SUPPORTED suma 10 de afinidad y 8 de respaldo en el área de su tecnología (§47.2, §49)',
+    `crudo ${rawOf(s, areaPrincipal.id)} / respaldo ${areaOf(s, areaPrincipal.id)?.supportScore}`);
+
+  section('Evidencia suelta y certificado declarado: no suman (§47.3, §50)');
   const evidencia = await req('POST', '/evidences', {
     token: A.token,
-    body: {
-      evidenceType: 'link',
-      description: 'Repositorio del orquestador.',
-      externalUrl: 'https://github.com/afinia/orquestador',
-      academicAreaId: areaPrincipal.id,
-    },
+    body: { evidenceType: 'link', description: 'Repositorio del orquestador.', externalUrl: 'https://github.com/afinia/orquestador', academicAreaId: areaPrincipal.id },
   });
-  check(evidencia.status === 201, '17.13 El estudiante registra una evidencia', msgOf(evidencia));
-
-  s = await summaryOf(A.token);
-  check(
-    rawOf(s, areaPrincipal.id) === 4.5,
-    '17.14 Una evidencia NO suma afinidad por si sola (§50, §55)',
-    `crudo ${rawOf(s, areaPrincipal.id)}`,
-  );
-
-  section('Certificado externo, ponderado por lo corroborado (§51.4)');
+  check(evidencia.status === 201, '17.10 El estudiante registra una evidencia', msgOf(evidencia));
   const cert = await req('POST', '/certificates/external', {
     token: A.token,
     body: {
@@ -377,53 +308,39 @@ async function rf17Calculo(ctx) {
       certificateUrl: 'https://certificados.example.com/afinia',
     },
   });
-  check(cert.status === 201, '17.15 El estudiante adjunta un certificado externo', msgOf(cert));
-
+  check(cert.status === 201, '17.11 El estudiante adjunta un certificado externo', msgOf(cert));
   s = await summaryOf(A.token);
-  check(
-    rawOf(s, areaPrincipal.id) === 5.5,
-    '17.16 Un certificado sin corroborar aporta 1 punto (4,5 + 1 = 5,5) (§51.4)',
-    `crudo ${rawOf(s, areaPrincipal.id)}`,
-  );
-  check(
-    rawOf(s, areaSecundaria.id) === 4,
-    '17.17 El area secundaria se mantiene en su unico interes',
-    `crudo ${rawOf(s, areaSecundaria.id)}`,
-  );
+  check(rawOf(s, areaPrincipal.id) === 10, '17.12 Ni la evidencia suelta ni el certificado DECLARED suman afinidad', `crudo ${rawOf(s, areaPrincipal.id)}`);
+
+  section('Participación confirmada (§47.1)');
+  const categorias = (await req('GET', '/activity-categories', { token: ctx.docente.token })).data ?? [];
+  const categoria = categorias.find((c) => c.isActive !== false && c.appliesTo !== 'extracurricular') ?? categorias[0];
+  const act = await req('POST', '/activities', {
+    token: ctx.docente.token,
+    body: { title: `Laboratorio de shaders ${TS}`, description: 'Actividad del escenario.', type: 'academica', categoryId: categoria.id, areaId: areaSecundaria.id, semesterScope: [4] },
+  });
+  await req('PATCH', `/activities/${act.data?.id}`, { token: ctx.docente.token, body: { status: 'open' } });
+  await req('POST', `/activities/${act.data?.id}/register`, { token: A.token });
+  await req('PATCH', `/activities/${act.data?.id}/confirm-participation`, {
+    token: ctx.docente.token, body: { studentProfileId: A.profileId, status: 'confirmed' },
+  });
+  s = await summaryOf(A.token);
+  check(s?.status === 'calculated', '17.13 Con trayectoria respaldada el estado pasa a calculado');
+  check(rawOf(s, areaSecundaria.id) === 10, '17.14 La participación confirmada vale 10 en el área de la actividad (§47.1)', `crudo ${rawOf(s, areaSecundaria.id)}`);
 
   section('Recalculo explicito e idempotencia');
   const recalc = await req('POST', '/affinity/recalculate/me', { token: A.token });
   check(recalc.status === 200, '17.18 El estudiante puede recalcular su afinidad');
-
   const antes = await summaryOf(A.token);
   await req('POST', '/affinity/recalculate/me', { token: A.token });
   const despues = await summaryOf(A.token);
-  check(
-    antes.totalScore === despues.totalScore && antes.areas.length === despues.areas.length,
-    '17.19 Recalcular sin cambios da el mismo resultado (idempotente)',
-    `${antes.totalScore} vs ${despues.totalScore}`,
-  );
-  check(
-    despues.areas.every((a, i) => i === 0 || despues.areas[i - 1].score >= a.score),
-    '17.20 El ranking viene ordenado de mayor a menor puntaje',
-  );
-  // §52 prohibe normalizar contra el area mas fuerte del propio estudiante.
-  // El campo `share`, que era justo eso, desaparecio: si el divisor cambiara
-  // con el perfil, un 80 de hoy y un 80 del ano que viene no significarian lo
-  // mismo y la pantalla de evolucion mentiria.
-  check(
-    despues.areas[0]?.rank === 1 && despues.areas[0]?.share === undefined,
-    '17.21 El area mas fuerte ocupa el puesto 1, y ya no se normaliza contra si misma (§52)',
-    `rank ${despues.areas[0]?.rank} share ${despues.areas[0]?.share}`,
-  );
-  check(
-    despues.maxRawPoints === 60
-      && despues.areas.every(
-        (a) => a.score === Math.round(Math.min(100, (a.rawPoints / 60) * 100)),
-      ),
-    '17.21b Cada puntaje es round(crudo / 60 x 100), el mismo divisor para todos (§52)',
-    JSON.stringify(despues.areas.map((a) => [a.rawPoints, a.score])),
-  );
+  check(antes.totalScore === despues.totalScore && antes.areas.length === despues.areas.length,
+    '17.19 Recalcular sin cambios da el mismo resultado (idempotente)', `${antes.totalScore} vs ${despues.totalScore}`);
+  check(despues.areas.every((a, i) => i === 0 || despues.areas[i - 1].score >= a.score), '17.20 El ranking viene ordenado de mayor a menor puntaje');
+  check(despues.areas[0]?.rank === 1 && despues.areas[0]?.share === undefined,
+    '17.21 El area mas fuerte ocupa el puesto 1, sin normalizar contra si misma (§47.4)', `rank ${despues.areas[0]?.rank}`);
+  check(despues.maxRawPoints === 100 && despues.areas.every((a) => a.score === Math.round(Math.min(100, a.rawPoints))),
+    '17.21b Cada puntaje es round(min(100, suma)): escala directa (§47.4)', JSON.stringify(despues.areas.map((a) => [a.rawPoints, a.score])));
 }
 
 // ===========================================================================
@@ -434,176 +351,66 @@ async function rf17Explicabilidad(ctx) {
   const { A, areaPrincipal, areaSecundaria } = ctx;
 
   section('Desglose del area principal');
-  const bd = await req('GET', `/affinity/me/areas/${areaPrincipal.id}/breakdown`, {
-    token: A.token,
-  });
+  const bd = await req('GET', `/affinity/me/areas/${areaPrincipal.id}/breakdown`, { token: A.token });
   check(bd.status === 200, '17.22 El estudiante consulta el desglose de un area', msgOf(bd));
-  check(
-    Array.isArray(bd.data?.contributions) && bd.data.contributions.length >= 5,
-    '17.23 El desglose lista las senales que alimentaron el puntaje',
-    `lineas ${bd.data?.contributions?.length}`,
-  );
-
+  check(Array.isArray(bd.data?.contributions) && bd.data.contributions.length >= 5,
+    '17.23 El desglose lista las señales consideradas, sumen o no', `lineas ${bd.data?.contributions?.length}`);
   const suma = (bd.data?.contributions ?? []).reduce((acc, c) => acc + Number(c.points), 0);
-  check(
-    Math.abs(suma - Number(bd.data?.rawPoints)) < 0.011,
-    '17.24 INVARIANTE: la suma del desglose es exactamente el puntaje del area',
-    `suma ${suma} vs crudo ${bd.data?.rawPoints}`,
-  );
-
+  check(Math.abs(suma - Number(bd.data?.rawPoints)) < 0.011, '17.24 INVARIANTE: la suma del desglose es exactamente el puntaje del area', `suma ${suma} vs crudo ${bd.data?.rawPoints}`);
   const tipos = new Set((bd.data?.contributions ?? []).map((c) => c.signalType));
-  check(
-    tipos.has('interest') && tipos.has('skill') && tipos.has('project') &&
-      tipos.has('evidence') && tipos.has('certificate') && tipos.has('improvement_area'),
-    '17.25 El desglose distingue las familias de senal de RN-14',
-    [...tipos].join(', '),
-  );
-
+  check(tipos.has('interest') && tipos.has('project') && tipos.has('evidence') && tipos.has('certificate') && tipos.has('improvement_area'),
+    '17.25 El desglose distingue las familias de señal', [...tipos].join(', '));
+  check((bd.data?.notContributing ?? []).some((c) => c.signalType === 'interest' && /no suma afinidad/.test(c.reason ?? c.sourceLabel ?? '')),
+    '17.25b El interés figura como «no contribuye» y dice por qué (V2 §45.1)');
   const linea = (bd.data?.contributions ?? [])[0];
-  check(
-    !!linea?.sourceLabel && !!linea?.matchType && typeof linea?.points === 'number',
-    '17.26 Cada linea dice de donde viene, como se asocio y cuanto aporta',
-    JSON.stringify(linea ?? {}),
-  );
-  check(
-    (bd.data?.contributions ?? []).some((c) => c.matchType === 'declared'),
-    '17.27 Se distingue el area declarada por el estudiante',
-  );
-  check(
-    (bd.data?.contributions ?? []).some((c) => c.sourceLabel.includes('Proyecto propio')),
-    '17.28 El proyecto propio aparece identificado por su titulo',
-  );
+  check(!!linea?.sourceLabel && !!linea?.matchType && typeof linea?.points === 'number', '17.26 Cada linea dice de donde viene, como se asocio y cuanto aporta', JSON.stringify(linea ?? {}));
+  check((bd.data?.contributions ?? []).some((c) => c.matchType === 'declared'), '17.27 Se distingue lo declarado por el estudiante');
+  check((bd.data?.contributions ?? []).some((c) => c.sourceLabel.includes('Proyecto propio')), '17.28 El proyecto propio aparece identificado por su titulo');
 
   section('Deduccion por etiquetas (coincidencias de RN-14)');
-  // Un proyecto SIN area declarada: el motor debe deducirla por coincidencia
-  // entre sus tecnologias y las etiquetas del area.
   const porEtiquetas = await req('POST', '/projects', {
     token: A.token,
-    body: {
-      title: `Visualizador de mallas ${TS}`,
-      description: 'Proyecto sin area declarada, para deduccion por etiquetas.',
-      status: 'active',
-      technologies: ['OpenGL', 'Shaders'],
-      visibility: 'profile',
-    },
+    body: { title: `Visualizador de mallas ${TS}`, description: 'Proyecto sin area declarada, para deduccion por etiquetas.', status: 'active', technologies: ['OpenGL', 'Shaders'], visibility: 'profile' },
   });
   check(porEtiquetas.status === 201, '17.29 Proyecto registrado sin area academica declarada');
-
-  const bdSec = await req('GET', `/affinity/me/areas/${areaSecundaria.id}/breakdown`, {
-    token: A.token,
-  });
-  check(
-    (bdSec.data?.contributions ?? []).some((c) => c.matchType === 'tag'),
-    '17.30 El area se deduce por coincidencia con las etiquetas del area',
-    (bdSec.data?.contributions ?? []).map((c) => c.matchType).join(', '),
-  );
-  check(
-    Math.abs(
-      (bdSec.data?.contributions ?? []).reduce((a, c) => a + Number(c.points), 0)
-      - Number(bdSec.data?.rawPoints),
-    ) < 0.011,
-    '17.31 El invariante tambien se cumple en el area deducida',
-    `suma ${(bdSec.data?.contributions ?? []).reduce((a, c) => a + Number(c.points), 0)}`
-    + ` vs crudo ${bdSec.data?.rawPoints}`,
-  );
+  const bdSec = await req('GET', `/affinity/me/areas/${areaSecundaria.id}/breakdown`, { token: A.token });
+  check((bdSec.data?.contributions ?? []).some((c) => c.matchType === 'tag'),
+    '17.30 Sin tecnologías propias, el área del proyecto se deduce por etiquetas (solo para el respaldo)', (bdSec.data?.contributions ?? []).map((c) => c.matchType).join(', '));
+  check(Math.abs((bdSec.data?.contributions ?? []).reduce((a, c) => a + Number(c.points), 0) - Number(bdSec.data?.rawPoints)) < 0.011,
+    '17.31 El invariante tambien se cumple en el area deducida');
 
   section('Ponderaciones expuestas (RN-14)');
   const pesos = await req('GET', '/affinity/weights', { token: A.token });
   check(pesos.status === 200, '17.32 Las ponderaciones del motor son consultables');
-  check(
-    Array.isArray(pesos.data?.weights) && pesos.data.weights.length >= 13,
-    '17.33 Las ponderaciones del motor estan almacenadas y son consultables (§51)',
-    `reglas ${pesos.data?.weights?.length}`,
-  );
-  check(
-    (pesos.data?.weights ?? []).every(
-      (w) => w.label && w.description && typeof w.points === 'number',
-    ),
-    '17.34 Cada ponderacion declara su etiqueta, justificacion y puntos',
-  );
+  check(Array.isArray(pesos.data?.weights) && pesos.data.weights.length >= 13, '17.33 Las ponderaciones estan almacenadas y son consultables', `reglas ${pesos.data?.weights?.length}`);
+  check((pesos.data?.weights ?? []).every((w) => w.label && w.description && typeof w.points === 'number'), '17.34 Cada ponderacion declara su etiqueta, justificacion y puntos');
   const codigos = new Set((pesos.data?.weights ?? []).map((w) => w.code));
-  check(
-    codigos.has('interest_priority_1') && codigos.has('project_corroborated')
-      && codigos.has('certificate_corroborated') && codigos.has('activity_confirmed'),
-    '17.35 Las ponderaciones cubren las fuentes que nombran RN-14 y §51',
-    [...codigos].join(', '),
-  );
-  // §51 separa los pesos de la estructura, y la estructura tambien es regla:
-  // publicar solo los primeros daria una explicacion incompleta.
-  check(
-    pesos.data?.caps?.PROJECT === 24 && pesos.data?.supportCaps?.PROJECT === 45
-      && Array.isArray(pesos.data?.diminishing?.PROJECT),
-    '17.35b Y se publican tambien los topes y los rendimientos decrecientes (§51)',
-    JSON.stringify([pesos.data?.caps, pesos.data?.supportCaps]),
-  );
+  check(codigos.has('project_corroborated') && codigos.has('certificate_corroborated') && codigos.has('activity_confirmed'),
+    '17.35 Las ponderaciones cubren las fuentes de la afinidad V3 (§46)', [...codigos].join(', '));
+  check(pesos.data?.caps?.PROJECT === 50 && pesos.data?.supportCaps?.PROJECT === 45 && Array.isArray(pesos.data?.diminishing?.PROJECT),
+    '17.35b Y se publican los topes y los rendimientos decrecientes (§47, §49)', JSON.stringify([pesos.data?.caps, pesos.data?.supportCaps]));
 }
 
 // ===========================================================================
-//  RF17 · Niveles relativos al propio estudiante
+//  RF17 · Niveles por cortes absolutos
 // ===========================================================================
 async function rf17Niveles(ctx) {
-  objective('RF17 y §54 · Clasificacion del nivel de afinidad');
-  const { A, areaPrincipal, areaSecundaria } = ctx;
-
+  objective('RF17 · Clasificacion del nivel de afinidad');
+  const { A, areaPrincipal } = ctx;
   const s = await summaryOf(A.token);
   const principal = s.areas.find((a) => a.academicAreaId === areaPrincipal.id);
-  const secundaria = s.areas.find((a) => a.academicAreaId === areaSecundaria.id);
-
-  /*
-   * Aqui la regla cambio de sentido y conviene decir por que.
-   *
-   * El nivel era relativo: el area mas fuerte de CUALQUIER estudiante salia
-   * «alta», aunque su puntaje fuera minimo. Con eso, un perfil recien
-   * empezado se veia igual de consolidado que uno de octavo semestre, y el
-   * nivel dejaba de orientar. §52 exige que el puntaje se pueda comparar en el
-   * tiempo, y un nivel cuyo divisor cambia con el perfil no se puede comparar
-   * ni consigo mismo.
-   */
   const umbral = (n) => (n > 59 ? 'high' : n > 24 ? 'medium' : 'low');
+  check(principal?.level === umbral(principal?.score), '17.36 El nivel sale de cortes absolutos, no del ranking interno', `puntaje ${principal?.score} -> nivel ${principal?.level}`);
+  check(principal?.level !== 'high', '17.37 El area mas fuerte de un perfil incipiente NO es «alta» por ser la primera', `nivel ${principal?.level}`);
+  check(s.areas.every((a) => a.share === undefined), '17.38 No hay peso relativo al propio perfil (§47.4)');
+  check(s.areas.every((a) => ['low', 'medium', 'high'].includes(a.level)), '17.39 Todos los niveles pertenecen a la escala definida');
+  check(s.areas.every((a, i) => a.rank === i + 1), '17.40 Los puestos del ranking son consecutivos desde 1');
 
-  check(
-    principal?.level === umbral(principal?.score),
-    '17.36 El nivel sale de los cortes absolutos de §54, no del ranking interno',
-    `puntaje ${principal?.score} -> nivel ${principal?.level}`,
-  );
-  check(
-    principal?.level !== 'high',
-    '17.37 El area mas fuerte de un perfil incipiente NO es «alta» por ser la primera',
-    `nivel ${principal?.level} puntaje ${principal?.score}`,
-  );
-  check(
-    principal.share === undefined && secundaria.share === undefined,
-    '17.38 El peso relativo al propio perfil desaparecio del contrato (§52)',
-    `${principal.share} vs ${secundaria.share}`,
-  );
-  check(
-    s.areas.every((a) => ['low', 'medium', 'high'].includes(a.level)),
-    '17.39 Todos los niveles pertenecen a la escala definida',
-  );
-  check(
-    s.areas.every((a, i) => a.rank === i + 1),
-    '17.40 Los puestos del ranking son consecutivos desde 1',
-  );
-
-  section('El piso absoluto evita niveles altos sin trayectoria');
-  // B declara un unico interes: tiene un area, pero 2 puntos no son una
-  // orientacion, asi que no debe salir en nivel alto.
-  await req('PUT', '/profiles/me/interests', {
-    token: ctx.B.token,
-    body: { items: [{ academicAreaId: areaPrincipal.id, priority: 5 }] },
-  });
+  section('Declarar no da nivel');
+  await req('PUT', '/profiles/me/interests', { token: ctx.B.token, body: { items: [{ academicAreaId: areaPrincipal.id, priority: 1 }] } });
   const sb = await summaryOf(ctx.B.token);
-  const unica = sb.areas[0];
-  check(
-    unica?.level === 'low' && unica?.rawPoints === 1,
-    '17.41 Un unico interes de prioridad 5 es 1 punto de 60: nivel bajo, sea o no el primero',
-    `nivel ${unica?.level} crudo ${unica?.rawPoints} puntaje ${unica?.score}`,
-  );
-  check(
-    unica?.supportScore === 0 && unica?.supportLevel === 'low',
-    '17.41b Y sin respaldo alguno: declarar algo no lo respalda (§49, §53)',
-    `respaldo ${unica?.supportScore} / ${unica?.supportLevel}`,
-  );
+  check((sb.areas ?? []).length === 0, '17.41 Un interés de máxima prioridad no da área ni nivel (V2 §45.1)', JSON.stringify(sb.areas));
+  check(sb.status === 'insufficient_data', '17.41b Y el estado sigue siendo «sin trayectoria»', String(sb.status));
 }
 
 // ===========================================================================

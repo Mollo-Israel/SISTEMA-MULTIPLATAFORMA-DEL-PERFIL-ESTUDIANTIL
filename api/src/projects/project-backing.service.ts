@@ -79,7 +79,8 @@ export class ProjectBackingService {
       repoCheck,
       demoCheck,
     ] = await Promise.all([
-      this.members.count({ where: { projectId } }),
+      // El responsable no es una señal adicional de sí mismo (§36).
+      this.members.count({ where: { projectId, isOwner: false } }),
       this.evidences.count({ where: { projectId } }),
       this.feedback.count({ where: { projectId } }),
       this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } }),

@@ -97,6 +97,19 @@ export class ProjectsService {
     });
     const saved = await this.projects.save(project);
 
+    // V2 §34, §48: el responsable también es integrante, para confirmar las
+    // tecnologías que usó. Su fila no cuenta como integrante aceptado (§36).
+    await this.members.save(
+      this.members.create({
+        projectId: saved.id,
+        userId,
+        role: 'Responsable',
+        contribution: null,
+        contributionConfirmedAt: new Date(),
+        isOwner: true,
+      }),
+    );
+
     // §41: la bitacora empieza en el minuto uno.
     await this.events.record({
       projectId: saved.id,

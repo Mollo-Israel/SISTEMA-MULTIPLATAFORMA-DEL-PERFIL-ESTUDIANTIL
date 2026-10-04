@@ -1,5 +1,13 @@
 /**
- * Motor de Afinidad V2 — reglas de cálculo (especificación §48 a §56).
+ * Motor de Afinidad V3 — reglas de cálculo (Especificación Maestra V2, §45 a §52).
+ *
+ * V3 cambia la pregunta: ya no es «hacia dónde se inclina el estudiante» sino
+ * «qué tan relacionada está su trayectoria RESPALDADA con esta área» (§45.1).
+ * Por eso lo declarado —intereses, orientación, áreas de mejora,
+ * disponibilidad, tecnologías de interés— ya **no** suma afinidad: alimenta
+ * recomendaciones. Solo puntúan participaciones confirmadas, proyectos con
+ * respaldo y certificados con respaldo (§46). Las cifras de V2 se conservan en
+ * las instantáneas con `engine_version = 2`.
  *
  * Este archivo es la **regla**, no el resultado. Vive en `shared` a propósito:
  * el estudiante tiene derecho a ver con qué se le calculó, y la pantalla de
@@ -22,7 +30,7 @@
  */
 
 /** Versión del motor que produjo un cálculo (§56). */
-export const AFFINITY_ENGINE_VERSION = 2;
+export const AFFINITY_ENGINE_VERSION = 3;
 
 /**
  * Familia de señal para el respaldo y la regla de diversidad (§53, §54).
@@ -106,27 +114,41 @@ export function diminishingFactor(scale: readonly number[], index: number): numb
  * afinidad que uno con tres: tiene más certificados.
  */
 export const AFFINITY_CAPS = {
-  /** §51.1 — preferencias, 14 = intereses (10) + habilidades (4). */
-  PREFERENCE: 14,
-  INTEREST: 10,
-  SKILL: 4,
-  /** §51.2 */
-  ACTIVITY: 10,
-  /** §51.3 */
-  PROJECT: 24,
-  /** §51.4 */
-  CERTIFICATE: 12,
+  /** V3 §45.1: lo declarado ya no suma afinidad. */
+  PREFERENCE: 0,
+  INTEREST: 0,
+  SKILL: 0,
+  /** V3 §47.1 */
+  ACTIVITY: 25,
+  /** V3 §47.2 */
+  PROJECT: 50,
+  /** V3 §47.3 */
+  CERTIFICATE: 25,
 } as const;
 
 /**
- * Máximo teórico de puntos crudos por área (§52).
- *
- * 14 + 10 + 24 + 12. La normalización se hace **contra este número**, nunca
- * contra el área más fuerte del propio estudiante: si el divisor cambiara con
- * el perfil, un 70 de hoy y un 70 de dentro de un año no significarían lo
- * mismo, y la pantalla de evolución mentiría.
+ * Puntos base de afinidad V3 (§47). Son la escala del motor: viven aquí y en
+ * `affinity_weights`, que una migración alinea con estos valores.
  */
-export const AFFINITY_MAX_RAW = 60;
+export const AFFINITY_POINTS_V3 = {
+  ACTIVITY_CONFIRMED: 10,
+  PROJECT_DECLARED: 0,
+  PROJECT_SUPPORTED: 10,
+  PROJECT_CORROBORATED: 18,
+  PROJECT_REVIEWED: 22,
+  PROJECT_FLAGGED: 0,
+  CERTIFICATE_DECLARED: 0,
+  CERTIFICATE_SUPPORTED: 8,
+  CERTIFICATE_CORROBORATED: 15,
+} as const;
+
+/**
+ * Máximo directo de afinidad por área (V3 §47): 25 + 50 + 25 = 100.
+ *
+ * `AFFINITY_SCORE = round(min(100, actividades + proyectos + certificados))`.
+ * No se compara contra el área más fuerte del propio estudiante (§47.4).
+ */
+export const AFFINITY_MAX_RAW = 100;
 
 /** Topes de respaldo por familia (§53). Suman exactamente 100. */
 export const SUPPORT_CAPS = {
@@ -190,8 +212,12 @@ export const LEVEL_THRESHOLDS = {
  * explicación y la que suele faltar.
  */
 export const AFFINITY_EXCLUDED_REASON: Record<string, string> = {
+  interest:
+    'Interés declarado: orienta tus recomendaciones, pero no suma afinidad (V2 §45.1).',
   improvement_area:
-    'Área en la que quieres mejorar: querer aprender algo no es tener afinidad con ello (§20).',
+    'Área en la que quieres mejorar: orienta tus recomendaciones, pero no suma afinidad (V2 §45.1).',
+  project_without_skills:
+    'Confirma en el proyecto las tecnologías que usaste: así sabemos a qué áreas pertenece tu experiencia (V2 §48).',
   activity_interested:
     'Interés en una actividad: marcar interés es una intención, no una experiencia (§23).',
   activity_registered:

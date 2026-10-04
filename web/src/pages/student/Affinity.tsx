@@ -251,10 +251,12 @@ export default function StudentAffinityPage() {
           {weights && (
             <div className="reglas-motor">
               <p className="muted" style={{ fontSize: '0.82rem' }}>
-                Motor v{weights.engineVersion}. Cada área puede sumar como mucho{' '}
-                <strong>{weights.maxRawPoints} puntos</strong>, que equivalen a 100 de afinidad.
-                El puntaje no se compara contra tu área más fuerte, sino contra ese máximo: así un
-                80 de hoy y un 80 del año que viene significan lo mismo.
+                Motor v{weights.engineVersion}. La afinidad mide qué tan relacionada está tu
+                trayectoria <strong>respaldada</strong> con cada área: actividades confirmadas,
+                proyectos con respaldo y certificados con respaldo, hasta{' '}
+                <strong>{weights.maxRawPoints} puntos</strong>. Lo que declaras (intereses, áreas que
+                quieres mejorar, tecnologías de interés) orienta tus recomendaciones, pero no suma
+                afinidad. No es una nota ni una certificación.
               </p>
               <div className="scroll-x">
                 <table>
@@ -267,12 +269,6 @@ export default function StudentAffinityPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>Intereses y habilidades</td>
-                      <td style={{ textAlign: 'right' }}>{weights.caps.PREFERENCE}</td>
-                      <td style={{ textAlign: 'right' }} className="muted">no aplica</td>
-                      <td className="muted">—</td>
-                    </tr>
                     <tr>
                       <td>Actividades confirmadas</td>
                       <td style={{ textAlign: 'right' }}>{weights.caps.ACTIVITY}</td>

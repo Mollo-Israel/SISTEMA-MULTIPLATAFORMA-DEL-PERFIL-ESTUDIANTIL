@@ -379,22 +379,6 @@ async function preparar() {
   const est = await estudiante('est', 'Rocio', 'Calderon', 6);
   const estOtro = await estudiante('otro', 'Fabian', 'Murillo', 3);
 
-  // Dos estudiantes en el área nueva: por debajo del umbral de cinco, que es
-  // justo lo que §65 quiere ver protegido.
-  for (const quien of [est, estOtro]) {
-    await req('PUT', '/profiles/me/interests', {
-      token: quien.token,
-      body: { items: [{ academicAreaId: area.id, priority: 1 }] },
-    });
-  }
-
-  // Un segundo cálculo, para que haya evolución que mirar.
-  await req('POST', '/affinity/recalculate/me', { token: est.token });
-  await req('PUT', '/profiles/me/interests', {
-    token: est.token,
-    body: { items: [{ academicAreaId: area.id, priority: 2 }] },
-  });
-
   const crearActividad = async (token, body) => {
     const creada = await req('POST', '/activities', { token, body });
     if (creada.status !== 201) {
@@ -403,6 +387,27 @@ async function preparar() {
     await req('PATCH', `/activities/${creada.data.id}`, { token, body: { status: 'open' } });
     return creada.data;
   };
+  // V2 §45.1: la afinidad sale de trayectoria respaldada. Dos estudiantes en
+  // el área nueva —por debajo del umbral de cinco que §65 protege— con una
+  // participación confirmada por Dirección cada uno.
+  const participar = async (quien, actividad) => {
+    await req('POST', `/activities/${actividad.id}/register`, { token: quien.token });
+    await req('PATCH', `/activities/${actividad.id}/confirm-participation`, {
+      token: director.token,
+      body: { studentProfileId: quien.profileId, status: 'confirmed' },
+    });
+  };
+  const practica1 = await crearActividad(director.token, {
+    title: `Práctica de visión 1 ${TS}`, description: 'Actividad del escenario.', type: 'academica', categoryId: taller.id, areaId: area.id,
+  });
+  const practica2 = await crearActividad(director.token, {
+    title: `Práctica de visión 2 ${TS}`, description: 'Actividad del escenario.', type: 'academica', categoryId: taller.id, areaId: area.id,
+  });
+  for (const quien of [est, estOtro]) await participar(quien, practica1);
+
+  // Un segundo cálculo distinto, para que haya evolución que mirar.
+  await req('POST', '/affinity/recalculate/me', { token: est.token });
+  await participar(est, practica2);
 
   await crearActividad(docente.token, {
     title: `Taller del docente ${TS}`,
