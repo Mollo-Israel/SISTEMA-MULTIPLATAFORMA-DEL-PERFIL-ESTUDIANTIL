@@ -44,18 +44,17 @@ export const ACTIVATION_RATE_LIMIT = {
 };
 
 /**
- * Duraciones y umbrales de identidad (especificacion §12, §14).
+ * Duraciones y umbrales de identidad (V2 §15.3, valores iniciales definitivos).
  *
- * La activación dura **72 horas** por omisión. Con 48 se quedaba corta: el
- * alta suele hacerse un viernes o en vacaciones, y el estudiante que abre el
- * correo el lunes encontraba el enlace vencido. La recuperación, en cambio, la
- * pide el propio usuario cuando la necesita, así que una hora sobra.
+ * 48 horas para activar, 30 minutos para recuperar, 2 minutos entre reenvíos,
+ * 5 envíos por día y 10 intentos con el código. Todos se pueden ajustar por
+ * entorno sin tocar código (V2 §10.3).
  */
 export const identityConfig = {
   accessTokenTtlMinutes: (c: ConfigService) => num(c, 'ACCESS_TOKEN_TTL_MINUTES', 15),
   refreshTokenTtlDays: (c: ConfigService) => num(c, 'REFRESH_TOKEN_TTL_DAYS', 7),
-  activationTtlHours: (c: ConfigService) => num(c, 'ACTIVATION_TOKEN_TTL_HOURS', 72),
-  passwordResetTtlMinutes: (c: ConfigService) => num(c, 'PASSWORD_RESET_TOKEN_TTL_MINUTES', 60),
+  activationTtlHours: (c: ConfigService) => num(c, 'ACTIVATION_TOKEN_TTL_HOURS', 48),
+  passwordResetTtlMinutes: (c: ConfigService) => num(c, 'PASSWORD_RESET_TOKEN_TTL_MINUTES', 30),
   resendCooldownSeconds: (c: ConfigService) => num(c, 'ACTIVATION_RESEND_COOLDOWN_SECONDS', 120),
   /**
    * Correos del mismo tipo por cuenta y por día.
@@ -64,7 +63,11 @@ export const identityConfig = {
    * lo largo de un día bastan para que Outlook marque el remitente como spam,
    * y desde ese momento tampoco llegan los correos legítimos de nadie.
    */
-  maxSendsPerDay: (c: ConfigService) => num(c, 'ACCOUNT_EMAILS_MAX_PER_DAY', 5),
+  maxSendsPerDay: (c: ConfigService) =>
+    // Nombre de la V2; el anterior se sigue aceptando para no romper un .env existente.
+    num(c, 'ACTIVATION_RESEND_MAX_PER_DAY', num(c, 'ACCOUNT_EMAILS_MAX_PER_DAY', 5)),
+  /** Intentos con el código de 6 dígitos antes de anular el evento (V2 §15.3). */
+  codeMaxAttempts: (c: ConfigService) => num(c, 'ACTIVATION_CODE_MAX_ATTEMPTS', 10),
 };
 
 /**

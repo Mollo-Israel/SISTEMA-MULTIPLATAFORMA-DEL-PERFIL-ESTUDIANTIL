@@ -67,6 +67,24 @@ export function assertEnvironment(config: ConfigService): void {
     problems.push('MAX_UPLOAD_MB debe ser un número entre 1 y 100.');
   }
 
+  // Asistente de IA (V2 §43): opcional. Mal configurado no debe tumbar nada
+  // en desarrollo —el sistema sigue con AI_PROVIDER=none—, pero en producción
+  // una configuración a medias es un error que hay que ver al arrancar.
+  const proveedor = (config.get<string>('AI_PROVIDER') ?? 'none').trim().toLowerCase() || 'none';
+  if (!['none', 'openai_compatible'].includes(proveedor)) {
+    (isProduction ? problems : warnings).push(
+      `AI_PROVIDER="${proveedor}" no es válido (none | openai_compatible). Se usará none.`,
+    );
+  } else if (proveedor === 'openai_compatible') {
+    for (const key of ['AI_BASE_URL', 'AI_MODEL']) {
+      if (!config.get<string>(key)?.trim()) {
+        (isProduction ? problems : warnings).push(
+          `${key} no está definido y AI_PROVIDER=openai_compatible: la IA quedará desactivada.`,
+        );
+      }
+    }
+  }
+
   for (const warning of warnings) logger.warn(warning);
 
   if (problems.length > 0) {

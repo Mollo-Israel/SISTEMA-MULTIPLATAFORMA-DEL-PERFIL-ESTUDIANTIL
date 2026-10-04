@@ -5,7 +5,7 @@
  * un efecto verificable en el servidor:
  *
  *   - el código de activación nunca llega al administrador, solo al buzón;
- *   - activar con enlace o con correo + código, y bloqueo tras 5 intentos;
+ *   - activar con enlace o con correo + código, y bloqueo tras 10 intentos (V2 §15.3);
  *   - estado del enlace (válido, usado, reemplazado…) antes de pedir la clave;
  *   - solo correos institucionales; espera entre reenvíos;
  *   - errores campo por campo en los formularios del administrador;
@@ -86,16 +86,19 @@ async function activacion(ctx) {
   check(chk.status === 200 && chk.data?.state === 'valid', 'QA.8 El enlace se comprueba antes de pedir la contraseña', json(chk.data));
   check(chk.data?.email && chk.data.email !== email && /•/.test(chk.data.email), 'QA.9 Y el correo se muestra enmascarado', chk.data?.email);
   const horas = (new Date(chk.data?.expiresAt).getTime() - Date.now()) / 3_600_000;
-  check(horas > 48, 'QA.10 La invitación dura días, no minutos', `${horas.toFixed(1)} h`);
+  check(horas > 47 && horas <= 48.01, 'QA.10 La invitación dura 48 horas (V2 §15.3)', `${horas.toFixed(1)} h`);
 
-  // Código equivocado 5 veces: se bloquea.
+  // Código equivocado: 9 intentos todavía no anulan; el 10.º sí.
   let ultimo = null;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 9; i++) {
     ultimo = await req('POST', '/activation/activate', { body: { email, code: '000000', password: PWD } });
   }
   check(ultimo.status === 400, 'QA.11 Un código equivocado se rechaza', `status ${ultimo.status}`);
+  const nueve = await req('POST', '/activation/check', { body: { token: correo.token, purpose: 'activation' } });
+  check(nueve.data?.state === 'valid', 'QA.11b Con 9 intentos fallidos el enlace sigue vivo', json(nueve.data));
+  await req('POST', '/activation/activate', { body: { email, code: '000000', password: PWD } });
   const bloqueado = await req('POST', '/activation/activate', { body: { email, code: correo.code, password: PWD } });
-  check(bloqueado.status === 400, 'QA.12 Tras 5 intentos fallidos, ni el código correcto sirve', json(bloqueado.data));
+  check(bloqueado.status === 400, 'QA.12 Tras 10 intentos fallidos, ni el código correcto sirve', json(bloqueado.data));
 
   // Reenvío: llega uno nuevo, el anterior queda reemplazado.
   ctx.pendiente = { email, correo };

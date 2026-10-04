@@ -16,8 +16,6 @@ export interface IssuedToken {
   expiresAt: Date;
 }
 
-/** Intentos con el código antes de anular el token. */
-export const MAX_CODE_ATTEMPTS = 5;
 
 /** SHA-256 en hexadecimal. Un token tiene entropía suficiente: no necesita sal. */
 function hash(token: string): string {
@@ -141,7 +139,7 @@ export class AccountTokensService {
     // Con PostgreSQL, TypeORM devuelve un UPDATE como [filas, afectadas].
     const filas = Array.isArray(resultado?.[0]) ? resultado[0] : resultado;
     const usados = Number(filas?.[0]?.failed_attempts ?? vivo.failedAttempts + 1);
-    if (usados >= MAX_CODE_ATTEMPTS) {
+    if (usados >= identityConfig.codeMaxAttempts(this.config)) {
       await this.tokens.update(
         { id: vivo.id },
         { revokedAt: new Date(), revokedReason: 'too_many_attempts' },

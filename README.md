@@ -64,11 +64,17 @@ npm install                   # dependencias backend (workspaces: shared + api)
 npm install --prefix web      # dependencias web
 npm install --prefix mobile   # dependencias móvil (Expo)
 
-npm run db:up                 # levanta PostgreSQL en Docker
+npm run db:up                 # levanta PostgreSQL en Docker (puerto POSTGRES_PORT del .env)
+npm run db:wait               # espera a que PostgreSQL acepte conexiones
 npm run shared:build          # compila tipos compartidos
-npm run api:migrate           # crea las 57 tablas (21 migraciones)
+npm run api:migrate           # aplica las migraciones
 npm run seed:populate         # POBLA la base con datos institucionales realistas
 ```
+
+> Todos los scripts de Docker leen el `.env` de la raíz de forma explícita
+> (`docker compose --env-file .env ...`): el puerto, el usuario y la contraseña
+> de la base salen de ahí y de ningún otro sitio. `.env.example` sugiere
+> `POSTGRES_PORT=5435` para no chocar con un PostgreSQL instalado en la máquina.
 
 `seed:populate` deja la base lista con **21 usuarios** (1 administrador, 2 docentes,
 1 director, 1 sociedad científica y 16 estudiantes), 9 actividades, 8 proyectos con
@@ -115,7 +121,7 @@ npm run mobile:start   # abre Expo; escanea el QR con Expo Go
 
 | Rol | Correo | Contraseña |
 |-----|--------|-----------|
-| Administrador (único) | `admin@univalle.edu` | `Admin123*` |
+| Administrador (único) | `ADMIN_EMAIL` del `.env` | `ADMIN_PASSWORD` del `.env` |
 | Docente (semestres 1–4) | `carlos.perez@univalle.edu` | `Univalle2026*` |
 | Docente (semestres 5–8) | `maria.gutierrez@univalle.edu` | `Univalle2026*` |
 | Director de carrera | `jorge.vargas@univalle.edu` | `Univalle2026*` |
@@ -128,7 +134,8 @@ se crea desde **Administración → Usuarios** o importando el padrón, y nace
 `PENDING_ACTIVATION` hasta que su dueño usa el enlace de activación.
 
 > Si reinicias el PC, basta con `npm run db:up` para recuperar la base (los datos persisten).
-> Para reconstruir la base desde cero: `npm run db:reset && npm run api:migrate && npm run seed:populate`.
+> Para reconstruir la base desde cero: `npm run db:rebuild` (borra el volumen, espera a que la
+> base esté lista, migra y siembra lo mínimo) y, si quiere datos de ejemplo, `npm run seed:populate`.
 
 ## Pruebas automáticas
 
@@ -174,12 +181,15 @@ O una por una:
 | Script | Descripción |
 |--------|-------------|
 | `npm run db:up` / `db:down` | Levanta/apaga PostgreSQL (Docker) |
+| `npm run db:wait` | Espera a que PostgreSQL acepte conexiones |
 | `npm run db:reset` | Reinicia PostgreSQL desde cero (borra el volumen) |
+| `npm run db:rebuild` | `db:reset` → espera → migraciones → seed base |
+| `npm run db:logs` | Registro de PostgreSQL |
 | `npm run api:build` / `api:dev` | Compila / ejecuta la API |
 | `npm run api:migrate` | Aplica migraciones TypeORM |
 | `npm run seed` | Seeds base (roles, áreas, habilidades, admin) |
 | `npm run seed:populate` | Pobla la base con cuentas institucionales y datos amplios |
-| `npm run test:all` | Las 15 suites de integración |
+| `npm run test:all` | Todas las suites de integración |
 | `npm run web:dev` / `web:build` | Servidor de desarrollo / compilación web |
 | `npm run mobile:start` | Inicia Expo (app móvil) |
 | `npm run mobile:typecheck` | Comprobación de tipos del móvil |
