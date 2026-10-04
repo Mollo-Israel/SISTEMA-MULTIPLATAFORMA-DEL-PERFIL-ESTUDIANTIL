@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import {
   ActivityModality,
+  ActivityReviewStatus,
   ActivityStatus,
   ActivityType,
   RegistrationMode,
@@ -140,6 +141,40 @@ export class Activity {
 
   @Column({ type: 'text', array: true, nullable: true })
   tags: string[] | null;
+
+  /**
+   * Revisión de Dirección (V2 §27.2). `null` con `requiresReview` = todavía
+   * no se envió. Publicar exige `not_required` o `approved`.
+   */
+  @Column({
+    name: 'review_status',
+    type: 'enum',
+    enum: ActivityReviewStatus,
+    enumName: 'activity_review_status_enum',
+    nullable: true,
+  })
+  reviewStatus: ActivityReviewStatus | null;
+
+  /** La creó Docente o Sociedad: necesita aprobación de Dirección (§27.3, §27.4). */
+  @Column({ name: 'requires_review', type: 'boolean', default: false })
+  requiresReview: boolean;
+
+  @Column({ name: 'submitted_at', type: 'timestamptz', nullable: true })
+  submittedAt: Date | null;
+
+  @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
+  reviewedAt: Date | null;
+
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  reviewedById: string | null;
+
+  /** Última observación o motivo de rechazo de Dirección. */
+  @Column({ name: 'review_comment', type: 'varchar', length: 1000, nullable: true })
+  reviewComment: string | null;
+
+  /** La actividad emite constancias internas (§30); parte de lo que se aprueba. */
+  @Column({ name: 'internal_constancy_enabled', type: 'boolean', default: false })
+  internalConstancyEnabled: boolean;
 
   @OneToMany(() => ActivityRegistration, (reg) => reg.activity)
   registrations: ActivityRegistration[];

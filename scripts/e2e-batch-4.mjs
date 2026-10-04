@@ -9,7 +9,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-4.mjs
  */
 
-import { API, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { API, aprobarActividad, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -54,6 +54,8 @@ async function gestores(ctx) {
       categoryId: ctx.categoria.id,
       areaId: ctx.area.id,
       semesterScope: [4],
+      // V2 §30: la actividad declara que emite constancias (y Dirección lo aprueba).
+      internalConstancyEnabled: true,
     },
   });
   check(propia.status === 201, 'B4.1 El docente crea una actividad académica en su semestre', msgOf(propia));
@@ -199,6 +201,8 @@ async function maquinaDeEstados(ctx) {
     req('PATCH', `/activities/${id}`, { token, body: { status } });
 
   section('Transiciones válidas');
+  // V2 §27: la actividad del docente pasa primero por Dirección.
+  await aprobarActividad(ctx.docente4.token, ctx.director.token, id, { abrir: false });
   const abierta = await cambiar(ctx.docente4.token, 'open');
   check(
     abierta.status === 200 && abierta.data?.status === 'open',

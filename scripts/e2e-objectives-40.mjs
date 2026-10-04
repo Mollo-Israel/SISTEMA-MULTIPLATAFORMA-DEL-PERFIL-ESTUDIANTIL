@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
-import { codigoUniversitario, leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
+import { aprobarActividad, codigoUniversitario, leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -22,6 +22,28 @@ const TS = Date.now();
 const PWD = 'Afinia2026Seg*';
 const email = (n) => `e2e.${n}.${TS}@univalle.edu`;
 const studentEmail = (n) => `e2e.${n}.${TS}@est.univalle.edu`;
+
+
+/**
+ * V2 §27: la Sociedad crea en borrador, Dirección aprueba y recién entonces
+ * se publica. Deja la actividad en el estado que pedía la prueba.
+ */
+let directorParaRevision = null;
+async function crearConRevision({ token, body }) {
+  const { status: deseado = 'draft', ...resto } = body;
+  const creada = await req('POST', '/activities', { token, body: resto });
+  if (creada.status !== 201 || deseado === 'draft') return creada;
+  const id = creada.data.id;
+  if (deseado === 'cancelled') {
+    await req('PATCH', `/activities/${id}`, { token, body: { status: 'cancelled' } });
+  } else {
+    await aprobarActividad(token, directorParaRevision, id, { abrir: false });
+    await req('PATCH', `/activities/${id}`, { token, body: { status: deseado === 'published' ? 'published' : 'open' } });
+    if (deseado === 'closed') await req('PATCH', `/activities/${id}`, { token, body: { status: 'closed' } });
+  }
+  const final = await req('GET', `/activities/${id}`, { token });
+  return { status: creada.status, data: final.data };
+}
 
 let pass = 0;
 let fail = 0;
@@ -555,6 +577,7 @@ async function objective1(ctx) {
     ?.accessToken;
   ctx.societyToken = (await req('POST', '/auth/login', { body: { email: email('sociedad'), password: PWD } })).data
     ?.accessToken;
+  directorParaRevision = ctx.directorToken;
 }
 
 // ===========================================================================
@@ -813,6 +836,7 @@ async function objective3(ctx) {
       capacity: 3,
       tags: ['arquitectura', 'patrones'],
       status: 'draft',
+      internalConstancyEnabled: true,
     },
   });
   check(academic.status === 201, '3.1 El director crea una actividad academica', `status ${academic.status} ${msgOf(academic)}`);
@@ -830,7 +854,7 @@ async function objective3(ctx) {
     `status ${societyAcademic.status}`,
   );
 
-  const extracurricular = await req('POST', '/activities', {
+  const extracurricular = await crearConRevision({
     token: societyToken,
     body: {
       title: `Hackathon de innovacion ${TS}`,
@@ -1015,7 +1039,7 @@ async function objective3(ctx) {
 
   // --- Estados que bloquean la inscripcion ---
   section('Estados que bloquean la inscripcion');
-  const closed = await req('POST', '/activities', {
+  const closed = await crearConRevision({
     token: societyToken,
     body: {
       title: `Convocatoria cerrada ${TS}`,
@@ -1032,7 +1056,7 @@ async function objective3(ctx) {
     msgOf(closedTry),
   );
 
-  const past = await req('POST', '/activities', {
+  const past = await crearConRevision({
     token: societyToken,
     body: {
       title: `Reto pasado ${TS}`,
@@ -1045,7 +1069,7 @@ async function objective3(ctx) {
   const pastTry = await req('POST', `/activities/${past.data?.id}/register`, { token: student });
   check(pastTry.status === 400, '3.31 Actividad con fecha pasada -> 400', `status ${pastTry.status}`);
 
-  const cancelled = await req('POST', '/activities', {
+  const cancelled = await crearConRevision({
     token: societyToken,
     body: {
       title: `Club cancelado ${TS}`,
@@ -1650,7 +1674,7 @@ async function cierreFinal(ctx) {
     '5.11 La actividad devuelve la categoría del catálogo, no un enum',
   );
 
-  const wrongScope = await req('POST', '/activities', {
+  const wrongScope = await crearConRevision({
     token: societyToken,
     body: {
       title: `Extra con categoría académica ${TS}`,
@@ -1994,13 +2018,14 @@ async function cierreFinal(ctx) {
   // Camino completo sobre una extracurricular publicada por la sociedad: el
   // director si emite la constancia, porque la actividad sigue su flujo
   // institucional y la participacion esta confirmada.
-  const extraOk = await req('POST', '/activities', {
+  const extraOk = await crearConRevision({
     token: societyToken,
     body: {
       title: `Club de estudio con constancia ${TS}`,
       type: 'extracurricular',
       categoryId: catId('club_estudio'),
       status: 'open',
+      internalConstancyEnabled: true,
     },
   });
   await req('POST', `/activities/${extraOk.data?.id}/register`, { token: student });
@@ -2044,8 +2069,8 @@ async function cierreFinal(ctx) {
         activityId: extraOk.data?.id,
         description: 'Intento de la sociedad.',
       },
-    })).status === 403,
-    '5.55 La sociedad sigue sin poder emitir constancias -> 403',
+    })).status === 409,
+    '5.55 V2 §30: la sociedad, responsable de una actividad aprobada con constancias, puede emitirla; aquí ya existe -> 409',
   );
 
   const finalSummary = await req('GET', '/profiles/me/summary', { token: student });

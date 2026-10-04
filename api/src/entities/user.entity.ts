@@ -55,4 +55,15 @@ export class User {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  /**
+   * El hash nunca sale en una respuesta, aunque el usuario viaje anidado en
+   * otra entidad (creador de una actividad, actor de una revisión...).
+   * Las consultas internas siguen leyéndolo con normalidad.
+   */
+  toJSON(): Omit<this, 'passwordHash' | 'toJSON'> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { passwordHash, ...rest } = this;
+    return rest as Omit<this, 'passwordHash' | 'toJSON'>;
+  }
 }

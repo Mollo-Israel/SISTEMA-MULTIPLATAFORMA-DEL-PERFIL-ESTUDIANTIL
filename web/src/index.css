@@ -1063,3 +1063,7 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 .pick .grow { flex: 1; min-width: 0; }
 .subtitle { margin: 1rem 0 0.2rem; font-size: 0.92rem; color: var(--gray-700); }
 .tag-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+/* V2 §27: casilla dentro de una fila de formulario. */
+.check-field { display: flex; flex-direction: row; align-items: center; gap: 0.5rem; cursor: pointer; }
+.check-field input { width: auto; }

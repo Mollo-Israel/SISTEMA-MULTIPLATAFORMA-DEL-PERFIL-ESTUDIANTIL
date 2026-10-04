@@ -394,8 +394,158 @@ async function batch4(ctx) {
 }
 
 // ===========================================================================
+//  BATCH 5 — Actividades y aprobación (§26–§31)
+// ===========================================================================
+async function batch5(ctx) {
+  objective('BATCH 5 · Docente y Sociedad proponen, Dirección decide');
+  const staff = async (key, role, semesters) => {
+    const c = await provisionAndActivate(ctx.admin, { firstName: 'Ana', lastName: 'Staff', email: correoStaff(`act${key}`), role });
+    if (semesters) await req('PUT', `/users/${c.userId}/semesters`, { token: ctx.admin, body: { semesters } });
+    return c;
+  };
+  const docente = await staff('doc', 'TEACHER', [1, 5]);
+  const director = await staff('dir', 'CAREER_DIRECTOR');
+  const sociedad = await staff('soc', 'SCIENTIFIC_SOCIETY');
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const extra = cats.find((c) => c.code === 'convocatoria') ?? cats.find((c) => c.appliesTo === 'extracurricular') ?? cats[0];
 
-const BATCHES = { batch2, batch3, batch4, batch10 };
+  const fuera = await req('POST', '/activities', {
+    token: docente.token,
+    body: { title: `Taller fuera de alcance ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [2] },
+  });
+  check(fuera.status === 403 || fuera.status === 400, 'V2.5.1 §28 El docente no elige semestres fuera de su alcance', `status ${fuera.status}`);
+
+  const publicada = await req('POST', '/activities', {
+    token: docente.token,
+    body: { title: `Taller directo ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [1, 5], status: 'open' },
+  });
+  check(publicada.status === 409, 'V2.5.2 §27.3 El docente no publica sin aprobación', `status ${publicada.status}`);
+
+  const creada = await req('POST', '/activities', {
+    token: docente.token,
+    body: {
+      title: `Taller de Docker ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [1, 5],
+      internalConstancyEnabled: true, gamificationRules: [{ trigger: 'participacion_confirmada', points: 30 }],
+    },
+  });
+  const id = creada.data?.id;
+  check(creada.status === 201 && creada.data?.requiresReview === true && creada.data?.reviewStatus === null,
+    'V2.5.3 §27.3 Nace en borrador, pendiente de enviar a revisión', json({ rs: creada.data?.reviewStatus, rr: creada.data?.requiresReview, st: creada.status }));
+  check((creada.data?.gamificationRules ?? []).some((r) => r.points === 30), 'V2.5.4 §31.2 Lleva su regla de puntos', json(creada.data?.gamificationRules));
+
+  const abrir = await req('PATCH', `/activities/${id}`, { token: docente.token, body: { status: 'open' } });
+  check(abrir.status === 409, 'V2.5.5 §27.6 Sin aprobación no se abre', `status ${abrir.status}`);
+
+  const enviada = await req('POST', `/activities/${id}/submit`, { token: docente.token, body: {} });
+  check(enviada.status === 200 && enviada.data?.reviewStatus === 'pending', 'V2.5.6 §27.3 Se envía a Dirección', json(enviada.data?.reviewStatus));
+  const editarEnRevision = await req('PATCH', `/activities/${id}`, { token: docente.token, body: { title: `Otro título ${TS}` } });
+  check(editarEnRevision.status === 409, 'V2.5.7 §27 En revisión no cambia su contenido', `status ${editarEnRevision.status}`);
+
+  const pendientes = await req('GET', '/activities/reviews/pending', { token: director.token });
+  check((pendientes.data ?? []).some((a) => a.id === id), 'V2.5.8 §27 Dirección la ve entre las pendientes');
+  const docenteRevisa = await req('POST', `/activities/${id}/review`, { token: docente.token, body: { decision: 'approve' } });
+  check(docenteRevisa.status === 403, 'V2.5.9 §27.3 El docente no aprueba su propia actividad', `status ${docenteRevisa.status}`);
+  const adminRevisa = await req('POST', `/activities/${id}/review`, { token: ctx.admin, body: { decision: 'approve' } });
+  check(adminRevisa.status === 403, 'V2.5.10 §6.5 La administración no aprueba actividades', `status ${adminRevisa.status}`);
+  const observarSinMotivo = await req('POST', `/activities/${id}/review`, { token: director.token, body: { decision: 'observe' } });
+  check(observarSinMotivo.status === 400, 'V2.5.11 §27.3 Observar exige decir qué cambiar', `status ${observarSinMotivo.status}`);
+
+  const observada = await req('POST', `/activities/${id}/review`, {
+    token: director.token, body: { decision: 'observe', comment: 'Indica el laboratorio y baja los puntos a 20.' },
+  });
+  check(observada.data?.reviewStatus === 'observed' && /laboratorio/.test(observada.data?.reviewComment ?? ''),
+    'V2.5.12 §27.3 OBSERVED conserva la observación', json(observada.data?.reviewComment));
+  const corregida = await req('PATCH', `/activities/${id}`, {
+    token: docente.token, body: { location: 'Laboratorio 3', gamificationRules: [{ trigger: 'participacion_confirmada', points: 20 }] },
+  });
+  check(corregida.status === 200, 'V2.5.13 §27.3 Observada se puede editar', `status ${corregida.status}`);
+  const reenviada = await req('POST', `/activities/${id}/submit`, { token: docente.token, body: { comment: 'Corregida.' } });
+  check(reenviada.data?.reviewStatus === 'pending', 'V2.5.14 §27.3 Y reenviar');
+  const aprobada = await req('POST', `/activities/${id}/review`, { token: director.token, body: { decision: 'approve' } });
+  check(aprobada.data?.reviewStatus === 'approved', 'V2.5.15 §27.3 Dirección aprueba', json(aprobada.data?.reviewStatus));
+  const abierta = await req('PATCH', `/activities/${id}`, { token: docente.token, body: { status: 'open' } });
+  check(abierta.status === 200 && abierta.data?.status === 'open', 'V2.5.16 §27.6 Aprobada, el docente la publica', `status ${abierta.status}`);
+  const historia = await req('GET', `/activities/${id}/reviews`, { token: docente.token });
+  check(JSON.stringify((historia.data ?? []).map((h) => h.action)) === JSON.stringify(['submitted', 'observed', 'submitted', 'approved']),
+    'V2.5.17 §88.12 La aprobación tiene historia completa', json((historia.data ?? []).map((h) => h.action)));
+  const cambioTrasPublicar = await req('PATCH', `/activities/${id}`, { token: docente.token, body: { title: `Cambiada ${TS}` } });
+  check(cambioTrasPublicar.status === 409, 'V2.5.18 §27 Publicada, su contenido no cambia sin Dirección', `status ${cambioTrasPublicar.status}`);
+  const auditoria = await req('GET', '/audit/events?eventType=ACTIVITY_APPROVED', { token: ctx.admin });
+  check((auditoria.data?.items ?? auditoria.data ?? []).some((e) => e.entityId === id), 'V2.5.19 §69 La aprobación queda auditada');
+
+  const otra = await req('POST', '/activities', { token: docente.token, body: { title: `Taller rechazado ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [5] } });
+  await req('POST', `/activities/${otra.data.id}/submit`, { token: docente.token, body: {} });
+  await req('POST', `/activities/${otra.data.id}/review`, { token: director.token, body: { decision: 'reject', comment: 'Duplica un taller existente.' } });
+  const reenvioRechazada = await req('POST', `/activities/${otra.data.id}/submit`, { token: docente.token, body: {} });
+  const abrirRechazada = await req('PATCH', `/activities/${otra.data.id}`, { token: docente.token, body: { status: 'open' } });
+  check(reenvioRechazada.status === 409 && abrirRechazada.status === 409, 'V2.5.20 §27.3 REJECTED no se publica ni se reutiliza', `${reenvioRechazada.status}/${abrirRechazada.status}`);
+
+  const socAcad = await req('POST', '/activities', { token: sociedad.token, body: { title: `Académica de sociedad ${TS}`, type: 'academica', categoryId: taller.id } });
+  check(socAcad.status === 403, 'V2.5.21 §27.4 La Sociedad no crea académicas', `status ${socAcad.status}`);
+  const socExtra = await req('POST', '/activities', { token: sociedad.token, body: { title: `Hackaton de la sociedad ${TS}`, type: 'extracurricular', categoryId: extra.id } });
+  check(socExtra.status === 201 && socExtra.data?.requiresReview === true, 'V2.5.22 §27.4 Sus extracurriculares pasan por Dirección', json([socExtra.status, socExtra.data?.reviewStatus, socExtra.data?.message]));
+
+  const deDireccion = await req('POST', '/activities', { token: director.token, body: { title: `Seminario de carrera ${TS}`, type: 'academica', categoryId: taller.id, status: 'open' } });
+  check(deDireccion.status === 201 && deDireccion.data?.reviewStatus === 'not_required' && deDireccion.data?.status === 'open',
+    'V2.5.23 §27.5 Dirección publica sin segunda autoridad', json([deDireccion.data?.reviewStatus, deDireccion.data?.status]));
+
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Lia', lastName: 'Paz', email: correoEst('act5'), role: 'STUDENT', semester: 5 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const perfil = (await req('GET', '/profiles/me', { token: est.token })).data;
+  await req('POST', `/activities/${id}/register`, { token: est.token });
+  const adminConfirma = await req('PATCH', `/activities/${id}/confirm-participation`, {
+    token: ctx.admin, body: { studentProfileId: perfil.id, status: 'confirmed' },
+  });
+  check(adminConfirma.status === 403, 'V2.5.24 §6.5 La administración no confirma participación', `status ${adminConfirma.status}`);
+  const confirmada = await req('PATCH', `/activities/${id}/confirm-participation`, {
+    token: docente.token, body: { studentProfileId: perfil.id, status: 'confirmed' },
+  });
+  check(confirmada.status === 200, 'V2.5.25 §29 El responsable confirma', `status ${confirmada.status}`);
+  const progreso = (await req('GET', '/gamification/me', { token: est.token })).data;
+  check((progreso?.events ?? []).some((e) => e.points === 20 && /actividad/.test(e.reason ?? '')),
+    'V2.5.26 §31.2 La participación da los puntos que fijó la actividad, aprobados por Dirección', json(progreso?.events?.slice(0, 2)));
+
+  const constancia = await req('POST', '/constancies/internal', {
+    token: docente.token, body: { profileId: perfil.id, activityId: id, description: `Constancia del taller ${TS}` },
+  });
+  check(constancia.status === 201 && constancia.data?.authorizedById === director.userId && constancia.data?.issuedById === docente.userId,
+    'V2.5.27 §30 El responsable emite la constancia; la autorizó la Dirección que aprobó', json({ s: constancia.status, a: constancia.data?.authorizedById, i: constancia.data?.issuedById, m: constancia.data?.message }));
+  const adminConstancia = await req('POST', '/constancies/internal', {
+    token: ctx.admin, body: { profileId: perfil.id, activityId: deDireccion.data.id, description: 'Constancia de prueba' },
+  });
+  check(adminConstancia.status === 403, 'V2.5.28 §6.5 La administración no otorga constancias', `status ${adminConstancia.status}`);
+  const sinHabilitar = await req('POST', '/activities', { token: director.token, body: { title: `Charla sin constancia ${TS}`, type: 'academica', categoryId: taller.id, status: 'open' } });
+  await req('POST', `/activities/${sinHabilitar.data.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${sinHabilitar.data.id}/confirm-participation`, { token: director.token, body: { studentProfileId: perfil.id, status: 'confirmed' } });
+  const noHabilitada = await req('POST', '/constancies/internal', {
+    token: director.token, body: { profileId: perfil.id, activityId: sinHabilitar.data.id, description: `Constancia ${TS}` },
+  });
+  check(noHabilitada.status === 400, 'V2.5.29 §30 Sin constancias habilitadas en la actividad, no se emiten', `status ${noHabilitada.status}`);
+
+  const demasiados = await req('POST', '/activities', {
+    token: director.token, body: { title: `Taller con muchos puntos ${TS}`, type: 'academica', categoryId: taller.id, gamificationRules: [{ trigger: 'participacion_confirmada', points: 900 }] },
+  });
+  const otroHecho = await req('POST', '/activities', {
+    token: director.token, body: { title: `Taller con hecho ajeno ${TS}`, type: 'academica', categoryId: taller.id, gamificationRules: [{ trigger: 'perfil_completo', points: 5 }] },
+  });
+  check(demasiados.status === 400 && otroHecho.status === 400, 'V2.5.30 §31.2 Puntos en rango y solo hechos permitidos', `${demasiados.status}/${otroHecho.status}`);
+
+  // §80 seguridad: el creador viaja anidado en actividades y pendientes;
+  // su hash de contraseña nunca debe salir.
+  const listados = [
+    await req('GET', '/activities', { token: est.token }),
+    await req('GET', '/activities/managed', { token: docente.token }),
+    await req('GET', '/activities/reviews/pending', { token: director.token }),
+    await req('GET', `/activities/${deDireccion.data.id}`, { token: director.token }),
+  ];
+  const fuga = listados.some((r) => /passwordHash|password_hash|\$2[aby]\$/.test(JSON.stringify(r.data)));
+  check(listados.every((r) => r.status === 200) && !fuga, 'V2.5.31 §80 Ninguna respuesta de actividades expone el hash de contraseña', listados.map((r) => r.status).join('/'));
+}
+
+// ===========================================================================
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -16,10 +17,13 @@ import {
 } from 'typeorm';
 import {
   ACTIVITY_STATUS_LABEL,
+  ActivityReviewStatus,
   ActivityStatus,
   ActivityType,
   canTransition,
+  GamificationTrigger,
   OCCUPYING_STATUSES,
+  PUBLISHABLE_REVIEW_STATUSES,
   REGISTRABLE_ACTIVITY_STATUSES,
   RegistrationMode,
   RegistrationStatus,
@@ -33,6 +37,10 @@ import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
 import { Skill } from '../entities/skill.entity';
+import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
+import { GamificationCriterion } from '../entities/gamification-criterion.entity';
+import { ConfigService } from '@nestjs/config';
+import { ActivityGamificationRuleDto } from './dto/create-activity.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { TeacherScopeService } from '../access/teacher-scope.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
@@ -122,7 +130,192 @@ export class ActivitiesService {
     private readonly trajectory: TrajectoryRecalculationPort,
     private readonly teacherScope: TeacherScopeService,
     private readonly audit: AuditService,
+    @InjectRepository(ActivityReview) private readonly reviews: Repository<ActivityReview>,
+    @InjectRepository(ActivityGamificationRule)
+    private readonly rules: Repository<ActivityGamificationRule>,
+    @InjectRepository(GamificationCriterion)
+    private readonly criteria: Repository<GamificationCriterion>,
+    private readonly config: ConfigService,
   ) {}
+
+  // =========================================================================
+  //  V2 §27 · Revisión de Dirección
+  // =========================================================================
+
+  /** Docente, Sociedad (y Administración) proponen; Dirección decide (§27.3–§27.5). */
+  private requiereRevision(role: RolNombre): boolean {
+    return role !== RolNombre.CAREER_DIRECTOR;
+  }
+
+  /**
+   * Campos que cambian QUÉ es la actividad. Lo que Dirección aprobó no puede
+   * cambiar después sin que lo vuelva a ver. Fechas, lugar o cupo son
+   * operación, no contenido.
+   */
+  private cambiaContenido(dto: UpdateActivityDto): boolean {
+    return [
+      dto.title, dto.description, dto.type, dto.categoryId, dto.areaId, dto.skillIds,
+      dto.semesterScope, dto.internalConstancyEnabled, dto.gamificationRules, dto.evidenceRequired,
+    ].some((v) => v !== undefined);
+  }
+
+  /** Envía a Dirección una actividad en borrador (§27.3). */
+  async submitForReview(user: AuthenticatedUser, id: string, comment?: string): Promise<Activity> {
+    const activity = await this.findOne(id);
+    await this.assertCanManage(user, activity);
+    if (!activity.requiresReview) {
+      throw new BadRequestException('Esta actividad no necesita revisión: la gestiona Dirección.');
+    }
+    if (activity.status !== ActivityStatus.DRAFT) {
+      throw new BadRequestException('Solo se envía a revisión una actividad en borrador.');
+    }
+    if (activity.reviewStatus === ActivityReviewStatus.PENDING) {
+      throw new ConflictException('Ya está en revisión.');
+    }
+    if (activity.reviewStatus === ActivityReviewStatus.APPROVED) {
+      throw new ConflictException('Ya está aprobada: puedes publicarla.');
+    }
+    if (activity.reviewStatus === ActivityReviewStatus.REJECTED) {
+      throw new ConflictException('Fue rechazada. No se reutiliza: crea una actividad nueva.');
+    }
+    activity.reviewStatus = ActivityReviewStatus.PENDING;
+    activity.submittedAt = new Date();
+    await this.activities.save(activity);
+    await this.reviews.save(this.reviews.create({
+      activityId: activity.id, actorUserId: user.userId, action: 'submitted', comment: comment ?? null,
+    }));
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.ACTIVITY_SUBMITTED,
+      entityType: 'activity',
+      entityId: activity.id,
+      metadata: { reenvio: !!activity.reviewComment },
+    });
+    return this.findOne(id);
+  }
+
+  /** Dirección aprueba, observa o rechaza (§27.3). Queda en la historia (§88.12). */
+  async review(
+    user: AuthenticatedUser,
+    id: string,
+    decision: 'approve' | 'observe' | 'reject',
+    comment?: string,
+  ): Promise<Activity> {
+    if (user.role !== RolNombre.CAREER_DIRECTOR) {
+      throw new ForbiddenException('Las actividades las aprueba la Dirección de carrera.');
+    }
+    const activity = await this.findOne(id);
+    if (activity.reviewStatus !== ActivityReviewStatus.PENDING) {
+      throw new ConflictException('Solo se decide sobre una actividad enviada a revisión.');
+    }
+    if (decision !== 'approve' && !comment?.trim()) {
+      throw new BadRequestException({
+        message: 'Escribe la observación para quien la propuso.',
+        fields: { comment: ['Escribe la observación para quien la propuso.'] },
+      });
+    }
+    const destino = {
+      approve: ActivityReviewStatus.APPROVED,
+      observe: ActivityReviewStatus.OBSERVED,
+      reject: ActivityReviewStatus.REJECTED,
+    }[decision];
+    activity.reviewStatus = destino;
+    activity.reviewedAt = new Date();
+    activity.reviewedById = user.userId;
+    activity.reviewComment = comment?.trim() || null;
+    await this.activities.save(activity);
+    const accion = ({ approve: 'approved', observe: 'observed', reject: 'rejected' } as const)[decision];
+    await this.reviews.save(this.reviews.create({
+      activityId: activity.id, actorUserId: user.userId, action: accion, comment: comment?.trim() || null,
+    }));
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: {
+        approve: AuditEventType.ACTIVITY_APPROVED,
+        observe: AuditEventType.ACTIVITY_OBSERVED,
+        reject: AuditEventType.ACTIVITY_REJECTED,
+      }[decision],
+      entityType: 'activity',
+      entityId: activity.id,
+      metadata: { comentario: comment?.trim() ?? null },
+    });
+    return this.findOne(id);
+  }
+
+  /** Lo que espera la decisión de Dirección. */
+  async pendingReviews(user: AuthenticatedUser) {
+    if (user.role !== RolNombre.CAREER_DIRECTOR) {
+      throw new ForbiddenException('Las aprobaciones son de la Dirección de carrera.');
+    }
+    const lista = await this.activities.find({
+      where: { reviewStatus: ActivityReviewStatus.PENDING },
+      relations: { academicArea: true, creator: true, category: true, activitySkills: { skill: true } },
+      order: { submittedAt: 'ASC' },
+    });
+    const reglas = lista.length
+      ? await this.rules.find({ where: { activityId: In(lista.map((a) => a.id)) } })
+      : [];
+    return lista.map((a) => ({ ...a, gamificationRules: reglas.filter((r) => r.activityId === a.id) }));
+  }
+
+  /** Historia de la revisión de una actividad. */
+  async reviewHistory(user: AuthenticatedUser, id: string) {
+    const activity = await this.findOne(id);
+    if (user.role !== RolNombre.CAREER_DIRECTOR) await this.assertCanManage(user, activity);
+    return this.reviews.find({
+      where: { activityId: id },
+      relations: { actor: true },
+      order: { createdAt: 'ASC' },
+    }).then((filas) => filas.map((r) => ({
+      id: r.id,
+      action: r.action,
+      comment: r.comment,
+      at: r.createdAt,
+      by: r.actor ? `${r.actor.firstName} ${r.actor.lastName}` : null,
+    })));
+  }
+
+  /** Reglas de puntos de la actividad (§31.2): hechos permitidos y rango. */
+  private async replaceRules(activityId: string, userId: string, reglas: ActivityGamificationRuleDto[]) {
+    const max = Number(this.config.get<string>('GAMIFICATION_ACTIVITY_MAX_POINTS') ?? 50) || 50;
+    for (const r of reglas) {
+      if (r.trigger !== GamificationTrigger.PARTICIPACION_CONFIRMADA) {
+        throw new BadRequestException({
+          message: 'En una actividad solo se premia la participación confirmada.',
+          fields: { gamificationRules: ['En una actividad solo se premia la participación confirmada.'] },
+        });
+      }
+      if (r.points > max) {
+        throw new BadRequestException({
+          message: `Una actividad puede dar como máximo ${max} puntos por participación.`,
+          fields: { gamificationRules: [`Como máximo ${max} puntos.`] },
+        });
+      }
+    }
+    const unicos = new Map(reglas.map((r) => [r.trigger, r]));
+    await this.rules.delete({ activityId });
+    for (const r of unicos.values()) {
+      const criterio = await this.criteria.findOne({ where: { code: r.trigger } });
+      await this.rules.save(this.rules.create({
+        activityId,
+        trigger: r.trigger,
+        points: r.points,
+        badgeId: r.badgeId ?? null,
+        description: r.description ?? null,
+        criterionId: criterio?.id ?? null,
+        createdById: userId,
+      }));
+    }
+  }
+
+  /** Semestres habilitados del docente: los únicos que puede elegir (§28). */
+  async myScope(user: AuthenticatedUser): Promise<{ semesters: number[] }> {
+    return { semesters: await this.teacherScope.allowedSemesters(user.userId) };
+  }
+
+  async rulesOf(activityId: string) {
+    return this.rules.find({ where: { activityId } });
+  }
 
   async create(user: AuthenticatedUser, dto: CreateActivityDto): Promise<Activity> {
     this.assertCanPublish(user.role, dto.type);
@@ -136,6 +329,17 @@ export class ActivitiesService {
     // actividad para todo el 1.o al 8.o y quedar como su gestor.
     const semesterScope = await this.resolveSemesterScope(user, dto.semesterScope);
     this.assertDateWindow(dto.activityDate, dto.endAt);
+
+    // V2 §27: lo que proponen Docente y Sociedad pasa por Dirección antes de
+    // publicarse; lo que crea Dirección, no.
+    const requiresReview = this.requiereRevision(user.role);
+    const estadoInicial = dto.status ?? ActivityStatus.DRAFT;
+    if (requiresReview && estadoInicial !== ActivityStatus.DRAFT) {
+      throw new ConflictException({
+        message: 'Se crea como borrador y se envía a revisión de Dirección antes de publicarse.',
+        fields: { status: ['Se crea como borrador y se envía a revisión de Dirección.'] },
+      });
+    }
 
     const activity = this.activities.create({
       title: dto.title,
@@ -156,12 +360,18 @@ export class ActivitiesService {
       tags: dto.tags ?? null,
       externalUrl: dto.externalUrl ?? null,
       evidenceRequired: dto.evidenceRequired ?? false,
-      status: dto.status ?? ActivityStatus.DRAFT,
+      status: estadoInicial,
+      requiresReview,
+      reviewStatus: requiresReview ? null : ActivityReviewStatus.NOT_REQUIRED,
+      internalConstancyEnabled: dto.internalConstancyEnabled ?? false,
     });
     const saved = await this.activities.save(activity);
 
     if (dto.skillIds?.length) {
       await this.replaceSkills(saved.id, dto.skillIds);
+    }
+    if (dto.gamificationRules?.length) {
+      await this.replaceRules(saved.id, user.userId, dto.gamificationRules);
     }
 
     await this.audit.record({
@@ -246,6 +456,9 @@ export class ActivitiesService {
     if (!activity) {
       throw new NotFoundException('Actividad no encontrada.');
     }
+    // Sus reglas de puntos viajan con ella: son parte de lo que se revisa.
+    (activity as Activity & { gamificationRules?: ActivityGamificationRule[] }).gamificationRules =
+      await this.rules.find({ where: { activityId: activity.id } });
     return activity;
   }
 
@@ -282,6 +495,30 @@ export class ActivitiesService {
     const activity = await this.findOne(id);
     await this.assertCanManage(user, activity);
 
+    // V2 §27: lo que Dirección revisa no cambia a sus espaldas.
+    const esDireccion = user.role === RolNombre.CAREER_DIRECTOR;
+    let reiniciarRevision = false;
+    if (activity.requiresReview && !esDireccion) {
+      if (activity.reviewStatus === ActivityReviewStatus.REJECTED
+        && !(Object.keys(dto).length === 1 && dto.status === ActivityStatus.CANCELLED)) {
+        throw new ConflictException('Fue rechazada por Dirección: no se reutiliza. Puedes cancelarla o crear una nueva.');
+      }
+      if (this.cambiaContenido(dto)) {
+        if (activity.reviewStatus === ActivityReviewStatus.PENDING) {
+          throw new ConflictException('Está en revisión: espera la decisión de Dirección para cambiar su contenido.');
+        }
+        if (activity.reviewStatus === ActivityReviewStatus.APPROVED) {
+          if (activity.status !== ActivityStatus.DRAFT) {
+            throw new ConflictException(
+              'Ya fue aprobada y publicada: los cambios de contenido los decide Dirección.',
+            );
+          }
+          // Aprobada pero sin publicar: el cambio pide una nueva revisión.
+          reiniciarRevision = true;
+        }
+      }
+    }
+
     if (dto.type && dto.type !== activity.type) {
       // Cambiar el tipo cambia el responsable: se valida con el tipo destino.
       this.assertCanPublish(user.role, dto.type);
@@ -306,6 +543,11 @@ export class ActivitiesService {
     if (dto.tags !== undefined) activity.tags = dto.tags;
     if (dto.externalUrl !== undefined) activity.externalUrl = dto.externalUrl;
     if (dto.evidenceRequired !== undefined) activity.evidenceRequired = dto.evidenceRequired;
+    if (dto.internalConstancyEnabled !== undefined) activity.internalConstancyEnabled = dto.internalConstancyEnabled;
+    if (reiniciarRevision) {
+      activity.reviewStatus = null;
+      activity.reviewComment = 'La actividad cambió después de aprobada: envíala de nuevo a revisión.';
+    }
     if (dto.requirements !== undefined) activity.requirements = dto.requirements ?? null;
     if (dto.registrationMode !== undefined) activity.registrationMode = dto.registrationMode;
     if (dto.endAt !== undefined) activity.endAt = dto.endAt ? new Date(dto.endAt) : null;
@@ -331,6 +573,9 @@ export class ActivitiesService {
 
     if (dto.skillIds !== undefined) {
       await this.replaceSkills(activity.id, dto.skillIds ?? []);
+    }
+    if (dto.gamificationRules !== undefined) {
+      await this.replaceRules(activity.id, user.userId, dto.gamificationRules ?? []);
     }
 
     if (dto.status !== undefined && dto.status !== estadoAnterior) {
@@ -398,6 +643,11 @@ export class ActivitiesService {
     status: RegistrationStatus,
   ): Promise<ActivityRegistration> {
     const activity = await this.findOne(activityId);
+    // V2 §6.5: la administración es técnica; confirmar participación no es
+    // una operación suya. La confirma quien responde por la actividad.
+    if (confirmer.role === RolNombre.ADMIN) {
+      throw new ForbiddenException('La participación la confirma el responsable de la actividad, no la administración.');
+    }
     await this.assertCanManage(
       confirmer,
       activity,
@@ -602,6 +852,17 @@ export class ActivitiesService {
    */
   private async assertStatusTransition(activity: Activity, next: ActivityStatus): Promise<void> {
     if (activity.status === next) return;
+
+    // V2 §27.6: solo se publica o abre lo que no necesita revisión o ya la pasó.
+    if ((next === ActivityStatus.PUBLISHED || next === ActivityStatus.OPEN)
+      && !PUBLISHABLE_REVIEW_STATUSES.includes(activity.reviewStatus as ActivityReviewStatus)) {
+      throw new ConflictException({
+        message: activity.reviewStatus === ActivityReviewStatus.PENDING
+          ? 'Está en revisión: se podrá publicar cuando Dirección la apruebe.'
+          : 'Necesita la aprobación de Dirección antes de publicarse: envíala a revisión.',
+        fields: { status: ['Necesita la aprobación de Dirección antes de publicarse.'] },
+      });
+    }
 
     if (TERMINAL_ACTIVITY_STATUSES.includes(activity.status)) {
       throw new BadRequestException(

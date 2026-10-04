@@ -456,7 +456,25 @@ export interface Activity {
   registrationBlockReason?: string | null;
   /** Situación del estudiante que consulta. Solo llega en su listado. */
   myRegistration?: { id: string; status: RegistrationStatus } | null;
+  /** Revisión de Dirección (V2 §27). null = sin enviar. */
+  reviewStatus?: ActivityReviewStatus | null;
+  requiresReview?: boolean;
+  reviewComment?: string | null;
+  submittedAt?: string | null;
+  internalConstancyEnabled?: boolean;
+  gamificationRules?: { id: string; trigger: string; points: number; description: string | null }[];
 }
+
+export type ActivityReviewStatus = 'not_required' | 'pending' | 'observed' | 'approved' | 'rejected';
+
+export const ACTIVITY_REVIEW_LABEL: Record<ActivityReviewStatus | 'unsubmitted', string> = {
+  unsubmitted: 'Sin enviar a revisión',
+  not_required: 'No requiere revisión',
+  pending: 'En revisión por Dirección',
+  observed: 'Con observaciones',
+  approved: 'Aprobada por Dirección',
+  rejected: 'Rechazada',
+};
 
 /** Participación de un estudiante en una actividad (§23). */
 export type RegistrationStatus =

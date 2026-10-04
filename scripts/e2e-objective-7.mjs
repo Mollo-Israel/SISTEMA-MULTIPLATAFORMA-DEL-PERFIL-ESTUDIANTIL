@@ -18,7 +18,7 @@
 //  Las cuentas que crea llevan sufijo de tiempo, por lo que puede repetirse.
 // =============================================================================
 
-import { leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, aprobarActividad } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -235,7 +235,8 @@ async function prepararEscenario(ctx) {
   const crearActividad = async (token, body, publicar = true) => {
     const creada = await req('POST', '/activities', { token, body });
     if (publicar && creada.data?.id) {
-      await req('PATCH', `/activities/${creada.data.id}`, { token, body: { status: 'open' } });
+      if (creada.data.requiresReview) await aprobarActividad(token, ctx.director, creada.data.id);
+      else await req('PATCH', `/activities/${creada.data.id}`, { token, body: { status: 'open' } });
     }
     return creada;
   };

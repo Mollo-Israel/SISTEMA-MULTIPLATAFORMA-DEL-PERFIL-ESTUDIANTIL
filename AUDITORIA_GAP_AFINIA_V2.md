@@ -118,15 +118,15 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 | Requisito | Estado | Observación |
 |---|---|---|
 | Lifecycle DRAFT…CANCELLED | IMPLEMENTADO | |
-| `review_status` y flujo Docente/Sociedad → Dirección (aprobar/observar/rechazar, reenviar) | FALTANTE | C6 |
+| `review_status` y flujo Docente/Sociedad → Dirección (aprobar/observar/rechazar, reenviar) | IMPLEMENTADO | C6 · BATCH 5 |
 | Director publica sin segunda autoridad | IMPLEMENTADO | (pasa a `NOT_REQUIRED`) |
-| Publicación solo con `NOT_REQUIRED/APPROVED` | FALTANTE | |
+| Publicación solo con `NOT_REQUIRED/APPROVED` | IMPLEMENTADO | BATCH 5 (409 en la API) |
 | Sociedad solo extracurriculares | IMPLEMENTADO | |
 | TeacherScope como fuente única; semestres seleccionables | IMPLEMENTADO | `TeacherScopeService` |
 | Participación INTERESTED…CANCELLED, solo CONFIRMED es experiencia, confirmación transaccional con efectos | IMPLEMENTADO | |
 | Constancia requiere CONFIRMED, no duplica afinidad | IMPLEMENTADO | |
-| `internal_constancy_enabled` en la actividad, aprobado por Dirección | FALTANTE | |
-| `authorized_by` en constancia | FALTANTE | |
+| `internal_constancy_enabled` en la actividad, aprobado por Dirección | IMPLEMENTADO | BATCH 5 |
+| `authorized_by` en constancia | IMPLEMENTADO | BATCH 5 (`authorized_by` = Dirección que aprobó; `issued_by` = quien emite) |
 
 ### Gamificación (§31)
 
@@ -134,8 +134,8 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 |---|---|---|
 | Independiente de afinidad | IMPLEMENTADO | |
 | Catálogo global (admin) | IMPLEMENTADO | |
-| Reglas por actividad, revisadas por Dirección | FALTANTE | |
-| Puntos positivos, rango configurable, idempotentes | PARCIAL | rango fijo en código |
+| Reglas por actividad, revisadas por Dirección | IMPLEMENTADO | BATCH 5 (`activity_gamification_rules`) |
+| Puntos positivos, rango configurable, idempotentes | IMPLEMENTADO | BATCH 5 (`GAMIFICATION_ACTIVITY_MAX_POINTS`) |
 | Insignias sin valor oficial | IMPLEMENTADO | |
 | Retos y recompensas | EXTENSIÓN | C9 |
 

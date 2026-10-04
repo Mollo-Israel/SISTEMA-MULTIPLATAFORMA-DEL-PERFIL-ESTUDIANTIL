@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
@@ -17,14 +17,41 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import {
   ActivityModality,
   ActivityStatus,
   ActivityType,
+  GamificationTrigger,
   RegistrationMode,
 } from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
+
+/** Regla de puntos de la actividad (V2 §31.2): un hecho permitido y sus puntos. */
+export class ActivityGamificationRuleDto {
+  @ApiProperty({ enum: [GamificationTrigger.PARTICIPACION_CONFIRMADA] })
+  @IsEnum(GamificationTrigger, { message: 'El hecho de la regla no es válido.' })
+  trigger: GamificationTrigger;
+
+  @ApiProperty({ minimum: 1, example: 15 })
+  @Type(() => Number)
+  @IsInt({ message: 'Los puntos deben ser un número entero, sin letras ni decimales.' })
+  @Min(1, { message: 'Una regla da al menos 1 punto.' })
+  points: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsUUID('4', { message: 'La insignia no es válida.' })
+  badgeId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(cleanText)
+  @IsString()
+  @MaxLength(300, { message: 'La descripción de la regla no puede superar 300 caracteres.' })
+  description?: string;
+}
 
 export class CreateActivityDto {
   @ApiProperty({ example: 'Taller de NestJS' })
@@ -160,4 +187,19 @@ export class CreateActivityDto {
   @IsString()
   @MaxLength(500, { message: 'Los requisitos no pueden superar 500 caracteres.' })
   requirements?: string;
+
+  /** La actividad emite constancias internas (V2 §30). */
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  internalConstancyEnabled?: boolean;
+
+  /** Puntos propios de la actividad (V2 §31.2); para Docente/Sociedad los revisa Dirección. */
+  @ApiProperty({ required: false, type: [ActivityGamificationRuleDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3, { message: 'Como máximo 3 reglas por actividad.' })
+  @ValidateNested({ each: true })
+  @Type(() => ActivityGamificationRuleDto)
+  gamificationRules?: ActivityGamificationRuleDto[];
 }

@@ -1,3 +1,4 @@
+import { ActivityGamificationRule } from '../entities/activity-review.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
@@ -61,6 +62,7 @@ import { GamificationExtrasController } from './gamification-extras.controller';
       GamificationChallenge,
       GamificationReward,
       RewardRedemption,
+      ActivityGamificationRule,
     ]),
     AccessModule,
   ],

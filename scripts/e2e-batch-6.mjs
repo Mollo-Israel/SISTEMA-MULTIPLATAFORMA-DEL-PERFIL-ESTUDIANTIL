@@ -17,7 +17,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-6.mjs
  */
 
-import { loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { loginAdmin, provisionAndActivate, req, aprobarActividad } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -377,10 +377,12 @@ async function preparar() {
         categoryId: categoria.id,
         areaId: areaAct.id,
         semesterScope: [5],
+        internalConstancyEnabled: true,
       },
     });
     if (creada.status !== 201) throw new Error(`No se pudo crear la actividad ${i}: ${JSON.stringify(creada.data)}`);
-    await req('PATCH', `/activities/${creada.data.id}`, { token: docente.token, body: { status: 'open' } });
+    // V2 §27: la actividad del docente la aprueba Dirección antes de abrirse.
+    await aprobarActividad(docente.token, director.token, creada.data.id);
     actividades.push(creada.data);
   }
 

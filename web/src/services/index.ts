@@ -622,6 +622,18 @@ export const activityService = {
   participants: (id: string) => api.get<Participant[]>(`/activities/${id}/participants`).then((r) => r.data),
   /** Actividades que el usuario gestiona, incluidos sus borradores. */
   managed: () => api.get<Activity[]>('/activities/managed').then((r) => r.data),
+  /** V2 §27: enviar a Dirección, decidir, pendientes e historia. */
+  submit: (id: string, comment?: string) =>
+    api.post<Activity>(`/activities/${id}/submit`, { comment }).then((r) => r.data),
+  review: (id: string, decision: 'approve' | 'observe' | 'reject', comment?: string) =>
+    api.post<Activity>(`/activities/${id}/review`, { decision, comment }).then((r) => r.data),
+  pendingReviews: () => api.get<Activity[]>('/activities/reviews/pending').then((r) => r.data),
+  reviewHistory: (id: string) =>
+    api.get<{ id: string; action: string; comment: string | null; at: string; by: string | null }[]>(
+      `/activities/${id}/reviews`,
+    ).then((r) => r.data),
+  /** Semestres habilitados del docente (V2 §28). */
+  myScope: () => api.get<{ semesters: number[] }>('/activities/my-scope').then((r) => r.data),
   myRegistrations: () =>
     api.get<{ registrationId: string; status: string; activity: Activity }[]>('/activities/my-registrations')
       .then((r) => r.data),

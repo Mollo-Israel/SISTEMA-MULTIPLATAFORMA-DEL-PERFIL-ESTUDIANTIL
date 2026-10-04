@@ -52,6 +52,10 @@ export class InternalConstancy {
   @Column({ name: 'authorized_by', type: 'uuid', nullable: true })
   authorizedById: string | null;
 
+  /** Quien la emitió (V2 §30): Dirección o el responsable autorizado. */
+  @Column({ name: 'issued_by', type: 'uuid', nullable: true })
+  issuedById: string | null;
+
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'authorized_by' })
   authorizedBy: User | null;

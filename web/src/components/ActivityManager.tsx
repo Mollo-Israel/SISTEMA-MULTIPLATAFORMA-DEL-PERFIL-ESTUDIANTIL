@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  FiCalendar, FiCheck, FiEdit2, FiPlus, FiSave, FiSearch, FiUserX, FiUsers, FiX,
+  FiCalendar, FiCheck, FiEdit2, FiPlus, FiSave, FiSearch, FiSend, FiUserX, FiUsers, FiX,
 } from 'react-icons/fi';
+import { useAuth } from '../auth/AuthContext';
 import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
 import type { AcademicArea, Activity, ActivityCategoryItem, Participant } from '../services/types';
@@ -10,7 +11,7 @@ import {
   Badge, Button, Card, EmptyState, ResultCount, SearchInput, SkeletonTable, Stagger,
 } from './ui';
 import { useConfirm, useToast } from './feedback';
-import { ACTIVITY_TRANSITIONS } from '../services/types';
+import { ACTIVITY_REVIEW_LABEL, ACTIVITY_TRANSITIONS } from '../services/types';
 import {
   ACTIVITY_MODALITIES,
   ACTIVITY_STATUS_LABEL,
@@ -35,13 +36,31 @@ const emptyForm = {
   capacity: '',
   tags: '',
   status: 'draft',
+  semesterScope: [] as number[],
+  internalConstancyEnabled: false,
+  points: '',
 };
+
+/** Estado de revisión (V2 §27) en palabras y color. */
+function revision(a: Activity): { label: string; tone: string } {
+  if (!a.requiresReview) return { label: ACTIVITY_REVIEW_LABEL.not_required, tone: 'gray' };
+  const k = a.reviewStatus ?? 'unsubmitted';
+  const tone = { unsubmitted: 'gray', pending: 'amber', observed: 'amber', approved: 'green', rejected: 'red', not_required: 'gray' }[k];
+  return { label: ACTIVITY_REVIEW_LABEL[k], tone };
+}
+
+const publicable = (a: Activity) =>
+  !a.requiresReview || a.reviewStatus === 'approved' || a.reviewStatus === 'not_required';
 
 export default function ActivityManager({
   activityType,
 }: {
   activityType: 'academica' | 'extracurricular';
 }) {
+  const { user } = useAuth();
+  /** Docente, Sociedad (y Administración) proponen; Dirección decide (V2 §27). */
+  const necesitaRevision = user?.role !== 'CAREER_DIRECTOR';
+  const [semestresPermitidos, setSemestresPermitidos] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +102,9 @@ export default function ActivityManager({
       load(),
       catalogService.areas().then(setAreas),
       catalogService.activityCategories().then(setCategories),
+      user?.role === 'TEACHER'
+        ? activityService.myScope().then((r) => setSemestresPermitidos(r.semesters))
+        : Promise.resolve(),
     ])
       .catch((e) => setError(apiError(e)))
       .finally(() => setLoading(false));
@@ -125,8 +147,14 @@ export default function ActivityManager({
             .map((t) => t.trim())
             .filter(Boolean)
         : undefined,
-      status: form.status,
+      status: necesitaRevision && !editing ? 'draft' : form.status,
+      semesterScope: form.semesterScope.length ? form.semesterScope : undefined,
+      internalConstancyEnabled: form.internalConstancyEnabled,
+      gamificationRules: form.points
+        ? [{ trigger: 'participacion_confirmada', points: Number(form.points) }]
+        : [],
     };
+    if (editing && necesitaRevision) delete payload.status;
     try {
       if (editing) {
         delete payload.type;
@@ -135,9 +163,11 @@ export default function ActivityManager({
       } else {
         await activityService.create(payload as never);
         notify(
-          form.status === 'draft'
-            ? 'Actividad guardada como borrador.'
-            : 'Actividad publicada.',
+          necesitaRevision
+            ? 'Actividad guardada como borrador. Envíala a revisión de Dirección para publicarla.'
+            : form.status === 'draft'
+              ? 'Actividad guardada como borrador.'
+              : 'Actividad publicada.',
         );
       }
       resetForm();
@@ -164,6 +194,9 @@ export default function ActivityManager({
       capacity: a.capacity ? String(a.capacity) : '',
       tags: (a.tags ?? []).join(', '),
       status: a.status,
+      semesterScope: a.semesterScope ?? [],
+      internalConstancyEnabled: !!a.internalConstancyEnabled,
+      points: String(a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.points ?? ''),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -172,6 +205,16 @@ export default function ActivityManager({
    * Pasar a cancelada o volver a borrador saca la actividad de la vista del
    * estudiante, asi que esos dos casos se confirman antes.
    */
+  const enviarARevision = async (a: Activity) => {
+    try {
+      await activityService.submit(a.id);
+      notify('Enviada a Dirección.', 'Te avisaremos aquí con su decisión.');
+      await load();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
   const changeStatus = async (a: Activity, status: string) => {
     const label = lbl(ACTIVITY_STATUS_LABEL, status);
     if (status === 'cancelled' || status === 'draft') {
@@ -422,24 +465,78 @@ export default function ActivityManager({
                   placeholder="react, arquitectura, backend"
                 />
               </div>
+              {!necesitaRevision && (
+                <div className="field">
+                  <label>Estado</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  >
+                    {ACTIVITY_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {lbl(ACTIVITY_STATUS_LABEL, s)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {activityType === 'academica' && (
               <div className="field">
-                <label>Estado</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  {ACTIVITY_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {lbl(ACTIVITY_STATUS_LABEL, s)}
-                    </option>
-                  ))}
-                </select>
+                <label>Semestres a los que va dirigida</label>
+                <div className="chip-row">
+                  {semestresPermitidos.map((n) => {
+                    const on = form.semesterScope.includes(n);
+                    return (
+                      <button
+                        type="button"
+                        key={n}
+                        className={`chip ${on ? 'on' : ''}`}
+                        aria-pressed={on}
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            semesterScope: on ? form.semesterScope.filter((x) => x !== n) : [...form.semesterScope, n].sort(),
+                          })}
+                      >
+                        {n}º
+                      </button>
+                    );
+                  })}
+                </div>
+                <small className="muted">
+                  {user?.role === 'TEACHER'
+                    ? 'Solo aparecen tus semestres habilitados. Sin marcar ninguno, va a todos ellos.'
+                    : 'Sin marcar ninguno, va a toda la carrera.'}
+                </small>
+              </div>
+            )}
+
+            <div className="row">
+              <label className="field check-field">
+                <input
+                  type="checkbox"
+                  checked={form.internalConstancyEnabled}
+                  onChange={(e) => setForm({ ...form, internalConstancyEnabled: e.target.checked })}
+                />
+                <span>Emite constancia interna a quienes participen</span>
+              </label>
+              <div className="field">
+                <label>Puntos por participar (opcional)</label>
+                <input
+                  inputMode="numeric"
+                  value={form.points}
+                  onChange={(e) => setForm({ ...form, points: e.target.value.replace(/[^\d]/g, '').slice(0, 3) })}
+                  placeholder="Los del criterio general"
+                />
               </div>
             </div>
 
             <p className="muted" style={{ fontSize: '0.78rem', marginBottom: '0.7rem' }}>
-              En <strong>borrador</strong> la actividad no es visible para los estudiantes. Para que
-              puedan inscribirse debe estar <strong>publicada</strong> o <strong>abierta</strong>.
+              {necesitaRevision
+                ? 'Se guarda como borrador. Cuando esté lista, envíala a revisión: Dirección la aprueba, la observa o la rechaza, y solo aprobada se puede publicar. La constancia y los puntos también los revisa Dirección.'
+                : 'En borrador la actividad no es visible para los estudiantes. Para que puedan inscribirse debe estar publicada o abierta.'}
             </p>
 
             <Button type="submit" loading={saving} icon={<FiSave size={15} />}>
@@ -514,6 +611,7 @@ export default function ActivityManager({
                   <th>Categoría</th>
                   <th>Fecha</th>
                   <th>Estado</th>
+                  <th>Revisión</th>
                   <th>Confirmados</th>
                   <th>Pendientes</th>
                   <th></th>
@@ -557,7 +655,8 @@ export default function ActivityManager({
                           onChange={(e) => changeStatus(a, e.target.value)}
                           aria-label={`Estado de ${a.title}`}
                         >
-                          {[a.status, ...ACTIVITY_TRANSITIONS[a.status]].map((s) => (
+                          {[a.status, ...ACTIVITY_TRANSITIONS[a.status].filter((s) =>
+                            publicable(a) || (s !== 'published' && s !== 'open'))].map((s) => (
                             <option key={s} value={s}>
                               {lbl(ACTIVITY_STATUS_LABEL, s)}
                             </option>
@@ -567,6 +666,20 @@ export default function ActivityManager({
                           <Badge tone={a.status === 'cancelled' ? 'red' : 'gray'}>
                             {lbl(ACTIVITY_STATUS_LABEL, a.status)}
                           </Badge>
+                        )}
+                      </td>
+                      <td>
+                        <Badge tone={revision(a).tone}>{revision(a).label}</Badge>
+                        {a.reviewComment && ['observed', 'rejected', null].includes(a.reviewStatus ?? null) && (
+                          <div className="muted small" style={{ maxWidth: 240 }}>«{a.reviewComment}»</div>
+                        )}
+                        {a.requiresReview && a.status === 'draft'
+                          && (a.reviewStatus === null || a.reviewStatus === undefined || a.reviewStatus === 'observed') && (
+                          <div style={{ marginTop: '0.3rem' }}>
+                            <Button size="sm" icon={<FiSend size={13} />} onClick={() => enviarARevision(a)}>
+                              {a.reviewStatus === 'observed' ? 'Reenviar' : 'Enviar a revisión'}
+                            </Button>
+                          </div>
                         )}
                       </td>
                       <td>

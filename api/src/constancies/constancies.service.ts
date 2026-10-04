@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -8,9 +9,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import {
+  ActivityReviewStatus,
   ActivityStatus,
-  ActivityType,
   ConstancyStatus,
+  PUBLISHABLE_REVIEW_STATUSES,
   RegistrationStatus,
   RolNombre,
 } from '@perfil/shared';
@@ -26,11 +28,6 @@ import {
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
 
-/** Actor institucional responsable de cada tipo de actividad. */
-const OWNER_ROLE_BY_TYPE: Record<ActivityType, RolNombre> = {
-  [ActivityType.ACADEMICA]: RolNombre.CAREER_DIRECTOR,
-  [ActivityType.EXTRACURRICULAR]: RolNombre.SCIENTIFIC_SOCIETY,
-};
 
 @Injectable()
 export class ConstanciesService {
@@ -74,6 +71,15 @@ export class ConstanciesService {
     }
     this.assertActivityAuthorized(activity);
 
+    // V2 §30: emite Dirección, o el responsable de la actividad cuando
+    // Dirección la aprobó con constancias habilitadas. La administración es
+    // técnica y no otorga constancias académicas (§6.5).
+    const esDireccion = authorizer.role === RolNombre.CAREER_DIRECTOR;
+    const esResponsable = activity.creatorId === authorizer.userId || activity.responsibleUserId === authorizer.userId;
+    if (!esDireccion && !esResponsable) {
+      throw new ForbiddenException('Solo Dirección o el responsable de la actividad emiten su constancia.');
+    }
+
     const registration = await this.registrations.findOne({
       where: { activityId: dto.activityId, studentProfileId: dto.profileId },
     });
@@ -104,7 +110,10 @@ export class ConstanciesService {
       activityRegistrationId: registration.id,
       description: dto.description,
       status: dto.status ?? ConstancyStatus.AUTHORIZED,
-      authorizedById: authorizer.userId,
+      issuedById: authorizer.userId,
+      // Quien autoriza es la Dirección: ella misma si emite, o quien aprobó
+      // la actividad si emite el responsable.
+      authorizedById: esDireccion ? authorizer.userId : activity.reviewedById ?? null,
     });
     const saved = await this.constancies.save(constancy);
     await this.trajectory.requestRecalculation(dto.profileId);
@@ -138,30 +147,16 @@ export class ConstanciesService {
         'La actividad fue cancelada: no está autorizada para emitir constancias.',
       );
     }
-
-    const creatorRole = activity.creator?.role?.name;
-    if (!creatorRole) {
-      throw new BadRequestException(
-        'No se pudo determinar el responsable de la actividad; no está autorizada.',
-      );
+    // V2 §27.6 y §30: autorizada = publicada tras pasar (o no necesitar) la
+    // revisión de Dirección, y con las constancias habilitadas en la actividad.
+    if (!PUBLISHABLE_REVIEW_STATUSES.includes(activity.reviewStatus as ActivityReviewStatus)) {
+      throw new BadRequestException('La actividad no fue aprobada por Dirección: no emite constancias.');
     }
-    // §22: una actividad académica la gestiona la dirección de carrera o un
-    // docente dentro de su alcance. Antes solo valía la dirección, y esa regla
-    // dejaba sin constancia toda la participación en actividades de docente.
-    const expected = OWNER_ROLE_BY_TYPE[activity.type];
-    const docenteEnAcademica =
-      creatorRole === RolNombre.TEACHER && activity.type === ActivityType.ACADEMICA;
-
-    if (creatorRole !== expected && creatorRole !== RolNombre.ADMIN && !docenteEnAcademica) {
-      const quien =
-        expected === RolNombre.CAREER_DIRECTOR
-          ? 'la dirección de carrera o un docente dentro de su alcance'
-          : 'la sociedad científica';
-      throw new BadRequestException(
-        `La actividad no sigue el flujo institucional que le corresponde: las actividades ${
-          activity.type === ActivityType.ACADEMICA ? 'académicas' : 'extracurriculares'
-        } las gestiona ${quien}.`,
-      );
+    if (!activity.internalConstancyEnabled) {
+      throw new BadRequestException({
+        message: 'Esta actividad no tiene habilitadas las constancias internas.',
+        fields: { activityId: ['Esta actividad no tiene habilitadas las constancias internas.'] },
+      });
     }
   }
 

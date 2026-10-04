@@ -1,3 +1,4 @@
+import { ReviewActivityDto, SubmitActivityDto } from './dto/review-activity.dto';
 import {
   Body,
   Controller,
@@ -72,6 +73,20 @@ export class ActivitiesController {
     return this.activitiesService.findManagedBy(user);
   }
 
+  @Get('my-scope')
+  @Roles(RolNombre.TEACHER)
+  @ApiOperation({ summary: 'Semestres a los que el docente puede dirigir actividades (V2 §28).' })
+  myScope(@CurrentUser() user: AuthenticatedUser) {
+    return this.activitiesService.myScope(user);
+  }
+
+  @Get('reviews/pending')
+  @Roles(RolNombre.CAREER_DIRECTOR)
+  @ApiOperation({ summary: 'Actividades de Docentes y Sociedad que esperan la decisión de Dirección (V2 §27).' })
+  pendingReviews(@CurrentUser() user: AuthenticatedUser) {
+    return this.activitiesService.pendingReviews(user);
+  }
+
   @Get('my-registrations')
   @Roles(RolNombre.STUDENT)
   @ApiOperation({ summary: 'Actividades del estudiante con su estado de participación.' })
@@ -97,6 +112,37 @@ export class ActivitiesController {
     @Body() dto: UpdateActivityDto,
   ) {
     return this.activitiesService.update(user, id, dto);
+  }
+
+  @Post(':id/submit')
+  @Roles(RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY, RolNombre.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Enviar a revisión de Dirección (V2 §27.3).' })
+  submit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SubmitActivityDto,
+  ) {
+    return this.activitiesService.submitForReview(user, id, dto.comment);
+  }
+
+  @Post(':id/review')
+  @Roles(RolNombre.CAREER_DIRECTOR)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Aprobar, observar o rechazar una actividad enviada (V2 §27.3).' })
+  reviewActivity(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewActivityDto,
+  ) {
+    return this.activitiesService.review(user, id, dto.decision, dto.comment);
+  }
+
+  @Get(':id/reviews')
+  @Roles(...MANAGER_ROLES)
+  @ApiOperation({ summary: 'Historia de la revisión de una actividad.' })
+  reviewHistory(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.reviewHistory(user, id);
   }
 
   @Post(':id/register-interest')

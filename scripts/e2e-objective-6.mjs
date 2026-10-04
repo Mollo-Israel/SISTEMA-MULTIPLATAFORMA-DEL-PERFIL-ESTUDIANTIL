@@ -18,7 +18,7 @@
 //  Las cuentas que crea llevan sufijo de tiempo, por lo que puede repetirse.
 // =============================================================================
 
-import { leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, aprobarActividad } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -319,7 +319,7 @@ async function rf17Calculo(ctx) {
     token: ctx.docente.token,
     body: { title: `Laboratorio de shaders ${TS}`, description: 'Actividad del escenario.', type: 'academica', categoryId: categoria.id, areaId: areaSecundaria.id, semesterScope: [4] },
   });
-  await req('PATCH', `/activities/${act.data?.id}`, { token: ctx.docente.token, body: { status: 'open' } });
+  await aprobarActividad(ctx.docente.token, ctx.directorToken, act.data?.id);
   await req('POST', `/activities/${act.data?.id}/register`, { token: A.token });
   await req('PATCH', `/activities/${act.data?.id}/confirm-participation`, {
     token: ctx.docente.token, body: { studentProfileId: A.profileId, status: 'confirmed' },

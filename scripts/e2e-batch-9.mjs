@@ -13,7 +13,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { API, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { API, loginAdmin, provisionAndActivate, req, aprobarActividad } from './lib/fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractPdfText, esPdf } = require('../api/dist/validation/pdf-text.js');
@@ -536,6 +536,7 @@ async function preparar() {
   };
 
   const docente = await staff('doc', 'Silvia', 'Rocabado', 'TEACHER', [7]);
+  const director = await staff('dir', 'Hernan', 'Quiroga', 'CAREER_DIRECTOR', null);
   const est = await estudiante('est', 'Joaquin', 'Villegas', 7);
   const otro = await estudiante('otro', 'Nadia', 'Careaga', 7);
 
@@ -555,10 +556,7 @@ async function preparar() {
     if (creada.status !== 201) {
       throw new Error(`No se pudo crear la actividad ${i}: ${JSON.stringify(creada.data)}`);
     }
-    await req('PATCH', `/activities/${creada.data.id}`, {
-      token: docente.token,
-      body: { status: 'open' },
-    });
+    await aprobarActividad(docente.token, director.token, creada.data.id);
     actividades.push(creada.data);
   }
 

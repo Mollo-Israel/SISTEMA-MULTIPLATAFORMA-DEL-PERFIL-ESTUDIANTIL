@@ -11,7 +11,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-7.mjs
  */
 
-import { loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { loginAdmin, provisionAndActivate, req, aprobarActividad } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -683,9 +683,9 @@ async function preparar() {
       throw new Error(`No se pudo crear «${body.title}»: ${JSON.stringify(creada.data)}`);
     }
     if (abrir) {
-      await req('PATCH', `/activities/${creada.data.id}`, {
-        token, body: { status: 'open' },
-      });
+      // V2 §27: lo de Docente y Sociedad pasa por Dirección.
+      if (creada.data.requiresReview) await aprobarActividad(token, director.token, creada.data.id);
+      else await req('PATCH', `/activities/${creada.data.id}`, { token, body: { status: 'open' } });
     }
     return creada.data;
   };

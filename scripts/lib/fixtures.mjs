@@ -266,3 +266,24 @@ export async function provisionStudent(adminToken, { firstName, lastName, email,
 
   return { ...actor, profileId };
 }
+
+/**
+ * V2 §27: una actividad de Docente o Sociedad se envía a Dirección y solo se
+ * publica aprobada. Envía, aprueba y (si `abrir`) la abre.
+ */
+export async function aprobarActividad(managerToken, directorToken, activityId, { abrir = true } = {}) {
+  const enviada = await req('POST', `/activities/${activityId}/submit`, { token: managerToken, body: {} });
+  if (enviada.status !== 200) {
+    throw new Error(`No se pudo enviar a revisión (${enviada.status}): ${JSON.stringify(enviada.data)}`);
+  }
+  const aprobada = await req('POST', `/activities/${activityId}/review`, {
+    token: directorToken, body: { decision: 'approve' },
+  });
+  if (aprobada.status !== 200) {
+    throw new Error(`Dirección no pudo aprobar (${aprobada.status}): ${JSON.stringify(aprobada.data)}`);
+  }
+  if (abrir) {
+    await req('PATCH', `/activities/${activityId}`, { token: managerToken, body: { status: 'open' } });
+  }
+  return aprobada.data;
+}

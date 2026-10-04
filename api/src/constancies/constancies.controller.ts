@@ -21,7 +21,9 @@ export class ConstanciesController {
   constructor(private readonly constanciesService: ConstanciesService) {}
 
   @Post()
-  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  // V2 §30 y §6.5: Dirección, o el responsable (Docente/Sociedad) de una
+  // actividad aprobada con constancias habilitadas. La administración no.
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY)
   @ApiOperation({
     summary:
       'Emitir constancia interna. Requiere participación confirmada y no admite duplicados.',
@@ -31,7 +33,7 @@ export class ConstanciesController {
   }
 
   @Get('eligible/:activityId')
-  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY, RolNombre.ADMIN)
   @ApiOperation({
     summary:
       'Participantes confirmados de una actividad, indicando si ya tienen constancia emitida.',

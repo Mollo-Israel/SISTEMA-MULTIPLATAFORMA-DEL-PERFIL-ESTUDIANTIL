@@ -2,11 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import {
+  ActivityReviewStatus,
   AffinityLevel,
   GAMIFICATION_TRIGGER_LABEL,
   SYSTEM_GAMIFICATION_TRIGGERS,
   GamificationTrigger,
   ProjectBackingTier,
+  PUBLISHABLE_REVIEW_STATUSES,
   RegistrationStatus,
 } from '@perfil/shared';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
@@ -16,6 +18,7 @@ import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { Contact, TeamMember } from '../entities/collaboration.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
+import { ActivityGamificationRule } from '../entities/activity-review.entity';
 import {
   Badge,
   GamificationEvent,
@@ -33,6 +36,10 @@ interface Hecho {
   sourceEntityId: string | null;
   /** Área del hecho, para aplicar un criterio limitado a esa área. */
   areaId?: string | null;
+  /** Puntos fijados por una regla de la actividad (V2 §31.2); mandan sobre el criterio. */
+  fixedPoints?: number;
+  /** Insignia que la regla de la actividad otorga con el hecho. */
+  badgeId?: string | null;
 }
 
 /**
@@ -65,6 +72,8 @@ export class GamificationService {
     @InjectRepository(StudentPoints) private readonly points: Repository<StudentPoints>,
     @InjectRepository(Badge) private readonly badges: Repository<Badge>,
     @InjectRepository(StudentBadge) private readonly studentBadges: Repository<StudentBadge>,
+    @InjectRepository(ActivityGamificationRule)
+    private readonly activityRules: Repository<ActivityGamificationRule>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(ActivityRegistration)
     private readonly registrations: Repository<ActivityRegistration>,
@@ -141,8 +150,19 @@ export class GamificationService {
     ];
     const puntos = await this.puntosPorHecho();
     const valorados = hechos
-      .map((h) => ({ ...h, points: puntos(h.trigger, h.areaId) }))
+      .map((h) => ({ ...h, points: h.fixedPoints ?? puntos(h.trigger, h.areaId) }))
       .filter((h) => h.points > 0);
+    // Insignias que otorgan las reglas de las actividades (idempotente).
+    const insigniasDeReglas = [...new Set(hechos.map((h) => h.badgeId).filter((b): b is string => !!b))];
+    if (insigniasDeReglas.length) {
+      await this.studentBadges
+        .createQueryBuilder()
+        .insert()
+        .into(StudentBadge)
+        .values(insigniasDeReglas.map((badgeId) => ({ studentProfileId, badgeId })))
+        .orIgnore()
+        .execute();
+    }
     if (valorados.length === 0) {
       return { nuevos: 0, total: (await this.totalDe(studentProfileId)).totalPoints };
     }
@@ -184,14 +204,35 @@ export class GamificationService {
       where: { studentProfileId, status: RegistrationStatus.CONFIRMED },
       relations: { activity: true },
     });
-    return filas.map((r) => ({
-      trigger: GamificationTrigger.PARTICIPACION_CONFIRMADA,
-      dedupeKey: `participacion:${r.id}`,
-      reason: `Participación confirmada en «${r.activity?.title ?? 'una actividad'}»`,
-      sourceEntityType: 'activity_registration',
-      sourceEntityId: r.id,
-      areaId: r.activity?.academicAreaId ?? null,
-    }));
+    // V2 §31.2: la actividad puede fijar sus propios puntos. Solo cuentan las
+    // reglas de actividades aprobadas (o de Dirección): una regla que nadie
+    // revisó no reparte puntos.
+    const ids = [...new Set(filas.map((r) => r.activityId))];
+    const reglas = ids.length
+      ? await this.activityRules.find({
+          where: { activityId: In(ids), trigger: GamificationTrigger.PARTICIPACION_CONFIRMADA },
+          relations: { activity: true },
+        })
+      : [];
+    const reglaDe = new Map(
+      reglas
+        .filter((r) => PUBLISHABLE_REVIEW_STATUSES.includes(r.activity?.reviewStatus as ActivityReviewStatus))
+        .map((r) => [r.activityId, r]),
+    );
+    return filas.map((r) => {
+      const regla = reglaDe.get(r.activityId);
+      return {
+        trigger: GamificationTrigger.PARTICIPACION_CONFIRMADA,
+        dedupeKey: `participacion:${r.id}`,
+        reason: `Participación confirmada en «${r.activity?.title ?? 'una actividad'}»`
+          + (regla ? ' (puntos de la actividad)' : ''),
+        sourceEntityType: 'activity_registration',
+        sourceEntityId: r.id,
+        areaId: r.activity?.academicAreaId ?? null,
+        fixedPoints: regla?.points,
+        badgeId: regla?.badgeId ?? null,
+      };
+    });
   }
 
   /**

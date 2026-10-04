@@ -7,6 +7,8 @@ import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
 import { Skill } from '../entities/skill.entity';
+import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
+import { GamificationCriterion } from '../entities/gamification-criterion.entity';
 import { AccessModule } from '../access/access.module';
 import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { ActivitiesService } from './activities.service';
@@ -22,6 +24,9 @@ import { ActivitiesController } from './activities.controller';
       ActivityCategory,
       ActivitySkill,
       Skill,
+      ActivityReview,
+      ActivityGamificationRule,
+      GamificationCriterion,
     ]),
     TrajectoryModule,
     AccessModule,

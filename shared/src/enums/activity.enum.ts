@@ -123,3 +123,39 @@ export const ACTIVITY_STATUS_LABEL: Record<ActivityStatus, string> = {
   [ActivityStatus.FINISHED]: 'Finalizada',
   [ActivityStatus.CANCELLED]: 'Cancelada',
 };
+
+/**
+ * Revisión institucional de una actividad (V2 §27.2).
+ *
+ * Va aparte del ciclo de vida: aprobar no es publicar, y publicar exige haber
+ * sido aprobada (o no necesitarlo). `null` en la base significa que la
+ * actividad requiere revisión y todavía no se envió.
+ */
+export enum ActivityReviewStatus {
+  /** La crea Dirección: no necesita una segunda autoridad (§27.5). */
+  NOT_REQUIRED = 'not_required',
+  /** Enviada; espera la decisión de Dirección. */
+  PENDING = 'pending',
+  /** Dirección pidió cambios: se edita y se reenvía. */
+  OBSERVED = 'observed',
+  APPROVED = 'approved',
+  /** No se publica. Queda en la historia; no se reaprovecha como aprobada. */
+  REJECTED = 'rejected',
+}
+
+export const ACTIVITY_REVIEW_LABEL: Record<ActivityReviewStatus | 'unsubmitted', string> = {
+  unsubmitted: 'Sin enviar a revisión',
+  [ActivityReviewStatus.NOT_REQUIRED]: 'No requiere revisión',
+  [ActivityReviewStatus.PENDING]: 'En revisión por Dirección',
+  [ActivityReviewStatus.OBSERVED]: 'Con observaciones',
+  [ActivityReviewStatus.APPROVED]: 'Aprobada por Dirección',
+  [ActivityReviewStatus.REJECTED]: 'Rechazada',
+};
+
+/** Estados de revisión que permiten publicar o abrir (§27.6). */
+export const PUBLISHABLE_REVIEW_STATUSES: readonly ActivityReviewStatus[] = [
+  ActivityReviewStatus.NOT_REQUIRED,
+  ActivityReviewStatus.APPROVED,
+];
+
+export type ActivityReviewAction = 'submitted' | 'approved' | 'observed' | 'rejected';

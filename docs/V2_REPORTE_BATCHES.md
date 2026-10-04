@@ -202,3 +202,34 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** ninguno.
 
 **Riesgos:** las reglas canónicas son una lista cerrada en código; ampliarla es un cambio versionado, no un parámetro.
+
+## BATCH 5 — Actividades, revisión de Dirección, constancias y gamificación por actividad
+
+**Estado:** completo
+
+**Objetivo:** §26–§31 (C6, parte de C9).
+
+**Cambios:**
+- Revisión de Dirección (§27): Docente, Sociedad y Administración crean en borrador y envían a revisión; Dirección **aprueba**, **observa** (vuelve con comentario y se puede reenviar) o **rechaza** (queda inmutable salvo cancelar). El comentario es obligatorio para observar o rechazar. Lo que crea Dirección queda `not_required`.
+- Publicar o abrir exige revisión `approved` o `not_required` (409 en la API, no solo en la pantalla). En revisión no se edita el contenido; si una aprobada aún en borrador cambia su contenido, vuelve a requerir revisión.
+- Historia de revisión (`activity_reviews`) y auditoría `ACTIVITY_SUBMITTED/APPROVED/OBSERVED/REJECTED`.
+- Constancias (§30): la actividad declara `internal_constancy_enabled`, aprobado con ella. Emite Dirección o el creador/responsable de la actividad; la Administración ya no. Cada constancia guarda `issued_by` (quien emite) y `authorized_by` (Dirección que aprobó).
+- Gamificación por actividad (§31.2): `activity_gamification_rules`, solo para participación confirmada, con techo configurable `GAMIFICATION_ACTIVITY_MAX_POINTS` (50). Se aplican solo en actividades publicables; reemplazan los puntos del criterio general para esa actividad y pueden otorgar insignia.
+- TeacherScope en la pantalla (§28): `GET /activities/my-scope`; el docente solo ve sus semestres habilitados.
+- Web: columna «Revisión» con el comentario de Dirección y botón «Enviar a revisión/Reenviar»; los estados de publicación no aparecen hasta que esté aprobada; casilla de constancia y puntos por participar; nueva página **Aprobaciones** de Dirección (`/director/approvals`) con detalle, historia y decisión.
+- Seguridad (hallazgo previo a V2): los listados de actividades devolvían el `passwordHash` del creador dentro de la relación `creator`. `User.toJSON()` lo excluye de toda respuesta; prueba de regresión V2.5.31.
+
+**Migraciones:** `1780410000000-V2ActivityReview` (columnas de revisión en `activities`, las existentes quedan `not_required` con constancia habilitada para no cambiar su comportamiento; tablas `activity_reviews` y `activity_gamification_rules`), `1780410100000-V2ConstancyIssuer` (`issued_by`, rellenado con `authorized_by`). `down` y `up` probados sobre una copia respaldada; luego se restauró el respaldo.
+
+**Archivos:** `shared/src/enums/activity.enum.ts`, `api/src/entities/{activity,activity-review,internal-constancy,user}.entity.ts`, `api/src/activities/*`, `api/src/constancies/*`, `api/src/gamification/*`, `api/src/audit/audit.service.ts`, `web/src/components/ActivityManager.tsx`, `web/src/pages/director/Approvals.tsx`, `web/src/{App.tsx,navigation.ts,components/Layout.tsx,services/*,index.css}`, `.env.example`, `scripts/lib/fixtures.mjs`, suites adaptadas.
+
+**Pruebas:** `e2e-v2` batch5 (31): alcance del docente, borrador obligatorio, envío, sin publicar sin aprobación, solo Dirección decide, comentario obligatorio, observar/reenviar, rechazo inmutable, edición bloqueada en revisión, historia y auditoría, reglas de puntos en rango, constancia habilitada, emisor y autorizante, Administración sin constancias, sin fuga de hash.
+
+**Resultados:** regresión completa: 17 suites, 1284 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 70, B9 49, B10 42, B11 46, QA 74, V2 83). API y móvil `tsc` limpios; web compila en producción.
+
+**Regresiones:** las suites que publicaban actividades de docente o sociedad directamente ahora pasan por `aprobarActividad`. La prueba 5.55 de objectives-40 (sociedad abre su actividad sin más) se invirtió: bajo V2 debe dar 409.
+
+**Pendientes:** ninguno del batch.
+
+**Riesgos:** la Administración también pasa por revisión al crear actividades; se eligió así porque §6.5 la deja fuera de las decisiones académicas.
+
