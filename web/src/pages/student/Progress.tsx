@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { FiAward, FiDownload, FiFileText, FiGift, FiInfo } from 'react-icons/fi';
 import { apiError } from '../../api/client';
@@ -27,7 +28,12 @@ const FECHA = (v: string | null) =>
  * dos lados: qué he hecho, y cómo se lo cuento a alguien de fuera.
  */
 export default function StudentProgressPage() {
-  const [tab, setTab] = useState<'progreso' | 'recompensas' | 'resumen'>('progreso');
+  // La pestaña viaja en la URL (?tab=): el menú lleva directo a «Equipos» o
+  // a «CV / Exportar» (V2 §77), y volver atrás deja donde estaba.
+  const [params, setParams] = useSearchParams();
+  const pedida = params.get('tab');
+  const tab: 'progreso' | 'recompensas' | 'resumen' = (['progreso', 'recompensas', 'resumen'] as string[]).includes(pedida ?? '') ? (pedida as 'progreso' | 'recompensas' | 'resumen') : 'progreso';
+  const setTab = (k: 'progreso' | 'recompensas' | 'resumen') => setParams(k === 'progreso' ? {} : { tab: k }, { replace: true });
 
   return (
     <div>

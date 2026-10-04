@@ -1,7 +1,9 @@
-import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
-import { collaborationService, type ContactView } from '../../services';
+import {
+  collaborationService, type ContactChannelType, type ContactChannelView, type ContactView,
+} from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
   Badge, Button, Card, EmptyState, Field, Muted, SkeletonCards,
@@ -25,6 +27,74 @@ const DISPONIBILIDAD: Record<string, string> = {
  * El codigo QR se imprime desde la web. Dibujarlo aqui pediria una libreria de
  * SVG que el proyecto no tiene, y el enlace se comparte igual de bien copiado.
  */
+const CANALES: { channel: ContactChannelType; label: string; placeholder: string }[] = [
+  { channel: 'teams', label: 'Microsoft Teams', placeholder: 'tu.cuenta@est.univalle.edu' },
+  { channel: 'whatsapp', label: 'WhatsApp', placeholder: '+591 71234567' },
+  { channel: 'linkedin', label: 'LinkedIn', placeholder: 'linkedin.com/in/tu-nombre' },
+  { channel: 'email', label: 'Correo de contacto', placeholder: 'nombre@correo.com' },
+  { channel: 'link', label: 'Otro enlace', placeholder: 'https://tu-portafolio.dev' },
+];
+
+/**
+ * «Cómo contactarte» (V2 §59). La validación es la del servidor: aquí solo se
+ * escribe y se muestra el error del canal que no pasó.
+ */
+function MisCanales() {
+  const [valores, setValores] = useState<Record<string, { value: string; isPublic: boolean }>>({});
+  const [guardando, setGuardando] = useState(false);
+  const toast = useToast();
+
+  const aplicar = (lista: ContactChannelView[]) =>
+    setValores(Object.fromEntries(lista.map((c) => [c.channel, { value: c.value, isPublic: c.isPublic }])));
+
+  useEffect(() => {
+    collaborationService.myChannels().then(aplicar).catch(() => {});
+  }, []);
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      const lista = CANALES
+        .filter((c) => (valores[c.channel]?.value ?? '').trim())
+        .map((c) => ({ channel: c.channel, value: valores[c.channel].value.trim(), isPublic: !!valores[c.channel].isPublic }));
+      aplicar(await collaborationService.saveChannels(lista));
+      toast.success('Canales guardados.', 'Tus contactos ya los ven.');
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <Card title="Cómo contactarte">
+      <Muted>
+        Afinia no tiene chat: tus contactos te escriben por el canal que elijas. Todos son opcionales.
+      </Muted>
+      {CANALES.map((c) => (
+        <View key={c.channel}>
+          <Field
+            label={c.label}
+            value={valores[c.channel]?.value ?? ''}
+            placeholder={c.placeholder}
+            onChangeText={(t) => setValores({ ...valores, [c.channel]: { value: t, isPublic: valores[c.channel]?.isPublic ?? false } })}
+          />
+          <View style={styles.fila}>
+            <Switch
+              value={!!valores[c.channel]?.isPublic}
+              disabled={!(valores[c.channel]?.value ?? '').trim()}
+              onValueChange={(v) => setValores({ ...valores, [c.channel]: { value: valores[c.channel]?.value ?? '', isPublic: v } })}
+              accessibilityLabel={`Mostrar ${c.label} en mi perfil público`}
+            />
+            <Muted>Mostrar en mi perfil público</Muted>
+          </View>
+        </View>
+      ))}
+      <Button icon="save" title="Guardar canales" loading={guardando} onPress={guardar} />
+    </Card>
+  );
+}
+
 export default function CollaborationScreen() {
   const enlaceState = useAsync(() => collaborationService.myPublicLink(), []);
   const contactosState = useAsync(() => collaborationService.contacts(), []);
@@ -138,6 +208,8 @@ export default function CollaborationScreen() {
         )}
       </Card>
 
+      <MisCanales />
+
       <Card title="Solicitar contacto">
         <Muted>
           Escanear un QR te lleva al perfil, pero no establece contacto: eso lo decide la otra
@@ -208,11 +280,27 @@ export default function CollaborationScreen() {
         )}
         {contactos.map((c) => (
           <View key={c.contactId} style={styles.item}>
-            <Text style={styles.nombre}>{c.name}</Text>
+            <Text style={styles.nombre}>{c.note?.alias || c.name}</Text>
             <Muted>
               {c.semester ? `${c.semester}.º semestre · ` : ''}
               {DISPONIBILIDAD[c.availability ?? 'unspecified']}
             </Muted>
+            {/* V2 §59: el contacto se hace fuera de Afinia, por el canal que compartió. */}
+            <View style={styles.botones}>
+              {(c.channels ?? []).filter((k) => k.href).map((k) => (
+                <Pressable
+                  key={k.channel}
+                  onPress={() => Linking.openURL(k.href!)}
+                  accessibilityRole="link"
+                  style={[styles.canal, k.channel === c.note?.preferredChannel && styles.canalPreferido]}
+                >
+                  <Text style={[styles.canalTexto, k.channel === c.note?.preferredChannel && { color: '#fff' }]}>
+                    {k.label}
+                  </Text>
+                </Pressable>
+              ))}
+              {(c.channels ?? []).length === 0 && <Muted>No compartió canales.</Muted>}
+            </View>
           </View>
         ))}
       </Card>
@@ -239,4 +327,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.gray100,
   },
   nombre: { fontWeight: '700', color: colors.gray700 },
+  canal: {
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.bordo,
+  },
+  canalPreferido: { backgroundColor: colors.bordo },
+  canalTexto: { color: colors.gray700, fontWeight: '600', fontSize: 12 },
 });

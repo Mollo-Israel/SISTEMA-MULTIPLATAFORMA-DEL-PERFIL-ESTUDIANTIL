@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { FiInbox, FiSearch, FiX } from 'react-icons/fi';
 
 /**
@@ -199,6 +200,19 @@ export function AsyncView<T>({
  * Dialogo centrado, con la misma entrada que el modal de confirmacion para que
  * todas las ventanas del sistema se sientan iguales. Escape y el fondo cierran.
  */
+/**
+ * Diálogo modal (V2 §66.2: sin parpadeos ni superposiciones incorrectas).
+ *
+ * - Se monta en `document.body` con un portal. Dentro de la página quedaba
+ *   bajo contenedores animados con `transform` (las listas con `Stagger`), y
+ *   un `position: fixed` dentro de un ancestro transformado se recoloca
+ *   mientras ese ancestro anima: de ahí el parpadeo.
+ * - Transición corta (180 ms) en vez de un resorte; con movimiento reducido,
+ *   `MotionConfig` la anula.
+ * - Atrapa el foco, lo devuelve al cerrar y bloquea el scroll del fondo.
+ * - `onClose` se lee por referencia: un padre que pasa una función nueva en
+ *   cada render no vuelve a registrar los manejadores.
+ */
 export function Modal({
   title,
   subtitle,
@@ -212,49 +226,84 @@ export function Modal({
   children: ReactNode;
   width?: number;
 }) {
+  const panel = useRef<HTMLDivElement | null>(null);
+  const cerrar = useRef(onClose);
+  cerrar.current = onClose;
+
   useEffect(() => {
+    const previo = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const enfocables = () =>
+      Array.from(
+        panel.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+    // Primer campo del contenido, o el propio diálogo.
+    (enfocables().find((el) => !el.classList.contains('modal-close')) ?? panel.current)?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        cerrar.current();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const lista = enfocables();
+      if (lista.length === 0) return;
+      const primero = lista[0];
+      const ultimo = lista[lista.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero.focus();
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+      previo?.focus?.();
+    };
+  }, []);
 
-  return (
-    <AnimatePresence>
+  return createPortal(
+    <motion.div
+      className="modal-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18 }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) cerrar.current(); }}
+      role="presentation"
+    >
       <motion.div
-        className="modal-backdrop"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        role="presentation"
+        ref={panel}
+        tabIndex={-1}
+        className="modal"
+        style={width ? { maxWidth: width } : undefined}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
       >
-        <motion.div
-          className="modal"
-          style={width ? { maxWidth: width } : undefined}
-          onClick={(e) => e.stopPropagation()}
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-          initial={{ opacity: 0, y: 12, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 8, scale: 0.98 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-        >
-          <div className="modal-head">
-            <div>
-              <h3>{title}</h3>
-              {subtitle && <span className="muted">{subtitle}</span>}
-            </div>
-            <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Cerrar">
-              <FiX />
-            </button>
+        <div className="modal-head">
+          <div>
+            <h3>{title}</h3>
+            {subtitle && <span className="muted">{subtitle}</span>}
           </div>
-          {children}
-        </motion.div>
+          <button type="button" className="btn btn-ghost btn-sm modal-close" onClick={() => cerrar.current()} aria-label="Cerrar">
+            <FiX />
+          </button>
+        </div>
+        {children}
       </motion.div>
-    </AnimatePresence>
+    </motion.div>,
+    document.body,
   );
 }
 

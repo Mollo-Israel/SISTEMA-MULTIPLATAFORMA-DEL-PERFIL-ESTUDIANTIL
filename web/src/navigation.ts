@@ -24,18 +24,32 @@ export const NAV: Record<string, NavGroup[]> = {
       items: [
         { to: '/student', label: 'Inicio' },
         { to: '/student/profile', label: 'Mi perfil' },
+        { to: '/student/profile?tab=intereses', label: 'Preferencias' },
         { to: '/student/projects', label: 'Proyectos' },
         { to: '/student/evidences', label: 'Evidencias y certificados' },
         { to: '/student/affinity', label: 'Áreas de afinidad' },
         { to: '/student/recommendations', label: 'Recomendaciones' },
-        { to: '/student/collaboration', label: 'Colaboración' },
-        { to: '/student/progress', label: 'Mi progreso' },
-        { to: '/student/privacy', label: 'Privacidad' },
       ],
     },
     {
       section: 'Comunidad',
-      items: [{ to: '/student/activities', label: 'Actividades' }],
+      items: [
+        { to: '/student/activities', label: 'Actividades' },
+        { to: '/student/collaboration', label: 'Colaboración' },
+        { to: '/student/collaboration?tab=equipos', label: 'Equipos' },
+      ],
+    },
+    {
+      section: 'Mi trayectoria',
+      items: [
+        { to: '/student/progress', label: 'Mi progreso' },
+        { to: '/student/progress?tab=resumen', label: 'CV / Exportar' },
+        { to: '/student/privacy', label: 'Privacidad' },
+      ],
+    },
+    {
+      section: 'Ayuda',
+      items: [{ to: '/ayuda', label: 'Ayuda' }],
     },
   ],
   [RolNombre.TEACHER]: [
@@ -48,8 +62,13 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/teacher/students', label: 'Perfil de estudiante' },
         { to: '/teacher/projects', label: 'Proyectos estudiantiles' },
         { to: '/teacher/reports', label: 'Panel académico' },
+        { to: '/teacher/team-needs', label: 'Necesidades de equipo' },
         { to: '/teacher/recognitions', label: 'Retos y recompensas' },
       ],
+    },
+    {
+      section: 'Ayuda',
+      items: [{ to: '/ayuda', label: 'Ayuda' }],
     },
   ],
   [RolNombre.CAREER_DIRECTOR]: [
@@ -66,6 +85,10 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/director/recognitions', label: 'Retos y recompensas' },
       ],
     },
+    {
+      section: 'Ayuda',
+      items: [{ to: '/ayuda', label: 'Ayuda' }],
+    },
   ],
   [RolNombre.SCIENTIFIC_SOCIETY]: [
     {
@@ -76,6 +99,10 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/society/metrics', label: 'Métricas' },
       ],
     },
+    {
+      section: 'Ayuda',
+      items: [{ to: '/ayuda', label: 'Ayuda' }],
+    },
   ],
   [RolNombre.ADMIN]: [
     {
@@ -84,11 +111,18 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin', label: 'Usuarios' },
         { to: '/admin/imports', label: 'Importar padrón' },
         { to: '/admin/areas', label: 'Áreas y habilidades' },
+        { to: '/admin?role=TEACHER', label: 'Alcance docente' },
         { to: '/admin/activity-categories', label: 'Categorías de actividad' },
+        { to: '/admin/resources', label: 'Recursos' },
         { to: '/admin/gamification', label: 'Puntos por logros' },
         { to: '/admin/recognitions', label: 'Retos y recompensas' },
+        { to: '/admin/audit', label: 'Auditoría' },
         { to: '/admin/mail', label: 'Correo' },
       ],
+    },
+    {
+      section: 'Ayuda',
+      items: [{ to: '/ayuda', label: 'Ayuda' }],
     },
   ],
 };

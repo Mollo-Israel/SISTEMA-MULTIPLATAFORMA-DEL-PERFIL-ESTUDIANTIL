@@ -81,6 +81,46 @@ export class ReportsService {
     };
   }
 
+  /**
+   * Necesidades de equipo abiertas cuyo responsable está en el alcance del
+   * docente (V2 §62, §77). Solo lectura: el docente las ve para orientar, no
+   * para invitar ni para elegir integrantes; eso es de los estudiantes (§47).
+   */
+  async teacherTeamNeeds(user: AuthenticatedUser) {
+    const scope = await this.teacherScope.scopeFor(user);
+    if (isEmptyScope(scope)) return [];
+    const filas: {
+      id: string; purpose: string; description: string | null; max_members: number | null;
+      created_at: Date; semester: number; owner: string; skills: string[] | null; areas: string[] | null;
+    }[] = await this.profiles.query(
+      `SELECT n.id, n.purpose, n.description, n.max_members, n.created_at, sp.semester,
+              u.first_name || ' ' || u.last_name AS owner,
+              (SELECT array_agg(s.name ORDER BY s.name) FROM team_need_skills ns JOIN skills s ON s.id = ns.skill_id
+                WHERE ns.team_need_id = n.id) AS skills,
+              (SELECT array_agg(a.name ORDER BY a.name) FROM team_need_areas na JOIN academic_areas a ON a.id = na.academic_area_id
+                WHERE na.team_need_id = n.id) AS areas
+         FROM team_needs n
+         JOIN student_profiles sp ON sp.id = n.owner_profile_id
+         JOIN users u ON u.id = sp.user_id
+        WHERE n.status = 'open'
+          AND ($1::int[] IS NULL OR sp.semester = ANY($1::int[]))
+        ORDER BY sp.semester, n.created_at DESC
+        LIMIT 200`,
+      [scope ?? null],
+    );
+    return filas.map((f) => ({
+      id: f.id,
+      purpose: f.purpose,
+      description: f.description,
+      maxMembers: f.max_members,
+      createdAt: f.created_at,
+      semester: Number(f.semester),
+      owner: f.owner,
+      requiredSkills: f.skills ?? [],
+      preferredAreas: f.areas ?? [],
+    }));
+  }
+
   /** Respuesta de un docente sin semestres asignados: vacia, no de la carrera. */
   private emptyTeacherOverview() {
     return {

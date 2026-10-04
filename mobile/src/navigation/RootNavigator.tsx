@@ -26,21 +26,6 @@ import WelcomeScreen from '../screens/student/WelcomeScreen';
 import { profileService } from '../services';
 import { Loading } from '../components/ui';
 
-import TeacherActivities from '../screens/teacher/TeacherActivities';
-import StudentSummary from '../screens/teacher/StudentSummary';
-import TeacherReport from '../screens/teacher/TeacherReport';
-
-import SocietyActivities from '../screens/society/SocietyActivities';
-
-import DirectorDashboard from '../screens/director/DirectorDashboard';
-import DirectorActivities from '../screens/director/DirectorActivities';
-import ConstanciesScreen from '../screens/director/ConstanciesScreen';
-import AffinityMapScreen from '../screens/director/AffinityMapScreen';
-import ParticipationScreen from '../screens/director/ParticipationScreen';
-
-import AdminUsers from '../screens/admin/AdminUsers';
-import AdminAreas from '../screens/admin/AdminAreas';
-
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
@@ -197,89 +182,6 @@ function StudentGate() {
   return <StudentTabs />;
 }
 
-function TeacherTabs() {
-  return (
-    <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen
-        name="Actividades"
-        component={TeacherActivities}
-        options={{ tabBarIcon: tabIcon('Actividades'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Estudiante"
-        component={StudentSummary}
-        options={{ tabBarIcon: tabIcon('Estudiante'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Reporte"
-        component={TeacherReport}
-        options={{ tabBarIcon: tabIcon('Reporte'), ...withLogout }}
-      />
-    </Tab.Navigator>
-  );
-}
-
-function SocietyTabs() {
-  return (
-    <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen
-        name="Actividades"
-        component={SocietyActivities}
-        options={{ tabBarIcon: tabIcon('Actividades'), ...withLogout }}
-      />
-    </Tab.Navigator>
-  );
-}
-
-function DirectorTabs() {
-  return (
-    <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen
-        name="Dashboard"
-        component={DirectorDashboard}
-        options={{ tabBarIcon: tabIcon('Dashboard'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Actividades"
-        component={DirectorActivities}
-        options={{ tabBarIcon: tabIcon('Actividades'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Constancias"
-        component={ConstanciesScreen}
-        options={{ tabBarIcon: tabIcon('Constancias'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Afinidad"
-        component={AffinityMapScreen}
-        options={{ tabBarIcon: tabIcon('Afinidad'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Semestre"
-        component={ParticipationScreen}
-        options={{ tabBarIcon: tabIcon('Semestre'), ...withLogout }}
-      />
-    </Tab.Navigator>
-  );
-}
-
-function AdminTabs() {
-  return (
-    <Tab.Navigator screenOptions={screenOptions}>
-      <Tab.Screen
-        name="Usuarios"
-        component={AdminUsers}
-        options={{ tabBarIcon: tabIcon('Usuarios'), ...withLogout }}
-      />
-      <Tab.Screen
-        name="Áreas"
-        component={AdminAreas}
-        options={{ tabBarIcon: tabIcon('Áreas'), ...withLogout }}
-      />
-    </Tab.Navigator>
-  );
-}
-
 export default function RootNavigator() {
   const { user } = useAuth();
   if (!user) {
@@ -289,26 +191,24 @@ export default function RootNavigator() {
       </Stack.Navigator>
     );
   }
-  switch (user.role) {
-    case 'STUDENT': return <StudentGate />;
-    case 'TEACHER': return <TeacherTabs />;
-    case 'SCIENTIFIC_SOCIETY': return <SocietyTabs />;
-    case 'CAREER_DIRECTOR': return <DirectorTabs />;
-    case 'ADMIN': return <AdminTabs />;
-    // Los cinco roles del sistema están arriba. Si llega otro, la app no sabe
-    // qué mostrarle: lo dice, en vez de prometerle una versión futura.
-    default: return <RolSinPantalla />;
-  }
+  // V2 §67: la app es solo del Estudiante. La API ya rechaza el inicio de
+  // sesión de otros roles desde el móvil; esto cubre una sesión antigua.
+  return user.role === 'STUDENT' ? <StudentGate /> : <SoloEstudiantes />;
 }
 
-function RolSinPantalla() {
+function SoloEstudiantes() {
+  const { logout } = useAuth();
   return (
     <Screen>
-      <H1>Sin acceso móvil</H1>
-      <Card title="Este rol no tiene pantallas en la aplicación">
+      <H1>App para estudiantes</H1>
+      <Card title="Tu rol trabaja desde la web">
         <Muted>
-          Entre desde la versión web, que sí cubre todos los roles del sistema.
+          La aplicación móvil de Afinia es para estudiantes. Docentes, Dirección, sociedades
+          científicas y Administración entran desde la versión web.
         </Muted>
+        <Pressable onPress={logout} style={{ marginTop: 14 }} accessibilityRole="button">
+          <Text style={{ color: colors.bordo, fontWeight: '700' }}>Cerrar sesión</Text>
+        </Pressable>
       </Card>
     </Screen>
   );

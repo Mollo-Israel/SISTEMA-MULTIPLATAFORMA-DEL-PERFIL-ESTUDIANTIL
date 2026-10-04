@@ -1,6 +1,7 @@
+import { useSearchParams } from 'react-router-dom';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
-  FiAlertTriangle, FiCheck, FiCopy, FiEdit2, FiLink, FiMessageSquare, FiRefreshCw, FiSend, FiUserPlus, FiUsers, FiX,
+  FiAlertTriangle, FiCheck, FiCopy, FiEdit2, FiLink, FiRefreshCw, FiUserPlus, FiUsers, FiX,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
@@ -39,7 +40,12 @@ const DISPONIBILIDAD: Record<string, string> = {
  * muestra los canales externos que la otra persona eligió compartir (§59).
  */
 export default function StudentCollaborationPage() {
-  const [tab, setTab] = useState<'enlace' | 'contactos' | 'equipos'>('enlace');
+  // La pestaña viaja en la URL (?tab=): el menú lleva directo a «Equipos» o
+  // a «CV / Exportar» (V2 §77), y volver atrás deja donde estaba.
+  const [params, setParams] = useSearchParams();
+  const pedida = params.get('tab');
+  const tab: 'enlace' | 'contactos' | 'equipos' = (['enlace', 'contactos', 'equipos'] as string[]).includes(pedida ?? '') ? (pedida as 'enlace' | 'contactos' | 'equipos') : 'enlace';
+  const setTab = (k: 'enlace' | 'contactos' | 'equipos') => setParams(k === 'enlace' ? {} : { tab: k }, { replace: true });
   const toast = useToast();
   const confirm = useConfirm();
 

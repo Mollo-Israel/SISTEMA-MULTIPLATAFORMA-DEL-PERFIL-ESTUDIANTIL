@@ -28,6 +28,7 @@ import { EvidencesModule } from './evidences/evidences.module';
 import { ProjectFeedbackModule } from './project-feedback/project-feedback.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { AiModule } from './ai/ai.module';
+import { HelpModule } from './help/help.module';
 import { GamificationModule } from './gamification/gamification.module';
 import { RequestIdMiddleware } from './common/request-context';
 import { RecommendationsModule } from './recommendations/recommendations.module';
@@ -78,6 +79,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     RecommendationsModule,
     CollaborationModule,
     AiModule,
+    HelpModule,
     GamificationModule,
   ],
   controllers: [HealthController],

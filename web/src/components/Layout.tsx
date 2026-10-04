@@ -4,22 +4,27 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiAward,
   FiBarChart2,
-  FiTrendingUp,
   FiBookOpen,
   FiCalendar,
   FiCheckSquare,
   FiClock,
   FiCompass,
+  FiFileText,
   FiFolder,
   FiGift,
   FiGrid,
+  FiHelpCircle,
   FiLayers,
   FiMail,
   FiMenu,
   FiPaperclip,
+  FiShield,
+  FiSliders,
   FiStar,
   FiTag,
   FiTarget,
+  FiTrendingUp,
+  FiUpload,
   FiUser,
   FiUsers,
   FiX,
@@ -29,6 +34,7 @@ import { useAuth } from '../auth/AuthContext';
 import { NAV } from '../navigation';
 import { TopProgress } from './feedback';
 import UserMenu from './UserMenu';
+import Tutorial from './Tutorial';
 
 const ICONS: Record<string, IconType> = {
   '/student': FiGrid,
@@ -64,7 +70,37 @@ const ICONS: Record<string, IconType> = {
   '/teacher/recognitions': FiGift,
   '/director/recognitions': FiGift,
   '/admin/recognitions': FiGift,
+  '/student/profile?tab=intereses': FiSliders,
+  '/student/collaboration?tab=equipos': FiUsers,
+  '/student/progress?tab=resumen': FiFileText,
+  '/student/privacy': FiShield,
+  '/teacher/team-needs': FiUsers,
+  '/teacher/my-activities': FiCalendar,
+  '/admin?role=TEACHER': FiSliders,
+  '/admin/imports': FiUpload,
+  '/admin/resources': FiBookOpen,
+  '/admin/audit': FiShield,
+  '/ayuda': FiHelpCircle,
 };
+
+/**
+ * Un ítem con `?tab=` (V2 §77: Equipos, CV, Preferencias) está activo solo con
+ * esa pestaña; el ítem de la página está activo cuando ninguna de sus
+ * pestañas con acceso propio lo está.
+ */
+function activo(to: string, pathname: string, search: string, hermanos: string[]): boolean {
+  const [ruta, query] = to.split('?');
+  if (pathname !== ruta && !(ruta.split('/').length > 2 && pathname.startsWith(`${ruta}/`))) return false;
+  const actual = new URLSearchParams(search);
+  if (query) {
+    const pedido = new URLSearchParams(query);
+    return [...pedido.entries()].every(([k, v]) => actual.get(k) === v);
+  }
+  return !hermanos.some((h) => {
+    const [r, q] = h.split('?');
+    return r === ruta && q && [...new URLSearchParams(q).entries()].every(([k, v]) => actual.get(k) === v);
+  });
+}
 
 export default function Layout() {
   const { user } = useAuth();
@@ -126,12 +162,19 @@ export default function Layout() {
               <div className="nav-section">{group.section}</div>
               {group.items.map((item) => {
                 const Icon = ICONS[item.to] ?? FiClock;
+                const todos = groups.flatMap((g) => g.items.map((i) => i.to));
+                const esRaiz = item.to.split('/').length <= 2;
                 return (
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to.split('/').length <= 2}
-                    className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+                    end={esRaiz}
+                    className={({ isActive }) => {
+                      const on = item.to.includes('?') || !esRaiz
+                        ? activo(item.to, location.pathname, location.search, todos)
+                        : isActive && activo(item.to, location.pathname, location.search, todos);
+                      return `nav-link ${on ? 'active' : ''}`;
+                    }}
                   >
                     <Icon /> {item.label}
                   </NavLink>
@@ -170,6 +213,7 @@ export default function Layout() {
         >
           <Outlet />
         </motion.div>
+        <Tutorial />
       </div>
     </div>
   );

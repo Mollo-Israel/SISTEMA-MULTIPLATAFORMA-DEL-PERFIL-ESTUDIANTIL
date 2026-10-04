@@ -22,6 +22,9 @@
     },
     "extra": {
       "apiUrl": "http://localhost:3010/api"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

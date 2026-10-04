@@ -1,8 +1,25 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
-import { UserStatus } from '@perfil/shared';
+import { RolNombre, UserStatus } from '@perfil/shared';
+
+/**
+ * Cliente que se presenta en la cabecera `X-Afinia-Client` (V2 §67). No es
+ * autorización —un cliente cualquiera puede omitirla y entonces es la web,
+ * donde cada rol tiene su lugar—: es la regla de producto «la app móvil es
+ * del Estudiante», aplicada antes de emitir la sesión y no ocultando botones.
+ */
+export type ClientKind = 'web' | 'mobile';
+
+export function assertClientAllowsRole(client: ClientKind | undefined, role: string): void {
+  if (client === 'mobile' && role !== RolNombre.STUDENT) {
+    throw new ForbiddenException({
+      code: 'MOBILE_STUDENT_ONLY',
+      message: 'La aplicación móvil es para estudiantes. Entra a Afinia desde la web.',
+    });
+  }
+}
 import { UsersService } from '../users/users.service';
 import { PublicUser, toPublicUser } from '../users/types/public-user';
 import { AuthSessionsService, SessionContext } from '../identity/auth-sessions.service';
@@ -61,6 +78,8 @@ export class AuthService {
     }
 
     const user = toPublicUser(entity);
+    // Antes de crear la sesión: si el cliente no corresponde, no queda nada abierto.
+    assertClientAllowsRole(context.client, user.role);
     const session = await this.sessions.create(user.id, context);
 
     return {
@@ -77,11 +96,13 @@ export class AuthService {
    * La rotación es condicional: si el mismo token llega dos veces, solo el
    * primero encuentra la sesión. Un token reutilizado no produce acceso.
    */
-  async refresh(refreshToken: string): Promise<AuthResult> {
+  async refresh(refreshToken: string, client?: ClientKind): Promise<AuthResult> {
     const session = await this.sessions.findUsable(refreshToken);
     if (!session) {
       throw new UnauthorizedException('La sesión expiró o fue cerrada. Inicie sesión de nuevo.');
     }
+    // Una sesión de personal no se renueva desde la app móvil (V2 §67).
+    assertClientAllowsRole(client, session.user.role?.name ?? '');
 
     if (session.user.status !== UserStatus.ACTIVE) {
       await this.sessions.revoke(session.id);

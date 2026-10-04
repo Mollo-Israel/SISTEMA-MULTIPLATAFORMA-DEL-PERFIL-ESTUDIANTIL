@@ -115,6 +115,8 @@ async function levantarApi() {
       AI_API_KEY: CLAVE,
       AI_TIMEOUT_MS: '1500',
       AI_MAX_INPUT_CHARS: '4000',
+      // V2 §65: de paso, el video del centro de ayuda.
+      HELP_VIDEO_URL: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10',
       // La instancia principal ya hizo los recálculos de arranque.
       AFFINITY_BACKFILL_ON_BOOT: 'false',
     },
@@ -154,6 +156,11 @@ async function pruebas() {
   await req('PUT', `/users/${docenteDentro.userId}/semesters`, { token: admin, body: { semesters: [6] } });
   await req('PUT', `/users/${docenteFuera.userId}/semesters`, { token: admin, body: { semesters: [1] } });
   for (const s of [est, otro]) await req('POST', '/profiles/me', { token: s.token, body: {} });
+
+  objective('§65 · Video del centro de ayuda');
+  const ayuda = await req('GET', '/help');
+  check(ayuda.data?.video?.embedUrl === 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+    'IA.0 HELP_VIDEO_URL de YouTube se inserta sin cookies', json(ayuda.data));
 
   objective('§43.1 · Proveedor openai_compatible');
   const st = await req('GET', '/ai/status', { token: est.token });

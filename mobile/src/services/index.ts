@@ -140,19 +140,12 @@ export const activityService = {
   list: (params?: Record<string, string>) => api.get<any[]>('/activities', { params }).then((r) => r.data),
   /** Detalle: para el estudiante incluye su propio estado y si puede inscribirse. */
   get: (id: string) => api.get<any>(`/activities/${id}`).then((r) => r.data),
-  /** Actividades que el usuario gestiona, incluidos sus borradores. */
-  managed: () => api.get<any[]>('/activities/managed').then((r) => r.data),
   myRegistrations: () => api.get<any[]>('/activities/my-registrations').then((r) => r.data),
-  create: (data: any) => api.post('/activities', data).then((r) => r.data),
-  update: (id: string, data: any) => api.patch(`/activities/${id}`, data).then((r) => r.data),
   registerInterest: (id: string) => api.post(`/activities/${id}/register-interest`).then((r) => r.data),
   register: (id: string) => api.post(`/activities/${id}/register`).then((r) => r.data),
   /** Baja voluntaria, solo antes de que confirmen la participacion (§23). */
   cancelRegistration: (id: string) =>
     api.post(`/activities/${id}/cancel-registration`).then((r) => r.data),
-  confirm: (id: string, studentProfileId: string, status: string) =>
-    api.patch(`/activities/${id}/confirm-participation`, { studentProfileId, status }).then((r) => r.data),
-  participants: (id: string) => api.get<any[]>(`/activities/${id}/participants`).then((r) => r.data),
 };
 
 export const projectService = {
@@ -284,12 +277,6 @@ export const certificateService = {
 
 export const constancyService = {
   mine: () => api.get<any[]>('/constancies/internal/my').then((r) => r.data),
-  eligible: (activityId: string) =>
-    api.get<any[]>(`/constancies/internal/eligible/${activityId}`).then((r) => r.data),
-  byActivity: (activityId: string) =>
-    api.get<any[]>(`/constancies/internal/activity/${activityId}`).then((r) => r.data),
-  create: (data: { profileId: string; activityId: string; description: string }) =>
-    api.post<any>('/constancies/internal', data).then((r) => r.data),
 };
 
 /** Un area dentro del resumen de afinidad (RF17, §49). */
@@ -406,6 +393,17 @@ export interface PublicLinkView {
   qrPayload: string;
 }
 
+export type ContactChannelType = 'teams' | 'whatsapp' | 'linkedin' | 'email' | 'link';
+
+/** Canal de contacto ya validado por la API, con su enlace seguro (V2 §59). */
+export interface ContactChannelView {
+  channel: ContactChannelType;
+  label: string;
+  value: string;
+  href: string | null;
+  isPublic: boolean;
+}
+
 export interface ContactView {
   contactId: string;
   profileId: string;
@@ -414,9 +412,17 @@ export interface ContactView {
   availability: string | null;
   source: string;
   since: string;
+  /** V2 §59: los canales que la otra persona compartió. */
+  channels: ContactChannelView[];
+  /** V2 §56: lo que yo anoté de este contacto. */
+  note: { alias: string | null; context: string | null; preferredChannel: ContactChannelType | null };
 }
 
 export const collaborationService = {
+  // V2 §59: Afinia no tiene chat; cada uno comparte sus canales.
+  myChannels: () => api.get<ContactChannelView[]>('/profiles/me/contact-channels').then((r) => r.data),
+  saveChannels: (channels: { channel: ContactChannelType; value: string; isPublic: boolean }[]) =>
+    api.put<ContactChannelView[]>('/profiles/me/contact-channels', { channels }).then((r) => r.data),
   myPublicLink: () => api.get<PublicLinkView>('/profiles/me/public-link').then((r) => r.data),
   rotatePublicLink: () =>
     api.post<PublicLinkView>('/profiles/me/public-link/rotate').then((r) => r.data),
@@ -535,13 +541,4 @@ export const recommendationService = {
   rules: () => api.get('/recommendations/rules').then((r) => r.data),
 };
 
-export const reportService = {
-  teacherOverview: () => api.get('/reports/teacher/overview').then((r) => r.data),
-  directorOverview: () => api.get('/reports/director/overview').then((r) => r.data),
-  participationBySemester: () => api.get('/reports/director/participation-by-semester').then((r) => r.data),
-  directorAffinityMap: () => api.get('/reports/director/affinity-map').then((r) => r.data),
-};
 
-export const adminService = {
-  listUsers: () => api.get<PublicUser[]>('/users').then((r) => r.data),
-};

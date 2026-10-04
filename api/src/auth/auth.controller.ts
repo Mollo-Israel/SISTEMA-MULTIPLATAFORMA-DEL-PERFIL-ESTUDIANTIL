@@ -23,6 +23,10 @@ import {
  * No hay `POST /auth/register`: §9.1 lo elimina. Una cuenta nace provisionada
  * por el administrador y se activa en `/activation`.
  */
+/** V2 §67: la app móvil se identifica; cualquier otro cliente es la web. */
+const clienteDe = (req: Request): 'web' | 'mobile' =>
+  String(req.headers['x-afinia-client'] ?? '').toLowerCase() === 'mobile' ? 'mobile' : 'web';
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -52,6 +56,7 @@ export class AuthController {
     const result = await this.authService.login(dto, {
       userAgent: req.headers['user-agent'] ?? null,
       ipAddress: req.ip ?? null,
+      client: clienteDe(req),
     });
     return this.entregar(req, res, result);
   }
@@ -70,7 +75,7 @@ export class AuthController {
       throw new UnauthorizedException('La sesión expiró o fue cerrada. Inicie sesión de nuevo.');
     }
     try {
-      return this.entregar(req, res, await this.authService.refresh(token));
+      return this.entregar(req, res, await this.authService.refresh(token, clienteDe(req)));
     } catch (error) {
       // Una cookie que ya no sirve se borra: el navegador no debe seguir
       // presentándola.

@@ -881,7 +881,94 @@ async function batch13(ctx) {
   check(ajenas, 'V2.13.9 §64 Solo sobre sus actividades');
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch8, batch10, batch11, batch12, batch13 };
+// ===========================================================================
+//  BATCH 14 — Ayuda, necesidades de equipo para el docente y auditoría
+// ===========================================================================
+async function batch14(ctx) {
+  objective('BATCH 14 · Centro de ayuda, accesos por actor y auditoría');
+  const ayuda = await req('GET', '/help');
+  check(ayuda.status === 200 && 'video' in (ayuda.data ?? {}),
+    'V2.14.1 §65 La ayuda se abre sin sesión (activar, recuperar)', json(ayuda.data));
+
+  const staff = async (key, role, semesters) => {
+    const c = await provisionAndActivate(ctx.admin, { firstName: 'Ayu', lastName: 'Da', email: correoStaff(`b14${key}`), role });
+    if (semesters) await req('PUT', `/users/${c.userId}/semesters`, { token: ctx.admin, body: { semesters } });
+    return c;
+  };
+  const docente = await staff('doc', 'TEACHER', [2]);
+  const sinAlcance = await staff('doc0', 'TEACHER');
+  const nuevo = async (k, semester) => {
+    const c = await provisionAndActivate(ctx.admin, { firstName: 'Nec', lastName: k, email: correoEst(`b14${k}`), role: 'STUDENT', semester });
+    await req('POST', '/profiles/me', { token: c.token, body: {} });
+    return c;
+  };
+  const deDos = await nuevo('dos', 2);
+  const deSeis = await nuevo('seis', 6);
+  const proposito = (k) => `Necesidad B14 ${k} ${TS}`;
+  await req('POST', '/team-needs', { token: deDos.token, body: { purpose: proposito('dos'), maxMembers: 3 } });
+  await req('POST', '/team-needs', { token: deSeis.token, body: { purpose: proposito('seis'), maxMembers: 3 } });
+
+  const vistas = await req('GET', '/reports/teacher/team-needs', { token: docente.token });
+  const propositos = (vistas.data ?? []).map((n) => n.purpose);
+  check(vistas.status === 200 && propositos.includes(proposito('dos')) && !propositos.includes(proposito('seis'))
+    && (vistas.data ?? []).every((n) => n.semester === 2),
+    'V2.14.2 §62 §77 El docente ve las necesidades de equipo de sus semestres, y solo esas', json(propositos.slice(0, 3)));
+  const vacio = await req('GET', '/reports/teacher/team-needs', { token: sinAlcance.token });
+  const estudiante = await req('GET', '/reports/teacher/team-needs', { token: deDos.token });
+  check((vacio.data ?? []).length === 0 && estudiante.status === 403,
+    'V2.14.3 §28 Sin alcance no ve ninguna; un estudiante no entra', `${(vacio.data ?? []).length}/${estudiante.status}`);
+  check(!JSON.stringify(vistas.data).includes('@'), 'V2.14.4 §62 Sin correos en la vista del docente');
+
+  const auditoria = await req('GET', '/audit/events?limit=5', { token: ctx.admin });
+  const auditoriaDocente = await req('GET', '/audit/events?limit=5', { token: docente.token });
+  check(auditoria.status === 200 && Array.isArray(auditoria.data) && auditoriaDocente.status === 403,
+    'V2.14.5 §77 La auditoría es de la Administración', `${auditoria.status}/${auditoriaDocente.status}`);
+  check(!/passwordHash|tokenHash|"password"/i.test(JSON.stringify(auditoria.data)), 'V2.14.6 §69 Sin datos sensibles en la auditoría');
+
+  const area = ((await req('GET', '/academic-areas', { token: ctx.admin })).data ?? []).find((x) => x.isActive !== false);
+  const cuerpo = {
+    title: `Recurso de administración ${TS}`, provider: 'Univalle', url: `https://ejemplo.univalle.edu/recurso-${TS}`,
+    academicAreaId: area?.id, resourceType: 'guide',
+  };
+  const recurso = await req('POST', '/learning-resources', { token: ctx.admin, body: cuerpo });
+  const recursoDocente = await req('POST', '/learning-resources', { token: docente.token, body: { ...cuerpo, title: `${cuerpo.title} docente` } });
+  check(recurso.status === 201 && recursoDocente.status === 403,
+    'V2.14.7 §77 La Administración gestiona recursos; un docente no', `${recurso.status}/${recursoDocente.status} ${json(recurso.data)}`);
+}
+
+// ===========================================================================
+//  BATCH 15 — La app móvil es del Estudiante
+// ===========================================================================
+async function batch15(ctx) {
+  objective('BATCH 15 · Móvil solo para estudiantes, aplicado por la API');
+  const MOVIL = { 'X-Afinia-Client': 'mobile' };
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Mo', lastName: 'Vil', email: correoEst('b15est'), role: 'STUDENT', semester: 4 });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Do', lastName: 'Cente', email: correoStaff('b15doc'), role: 'TEACHER' });
+
+  const estMovil = await crudo('POST', '/auth/login', { body: { email: est.email, password: PWD }, headers: MOVIL });
+  check(estMovil.status === 200 && !!estMovil.data?.accessToken && estMovil.data?.user?.role === 'STUDENT',
+    'V2.15.1 §67 El estudiante inicia sesión en la app móvil', `status ${estMovil.status}`);
+
+  const docMovil = await crudo('POST', '/auth/login', { body: { email: docente.email, password: PWD }, headers: MOVIL });
+  check(docMovil.status === 403 && docMovil.data?.code === 'MOBILE_STUDENT_ONLY' && !docMovil.data?.accessToken && !docMovil.data?.refreshToken,
+    'V2.15.2 §67 Un docente no obtiene sesión desde la app móvil', `status ${docMovil.status} ${json(docMovil.data)}`);
+  check(/web/i.test(docMovil.data?.message ?? ''), 'V2.15.3 §67 El mensaje lo orienta a la web');
+
+  const adminMovil = await crudo('POST', '/auth/login', {
+    body: { email: process.env.ADMIN_EMAIL ?? 'admin@univalle.edu', password: process.env.ADMIN_PASSWORD ?? 'Admin123*' }, headers: MOVIL,
+  });
+  check(adminMovil.status === 403, 'V2.15.4 §67 Tampoco la Administración', `status ${adminMovil.status}`);
+
+  const docWeb = await crudo('POST', '/auth/login', { body: { email: docente.email, password: PWD } });
+  check(docWeb.status === 200 && !!docWeb.data?.refreshToken, 'V2.15.5 §67 Desde la web el docente entra con normalidad', `status ${docWeb.status}`);
+
+  const renovarMovil = await crudo('POST', '/auth/refresh', { body: { refreshToken: docWeb.data?.refreshToken }, headers: MOVIL });
+  check(renovarMovil.status === 403, 'V2.15.6 §67 Una sesión de personal no se renueva desde el móvil', `status ${renovarMovil.status}`);
+  const renovarWeb = await crudo('POST', '/auth/refresh', { body: { refreshToken: docWeb.data?.refreshToken } });
+  check(renovarWeb.status === 200, 'V2.15.7 §67 Y esa misma sesión sigue sirviendo en la web', `status ${renovarWeb.status}`);
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch8, batch10, batch11, batch12, batch13, batch14, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V2 — verificación contra la API${C.r}`);

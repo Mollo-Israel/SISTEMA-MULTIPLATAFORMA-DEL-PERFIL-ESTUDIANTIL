@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { helpVideo } from '../help/help-video';
 import { Logger } from '@nestjs/common';
 import { readMailSettings } from '../mail/mail.settings';
 
@@ -83,6 +84,12 @@ export function assertEnvironment(config: ConfigService): void {
         );
       }
     }
+  }
+
+  // Centro de ayuda (V2 §65): un video mal escrito no rompe nada; se avisa.
+  const video = config.get<string>('HELP_VIDEO_URL')?.trim();
+  if (video && !helpVideo(video)) {
+    warnings.push('HELP_VIDEO_URL no es un enlace https válido: el centro de ayuda se mostrará sin video.');
   }
 
   for (const warning of warnings) logger.warn(warning);

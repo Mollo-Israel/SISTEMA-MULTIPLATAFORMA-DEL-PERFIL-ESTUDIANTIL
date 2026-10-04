@@ -987,6 +987,7 @@ export const recommendationService = {
 
 export const reportService = {
   teacherOverview: () => api.get('/reports/teacher/overview').then((r) => r.data),
+  teacherTeamNeeds: () => api.get<TeacherTeamNeed[]>('/reports/teacher/team-needs').then((r) => r.data),
   teacherAffinity: () => api.get('/reports/teacher/affinity-summary').then((r) => r.data),
   teacherProjects: () => api.get('/reports/teacher/projects-summary').then((r) => r.data),
   directorOverview: () => api.get('/reports/director/overview').then((r) => r.data),
@@ -1083,4 +1084,43 @@ export const aiService = {
   suggest: (body: { task: AiTask } & Record<string, unknown>) =>
     api.post<AiSuggestionResult>('/ai/suggestions', body).then((r) => r.data),
   accept: (runId: string) => api.post(`/ai/runs/${runId}/accept`).then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// V2 §65 · Centro de ayuda
+// ---------------------------------------------------------------------------
+export const helpService = {
+  get: () => api.get<{ video: { url: string; embedUrl: string | null } | null }>('/help').then((r) => r.data),
+};
+
+/** Necesidad de equipo abierta en el alcance del docente (V2 §62, §77). */
+export interface TeacherTeamNeed {
+  id: string;
+  purpose: string;
+  description: string | null;
+  maxMembers: number | null;
+  createdAt: string;
+  semester: number;
+  owner: string;
+  requiredSkills: string[];
+  preferredAreas: string[];
+}
+
+// ---------------------------------------------------------------------------
+// V2 §77 · Auditoría (solo Administración)
+// ---------------------------------------------------------------------------
+export interface AuditEventView {
+  id: string;
+  eventType: string;
+  entityType: string;
+  entityId: string | null;
+  actor: string | null;
+  actorUserId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export const auditService = {
+  list: (params: { eventType?: string; entityType?: string; limit?: number }) =>
+    api.get<AuditEventView[]>('/audit/events', { params }).then((r) => r.data),
 };

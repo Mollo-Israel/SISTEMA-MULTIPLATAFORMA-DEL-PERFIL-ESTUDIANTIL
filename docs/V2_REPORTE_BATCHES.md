@@ -369,3 +369,53 @@ Formato de la especificación V2 §87. Un bloque por batch, en orden.
 **Pendientes:** la pantalla móvil del docente aún dice «Reporte del curso»; el BATCH 15 retira del móvil todo lo que no es del Estudiante.
 
 **Riesgos:** ninguno nuevo.
+
+## BATCH 14 — UX web: modales, movimiento, ayuda y navegación por actor
+
+**Estado:** completo
+
+**Objetivo:** §65, §66, §77.
+
+**Cambios:**
+- Modales sin parpadeo (§66.2): `Modal`, la confirmación y el perfil del menú se montan en `<body>` con un portal. Antes quedaban bajo contenedores animados con `transform` (listas con `Stagger`, la barra superior), y un `position: fixed` dentro de un ancestro transformado se recoloca mientras ese ancestro anima: esa era la causa del parpadeo y de la superposición incorrecta. Transición de 180 ms en lugar de un resorte; foco atrapado y devuelto al cerrar; scroll del fondo bloqueado; `onClose` leído por referencia (un padre que pasa una función nueva en cada render ya no re-registra los manejadores).
+- Movimiento reducido (§66.3): `MotionConfig` con `reducedMotion="user"` en la raíz; el CSS ya lo respetaba.
+- Centro de ayuda (§65): `/ayuda` para todos los roles, con preguntas frecuentes por actor, el recorrido de lo que cada uno puede hacer y el video de `HELP_VIDEO_URL` (YouTube se inserta desde `youtube-nocookie.com`; otros proveedores, como enlace; valores no `https` se ignoran con aviso al arrancar). `GET /help` es público para que la ayuda sirva también antes de iniciar sesión.
+- Tutorial de primer uso por actor: aparece una vez por persona y navegador, se omite en cualquier paso y se reabre desde Ayuda o desde el menú de usuario; nunca bloquea.
+- Navegación por actor (§77): el estudiante suma accesos directos a **Preferencias**, **Equipos**, **CV / Exportar** y **Ayuda** (las pestañas viajan en la URL y el menú marca solo el ítem correcto); el docente, **Necesidades de equipo** (vista de solo lectura de su alcance, `GET /reports/teacher/team-needs`); Administración, **Alcance docente** (usuarios filtrados por rol, donde se editan los semestres), **Recursos** y **Auditoría** (vista de `/audit/events`).
+- Sin terminología interna visible (`backing_tier`, `support_score`…): revisado.
+
+**Migraciones:** ninguna.
+
+**Archivos:** `api/src/help/*`, `api/src/app.module.ts`, `api/src/config/environment.check.ts`, `api/src/reports/{reports.controller.ts,reports.service.ts}`, `web/src/{App.tsx,navigation.ts,index.css}`, `web/src/components/{ui.tsx,feedback.tsx,UserMenu.tsx,Layout.tsx,Tutorial.tsx}`, `web/src/help/content.ts`, `web/src/pages/{help/Help.tsx,admin/Audit.tsx,admin/Users.tsx,teacher/TeamNeeds.tsx,student/Collaboration.tsx,student/Progress.tsx}`, `web/src/services/index.ts`, `scripts/e2e-v2.mjs`, `scripts/e2e-ai-provider.mjs`.
+
+**Pruebas:** `e2e-v2` batch14 (7): ayuda sin sesión; necesidades solo del alcance; sin alcance no ve nada y un estudiante no entra; sin correos; auditoría solo para Administración y sin datos sensibles; recursos para Administración y no para un docente. `e2e-ai-provider` (+1): el video de YouTube se inserta sin cookies. Las comprobaciones de navegador (portal, foco, movimiento reducido, tutorial, menú, ancho de teléfono) están en la suite de Playwright del BATCH 16.
+
+**Regresiones:** la prueba de recursos usaba una URL fija y chocaba con una corrida anterior (la API rechaza enlaces repetidos, como corresponde); ahora es única.
+
+**Pendientes:** capturas de pantalla dentro de la ayuda: el contenido usa iconos; agregar imágenes reales es contenido, no código.
+
+## BATCH 15 — Móvil solo Estudiante
+
+**Estado:** completo (sin prueba en emulador: no hay SDK de Android en esta máquina)
+
+**Objetivo:** §67, C8.
+
+**Cambios:**
+- La app se identifica con `X-Afinia-Client: mobile`. La API **no emite sesión** a otro rol desde el móvil (`403 MOBILE_STUDENT_ONLY`, con un mensaje que lo orienta a la web) y tampoco renueva desde el móvil una sesión de personal. No es una barrera de seguridad —quien omite la cabecera es la web, donde cada rol tiene su lugar—: es la regla de producto aplicada en el servidor antes de crear la sesión, no ocultando botones.
+- Se retiraron del móvil las pantallas, pestañas y servicios de Docente, Dirección, Sociedad y Administración (14 archivos). Una sesión antigua de personal ve un aviso con «Cerrar sesión».
+- Paridad del flujo del estudiante: el móvil suma «Cómo contactarte» (canales, con la validación del servidor) y abre los canales de cada contacto (el preferido resaltado). El resto del flujo ya existía (bienvenida V2, intereses por tecnología, actividades, proyectos, evidencias, afinidad, recomendaciones, progreso).
+- Auditoría Expo: SDK 54 confirmado; no corresponde migrar de SDK. `expo-doctor` daba 15/18: faltaba `expo-font` (dependencia par de `@expo/vector-icons`; la app podía caerse fuera de Expo Go), había dos versiones de `expo-font` y `expo` estaba un parche atrás. Con `npx expo install expo-font expo@~54.0.37`: **18/18**.
+
+**Migraciones:** ninguna.
+
+**Archivos:** `api/src/auth/{auth.controller.ts,auth.service.ts}`, `api/src/identity/auth-sessions.service.ts`, `mobile/src/{api/client.ts,navigation/RootNavigator.tsx,components/icons.tsx,services/index.ts,screens/student/CollaborationScreen.tsx}`, pantallas de personal eliminadas, `mobile/{package.json,package-lock.json,app.json}`, `scripts/e2e-v2.mjs`.
+
+**Pruebas:** `e2e-v2` batch15 (7): el estudiante entra en el móvil; docente y Administración no obtienen sesión; el mensaje orienta a la web; desde la web el docente entra; su sesión no se renueva desde el móvil y sí desde la web. Móvil `tsc` limpio; `expo-doctor` 18/18.
+
+**Resultados (B14 + B15):** regresión completa: 18 suites, 1378 comprobaciones correctas, 0 fallos (objectives-40 249, obj5 116, obj6 83, obj7 89, B1 56, B2 65, B3 58, B4 48, B5 49, B6 50, B7 57, B8 63, B9 49, B10 42, B11 46, QA 74, V2 147, IA 37). Web compila en producción.
+
+**Regresiones:** ninguna.
+
+**Pendientes:** prueba en emulador Android y en dispositivo físico (no hay SDK de Android ni `adb` en esta máquina). Procedimiento: instalar Android Studio, crear un AVD con API 34, `npm --prefix mobile run android` y recorrer bienvenida → actividad → proyecto → contacto; con Maestro, el mismo recorrido como flujo (ver BATCH 16).
+
+**Riesgos:** ninguno nuevo.

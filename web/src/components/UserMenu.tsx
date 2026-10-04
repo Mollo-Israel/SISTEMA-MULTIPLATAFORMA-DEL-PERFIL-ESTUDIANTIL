@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   FiChevronDown,
   FiExternalLink,
+  FiHelpCircle,
   FiLogOut,
   FiMail,
+  FiPlayCircle,
   FiShield,
   FiUser,
   FiX,
 } from 'react-icons/fi';
 import { useAuth } from '../auth/AuthContext';
+import { openTutorial } from './Tutorial';
 import { ROLE_LABEL, RolNombre } from '../constants';
 import { USER_STATUS_LABEL } from '../services/types';
 
@@ -96,6 +100,20 @@ export default function UserMenu() {
               >
                 <FiUser size={15} /> Mi perfil
               </button>
+              {/* V2 §65: la ayuda y el tutorial siempre a mano. */}
+              <Link to="/ayuda" role="menuitem" className="menu-link" onClick={() => setOpen(false)}>
+                <FiHelpCircle size={15} /> Ayuda
+              </Link>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  openTutorial();
+                }}
+              >
+                <FiPlayCircle size={15} /> Ver el tutorial
+              </button>
               <button type="button" role="menuitem" className="danger" onClick={logout}>
                 <FiLogOut size={15} /> Cerrar sesión
               </button>
@@ -104,6 +122,8 @@ export default function UserMenu() {
         )}
       </AnimatePresence>
 
+      {/* Portal: la barra superior no debe contener al diálogo (V2 §66.2). */}
+      {createPortal(
       <AnimatePresence>
         {showProfile && (
           <motion.div
@@ -111,6 +131,7 @@ export default function UserMenu() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
             onClick={() => setShowProfile(false)}
           >
             <motion.div
@@ -118,10 +139,10 @@ export default function UserMenu() {
               role="dialog"
               aria-modal="true"
               aria-label="Mi perfil"
-              initial={{ opacity: 0, y: 14, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -180,7 +201,9 @@ export default function UserMenu() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      )}
     </div>
   );
 }

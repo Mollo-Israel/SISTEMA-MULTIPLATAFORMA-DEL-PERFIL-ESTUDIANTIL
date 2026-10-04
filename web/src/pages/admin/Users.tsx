@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   FiAlertTriangle, FiCheck, FiClock, FiEdit2, FiMail, FiPlus, FiSearch, FiSend, FiSliders, FiSlash,
   FiUserPlus, FiUsers, FiXCircle,
@@ -70,6 +70,10 @@ function describirInvitacion(inv?: InvitationView): { tono: 'ok' | 'warn' | 'err
 export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [applied, setApplied] = useState('');
+  // V2 §77: «Alcance docente» abre esta lista con ?role=TEACHER, donde cada
+  // docente muestra y edita sus semestres habilitados.
+  const [params, setParams] = useSearchParams();
+  const rol = params.get('role') ?? '';
   const { data, loading, error, reload } = useAsync(
     () => adminService.listUsers(applied || undefined),
     [applied],
@@ -346,10 +350,24 @@ export default function AdminUsersPage() {
           }
           emptyMessage="Todavía no hay usuarios registrados."
         >
-          {(users) => (
+          {(todos) => {
+            const users = rol ? todos.filter((u) => u.role === rol) : todos;
+            return (
             <>
-              <div style={{ marginBottom: '0.6rem' }}>
-                <ResultCount shown={users.length} total={users.length} noun="usuarios" />
+              <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <ResultCount shown={users.length} total={todos.length} noun="usuarios" />
+                <select
+                  value={rol}
+                  aria-label="Filtrar por rol"
+                  onChange={(e) => setParams(e.target.value ? { role: e.target.value } : {}, { replace: true })}
+                  style={{ maxWidth: 220 }}
+                >
+                  <option value="">Todos los roles</option>
+                  {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+                {rol === RolNombre.TEACHER && (
+                  <span className="muted small">Cada docente ve solo a los estudiantes de los semestres que tiene habilitados.</span>
+                )}
               </div>
               <div className="table-scroll">
                 <table>
@@ -412,7 +430,8 @@ export default function AdminUsersPage() {
                 </table>
               </div>
             </>
-          )}
+            );
+          }}
         </AsyncView>
       </Card>
 

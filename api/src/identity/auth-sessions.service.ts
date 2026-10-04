@@ -9,6 +9,8 @@ import { identityConfig } from '../config/identity.config';
 export interface SessionContext {
   userAgent?: string | null;
   ipAddress?: string | null;
+  /** V2 §67: `mobile` si la app se identificó con `X-Afinia-Client`. */
+  client?: 'web' | 'mobile';
 }
 
 function hash(value: string): string {

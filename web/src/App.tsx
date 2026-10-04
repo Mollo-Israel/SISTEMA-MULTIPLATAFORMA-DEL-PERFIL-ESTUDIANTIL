@@ -1,3 +1,4 @@
+import { MotionConfig } from 'framer-motion';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { RolNombre } from './constants';
@@ -37,6 +38,9 @@ import DirectorAffinityMap from './pages/director/AffinityMap';
 import DirectorActivitiesPage from './pages/director/Activities';
 import DirectorConstanciesPage from './pages/director/Constancies';
 import DirectorApprovalsPage from './pages/director/Approvals';
+import AdminAuditPage from './pages/admin/Audit';
+import HelpPage from './pages/help/Help';
+import TeacherTeamNeedsPage from './pages/teacher/TeamNeeds';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorTrendsPage from './pages/director/Trends';
 import RecognitionsPage from './pages/staff/Recognitions';
@@ -75,6 +79,9 @@ function guarded(roles: string[], element: JSX.Element) {
 
 export default function App() {
   return (
+    // V2 §66.3: con «reducir movimiento» del sistema, framer-motion no anima
+    // (el CSS ya lo respetaba), y por omisión las transiciones duran 180 ms.
+    <MotionConfig reducedMotion="user" transition={{ duration: 0.18 }}>
     <AuthProvider>
       <ToastProvider>
         <ConfirmProvider>
@@ -133,6 +140,7 @@ export default function App() {
             <Route path="/teacher/students" element={<TeacherStudentsPage />} />
             <Route path="/teacher/projects" element={<TeacherStudentProjectsPage />} />
             <Route path="/teacher/reports" element={<TeacherReportsPage />} />
+            <Route path="/teacher/team-needs" element={<TeacherTeamNeedsPage />} />
             <Route path="/teacher/recognitions" element={<RecognitionsPage />} />
           </Route>
 
@@ -162,6 +170,13 @@ export default function App() {
             <Route path="/admin/activity-categories" element={<AdminActivityCategoriesPage />} />
             <Route path="/admin/gamification" element={<AdminGamificationPage />} />
             <Route path="/admin/recognitions" element={<RecognitionsPage />} />
+            <Route path="/admin/resources" element={<DirectorLearningResourcesPage />} />
+            <Route path="/admin/audit" element={<AdminAuditPage />} />
+          </Route>
+
+          {/* V2 §65: la ayuda es de todos los actores. */}
+          <Route element={guarded([S, T, D, SC, A], <Layout />)}>
+            <Route path="/ayuda" element={<HelpPage />} />
           </Route>
 
           <Route path="*" element={<RootRedirect />} />
@@ -170,5 +185,6 @@ export default function App() {
         </ConfirmProvider>
       </ToastProvider>
     </AuthProvider>
+    </MotionConfig>
   );
 }

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { FiAlertTriangle, FiCheckCircle, FiInfo, FiX, FiXCircle } from 'react-icons/fi';
 import { requestActivity } from '../api/client';
 
@@ -204,6 +205,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
+      {/* Portal y transición corta, como Modal (V2 §66.2). */}
+      {createPortal(
       <AnimatePresence>
         {pending && (
           <motion.div
@@ -211,6 +214,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
             onClick={() => close(false)}
           >
             <motion.div
@@ -218,10 +222,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               role="dialog"
               aria-modal="true"
               aria-label={pending.options.title}
-              initial={{ opacity: 0, y: 12, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
               onClick={(e) => e.stopPropagation()}
             >
               <div className="confirm-head">
@@ -251,7 +255,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body,
+      )}
     </ConfirmContext.Provider>
   );
 }

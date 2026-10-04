@@ -27,7 +27,14 @@ export const tokenStore = {
   },
 };
 
-export const api = axios.create({ baseURL: API_URL });
+/**
+ * V2 §67: la app móvil es del Estudiante. Se identifica en cada pedido y la
+ * API rechaza el inicio de sesión de otros roles desde aquí; personal docente,
+ * dirección, sociedad y administración usan la web.
+ */
+export const CLIENT_HEADER = { 'X-Afinia-Client': 'mobile' };
+
+export const api = axios.create({ baseURL: API_URL, headers: CLIENT_HEADER });
 
 api.interceptors.request.use(async (config) => {
   const token = await tokenStore.get();
@@ -58,7 +65,7 @@ async function renovarSesion(): Promise<string | null> {
   try {
     // Cliente limpio: si esta llamada pasara por los interceptores, un 401 en
     // la propia renovacion entraria en bucle.
-    const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+    const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken }, { headers: CLIENT_HEADER });
     await tokenStore.setPair(data.accessToken, data.refreshToken);
     return data.accessToken as string;
   } catch {

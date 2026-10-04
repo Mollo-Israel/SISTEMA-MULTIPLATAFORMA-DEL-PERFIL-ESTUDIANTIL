@@ -40,15 +40,5 @@ export const TAB_ICON: Record<string, IconName> = {
   Proyectos: 'folder',
   Afinidad: 'bar-chart-2',
   Sugerencias: 'compass',
-  // Docente
-  Estudiante: 'users',
-  Reporte: 'file-text',
-  // Direccion de carrera
-  Dashboard: 'grid',
-  Constancias: 'award',
-  Semestre: 'pie-chart',
-  // Administracion
-  Usuarios: 'users',
-  'Áreas': 'layers',
-  // Comun
+  // V2 §67: la app es solo del Estudiante; las pestañas de personal se retiraron.
 };

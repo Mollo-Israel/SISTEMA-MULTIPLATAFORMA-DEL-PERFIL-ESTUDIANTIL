@@ -205,11 +205,11 @@ Según §1, se registran aquí y se resuelven aplicando la V2.
 | Panel docente por semestre, sin datos oficiales de asignatura | IMPLEMENTADO | C10 · BATCH 13: «Panel académico» con resumen por semestre |
 | Analítica de Dirección descriptiva, umbral de privacidad | IMPLEMENTADO | BATCH 13: + recursos más consultados |
 | Métricas de Sociedad solo de sus actividades | IMPLEMENTADO | BATCH 13: + ausentes, repetición y por categoría; narrativa IA opcional |
-| Tutorial reabrible, centro de ayuda por actor, `HELP_VIDEO_URL` | FALTANTE | |
+| Tutorial reabrible, centro de ayuda por actor, `HELP_VIDEO_URL` | IMPLEMENTADO | BATCH 14 |
 | UX estudiante, sin parpadeo, validación por campo | IMPLEMENTADO | corrección de QA |
-| `prefers-reduced-motion` | PARCIAL | CSS sí; framer-motion no |
-| Móvil solo Estudiante | INCORRECTO | C8 |
-| Auditoría Expo (`expo doctor`) | FALTANTE | |
+| `prefers-reduced-motion` | IMPLEMENTADO | BATCH 14: `MotionConfig` con `reducedMotion` del sistema |
+| Móvil solo Estudiante | IMPLEMENTADO | C8 · BATCH 15: pantallas de personal retiradas y `MOBILE_STUDENT_ONLY` en la API |
+| Auditoría Expo (`expo doctor`) | IMPLEMENTADO | BATCH 15: 18/18 tras `expo-font` y parche de `expo` |
 
 ### Auditoría, integridad, transacciones (§69–§74)
 

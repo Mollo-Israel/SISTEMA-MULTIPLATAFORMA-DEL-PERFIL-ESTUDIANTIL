@@ -36,6 +36,14 @@ export class ReportsController {
     return this.reportsService.teacherProjectsSummary(user);
   }
 
+  /** V2 §62, §77: necesidades de equipo abiertas de estudiantes de su alcance. */
+  @Get('teacher/team-needs')
+  @Roles(RolNombre.TEACHER)
+  @ApiOperation({ summary: 'Necesidades de equipo abiertas en los semestres del docente (solo lectura).' })
+  teacherTeamNeeds(@CurrentUser() user: AuthenticatedUser) {
+    return this.reportsService.teacherTeamNeeds(user);
+  }
+
   // ---------- Director ----------
 
   @Get('director/overview')
