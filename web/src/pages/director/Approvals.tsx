@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { FiAlertCircle, FiCheck, FiClock, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
+import { useCachedState } from '../../hooks/viewCache';
 import { activityService } from '../../services';
 import {
-  Badge, Button, Card, EmptyState, PageHeader, SkeletonCards, Stagger,
+  Badge, Button, Card, Diferido, EmptyState, PageHeader, SkeletonCards, Stagger,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
 import type { Activity } from '../../services/types';
@@ -27,7 +28,7 @@ const fecha = (v: string | null) =>
  * rechaza. La API es la que decide: esta página solo la usa.
  */
 export default function DirectorApprovalsPage() {
-  const [items, setItems] = useState<Activity[] | null>(null);
+  const [items, setItems] = useCachedState<Activity[] | null>('pendientes', null);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [historia, setHistoria] = useState<Record<string, Historia>>({});
   const [comentario, setComentario] = useState('');
@@ -94,7 +95,7 @@ export default function DirectorApprovalsPage() {
       />
 
       {items === null ? (
-        <SkeletonCards count={3} />
+        <Diferido><SkeletonCards count={3} /></Diferido>
       ) : items.length === 0 ? (
         <EmptyState
           icon={<FiCheck size={28} />}

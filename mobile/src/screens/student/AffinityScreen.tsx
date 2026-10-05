@@ -365,7 +365,7 @@ export default function AffinityScreen() {
             prediccion de resultados academicos.
           </Muted>
 
-          {historyState.loading && <SkeletonCards count={2} />}
+          {historyState.loading && !historyState.data && <SkeletonCards count={2} />}
           {historyState.error && <ErrorText message={historyState.error} />}
 
           {historyState.data && historyState.data.length === 0 && (

@@ -1,5 +1,6 @@
 import { MotionConfig } from 'framer-motion';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { RolNombre } from './constants';
 import { HOME_BY_ROLE } from './navigation';
@@ -69,12 +70,15 @@ function RootRedirect() {
   return <Navigate to={HOME_BY_ROLE[user.role] ?? '/login'} replace />;
 }
 
-function guarded(roles: string[], element: JSX.Element) {
-  return (
-    <ProtectedRoute roles={roles}>
-      <Layout />
-    </ProtectedRoute>
-  );
+/**
+ * Guarda de rol dentro del marco común: deja pasar o redirige al inicio del
+ * rol, sin desmontar el menú ni la barra.
+ */
+function RoleGate({ roles, children }: { roles: string[]; children: ReactNode }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (!roles.includes(user.role)) return <Navigate to={HOME_BY_ROLE[user.role] ?? '/login'} replace />;
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -109,15 +113,18 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Un solo marco (menú y barra superior) para todas las rutas con
+              sesión. Antes cada rol tenía el suyo y pasar a «Ayuda» lo
+              desmontaba y volvía a montar entero: otro parpadeo. Dentro, una
+              guarda por rol que no toca el marco. */}
           <Route
             element={
-              <ProtectedRoute roles={[S]}>
-                <OnboardingGate>
-                  <Layout />
-                </OnboardingGate>
+              <ProtectedRoute roles={[S, T, D, SC, A]}>
+                <Layout />
               </ProtectedRoute>
             }
           >
+          <Route element={<RoleGate roles={[S]}><OnboardingGate><Outlet /></OnboardingGate></RoleGate>}>
             <Route path="/student" element={<StudentDashboard />} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
             {/* Intereses y cuestionario viven ahora dentro de «Mi perfil». */}
@@ -133,7 +140,7 @@ export default function App() {
             <Route path="/student/recommendations" element={<StudentRecommendationsPage />} />
           </Route>
 
-          <Route element={guarded([T], <Layout />)}>
+          <Route element={<RoleGate roles={[T]}><Outlet /></RoleGate>}>
             <Route path="/teacher" element={<TeacherDashboard />} />
             <Route path="/teacher/activities" element={<TeacherActivitiesPage />} />
             <Route path="/teacher/my-activities" element={<TeacherMyActivitiesPage />} />
@@ -144,7 +151,7 @@ export default function App() {
             <Route path="/teacher/recognitions" element={<RecognitionsPage />} />
           </Route>
 
-          <Route element={guarded([D], <Layout />)}>
+          <Route element={<RoleGate roles={[D]}><Outlet /></RoleGate>}>
             <Route path="/director" element={<DirectorDashboard />} />
             <Route path="/director/activities" element={<DirectorActivitiesPage />} />
             <Route path="/director/constancies" element={<DirectorConstanciesPage />} />
@@ -155,13 +162,13 @@ export default function App() {
             <Route path="/director/recognitions" element={<RecognitionsPage />} />
           </Route>
 
-          <Route element={guarded([SC], <Layout />)}>
+          <Route element={<RoleGate roles={[SC]}><Outlet /></RoleGate>}>
             <Route path="/society" element={<SocietyDashboard />} />
             <Route path="/society/activities" element={<SocietyActivitiesPage />} />
             <Route path="/society/metrics" element={<SocietyMetricsPage />} />
           </Route>
 
-          <Route element={guarded([A], <Layout />)}>
+          <Route element={<RoleGate roles={[A]}><Outlet /></RoleGate>}>
             <Route path="/admin" element={<AdminUsersPage />} />
             <Route path="/admin/imports" element={<AdminImportsPage />} />
             <Route path="/admin/mail" element={<AdminMailPage />} />
@@ -175,8 +182,7 @@ export default function App() {
           </Route>
 
           {/* V2 §65: la ayuda es de todos los actores. */}
-          <Route element={guarded([S, T, D, SC, A], <Layout />)}>
-            <Route path="/ayuda" element={<HelpPage />} />
+          <Route path="/ayuda" element={<HelpPage />} />
           </Route>
 
           <Route path="*" element={<RootRedirect />} />

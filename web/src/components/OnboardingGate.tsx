@@ -2,6 +2,10 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { profileService } from '../services';
 import { useDelayedFlag } from './ui';
+import { viewCache } from '../hooks/viewCache';
+
+/** Una vez completada, la bienvenida no vuelve a preguntarse en la sesión. */
+const CLAVE = 'onboarding:completada';
 
 /**
  * Hasta terminar la bienvenida, el estudiante solo ve la bienvenida.
@@ -15,18 +19,25 @@ import { useDelayedFlag } from './ui';
  * encerrado fuera del sistema.
  */
 export default function OnboardingGate({ children }: { children: ReactNode }) {
-  const [estado, setEstado] = useState<'cargando' | 'pendiente' | 'listo'>('cargando');
+  const [estado, setEstado] = useState<'cargando' | 'pendiente' | 'listo'>(
+    () => (viewCache.get<boolean>(CLAVE) ? 'listo' : 'cargando'),
+  );
   const esperaVisible = useDelayedFlag(estado === 'cargando', 250);
 
   useEffect(() => {
+    if (estado === 'listo') return undefined;
     let vigente = true;
     profileService
       .onboarding()
-      .then((s) => vigente && setEstado(s.completed ? 'listo' : 'pendiente'))
+      .then((s) => {
+        if (s.completed) viewCache.set(CLAVE, true);
+        if (vigente) setEstado(s.completed ? 'listo' : 'pendiente');
+      })
       .catch(() => vigente && setEstado('listo'));
     return () => {
       vigente = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (estado === 'pendiente') return <Navigate to="/student/bienvenida" replace />;

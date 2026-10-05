@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import {
   FiChevronDown,
   FiChevronRight,
@@ -44,6 +45,7 @@ import {
   ResultCount,
   SearchInput,
   SkeletonCards,
+  Diferido,
   Stagger,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
@@ -55,9 +57,10 @@ const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default function StudentProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [areas, setAreas] = useState<AcademicArea[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Con memoria de la sesión: al volver a «Proyectos» se pinta al instante.
+  const [projects, setProjects] = useCachedState<Project[]>('proyectos', []);
+  const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
+  const [loading, setLoading] = useState(() => !enMemoria('proyectos'));
   const [creating, setCreating] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -254,7 +257,7 @@ export default function StudentProjectsPage() {
       </div>
 
       {loading ? (
-        <SkeletonCards count={3} />
+        <Diferido><SkeletonCards count={3} /></Diferido>
       ) : projects.length === 0 ? (
         <EmptyState
           icon={<FiFolder size={22} />}

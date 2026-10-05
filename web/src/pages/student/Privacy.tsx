@@ -3,7 +3,8 @@ import { FiEye, FiEyeOff, FiLock, FiShield } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { profileService } from '../../services';
 import { useToast } from '../../components/feedback';
-import { Badge, Card, PageHeader, SkeletonCards } from '../../components/ui';
+import { Badge, Card, Diferido, PageHeader, SkeletonCards } from '../../components/ui';
+import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import {
   PUBLIC_FIELD_LABEL,
   type PublicProfileField,
@@ -24,8 +25,8 @@ const ORDEN: PublicProfileField[] = [
  */
 export default function StudentPrivacyPage() {
   const toast = useToast();
-  const [settings, setSettings] = useState<VisibilitySettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useCachedState<VisibilitySettings | null>('visibilidad', null);
+  const [loading, setLoading] = useState(() => !enMemoria('visibilidad'));
   const [guardando, setGuardando] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,7 +70,7 @@ export default function StudentPrivacyPage() {
     return (
       <div>
         <PageHeader title="Privacidad" description="Cargando tu configuración…" />
-        <Card><SkeletonCards count={2} /></Card>
+        <Diferido><Card><SkeletonCards count={2} /></Card></Diferido>
       </div>
     );
   }

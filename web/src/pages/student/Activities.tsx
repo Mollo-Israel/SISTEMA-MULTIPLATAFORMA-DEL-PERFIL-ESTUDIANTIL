@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   FiAlertCircle,
   FiCalendar,
@@ -24,6 +24,7 @@ import {
   ResultCount,
   SearchInput,
   SkeletonCards,
+  Diferido,
   Stagger,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
@@ -42,6 +43,11 @@ export default function StudentActivitiesPage() {
   const [query, setQuery] = useState('');
   const [type, setType] = useState<'todas' | 'academica' | 'extracurricular'>('todas');
   const [busy, setBusy] = useState<string | null>(null);
+  // Se pintan de a poco: miles de tarjetas a la vez bloqueaban la pantalla al
+  // entrar (y se veía como un tirón). Cambiar un filtro vuelve al principio.
+  const PASO = 24;
+  const [limite, setLimite] = useState(PASO);
+  useEffect(() => setLimite(PASO), [query, type]);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -152,9 +158,9 @@ export default function StudentActivitiesPage() {
         <ResultCount shown={visible.length} total={items.length} noun="actividades" />
       </div>
 
-      {loading ? (
-        <SkeletonCards count={4} />
-      ) : error ? (
+      {loading && !data ? (
+        <Diferido><SkeletonCards count={4} /></Diferido>
+      ) : error && !data ? (
         <div className="alert alert-error">{error}</div>
       ) : items.length === 0 ? (
         <EmptyState
@@ -180,7 +186,7 @@ export default function StudentActivitiesPage() {
         />
       ) : (
         <div className="grid cols-2">
-          {visible.map((a, index) => {
+          {visible.slice(0, limite).map((a, index) => {
             const date = formatDate(a.eventDate);
             const blocked = a.registrationBlockReason;
             const full = a.capacity != null && a.seatsLeft === 0;
@@ -274,6 +280,13 @@ export default function StudentActivitiesPage() {
               </Stagger>
             );
           })}
+        </div>
+      )}
+      {visible.length > limite && (
+        <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+          <Button variant="secondary" onClick={() => setLimite((n) => n + PASO)}>
+            Ver más ({visible.length - limite} restantes)
+          </Button>
         </div>
       )}
     </div>

@@ -169,6 +169,35 @@ async function pruebas(browser) {
   await p3.click('a[href="/student/progress?tab=resumen"]');
   check(await p3.getByText('Plantilla', { exact: true }).first().isVisible(), 'WEB.18 §61 CV / Exportar abre el generador con plantillas');
   check(!(await p3.content()).includes('Mensajes'), 'WEB.19 §57 Ninguna pestaña de mensajes');
+
+  objective('Cambio de vista sin parpadeo');
+  // Primera pasada: cada vista carga y queda en la memoria de la sesión.
+  const vistas = ['/student/activities', '/student/projects', '/student/affinity', '/student'];
+  for (const r of vistas) { await p3.click(`nav a[href="${r}"]`); await espera(1200); }
+  // Segunda pasada, cuadro a cuadro: ni el contenido se vuelve transparente
+  // ni aparece un esqueleto en lugar de lo que ya se había mostrado.
+  const malas = [];
+  for (const r of vistas) {
+    await p3.evaluate(() => {
+      window.__cuadros = [];
+      const fin = performance.now() + 700;
+      const tick = () => {
+        const c = document.querySelector('.content');
+        let minimo = c ? Number(getComputedStyle(c).opacity) : 0;
+        c?.querySelectorAll('*').forEach((el, i) => { if (i < 400) minimo = Math.min(minimo, Number(getComputedStyle(el).opacity)); });
+        window.__cuadros.push({ minimo, esqueleto: !!c?.querySelector('.skeleton, .skeleton-cards, .skeleton-table, .async-wait') });
+        if (performance.now() < fin) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await p3.click(`nav a[href="${r}"]`);
+    await espera(800);
+    const cuadros = await p3.evaluate(() => window.__cuadros);
+    const t = cuadros.filter((x) => x.minimo < 0.6).length;
+    const e = cuadros.filter((x) => x.esqueleto).length;
+    if (t || e) malas.push(`${r} (${t} transparentes, ${e} con esqueleto)`);
+  }
+  check(malas.length === 0, 'WEB.19b Volver a una vista ya vista la pinta al instante: sin fundido ni esqueleto', malas.join(', '));
   await ctx3.close();
 
   objective('§66 · Teléfono: sin desplazamiento horizontal');

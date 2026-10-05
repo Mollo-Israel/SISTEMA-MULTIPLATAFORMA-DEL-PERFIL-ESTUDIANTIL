@@ -254,16 +254,16 @@ export default function ActivitiesScreen({ navigation }: any) {
         <Button icon="x" title="Limpiar filtros" variant="secondary" onPress={clearFilters} />
       )}
 
-      {loading && <SkeletonCards count={3} />}
+      {loading && !data && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
 
-      {!loading && !error && all.length > 0 && (
+      {(!loading || data) && !error && all.length > 0 && (
         <View style={{ marginTop: 10 }}>
           <ResultCount shown={filtered.length} total={all.length} noun="actividades" />
         </View>
       )}
 
-      {!loading && !error && filtered.length === 0 && (
+      {(!loading || data) && !error && filtered.length === 0 && (
         <EmptyState
           icon={query || hasFilters ? 'search' : 'calendar'}
           message={

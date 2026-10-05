@@ -49,7 +49,7 @@ export default function MyActivitiesScreen() {
         description="Estado de tu participación en cada actividad."
       />
 
-      {loading && <SkeletonCards count={3} />}
+      {loading && !data && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
 
       {data && data.length > 0 && (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import { useSearchParams } from 'react-router-dom';
 import { FiCompass, FiLock, FiRefreshCw, FiSave } from 'react-icons/fi';
 import { apiError } from '../../api/client';
@@ -19,7 +20,7 @@ import type {
   SkillInterestKind,
   StudentProfile,
 } from '../../services/types';
-import { Badge, Button, Card, PageHeader, ProgressBar, SkeletonCards, Tabs } from '../../components/ui';
+import { Badge, Button, Card, Diferido, PageHeader, ProgressBar, SkeletonCards, Tabs } from '../../components/ui';
 import { useToast } from '../../components/feedback';
 import { AreaChooser, InterestChooser, SkillInterestChooser } from '../../components/Declarations';
 import QuestionnaireRunner from '../../components/QuestionnaireRunner';
@@ -46,10 +47,11 @@ export default function StudentProfilePage() {
     ? params.get('tab')
     : 'datos') as Pestana;
 
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [areas, setAreas] = useState<AcademicArea[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Con memoria de la sesión: al volver a «Mi perfil» se pinta al instante.
+  const [profile, setProfile] = useCachedState<StudentProfile | null>('perfil', null);
+  const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
+  const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
+  const [loading, setLoading] = useState(() => !enMemoria('perfil'));
   const toast = useToast();
 
   const recargar = async () => {
@@ -112,7 +114,7 @@ export default function StudentProfilePage() {
       />
 
       {loading ? (
-        <Card><SkeletonCards count={3} /></Card>
+        <Diferido><Card><SkeletonCards count={3} /></Card></Diferido>
       ) : tab === 'datos' ? (
         <DatosTab profile={profile} areas={areas} onSaved={(p) => setProfile(p)} />
       ) : tab === 'intereses' ? (
@@ -303,10 +305,10 @@ function InteresesTab({
   mejora: string[];
   onSaved: () => void;
 }) {
-  const [intereses, setIntereses] = useState<Record<string, number>>({});
-  const [tecnologias, setTecnologias] = useState<Record<string, SkillInterestKind>>({});
-  const [respaldadas, setRespaldadas] = useState<BackedSkill[]>([]);
-  const [cargando, setCargando] = useState(true);
+  const [intereses, setIntereses] = useCachedState<Record<string, number>>('intereses', {});
+  const [tecnologias, setTecnologias] = useCachedState<Record<string, SkillInterestKind>>('tecnologias', {});
+  const [respaldadas, setRespaldadas] = useCachedState<BackedSkill[]>('respaldadas', []);
+  const [cargando, setCargando] = useState(() => !enMemoria('intereses'));
   const [guardandoI, setGuardandoI] = useState(false);
   const [guardandoS, setGuardandoS] = useState(false);
   const toast = useToast();
@@ -434,13 +436,14 @@ function InteresesTab({
 // ===========================================================================
 
 function CuestionarioTab() {
-  const [run, setRun] = useState<OnboardingRun | null>(null);
-  const [cargando, setCargando] = useState(true);
+  const [run, setRun] = useCachedState<OnboardingRun | null>('cuestionario', null);
+  const [cargando, setCargando] = useState(() => !enMemoria('cuestionario'));
   const [respondiendo, setRespondiendo] = useState(false);
   const toast = useToast();
 
   const cargar = () => {
-    setCargando(true);
+    // Si ya hay algo que mostrar, se refresca sin volver al indicador.
+    if (!enMemoria('cuestionario')) setCargando(true);
     onboardingService
       .current()
       .then((r) => setRun(r.run))

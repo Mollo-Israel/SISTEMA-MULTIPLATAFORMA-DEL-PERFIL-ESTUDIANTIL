@@ -9,6 +9,7 @@ import {
   FiEdit2,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
+import { useCachedState, viewCache } from '../../hooks/viewCache';
 import { catalogService, projectFeedbackService, projectService } from '../../services';
 import {
   AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
@@ -39,10 +40,13 @@ export default function TeacherStudentProjectsPage() {
     search: '',
   });
   const [applied, setApplied] = useState(filters);
-  const [data, setData] = useState<InstitutionalPortfolio | null>(null);
+  // Memoria de la sesión por filtro: al volver, el portafolio se pinta al instante.
+  const [data, setData] = useState<InstitutionalPortfolio | null>(
+    () => viewCache.get<InstitutionalPortfolio>(`${window.location.pathname}|portafolio|{}`) ?? null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [areas, setAreas] = useState<AcademicArea[]>([]);
+  const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [members, setMembers] = useState<ProjectMemberItem[]>([]);
@@ -65,11 +69,17 @@ export default function TeacherStudentProjectsPage() {
   }, [applied]);
 
   const load = useCallback(() => {
+    const clave = `${window.location.pathname}|portafolio|${JSON.stringify(params)}`;
+    const previo = viewCache.get<InstitutionalPortfolio>(clave);
+    if (previo) setData(previo);
     setLoading(true);
     setError(null);
     projectService
       .institutional(params)
-      .then(setData)
+      .then((d) => {
+        viewCache.set(clave, d);
+        setData(d);
+      })
       .catch((e) => setError(apiError(e)))
       .finally(() => setLoading(false));
   }, [params]);

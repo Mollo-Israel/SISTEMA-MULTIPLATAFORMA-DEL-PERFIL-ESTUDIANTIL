@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
+import { useCachedState } from '../../hooks/viewCache';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   FiAlertTriangle, FiCheck, FiCopy, FiEdit2, FiLink, FiRefreshCw, FiUserPlus, FiUsers, FiX,
@@ -18,7 +19,7 @@ import { catalogService } from '../../services';
 import type { Skill } from '../../services/types';
 import { useConfirm, useToast } from '../../components/feedback';
 import {
-  Badge, Button, Card, EmptyState, Loading, PageHeader, Tabs,
+  Badge, Button, Card, Diferido, EmptyState, Loading, PageHeader, Tabs,
 } from '../../components/ui';
 
 const DISPONIBILIDAD: Record<string, string> = {
@@ -82,7 +83,7 @@ export default function StudentCollaborationPage() {
 // ---------------------------------------------------------------------------
 
 function MiEnlace({ toast, confirm }: { toast: any; confirm: any }) {
-  const [enlace, setEnlace] = useState<PublicLinkView | null>(null);
+  const [enlace, setEnlace] = useCachedState<PublicLinkView | null>('enlace', null);
   const [rotando, setRotando] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
@@ -123,7 +124,7 @@ function MiEnlace({ toast, confirm }: { toast: any; confirm: any }) {
     }
   };
 
-  if (!enlace) return <Card><Loading /></Card>;
+  if (!enlace) return <Diferido><Card><Loading /></Card></Diferido>;
 
   return (
     <Card
@@ -193,7 +194,7 @@ const CANALES: { channel: ContactChannelType; label: string; placeholder: string
 ];
 
 function MisCanales({ toast }: { toast: any }) {
-  const [valores, setValores] = useState<Record<string, { value: string; isPublic: boolean }>>({});
+  const [valores, setValores] = useCachedState<Record<string, { value: string; isPublic: boolean }>>('canales', {});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
 
@@ -292,9 +293,9 @@ function CanalesDe({ canales, preferido }: { canales: ContactChannelView[]; pref
 // ---------------------------------------------------------------------------
 
 function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
-  const [contactos, setContactos] = useState<ContactView[] | null>(null);
-  const [recibidas, setRecibidas] = useState<any[]>([]);
-  const [enviadas, setEnviadas] = useState<any[]>([]);
+  const [contactos, setContactos] = useCachedState<ContactView[] | null>('contactos', null);
+  const [recibidas, setRecibidas] = useCachedState<any[]>('recibidas', []);
+  const [enviadas, setEnviadas] = useCachedState<any[]>('enviadas', []);
   const [slug, setSlug] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -471,7 +472,7 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
       )}
 
       <Card title="Mis contactos">
-        {!contactos && <Loading />}
+        {!contactos && <Diferido><Loading /></Diferido>}
         {contactos && contactos.length === 0 && (
           <EmptyState
             icon={<FiUsers size={22} />}
@@ -551,10 +552,10 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
 // ---------------------------------------------------------------------------
 
 function Equipos({ toast }: { toast: any }) {
-  const [necesidades, setNecesidades] = useState<TeamNeedView[] | null>(null);
-  const [equipos, setEquipos] = useState<TeamView[]>([]);
-  const [invitaciones, setInvitaciones] = useState<any[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]);
+  const [necesidades, setNecesidades] = useCachedState<TeamNeedView[] | null>('necesidades', null);
+  const [equipos, setEquipos] = useCachedState<TeamView[]>('equipos', []);
+  const [invitaciones, setInvitaciones] = useCachedState<any[]>('invitaciones-equipo', []);
+  const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
   const [sugerencias, setSugerencias] = useState<TeamSuggestionsView | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [form, setForm] = useState({ purpose: '', maxMembers: 4, skillIds: [] as string[] });
@@ -746,7 +747,7 @@ function Equipos({ toast }: { toast: any }) {
       </Card>
 
       <Card title="Mis necesidades">
-        {!necesidades && <Loading />}
+        {!necesidades && <Diferido><Loading /></Diferido>}
         {necesidades && necesidades.length === 0 && (
           <EmptyState message="Todavía no publicaste ninguna." />
         )}

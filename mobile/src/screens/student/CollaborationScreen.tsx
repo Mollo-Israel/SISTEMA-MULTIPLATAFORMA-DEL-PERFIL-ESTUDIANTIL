@@ -174,7 +174,7 @@ export default function CollaborationScreen() {
   return (
     <ScrollView contentContainerStyle={styles.contenido}>
       <Card title="Mi perfil compartible">
-        {enlaceState.loading && <SkeletonCards count={1} />}
+        {enlaceState.loading && !enlace && <SkeletonCards count={1} />}
         {enlace && (
           <>
             <View style={styles.fila}>
@@ -274,8 +274,8 @@ export default function CollaborationScreen() {
       )}
 
       <Card title="Mis contactos">
-        {contactosState.loading && <SkeletonCards count={2} />}
-        {!contactosState.loading && contactos.length === 0 && (
+        {contactosState.loading && !contactosState.data && <SkeletonCards count={2} />}
+        {(!contactosState.loading || contactosState.data) && contactos.length === 0 && (
           <EmptyState message="Todavia no tienes contactos. Comparte tu enlace o solicita el de alguien." />
         )}
         {contactos.map((c) => (

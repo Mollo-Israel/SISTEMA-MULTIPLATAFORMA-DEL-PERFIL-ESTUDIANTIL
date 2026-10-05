@@ -4,12 +4,13 @@ import {
   FiCalendar, FiCheck, FiEdit2, FiPlus, FiSave, FiSearch, FiSend, FiUserX, FiUsers, FiX,
 } from 'react-icons/fi';
 import { useAuth } from '../auth/AuthContext';
+import { enMemoria, useCachedState } from '../hooks/viewCache';
 import AiAssist from './AiAssist';
 import { apiError } from '../api/client';
 import { activityService, catalogService } from '../services';
 import type { AcademicArea, Activity, ActivityCategoryItem, Participant } from '../services/types';
 import {
-  Badge, Button, Card, EmptyState, ResultCount, SearchInput, SkeletonTable, Stagger,
+  Badge, Button, Card, Diferido, EmptyState, ResultCount, SearchInput, SkeletonTable, Stagger,
 } from './ui';
 import { useConfirm, useToast } from './feedback';
 import { ACTIVITY_REVIEW_LABEL, ACTIVITY_TRANSITIONS } from '../services/types';
@@ -61,17 +62,18 @@ export default function ActivityManager({
   const { user } = useAuth();
   /** Docente, Sociedad (y Administración) proponen; Dirección decide (V2 §27). */
   const necesitaRevision = user?.role !== 'CAREER_DIRECTOR';
-  const [semestresPermitidos, setSemestresPermitidos] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [areas, setAreas] = useState<AcademicArea[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Con memoria de la sesión: al volver a la gestión se pinta al instante.
+  const [semestresPermitidos, setSemestresPermitidos] = useCachedState<number[]>('semestres', [1, 2, 3, 4, 5, 6, 7, 8]);
+  const [activities, setActivities] = useCachedState<Activity[]>(`actividades-${activityType}`, []);
+  const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
+  const [loading, setLoading] = useState(() => !enMemoria(`actividades-${activityType}`));
   /** Solo el fallo de la carga inicial: el resto de errores son avisos flotantes. */
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
-  const [categories, setCategories] = useState<ActivityCategoryItem[]>([]);
+  const [categories, setCategories] = useCachedState<ActivityCategoryItem[]>('categorias', []);
   const [editing, setEditing] = useState<Activity | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -83,6 +85,10 @@ export default function ActivityManager({
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  // Las filas se pintan de a poco (cientos a la vez trababan la pantalla).
+  const PASO = 50;
+  const [limite, setLimite] = useState(PASO);
+  useEffect(() => setLimite(PASO), [query, statusFilter]);
   const [partQuery, setPartQuery] = useState('');
 
   // Del catálogo administrable: las que aplican a este tipo o a ambos (RF4).
@@ -98,7 +104,6 @@ export default function ActivityManager({
   }, [activityType]);
 
   useEffect(() => {
-    setLoading(true);
     Promise.all([
       load(),
       catalogService.areas().then(setAreas),
@@ -299,7 +304,7 @@ export default function ActivityManager({
     }
   };
 
-  if (loading) return <SkeletonTable rows={5} columns={6} />;
+  if (loading) return <Diferido><SkeletonTable rows={5} columns={6} /></Diferido>;
 
   const selectedActivity = activities.find((a) => a.id === selected);
   const partNeedle = normalize(partQuery.trim());
@@ -634,7 +639,7 @@ export default function ActivityManager({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((a) => {
+                {visible.slice(0, limite).map((a) => {
                   const pend = (a.registrationCount ?? 0) - (a.confirmedCount ?? 0);
                   return (
                     <tr key={a.id} className={selected === a.id ? 'row-picked' : undefined}>
@@ -732,6 +737,13 @@ export default function ActivityManager({
               </tbody>
             </table>
           </div>
+          {visible.length > limite && (
+            <div style={{ textAlign: 'center', marginTop: '0.8rem' }}>
+              <Button variant="secondary" size="sm" onClick={() => setLimite((n) => n + PASO)}>
+                Ver más ({visible.length - limite} restantes)
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 

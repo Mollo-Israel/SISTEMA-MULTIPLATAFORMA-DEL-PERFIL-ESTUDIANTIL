@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiAward, FiCalendar, FiCheck, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
+import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import { activityService, constancyService } from '../../services';
 import {
-  Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput, SkeletonCards,
+  Badge, Button, Card, Diferido, EmptyState, PageHeader, ResultCount, SearchInput, SkeletonCards,
   SkeletonTable, Stagger,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
@@ -17,8 +18,8 @@ const normalize = (s: string) =>
  * Solo el director de carrera, y únicamente sobre participación confirmada.
  */
 export default function DirectorConstanciesPage() {
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useCachedState<Activity[]>('actividades', []);
+  const [loading, setLoading] = useState(() => !enMemoria('actividades'));
   const [selected, setSelected] = useState<string>('');
   const [eligible, setEligible] = useState<EligibleParticipant[]>([]);
   const [issued, setIssued] = useState<InternalConstancy[]>([]);
@@ -112,7 +113,7 @@ export default function DirectorConstanciesPage() {
   const pending = allPending.filter((e) => match(e.studentName));
   const withConstancy = eligible.filter((e) => e.hasConstancy);
 
-  if (loading) return <SkeletonCards count={2} />;
+  if (loading) return <Diferido><SkeletonCards count={2} /></Diferido>;
 
   return (
     <div>

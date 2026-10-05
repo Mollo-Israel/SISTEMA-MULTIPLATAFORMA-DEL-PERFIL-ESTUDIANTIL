@@ -16,7 +16,7 @@ export default function HomeScreen({ navigation }: any) {
       <H1>Hola, {user?.firstName}</H1>
       <Muted>Tu perfil se construye con lo que declaras y tu actividad académica.</Muted>
 
-      {loading && <SkeletonCards count={3} />}
+      {loading && !data && <SkeletonCards count={3} />}
       {error && <ErrorText message={error} />}
 
       {!loading && !data && (

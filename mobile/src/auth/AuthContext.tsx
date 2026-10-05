@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { setUnauthorizedHandler, tokenStore } from '../api/client';
 import { authService, type PublicUser } from '../services';
+import { viewCache } from '../hooks/viewCache';
 
 interface AuthState {
   user: PublicUser | null;
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setUnauthorizedHandler(async () => {
       await tokenStore.clear();
+      viewCache.clear();
       setUser(null);
     });
     (async () => {
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const result = await authService.login(email, password);
     await tokenStore.setPair(result.accessToken, result.refreshToken);
+    viewCache.clear();
     setUser(result.user);
   };
 
@@ -59,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     await tokenStore.clear();
+    viewCache.clear();
     setUser(null);
   };
 

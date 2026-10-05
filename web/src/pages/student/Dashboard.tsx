@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
+import { useContext } from 'react';
 import { motion } from 'framer-motion';
+import { PrimeraVisita } from '../../components/primeraVisita';
 import {
   FiArrowRight, FiAward, FiBarChart2, FiCalendar, FiCompass, FiFolder, FiUpload, FiUser, FiUsers,
 } from 'react-icons/fi';
@@ -22,7 +24,7 @@ const ATAJOS = [
   { to: '/student/activities', icon: <FiCalendar />, t: 'Actividades', d: 'Talleres, charlas y eventos para inscribirte.', c: 'c2' },
   { to: '/student/projects', icon: <FiFolder />, t: 'Mis proyectos', d: 'Lo que construiste, con tu aporte.', c: 'c3' },
   { to: '/student/evidences', icon: <FiUpload />, t: 'Certificados y evidencias', d: 'Lo que demuestra lo que sabes.', c: 'c4' },
-  { to: '/student/collaboration', icon: <FiUsers />, t: 'Compañeros y equipos', d: 'Contactos por QR, equipos y mensajes.', c: 'c5' },
+  { to: '/student/collaboration', icon: <FiUsers />, t: 'Compañeros y equipos', d: 'Contactos por QR, equipos y canales de contacto.', c: 'c5' },
   { to: '/student/progress', icon: <FiAward />, t: 'Mi progreso', d: 'Tus puntos, insignias y recompensas.', c: 'c6' },
 ];
 
@@ -61,13 +63,15 @@ function siguientePaso(d: ProfileSummary): { titulo: string; texto: string; to: 
 }
 
 export default function StudentDashboard() {
+  // Las tarjetas entran animadas solo la primera vez (sin parpadeo al volver).
+  const primera = useContext(PrimeraVisita);
   const { user } = useAuth();
   const summary = useAsync(() => profileService.summary(), []);
   const d = summary.data;
 
   return (
     <div>
-      <motion.div className="home-hero" initial="hidden" animate="show" variants={aparecer}>
+      <motion.div className="home-hero" initial={primera ? 'hidden' : false} animate="show" variants={aparecer}>
         <div>
           <span className="home-kicker">Tu espacio</span>
           <h1>¡Hola{user?.firstName ? `, ${user.firstName}` : ''}!</h1>
@@ -90,7 +94,7 @@ export default function StudentDashboard() {
           {(() => {
             const paso = siguientePaso(d);
             return (
-              <motion.div className="next-step" variants={aparecer} initial="hidden" animate="show" custom={1}>
+              <motion.div className="next-step" variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={1}>
                 <span className="ns-icon"><FiArrowRight /></span>
                 <div className="grow">
                   <span className="ns-kicker">Tu siguiente paso</span>
@@ -109,7 +113,7 @@ export default function StudentDashboard() {
               { n: d.externalCertificates.length + d.internalConstancies.length, l: 'certificados y constancias', c: 'c4' },
               { n: d.skills.length, l: 'tecnologías con respaldo', c: 'c1' },
             ].map((s, i) => (
-              <motion.div key={s.l} className={`home-stat ${s.c}`} variants={aparecer} initial="hidden" animate="show" custom={i + 2}>
+              <motion.div key={s.l} className={`home-stat ${s.c}`} variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={i + 2}>
                 <span className="n">{s.n}</span>
                 <span className="l">{s.l}</span>
               </motion.div>
@@ -161,7 +165,7 @@ export default function StudentDashboard() {
           <h2 className="home-h2">¿Qué quieres hacer?</h2>
           <div className="qa-grid">
             {ATAJOS.map((q, i) => (
-              <motion.div key={q.t} variants={aparecer} initial="hidden" animate="show" custom={i}>
+              <motion.div key={q.t} variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={i}>
                 <Link to={q.to} className={`qa-card tinted ${q.c}`}>
                   <span className="qi">{q.icon}</span>
                   <b>{q.t}</b>

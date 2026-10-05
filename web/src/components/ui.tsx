@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { PrimeraVisita } from './primeraVisita';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { FiInbox, FiSearch, FiX } from 'react-icons/fi';
@@ -166,6 +167,15 @@ export function useDelayedFlag(activo: boolean, ms: number): boolean {
     return () => clearTimeout(t);
   }, [activo, ms]);
   return visible;
+}
+
+/**
+ * Esqueleto que solo aparece si la espera dura: una respuesta rápida no debe
+ * pasar por «vacío → esqueleto → contenido» en un parpadeo.
+ */
+export function Diferido({ children, ms = 180 }: { children: ReactNode; ms?: number }) {
+  const visible = useDelayedFlag(true, ms);
+  return visible ? <>{children}</> : <div className="async-wait" />;
 }
 
 export function AsyncView<T>({
@@ -501,6 +511,7 @@ export function ProgressBar({
   tone?: 'bordo' | 'green' | 'amber';
 }) {
   const safe = Math.max(0, Math.min(100, Math.round(value)));
+  const primera = useContext(PrimeraVisita);
   return (
     <div className="progress-block">
       <div className="flex between progress-label">
@@ -510,7 +521,7 @@ export function ProgressBar({
       <div className="progress" role="progressbar" aria-valuenow={safe} aria-valuemin={0} aria-valuemax={100}>
         <motion.div
           className={`bar-${tone}`}
-          initial={{ width: 0 }}
+          initial={primera ? { width: 0 } : false}
           animate={{ width: `${safe}%` }}
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
         />
@@ -521,11 +532,13 @@ export function ProgressBar({
 
 /** Entrada escalonada para listas. Cada elemento aparece un poco después. */
 export function Stagger({ children, index = 0 }: { children: ReactNode; index?: number }) {
+  // Solo en la primera visita de la vista; al volver, quieto (sin parpadeo).
+  const primera = useContext(PrimeraVisita);
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={primera ? { opacity: 0, y: 6 } : false}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, delay: Math.min(index, 8) * 0.04 }}
+      transition={{ duration: 0.2, delay: Math.min(index, 6) * 0.03 }}
     >
       {children}
     </motion.div>

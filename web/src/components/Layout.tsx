@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -35,6 +35,7 @@ import { NAV } from '../navigation';
 import { TopProgress } from './feedback';
 import UserMenu from './UserMenu';
 import Tutorial from './Tutorial';
+import { PrimeraVisita, vistasVisitadas } from './primeraVisita';
 
 const ICONS: Record<string, IconType> = {
   '/student': FiGrid,
@@ -111,6 +112,16 @@ export default function Layout() {
 
   useEffect(() => {
     setMenuOpen(false);
+    // Cada vista empieza arriba, como una página nueva.
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  // Las animaciones de entrada solo la primera vez que se abre una vista en
+  // la sesión: al volver, el contenido ya está en memoria y aparece quieto.
+  // Se fija al entrar a la ruta y no cambia hasta salir de ella.
+  const primeraVisita = useMemo(() => !vistasVisitadas.has(location.pathname), [location.pathname]);
+  useEffect(() => {
+    vistasVisitadas.add(location.pathname);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -204,15 +215,14 @@ export default function Layout() {
           </div>
           <UserMenu />
         </header>
-        <motion.div
-          className="content"
-          key={location.pathname}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
-        >
-          <Outlet />
-        </motion.div>
+        {/* Sin `key` ni fundido: antes cada cambio de ruta desmontaba este
+            contenedor y lo volvía a montar con opacidad 0, y la página
+            parpadeaba aunque sus datos ya estuvieran en memoria. */}
+        <PrimeraVisita.Provider value={primeraVisita}>
+          <div className="content">
+            <Outlet />
+          </div>
+        </PrimeraVisita.Provider>
         <Tutorial />
       </div>
     </div>

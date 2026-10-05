@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { api, renovarSesion, setUnauthorizedHandler, tokenStore } from '../api/client';
 import { authService } from '../services';
 import type { PublicUser } from '../services/types';
+import { viewCache } from '../hooks/viewCache';
 
 interface AuthState {
   user: PublicUser | null;
@@ -19,6 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       tokenStore.clear();
+      viewCache.clear();
       setUser(null);
     });
     // Tras una recarga no hay access token (vive en memoria): se pide uno con
@@ -31,6 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const result = await authService.login(email, password);
     tokenStore.set(result.accessToken);
+    // Lo que se recordaba de las vistas era de la sesión anterior.
+    viewCache.clear();
     setUser(result.user);
     return result.user;
   };
@@ -45,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     authService.logout().catch(() => {});
     tokenStore.clear();
+    viewCache.clear();
     setUser(null);
     delete api.defaults.headers.common.Authorization;
   };
