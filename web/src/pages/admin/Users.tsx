@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   FiAlertTriangle, FiCheck, FiClock, FiEdit2, FiMail, FiPlus, FiSearch, FiSend, FiSliders, FiSlash,
@@ -176,6 +176,18 @@ export default function AdminUsersPage() {
     }
   };
 
+  // La tabla no se vuelve a dibujar al escribir en el formulario: recibe
+  // acciones con identidad estable que siempre llaman a la versión vigente.
+  const vigentes = useRef({ editar: setEditing, docente: setSemesterTarget, reenviar, cambiarEstado, filtrarRol: (r: string) => setParams(r ? { role: r } : {}, { replace: true }) });
+  vigentes.current = { editar: setEditing, docente: setSemesterTarget, reenviar, cambiarEstado, filtrarRol: (r: string) => setParams(r ? { role: r } : {}, { replace: true }) };
+  const acciones = useMemo<AccionesTabla>(() => ({
+    editar: (u) => vigentes.current.editar(u),
+    docente: (u) => vigentes.current.docente(u),
+    reenviar: (u) => vigentes.current.reenviar(u),
+    cambiarEstado: (u, st) => vigentes.current.cambiarEstado(u, st),
+    filtrarRol: (r) => vigentes.current.filtrarRol(r),
+  }), []);
+
   const simulado = correo.data?.transport === 'console';
 
   return (
@@ -350,88 +362,7 @@ export default function AdminUsersPage() {
           }
           emptyMessage="Todavía no hay usuarios registrados."
         >
-          {(todos) => {
-            const users = rol ? todos.filter((u) => u.role === rol) : todos;
-            return (
-            <>
-              <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <ResultCount shown={users.length} total={todos.length} noun="usuarios" />
-                <select
-                  value={rol}
-                  aria-label="Filtrar por rol"
-                  onChange={(e) => setParams(e.target.value ? { role: e.target.value } : {}, { replace: true })}
-                  style={{ maxWidth: 220 }}
-                >
-                  <option value="">Todos los roles</option>
-                  {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-                {rol === RolNombre.TEACHER && (
-                  <span className="muted small">Cada docente ve solo a los estudiantes de los semestres que tiene habilitados.</span>
-                )}
-              </div>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Nombre</th>
-                      <th>Correo</th>
-                      <th>Rol</th>
-                      <th>Semestre</th>
-                      <th>Estado</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr key={u.id}>
-                        <td>
-                          {u.firstName} {u.lastName}
-                        </td>
-                        <td className="muted">{u.email}</td>
-                        <td>{ROLE_LABEL[u.role] ?? u.role}</td>
-                        <td>
-                          <SemestreCelda user={u} onTeacher={() => setSemesterTarget(u)} onStudent={() => setEditing(u)} />
-                        </td>
-                        <td>
-                          <Badge tone={STATUS_TONE[u.status] ?? 'gray'}>
-                            {USER_STATUS_LABEL[u.status] ?? u.status}
-                          </Badge>
-                          {u.status === 'pending_activation' && <InvitacionLinea inv={u.invitation} />}
-                        </td>
-                        <td>
-                          <div className="flex" style={{ gap: '0.35rem' }}>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => setEditing(u)}
-                              title="Editar datos"
-                              aria-label={`Editar a ${u.firstName} ${u.lastName}`}
-                            >
-                              <FiEdit2 />
-                            </button>
-                            {u.status === 'pending_activation' ? (
-                              <Button variant="secondary" size="sm" onClick={() => reenviar(u)} icon={<FiMail size={13} />}>
-                                Reenviar invitación
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => cambiarEstado(u, u.status === 'active' ? 'suspended' : 'active')}
-                                icon={u.status === 'active' ? <FiSlash size={13} /> : <FiCheck size={13} />}
-                              >
-                                {u.status === 'active' ? 'Suspender' : 'Reactivar'}
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-            );
-          }}
+          {(todos) => <TablaUsuarios todos={todos} rol={rol} acciones={acciones} />}
         </AsyncView>
       </Card>
 
@@ -466,6 +397,126 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+
+/** Filas que se dibujan de una vez; el resto, con «Ver más». */
+const PASO_FILAS = 50;
+
+interface AccionesTabla {
+  editar: (u: PublicUser) => void;
+  docente: (u: PublicUser) => void;
+  reenviar: (u: PublicUser) => void;
+  cambiarEstado: (u: PublicUser, status: UserStatus) => void;
+  filtrarRol: (rol: string) => void;
+}
+
+/**
+ * La lista de cuentas, aparte del formulario.
+ *
+ * Con miles de usuarios, dibujarlos todos en cada tecla que se escribe en
+ * «Crear una cuenta» trababa la pantalla. Memorizada, solo se vuelve a dibujar
+ * cuando cambian los datos o el filtro; y muestra las filas por tandas.
+ */
+const TablaUsuarios = memo(function TablaUsuarios({
+  todos,
+  rol,
+  acciones,
+}: {
+  todos: PublicUser[];
+  rol: string;
+  acciones: AccionesTabla;
+}) {
+  const users = useMemo(() => (rol ? todos.filter((u) => u.role === rol) : todos), [todos, rol]);
+  const [limite, setLimite] = useState(PASO_FILAS);
+  useEffect(() => setLimite(PASO_FILAS), [todos, rol]);
+  return (
+    <>
+      <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <ResultCount shown={users.length} total={todos.length} noun="usuarios" />
+        <select
+          value={rol}
+          aria-label="Filtrar por rol"
+          onChange={(e) => acciones.filtrarRol(e.target.value)}
+          style={{ maxWidth: 220 }}
+        >
+          <option value="">Todos los roles</option>
+          {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        {rol === RolNombre.TEACHER && (
+          <span className="muted small">Cada docente ve solo a los estudiantes de los semestres que tiene habilitados.</span>
+        )}
+      </div>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Correo</th>
+              <th>Rol</th>
+              <th>Semestre</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.slice(0, limite).map((u) => (
+              <tr key={u.id}>
+                <td>
+                  {u.firstName} {u.lastName}
+                </td>
+                <td className="muted">{u.email}</td>
+                <td>{ROLE_LABEL[u.role] ?? u.role}</td>
+                <td>
+                  <SemestreCelda user={u} onTeacher={() => acciones.docente(u)} onStudent={() => acciones.editar(u)} />
+                </td>
+                <td>
+                  <Badge tone={STATUS_TONE[u.status] ?? 'gray'}>
+                    {USER_STATUS_LABEL[u.status] ?? u.status}
+                  </Badge>
+                  {u.status === 'pending_activation' && <InvitacionLinea inv={u.invitation} />}
+                </td>
+                <td>
+                  <div className="flex" style={{ gap: '0.35rem' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => acciones.editar(u)}
+                      title="Editar datos"
+                      aria-label={`Editar a ${u.firstName} ${u.lastName}`}
+                    >
+                      <FiEdit2 />
+                    </button>
+                    {u.status === 'pending_activation' ? (
+                      <Button variant="secondary" size="sm" onClick={() => acciones.reenviar(u)} icon={<FiMail size={13} />}>
+                        Reenviar invitación
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => acciones.cambiarEstado(u, u.status === 'active' ? 'suspended' : 'active')}
+                        icon={u.status === 'active' ? <FiSlash size={13} /> : <FiCheck size={13} />}
+                      >
+                        {u.status === 'active' ? 'Suspender' : 'Reactivar'}
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {users.length > limite && (
+        <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
+          <Button variant="secondary" size="sm" onClick={() => setLimite((n) => n + PASO_FILAS)}>
+            Ver más ({users.length - limite} restantes)
+          </Button>
+        </div>
+      )}
+    </>
+  );
+});
 
 /* ------------------------------------------------------------------ */
 
