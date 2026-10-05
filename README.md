@@ -148,6 +148,7 @@ y [`docs/SEGURIDAD_V2.md`](docs/SEGURIDAD_V2.md).
 ## Documentación
 
 - [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md) — el sistema explicado con diagramas.
+- [`docs/AFINIA_FLUJO_COMPLETO_Y_MOTORES.md`](docs/AFINIA_FLUJO_COMPLETO_Y_MOTORES.md) — el flujo completo y, en detalle, cómo están construidos el motor de afinidad V3 y el asistente de IA.
 - [`docs/MATRIZ_TRAZABILIDAD_V2.md`](docs/MATRIZ_TRAZABILIDAD_V2.md) — RF/RNF → módulo → rutas → pantallas → pruebas.
 - [`docs/V2_REPORTE_BATCHES.md`](docs/V2_REPORTE_BATCHES.md) — qué se hizo en cada batch de la V2, con pruebas y resultados.
 - [`AUDITORIA_GAP_AFINIA_V2.md`](AUDITORIA_GAP_AFINIA_V2.md) — la auditoría inicial y el estado final de cada punto.
