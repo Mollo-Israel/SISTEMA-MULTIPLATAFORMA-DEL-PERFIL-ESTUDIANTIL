@@ -9,7 +9,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthenticatedUser } from './types/authenticated-user';
-import { AUTH_RATE_LIMIT } from '../config/identity.config';
+import { AUTH_RATE_LIMIT, REFRESH_RATE_LIMIT } from '../config/identity.config';
 import {
   clearRefreshCookie,
   readRefreshCookie,
@@ -64,10 +64,10 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(200)
-  @Throttle({ default: AUTH_RATE_LIMIT })
+  @Throttle({ default: REFRESH_RATE_LIMIT })
   @ApiOperation({
     summary: 'Canjear el refresh token por un par nuevo.',
-    description: 'Rotatorio: el token presentado deja de servir en cuanto se canjea.',
+    description: 'Rotatorio: el token presentado deja de servir en cuanto se canjea (salvo una gracia corta, REFRESH_TOKEN_REUSE_GRACE_SECONDS, para recargas en medio de la renovación).',
   })
   async refresh(@Body() dto: RefreshDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = dto.refreshToken ?? readRefreshCookie(req);

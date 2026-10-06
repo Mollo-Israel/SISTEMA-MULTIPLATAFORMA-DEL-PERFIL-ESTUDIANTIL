@@ -25,7 +25,7 @@ Este documento resume qué se verificó, con qué herramienta y con qué resulta
 |---|---|---|
 | Autorización negativa | Guardas de rol + comprobación de propiedad o alcance en cada servicio; nunca solo en la pantalla | B11 (403 por rol), B5/B6/obj-40 (proyectos y evidencias ajenas), V2.5 (solo Dirección decide), V2.8.7/IA.20 (la IA no abre puertas), V2.14 (auditoría y necesidades), V2.15 (móvil) |
 | TeacherScope | Una sola fuente (`TeacherScopeService`) para perfiles, proyectos, paneles e IA | obj-6, B9, V2.13.1, V2.14.2, IA.20 |
-| Sesión | Access token corto; refresh rotatorio con revocación; cookie HttpOnly en web; sesión no emitida a personal desde el móvil | B1, B2, V2.2, V2.15 |
+| Sesión | Access token corto; refresh rotatorio con revocación y gracia de 60 s para recargas en medio de la renovación; cookie HttpOnly en web; sesión no emitida a personal desde el móvil | B1, B2, V2.2, V2.15 |
 | Rate limit | Global 5000/min; login, activación y recuperación estrechos; IA 20/min por persona | B1, B2.2 (429 con `retryAfterSeconds`) |
 | Enumeración | Mismo mensaje para correo inexistente y contraseña errónea; perfil público cerrado responde 404 | B1, B8 |
 | Archivos | Sin estáticos: la descarga pasa por un controlador que exige sesión y autorización; tipo y tamaño validados | B3, B11 (descarga ajena 404/403) |

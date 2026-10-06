@@ -37,6 +37,15 @@ const envNum = (key: string, fallback: number): number => {
 /** Login y refresh: objetivo natural de la fuerza bruta (§15). */
 export const AUTH_RATE_LIMIT = { limit: envNum('RATE_LIMIT_AUTH_PER_MINUTE', 10), ttl: 60_000 };
 
+/**
+ * Renovación de sesión: límite propio, más amplio que el del login.
+ *
+ * El refresh token son 48 bytes aleatorios: no se adivina por fuerza bruta.
+ * Compartir el tope de 10 del login hacía que unos cuantos F5 seguidos
+ * agotaran el cupo y la sesión se cerrara con un 429.
+ */
+export const REFRESH_RATE_LIMIT = { limit: envNum('RATE_LIMIT_REFRESH_PER_MINUTE', 60), ttl: 60_000 };
+
 /** Activacion y recuperacion: ademas evitan el envio masivo de correo (§15). */
 export const ACTIVATION_RATE_LIMIT = {
   limit: envNum('RATE_LIMIT_ACTIVATION_PER_MINUTE', 5),
@@ -53,6 +62,18 @@ export const ACTIVATION_RATE_LIMIT = {
 export const identityConfig = {
   accessTokenTtlMinutes: (c: ConfigService) => num(c, 'ACCESS_TOKEN_TTL_MINUTES', 15),
   refreshTokenTtlDays: (c: ConfigService) => num(c, 'REFRESH_TOKEN_TTL_DAYS', 7),
+  /**
+   * Segundos en que el refresh token recién reemplazado sigue sirviendo.
+   *
+   * Una recarga en medio de una renovación pierde la cookie nueva; sin esta
+   * ventana, ese F5 cerraba la sesión. 0 la desactiva; el tope es 5 minutos.
+   */
+  refreshReuseGraceSeconds: (c: ConfigService) => {
+    // Aquí el 0 es un valor válido (desactiva la gracia); `num` lo descartaría.
+    const raw = c.get<string>('REFRESH_TOKEN_REUSE_GRACE_SECONDS');
+    const value = raw === undefined || raw === '' ? 60 : Number(raw);
+    return Number.isFinite(value) ? Math.min(300, Math.max(0, value)) : 60;
+  },
   activationTtlHours: (c: ConfigService) => num(c, 'ACTIVATION_TOKEN_TTL_HOURS', 48),
   passwordResetTtlMinutes: (c: ConfigService) => num(c, 'PASSWORD_RESET_TOKEN_TTL_MINUTES', 30),
   resendCooldownSeconds: (c: ConfigService) => num(c, 'ACTIVATION_RESEND_COOLDOWN_SECONDS', 120),

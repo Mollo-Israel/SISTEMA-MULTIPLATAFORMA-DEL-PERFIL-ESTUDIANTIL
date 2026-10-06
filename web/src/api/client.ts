@@ -106,28 +106,71 @@ export const setUnauthorizedHandler = (handler: () => void) => {
   onUnauthorized = handler;
 };
 
-/**
- * Renovacion en curso.
- *
- * Si varias peticiones caducan a la vez, todas esperan al mismo canje. Sin
- * esto cada una pediria su propio refresh y, como el token rota, solo la
- * primera funcionaria: el resto cerraria la sesion del usuario.
- */
-let refreshing: Promise<{ accessToken: string; user: unknown } | null> | null = null;
+type Renovada = { accessToken: string; user: unknown };
 
-/** Canjea la cookie de sesión por un access token nuevo. */
-export async function renovarSesion(): Promise<{ accessToken: string; user: unknown } | null> {
-  if (!tokenStore.hasSession()) return null;
+/**
+ * Resultado de intentar renovar. Distinguir los dos fallos es lo que evita
+ * expulsar a nadie por un corte de red: solo `invalida` cierra la sesion.
+ */
+type Intento =
+  | { estado: 'ok'; sesion: Renovada }
+  | { estado: 'invalida' }
+  | { estado: 'fallo' };
+
+/**
+ * Renovacion en curso, una sola para toda la pagina.
+ *
+ * La comparten el arranque (AuthContext) y el interceptor. Antes cada uno
+ * pedia la suya: al recargar podian salir dos a la vez con la misma cookie, y
+ * como el refresh token rota, la segunda recibia 401 y cerraba la sesion que
+ * la primera acababa de renovar.
+ */
+let enCurso: Promise<Intento> | null = null;
+
+async function canjear(): Promise<Intento> {
   try {
     // Cliente aparte: este no debe pasar por los interceptores, o un 401 en
     // la propia renovacion entraria en bucle.
     const { data } = await axios.post(`${api.defaults.baseURL}/auth/refresh`, {}, SESSION_REQUEST);
     tokenStore.set(data.accessToken);
-    return { accessToken: data.accessToken as string, user: data.user };
-  } catch {
-    tokenStore.clear();
-    return null;
+    return { estado: 'ok', sesion: { accessToken: data.accessToken as string, user: data.user } };
+  } catch (e) {
+    // Solo un 401 dice que la sesion ya no existe. Sin red, un 429 o un 5xx
+    // no son motivo para olvidarla: se vuelve a intentar la proxima vez.
+    if (axios.isAxiosError(e) && e.response?.status === 401) {
+      tokenStore.clear();
+      return { estado: 'invalida' };
+    }
+    return { estado: 'fallo' };
   }
+}
+
+/**
+ * Entre pestañas tambien hay una sola renovacion a la vez (Web Locks).
+ *
+ * La cookie es comun a todas: si dos pestañas renuevan juntas, una rota el
+ * token que la otra esta presentando. Con el cerrojo, la segunda espera y
+ * canjea la cookie ya actualizada por la primera.
+ */
+function conCerrojo(fn: () => Promise<Intento>): Promise<Intento> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  // Los tipos de esta version de TypeScript anidan la promesa del callback;
+  // en ejecucion `request` la resuelve, y `then` lo deja dicho en el tipo.
+  return locks ? locks.request('afinia-renovar-sesion', () => fn()).then((r) => r) : fn();
+}
+
+function intentarRenovar(): Promise<Intento> {
+  if (!tokenStore.hasSession()) return Promise.resolve({ estado: 'invalida' });
+  enCurso = enCurso ?? conCerrojo(canjear).finally(() => {
+    enCurso = null;
+  });
+  return enCurso;
+}
+
+/** Canjea la cookie de sesión por un access token nuevo. */
+export async function renovarSesion(): Promise<Renovada | null> {
+  const r = await intentarRenovar();
+  return r.estado === 'ok' ? r.sesion : null;
 }
 
 api.interceptors.response.use(
@@ -154,14 +197,14 @@ api.interceptors.response.use(
 
     if (esRenovable) {
       original._reintentado = true;
-      refreshing = refreshing ?? renovarSesion();
-      const nuevo = await refreshing;
-      refreshing = null;
-      if (nuevo) {
+      const intento = await intentarRenovar();
+      if (intento.estado === 'ok') {
         // No hace falta tocar la cabecera: `api.request` vuelve a pasar por el
         // interceptor de peticion, que la rellena con el token ya renovado.
         return api.request(original);
       }
+      // Un fallo pasajero no cierra la sesion: la peticion falla y nada mas.
+      if (intento.estado === 'fallo') return Promise.reject(error);
     }
 
     if (error.response?.status === 401 && onUnauthorized) {

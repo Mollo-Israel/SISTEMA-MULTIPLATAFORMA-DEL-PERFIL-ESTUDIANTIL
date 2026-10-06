@@ -351,11 +351,33 @@ async function sesiones(ctx) {
     'B3.2 El refresh token rota en cada uso',
   );
 
+  // Recargar la página en medio de una renovación descarta la respuesta con el
+  // token nuevo: el cliente vuelve a presentar el anterior. Dentro de la gracia
+  // (REFRESH_TOKEN_REUSE_GRACE_SECONDS) sirve, pero una sola vez.
   const reutilizado = await req('POST', '/auth/refresh', { body: { refreshToken: primer } });
   check(
-    reutilizado.status === 401,
-    'B3.3 El refresh token anterior deja de servir -> 401',
+    reutilizado.status === 200 && !!reutilizado.data?.refreshToken && reutilizado.data.refreshToken !== refrescado.data?.refreshToken,
+    'B3.3 Recarga en medio de la renovación: el token recién reemplazado sirve una vez y emite otro',
     `status ${reutilizado.status}`,
+  );
+  const otraVez = await req('POST', '/auth/refresh', { body: { refreshToken: primer } });
+  check(
+    otraVez.status === 401,
+    'B3.3c Usado otra vez, el token anterior ya no sirve -> 401',
+    `status ${otraVez.status}`,
+  );
+
+  // Dos renovaciones a la vez con el mismo token (dos pestañas, o un 401 en
+  // varias peticiones juntas): ninguna puede tumbar la sesión de la otra.
+  const actual = reutilizado.data?.refreshToken;
+  const [a1, a2] = await Promise.all([
+    req('POST', '/auth/refresh', { body: { refreshToken: actual } }),
+    req('POST', '/auth/refresh', { body: { refreshToken: actual } }),
+  ]);
+  check(
+    a1.status === 200 && a2.status === 200,
+    'B3.3d Dos renovaciones simultáneas con el mismo token: las dos responden 200',
+    `status ${a1.status} y ${a2.status}`,
   );
 
   // El access token renovado tiene que servir de verdad. Los clientes web y
@@ -369,7 +391,8 @@ async function sesiones(ctx) {
   );
 
   section('Revocación');
-  const vigente = refrescado.data.refreshToken;
+  // El que quedó vigente: la segunda rotación de la carrera anterior.
+  const vigente = a2.data?.refreshToken ?? a1.data?.refreshToken;
   const sesiones = await req('GET', '/auth/sessions', { token: refrescado.data.accessToken });
   check(sesiones.status === 200 && (sesiones.data ?? []).length >= 1, 'B3.4 El usuario ve sus sesiones abiertas');
 

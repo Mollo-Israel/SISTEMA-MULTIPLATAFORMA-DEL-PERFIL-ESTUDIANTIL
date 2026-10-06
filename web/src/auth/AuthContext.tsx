@@ -24,10 +24,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
     });
     // Tras una recarga no hay access token (vive en memoria): se pide uno con
-    // la cookie de sesión. Sin sesión previa, ni se intenta.
-    renovarSesion()
-      .then((r) => setUser((r?.user as PublicUser | undefined) ?? null))
-      .finally(() => setLoading(false));
+    // la cookie de sesión. Sin sesión previa, ni se intenta. Si falla por algo
+    // pasajero (red, 429, 5xx) la marca de sesión sigue en pie y se reintenta
+    // un par de veces antes de mandar a nadie al login.
+    let vivo = true;
+    (async () => {
+      let r = await renovarSesion();
+      for (let intento = 1; !r && intento <= 2 && tokenStore.hasSession() && vivo; intento++) {
+        await new Promise((ok) => setTimeout(ok, 700 * intento));
+        r = await renovarSesion();
+      }
+      if (vivo) setUser((r?.user as PublicUser | undefined) ?? null);
+    })().finally(() => {
+      if (vivo) setLoading(false);
+    });
+    return () => {
+      vivo = false;
+    };
   }, []);
 
   const login = async (email: string, password: string) => {

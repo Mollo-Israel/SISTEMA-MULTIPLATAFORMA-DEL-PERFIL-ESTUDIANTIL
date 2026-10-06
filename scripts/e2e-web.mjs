@@ -198,6 +198,45 @@ async function pruebas(browser) {
     if (t || e) malas.push(`${r} (${t} transparentes, ${e} con esqueleto)`);
   }
   check(malas.length === 0, 'WEB.19b Volver a una vista ya vista la pinta al instante: sin fundido ni esqueleto', malas.join(', '));
+
+  objective('§18 · Recargar la página no cierra la sesión');
+  const rechazos = [];
+  p3.on('response', (r) => { if (r.url().includes('/auth/refresh') && r.status() !== 200) rechazos.push(r.status()); });
+  // Cinco F5 seguidos, cada uno en cuanto la página termina de cargar.
+  for (let i = 0; i < 5; i++) await p3.reload({ waitUntil: 'load' });
+  await p3.waitForTimeout(1500);
+  check(!p3.url().includes('/login') && await p3.locator('nav a.nav-link').count() > 0,
+    'WEB.19c Cinco recargas seguidas: la sesión sigue abierta', p3.url());
+
+  // F5 justo mientras la sesión se renueva: la petición llega al servidor, que
+  // rota el token, pero la respuesta con la cookie nueva nunca llega al
+  // navegador. Se reproduce tal cual: el canje se hace por fuera del navegador
+  // (su Set-Cookie se pierde) y la petición de la página se corta.
+  let perdidas = 0;
+  await p3.route('**/api/auth/refresh', async (route) => {
+    // Solo se pierde la primera respuesta, como en un F5 real.
+    if (perdidas > 0) return route.continue();
+    const h = await route.request().allHeaders();
+    const canje = await fetch(route.request().url(), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: h.cookie ?? '', 'x-session-transport': 'cookie', origin: WEB },
+      body: '{}',
+    });
+    if (canje.status === 200) perdidas += 1;
+    await route.abort('connectionreset');
+  });
+  await p3.reload({ waitUntil: 'load' });
+  await p3.waitForTimeout(800);
+  await p3.unroute('**/api/auth/refresh');
+  await p3.reload({ waitUntil: 'load' });
+  await p3.waitForTimeout(2000);
+  check(perdidas > 0 && !p3.url().includes('/login') && await p3.locator('nav a.nav-link').count() > 0,
+    'WEB.19d F5 en medio de la renovación (el servidor rotó, el navegador no recibió la cookie): la sesión sigue abierta', p3.url());
+  // Y no se quedó viva por casualidad: tras la carrera, otra recarga normal renueva bien.
+  await p3.reload({ waitUntil: 'load' });
+  await p3.waitForTimeout(1500);
+  check(!p3.url().includes('/login') && rechazos.length === 0,
+    'WEB.19e Ninguna renovación fue rechazada en todo el recorrido', rechazos.join(', '));
   await ctx3.close();
 
   objective('§66 · Teléfono: sin desplazamiento horizontal');

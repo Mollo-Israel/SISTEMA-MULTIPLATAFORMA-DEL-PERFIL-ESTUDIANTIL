@@ -149,6 +149,15 @@ flowchart TD
 - `POST /auth/login` devuelve un **access token corto** y un **refresh
   rotatorio** (cookie HttpOnly en la web). Cerrar sesión revoca el refresh en
   el servidor.
+- **Recargar la página no cierra la sesión.** El access token vive en memoria,
+  así que tras un F5 la web lo renueva con la cookie. Si el F5 cae justo en
+  medio de una renovación, el servidor ya rotó el token pero el navegador
+  descarta la cookie nueva. Por eso el token recién reemplazado sirve **una
+  vez más** durante 60 s (`REFRESH_TOKEN_REUSE_GRACE_SECONDS`); usado de nuevo,
+  responde 401. En el cliente hay una sola renovación en vuelo, compartida por
+  toda la página y coordinada entre pestañas (Web Locks), y solo un 401 real
+  cierra la sesión: un corte de red o un 429 no. `/auth/refresh` tiene su
+  propio límite (60 por minuto); el del login sigue en 10.
 - La app móvil **solo emite sesión a estudiantes**. Otro rol recibe un rechazo
   desde la API, no solo desde la pantalla.
 

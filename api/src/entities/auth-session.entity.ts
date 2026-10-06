@@ -37,6 +37,20 @@ export class AuthSession {
   @Column({ name: 'refresh_token_hash', type: 'varchar', length: 64 })
   refreshTokenHash: string;
 
+  /**
+   * SHA-256 del refresh token que este reemplazó en la última rotación.
+   *
+   * Sirve solo durante una ventana corta tras `rotatedAt`: cubre la recarga
+   * de la página en medio de una renovación, cuando el navegador descarta la
+   * cookie nueva y vuelve a presentar la anterior.
+   */
+  @Index('idx_auth_sessions_previous_hash')
+  @Column({ name: 'previous_refresh_token_hash', type: 'varchar', length: 64, nullable: true })
+  previousRefreshTokenHash: string | null;
+
+  @Column({ name: 'rotated_at', type: 'timestamptz', nullable: true })
+  rotatedAt: Date | null;
+
   @Column({ name: 'expires_at', type: 'timestamptz' })
   expiresAt: Date;
 

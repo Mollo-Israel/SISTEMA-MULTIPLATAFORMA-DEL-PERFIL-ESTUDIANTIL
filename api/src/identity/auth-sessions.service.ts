@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { EntityManager, IsNull, LessThan, Repository } from 'typeorm';
+import { EntityManager, IsNull, LessThan, MoreThan, Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import { AuthSession } from '../entities/auth-session.entity';
 import { identityConfig } from '../config/identity.config';
@@ -56,13 +56,31 @@ export class AuthSessionsService {
     return { sessionId: session.id, refreshToken, expiresAt };
   }
 
-  /** Sesion viva que corresponde a este refresh token, o null. */
+  /**
+   * Sesion viva que corresponde a este refresh token, o null.
+   *
+   * Acepta tambien el token recien reemplazado, solo durante la gracia de
+   * reutilizacion: si la pagina se recarga mientras se renueva la sesion, el
+   * navegador descarta la cookie nueva y presenta la anterior. Pasada esa
+   * ventana, un token viejo vuelve a ser lo que era: inservible.
+   */
   async findUsable(refreshToken: string): Promise<AuthSession | null> {
     if (!refreshToken || refreshToken.length < 16) return null;
-    const session = await this.sessions.findOne({
-      where: { refreshTokenHash: hash(refreshToken) },
+    const presentado = hash(refreshToken);
+    let session = await this.sessions.findOne({
+      where: { refreshTokenHash: presentado },
       relations: { user: { role: true } },
     });
+    const graciaMs = this.graceMs();
+    if (!session && graciaMs > 0) {
+      session = await this.sessions.findOne({
+        where: {
+          previousRefreshTokenHash: presentado,
+          rotatedAt: MoreThan(new Date(Date.now() - graciaMs)),
+        },
+        relations: { user: { role: true } },
+      });
+    }
     if (!session) return null;
     return session.isUsable() ? session : null;
   }
@@ -70,17 +88,26 @@ export class AuthSessionsService {
   /**
    * Rota el refresh token de una sesion viva.
    *
-   * La rotacion es una escritura condicionada al hash anterior: si dos
-   * peticiones llegan con el mismo token, solo una encuentra la fila y la otra
-   * queda sin sesion, que es el comportamiento deseado ante una reutilizacion.
+   * La rotacion es una escritura condicionada al hash vigente: si dos
+   * peticiones llegan con el mismo token, solo una encuentra la fila. La otra
+   * puede reintentar (ver AuthService.refresh): dentro de la gracia, su token
+   * ya figura como el anterior y la sesion vuelve a rotar desde el vigente.
    */
   async rotate(session: AuthSession): Promise<{ refreshToken: string; expiresAt: Date } | null> {
     const refreshToken = randomBytes(48).toString('base64url');
     const expiresAt = new Date(Date.now() + this.ttlMs());
 
+    const ahora = new Date();
     const result = await this.sessions.update(
       { id: session.id, refreshTokenHash: session.refreshTokenHash, revokedAt: IsNull() },
-      { refreshTokenHash: hash(refreshToken), expiresAt, lastUsedAt: new Date() },
+      {
+        refreshTokenHash: hash(refreshToken),
+        // El que se reemplaza queda aceptado durante la gracia (ver findUsable).
+        previousRefreshTokenHash: session.refreshTokenHash,
+        rotatedAt: ahora,
+        expiresAt,
+        lastUsedAt: ahora,
+      },
     );
     if (!result.affected) return null;
 
@@ -139,6 +166,10 @@ export class AuthSessionsService {
   async purgeExpired(): Promise<number> {
     const result = await this.sessions.delete({ expiresAt: LessThan(new Date()) });
     return result.affected ?? 0;
+  }
+
+  private graceMs(): number {
+    return identityConfig.refreshReuseGraceSeconds(this.config) * 1000;
   }
 
   private ttlMs(): number {

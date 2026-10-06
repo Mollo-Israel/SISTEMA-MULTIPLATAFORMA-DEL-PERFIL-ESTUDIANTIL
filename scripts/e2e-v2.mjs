@@ -96,8 +96,13 @@ async function batch2(ctx) {
   const cookie2 = cookieDe(renovada.setCookie);
   check(renovada.status === 200 && Boolean(renovada.data?.accessToken) && Boolean(cookie2) && cookie2 !== cookie,
     'V2.2.7 §18 Con la cookie se renueva y la cookie rota', `status ${renovada.status}`);
+  // F5 en medio de la renovación: el navegador perdió la cookie nueva y vuelve
+  // con la anterior. Dentro de la gracia sirve una vez; después, ya no.
   const vieja = await crudo('POST', '/auth/refresh', { body: {}, cookie, headers: { 'X-Session-Transport': 'cookie' } });
-  check(vieja.status === 401, 'V2.2.8 §18 La cookie anterior ya no sirve (rotación)', `status ${vieja.status}`);
+  check(vieja.status === 200 && Boolean(cookieDe(vieja.setCookie)),
+    'V2.2.8 §18 F5 en medio de la renovación: la cookie anterior sirve una vez y rota', `status ${vieja.status}`);
+  const viejaOtraVez = await crudo('POST', '/auth/refresh', { body: {}, cookie, headers: { 'X-Session-Transport': 'cookie' } });
+  check(viejaOtraVez.status === 401, 'V2.2.8b §18 Usada otra vez, la cookie anterior ya no sirve (rotación)', `status ${viejaOtraVez.status}`);
 
   const salir = await crudo('POST', '/auth/logout', { body: {}, cookie: cookie2, headers: { 'X-Session-Transport': 'cookie' } });
   check(salir.status === 200 && salir.setCookie.some((c) => /^afinia_rt=;/.test(c) || /Expires=Thu, 01 Jan 1970/i.test(c)),
