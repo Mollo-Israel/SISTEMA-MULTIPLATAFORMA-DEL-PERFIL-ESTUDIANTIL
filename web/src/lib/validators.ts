@@ -1,3 +1,4 @@
+import { RolNombre, UNIVERSITY_CODE_PREFIX, universityCodeExample } from '../constants';
 /**
  * Validaciones de formulario, copia de las del servidor.
  *
@@ -48,7 +49,8 @@ export const CODE_RE = /^[a-z][a-z0-9_]{2,59}$/;
 
 export const INSTITUTIONAL_EMAIL_RE = /^[a-z0-9._%+-]+@(?:[a-z0-9-]+\.)*univalle\.edu$/i;
 
-export const UNIVERSITY_CODE_RE = /^[A-Za-z0-9._-]{3,30}$/;
+/** Código universitario: tres letras, guion y siete letras o números. */
+export const UNIVERSITY_CODE_RE = /^[A-Z]{3}-[A-Z0-9]{7}$/;
 
 const limpio = (v: string) => v.replace(/\s+/g, ' ').trim();
 
@@ -155,18 +157,24 @@ export const optionalText =
   (v) =>
     limpio(v ?? '').length > max ? `No puede superar ${max} caracteres.` : null;
 
-export const universityCode: Validator = (v) => {
-  const t = (v ?? '').trim();
-  if (!t) return null;
-  if (!UNIVERSITY_CODE_RE.test(t)) return 'De 3 a 30 caracteres: letras, números, punto, guion o guion bajo.';
-  return null;
-};
+/** Mayúsculas y sin espacios, igual que lo guarda la API. */
+export const normalizeUniversityCode = (v: string | null | undefined) =>
+  String(v ?? '').trim().toUpperCase().replace(/\s+/g, '');
 
-/** Código universitario obligatorio: alta manual de un estudiante (V2 §12). */
-export const requiredUniversityCode: Validator = (v) => {
-  const t = (v ?? '').trim();
-  if (!t) return 'El código universitario es obligatorio.';
-  if (!UNIVERSITY_CODE_RE.test(t)) return 'De 3 a 30 caracteres: letras, números, punto, guion o guion bajo.';
+/**
+ * Código universitario obligatorio, con el prefijo del rol (V2 §12): la misma
+ * regla que `universityCodeProblem` en `shared`.
+ */
+export const universityCodeFor = (role: RolNombre): Validator => (v) => {
+  const code = normalizeUniversityCode(v);
+  const prefijo = UNIVERSITY_CODE_PREFIX[role];
+  if (!code) return 'El código universitario es obligatorio.';
+  if (!UNIVERSITY_CODE_RE.test(code)) {
+    return `Formato: ${prefijo}- y 7 letras o números (por ejemplo ${universityCodeExample(role)}).`;
+  }
+  if (!code.startsWith(`${prefijo}-`)) {
+    return `Para este rol el código empieza con ${prefijo}- (por ejemplo ${universityCodeExample(role)}).`;
+  }
   return null;
 };
 

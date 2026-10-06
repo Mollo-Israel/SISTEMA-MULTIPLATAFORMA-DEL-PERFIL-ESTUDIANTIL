@@ -18,8 +18,12 @@ import {
   CvAssistMode,
   DIMINISHING,
   RolNombre,
+  SEMESTER_ROLES,
   SUPPORT_CAPS,
+  UNIVERSITY_CODE_PREFIX,
   diminishingFactor,
+  normalizeUniversityCode,
+  universityCodeProblem,
 } from '@perfil/shared';
 import { RULES, containsTerm, normalize } from '../../src/recommendations/recommendation.rules';
 import { passwordPolicyError } from '../../src/common/validation';
@@ -241,5 +245,26 @@ describe('PDF del CV (§61)', () => {
     const moderna = new PdfWriter('x', PDF_THEMES.modern).section('A').build().toString('latin1');
     assert.match(compacta, /\/Times-Roman/);
     assert.match(moderna, / rg /);
+  });
+});
+
+describe('Código universitario (§12)', () => {
+  it('cada rol tiene su prefijo; Estudiante y Sociedad científica comparten EST', () => {
+    assert.deepEqual(UNIVERSITY_CODE_PREFIX, {
+      STUDENT: 'EST', SCIENTIFIC_SOCIETY: 'EST', TEACHER: 'DOC', CAREER_DIRECTOR: 'DIR', ADMIN: 'ADM',
+    });
+    assert.deepEqual([...SEMESTER_ROLES].sort(), [RolNombre.SCIENTIFIC_SOCIETY, RolNombre.STUDENT].sort());
+  });
+  it('acepta PREFIJO-XXXXXXX del rol y normaliza a mayúsculas', () => {
+    assert.equal(universityCodeProblem('EST-38DJ1HA', RolNombre.STUDENT), null);
+    assert.equal(universityCodeProblem(' est-38dj1ha ', RolNombre.SCIENTIFIC_SOCIETY), null);
+    assert.equal(normalizeUniversityCode(' doc-ab12cd3 '), 'DOC-AB12CD3');
+  });
+  it('rechaza vacío, mal formato o el prefijo de otro rol', () => {
+    assert.match(universityCodeProblem('', RolNombre.ADMIN) ?? '', /obligatorio/);
+    assert.match(universityCodeProblem('DOC-12', RolNombre.TEACHER) ?? '', /Formato/);
+    assert.match(universityCodeProblem('EST-38DJ1HAX', RolNombre.STUDENT) ?? '', /Formato/);
+    assert.match(universityCodeProblem('EST-38DJ1HA', RolNombre.TEACHER) ?? '', /DOC-/);
+    assert.match(universityCodeProblem('DIR-38DJ1HA', RolNombre.ADMIN) ?? '', /ADM-/);
   });
 });

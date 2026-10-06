@@ -114,7 +114,7 @@ un trabajo «huérfano» en `PROCESSING` vuelve a la cola.
 
 ```mermaid
 flowchart TD
-    P[Administración provisiona la cuenta<br/>semestre y código obligatorios] --> A[El titular activa desde el correo<br/>y elige su contraseña]
+    P[Administración provisiona la cuenta<br/>con su código universitario] --> A[El titular activa desde el correo<br/>y elige su contraseña]
     A --> W[Bienvenida obligatoria:<br/>datos, intereses, disponibilidad, privacidad]
     W -.opcional.-> Q[Cuestionario de orientación v2]
     W --> ACT[Se inscribe en actividades aprobadas]
@@ -141,7 +141,23 @@ flowchart TD
 ### 3.2 Alta y acceso
 
 - **No hay registro público.** Administración crea la cuenta (`POST /users`) o
-  importa el padrón. El semestre y el código universitario son obligatorios.
+  importa el padrón.
+- **Toda cuenta tiene código universitario**, único, con el formato
+  `PREFIJO-XXXXXXX` (siete letras o números en mayúscula). Lo escribe quien
+  crea la cuenta, o llega en el padrón; el servidor rechaza el que no tenga el
+  prefijo del rol:
+
+  | Rol | Prefijo | Semestre al crear |
+  |---|---|---|
+  | Estudiante | `EST-` | Obligatorio |
+  | Sociedad científica | `EST-` | Obligatorio |
+  | Docente | `DOC-` | — |
+  | Dirección de carrera | `DIR-` | — |
+  | Administración | `ADM-` | — |
+
+  El código y el semestre viven en la cuenta (`users`); el perfil del
+  estudiante guarda una copia sincronizada. La contraseña no puede contener el
+  código, en ninguna cuenta.
 - La activación sale por la **cola de correo** con enlace y código (vigencia
   48 h). El reenvío tiene espera de 120 s y tope diario.
 - La contraseña sigue una sola política en servidor y pantallas: 12 a 128

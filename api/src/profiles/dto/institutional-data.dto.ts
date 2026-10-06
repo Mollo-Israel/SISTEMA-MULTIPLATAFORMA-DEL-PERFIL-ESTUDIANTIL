@@ -1,16 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsInt,
-  IsOptional,
-  IsString,
-  Matches,
-  Max,
-  MaxLength,
-  Min,
-  MinLength,
-} from 'class-validator';
-import { cleanLine } from '../../common/validation';
+import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { UNIVERSITY_CODE_PATTERN, normalizeUniversityCode } from '@perfil/shared';
 
 /**
  * Datos institucionales de un estudiante (§17.1).
@@ -30,14 +21,12 @@ export class SetInstitutionalDataDto {
   @Max(8, { message: 'El semestre máximo es 8.' })
   semester?: number;
 
-  @ApiProperty({ required: false, example: '202100123' })
+  @ApiProperty({ required: false, example: 'EST-38DJ1HA' })
   @IsOptional()
-  @Transform(cleanLine)
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeUniversityCode(value) : value))
   @IsString()
-  @MinLength(3, { message: 'El código universitario es demasiado corto.' })
-  @MaxLength(30, { message: 'El código universitario no puede superar 30 caracteres.' })
-  @Matches(/^[A-Za-z0-9._-]+$/, {
-    message: 'El código universitario solo admite letras, números, punto, guion y guion bajo.',
+  @Matches(UNIVERSITY_CODE_PATTERN, {
+    message: 'Formato del código: EST- y 7 letras o números (por ejemplo EST-38DJ1HA).',
   })
   universityCode?: string;
 }

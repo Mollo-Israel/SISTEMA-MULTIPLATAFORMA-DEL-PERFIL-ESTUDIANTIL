@@ -33,6 +33,19 @@ export class User {
   @Column({ name: 'last_name', type: 'varchar', length: 100 })
   lastName: string;
 
+  /**
+   * Código universitario, en toda cuenta: `PREFIJO-XXXXXXX` según el rol
+   * (ver `UNIVERSITY_CODE_PREFIX`). Único. En un estudiante, su perfil guarda
+   * una copia sincronizada.
+   */
+  @Index('uq_users_university_code', { unique: true })
+  @Column({ name: 'university_code', type: 'varchar', length: 11 })
+  universityCode: string;
+
+  /** Semestre que cursa, en los roles que lo indican (`SEMESTER_ROLES`). */
+  @Column({ type: 'smallint', nullable: true })
+  semester: number | null;
+
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
 

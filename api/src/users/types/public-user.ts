@@ -12,9 +12,9 @@ export interface PublicUser {
   updatedAt: Date;
   /** Semestres habilitados. Solo se completa para usuarios con rol docente. */
   semesters?: number[];
-  /** Semestre institucional. Solo para estudiantes. */
+  /** Semestre que cursa, en los roles que lo indican. */
   semester?: number | null;
-  /** Código universitario. Solo para estudiantes. */
+  /** Código universitario (`PREFIJO-XXXXXXX`). Toda cuenta lo tiene. */
   universityCode?: string | null;
   /**
    * Cómo quedó el último correo de cuenta: enviado, en cola o fallido, y por
@@ -54,6 +54,8 @@ export function toPublicUser(user: User): PublicUser {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    universityCode: user.universityCode ?? null,
+    semester: user.semester ?? null,
     status: user.status,
     role: user.role.name,
     createdAt: user.createdAt,

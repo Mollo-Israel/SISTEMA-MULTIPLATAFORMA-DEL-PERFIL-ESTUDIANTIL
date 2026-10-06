@@ -9,6 +9,8 @@ import {
   ImportRowStatus,
   RolNombre,
   UserStatus,
+  normalizeUniversityCode,
+  universityCodeProblem,
 } from '@perfil/shared';
 import { ImportBatch, ImportBatchRow } from '../entities/import-batch.entity';
 import { User } from '../entities/user.entity';
@@ -157,17 +159,22 @@ export class ImportsService {
   ): Promise<EvaluatedRow[]> {
     const domains = institutionalEmailDomains(this.config);
 
-    const codes = parsed.map((r) => r.values.university_code?.trim()).filter(Boolean) as string[];
+    const codes = parsed.map((r) => normalizeUniversityCode(r.values.university_code)).filter(Boolean);
     const emails = parsed
       .map((r) => r.values.institutional_email?.trim().toLowerCase())
       .filter(Boolean) as string[];
 
-    const [profilesByCode, usersByEmail] = await Promise.all([
+    const [profilesByCode, usersByEmail, accountsByCode] = await Promise.all([
       codes.length
         ? this.profiles.find({ where: { universityCode: In(codes) }, relations: { user: true } })
         : Promise.resolve([]),
       emails.length ? this.users.find({ where: { email: In(emails) } }) : Promise.resolve([]),
+      // El código es único entre todas las cuentas, no solo entre estudiantes.
+      codes.length
+        ? this.users.find({ where: { universityCode: In(codes) }, select: { id: true, universityCode: true } })
+        : Promise.resolve([]),
     ]);
+    const accountByCode = new Map(accountsByCode.map((u) => [u.universityCode, u.id]));
 
     const byCode = new Map(profilesByCode.map((p) => [p.universityCode!, p]));
     const byEmail = new Map(usersByEmail.map((u) => [u.email, u]));
@@ -180,7 +187,7 @@ export class ImportsService {
     const out: EvaluatedRow[] = [];
 
     for (const { lineNumber, values } of parsed) {
-      const universityCode = values.university_code?.trim() || null;
+      const universityCode = normalizeUniversityCode(values.university_code) || null;
       const email = values.institutional_email?.trim().toLowerCase() || null;
       const firstName = values.first_name?.trim() || null;
       const lastName = values.last_name?.trim() || null;
@@ -219,6 +226,16 @@ export class ImportsService {
       // ---- identificación ----
       const byCodeMatch = byCode.get(universityCode!);
       const byEmailMatch = email ? byEmail.get(email) : undefined;
+
+      const cuentaDelCodigo = accountByCode.get(universityCode!);
+      if (!byCodeMatch && cuentaDelCodigo && cuentaDelCodigo !== byEmailMatch?.id) {
+        out.push({
+          ...base,
+          status: ImportRowStatus.CONFLICT,
+          message: 'Ese código universitario ya pertenece a otra cuenta.',
+        });
+        continue;
+      }
 
       if (byCodeMatch && byEmailMatch && byCodeMatch.userId !== byEmailMatch.id) {
         out.push({
@@ -283,7 +300,8 @@ export class ImportsService {
     domains: string[];
   }): string | null {
     if (!input.universityCode) return 'Falta el código universitario.';
-    if (input.universityCode.length > 40) return 'El código universitario es demasiado largo.';
+    const problemaCodigo = universityCodeProblem(input.universityCode, RolNombre.STUDENT);
+    if (problemaCodigo) return problemaCodigo;
     if (!input.firstName) return 'Falta el nombre.';
     if (!input.lastName) return 'Falta el apellido.';
     if (!NAME_RE.test(input.firstName)) return 'El nombre contiene caracteres no permitidos.';
@@ -356,6 +374,8 @@ export class ImportsService {
               email: row.institutionalEmail!,
               passwordHash: placeholder,
               roleId: studentRole.id,
+              universityCode: row.universityCode!,
+              semester: row.semester,
               status: UserStatus.PENDING_ACTIVATION,
             }),
           );
@@ -382,6 +402,7 @@ export class ImportsService {
             firstName: row.firstName!,
             lastName: row.lastName!,
             email: row.institutionalEmail!,
+            semester: row.semester,
           },
         );
         const profile = await profileRepo.findOne({ where: { userId } });

@@ -61,7 +61,9 @@ async function req(method, path, { token, body, raw } = {}) {
 const msgOf = (r) =>
   Array.isArray(r?.data?.message) ? r.data.message.join(' | ') : (r?.data?.message ?? '');
 
-const codigo = (n) => `AF${TS}${String(n).padStart(3, '0')}`;
+// Formato EST-XXXXXXX: 4 caracteres de esta ejecución y 3 del número de fila.
+const RUN = (TS % 1679616).toString(36).toUpperCase().padStart(4, '0');
+const codigo = (n) => `EST-${RUN}${String(n).padStart(3, '0')}`;
 const correo = (k) => `b1.${k}.${TS}@est.univalle.edu`;
 
 /** Construye un CSV de padrón a partir de filas. */
@@ -553,7 +555,8 @@ async function main() {
         email: correo(key),
         password: PWD,
         role,
-        ...(role === 'STUDENT' ? { semester: 1, universityCode: codigoUniversitario() } : {}),
+        universityCode: codigoUniversitario(role),
+        ...(role === 'STUDENT' || role === 'SCIENTIFIC_SOCIETY' ? { semester: 1 } : {}),
       },
     });
     const invitacion = await leerCorreo(correo(key), { tipo: 'account_activation', desde });

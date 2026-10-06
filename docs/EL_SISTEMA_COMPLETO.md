@@ -180,7 +180,7 @@ sequenceDiagram
     actor E as Titular
     participant API
     participant Cola as Cola de correo
-    A->>API: POST /users (semestre y código universitario obligatorios)
+    A->>API: POST /users (código universitario del rol; semestre si corresponde)
     API->>Cola: activación (enlace + código, vigencia 48 h)
     Cola-->>E: correo institucional
     E->>API: POST /activation/activate (elige su contraseña)

@@ -9,13 +9,14 @@ import * as bcrypt from 'bcryptjs';
 import {
   ActivityCategory as ActivityCategoryCode, ActivityModality, ActivityStatus, ActivityType,
   ConstancyStatus, EvidenceType, GamificationTrigger, ProjectInvitationStatus,
-  ProjectStatus, ProjectVisibility, RegistrationStatus, RolNombre, SkillLevel, UserStatus,
+  ProjectStatus, ProjectVisibility, RegistrationStatus, RolNombre, SEMESTER_ROLES, SkillLevel, UserStatus,
 } from '@perfil/shared';
 import { AppModule } from '../../app.module';
 import { AffinityEngineService } from '../../affinity-recalc/affinity.engine';
 import { ProfilesService } from '../../profiles/profiles.service';
 import { Role } from '../../entities/role.entity';
 import { User } from '../../entities/user.entity';
+import { seedUniversityCode } from './seed-university-code';
 import { StudentProfile } from '../../entities/student-profile.entity';
 import { AcademicArea } from '../../entities/academic-area.entity';
 import { Skill } from '../../entities/skill.entity';
@@ -135,6 +136,11 @@ async function run() {
     u.passwordHash = passwordHash;
     u.roleId = roles[role].id;
     u.status = UserStatus.ACTIVE;
+    // Toda cuenta lleva código; el de un estudiante se copia a su perfil.
+    u.universityCode ??= seedUniversityCode(role, email);
+    // Quien cursa (estudiante o sociedad) tiene semestre; el resto, no.
+    if (role === RolNombre.SCIENTIFIC_SOCIETY) u.semester ??= 6;
+    if (!SEMESTER_ROLES.includes(role)) u.semester = null;
     return userRepo.save(u);
   };
 
@@ -164,6 +170,11 @@ async function run() {
     let profile = await profileRepo.findOne({ where: { userId: user.id } });
     if (!profile) profile = profileRepo.create({ userId: user.id });
     profile.semester = (i % 8) + 1;
+    profile.universityCode = user.universityCode;
+    if (user.semester !== profile.semester) {
+      user.semester = profile.semester;
+      await userRepo.save(user);
+    }
     profile.bio = `Estudiante de Ingeniería en Sistemas con interés en ${primary.name.toLowerCase()}.`;
     profile.improvementAreaIds = [secondary.id];
     // El ultimo estudiante no aparece en sugerencias de companeros, para poder

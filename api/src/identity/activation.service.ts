@@ -5,7 +5,6 @@ import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { AccountTokenPurpose, UserStatus } from '@perfil/shared';
 import { User } from '../entities/user.entity';
-import { StudentProfile } from '../entities/student-profile.entity';
 import { AccountToken, TokenState } from '../entities/account-token.entity';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { AccountTokensService } from './account-tokens.service';
@@ -84,7 +83,6 @@ export interface TokenCheck {
 export class ActivationService {
   constructor(
     @InjectRepository(User) private readonly users: Repository<User>,
-    @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     private readonly tokens: AccountTokensService,
     private readonly sessions: AuthSessionsService,
     private readonly accountMail: AccountMailService,
@@ -322,10 +320,10 @@ export class ActivationService {
 
   /** Aplica §13, incluidas las reglas que dependen del propio usuario. */
   private async assertPasswordAcceptable(password: string, user: User): Promise<void> {
-    const profile = await this.profiles.findOne({ where: { userId: user.id } });
+    // Toda cuenta tiene código universitario: la regla vale para todos.
     const error = passwordPolicyError(password, {
       email: user.email,
-      universityCode: profile?.universityCode ?? null,
+      universityCode: user.universityCode ?? null,
     });
     if (error) throw new BadRequestException(error);
   }

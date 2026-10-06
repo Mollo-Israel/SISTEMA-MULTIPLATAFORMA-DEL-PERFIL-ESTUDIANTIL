@@ -78,6 +78,40 @@ async function batch2(ctx) {
   const vaciar = await req('PATCH', `/users/${est.userId}`, { token: ctx.admin, body: { universityCode: '' } });
   check(vaciar.status === 400, 'V2.2.3 §12 El código universitario no se puede dejar vacío al editar', `status ${vaciar.status}`);
 
+  // ----- Código universitario en toda cuenta, con el prefijo de su rol
+  const alta = (k, role, extra = {}) => req('POST', '/users', {
+    token: ctx.admin,
+    body: { firstName: 'Rosa', lastName: 'Mendez', email: role === 'STUDENT' ? correoEst(k) : correoStaff(k), role, ...extra },
+  });
+  const docSinCodigo = await alta('doccod0', 'TEACHER');
+  check(docSinCodigo.status === 400 && docSinCodigo.data?.fields?.universityCode,
+    'V2.2.3b §12 Toda cuenta lleva código: un docente sin código -> 400 en ese campo', `status ${docSinCodigo.status}`);
+  const prefijoAjeno = await alta('doccod1', 'TEACHER', { universityCode: codigoUniversitario('STUDENT') });
+  check(prefijoAjeno.status === 400 && /DOC-/.test(json(prefijoAjeno.data?.fields?.universityCode)),
+    'V2.2.3c §12 El prefijo depende del rol: un docente con EST- -> 400 y pide DOC-', json(prefijoAjeno.data?.fields));
+  const malFormato = await alta('doccod2', 'TEACHER', { universityCode: 'DOC-12' });
+  check(malFormato.status === 400 && malFormato.data?.fields?.universityCode,
+    'V2.2.3d §12 Formato PREFIJO-XXXXXXX: «DOC-12» -> 400', `status ${malFormato.status}`);
+  const enMinusculas = codigoUniversitario('TEACHER');
+  const docOk = await alta('doccod3', 'TEACHER', { universityCode: enMinusculas.toLowerCase() });
+  check(docOk.status === 201 && docOk.data?.universityCode === enMinusculas && docOk.data?.semester == null,
+    'V2.2.3e §12 Se guarda en mayúsculas y el docente no lleva semestre', `status ${docOk.status} ${docOk.data?.universityCode}`);
+
+  const socSinSemestre = await alta('soccod0', 'SCIENTIFIC_SOCIETY', { universityCode: codigoUniversitario('SCIENTIFIC_SOCIETY') });
+  check(socSinSemestre.status === 400 && socSinSemestre.data?.fields?.semester,
+    'V2.2.3f La Sociedad científica indica su semestre al crearse -> 400 sin él', json(socSinSemestre.data?.fields));
+  const codSoc = codigoUniversitario('SCIENTIFIC_SOCIETY');
+  const socOk = await alta('soccod1', 'SCIENTIFIC_SOCIETY', { universityCode: codSoc, semester: 6 });
+  check(socOk.status === 201 && socOk.data?.semester === 6 && /^EST-[A-Z0-9]{7}$/.test(socOk.data?.universityCode ?? ''),
+    'V2.2.3g La Sociedad científica se crea con su semestre y un código EST-', `status ${socOk.status}`);
+  const repetido = await alta('estcod9', 'STUDENT', { universityCode: codSoc, semester: 2 });
+  check(repetido.status === 409 && repetido.data?.fields?.universityCode,
+    'V2.2.3h El código es único entre todas las cuentas, no solo entre estudiantes -> 409', `status ${repetido.status}`);
+  const lista = await req('GET', `/users?search=${encodeURIComponent(correoStaff('soccod1'))}`, { token: ctx.admin });
+  const fila = (lista.data ?? [])[0];
+  check(fila?.universityCode === codSoc && fila?.semester === 6,
+    'V2.2.3i El listado muestra el código y el semestre de cada cuenta', json(fila && { c: fila.universityCode, s: fila.semester }));
+
   // ----- Sesión web: refresh token en cookie HttpOnly (§18)
   const web = await crudo('POST', '/auth/login', {
     body: { email: est.email, password: PWD },

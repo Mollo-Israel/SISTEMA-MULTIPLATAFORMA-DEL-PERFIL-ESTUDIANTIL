@@ -13,6 +13,7 @@
 import {
   API,
   PWD,
+  codigoUniversitario,
   loginAdmin,
   provisionAndActivate,
   req,
@@ -91,7 +92,7 @@ async function datosInstitucionales(ctx) {
 
   const intentoCodigo = await req('PATCH', '/profiles/me', {
     token: ctx.est.token,
-    body: { universityCode: 'FALSO123' },
+    body: { universityCode: 'EST-FALSO12' },
   });
   check(
     intentoCodigo.status === 400,
@@ -112,7 +113,7 @@ async function datosInstitucionales(ctx) {
   section('El administrador sí');
   const asignado = await req('PATCH', `/profiles/${ctx.profileId}/institutional-data`, {
     token: ctx.admin,
-    body: { semester: 4, universityCode: `B2${TS}` },
+    body: { semester: 4, universityCode: codigoUniversitario() },
   });
   check(asignado.status === 200, 'B2.6 El administrador fija semestre y código', msgOf(asignado));
   check(asignado.data?.semester === 4, 'B2.7 El semestre queda registrado');

@@ -21,8 +21,11 @@ import {
   SkillInterestKind,
   SkillInterestSource,
   UserStatus,
+  normalizeUniversityCode,
+  universityCodeProblem,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
+import { User } from '../entities/user.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
 import { StudentFreeInterest } from '../entities/student-free-interest.entity';
 import { StudentSkillInterest } from '../entities/student-skill-interest.entity';
@@ -104,10 +107,20 @@ export class ProfilesService {
     // Si la institución ya creó el perfil con esos datos, el estudiante lo
     // completa; antes chocaba con él y el alta manual dejaba al estudiante
     // sin forma de tener semestre.
+    // Un perfil nuevo copia de la cuenta su código y su semestre, que fijó la
+    // institución: el perfil guarda una copia sincronizada.
+    const cuenta = existing
+      ? null
+      : await this.profiles.manager.getRepository(User).findOne({
+        where: { id: userId },
+        select: { id: true, universityCode: true, semester: true },
+      });
     const profile =
       existing
       ?? this.profiles.create({
         userId,
+        universityCode: cuenta?.universityCode ?? null,
+        semester: cuenta?.semester ?? null,
         status: ProfileStatus.INCOMPLETE,
         completionPercentage: 0,
       });
@@ -661,19 +674,34 @@ export class ProfilesService {
     const antes = { semester: profile.semester, universityCode: profile.universityCode };
 
     if (dto.universityCode !== undefined) {
-      const enUso = await this.profiles.findOne({
-        where: { universityCode: dto.universityCode, id: Not(profileId) },
+      const problema = universityCodeProblem(dto.universityCode, RolNombre.STUDENT);
+      if (problema) {
+        throw new BadRequestException({ message: problema, fields: { universityCode: [problema] } });
+      }
+      const codigo = normalizeUniversityCode(dto.universityCode);
+      // Único entre todas las cuentas, no solo entre estudiantes.
+      const enUso = await this.profiles.manager.getRepository(User).findOne({
+        where: { universityCode: codigo, id: Not(profile.userId) },
+        select: { id: true },
       });
       if (enUso) {
-        throw new ConflictException(
-          'Ese código universitario ya pertenece a otro estudiante.',
-        );
+        throw new ConflictException('Ese código universitario ya pertenece a otra cuenta.');
       }
-      profile.universityCode = dto.universityCode;
+      profile.universityCode = codigo;
     }
     if (dto.semester !== undefined) profile.semester = dto.semester;
 
-    await this.profiles.save(profile);
+    // La cuenta y el perfil cambian juntos: el perfil guarda una copia.
+    await this.profiles.manager.transaction(async (manager) => {
+      await manager.getRepository(StudentProfile).save(profile);
+      await manager.getRepository(User).update(
+        { id: profile.userId },
+        {
+          ...(profile.universityCode ? { universityCode: profile.universityCode } : {}),
+          semester: profile.semester,
+        },
+      );
+    });
     // Cambiar el semestre mueve al estudiante dentro o fuera del alcance de un
     // docente, asi que queda registrado quien lo hizo.
     await this.audit.record({

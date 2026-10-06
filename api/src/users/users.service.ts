@@ -10,7 +10,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Not, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
-import { RolNombre, UserStatus } from '@perfil/shared';
+import {
+  RolNombre,
+  SEMESTER_ROLES,
+  UserStatus,
+  normalizeUniversityCode,
+  universityCodeProblem,
+} from '@perfil/shared';
 import { User } from '../entities/user.entity';
 import { TeacherSemesterAccess } from '../entities/teacher-semester-access.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -79,26 +85,18 @@ export class UsersService {
     await this.assertEmailAvailable(email);
 
     const esEstudiante = params.role === RolNombre.STUDENT;
-    // El semestre es un dato institucional (§17.1): el estudiante no puede
-    // fijarlo, así que si no lo pone quien crea la cuenta, nadie lo pone y el
-    // perfil se queda incompleto para siempre. Era exactamente lo que pasaba
-    // con las altas manuales.
-    if (esEstudiante && !params.semester) {
+    const llevaSemestre = SEMESTER_ROLES.includes(params.role);
+    // El semestre es un dato institucional (§17.1): quien cursa no puede
+    // fijarlo, así que si no lo pone quien crea la cuenta, nadie lo pone.
+    if (llevaSemestre && !params.semester) {
       throw new BadRequestException({
-        message: 'Indique el semestre del estudiante.',
-        fields: { semester: ['Indique el semestre del estudiante (1 a 8).'] },
+        message: 'Indique el semestre.',
+        fields: { semester: ['Indique el semestre que cursa (1 a 8).'] },
       });
     }
-    // V2 §12: el código universitario también es obligatorio en el alta manual.
-    if (esEstudiante && !params.universityCode?.trim()) {
-      throw new BadRequestException({
-        message: 'El código universitario es obligatorio.',
-        fields: { universityCode: ['El código universitario es obligatorio.'] },
-      });
-    }
-    if (esEstudiante && params.universityCode) {
-      await this.assertUniversityCodeAvailable(params.universityCode);
-    }
+    // Toda cuenta lleva su código universitario, con el prefijo de su rol.
+    const universityCode = this.assertUniversityCodeFormat(params.universityCode, params.role);
+    await this.assertUniversityCodeAvailable(universityCode);
 
     const role = await this.rolesService.findByName(params.role);
     // Sin contrasena declarada se guarda una aleatoria que nadie conoce: la
@@ -116,6 +114,8 @@ export class UsersService {
           email,
           passwordHash,
           roleId: role.id,
+          universityCode,
+          semester: llevaSemestre ? params.semester! : null,
           // §9.2: una cuenta nace provisionada. Quien la crea no fija la
           // contrasena definitiva; la fija su titular al activar.
           status: params.status ?? UserStatus.PENDING_ACTIVATION,
@@ -128,7 +128,7 @@ export class UsersService {
           manager.getRepository(StudentProfile).create({
             userId: user.id,
             semester: params.semester!,
-            universityCode: params.universityCode ?? null,
+            universityCode,
           }),
         );
       }
@@ -145,10 +145,6 @@ export class UsersService {
     });
 
     const result = toPublicUser(saved);
-    if (esEstudiante) {
-      result.semester = params.semester ?? null;
-      result.universityCode = params.universityCode ?? null;
-    }
     // Una cuenta provisionada necesita su invitación para poder usarse. Se
     // espera unos segundos al envío para decirle al administrador en qué
     // quedó; nunca se le devuelve el enlace ni el código.
@@ -175,16 +171,28 @@ export class UsersService {
     return { status: 'queued', deliveryState: 'QUEUED', sentTo: maskEmail(email), simulated };
   }
 
-  private async assertUniversityCodeAvailable(code: string, exceptProfileId?: string): Promise<void> {
-    const enUso = await this.dataSource.getRepository(StudentProfile).findOne({
-      where: exceptProfileId
-        ? { universityCode: code, id: Not(exceptProfileId) }
-        : { universityCode: code },
+  /**
+   * Código normalizado (mayúsculas, sin espacios) o error de campo si no sigue
+   * el formato `PREFIJO-XXXXXXX` con el prefijo del rol.
+   */
+  private assertUniversityCodeFormat(value: string | null | undefined, role: RolNombre): string {
+    const problema = universityCodeProblem(value, role);
+    if (problema) {
+      throw new BadRequestException({ message: problema, fields: { universityCode: [problema] } });
+    }
+    return normalizeUniversityCode(value);
+  }
+
+  /** El código es único entre todas las cuentas. */
+  private async assertUniversityCodeAvailable(code: string, exceptUserId?: string): Promise<void> {
+    const enUso = await this.usersRepository.findOne({
+      where: exceptUserId ? { universityCode: code, id: Not(exceptUserId) } : { universityCode: code },
+      select: { id: true },
     });
     if (enUso) {
       throw new ConflictException({
-        message: 'Ese código universitario ya pertenece a otro estudiante.',
-        fields: { universityCode: ['Ese código universitario ya pertenece a otro estudiante.'] },
+        message: 'Ese código universitario ya pertenece a otra cuenta.',
+        fields: { universityCode: ['Ese código universitario ya pertenece a otra cuenta.'] },
       });
     }
   }
@@ -215,21 +223,6 @@ export class UsersService {
       const byTeacher = await this.getSemestersForTeachers(teacherIds);
       for (const user of result) {
         if (user.role === RolNombre.TEACHER) user.semesters = byTeacher.get(user.id) ?? [];
-      }
-    }
-
-    // Semestre y código de los estudiantes, también en lote.
-    const studentIds = result.filter((u) => u.role === RolNombre.STUDENT).map((u) => u.id);
-    if (studentIds.length > 0) {
-      const perfiles = await this.dataSource.getRepository(StudentProfile).find({
-        where: { userId: In(studentIds) },
-        select: { userId: true, semester: true, universityCode: true },
-      });
-      const porUsuario = new Map(perfiles.map((p) => [p.userId, p]));
-      for (const user of result) {
-        if (user.role !== RolNombre.STUDENT) continue;
-        user.semester = porUsuario.get(user.id)?.semester ?? null;
-        user.universityCode = porUsuario.get(user.id)?.universityCode ?? null;
       }
     }
 
@@ -285,6 +278,7 @@ export class UsersService {
     if (params.firstName !== undefined) user.firstName = params.firstName;
     if (params.lastName !== undefined) user.lastName = params.lastName;
     if (params.status !== undefined) user.status = params.status;
+    const antes = { semester: user.semester, universityCode: user.universityCode };
     if (params.role !== undefined && params.role !== user.role.name) {
       const role = await this.rolesService.findByName(params.role);
       user.roleId = role.id;
@@ -294,47 +288,55 @@ export class UsersService {
         await this.semesterAccess.delete({ teacherId: user.id });
       }
     }
+    const rol = user.role.name;
+
+    // El código se puede corregir, nunca dejar vacío, y debe llevar el prefijo
+    // del rol: si el rol cambia, el código anterior deja de servir.
+    const codigoNoEncaja = universityCodeProblem(user.universityCode, rol) !== null;
+    if (params.universityCode !== undefined || codigoNoEncaja) {
+      const codigo = this.assertUniversityCodeFormat(params.universityCode ?? user.universityCode, rol);
+      if (codigo !== user.universityCode) await this.assertUniversityCodeAvailable(codigo, user.id);
+      user.universityCode = codigo;
+    }
+
+    // Semestre: solo en los roles que lo cursan, y obligatorio en ellos.
+    if (SEMESTER_ROLES.includes(rol)) {
+      if (params.semester !== undefined) user.semester = params.semester;
+      if (!user.semester) {
+        throw new BadRequestException({
+          message: 'Indique el semestre.',
+          fields: { semester: ['Indique el semestre que cursa (1 a 8).'] },
+        });
+      }
+    } else {
+      user.semester = null;
+    }
 
     const saved = await this.usersRepository.save(user);
-    const result = toPublicUser(saved);
 
-    // Datos institucionales del estudiante, desde la misma ventana de edición.
-    if (saved.role.name === RolNombre.STUDENT) {
+    // El perfil del estudiante guarda una copia de su semestre y su código.
+    if (rol === RolNombre.STUDENT) {
       const perfiles = this.dataSource.getRepository(StudentProfile);
-      let perfil = await perfiles.findOne({ where: { userId: saved.id } });
-      const cambiaSemestre = params.semester !== undefined && params.semester !== perfil?.semester;
-      const cambiaCodigo =
-        params.universityCode !== undefined && params.universityCode !== perfil?.universityCode;
-      if (cambiaCodigo && !params.universityCode?.trim()) {
-        // Se puede corregir, pero no dejar vacío (V2 §12).
-        throw new BadRequestException({
-          message: 'El código universitario es obligatorio.',
-          fields: { universityCode: ['El código universitario es obligatorio.'] },
-        });
+      const perfil = (await perfiles.findOne({ where: { userId: saved.id } })) ?? perfiles.create({ userId: saved.id });
+      if (perfil.semester !== saved.semester || perfil.universityCode !== saved.universityCode) {
+        perfil.semester = saved.semester;
+        perfil.universityCode = saved.universityCode;
+        await perfiles.save(perfil);
       }
-      if (cambiaSemestre || cambiaCodigo) {
-        if (cambiaCodigo && params.universityCode) {
-          await this.assertUniversityCodeAvailable(params.universityCode, perfil?.id);
-        }
-        const antes = { semester: perfil?.semester ?? null, universityCode: perfil?.universityCode ?? null };
-        perfil ??= perfiles.create({ userId: saved.id });
-        if (cambiaSemestre) perfil.semester = params.semester!;
-        if (cambiaCodigo) perfil.universityCode = params.universityCode || null;
-        perfil = await perfiles.save(perfil);
-        // Cambiar el semestre mueve al estudiante dentro o fuera del alcance de
-        // un docente: queda registrado quién lo hizo.
-        await this.audit.record({
-          actorUserId: actorUserId ?? null,
-          eventType: AuditEventType.INSTITUTIONAL_DATA_CHANGED,
-          entityType: 'student_profile',
-          entityId: perfil.id,
-          metadata: { antes, despues: { semester: perfil.semester, universityCode: perfil.universityCode } },
-        });
-      }
-      result.semester = perfil?.semester ?? null;
-      result.universityCode = perfil?.universityCode ?? null;
     }
-    return result;
+
+    // Cambiar el semestre mueve a la persona dentro o fuera del alcance de un
+    // docente: queda registrado quién lo hizo, igual que el código.
+    if (antes.semester !== saved.semester || antes.universityCode !== saved.universityCode) {
+      await this.audit.record({
+        actorUserId: actorUserId ?? null,
+        eventType: AuditEventType.INSTITUTIONAL_DATA_CHANGED,
+        entityType: 'user',
+        entityId: saved.id,
+        metadata: { antes, despues: { semester: saved.semester, universityCode: saved.universityCode } },
+      });
+    }
+    return toPublicUser(saved);
   }
 
   /**

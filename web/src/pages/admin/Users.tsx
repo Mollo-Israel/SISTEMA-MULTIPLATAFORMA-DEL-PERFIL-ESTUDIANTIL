@@ -13,11 +13,14 @@ import {
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
-import { ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, PROVISIONABLE_ROLES, SEMESTERS } from '../../constants';
+import {
+  ROLE_LABEL, RolNombre, INSTITUTIONAL_ROLES, PROVISIONABLE_ROLES, SEMESTER_ROLES, SEMESTERS,
+  UNIVERSITY_CODE_PREFIX, universityCodeExample,
+} from '../../constants';
 import { USER_STATUS_LABEL } from '../../services/types';
 import type { InvitationView, PublicUser, UserStatus } from '../../services/types';
 import {
-  institutionalEmail, personName, requiredUniversityCode, universityCode, validate,
+  institutionalEmail, normalizeUniversityCode, personName, universityCodeFor, validate,
 } from '../../lib/validators';
 
 /** Color del estado en la tabla (§12). */
@@ -38,16 +41,25 @@ const emptyForm: Record<Campo, string> = {
   email: '',
   role: RolNombre.STUDENT,
   semester: '',
-  universityCode: '',
+  universityCode: `${UNIVERSITY_CODE_PREFIX[RolNombre.STUDENT]}-`,
 };
+
+/**
+ * Al cambiar de rol, el código toma el prefijo del rol nuevo si todavía no se
+ * escribió nada más que un prefijo. Lo ya escrito no se toca.
+ */
+function codigoParaRol(actual: string, rol: RolNombre): string {
+  const limpio = actual.trim().toUpperCase();
+  return !limpio || /^[A-Z]{0,3}-?$/.test(limpio) ? `${UNIVERSITY_CODE_PREFIX[rol]}-` : actual;
+}
 
 function reglas(form: Record<Campo, string>) {
   return validate(form, {
     firstName: personName('nombre'),
     lastName: personName('apellido'),
     email: institutionalEmail,
-    semester: (v) => (form.role === RolNombre.STUDENT && !v ? 'Elige el semestre que cursa.' : null),
-    universityCode: form.role === RolNombre.STUDENT ? requiredUniversityCode : undefined,
+    semester: (v) => (SEMESTER_ROLES.includes(form.role as RolNombre) && !v ? 'Elige el semestre que cursa.' : null),
+    universityCode: universityCodeFor(form.role as RolNombre),
   });
 }
 
@@ -88,10 +100,15 @@ export default function AdminUsersPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const esEstudiante = form.role === RolNombre.STUDENT;
+  const rolElegido = form.role as RolNombre;
+  const llevaSemestre = SEMESTER_ROLES.includes(rolElegido);
 
   const set = (campo: Campo, valor: string) => {
-    setForm((f) => ({ ...f, [campo]: valor }));
+    setForm((f) =>
+      campo === 'role'
+        ? { ...f, role: valor, universityCode: codigoParaRol(f.universityCode, valor as RolNombre) }
+        : { ...f, [campo]: valor },
+    );
     errores.clear(campo);
   };
 
@@ -110,13 +127,11 @@ export default function AdminUsersPage() {
         lastName: form.lastName.trim(),
         email: form.email.trim().toLowerCase(),
         role: form.role,
+        universityCode: normalizeUniversityCode(form.universityCode),
       };
-      if (esEstudiante) {
-        body.semester = Number(form.semester);
-        if (form.universityCode.trim()) body.universityCode = form.universityCode.trim();
-      }
+      if (llevaSemestre) body.semester = Number(form.semester);
       const creado = await adminService.createUser(body);
-      setForm({ ...emptyForm, role: form.role });
+      setForm({ ...emptyForm, role: form.role, universityCode: `${UNIVERSITY_CODE_PREFIX[rolElegido]}-` });
       errores.reset();
       const aviso = describirInvitacion(creado.invitation);
       const titulo = `Cuenta creada: ${creado.firstName} ${creado.lastName}`;
@@ -224,13 +239,13 @@ export default function AdminUsersPage() {
               label="Correo institucional"
               required
               error={errores.errors.email}
-              hint={esEstudiante ? 'Termina en @est.univalle.edu' : 'Termina en @univalle.edu'}
+              hint={rolElegido === RolNombre.STUDENT ? 'Termina en @est.univalle.edu' : 'Termina en @univalle.edu'}
             >
               <input
                 type="email"
                 value={form.email}
                 onChange={(e) => set('email', e.target.value)}
-                placeholder={esEstudiante ? 'ana.quispe@est.univalle.edu' : 'carlos.perez@univalle.edu'}
+                placeholder={rolElegido === RolNombre.STUDENT ? 'ana.quispe@est.univalle.edu' : 'carlos.perez@univalle.edu'}
                 aria-invalid={!!errores.errors.email}
               />
             </FormField>
@@ -258,13 +273,13 @@ export default function AdminUsersPage() {
               />
             </FormField>
           </div>
-          {esEstudiante && (
-            <div className="row">
+          <div className="row">
+            {llevaSemestre && (
               <FormField
                 label="Semestre que cursa"
                 required
                 error={errores.errors.semester}
-                hint="Lo fija la universidad: el estudiante no puede cambiarlo."
+                hint="Lo fija la universidad: la persona no puede cambiarlo."
               >
                 <select
                   value={form.semester}
@@ -279,21 +294,24 @@ export default function AdminUsersPage() {
                   ))}
                 </select>
               </FormField>
-              <FormField
-                label="Código universitario"
-                required
-                error={errores.errors.universityCode}
-                hint="Identifica al estudiante en el padrón; no puede repetirse."
-              >
-                <input
-                  value={form.universityCode}
-                  onChange={(e) => set('universityCode', e.target.value)}
-                  placeholder="202100123"
-                  aria-invalid={!!errores.errors.universityCode}
-                />
-              </FormField>
-            </div>
-          )}
+            )}
+            <FormField
+              label="Código universitario"
+              required
+              error={errores.errors.universityCode}
+              hint={`${UNIVERSITY_CODE_PREFIX[rolElegido]}- y 7 letras o números. No puede repetirse.`}
+            >
+              <input
+                value={form.universityCode}
+                onChange={(e) => set('universityCode', e.target.value.toUpperCase())}
+                placeholder={universityCodeExample(rolElegido)}
+                maxLength={11}
+                autoCapitalize="characters"
+                spellCheck={false}
+                aria-invalid={!!errores.errors.universityCode}
+              />
+            </FormField>
+          </div>
           <p className="muted" style={{ fontSize: '0.8rem', marginTop: 0 }}>
             No se define contraseña: la persona recibe una invitación en su correo institucional
             y elige la suya. Usted nunca ve el enlace ni el código de activación.
@@ -464,6 +482,7 @@ const TablaUsuarios = memo(function TablaUsuarios({
               <tr key={u.id}>
                 <td>
                   {u.firstName} {u.lastName}
+                  {u.universityCode && <div className="muted small">{u.universityCode}</div>}
                 </td>
                 <td className="muted">{u.email}</td>
                 <td>{ROLE_LABEL[u.role] ?? u.role}</td>
@@ -547,11 +566,11 @@ function SemestreCelda({
       </div>
     );
   }
-  if (user.role === RolNombre.STUDENT) {
+  if (SEMESTER_ROLES.includes(user.role as RolNombre)) {
     return user.semester ? (
       <Badge tone="bordo">{user.semester}º semestre</Badge>
     ) : (
-      <button type="button" className="link-warn" onClick={onStudent} title="Sin semestre, el perfil no puede completarse">
+      <button type="button" className="link-warn" onClick={onStudent} title="Falta el semestre que cursa">
         <FiAlertTriangle size={13} /> Asignar semestre
       </button>
     );
@@ -600,7 +619,6 @@ function EditUserDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const esEstudiante = user.role === RolNombre.STUDENT;
   const [form, setForm] = useState<Record<Campo, string>>({
     firstName: user.firstName,
     lastName: user.lastName,
@@ -611,6 +629,8 @@ function EditUserDialog({
   });
   const [saving, setSaving] = useState(false);
   const errores = useFormErrors(CAMPOS);
+  const rolEditado = form.role as RolNombre;
+  const llevaSemestre = SEMESTER_ROLES.includes(rolEditado);
 
   const set = (campo: Campo, valor: string) => {
     setForm((f) => ({ ...f, [campo]: valor }));
@@ -632,10 +652,8 @@ function EditUserDialog({
         email: form.email.trim().toLowerCase(),
       };
       if (canChangeRole) body.role = form.role;
-      if (esEstudiante) {
-        body.semester = Number(form.semester);
-        body.universityCode = form.universityCode.trim() || undefined;
-      }
+      body.universityCode = normalizeUniversityCode(form.universityCode);
+      if (llevaSemestre) body.semester = Number(form.semester);
       await adminService.updateUser(user.id, body);
       onSaved();
     } catch (e2) {
@@ -661,13 +679,13 @@ function EditUserDialog({
         <FormField label="Correo institucional" required error={errores.errors.email}>
           <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
         </FormField>
-        {esEstudiante && (
-          <div className="row">
+        <div className="row">
+          {llevaSemestre && (
             <FormField
               label="Semestre que cursa"
               required
               error={errores.errors.semester}
-              hint="Cambiarlo mueve al estudiante de alcance docente."
+              hint="Cambiarlo puede mover a la persona de alcance docente."
             >
               <select value={form.semester} onChange={(e) => set('semester', e.target.value)}>
                 <option value="">Elige el semestre…</option>
@@ -678,11 +696,22 @@ function EditUserDialog({
                 ))}
               </select>
             </FormField>
-            <FormField label="Código universitario" error={errores.errors.universityCode}>
-              <input value={form.universityCode} onChange={(e) => set('universityCode', e.target.value)} />
-            </FormField>
-          </div>
-        )}
+          )}
+          <FormField
+            label="Código universitario"
+            required
+            error={errores.errors.universityCode}
+            hint={`${UNIVERSITY_CODE_PREFIX[rolEditado]}- y 7 letras o números.`}
+          >
+            <input
+              value={form.universityCode}
+              onChange={(e) => set('universityCode', e.target.value.toUpperCase())}
+              placeholder={universityCodeExample(rolEditado)}
+              maxLength={11}
+              spellCheck={false}
+            />
+          </FormField>
+        </div>
         <FormField label="Rol" error={errores.errors.role}>
           {canChangeRole ? (
             <select value={form.role} onChange={(e) => set('role', e.target.value)}>

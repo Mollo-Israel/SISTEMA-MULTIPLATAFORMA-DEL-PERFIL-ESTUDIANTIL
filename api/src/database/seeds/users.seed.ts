@@ -3,6 +3,7 @@ import * as bcrypt from 'bcryptjs';
 import { RolNombre, UserStatus } from '@perfil/shared';
 import { Role } from '../../entities/role.entity';
 import { User } from '../../entities/user.entity';
+import { seedUniversityCode } from './seed-university-code';
 
 export async function seedAdminUser(dataSource: DataSource): Promise<void> {
   const userRepo = dataSource.getRepository(User);
@@ -32,6 +33,7 @@ export async function seedAdminUser(dataSource: DataSource): Promise<void> {
       email,
       passwordHash,
       roleId: adminRole.id,
+      universityCode: seedUniversityCode(RolNombre.ADMIN, email),
       status: UserStatus.ACTIVE,
     }),
   );

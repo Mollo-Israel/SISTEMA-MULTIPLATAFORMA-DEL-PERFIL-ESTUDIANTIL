@@ -12,7 +12,13 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { RolNombre, UserStatus } from '@perfil/shared';
+import {
+  RolNombre,
+  SEMESTER_ROLES,
+  UNIVERSITY_CODE_PATTERN,
+  UserStatus,
+  normalizeUniversityCode,
+} from '@perfil/shared';
 import { cleanLine, EMAIL_MSG, NAME_MSG, NAME_RE, PASSWORD_MSG, PASSWORD_RE, trimLower, UNIVALLE_RE } from '../../common/validation';
 
 /**
@@ -102,31 +108,27 @@ export class CreateUserDto {
   status?: UserStatus;
 
   /**
-   * Semestre institucional del estudiante (§17.1).
-   *
-   * Obligatorio al dar de alta a un estudiante a mano: es un dato que el
-   * estudiante no puede fijar, así que si no lo pone el administrador nadie lo
-   * pone, y sin él el perfil nunca llega a completarse.
+   * Semestre que cursa (§17.1), obligatorio en los roles que lo indican
+   * (`SEMESTER_ROLES`). Es un dato que la persona no puede fijar: si no lo
+   * pone quien crea la cuenta, nadie lo pone.
    */
   @ApiProperty({ required: false, minimum: 1, maximum: 8, example: 3 })
-  @ValidateIf((o: CreateUserDto) => o.role === RolNombre.STUDENT || o.semester !== undefined)
+  @ValidateIf((o: CreateUserDto) => SEMESTER_ROLES.includes(o.role) || o.semester !== undefined)
   @Type(() => Number)
-  @IsIn([1, 2, 3, 4, 5, 6, 7, 8], { message: 'Indique el semestre del estudiante (1 a 8).' })
+  @IsIn([1, 2, 3, 4, 5, 6, 7, 8], { message: 'Indique el semestre que cursa (1 a 8).' })
   semester?: number;
 
   /**
-   * Código universitario (V2 §12): obligatorio y único para un estudiante. Es
-   * el identificador institucional con el que el padrón lo reconoce después.
+   * Código universitario (V2 §12): obligatorio y único en toda cuenta, con el
+   * formato `PREFIJO-XXXXXXX`. El prefijo depende del rol (EST, DOC, DIR o
+   * ADM); esa correspondencia la comprueba el servicio.
    */
-  @ApiProperty({ required: false, example: '202100123' })
-  @ValidateIf((o: CreateUserDto) => o.role === RolNombre.STUDENT || o.universityCode !== undefined)
-  @Transform(cleanLine)
+  @ApiProperty({ example: 'EST-38DJ1HA', description: 'PREFIJO-XXXXXXX: EST, DOC, DIR o ADM según el rol.' })
+  @Transform(({ value }) => (typeof value === 'string' ? normalizeUniversityCode(value) : value))
   @IsString({ message: 'El código universitario es obligatorio.' })
   @IsNotEmpty({ message: 'El código universitario es obligatorio.' })
-  @MinLength(3, { message: 'El código universitario es demasiado corto.' })
-  @MaxLength(30, { message: 'El código universitario no puede superar 30 caracteres.' })
-  @Matches(/^[A-Za-z0-9._-]+$/, {
-    message: 'El código universitario solo admite letras, números, punto, guion y guion bajo.',
+  @Matches(UNIVERSITY_CODE_PATTERN, {
+    message: 'Formato del código: tres letras, guion y 7 letras o números (por ejemplo EST-38DJ1HA).',
   })
-  universityCode?: string;
+  universityCode: string;
 }

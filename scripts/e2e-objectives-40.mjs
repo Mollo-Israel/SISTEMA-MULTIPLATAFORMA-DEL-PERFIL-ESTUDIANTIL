@@ -18,6 +18,7 @@ import { aprobarActividad, codigoUniversitario, leerCorreo, provisionAndActivate
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
+const CODIGO_O40 = codigoUniversitario();
 // §13: la politica exige 12 caracteres como minimo.
 const PWD = 'Afinia2026Seg*';
 const email = (n) => `e2e.${n}.${TS}@univalle.edu`;
@@ -209,7 +210,7 @@ async function objective1(ctx) {
       password: PWD,
       role: 'STUDENT',
       semester: 1,
-      universityCode: `O40${TS}`,
+      universityCode: CODIGO_O40,
     },
   });
   check(
@@ -245,7 +246,7 @@ async function objective1(ctx) {
       password: PWD,
       role: 'STUDENT',
       semester: 1,
-      universityCode: `O40${TS}B`,
+      universityCode: codigoUniversitario(),
     },
   });
   check(dup.status === 409, '1.6 Correo duplicado -> 409', `status ${dup.status}`);
@@ -380,7 +381,8 @@ async function objective1(ctx) {
         email: email(key),
         password: PWD,
         role,
-        ...(role === 'STUDENT' ? { semester: 1, universityCode: codigoUniversitario() } : {}),
+        universityCode: codigoUniversitario(role),
+        ...(role === 'STUDENT' || role === 'SCIENTIFIC_SOCIETY' ? { semester: 1 } : {}),
       },
     });
     if (r.status === 201 && r.data?.status === 'pending_activation') {

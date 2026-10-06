@@ -64,11 +64,28 @@ export const BUZON = process.env.MAIL_CAPTURE_DIR
 
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
-let secuenciaCodigo = 0;
-/** Código universitario único para las altas de prueba (V2 §12 lo exige). */
-export function codigoUniversitario() {
-  secuenciaCodigo += 1;
-  return `T${Date.now().toString(36)}${secuenciaCodigo}`.toUpperCase();
+/** Prefijo del código universitario según el rol (copia de shared/university-code). */
+export const PREFIJO_CODIGO = {
+  STUDENT: 'EST', SCIENTIFIC_SOCIETY: 'EST', TEACHER: 'DOC', CAREER_DIRECTOR: 'DIR', ADMIN: 'ADM',
+};
+/** Roles que indican el semestre que cursan. */
+export const ROLES_CON_SEMESTRE = ['STUDENT', 'SCIENTIFIC_SOCIETY'];
+
+const ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const usados = new Set();
+/**
+ * Código universitario único para las altas de prueba (V2 §12): toda cuenta
+ * lo lleva, con el formato PREFIJO-XXXXXXX del rol.
+ */
+export function codigoUniversitario(rol = 'STUDENT') {
+  let codigo;
+  do {
+    let cuerpo = '';
+    for (let i = 0; i < 7; i++) cuerpo += ALFABETO[Math.floor(Math.random() * ALFABETO.length)];
+    codigo = `${PREFIJO_CODIGO[rol] ?? 'EST'}-${cuerpo}`;
+  } while (usados.has(codigo));
+  usados.add(codigo);
+  return codigo;
 }
 
 function analizarCorreo(m) {
@@ -160,13 +177,8 @@ export async function provisionAndActivate(
 ) {
   await asegurarCorreoDePrueba(adminToken);
   const desde = Date.now();
-  const body = { firstName, lastName, email, role };
-  if (role === 'STUDENT') {
-    body.semester = semester ?? 1;
-    body.universityCode = universityCode ?? codigoUniversitario();
-  } else if (universityCode) {
-    body.universityCode = universityCode;
-  }
+  const body = { firstName, lastName, email, role, universityCode: universityCode ?? codigoUniversitario(role) };
+  if (ROLES_CON_SEMESTRE.includes(role)) body.semester = semester ?? 1;
 
   const created = await req('POST', '/users', { token: adminToken, body });
   if (created.status !== 201) {

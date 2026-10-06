@@ -19,8 +19,8 @@ const PLANTILLA = 'university_code,first_name,last_name,institutional_email,seme
 
 const EJEMPLO = [
   PLANTILLA,
-  '202100123,Ana,Rojas Vargas,ana.rojas@est.univalle.edu,5',
-  '202100124,Luis,Mamani Quispe,luis.mamani@est.univalle.edu,3',
+  'EST-38DJ1HA,Ana,Rojas Vargas,ana.rojas@est.univalle.edu,5',
+  'EST-4KQ7M2B,Luis,Mamani Quispe,luis.mamani@est.univalle.edu,3',
 ].join('\n');
 
 const VERDICTO: Record<ImportRowStatus, { label: string; tone: string; icon: JSX.Element; help: string }> = {
@@ -197,7 +197,8 @@ export default function AdminImportsPage() {
       >
         <p className="muted" style={{ marginTop: 0 }}>
           El archivo debe tener estas columnas en la primera fila:{' '}
-          <code>{PLANTILLA}</code>
+          <code>{PLANTILLA}</code>. El código universitario sigue el formato{' '}
+          <code>EST-</code> y 7 letras o números (por ejemplo <code>EST-38DJ1HA</code>).
         </p>
 
         <label className="import-drop">

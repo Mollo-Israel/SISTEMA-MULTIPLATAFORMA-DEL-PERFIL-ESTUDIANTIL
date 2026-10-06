@@ -7,6 +7,24 @@ export enum RolNombre {
 }
 
 /**
+ * Prefijo del código universitario según el rol (copia de
+ * `shared/src/enums/university-code.ts`; si cambia allí, cambia aquí).
+ */
+export const UNIVERSITY_CODE_PREFIX: Record<RolNombre, string> = {
+  [RolNombre.STUDENT]: 'EST',
+  [RolNombre.SCIENTIFIC_SOCIETY]: 'EST',
+  [RolNombre.TEACHER]: 'DOC',
+  [RolNombre.CAREER_DIRECTOR]: 'DIR',
+  [RolNombre.ADMIN]: 'ADM',
+};
+
+/** Roles que indican el semestre que cursan al crear la cuenta. */
+export const SEMESTER_ROLES: readonly RolNombre[] = [RolNombre.STUDENT, RolNombre.SCIENTIFIC_SOCIETY];
+
+/** Ejemplo del código para un rol, para pistas y marcadores de posición. */
+export const universityCodeExample = (role: RolNombre) => `${UNIVERSITY_CODE_PREFIX[role]}-38DJ1HA`;
+
+/**
  * Roles institucionales, los que no son estudiante.
  * Se conserva porque al editar un usuario la interfaz distingue ambos grupos.
  */
