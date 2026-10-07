@@ -464,6 +464,8 @@ export interface Activity {
   activityAreas?: { activityId: string; academicAreaId: string; academicArea?: AcademicArea | null }[];
   /** V3 §12: interna (de la carrera) o externa (de un proveedor). */
   originType?: 'internal' | 'external';
+  /** V3 §14: qué genera al terminar. */
+  outcomePolicy?: 'none' | 'internal_constancy' | 'external_credential_expected' | 'other_authorized_resource';
   provider?: string | null;
   credentialExpected?: boolean;
   expectedIssuerDomains?: string[];

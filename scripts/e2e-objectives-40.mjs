@@ -1360,7 +1360,9 @@ async function objective4(ctx) {
     'asistencia.pdf',
   );
   const segundo = await req('POST', '/uploads', { token: student, raw: segundoForm });
-  const fileEvidence = await req('POST', '/evidences', {
+  // V3 §13.1: a una actividad no se le sube evidencia de asistencia; la
+  // confirma su responsable.
+  const aActividad = await req('POST', '/evidences', {
     token: student,
     body: {
       evidenceType: 'file',
@@ -1369,7 +1371,16 @@ async function objective4(ctx) {
       activityId: academicActivityId,
     },
   });
-  check(fileEvidence.status === 201, '4.26 Evidencia de archivo asociada a la actividad', msgOf(fileEvidence));
+  check(aActividad.status === 400 && aActividad.data?.code === 'ACTIVITY_EVIDENCE_NOT_REQUIRED',
+    '4.26 V3 §13.1 Una actividad no pide evidencia de asistencia al estudiante -> 400', msgOf(aActividad));
+  const fileEvidence = await req('POST', '/evidences', {
+    token: student,
+    body: {
+      evidenceType: 'file',
+      description: 'Constancia de un curso propio.',
+      storedFileId: segundo.data?.id,
+    },
+  });
   check(
     fileEvidence.data?.fileName === 'asistencia.pdf'
       && fileEvidence.data?.mimeType === 'application/pdf',
@@ -1479,8 +1490,8 @@ async function objective4(ctx) {
   });
   check(eligible.status === 200, '4.41 El director consulta los participantes elegibles', msgOf(eligible));
   check(
-    eligible.data?.every((e) => e.hasConstancy === false),
-    '4.42 Todavia ninguno tiene constancia emitida',
+    (eligible.data ?? []).length > 0 && eligible.data.every((e) => e.hasConstancy === true),
+    '4.42 V3 §14.1 Al confirmar, la constancia ya se emitió sola',
   );
 
   const societyConstancy = await req('POST', '/constancies/internal', {
@@ -1554,7 +1565,9 @@ async function objective4(ctx) {
       description: 'Segunda constancia por la misma actividad.',
     },
   });
-  check(duplicate.status === 409, '4.50 Constancia duplicada -> 409', `status ${duplicate.status}`);
+  // V3 §14.1: la constancia no se duplica; pedirla otra vez devuelve la misma.
+  check(duplicate.data?.id === constancy.data?.id,
+    '4.50 Pedir otra constancia por la misma participación no la duplica (devuelve la existente)', `status ${duplicate.status}`);
 
   const eligibleAfter = await req('GET', `/constancies/internal/eligible/${academicActivityId}`, {
     token: directorToken,
@@ -2059,8 +2072,8 @@ async function cierreFinal(ctx) {
         activityId: extraOk.data?.id,
         description: 'Segunda constancia para la misma actividad.',
       },
-    })).status === 409,
-    '5.54 Constancia duplicada sobre la extracurricular -> 409',
+    })).data?.id === extraConstancy.data?.id,
+    '5.54 V3 §14.1 Pedirla otra vez no la duplica: devuelve la misma',
   );
 
   check(
@@ -2071,8 +2084,8 @@ async function cierreFinal(ctx) {
         activityId: extraOk.data?.id,
         description: 'Intento de la sociedad.',
       },
-    })).status === 409,
-    '5.55 V2 §30: la sociedad, responsable de una actividad aprobada con constancias, puede emitirla; aquí ya existe -> 409',
+    })).data?.id === extraConstancy.data?.id,
+    '5.55 V2 §30: la sociedad, responsable de la actividad, puede pedirla; ya existe y devuelve la misma',
   );
 
   const finalSummary = await req('GET', '/profiles/me/summary', { token: student });

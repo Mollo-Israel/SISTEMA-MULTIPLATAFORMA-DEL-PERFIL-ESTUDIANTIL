@@ -36,7 +36,7 @@ const emptyForm = {
   skillIds: [] as string[],
   originType: 'internal' as 'internal' | 'external',
   provider: '',
-  credentialExpected: false,
+  outcomePolicy: 'none' as 'none' | 'internal_constancy' | 'external_credential_expected' | 'other_authorized_resource',
   expectedIssuerDomains: '',
   expectedKeywords: '',
   responsibleUserId: '',
@@ -47,7 +47,6 @@ const emptyForm = {
   tags: '',
   status: 'draft',
   semesterScope: [] as number[],
-  internalConstancyEnabled: false,
   points: '',
 };
 
@@ -164,10 +163,10 @@ export default function ActivityManager({
       areaIds: form.areaIds,
       skillIds: form.skillIds,
       originType: form.originType,
-      ...(form.originType === 'external'
+      outcomePolicy: form.outcomePolicy,
+      ...(form.originType === 'external' || form.outcomePolicy === 'external_credential_expected'
         ? {
           provider: form.provider.trim(),
-          credentialExpected: form.credentialExpected,
           expectedIssuerDomains: form.expectedIssuerDomains.split(',').map((t) => t.trim()).filter(Boolean),
           expectedKeywords: form.expectedKeywords.split(',').map((t) => t.trim()).filter(Boolean),
         }
@@ -185,7 +184,6 @@ export default function ActivityManager({
         : undefined,
       status: necesitaRevision && !editing ? 'draft' : form.status,
       semesterScope: form.semesterScope.length ? form.semesterScope : undefined,
-      internalConstancyEnabled: form.internalConstancyEnabled,
       gamificationRules: form.points
         ? [{ trigger: 'participacion_confirmada', points: Number(form.points) }]
         : [],
@@ -229,7 +227,7 @@ export default function ActivityManager({
       skillIds: (a.activitySkills ?? []).map((x) => x.skillId),
       originType: a.originType ?? 'internal',
       provider: a.provider ?? '',
-      credentialExpected: !!a.credentialExpected,
+      outcomePolicy: a.outcomePolicy ?? (a.internalConstancyEnabled ? 'internal_constancy' : 'none'),
       expectedIssuerDomains: (a.expectedIssuerDomains ?? []).join(', '),
       expectedKeywords: (a.expectedKeywords ?? []).join(', '),
       responsibleUserId: a.responsibleUserId ?? '',
@@ -240,7 +238,6 @@ export default function ActivityManager({
       tags: (a.tags ?? []).join(', '),
       status: a.status,
       semesterScope: a.semesterScope ?? [],
-      internalConstancyEnabled: !!a.internalConstancyEnabled,
       points: String(a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.points ?? ''),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -402,7 +399,13 @@ export default function ActivityManager({
                     role="radio"
                     aria-checked={form.originType === o}
                     className={form.originType === o ? 'on' : ''}
-                    onClick={() => setForm({ ...form, originType: o })}
+                    onClick={() => setForm({
+                      ...form,
+                      originType: o,
+                      outcomePolicy: o === 'external' && form.outcomePolicy === 'internal_constancy'
+                        ? 'external_credential_expected'
+                        : form.outcomePolicy,
+                    })}
                   >
                     {o === 'internal' ? 'Interna (la organiza la carrera)' : 'Externa (de un proveedor)'}
                   </button>
@@ -483,7 +486,7 @@ export default function ActivityManager({
               maxAreas={6}
             />
 
-            {form.originType === 'external' && (
+            {(form.originType === 'external' || form.outcomePolicy === 'external_credential_expected') && (
               <div className="external-box">
                 <div className="row">
                   <div className="field">
@@ -494,17 +497,9 @@ export default function ActivityManager({
                       onChange={(e) => setForm({ ...form, provider: e.target.value })}
                       placeholder="Cisco Networking Academy, IBM SkillsBuild, Coursera…"
                       maxLength={160}
-                      required
+                      required={form.originType === 'external'}
                     />
                   </div>
-                  <label className="check-line" style={{ alignSelf: 'end' }}>
-                    <input
-                      type="checkbox"
-                      checked={form.credentialExpected}
-                      onChange={(e) => setForm({ ...form, credentialExpected: e.target.checked })}
-                    />
-                    Al terminar, el proveedor emite una credencial
-                  </label>
                 </div>
                 <div className="row">
                   <div className="field">
@@ -656,14 +651,26 @@ export default function ActivityManager({
             )}
 
             <div className="row">
-              <label className="field check-field">
-                <input
-                  type="checkbox"
-                  checked={form.internalConstancyEnabled}
-                  onChange={(e) => setForm({ ...form, internalConstancyEnabled: e.target.checked })}
-                />
-                <span>Emite constancia interna a quienes participen</span>
-              </label>
+              <div className="field">
+                <label htmlFor="op-resultado">Al terminar, genera</label>
+                <select
+                  id="op-resultado"
+                  value={form.outcomePolicy}
+                  onChange={(e) => setForm({ ...form, outcomePolicy: e.target.value as typeof form.outcomePolicy })}
+                >
+                  <option value="none">Nada (solo la participación confirmada)</option>
+                  {form.originType === 'internal' && (
+                    <option value="internal_constancy">Constancia interna automática al confirmar</option>
+                  )}
+                  <option value="external_credential_expected">Credencial del proveedor (el estudiante la adjunta)</option>
+                  <option value="other_authorized_resource">Otro recurso que autoriza el responsable</option>
+                </select>
+                <span className="field-hint">
+                  {form.outcomePolicy === 'internal_constancy'
+                    ? 'Al confirmar la participación, la constancia se emite sola y aparece en la trayectoria del estudiante.'
+                    : 'El estudiante nunca sube evidencia de asistencia: la confirma el responsable.'}
+                </span>
+              </div>
               <div className="field">
                 <label>Puntos por participar (opcional)</label>
                 <input

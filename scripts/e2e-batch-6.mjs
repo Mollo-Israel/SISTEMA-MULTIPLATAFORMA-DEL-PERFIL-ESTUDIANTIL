@@ -107,12 +107,12 @@ async function actividades(ctx) {
   s = await resumen(est.token);
   check(crudo(s, areaAct.id) === 10 && puntaje(s, areaAct.id) === 10,
     'B6.8 Una participación confirmada vale 10 (§47.1)', `crudo ${crudo(s, areaAct.id)}`);
-  check(respaldo(s, areaAct.id) === 8, 'B6.9 Y aporta 8 de respaldo (§49)', `respaldo ${respaldo(s, areaAct.id)}`);
+  check(respaldo(s, areaAct.id) === 12, 'B6.9 Y aporta 8 de respaldo más 4 de la constancia que V3 §14.1 emite sola (§49)', `respaldo ${respaldo(s, areaAct.id)}`);
 
   for (const a of ctx.actividades.slice(1, 3)) await confirmar(ctx, est, a);
   s = await resumen(est.token);
   check(crudo(s, areaAct.id) === 22, 'B6.10 La 2.ª vale el 70 % y la 3.ª el 50 %: 10 + 7 + 5 = 22 (§47.1)', `crudo ${crudo(s, areaAct.id)}`);
-  check(respaldo(s, areaAct.id) === 18, 'B6.11 El respaldo sigue su escala: 8 + 5,6 + 4 ≈ 18 (§49)', `respaldo ${respaldo(s, areaAct.id)}`);
+  check(respaldo(s, areaAct.id) === 20, 'B6.11 El respaldo sigue su escala con las constancias automáticas y topa en 20 (§49)', `respaldo ${respaldo(s, areaAct.id)}`);
 
   const d = await desglose(est.token, areaAct.id);
   const conMulti = (d.contributing ?? []).filter((c) => c.multiplier < 1);

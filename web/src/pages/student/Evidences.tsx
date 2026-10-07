@@ -503,7 +503,6 @@ function EvidenceForm({
         // resuelve el servidor a partir de lo que realmente se subió.
         storedFileId: type === 'file' ? file?.id : undefined,
         projectId: projectId || undefined,
-        activityId: activityId || undefined,
         academicAreaId: academicAreaId || undefined,
       });
       setDescription('');
@@ -581,20 +580,6 @@ function EvidenceForm({
                 </option>
               ))}
             </select>
-          </div>
-          <div className="field">
-            <label>Actividad</label>
-            <select value={activityId} onChange={(e) => setActivityId(e.target.value)}>
-              <option value="">Ninguna</option>
-              {activities.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.title}
-                </option>
-              ))}
-            </select>
-            <span className="muted" style={{ fontSize: '0.74rem' }}>
-              Solo actividades en las que participas.
-            </span>
           </div>
           <div className="field">
             <label>Área académica</label>

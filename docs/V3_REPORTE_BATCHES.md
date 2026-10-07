@@ -231,3 +231,39 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Riesgos:** un `down` de la migración pierde la marca «externa» de las oportunidades creadas después (el `up` solo la deduce de la categoría); por eso se exige copia de seguridad antes de revertir en un entorno con datos.
 
 **Resultados:** unitarias 47/47; `e2e-v3` 58 (B6: 16/16). Regresión completa: 1479 correctas y 4 fallos, todos en `e2e-batch-4` (B4.22–B4.26), porque la suite V2 declaraba habilidades de otra área; es la regla nueva de §4/§67. Corregida la suite para declarar las áreas de esas habilidades: `e2e-batch-4` 48/48. Total efectivo **1483/0**.
+
+---
+
+## BATCH 7 — Participación interna y resultados
+
+**ESTADO:** completo
+
+**Objetivo:** que la participación interna la confirme el responsable sin evidencia del estudiante, con una política de resultado explícita y constancia automática (§13, §14).
+
+**Hallazgos iniciales:**
+- El estudiante podía subir evidencia de una actividad (web, móvil y API), y la actividad tenía `evidence_required`.
+- Solo existía `internal_constancy_enabled`; la constancia se emitía a mano.
+- La inscripción no quedaba auditada (`ACTIVITY_REGISTERED`).
+
+**Cambios:**
+- Política de resultado `outcome_policy`: NONE / INTERNAL_CONSTANCY / EXTERNAL_CREDENTIAL_EXPECTED / OTHER_AUTHORIZED_RESOURCE. `internal_constancy_enabled` y `credential_expected` quedan sincronizados con ella (compatibilidad). Una externa no puede emitir constancia interna; una interna sí puede conducir a una credencial de un tercero y conserva su proveedor (§14.2).
+- **Constancia automática (§14.1):** al confirmar la participación en una oportunidad publicada y aprobada (o sin revisión) con política de constancia, se emite sola, a nombre de quien confirmó y autorizada por quien aprobó; auditada como `CONSTANCY_ISSUED` (`automatica: true`). Si la confirmación se corrige a ausente, la constancia queda `rejected` (no se borra) y vuelve a `authorized` si se confirma de nuevo. Pedirla a mano no la duplica: devuelve la existente.
+- **Sin evidencia de asistencia (§13.1):** `POST /evidences` con `activityId` responde 400 `ACTIVITY_EVIDENCE_NOT_REQUIRED`; `evidence_required` se ignora; se quita el selector de actividad en web y móvil. Las evidencias históricas se conservan.
+- `ACTIVITY_REGISTERED` auditado al inscribirse.
+- Web: «Al terminar, genera» reemplaza la casilla de constancia; el bloque de proveedor aparece también para internas que conducen a una credencial.
+
+**Migraciones:** `1780500000000-V3OutcomePolicy` (enum + columna, deducida de los datos: 1841 con constancia, 1 con credencial, 1198 sin resultado). Copia de seguridad previa; `up` → `down` → `up` probado.
+
+**Pruebas ejecutadas:** `e2e-v3 batch7` (V3.7.1–V3.7.13); `batch6` repetido; unitarias; regresión completa.
+
+**Decisiones:**
+- La emisión manual de constancias se mantiene (Dirección o responsable) pero es idempotente; `4.50` de `e2e-objectives-40` se actualizó: ya no espera 409, sino que no se duplique.
+- Corrección encontrada en este batch: el proveedor de una interna con credencial esperada se perdía al crear (B6); ahora se conserva.
+
+**Riesgos:** ninguno nuevo.
+
+**Pruebas adaptadas a las reglas V3:** `e2e-objectives-40` 4.26 (una actividad ya no admite evidencia de asistencia → 400), 4.27 (los metadatos se comprueban con una evidencia propia), 4.42 (la constancia ya existe al confirmar), 5.54/5.55 (pedirla otra vez devuelve la misma); `e2e-batch-6` B6.9/B6.11 (el respaldo suma ahora la constancia automática: 12 y tope 20).
+
+**Resultados:** unitarias 47/47; `e2e-v3` 71 (B7 13/13). Regresión completa: **1496 correctas, 0 fallos** (20 suites). `e2e-ai-provider` levanta su propia API: el script de regresión ahora fuerza `MAIL_TRANSPORT=console` para que nunca herede el SMTP real del `.env` (la suite lo detecta y se niega a correr, que es lo que pasó en la primera vuelta).
+
+**Pendientes:** aceptación de externas, elegibilidad y referencia de validación (B8).

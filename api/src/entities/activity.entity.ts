@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import {
   ActivityOrigin,
+  ActivityOutcomePolicy,
   ActivityModality,
   ActivityReviewStatus,
   ActivityStatus,
@@ -64,6 +65,13 @@ export class Activity {
   @Index('idx_activities_origin')
   @Column({ name: 'origin_type', type: 'enum', enum: ActivityOrigin, enumName: 'activity_origin_enum', default: ActivityOrigin.INTERNAL })
   originType: ActivityOrigin;
+
+  /** V3 §14: qué puede generarse al terminar (constancia, credencial externa…). */
+  @Column({
+    name: 'outcome_policy', type: 'enum', enum: ActivityOutcomePolicy,
+    enumName: 'activity_outcome_policy_enum', default: ActivityOutcomePolicy.NONE,
+  })
+  outcomePolicy: ActivityOutcomePolicy;
 
   /** V3 §12.1 · Externa: quién la ofrece (Cisco, IBM, Coursera…). */
   @Column({ type: 'varchar', length: 160, nullable: true })

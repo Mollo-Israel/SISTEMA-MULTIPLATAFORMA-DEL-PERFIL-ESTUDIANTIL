@@ -7,6 +7,7 @@ import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
 import { ActivityArea } from '../entities/activity-area.entity';
+import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { Skill } from '../entities/skill.entity';
 import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
@@ -25,6 +26,7 @@ import { ActivitiesController } from './activities.controller';
       ActivityCategory,
       ActivitySkill,
       ActivityArea,
+      InternalConstancy,
       Skill,
       ActivityReview,
       ActivityGamificationRule,

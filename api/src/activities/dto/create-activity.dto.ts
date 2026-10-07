@@ -23,6 +23,7 @@ import {
 import {
   ActivityModality,
   ActivityOrigin,
+  ActivityOutcomePolicy,
   ActivityStatus,
   ActivityType,
   GamificationTrigger,
@@ -132,6 +133,12 @@ export class CreateActivityDto {
   @IsOptional()
   @IsEnum(ActivityOrigin, { message: 'El origen debe ser interno o externo.' })
   originType?: ActivityOrigin;
+
+  /** V3 §14: qué genera al terminar. Sustituye a `internalConstancyEnabled` (que se sigue aceptando). */
+  @ApiProperty({ required: false, enum: ActivityOutcomePolicy })
+  @IsOptional()
+  @IsEnum(ActivityOutcomePolicy, { message: 'Política de resultado no válida.' })
+  outcomePolicy?: ActivityOutcomePolicy;
 
   /** V3 §12.1 · Externa: proveedor (obligatorio si es externa). */
   @ApiProperty({ required: false, example: 'Cisco Networking Academy' })

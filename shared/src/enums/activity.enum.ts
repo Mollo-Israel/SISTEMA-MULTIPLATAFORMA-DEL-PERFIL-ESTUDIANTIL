@@ -8,6 +8,20 @@ export enum ActivityOrigin {
   EXTERNAL = 'external',
 }
 
+/**
+ * Qué puede generarse al terminar una oportunidad (V3 §14). Lo decide el
+ * responsable al crearla y Dirección lo aprueba con la oportunidad.
+ */
+export enum ActivityOutcomePolicy {
+  NONE = 'none',
+  /** Constancia interna automática al confirmar la participación (§14.1). */
+  INTERNAL_CONSTANCY = 'internal_constancy',
+  /** Un tercero emite una credencial que el estudiante adjunta después (§14.2). */
+  EXTERNAL_CREDENTIAL_EXPECTED = 'external_credential_expected',
+  /** Otro recurso que autoriza el responsable. */
+  OTHER_AUTHORIZED_RESOURCE = 'other_authorized_resource',
+}
+
 export enum ActivityType {
   ACADEMICA = 'academica',
   EXTRACURRICULAR = 'extracurricular',

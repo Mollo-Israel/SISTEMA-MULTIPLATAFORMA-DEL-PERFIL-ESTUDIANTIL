@@ -383,7 +383,94 @@ async function batch6(ctx) {
     'V3.6.16 §12 El estudiante ve un único universo: origen y áreas de cada oportunidad', json({ o: vista?.originType, n: vista?.activityAreas?.length }));
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6 };
+// ===========================================================================
+//  BATCH 7 — Participación interna y resultados (§13, §14)
+// ===========================================================================
+async function batch7(ctx) {
+  objective('BATCH 7 · Sin evidencia del estudiante, política de resultado y constancia automática');
+  const director = await provisionAndActivate(ctx.admin, {
+    firstName: 'Ines', lastName: 'Barrientos', email: correoStaff('b7dir'), role: 'CAREER_DIRECTOR',
+  });
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Tobias', lastName: 'Cuba', email: correoEst('b7'), role: 'STUDENT', semester: 3,
+  });
+  const perfil = await req('GET', '/profiles/me', { token: est.token });
+  const profileId = perfil.data?.id;
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const crear = (titulo, extra = {}) => req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${TS}`, type: 'academica', categoryId: taller.id, status: 'open', ...extra },
+  });
+
+  const conConstancia = await crear('Clase espejo con constancia', { outcomePolicy: 'internal_constancy', evidenceRequired: true });
+  check(conConstancia.status === 201 && conConstancia.data?.outcomePolicy === 'internal_constancy'
+    && conConstancia.data?.internalConstancyEnabled === true,
+  'V3.7.1 §14 La oportunidad declara qué genera al terminar (constancia interna)', json({ p: conConstancia.data?.outcomePolicy }));
+  check(conConstancia.data?.evidenceRequired === false,
+    'V3.7.2 §13.1 Nunca se pide al estudiante evidencia de asistencia (el flag se ignora)', json(conConstancia.data?.evidenceRequired));
+  const externaConConstancia = await crear('Curso externo', {
+    originType: 'external', provider: 'Coursera', externalUrl: 'https://coursera.org/x', outcomePolicy: 'internal_constancy',
+  });
+  check(externaConConstancia.status === 400 && externaConConstancia.data?.fields?.outcomePolicy,
+    'V3.7.3 §14 Una externa no emite constancia interna (su resultado es la credencial)', `status ${externaConConstancia.status}`);
+
+  // ----- Participación
+  const insc = await req('POST', `/activities/${conConstancia.data.id}/register`, { token: est.token });
+  check(insc.status === 201 || insc.status === 200, 'V3.7.4 §13 El estudiante se inscribe', `status ${insc.status}`);
+  const auditoria = await req('GET', `/audit/events?eventType=ACTIVITY_REGISTERED&entityId=${insc.data?.id}`, { token: ctx.admin });
+  const eventos = auditoria.data?.items ?? auditoria.data ?? [];
+  check(Array.isArray(eventos) && eventos.length >= 1, 'V3.7.5 §65 La inscripción queda auditada (ACTIVITY_REGISTERED)', json(auditoria.data).slice(0, 120));
+  const evidencia = await req('POST', '/evidences', {
+    token: est.token,
+    body: { evidenceType: 'link', externalUrl: 'https://foto.test/estuve.jpg', description: 'Estuve', activityId: conConstancia.data.id },
+  });
+  check(evidencia.status === 400 && evidencia.data?.code === 'ACTIVITY_EVIDENCE_NOT_REQUIRED',
+    'V3.7.6 §13.1 El estudiante no sube evidencia de que fue a una actividad', json({ s: evidencia.status, c: evidencia.data?.code }));
+
+  const confirmar = (status) => req('PATCH', `/activities/${conConstancia.data.id}/confirm-participation`, {
+    token: director.token, body: { studentProfileId: profileId, status },
+  });
+  const confirmada = await confirmar('confirmed');
+  check(confirmada.status === 200, 'V3.7.7 §13 El responsable confirma la participación', `status ${confirmada.status}`);
+  const mias = async () => ((await req('GET', '/constancies/internal/my', { token: est.token })).data ?? [])
+    .filter((c) => c.activityId === conConstancia.data.id);
+  const tras = await mias();
+  check(tras.length === 1 && tras[0].status === 'authorized' && tras[0].issuedById === director.userId,
+    'V3.7.8 §14.1 La constancia aparece sola en la trayectoria, emitida por el responsable', json(tras.map((c) => ({ s: c.status, i: c.issuedById === director.userId }))));
+  const manual = await req('POST', '/constancies/internal', {
+    token: director.token, body: { profileId, activityId: conConstancia.data.id, description: 'Constancia pedida otra vez por la misma participación.' },
+  });
+  check(manual.data?.id === tras[0]?.id, 'V3.7.9 §38 Pedirla otra vez no la duplica', json({ s: manual.status }));
+
+  await confirmar('absent');
+  const corregida = await mias();
+  check(corregida.length === 1 && corregida[0].status === 'rejected',
+    'V3.7.10 §14.1 Si la confirmación se corrige a ausente, la constancia queda rechazada (no se borra)', json(corregida.map((c) => c.status)));
+  await confirmar('confirmed');
+  const otraVez = await mias();
+  check(otraVez.length === 1 && otraVez[0].status === 'authorized', 'V3.7.11 Y vuelve a valer si se confirma de nuevo', json(otraVez.map((c) => c.status)));
+
+  // ----- Sin política de constancia, confirmar no emite nada
+  const sinConstancia = await crear('Charla abierta', { outcomePolicy: 'none' });
+  await req('POST', `/activities/${sinConstancia.data.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${sinConstancia.data.id}/confirm-participation`, {
+    token: director.token, body: { studentProfileId: profileId, status: 'confirmed' },
+  });
+  const ninguna = ((await req('GET', '/constancies/internal/my', { token: est.token })).data ?? [])
+    .filter((c) => c.activityId === sinConstancia.data.id);
+  check(ninguna.length === 0, 'V3.7.12 §14 Sin política de constancia, confirmar no emite constancia', `${ninguna.length}`);
+
+  // ----- §14.2 Interna que conduce a una credencial externa
+  const haciaCredencial = await crear('Taller preparatorio CCNA', {
+    outcomePolicy: 'external_credential_expected', provider: 'Cisco Networking Academy', expectedIssuerDomains: ['netacad.com'],
+  });
+  check(haciaCredencial.status === 201 && haciaCredencial.data?.originType === 'internal'
+    && haciaCredencial.data?.credentialExpected === true && haciaCredencial.data?.provider === 'Cisco Networking Academy',
+  'V3.7.13 §14.2 Una interna puede conducir a una credencial de un tercero (con su proveedor)', json({ o: haciaCredencial.data?.originType, c: haciaCredencial.data?.credentialExpected }));
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

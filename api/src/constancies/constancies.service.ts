@@ -98,6 +98,9 @@ export class ConstanciesService {
       where: { studentProfileId: dto.profileId, activityId: dto.activityId },
     });
     if (duplicate) {
+      // V3 §14.1: al confirmar la participación la constancia se emite sola.
+      // Pedirla otra vez no crea una segunda: devuelve la que ya existe.
+      if (duplicate.status === ConstancyStatus.AUTHORIZED) return this.findOneOrFail(duplicate.id);
       throw new ConflictException(
         'Ya existe una constancia interna para este estudiante en esta actividad.',
       );

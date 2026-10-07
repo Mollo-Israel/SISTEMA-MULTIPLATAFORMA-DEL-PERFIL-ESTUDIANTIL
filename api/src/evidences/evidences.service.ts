@@ -47,7 +47,14 @@ export class EvidencesService {
     this.assertPayloadMatchesType(dto);
 
     if (dto.projectId) await this.assertProjectAccess(user, dto.projectId);
-    if (dto.activityId) await this.assertActivityParticipation(profile.id, dto.activityId);
+    // V3 §13.1: para una actividad el estudiante no sube evidencia de que fue.
+    // El responsable ya conoce la inscripción y confirma la asistencia; esa
+    // señal institucional es más fuerte que una autodeclaración. Las
+    // credenciales de oportunidades externas van por su propio flujo (§15).
+    if (dto.activityId) {
+      const msg = 'No hace falta subir evidencia de una actividad: el responsable confirma tu participación.';
+      throw new BadRequestException({ code: 'ACTIVITY_EVIDENCE_NOT_REQUIRED', message: msg, fields: { activityId: [msg] } });
+    }
     if (dto.academicAreaId) await this.assertAreaExists(dto.academicAreaId);
 
     // §27: los metadatos del archivo los pone el servidor a partir del
@@ -178,28 +185,7 @@ export class EvidencesService {
     }
   }
 
-  /**
-   * Solo se adjunta evidencia a una actividad en la que el estudiante participa:
-   * de lo contrario cualquiera podria respaldar actividades ajenas.
-   */
-  private async assertActivityParticipation(
-    studentProfileId: string,
-    activityId: string,
-  ): Promise<void> {
-    const exists = await this.activities.exists({ where: { id: activityId } });
-    if (!exists) {
-      throw new BadRequestException('La actividad indicada no existe.');
-    }
-    const registration = await this.registrations.exists({
-      where: { activityId, studentProfileId },
-    });
-    if (!registration) {
-      throw new BadRequestException(
-        'Solo puede adjuntar evidencia de actividades en las que se inscribió.',
-      );
-    }
-  }
-
+  
   private async assertAreaExists(areaId: string): Promise<void> {
     const exists = await this.areas.exists({ where: { id: areaId } });
     if (!exists) {

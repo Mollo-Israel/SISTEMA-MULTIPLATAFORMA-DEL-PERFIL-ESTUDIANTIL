@@ -499,7 +499,6 @@ function EvidenceForm({
         // §27: se adjunta por identificador; los metadatos los pone el servidor.
         storedFileId: type === 'file' ? file?.id : undefined,
         projectId: projectId || undefined,
-        activityId: activityId || undefined,
         academicAreaId: areaId || undefined,
       });
       setDescription('');
@@ -564,13 +563,6 @@ function EvidenceForm({
         value={projectId}
         onChange={setProjectId}
         options={projects.map((p) => ({ id: p.id, label: p.title }))}
-      />
-      <Picker
-        label="Actividad (solo en las que participas)"
-        emptyLabel="Ninguna"
-        value={activityId}
-        onChange={setActivityId}
-        options={activities.map((a) => ({ id: a.id, label: a.title }))}
       />
       <Picker
         label="Área académica"

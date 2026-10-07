@@ -18,6 +18,8 @@ import {
 import {
   ACTIVITY_STATUS_LABEL,
   ActivityOrigin,
+  ActivityOutcomePolicy,
+  ConstancyStatus,
   ActivityReviewStatus,
   ActivityStatus,
   ActivityType,
@@ -38,6 +40,7 @@ import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
 import { ActivityArea } from '../entities/activity-area.entity';
+import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { User } from '../entities/user.entity';
 import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
@@ -160,6 +163,8 @@ export class ActivitiesService {
     private readonly activitySkills: Repository<ActivitySkill>,
     @InjectRepository(ActivityArea)
     private readonly activityAreas: Repository<ActivityArea>,
+    @InjectRepository(InternalConstancy)
+    private readonly constancies: Repository<InternalConstancy>,
     @InjectRepository(Skill) private readonly skills: Repository<Skill>,
     @Inject(TRAJECTORY_RECALCULATION)
     private readonly trajectory: TrajectoryRecalculationPort,
@@ -182,6 +187,103 @@ export class ActivitiesService {
     // V3 §12.2: Dirección y Administración publican sin revisión
     // (NOT_REQUIRED); Docente y Sociedad proponen y Dirección decide.
     return role !== RolNombre.CAREER_DIRECTOR && role !== RolNombre.ADMIN;
+  }
+
+  /**
+   * Política de resultado (V3 §14). Acepta `outcomePolicy` o, por
+   * compatibilidad, `internalConstancyEnabled` / `credentialExpected`.
+   * Una externa no emite constancia interna: su resultado es la credencial del
+   * proveedor.
+   */
+  private politicaResultado(
+    dto: { outcomePolicy?: ActivityOutcomePolicy; internalConstancyEnabled?: boolean; credentialExpected?: boolean },
+    origen: ActivityOrigin,
+    actual: ActivityOutcomePolicy = ActivityOutcomePolicy.NONE,
+  ): ActivityOutcomePolicy {
+    let politica = actual;
+    if (dto.outcomePolicy !== undefined) politica = dto.outcomePolicy;
+    else if (dto.internalConstancyEnabled === true) politica = ActivityOutcomePolicy.INTERNAL_CONSTANCY;
+    else if (dto.credentialExpected === true) politica = ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED;
+    else if (dto.internalConstancyEnabled === false && politica === ActivityOutcomePolicy.INTERNAL_CONSTANCY) {
+      politica = ActivityOutcomePolicy.NONE;
+    } else if (dto.credentialExpected === false && politica === ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED) {
+      politica = ActivityOutcomePolicy.NONE;
+    }
+    if (origen === ActivityOrigin.EXTERNAL && politica === ActivityOutcomePolicy.INTERNAL_CONSTANCY) {
+      const msg = 'Una oportunidad externa no emite constancia interna: su resultado es la credencial del proveedor.';
+      throw new BadRequestException({ message: msg, fields: { outcomePolicy: [msg] } });
+    }
+    return politica;
+  }
+
+  /** Lleva la política a las columnas que la reflejan. */
+  private aplicarPolitica(activity: Activity, politica: ActivityOutcomePolicy): void {
+    activity.outcomePolicy = politica;
+    activity.internalConstancyEnabled = politica === ActivityOutcomePolicy.INTERNAL_CONSTANCY;
+    activity.credentialExpected = politica === ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED;
+  }
+
+  /** Datos de proveedor: los lleva una externa o una interna que conduce a una credencial (§14.2). */
+  private llevaDatosDeProveedor(activity: Activity): boolean {
+    return activity.originType === ActivityOrigin.EXTERNAL
+      || activity.outcomePolicy === ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED;
+  }
+
+  /**
+   * Constancia automática (V3 §14.1): al confirmar la participación en una
+   * actividad con constancia, el sistema la emite a nombre de quien confirmó
+   * (el responsable) y la adjunta a la trayectoria. El estudiante no sube nada.
+   * Si después se corrige la confirmación, la constancia queda rechazada (no
+   * se borra: es historia).
+   */
+  private async sincronizarConstancia(
+    activity: Activity,
+    registration: ActivityRegistration,
+    confirmerId: string,
+  ): Promise<void> {
+    const existente = await this.constancies.findOne({
+      where: { studentProfileId: registration.studentProfileId, activityId: activity.id },
+    });
+    if (registration.status !== RegistrationStatus.CONFIRMED) {
+      if (existente && existente.status === ConstancyStatus.AUTHORIZED) {
+        existente.status = ConstancyStatus.REJECTED;
+        await this.constancies.save(existente);
+      }
+      return;
+    }
+    const autorizada = activity.outcomePolicy === ActivityOutcomePolicy.INTERNAL_CONSTANCY
+      && activity.status !== ActivityStatus.DRAFT
+      && activity.status !== ActivityStatus.CANCELLED
+      && PUBLISHABLE_REVIEW_STATUSES.includes(activity.reviewStatus as ActivityReviewStatus);
+    if (!autorizada) return;
+    if (existente) {
+      if (existente.status !== ConstancyStatus.AUTHORIZED) {
+        existente.status = ConstancyStatus.AUTHORIZED;
+        existente.issuedById = confirmerId;
+        await this.constancies.save(existente);
+      }
+      return;
+    }
+    const constancia = await this.constancies.save(
+      this.constancies.create({
+        studentProfileId: registration.studentProfileId,
+        activityId: activity.id,
+        activityRegistrationId: registration.id,
+        description: `Participación confirmada en «${activity.title}».`.slice(0, 300),
+        status: ConstancyStatus.AUTHORIZED,
+        // §6.5: emite quien responde y confirmó; autoriza quien aprobó la
+        // actividad (o quien la publicó sin revisión, si fue Dirección).
+        issuedById: confirmerId,
+        authorizedById: activity.reviewedById ?? (activity.requiresReview ? null : activity.creatorId),
+      }),
+    );
+    await this.audit.record({
+      actorUserId: confirmerId,
+      eventType: AuditEventType.CONSTANCY_ISSUED,
+      entityType: 'internal_constancy',
+      entityId: constancia.id,
+      metadata: { activityId: activity.id, studentProfileId: registration.studentProfileId, automatica: true },
+    });
   }
 
   /** Áreas pedidas: `areaIds` (V3) o el `areaId` de siempre. */
@@ -253,6 +355,7 @@ export class ActivitiesService {
     return [
       dto.title, dto.description, dto.type, dto.categoryId, dto.areaId, dto.areaIds, dto.skillIds,
       dto.originType, dto.provider, dto.credentialExpected, dto.expectedIssuerDomains, dto.expectedKeywords,
+      dto.outcomePolicy,
       dto.semesterScope, dto.internalConstancyEnabled, dto.gamificationRules, dto.evidenceRequired,
     ].some((v) => v !== undefined);
   }
@@ -453,10 +556,11 @@ export class ActivitiesService {
       creatorId: user.userId,
       responsibleUserId: responsable,
       originType: origen,
-      provider: origen === ActivityOrigin.EXTERNAL ? dto.provider?.trim() ?? null : null,
-      credentialExpected: origen === ActivityOrigin.EXTERNAL ? dto.credentialExpected ?? false : false,
-      expectedIssuerDomains: origen === ActivityOrigin.EXTERNAL ? dto.expectedIssuerDomains ?? [] : [],
-      expectedKeywords: origen === ActivityOrigin.EXTERNAL ? dto.expectedKeywords ?? [] : [],
+      // Se limpian abajo si la oportunidad no lleva datos de proveedor.
+      provider: dto.provider?.trim() || null,
+      credentialExpected: false,
+      expectedIssuerDomains: dto.expectedIssuerDomains ?? [],
+      expectedKeywords: dto.expectedKeywords ?? [],
       eventDate: dto.activityDate ? new Date(dto.activityDate) : null,
       endAt: dto.endAt ? new Date(dto.endAt) : null,
       semesterScope,
@@ -466,12 +570,19 @@ export class ActivitiesService {
       capacity: dto.capacity ?? null,
       tags: dto.tags ?? null,
       externalUrl: dto.externalUrl ?? null,
-      evidenceRequired: dto.evidenceRequired ?? false,
+      // V3 §13.1: nunca se pide al estudiante evidencia de asistencia.
+      evidenceRequired: false,
       status: estadoInicial,
       requiresReview,
       reviewStatus: requiresReview ? null : ActivityReviewStatus.NOT_REQUIRED,
-      internalConstancyEnabled: dto.internalConstancyEnabled ?? false,
+      internalConstancyEnabled: false,
     });
+    this.aplicarPolitica(activity, this.politicaResultado(dto, origen));
+    if (!this.llevaDatosDeProveedor(activity)) {
+      activity.provider = null;
+      activity.expectedIssuerDomains = [];
+      activity.expectedKeywords = [];
+    }
     const saved = await this.activities.save(activity);
 
     await this.replaceAreas(saved.id, areas);
@@ -658,14 +769,16 @@ export class ActivitiesService {
     }
     if (dto.originType !== undefined) activity.originType = dto.originType;
     if (dto.provider !== undefined) activity.provider = dto.provider?.trim() || null;
-    if (dto.credentialExpected !== undefined) activity.credentialExpected = dto.credentialExpected;
     if (dto.expectedIssuerDomains !== undefined) activity.expectedIssuerDomains = dto.expectedIssuerDomains;
     if (dto.expectedKeywords !== undefined) activity.expectedKeywords = dto.expectedKeywords;
     if (dto.externalUrl !== undefined) activity.externalUrl = dto.externalUrl;
     this.assertExterna(activity.originType, activity.provider, activity.externalUrl);
-    if (activity.originType === ActivityOrigin.INTERNAL) {
+    if (dto.outcomePolicy !== undefined || dto.internalConstancyEnabled !== undefined
+      || dto.credentialExpected !== undefined || dto.originType !== undefined) {
+      this.aplicarPolitica(activity, this.politicaResultado(dto, activity.originType, activity.outcomePolicy));
+    }
+    if (!this.llevaDatosDeProveedor(activity)) {
       activity.provider = null;
-      activity.credentialExpected = false;
       activity.expectedIssuerDomains = [];
       activity.expectedKeywords = [];
     }
@@ -688,8 +801,8 @@ export class ActivitiesService {
     if (dto.location !== undefined) activity.location = dto.location;
     if (dto.capacity !== undefined) activity.capacity = dto.capacity;
     if (dto.tags !== undefined) activity.tags = dto.tags;
-    if (dto.evidenceRequired !== undefined) activity.evidenceRequired = dto.evidenceRequired;
-    if (dto.internalConstancyEnabled !== undefined) activity.internalConstancyEnabled = dto.internalConstancyEnabled;
+    // V3 §13.1: la evidencia de asistencia ya no se pide; el flag histórico se apaga.
+    if (dto.evidenceRequired !== undefined) activity.evidenceRequired = false;
     if (reiniciarRevision) {
       activity.reviewStatus = null;
       activity.reviewComment = 'La actividad cambió después de aprobada: envíala de nuevo a revisión.';
@@ -834,7 +947,8 @@ export class ActivitiesService {
     // gamificación y auditoría. Las tres primeras cuelgan del recálculo;
     // la auditoría se registra aquí porque es la decisión de una persona
     // sobre otra y debe quedar constancia de quién la tomó.
-    if (status === RegistrationStatus.CONFIRMED) {
+    await this.sincronizarConstancia(activity, saved, confirmer.userId);
+    if (status === RegistrationStatus.CONFIRMED || anterior === RegistrationStatus.CONFIRMED) {
       await this.trajectory.requestRecalculation(studentProfileId);
     }
 
@@ -943,7 +1057,17 @@ export class ActivitiesService {
     } else {
       registration.status = target;
     }
-    return this.registrations.save(registration);
+    const guardada = await this.registrations.save(registration);
+    if (target === RegistrationStatus.REGISTERED) {
+      await this.audit.record({
+        actorUserId: userId,
+        eventType: AuditEventType.ACTIVITY_REGISTERED,
+        entityType: 'activity_registration',
+        entityId: guardada.id,
+        metadata: { activityId: activity.id, studentProfileId: profile.id },
+      });
+    }
+    return guardada;
   }
 
   /**
