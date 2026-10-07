@@ -515,3 +515,33 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 86/86; `e2e-v3` 228 (B14 13/13). Regresión completa: **1659 correctas, 0 fallos** (20 suites).
 
 **Pendientes:** recomendaciones sin afinidad como factor (B15).
+
+---
+
+## BATCH 15 — Recomendaciones
+
+**ESTADO:** completo
+
+**Objetivo:** recomendar lo que el estudiante quiere explorar o mejorar, sin encasillarlo por lo que ya sabe; «No me interesa» que baje lo parecido sin tocar el perfil; recomendaciones dentro de Actividades (§34).
+
+**Hallazgos iniciales:**
+- Reparto 35/25/20/10/10 con la afinidad como factor (10 %) y un refuerzo por régimen que también dependía de la afinidad.
+- El descarte quitaba la recomendación, pero no bajaba la prioridad de lo parecido ni quedaba auditado.
+- «Recomendaciones» era una pantalla aparte que duplicaba Actividades.
+
+**Cambios:**
+- **Reparto V3 (§34):** 40 % intereses explícitos (áreas declaradas y texto libre), 30 % áreas de mejora, 15 % tecnologías de interés o a mejorar, 10 % orientación confirmada y 5 % feedback (guardó algo parecido). La afinidad no es un factor y el refuerzo por régimen ya no se aplica. El contexto (fecha, semestre, modalidad, disponibilidad) queda como filtro duro y como explicación, sin puntos. Los motivos siguen sumando exactamente el puntaje.
+- **Multiárea:** una oportunidad con varias áreas se puntúa por la que mejor encaja con el estudiante.
+- **«No me interesa» (§34.1):** queda auditado (`RECOMMENDATION_DISMISSED`), lo descartado no vuelve, y cada descarte parecido (misma área y tipo) multiplica la prioridad por 0,6, con un motivo que lo dice. No modifica los intereses del perfil. Guardar y descartar reordenan al momento.
+- **Reglas publicadas:** reparto, filtros duros y efecto del descarte.
+- **Web (§34.2):** Actividades tiene las pestañas [Para ti] [Todas] [Interesadas] [Inscritas] [Historial]. «Para ti» muestra las oportunidades sugeridas con su motivo, «Guardar» y «No me interesa». La entrada «Recomendaciones» sale del menú; su página queda como «Más sugerencias» (recursos, áreas para fortalecer y compañeros), enlazada desde «Para ti». El tablero lleva a «Para ti».
+
+**Migraciones:** ninguna (los motivos se guardan en JSON).
+
+**Pruebas ejecutadas:** unitaria del reparto (86/86); `e2e-v3 batch15` (V3.15.1–V3.15.12); suites que verificaban el reparto V2 actualizadas al de V3 (`e2e-objective-7` 18.15, 18.16 y 18.57b; `e2e-v2` V2.10.1, .2, .8 y .9; `e2e-batch-7` B7.13, B7.25, B7.53 y B7.54); regresión completa.
+
+**Pendientes:** las mismas pestañas en móvil (B22).
+
+**Riesgos:** ninguno nuevo.
+
+**Resultados:** unitarias 86/86; `e2e-v3` 240 (B15 12/12). Regresión completa: 1670 correctas y 1 fallo en `e2e-web` (WEB.19b: al volver a Actividades, «Para ti» volvía a cargar con esqueleto). Corregido con la memoria de sesión y el esqueleto diferido que usan las demás vistas; `e2e-web` 29/29. Total efectivo **1671/0**.

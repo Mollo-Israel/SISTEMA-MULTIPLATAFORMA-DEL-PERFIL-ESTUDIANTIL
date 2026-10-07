@@ -13,6 +13,8 @@ import {
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { activityService } from '../../services';
+import { useSearchParams } from 'react-router-dom';
+import ParaTi from '../../components/ParaTi';
 import type { Activity } from '../../services/types';
 import { useAsync } from '../../hooks/useAsync';
 import {
@@ -26,9 +28,10 @@ import {
   SkeletonCards,
   Diferido,
   Stagger,
+  Tabs,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
-import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
+import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -51,17 +54,30 @@ export default function StudentActivitiesPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
+  // V3 §34.2: [Para ti] [Todas] [Interesadas] [Inscritas] [Historial].
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') ?? 'para-ti';
+  const cambiarTab = (k: string) => setParams(k === 'para-ti' ? {} : { tab: k }, { replace: true });
+  const historial = useAsync(() => (tab === 'historial' ? activityService.myRegistrations() : Promise.resolve(null)), [tab]);
+
   const items = data ?? [];
+  const deLaPestana = (a: Activity) => {
+    const estado = a.myRegistration?.status;
+    if (tab === 'interesadas') return estado === 'interested';
+    if (tab === 'inscritas') return estado === 'registered' || estado === 'accepted' || estado === 'confirmed';
+    return true;
+  };
 
   const visible = useMemo(() => {
     const q = normalize(query.trim());
     return items.filter((a) => {
+      if (!deLaPestana(a)) return false;
       if (type !== 'todas' && a.type !== type) return false;
       if (!q) return true;
       return [a.title, a.description ?? '', a.academicArea?.name ?? '', a.category?.name ?? '', a.location ?? '']
         .some((field) => normalize(field).includes(q));
     });
-  }, [items, query, type]);
+  }, [items, query, type, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (fn: () => Promise<unknown>, id: string, success: string, detail?: string) => {
     setBusy(id);
@@ -129,10 +145,50 @@ export default function StudentActivitiesPage() {
   return (
     <div>
       <PageHeader
-        title="Actividades disponibles"
-        description="Marca tu interés o solicita inscripción. La participación confirmada alimenta tu perfil y tu afinidad."
+        title="Actividades y oportunidades"
+        description="Lo que te sugerimos, todo lo abierto, lo que te interesa y lo que ya hiciste. La participación confirmada alimenta tu perfil y tu afinidad."
       />
 
+      <Tabs
+        value={tab}
+        onChange={cambiarTab}
+        items={[
+          { key: 'para-ti', label: 'Para ti' },
+          { key: 'todas', label: 'Todas' },
+          { key: 'interesadas', label: 'Interesadas', count: items.filter((a) => a.myRegistration?.status === 'interested').length },
+          { key: 'inscritas', label: 'Inscritas', count: items.filter((a) => ['registered', 'accepted', 'confirmed'].includes(a.myRegistration?.status ?? '')).length },
+          { key: 'historial', label: 'Historial' },
+        ]}
+      />
+
+      {tab === 'para-ti' && <ParaTi onChanged={reload} />}
+
+      {tab === 'historial' && (
+        <Card title="Tu historial">
+          {!historial.data ? (
+            <SkeletonCards count={2} />
+          ) : historial.data.length === 0 ? (
+            <EmptyState icon={<FiCalendar size={22} />} message="Todavía no participas en ninguna actividad." />
+          ) : (
+            <div className="scroll-x">
+              <table>
+                <thead><tr><th>Actividad</th><th>Fecha</th><th>Estado</th></tr></thead>
+                <tbody>
+                  {historial.data.map((r) => (
+                    <tr key={r.registrationId}>
+                      <td>{r.activity?.title}</td>
+                      <td className="muted">{formatDate(r.activity?.eventDate ?? null) ?? '—'}</td>
+                      <td>{lbl(REGISTRATION_STATUS_LABEL, r.status)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {(tab === 'todas' || tab === 'interesadas' || tab === 'inscritas') && (<>
       <div className="filters">
         <SearchInput
           value={query}
@@ -299,6 +355,7 @@ export default function StudentActivitiesPage() {
           </Button>
         </div>
       )}
+      </>)}
     </div>
   );
 }

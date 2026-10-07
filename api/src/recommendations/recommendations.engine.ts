@@ -101,6 +101,9 @@ interface Contexto {
   improveSkills: { id: string; name: string }[];
   /** Áreas confirmadas desde la orientación académica (V2 §54). */
   orientationAreas: Set<string>;
+  /** V3 §34: lo que guardó y lo que descartó, por «área|tipo». */
+  savedSimilar: Set<string>;
+  dismissedSimilar: Map<string, number>;
   now: Date;
 }
 
@@ -140,6 +143,7 @@ export class RecommendationsEngine {
     private readonly resources: Repository<LearningResource>,
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     @InjectRepository(ProjectMember) private readonly members: Repository<ProjectMember>,
+    @InjectRepository(Recommendation) private readonly decided: Repository<Recommendation>,
   ) {}
 
   async generate(profileId: string): Promise<GenerationResult> {
@@ -149,7 +153,7 @@ export class RecommendationsEngine {
     }
 
     // --- 2. Informacion del perfil y afinidades --------------------------
-    const [affinityRows, preferredRows, freeRows, skillRows, areaRows] = await Promise.all([
+    const [affinityRows, preferredRows, freeRows, skillRows, areaRows, decididas] = await Promise.all([
       this.affinities.find({ where: { studentProfileId: profileId } }),
       this.preferred.find({ where: { studentProfileId: profileId } }),
       this.freeInterests.find({ where: { studentProfileId: profileId } }),
@@ -159,8 +163,20 @@ export class RecommendationsEngine {
         relations: { skill: true },
       }),
       this.areas.find(),
+      // V3 §34: el feedback de recomendaciones (guardadas y descartadas).
+      this.decided.find({
+        where: { studentProfileId: profileId, status: In([RecommendationStatus.SAVED, RecommendationStatus.DISMISSED]) },
+        select: { id: true, type: true, academicAreaId: true, status: true },
+      }),
     ]);
     const improvementIds = new Set(profile.improvementAreaIds ?? []);
+    const savedSimilar = new Set<string>();
+    const dismissedSimilar = new Map<string, number>();
+    for (const d of decididas) {
+      const clave = `${d.academicAreaId ?? '-'}|${d.type}`;
+      if (d.status === RecommendationStatus.SAVED) savedSimilar.add(clave);
+      else dismissedSimilar.set(clave, (dismissedSimilar.get(clave) ?? 0) + 1);
+    }
 
     const sufficient =
       affinityRows.length + preferredRows.length + freeRows.length + skillRows.length +
@@ -238,6 +254,8 @@ export class RecommendationsEngine {
       orientationAreas: new Set(
         preferredRows.filter((p) => p.source === InterestSource.ONBOARDING).map((p) => p.academicAreaId),
       ),
+      savedSimilar,
+      dismissedSimilar,
       now: generatedAt,
     };
 
@@ -288,15 +306,18 @@ export class RecommendationsEngine {
     haystack: string,
     contexto: { factor: number; label: string | null },
     elementSkillIds: string[] = [],
+    type: RecommendationType | null = null,
   ): { score: number; reasons: RecommendationReason[] } {
     const reasons: RecommendationReason[] = [];
     const name = areaId ? ctx.areaName.get(areaId) : undefined;
     const suyas = new Set(elementSkillIds);
 
     /*
-     * Cada componente de V2 §54 tiene su techo y las señales de un mismo
-     * componente comparten ese techo en vez de sumarse por encima. El motivo
-     * lleva lo que aportó de verdad: la suma de los motivos es el puntaje.
+     * V3 §34: cada componente tiene su techo y las señales de un mismo
+     * componente lo comparten. El motivo lleva lo que aportó de verdad: la
+     * suma de los motivos es el puntaje. La afinidad NO es un factor: se
+     * recomienda lo que el estudiante quiere explorar o mejorar, no lo que
+     * ya sabe.
      */
     const acumulador = (techo: number) => {
       let usado = 0;
@@ -309,7 +330,7 @@ export class RecommendationsEngine {
     };
     const total = () => this.redondear(reasons.reduce((a, r) => a + r.points, 0));
 
-    // ------------------------------------------- 35 % interés explícito
+    // ------------------------------------------- 40 % intereses explícitos
     const interes = acumulador(RULES.ranking.explicitInterest);
     if (areaId && name) {
       const priority = ctx.preferredByArea.get(areaId);
@@ -321,36 +342,40 @@ export class RecommendationsEngine {
         );
       }
     }
-    const techInteres = ctx.interestSkills.find((t) => suyas.has(t.id))
-      ?? ctx.interestSkills.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
-    if (techInteres) {
-      interes(
-        RecommendationReasonCode.SKILL_MATCH,
-        `Trabaja ${techInteres.name}, una tecnología que te interesa`,
-        suyas.has(techInteres.id) ? RULES.skillLinkFactor : RULES.skillMatchFactor,
-      );
-    }
     const libre = ctx.freeInterestNames.find((n) => matchesDeclaredTerm(haystack, n, 4));
     if (libre) {
       interes(RecommendationReasonCode.FREE_INTEREST_MATCH, `Coincide con tu interés «${libre}»`, RULES.freeInterestFactor);
     }
 
-    // --------------------------------------------- 25 % área de mejora
-    const mejora = acumulador(RULES.ranking.improvementArea);
+    // --------------------------------------------- 30 % áreas de mejora
     if (areaId && name && ctx.improvementIds.has(areaId)) {
-      mejora(RecommendationReasonCode.IMPROVEMENT_AREA, `Marcaste ${name} como área a fortalecer`, 1);
+      acumulador(RULES.ranking.improvementArea)(
+        RecommendationReasonCode.IMPROVEMENT_AREA, `Marcaste ${name} como área a fortalecer`, 1,
+      );
+    }
+
+    // ------------------------------ 15 % tecnologías de interés o mejora
+    const tecnologia = acumulador(RULES.ranking.skills);
+    const techInteres = ctx.interestSkills.find((t) => suyas.has(t.id))
+      ?? ctx.interestSkills.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
+    if (techInteres) {
+      tecnologia(
+        RecommendationReasonCode.SKILL_MATCH,
+        `Trabaja ${techInteres.name}, una tecnología que te interesa`,
+        suyas.has(techInteres.id) ? 1 : RULES.skillMatchFactor,
+      );
     }
     const techMejora = ctx.improveSkills.find((t) => suyas.has(t.id))
       ?? ctx.improveSkills.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
     if (techMejora) {
-      mejora(
+      tecnologia(
         RecommendationReasonCode.IMPROVE_SKILL_MATCH,
         `Trabaja ${techMejora.name}, una tecnología que quieres mejorar`,
-        suyas.has(techMejora.id) ? RULES.skillLinkFactor : RULES.skillMatchFactor,
+        suyas.has(techMejora.id) ? 1 : RULES.skillMatchFactor,
       );
     }
 
-    // ---------------------------------- 20 % orientación confirmada
+    // ---------------------------------- 10 % orientación confirmada
     if (areaId && name && ctx.orientationAreas.has(areaId)) {
       acumulador(RULES.ranking.orientation)(
         RecommendationReasonCode.ORIENTATION_CONFIRMED,
@@ -359,26 +384,33 @@ export class RecommendationsEngine {
       );
     }
 
-    // Sin una señal de lo que el estudiante quiere, no hay recomendación: la
-    // afinidad y el contexto solo ordenan lo que ya encaja con él.
+    // Sin una señal de lo que el estudiante quiere, no hay recomendación.
     if (reasons.length === 0) return { score: 0, reasons: [] };
 
-    // ----------------------------- 10 % afinidad y respaldo contextual
-    if (areaId && name) {
-      const info = ctx.affinityByArea.get(areaId);
-      if (info && (info.score > 0 || info.supportScore > 0)) {
-        const factor = (info.score + info.supportScore) / 200;
-        acumulador(RULES.ranking.affinitySupport)(
-          RecommendationReasonCode.AFFINITY_AREA,
-          `Ya tienes trayectoria en ${name} (afinidad ${info.score}/100, respaldo ${SUPPORT_LABEL[info.supportLevel]})`,
-          factor,
-        );
-      }
+    // ------------------------------- 5 % feedback de recomendaciones
+    const clave = `${areaId ?? '-'}|${type ?? ''}`;
+    if (type && ctx.savedSimilar.has(clave)) {
+      acumulador(RULES.ranking.feedback)(
+        RecommendationReasonCode.SIMILAR_SAVED, 'Guardaste una recomendación parecida', 1,
+      );
     }
 
-    // ------------------------------------- 10 % disponibilidad y contexto
+    // El contexto (fecha, semestre, modalidad, disponibilidad) ya filtró lo
+    // que no corresponde; aquí solo explica, sin sumar (§34: filtros duros).
     if (contexto.factor > 0 && contexto.label) {
-      acumulador(RULES.ranking.context)(RecommendationReasonCode.CONTEXT_MATCH, contexto.label, contexto.factor);
+      reasons.push({ code: RecommendationReasonCode.CONTEXT_MATCH, label: contexto.label, points: 0 });
+    }
+
+    // ------------------------ §34.1 «No me interesa» baja lo parecido
+    const descartadas = type ? (ctx.dismissedSimilar.get(clave) ?? 0) : 0;
+    if (descartadas > 0) {
+      const antes = total();
+      const despues = this.redondear(antes * Math.pow(RULES.dismissal.factor, descartadas));
+      reasons.push({
+        code: RecommendationReasonCode.DISMISSED_SIMILAR,
+        label: `Descartaste ${descartadas} recomendación(es) parecida(s): baja su prioridad`,
+        points: this.redondear(despues - antes),
+      });
     }
 
     return { score: total(), reasons };
@@ -391,39 +423,18 @@ export class RecommendationsEngine {
    * recibe. Nada desaparece de la lista por esto, solo cambia el orden.
    */
   private applyRegime(
-    ctx: Contexto,
-    areaId: string | null,
-    categoryCode: string | null,
-    resourceType: LearningResourceType | null,
-    type: RecommendationType,
-    reasons: RecommendationReason[],
+    _ctx: Contexto,
+    _areaId: string | null,
+    _categoryCode: string | null,
+    _resourceType: LearningResourceType | null,
+    _type: RecommendationType,
+    _reasons: RecommendationReason[],
     score: number,
   ): number {
-    if (!areaId) return score;
-    const regime = ctx.regimeByArea.get(areaId) ?? RecommendationRegime.NONE;
-    if (!fitsRegime(regime, categoryCode, resourceType, type)) return score;
-
-    const name = ctx.areaName.get(areaId) ?? 'esta área';
-    const info = ctx.affinityByArea.get(areaId);
-
-    if (regime === RecommendationRegime.BUILD_EXPERIENCE) {
-      reasons.push({
-        code: RecommendationReasonCode.BUILD_EXPERIENCE,
-        label:
-          `Tu respaldo en ${name} todavía es ${SUPPORT_LABEL[info?.supportLevel ?? AffinityLevel.LOW]}`
-          + ': esto te deja algo que puedas demostrar',
-        points: RULES.regime.bonus,
-      });
-    } else {
-      reasons.push({
-        code: RecommendationReasonCode.ADVANCE_LEVEL,
-        label:
-          `Tu trayectoria en ${name} ya está respaldada `
-          + `(${info?.supportScore ?? 0}/100): esto te lleva más lejos`,
-        points: RULES.regime.bonus,
-      });
-    }
-    return Math.min(100, this.redondear(score + RULES.regime.bonus));
+    // V3 §34: el ranking no depende de la afinidad, así que el refuerzo por
+    // régimen (que la usaba) ya no se aplica. El punto de enganche se
+    // conserva por si una versión futura del reparto lo vuelve a necesitar.
+    return score;
   }
 
   // =========================================================================
@@ -436,7 +447,7 @@ export class RecommendationsEngine {
   ): Promise<{ elements: Produced[]; availableByArea: Map<string, number> }> {
     const candidates = await this.activities.find({
       where: { status: In(REGISTRABLE_STATUSES) },
-      relations: { category: true, activitySkills: true },
+      relations: { category: true, activitySkills: true, activityAreas: true },
     });
 
     // §61: los cursos y recursos ya no son actividades. Se excluyen aqui para
@@ -483,15 +494,24 @@ export class RecommendationsEngine {
         [a.title, a.description, (a.tags ?? []).join(' '), a.category?.name].join(' '),
       );
       const contexto = this.activityContext(ctx, a);
-      const { score, reasons } = this.scoreElement(
-        ctx, a.academicAreaId, haystack, contexto, (a.activitySkills ?? []).map((s) => s.skillId),
-      );
+      const type = typeForCategory(a.category?.code);
+      // V3 §12.1: una oportunidad puede tocar varias áreas; cuenta la que
+      // mejor encaja con el estudiante.
+      const areasDeActividad = [...new Set([
+        ...(a.academicAreaId ? [a.academicAreaId] : []),
+        ...(a.activityAreas ?? []).map((x) => x.academicAreaId),
+      ])];
+      let mejor = { score: 0, reasons: [] as RecommendationReason[], areaId: a.academicAreaId as string | null };
+      for (const areaId of areasDeActividad.length ? areasDeActividad : [null]) {
+        const r = this.scoreElement(ctx, areaId, haystack, contexto, (a.activitySkills ?? []).map((s) => s.skillId), type);
+        if (r.score > mejor.score) mejor = { ...r, areaId };
+      }
+      const { score, reasons } = mejor;
       if (reasons.length === 0) continue;
 
-      const type = typeForCategory(a.category?.code);
       const final = this.applyRegime(
         ctx,
-        a.academicAreaId,
+        mejor.areaId,
         a.category?.code ?? null,
         null,
         type,
@@ -503,7 +523,7 @@ export class RecommendationsEngine {
       elements.push({
         type,
         targetId: a.id,
-        academicAreaId: a.academicAreaId ?? null,
+        academicAreaId: mejor.areaId ?? null,
         title: a.title,
         description: a.description ? a.description.slice(0, 500) : null,
         targetLink: a.externalUrl,
@@ -604,12 +624,12 @@ export class RecommendationsEngine {
             : null,
       };
 
+      const type = typeForResource(r.resourceType);
       const { score, reasons } = this.scoreElement(
-        ctx, r.academicAreaId, haystack, contexto, (r.resourceSkills ?? []).map((s) => s.skillId),
+        ctx, r.academicAreaId, haystack, contexto, (r.resourceSkills ?? []).map((s) => s.skillId), type,
       );
       if (reasons.length === 0) continue;
 
-      const type = typeForResource(r.resourceType);
       const final = this.applyRegime(
         ctx,
         r.academicAreaId,

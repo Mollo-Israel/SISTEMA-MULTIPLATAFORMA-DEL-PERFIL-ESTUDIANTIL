@@ -94,6 +94,10 @@ export enum RecommendationReasonCode {
   AVAILABILITY = 'availability',
   /** El elemento encaja con el contexto del estudiante: modalidad, semestre. */
   CONTEXT_MATCH = 'context_match',
+  /** V3 §34: guardó algo parecido (feedback positivo, 5 %). */
+  SIMILAR_SAVED = 'similar_saved',
+  /** V3 §34.1: descartó algo parecido; baja la prioridad, no toca su perfil. */
+  DISMISSED_SIMILAR = 'dismissed_similar',
 }
 
 /**

@@ -451,8 +451,8 @@ async function rf18Generacion(ctx) {
   // mas de la mitad de ese 20 %.
   // V2 §54: 35 % interés explícito; la prioridad 5 cobra el 60 % de ese 35.
   check(
-    taller?.reasons.some((x) => x.code === 'preferred_area' && x.points === 21),
-    '18.15 Un área de interés con prioridad 5 aporta 21 de los 35 puntos de interés (V2 §54)',
+    taller?.reasons.some((x) => x.code === 'preferred_area' && x.points === 24),
+    '18.15 V3 §34 Un área de interés con prioridad 5 aporta 24 de los 40 puntos de interés',
     JSON.stringify(taller?.reasons),
   );
   check(
@@ -468,8 +468,8 @@ async function rf18Generacion(ctx) {
     `${(taller?.reasons ?? []).reduce((a, x) => a + Number(x.points), 0)} vs ${taller?.score}`,
   );
   check(
-    taller?.reasons.some((x) => x.code === 'affinity_area'),
-    '18.16 La trayectoria respaldada (afinidad V3) tambien es motivo',
+    !taller?.reasons.some((x) => x.code === 'affinity_area'),
+    '18.16 V3 §34 La afinidad no es un factor del ranking: no aparece como motivo',
   );
   check(
     taller?.reasons.some((x) => x.code === 'free_interest_match' && /Canalizacion de datos/.test(x.label)),
@@ -626,13 +626,13 @@ async function rf18Validaciones(ctx) {
   const pesos = reglas.data?.ranking ?? [];
   check(
     pesos.length === 5 && pesos.reduce((a, r) => a + r.weight, 0) === 100,
-    '18.57 El reparto publicado es el de V2 §54 (cinco componentes) y suma 100',
+    '18.57 El reparto publicado es el de V3 §34 (cinco componentes) y suma 100',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    (reglas.data?.regimes ?? []).length === 1
+    !!reglas.data?.dismissal && !!reglas.data?.filters
       && (reglas.data?.teammate ?? []).length >= 5,
-    '18.57b Y se publica el refuerzo de oportunidades avanzadas y las prioridades de compañeros',
+    '18.57b V3 §34 Se publican los filtros duros, el efecto de «No me interesa» y las prioridades de compañeros',
     JSON.stringify([reglas.data?.regimes?.length, reglas.data?.teammate?.length]),
   );
   check(!!reglas.data.limits && !!reglas.data.minimumScore, '18.58 Tambien los limites y el puntaje minimo');

@@ -72,10 +72,11 @@ describe('Afinidad V3 (§45–§47)', () => {
 });
 
 describe('Recomendaciones (§54, §60)', () => {
-  it('el reparto 35/25/20/10/10 suma 100', () => {
+  it('V3 §34: el reparto 40/30/15/10/5 suma 100 y no incluye la afinidad', () => {
     const r = RULES.ranking;
-    assert.deepEqual([r.explicitInterest, r.improvementArea, r.orientation, r.affinitySupport, r.context], [35, 25, 20, 10, 10]);
+    assert.deepEqual([r.explicitInterest, r.improvementArea, r.skills, r.orientation, r.feedback], [40, 30, 15, 10, 5]);
     assert.equal(Object.values(r).reduce((s, v) => s + v, 0), 100);
+    assert.equal('affinitySupport' in r, false);
   });
 
   it('coincide por palabra completa, sin tildes ni mayúsculas', () => {

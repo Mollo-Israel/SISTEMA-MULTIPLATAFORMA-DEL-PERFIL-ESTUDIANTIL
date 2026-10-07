@@ -26,17 +26,24 @@ export const RULES = {
    * que suman 100 y que ninguna señal pesa mas de lo que §60 le concede.
    */
   ranking: {
-    /** V2 §54 · Interés explícito: áreas y tecnologías que le interesan. */
-    explicitInterest: 35,
-    /** V2 §54 · Área (o tecnología) que quiere fortalecer. */
-    improvementArea: 25,
-    /** V2 §54 · Áreas que salieron de su orientación y él confirmó. */
-    orientation: 20,
-    /** V2 §54 · Afinidad y respaldo contextual del área. */
-    affinitySupport: 10,
-    /** V2 §54 · Disponibilidad y contexto: fecha, semestre, modalidad. */
-    context: 10,
+    /** V3 §34 · 40 % intereses explícitos (áreas declaradas y texto libre). */
+    explicitInterest: 40,
+    /** V3 §34 · 30 % áreas de mejora. */
+    improvementArea: 30,
+    /** V3 §34 · 15 % tecnologías de interés o a mejorar. */
+    skills: 15,
+    /** V3 §34 · 10 % orientación confirmada. */
+    orientation: 10,
+    /** V3 §34 · 5 % feedback de recomendaciones (guardó algo parecido). */
+    feedback: 5,
   },
+
+  /**
+   * V3 §34.1 · «No me interesa». Cada recomendación parecida descartada (misma
+   * área y mismo tipo) multiplica la prioridad por este factor. No modifica
+   * los intereses del perfil: eso se hace en Mi perfil → Intereses.
+   */
+  dismissal: { factor: 0.6 },
 
   /**
    * Cuanto cuenta un interes explicito segun la prioridad que le dio (§51.1).

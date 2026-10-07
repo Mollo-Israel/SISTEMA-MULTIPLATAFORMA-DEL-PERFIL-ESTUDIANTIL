@@ -220,11 +220,11 @@ async function reparto(ctx) {
     JSON.stringify(afinidad),
   );
   const interes = taller.reasons
-    .filter((x) => ['preferred_area', 'free_interest_match', 'skill_match'].includes(x.code))
+    .filter((x) => ['preferred_area', 'free_interest_match'].includes(x.code))
     .reduce((a, x) => a + Number(x.points), 0);
   check(
-    interes > 0 && interes <= 35.011,
-    'B7.13 El interés explícito, venga por donde venga, no pasa del 35 % (V2 §54)',
+    interes > 0 && interes <= 40.011,
+    'B7.13 V3 §34 El interés explícito, venga por donde venga, no pasa del 40 %',
     `interés ${interes}`,
   );
   const mejora = taller.reasons
@@ -306,8 +306,8 @@ async function regimenes(ctx) {
   section('V2 §54 · El refuerzo de oportunidades avanzadas exige afinidad Y respaldo altos');
   const reto = porObjetivo(items, ctx.retoRespaldado.id);
   check(
-    !!reto && codigos(reto).includes('affinity_area'),
-    'B7.25 En el área con trayectoria, el reto cita esa trayectoria como motivo',
+    !!reto && !codigos(reto).includes('affinity_area'),
+    'B7.25 V3 §34 La trayectoria (afinidad) no es motivo del ranking, ni siquiera en el área fuerte',
     JSON.stringify(codigos(reto)),
   );
   check(
@@ -522,17 +522,18 @@ async function noAislado(ctx) {
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    pesos.find((r) => r.code === 'preferred_area')?.weight === 35
-      && pesos.find((r) => r.code === 'improvement_area')?.weight === 25
-      && pesos.find((r) => r.code === 'orientation_confirmed')?.weight === 20
-      && pesos.find((r) => r.code === 'affinity_area')?.weight === 10
-      && pesos.find((r) => r.code === 'context_match')?.weight === 10,
-    'B7.53 Y es exactamente el de V2 §54: 35 / 25 / 20 / 10 / 10',
+    pesos.find((r) => r.code === 'preferred_area')?.weight === 40
+      && pesos.find((r) => r.code === 'improvement_area')?.weight === 30
+      && pesos.find((r) => r.code === 'skill_match')?.weight === 15
+      && pesos.find((r) => r.code === 'orientation_confirmed')?.weight === 10
+      && pesos.find((r) => r.code === 'similar_saved')?.weight === 5
+      && !pesos.some((r) => r.code === 'affinity_area'),
+    'B7.53 V3 §34 Y es exactamente 40 / 30 / 15 / 10 / 5, sin afinidad',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    JSON.stringify((reglas.data?.regimes ?? []).map((r) => r.code)) === JSON.stringify(['advance_level']),
-    'B7.54 El único refuerzo publicado es el de oportunidades avanzadas (V2 §54)',
+    (reglas.data?.regimes ?? []).length === 0 && !!reglas.data?.dismissal,
+    'B7.54 V3 §34 Ya no hay refuerzo por afinidad; se publica el efecto de «No me interesa»',
     JSON.stringify((reglas.data?.regimes ?? []).map((r) => r.code)),
   );
   check(

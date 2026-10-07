@@ -1531,7 +1531,85 @@ async function batch14(ctx) {
   void resumen;
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14 };
+// ===========================================================================
+//  BATCH 15 — Recomendaciones (§34)
+// ===========================================================================
+async function batch15(ctx) {
+  objective('BATCH 15 · Ranking 40/30/15/10/5 sin afinidad, «No me interesa» y guardar');
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Iris', lastName: 'Sugerida', email: correoEst('b15'), role: 'STUDENT', semester: 3,
+  });
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Tadeo', lastName: 'Oferta', email: correoStaff('b15dir'), role: 'CAREER_DIRECTOR' });
+  const letras = (n) => String.fromCharCode(...String(TS + n).slice(-6).split('').map((d) => 65 + Number(d)));
+  const sufijo = letras(15);
+  const area = async (n, tag) => (await req('POST', '/academic-areas', { token: ctx.admin, body: { name: `${n} ${sufijo}`, tags: [`${tag}${sufijo.toLowerCase()}`] } })).data;
+  const aInt = await area('Computacion Afectiva', 'afectiv');
+  const aMej = await area('Cartografia Digital', 'cartog');
+  const sInt = (await req('POST', '/skills', { token: ctx.admin, body: { name: `Emotiv${sufijo}`, academicAreaId: aInt.id } })).data;
+
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: aInt.id, priority: 1 }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { improvementAreaIds: [aMej.id] } });
+  await req('PUT', '/profiles/me/skill-interests', { token: est.token, body: { items: [{ skillId: sInt.id, kind: 'interest' }] } });
+
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const crear = async (titulo, a, extra = {}) => (await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${TS}`, description: 'Escenario de recomendaciones V3.', type: 'academica', categoryId: taller.id, areaId: a.id, status: 'open', ...extra },
+  })).data;
+  const t1 = await crear('Taller de emociones uno', aInt, { skillIds: [sInt.id] });
+  const t2 = await crear('Taller de emociones dos', aInt);
+  const t3 = await crear('Taller de emociones tres', aInt);
+  const m1 = await crear('Taller de mapas', aMej);
+  const m2 = await crear('Taller de mapas avanzado', aMej);
+
+  const leer = async () => {
+    return ((await req('GET', '/recommendations/me', { token: est.token })).data?.groups ?? []).flatMap((g) => g.items);
+  };
+  let items = await leer();
+  const de = (act) => items.find((i) => i.targetId === act.id);
+  const pts = (item, code) => (item?.reasons ?? []).filter((r) => r.code === code).reduce((a, r) => a + r.points, 0);
+
+  const reglas = (await req('GET', '/recommendations/rules', { token: est.token })).data;
+  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([40, 30, 15, 10, 5]),
+    'V3.15.1 §34 Reparto publicado: 40 / 30 / 15 / 10 / 5', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
+  check(pts(de(t1), 'preferred_area') === 40 && pts(de(t1), 'skill_match') === 15,
+    'V3.15.2 §34 Interés explícito 40 y tecnología de interés 15', JSON.stringify(de(t1)?.reasons));
+  check(pts(de(m1), 'improvement_area') === 30, 'V3.15.3 §34 Área de mejora 30', JSON.stringify(de(m1)?.reasons));
+  check(items.every((i) => !(i.reasons ?? []).some((r) => r.code === 'affinity_area')),
+    'V3.15.4 §34 La afinidad no es factor de ninguna recomendación');
+  check(items.every((i) => Math.abs((i.reasons ?? []).reduce((a, r) => a + r.points, 0) - Number(i.score)) < 0.011),
+    'V3.15.5 Los motivos suman el puntaje y cada uno explica por qué se muestra');
+
+  // ----- §34.1 No me interesa
+  const intereses = async () => {
+    const yo = (await req('GET', '/profiles/me', { token: est.token })).data;
+    const tec = (await req('GET', '/profiles/me/skill-interests', { token: est.token })).data;
+    return JSON.stringify([yo?.improvementAreaIds, yo?.preferredAreas ?? yo?.interests ?? null, tec]);
+  };
+  const interesesAntes = await intereses();
+  const antesT2 = Number(de(t2)?.score);
+  const descartar = await req('PATCH', `/recommendations/me/${de(t3).id}`, { token: est.token, body: { status: 'dismissed' } });
+  check(descartar.status === 200, 'V3.15.6 §34.1 «No me interesa»', `status ${descartar.status}`);
+  const audit = await req('GET', `/audit/events?eventType=RECOMMENDATION_DISMISSED&entityId=${de(t3).id}`, { token: ctx.admin });
+  check((audit.data?.items ?? audit.data ?? []).length >= 1, 'V3.15.7 §34.1 Queda registrado RECOMMENDATION_DISMISSED');
+  const interesesDespues = await intereses();
+  check(interesesAntes === interesesDespues,
+    'V3.15.8 §34.1 No modifica los intereses del perfil');
+  items = await leer();
+  check(!de(t3), 'V3.15.9 Lo descartado no vuelve a proponerse');
+  check(Number(de(t2)?.score) < antesT2 && pts(de(t2), 'dismissed_similar') < 0,
+    'V3.15.10 §34.1 Lo parecido (misma área y tipo) baja de prioridad y dice por qué', `${antesT2} → ${de(t2)?.score} ${JSON.stringify(de(t2)?.reasons)}`);
+  check(Number(de(m1)?.score) === 30 + 0 || !pts(de(m1), 'dismissed_similar'),
+    'V3.15.11 Lo no parecido no se ve afectado', JSON.stringify(de(m1)?.reasons));
+
+  // ----- Feedback positivo (5 %)
+  await req('PATCH', `/recommendations/me/${de(m1).id}`, { token: est.token, body: { status: 'saved' } });
+  items = await leer();
+  check(pts(de(m2), 'similar_saved') === 5, 'V3.15.12 §34 Guardar algo parecido suma el 5 % de feedback', JSON.stringify(de(m2)?.reasons));
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

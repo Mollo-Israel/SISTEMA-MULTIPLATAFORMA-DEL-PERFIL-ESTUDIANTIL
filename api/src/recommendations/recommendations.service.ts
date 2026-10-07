@@ -1,3 +1,4 @@
+import { AuditEventType, AuditService } from '../audit/audit.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
@@ -43,6 +44,7 @@ const MESSAGES = {
 export class RecommendationsService {
   constructor(
     private readonly engine: RecommendationsEngine,
+    private readonly audit: AuditService,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(Recommendation) private readonly recommendations: Repository<Recommendation>,
     @InjectRepository(Activity) private readonly activities: Repository<Activity>,
@@ -153,6 +155,21 @@ export class RecommendationsService {
     recommendation.decidedAt = status === RecommendationStatus.VIEWED ? null : now;
     await this.recommendations.save(recommendation);
 
+    if (status === RecommendationStatus.DISMISSED || status === RecommendationStatus.SAVED) {
+      if (status === RecommendationStatus.DISMISSED) {
+        // V3 §34.1: queda registrado; NO se tocan los intereses del perfil.
+        await this.audit.record({
+          actorUserId: userId,
+          eventType: AuditEventType.RECOMMENDATION_DISMISSED,
+          entityType: 'recommendation',
+          entityId: recommendation.id,
+          metadata: { type: recommendation.type, academicAreaId: recommendation.academicAreaId, targetId: recommendation.targetId },
+        });
+      }
+      // El feedback reordena ya lo parecido (§34).
+      await this.engine.generate(profileId);
+    }
+
     return this.toView(recommendation);
   }
 
@@ -177,21 +194,25 @@ export class RecommendationsService {
   getRules() {
     return {
       rulesVersion: RULES_VERSION,
-      /** V2 §54 · Reparto del ranking. Suma 100. */
+      /** V3 §34 · Reparto del ranking. Suma 100; la afinidad no es un factor. */
       ranking: [
         {
           code: 'preferred_area',
-          label: 'Interés explícito: áreas y tecnologías que te interesan',
+          label: 'Intereses explícitos',
           weight: RULES.ranking.explicitInterest,
-          detail:
-            'Entero con prioridad 1 y algo más de la mitad con prioridad 5. Una tecnología de '
-            + 'interés que la actividad trabaja suma; si solo aparece en el texto, suma menos.',
+          detail: 'Áreas que marcaste como interés (entera con prioridad 1, algo más de la mitad con 5) y tus intereses escritos.',
         },
         {
           code: 'improvement_area',
-          label: 'Área o tecnología que quieres fortalecer',
+          label: 'Áreas de mejora',
           weight: RULES.ranking.improvementArea,
-          detail: 'El área marcada para fortalecer cuenta entera; una tecnología a mejorar, en parte.',
+          detail: 'Áreas que marcaste para fortalecer.',
+        },
+        {
+          code: 'skill_match',
+          label: 'Tecnologías de interés o a mejorar',
+          weight: RULES.ranking.skills,
+          detail: 'Entera si la oportunidad declara la tecnología; menos si solo aparece en el texto.',
         },
         {
           code: 'orientation_confirmed',
@@ -200,31 +221,19 @@ export class RecommendationsService {
           detail: 'Áreas que te sugirió el cuestionario y que tú decidiste sumar.',
         },
         {
-          code: 'affinity_area',
-          label: 'Afinidad y respaldo en esa área',
-          weight: RULES.ranking.affinitySupport,
-          detail: 'Ordena lo que ya encaja contigo: nunca recomienda algo por sí sola.',
-        },
-        {
-          code: 'context_match',
-          label: 'Disponibilidad y contexto',
-          weight: RULES.ranking.context,
-          detail:
-            'Fecha próxima, modalidad compatible con cómo prefieres participar y disponibilidad '
-            + 'que declaraste. Las actividades de otros semestres no se recomiendan.',
+          code: 'similar_saved',
+          label: 'Feedback de tus recomendaciones',
+          weight: RULES.ranking.feedback,
+          detail: 'Guardaste algo parecido (misma área y tipo).',
         },
       ],
-      /** V2 §54 · Las oportunidades avanzadas suben si afinidad y respaldo son altos. */
-      regimes: [
-        {
-          code: 'advance_level',
-          label: 'Afinidad alta con respaldo alto',
-          detail:
-            'Se priorizan convocatorias, hackathones, retos e investigación: lo que lleva '
-            + 'más lejos a quien ya demostró.',
-          bonus: RULES.regime.bonus,
-        },
-      ],
+      /** V3 §34 · Filtros duros antes de puntuar. */
+      filters: 'Solo oportunidades visibles, aprobadas, abiertas, con fecha vigente, para tu semestre y con cupo. La afinidad no ordena la lista.',
+      /** V3 §34.1 · «No me interesa». */
+      dismissal: {
+        factor: RULES.dismissal.factor,
+        detail: 'Cada recomendación parecida que descartaste (misma área y tipo) multiplica la prioridad por este factor. No cambia tus intereses: eso se hace en Mi perfil → Intereses.',
+      },
       /** §62 · Prioridades para sugerir un compañero, en su orden. */
       teammate: [
         {

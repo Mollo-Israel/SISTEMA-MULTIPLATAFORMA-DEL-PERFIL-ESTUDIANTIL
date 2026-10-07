@@ -294,8 +294,8 @@ export default function StudentRecommendationsPage() {
   return (
     <div>
       <PageHeader
-        title="Recomendaciones"
-        description="Actividades, oportunidades y compañeros sugeridos a partir de tu perfil."
+        title="Más sugerencias"
+        description="Recursos, áreas para fortalecer y compañeros sugeridos. Las oportunidades sugeridas están en Actividades → Para ti."
         actions={
           <SearchInput
             value={query}

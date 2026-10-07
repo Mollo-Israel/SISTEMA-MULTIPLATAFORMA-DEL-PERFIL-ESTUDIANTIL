@@ -325,8 +325,8 @@ async function batch10(ctx) {
   const de = (act) => items.find((i) => i.targetId === act.id);
   const puntos = (item, code) => (item?.reasons ?? []).filter((r) => r.code === code).reduce((a, r) => a + r.points, 0);
 
-  check(puntos(de(actInteres), 'preferred_area') === 35, 'V2.10.1 §54 Interés explícito de prioridad 1: 35 puntos', JSON.stringify(de(actInteres)?.reasons));
-  check(puntos(de(actMejora), 'improvement_area') === 25, 'V2.10.2 §54 Área a fortalecer: 25 puntos', JSON.stringify(de(actMejora)?.reasons));
+  check(puntos(de(actInteres), 'preferred_area') === 40, 'V2.10.1 V3 §34 Interés explícito de prioridad 1: 40 puntos', JSON.stringify(de(actInteres)?.reasons));
+  check(puntos(de(actMejora), 'improvement_area') === 30, 'V2.10.2 V3 §34 Área de mejora: 30 puntos', JSON.stringify(de(actMejora)?.reasons));
   check(puntos(de(actTecInt), 'skill_match') > 0 && /te interesa/.test(de(actTecInt)?.reasons?.[0]?.label ?? ''),
     'V2.10.3 §53 Tecnología de interés que la actividad trabaja: suma interés, con su motivo', JSON.stringify(de(actTecInt)?.reasons));
   check(puntos(de(actTecMej), 'improve_skill_match') > 0, 'V2.10.4 §53 Tecnología a mejorar: suma en «mejora»', JSON.stringify(de(actTecMej)?.reasons));
@@ -351,15 +351,15 @@ async function batch10(ctx) {
     void actOrientacion;
     items = await leer();
     const delArea = items.filter((i) => i.area?.id === sugerida.academicAreaId && ['activity', 'opportunity', 'resource', 'external_course'].includes(i.type));
-    check(delArea.length > 0 && delArea.every((i) => puntos(i, 'orientation_confirmed') === 20),
-      'V2.10.8 §54 El área confirmada desde la orientación aporta 20', JSON.stringify(delArea.slice(0, 1).map((i) => i.reasons)));
+    check(delArea.length > 0 && delArea.every((i) => puntos(i, 'orientation_confirmed') === 10),
+      'V2.10.8 V3 §34 El área confirmada desde la orientación aporta 10', JSON.stringify(delArea.slice(0, 1).map((i) => i.reasons)));
   } else {
     check(false, 'V2.10.8 §54 El cuestionario debía sugerir al menos un área', JSON.stringify(run.data));
   }
 
   const reglas = (await req('GET', '/recommendations/rules', { token: est.token })).data;
-  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([35, 25, 20, 10, 10]),
-    'V2.10.9 §54 Las reglas publicadas son las de la especificación', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
+  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([40, 30, 15, 10, 5]),
+    'V2.10.9 V3 §34 Las reglas publicadas son las de la especificación: 40/30/15/10/5', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
 }
 
 // ===========================================================================

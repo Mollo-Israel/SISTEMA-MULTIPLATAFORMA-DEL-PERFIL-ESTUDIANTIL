@@ -27,7 +27,6 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/student/projects', label: 'Proyectos' },
         { to: '/student/evidences', label: 'Evidencias y certificados' },
         { to: '/student/affinity', label: 'Áreas de afinidad' },
-        { to: '/student/recommendations', label: 'Recomendaciones' },
       ],
     },
     {

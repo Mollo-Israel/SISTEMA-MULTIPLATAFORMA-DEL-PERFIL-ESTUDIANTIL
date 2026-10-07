@@ -20,7 +20,7 @@ const aparecer = {
 };
 
 const ATAJOS = [
-  { to: '/student/recommendations', icon: <FiCompass />, t: 'Para ti', d: 'Cursos, charlas y actividades que encajan contigo.', c: 'c1' },
+  { to: '/student/activities', icon: <FiCompass />, t: 'Para ti', d: 'Oportunidades que encajan con lo que quieres explorar.', c: 'c1' },
   { to: '/student/activities', icon: <FiCalendar />, t: 'Actividades', d: 'Talleres, charlas y eventos para inscribirte.', c: 'c2' },
   { to: '/student/projects', icon: <FiFolder />, t: 'Mis proyectos', d: 'Lo que construiste, con tu aporte.', c: 'c3' },
   { to: '/student/evidences', icon: <FiUpload />, t: 'Certificados y evidencias', d: 'Lo que demuestra lo que sabes.', c: 'c4' },
@@ -57,8 +57,8 @@ function siguientePaso(d: ProfileSummary): { titulo: string; texto: string; to: 
   return {
     titulo: 'Mira lo que te recomendamos',
     texto: 'Con lo que ya cargaste tenemos sugerencias pensadas para ti.',
-    to: '/student/recommendations',
-    cta: 'Ver recomendaciones',
+    to: '/student/activities',
+    cta: 'Ver lo que es para ti',
   };
 }
 
