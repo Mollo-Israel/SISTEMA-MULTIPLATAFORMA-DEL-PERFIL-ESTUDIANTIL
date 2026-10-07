@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { FiActivity, FiAward, FiFolder, FiInfo, FiSearch, FiTarget, FiUser } from 'react-icons/fi';
 import { apiError } from '../../api/client';
@@ -23,6 +24,9 @@ const normalize = (s: string) =>
 export default function TeacherStudentsPage() {
   const { data, loading, error } = useAsync<StudentDirectory>(() => profileService.listStudents(), []);
   const [search, setSearch] = useState('');
+  // V3 §51: el drill-down desde «Por semestre» llega con ?semestre=N.
+  const [params] = useSearchParams();
+  const [semestre, setSemestre] = useState(params.get('semestre') ?? '');
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<any>(null);
   const [affinity, setAffinity] = useState<AffinitySummary | null>(null);
@@ -34,12 +38,13 @@ export default function TeacherStudentsPage() {
 
   const filtered = useMemo(() => {
     const term = normalize(search.trim());
-    if (!term) return students;
-    return students.filter((s) =>
+    const delSemestre = semestre ? students.filter((s) => String(s.semester ?? '') === semestre) : students;
+    if (!term) return delSemestre;
+    return delSemestre.filter((s) =>
       [s.studentName ?? '', s.email ?? '', s.semester ? `${s.semester}` : '']
         .some((field) => normalize(field).includes(term)),
     );
-  }, [students, search]);
+  }, [students, search, semestre]);
 
   const openProfile = async (profileId: string) => {
     setSelected(profileId);
@@ -106,6 +111,11 @@ export default function TeacherStudentsPage() {
                 onChange={setSearch}
                 placeholder="Buscar por nombre, correo o semestre…"
               />
+              <select aria-label="Filtrar por semestre" value={semestre} onChange={(e) => setSemestre(e.target.value)} style={{ maxWidth: 170 }}>
+                <option value="">Todos los semestres</option>
+                {[...new Set(students.map((s) => s.semester).filter((x): x is number => !!x))].sort((x, y) => x - y)
+                  .map((n) => <option key={n} value={String(n)}>{n}.º semestre</option>)}
+              </select>
               {students.length > 0 && (
                 <ResultCount
                   shown={filtered.length}

@@ -68,6 +68,8 @@ h3 { font-size: 1.02rem; }
 .card + .card { margin-top: 1rem; }
 .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
 .grid { display: grid; gap: 1rem; }
+/* En una grilla el espacio lo pone `gap`: el margen entre tarjetas seguidas las desalineaba. */
+.grid > .card + .card { margin-top: 0; }
 .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
 .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
@@ -1204,3 +1206,23 @@ button.chip { cursor: pointer; font-family: var(--font); }
 .cv-orden { display: flex; gap: 0.2rem; }
 .cv-orden button { border: 1px solid var(--gray-200); background: #fff; border-radius: 6px; width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer; color: var(--gray-700); }
 .cv-orden button:disabled { opacity: 0.35; cursor: default; }
+
+/* --- Inicios y paneles por actor (V3 §50 a §54) --- */
+.stat-link { cursor: pointer; text-align: left; font-family: var(--font); border: 1px solid var(--gray-200); transition: border-color 0.15s, box-shadow 0.15s; }
+.stat-link:hover { border-color: var(--bordo); box-shadow: 0 2px 10px rgba(107, 18, 32, 0.08); }
+.stat-link:focus-visible, .pendiente:focus-visible { outline: 2px solid var(--bordo); outline-offset: 2px; }
+.stat-accion { display: inline-flex; align-items: center; gap: 0.25rem; margin-top: 0.35rem; font-size: 0.75rem; font-weight: 600; color: var(--bordo); }
+.pendiente { display: flex; flex-direction: column; gap: 0.25rem; text-decoration: none; color: var(--gray-700); border: 1px solid var(--gray-200); }
+.pendiente.con { border-color: var(--bordo); }
+.pendiente:hover { box-shadow: 0 2px 10px rgba(107, 18, 32, 0.08); }
+.pendiente-n { font-size: 1.8rem; font-weight: 800; color: var(--gray-900); line-height: 1; }
+.pendiente.con .pendiente-n { color: var(--bordo); }
+.page-header.embebido { margin-bottom: 0.6rem; }
+.page-header.embebido p { margin: 0; }
+.fila-clic { cursor: pointer; }
+.fila-clic:hover td { background: var(--gray-50); }
+.link-btn { background: none; border: none; padding: 0; color: var(--bordo); font: inherit; cursor: pointer; text-decoration: underline; }
+.filtros-metricas { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem; }
+.delta { display: block; font-size: 0.72rem; color: var(--gray-500); }
+.delta.sube { color: #1f7a3d; }
+.delta.baja { color: #a23b2a; }

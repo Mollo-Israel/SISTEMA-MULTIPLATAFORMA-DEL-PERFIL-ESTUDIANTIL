@@ -613,6 +613,14 @@ export interface NotaAnalitica {
 type Suprimible<T> = Partial<T> & { suppressed?: boolean; reason?: string };
 
 export interface DirectorTrends {
+  /** V3 §52 · Evolución: afinidad y respaldo promedio por área y mes. */
+  affinityEvolution?: Suprimible<{
+    period: string;
+    area: string;
+    students: number;
+    averageAffinity: number;
+    averageSupport: number;
+  }>[];
   interestByArea: Suprimible<{
     area: string;
     students: number;
@@ -1104,7 +1112,26 @@ export const reportService = {
   directorOverview: () => api.get('/reports/director/overview').then((r) => r.data),
   participationBySemester: () => api.get('/reports/director/participation-by-semester').then((r) => r.data),
   directorProjects: () => api.get('/reports/director/projects-summary').then((r) => r.data),
+  /** V3 §52: lo pendiente para el Inicio de Dirección. */
+  directorPending: () => api.get<DirectorPending>('/reports/director/pending').then((r) => r.data),
+  /** V3 §54: Inicio de Administración. */
+  adminOverview: () => api.get<AdminOverview>('/reports/admin/overview').then((r) => r.data),
 };
+
+export interface DirectorPending {
+  activitiesPendingReview: number;
+  activitiesObserved: number;
+  credentialsPendingManualReview: number;
+  constanciesPending: number;
+}
+
+export interface AdminOverview {
+  users: { role: string; total: number; active: number; pendingActivation: number }[];
+  attention: { activitiesPendingReview: number; credentialsPendingManualReview: number; pendingActivation: number };
+  lastImport: { status: string; createdAt: string } | null;
+  auditEventsLast7Days: number;
+  mail: { mode: 'simulated' | 'smtp' };
+}
 
 export const adminService = {
   listUsers: (search?: string) =>

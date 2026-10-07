@@ -8,7 +8,7 @@ import { AsyncView, Badge, Card, PageHeader, SkeletonTable } from '../../compone
  * estudiantes de los semestres habilitados para el docente, agrupados por
  * semestre.
  */
-export default function TeacherReportsPage() {
+export default function TeacherReportsPage({ onSemester }: { onSemester?: (semester: number) => void } = {}) {
   const overview = useAsync(() => reportService.teacherOverview(), []);
   const affinity = useAsync(() => reportService.teacherAffinity(), []);
   const projects = useAsync(() => reportService.teacherProjects(), []);
@@ -40,8 +40,13 @@ export default function TeacherReportsPage() {
                 </thead>
                 <tbody>
                   {d.bySemester.map((f: any) => (
-                    <tr key={f.semester}>
-                      <td>{f.semester}.º</td><td>{f.students}</td><td>{f.activeProfiles}</td>
+                    <tr
+                      key={f.semester}
+                      className={onSemester ? 'fila-clic' : undefined}
+                      onClick={onSemester ? () => onSemester(f.semester) : undefined}
+                      title={onSemester ? `Ver los estudiantes de ${f.semester}.º semestre` : undefined}
+                    >
+                      <td>{onSemester ? <button type="button" className="link-btn" onClick={() => onSemester(f.semester)}>{f.semester}.º</button> : `${f.semester}.º`}</td><td>{f.students}</td><td>{f.activeProfiles}</td>
                       <td>{f.confirmedParticipations}</td><td>{f.projectsVisibleToTeachers}</td><td>{f.openTeamNeeds}</td>
                     </tr>
                   ))}

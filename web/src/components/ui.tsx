@@ -1,4 +1,4 @@
-import { useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { PrimeraVisita } from './primeraVisita';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -434,6 +434,13 @@ export function ResultCount({ shown, total, noun = 'resultados' }: { shown: numb
 //  Encabezado de pagina y pestañas
 // ===========================================================================
 
+/**
+ * V3 §51/§52: una página usada como pestaña de otra (el panel del docente, la
+ * analítica de Dirección) no repite su encabezado grande: deja la explicación
+ * y las acciones, y el título lo pone la pestaña.
+ */
+export const PanelEmbebido = createContext(false);
+
 export function PageHeader({
   title,
   description,
@@ -443,6 +450,15 @@ export function PageHeader({
   description?: ReactNode;
   actions?: ReactNode;
 }) {
+  const embebido = useContext(PanelEmbebido);
+  if (embebido) {
+    return (description || actions) ? (
+      <div className="page-header embebido">
+        {description && <p className="muted">{description}</p>}
+        {actions && <div className="page-header-actions">{actions}</div>}
+      </div>
+    ) : null;
+  }
   return (
     <div className="page-header">
       <div>

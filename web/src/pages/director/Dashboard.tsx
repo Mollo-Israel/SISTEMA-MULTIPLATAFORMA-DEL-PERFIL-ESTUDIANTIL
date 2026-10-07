@@ -1,76 +1,84 @@
+import { Link } from 'react-router-dom';
+import { FiArrowRight, FiBarChart2, FiCheckSquare, FiFileText, FiShield } from 'react-icons/fi';
 import { useAsync } from '../../hooks/useAsync';
-import { reportService } from '../../services';
-import { AsyncView, Card, PageHeader, SkeletonCards, SkeletonTable, Stat } from '../../components/ui';
+import { reportService, type DirectorPending } from '../../services';
+import { AsyncView, Card, PageHeader, SkeletonCards, Stat } from '../../components/ui';
 
+/**
+ * Inicio de Dirección (V3 §52): lo que hay que atender y cuatro cifras. La
+ * analítica completa está en «Analítica»; aquí no se repite.
+ */
 export default function DirectorDashboard() {
+  const pendientes = useAsync(() => reportService.directorPending(), []);
   const overview = useAsync(() => reportService.directorOverview(), []);
-  const semester = useAsync(() => reportService.participationBySemester(), []);
 
   return (
     <div>
       <PageHeader
-        title="Panel de dirección"
-        description="Indicadores descriptivos de la carrera. No representan rendimiento ni predicción."
+        title="Inicio"
+        description="Lo que espera tu decisión y un vistazo a la carrera."
       />
 
-      <AsyncView
-        loading={overview.loading}
-        error={overview.error}
-        data={overview.data}
-        skeleton={<SkeletonCards count={4} />}
-      >
-        {(d: any) => (
-          <>
-            <div className="grid cols-4">
-              <Stat value={d.totals.students} label="Estudiantes" />
-              <Stat value={d.totals.projects} label="Proyectos" />
-              <Stat value={d.totals.activities} label="Actividades" />
-              <Stat value={d.totals.registrations} label="Participaciones" />
-            </div>
-            <div className="grid cols-2 mt">
-              <Card title="Áreas con mayor interés">
-                <table><tbody>{d.topInterestAreas.map((a: any) => <tr key={a.area}><td>{a.area}</td><td style={{ width: 60 }}>{a.count}</td></tr>)}</tbody></table>
-                {d.topInterestAreas.length === 0 && <p className="muted">Sin datos.</p>}
-              </Card>
-              <Card title="Distribución de habilidades">
-                <table><tbody>{d.skillDistribution.map((s: any) => <tr key={s.skill}><td>{s.skill}</td><td className="muted">{s.area ?? '—'}</td><td style={{ width: 60 }}>{s.count}</td></tr>)}</tbody></table>
-                {d.skillDistribution.length === 0 && <p className="muted">Sin datos.</p>}
-              </Card>
-            </div>
-            <Card title="Tendencias descriptivas">
-              <p><strong>Completitud promedio de perfiles:</strong> {d.trends.averageProfileCompletion}%</p>
-              <p><strong>Perfiles completos:</strong> {d.trends.profilesComplete} ({d.trends.profilesCompletePercentage}%)</p>
-              <p className="muted">{d.trends.note}</p>
-            </Card>
-          </>
+      <AsyncView loading={pendientes.loading} error={pendientes.error} data={pendientes.data} skeleton={<SkeletonCards count={3} />}>
+        {(p: DirectorPending) => (
+          <div className="grid cols-3">
+            <Pendiente
+              to="/director/approvals"
+              icon={<FiCheckSquare />}
+              n={p.activitiesPendingReview}
+              titulo="Actividades por aprobar"
+              detalle={p.activitiesObserved ? `${p.activitiesObserved} observada(s) esperando correcciones` : 'Propuestas de docentes y sociedad'}
+            />
+            <Pendiente
+              to="/director/credential-reviews"
+              icon={<FiShield />}
+              n={p.credentialsPendingManualReview}
+              titulo="Credenciales en revisión"
+              detalle="Revisión manual excepcional"
+            />
+            <Pendiente
+              to="/director/constancies"
+              icon={<FiFileText />}
+              n={p.constanciesPending}
+              titulo="Constancias pendientes"
+              detalle="Participaciones confirmadas por emitir"
+            />
+          </div>
         )}
       </AsyncView>
 
-      <Card title="Participación por semestre">
-        <AsyncView
-          loading={semester.loading}
-          error={semester.error}
-          data={semester.data}
-          skeleton={<SkeletonTable rows={4} columns={6} />}
-          isEmpty={(d: any) => d.length === 0}
-          emptyMessage="Sin participaciones registradas."
-        >
-          {(rows: any) => (
-            <table>
-              <thead><tr><th>Semestre</th><th>Total</th><th>Interés</th><th>Inscritos</th><th>Confirmados</th><th>Ausentes</th></tr></thead>
-              <tbody>
-                {rows.map((r: any, i: number) => (
-                  <tr key={i}>
-                    <td>{r.semester ?? 'Sin semestre'}</td><td>{r.total}</td>
-                    <td>{r.byStatus.interested}</td><td>{r.byStatus.registered}</td>
-                    <td>{r.byStatus.confirmed}</td><td>{r.byStatus.absent}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </AsyncView>
+      <AsyncView loading={overview.loading} error={overview.error} data={overview.data} skeleton={<SkeletonCards count={4} />}>
+        {(d: any) => (
+          <div className="grid cols-4 mt">
+            <Stat value={d.totals.students} label="Estudiantes" />
+            <Stat value={d.totals.projects} label="Proyectos" />
+            <Stat value={d.totals.activities} label="Actividades" />
+            <Stat value={d.totals.registrations} label="Participaciones" />
+          </div>
+        )}
+      </AsyncView>
+
+      <Card title="Analítica" actions={<Link to="/director/analytics" className="btn btn-secondary btn-sm"><FiBarChart2 size={13} /> Abrir</Link>}>
+        <div className="chip-row">
+          {[
+            ['', 'Panorama'], ['afinidad', 'Afinidad'], ['participacion', 'Participación'], ['demanda', 'Demanda'], ['evolucion', 'Evolución'],
+          ].map(([k, l]) => (
+            <Link key={l} className="chip" to={k ? `/director/analytics?tab=${k}` : '/director/analytics'}>{l}</Link>
+          ))}
+        </div>
       </Card>
     </div>
+  );
+}
+
+function Pendiente({ to, icon, n, titulo, detalle }: { to: string; icon: React.ReactNode; n: number; titulo: string; detalle: string }) {
+  return (
+    <Link to={to} className={`card pendiente ${n > 0 ? 'con' : ''}`}>
+      <span className="qi" aria-hidden>{icon}</span>
+      <span className="pendiente-n">{n}</span>
+      <strong>{titulo}</strong>
+      <span className="muted">{detalle}</span>
+      <span className="stat-accion">Ir <FiArrowRight size={12} /></span>
+    </Link>
   );
 }

@@ -2049,7 +2049,74 @@ async function batch19(ctx) {
     'V3.19.10 Las insignias muestran si se obtuvieron y su avance');
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19 };
+// ===========================================================================
+//  BATCH 20 — Dashboards y BI por actor (§50 a §54)
+// ===========================================================================
+async function batch20(ctx) {
+  objective('BATCH 20 · Inicio por actor, analítica de Dirección con evolución y sin datos de más');
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Bia', lastName: 'Tablero', email: correoEst('b20'), role: 'STUDENT', semester: 3 });
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dino', lastName: 'Director', email: correoStaff('b20dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Teo', lastName: 'Docente', email: correoStaff('b20doc'), role: 'TEACHER' });
+  const sociedad = await provisionAndActivate(ctx.admin, { firstName: 'Sara', lastName: 'Sociedad', email: correoStaff('b20soc'), role: 'SCIENTIFIC_SOCIETY' });
+
+  // ----- Admin · Inicio (§54)
+  const adm = await req('GET', '/reports/admin/overview', { token: ctx.admin });
+  const roles = (adm.data?.users ?? []).map((u) => u.role).sort().join();
+  check(adm.status === 200 && roles === ['ADMIN', 'CAREER_DIRECTOR', 'SCIENTIFIC_SOCIETY', 'STUDENT', 'TEACHER'].sort().join(),
+    'V3.20.1 §54 El Inicio de Administración cuenta cuentas por rol', roles);
+  check(typeof adm.data?.attention?.activitiesPendingReview === 'number' && typeof adm.data?.attention?.pendingActivation === 'number'
+    && typeof adm.data?.auditEventsLast7Days === 'number',
+  'V3.20.2 Y dice lo que requiere atención');
+  const crudo = JSON.stringify(adm.data ?? {});
+  check(['simulated', 'smtp'].includes(adm.data?.mail?.mode) && !/SMTP_|password|pass\b|@/i.test(crudo),
+    'V3.20.3 Del correo solo el modo: ni credenciales ni correos de personas', adm.data?.mail?.mode);
+  for (const [quien, t] of [['Dirección', director.token], ['un estudiante', est.token]]) {
+    const r = await req('GET', '/reports/admin/overview', { token: t });
+    check(r.status === 403, `V3.20.4 ${quien} no ve el Inicio de Administración`, `status ${r.status}`);
+  }
+
+  // ----- Dirección · Inicio (§52)
+  const pend = await req('GET', '/reports/director/pending', { token: director.token });
+  check(pend.status === 200 && ['activitiesPendingReview', 'activitiesObserved', 'credentialsPendingManualReview', 'constanciesPending']
+    .every((k) => typeof pend.data?.[k] === 'number'), 'V3.20.5 §52 El Inicio de Dirección muestra lo pendiente', JSON.stringify(pend.data));
+  // Una propuesta de la Sociedad aparece como pendiente.
+  const cats = (await req('GET', '/activity-categories', { token: sociedad.token })).data ?? [];
+  const catExtra = cats.find((c) => c.appliesTo === 'extracurricular') ?? cats[0];
+  const propuesta = await req('POST', '/activities', {
+    token: sociedad.token,
+    body: { title: `Club de lectura técnica ${TS}`, type: 'extracurricular', categoryId: catExtra.id, activityDate: new Date(Date.now() + 9 * 86_400_000).toISOString() },
+  });
+  await req('POST', `/activities/${propuesta.data?.id}/submit`, { token: sociedad.token, body: {} });
+  const pend2 = (await req('GET', '/reports/director/pending', { token: director.token })).data;
+  check(pend2?.activitiesPendingReview >= 1 && pend2.activitiesPendingReview >= pend.data.activitiesPendingReview,
+    'V3.20.6 Una propuesta enviada aparece en lo pendiente', `${pend.data?.activitiesPendingReview} → ${pend2?.activitiesPendingReview}`);
+  for (const [quien, t] of [['un docente', docente.token], ['la Sociedad', sociedad.token], ['un estudiante', est.token]]) {
+    const r = await req('GET', '/reports/director/pending', { token: t });
+    check(r.status === 403, `V3.20.7 ${quien} no ve lo pendiente de Dirección`, `status ${r.status}`);
+  }
+
+  // ----- Dirección · Analítica: evolución (§52) con el umbral de §65
+  const tend = await req('GET', '/reports/director/trends', { token: director.token });
+  const evo = tend.data?.affinityEvolution;
+  check(tend.status === 200 && Array.isArray(evo), 'V3.20.8 §52 Analítica trae la evolución por área y mes', `status ${tend.status}`);
+  const min = Number(process.env.ANALYTICS_MIN_GROUP_SIZE ?? 5);
+  check((evo ?? []).every((f) => f.suppressed === true || (f.students >= min && typeof f.averageAffinity === 'number')),
+    'V3.20.9 §65 Cada fila respeta el tamaño mínimo de grupo o se suprime con su motivo', `${(evo ?? []).length} filas`);
+  check((evo ?? []).every((f) => /^\d{4}-\d{2}$/.test(f.period ?? '')) && !JSON.stringify(evo ?? []).includes('studentProfileId'),
+    'V3.20.10 Agregada por mes: sin identificadores de estudiantes');
+  const tendDoc = await req('GET', '/reports/director/trends', { token: docente.token });
+  check(tendDoc.status === 403, 'V3.20.11 Un docente no ve la analítica de la carrera', `status ${tendDoc.status}`);
+
+  // ----- Docente y Sociedad: lo suyo
+  const ov = await req('GET', '/reports/teacher/overview', { token: docente.token });
+  check(ov.status === 200 && typeof ov.data?.students?.total === 'number', 'V3.20.12 §51 El resumen del panel docente responde dentro de su alcance');
+  const soc = await req('GET', '/reports/society/activities', { token: sociedad.token });
+  check(soc.status === 200 && (soc.data?.activities ?? []).every((a) => a.activityId && 'category' in a && 'area' in a && 'eventDate' in a),
+    'V3.20.13 §53 Las métricas de la Sociedad traen periodo, categoría y área para filtrar', `status ${soc.status}`);
+  check(!(soc.data?.activities ?? []).some((a) => a.students || a.profiles), 'V3.20.14 Y ningún dato de perfiles');
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19, batch20 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

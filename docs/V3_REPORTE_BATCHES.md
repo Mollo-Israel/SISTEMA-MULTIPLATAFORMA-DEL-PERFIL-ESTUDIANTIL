@@ -750,3 +750,71 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Riesgos:** los estudiantes que sumaban puntos por contactos dejan de hacerlo desde ahora; su histórico se mantiene.
 
 **Pendientes:** ninguno propio del batch.
+
+---
+
+## BATCH 20 — Dashboards y BI por actor
+
+**ESTADO:** completo
+
+**Objetivo:** que cada actor tenga vistas con propósitos distintos (§50 a §54, §68), sin tres paneles iguales con nombres distintos.
+- Docente: un panel con pestañas y drill-down.
+- Dirección: Inicio, Aprobaciones y Analítica con pestañas.
+- Sociedad: un resumen frente a métricas interactivas.
+- Administración: un Inicio de verdad.
+
+**Hallazgos iniciales:**
+- El docente tenía «Panel» y «Panel académico» casi idénticos, y cinco entradas más para mirar a los mismos estudiantes.
+- Dirección tenía Panel general, Mapa de afinidad y Tendencias, que se repetían. «Evolución» no mostraba cambio en el tiempo de la afinidad.
+- La Sociedad tenía un panel estático con tres pasos y métricas sin filtros ni comparación. Faltaban «Crear actividad» y «Participantes».
+- Administración entraba directo a Usuarios, sin Inicio.
+- Una regla CSS ya existente (`.card + .card`) desalineaba la primera tarjeta de cada grilla.
+
+**Cambios:**
+- **Docente (§51):**
+  - «Inicio / Panel académico» con las pestañas Resumen, Por semestre, Estudiantes, Proyectos visibles, Actividades y Necesidades/equipos.
+  - El Resumen tiene tarjetas que llevan a su pestaña y gráficos de barras.
+  - Una fila de «Por semestre» abre Estudiantes filtrado por ese semestre (`?semestre=N`, con un selector propio).
+  - Las rutas antiguas redirigen a su pestaña conservando la consulta (`APestana`).
+  - Las páginas reutilizadas no repiten su encabezado gracias a `PanelEmbebido`.
+- **Dirección (§52):**
+  - **Inicio** muestra lo pendiente (actividades por aprobar u observadas, credenciales en revisión manual, constancias por emitir) con enlace a cada pantalla, cuatro cifras y accesos a Analítica.
+  - **Analítica** tiene cinco pestañas:
+    - Panorama: totales, narrativa con IA y gráficos.
+    - Afinidad: la foto agregada actual.
+    - Participación: por semestre y por mes, con inscritos, confirmados y ausentes.
+    - Demanda: actividades y recursos que atraen, interés declarado y tecnologías.
+    - **Evolución:** afinidad y respaldo promedio por área y mes, con la última instantánea de cada estudiante por mes, solo del motor vigente y con el umbral de §65. Esto es nuevo en `GET /reports/director/trends` (`affinityEvolution`).
+  - Mapa y Tendencias redirigen a su pestaña.
+- **Sociedad (§53):**
+  - Menú: Inicio, Mis actividades, Crear actividad, Participantes y Métricas.
+  - **Inicio:** resumen breve y lo próximo.
+  - **Participantes:** por actividad, inscritos, confirmados y ausentes, con «Ver y confirmar».
+  - **Métricas:** filtros por periodo, categoría y área; comparación con el periodo anterior del mismo largo; clic a la actividad y clic a la categoría para filtrar.
+  - El gestor de actividades acepta los enlaces directos `?nuevo=1` y `?actividad=<id>`.
+  - Las filas suprimidas por §65 conservan el área y la categoría de la actividad (que no identifican a nadie), para que los filtros no las dejen fuera.
+- **Administración (§54):**
+  - Menú: Inicio, Usuarios (`/admin/users`), Importar padrón, Áreas y habilidades, Categorías, Actividades/oportunidades, Recursos, Gamificación, Retos, Auditoría y Correo (configuración técnica). No hay pantalla genérica de roles, y el alcance del docente sigue dentro de Usuarios.
+  - **Inicio** (`GET /reports/admin/overview`, solo administración): cuentas por rol (total, activas, sin activar), lo que requiere atención, la última importación, la auditoría de los últimos 7 días y el modo de correo, sin credenciales.
+- `GET /reports/director/pending` (Dirección y Administración).
+- CSS: las grillas ya no desalinean sus tarjetas; tarjetas de acción y pendientes con foco visible.
+
+**Migraciones:** ninguna.
+
+**Pruebas ejecutadas:**
+- `e2e-v3 batch20` (V3.20.1–V3.20.14, 17 comprobaciones): permisos negativos de cada endpoint nuevo, pendientes que reaccionan a una propuesta, evolución agregada sin identificadores y con umbral, correo sin credenciales, métricas de Sociedad filtrables y sin perfiles.
+- `e2e-web` actualizado a V3 §51:
+  - WEB.10: un solo panel.
+  - WEB.12: las seis pestañas.
+  - WEB.12b: la ruta antigua abre su pestaña.
+- Revisión visual con capturas a 1366 y 375 px de los cuatro actores. Encontró y corrigió:
+  - Un error de hooks (React #310) en el gestor de actividades al abrir «Crear actividad».
+  - Tarjetas desalineadas en las grillas.
+  - El mes partido en dos líneas en Evolución.
+- Regresión completa.
+
+**Resultados:** `e2e-v3` 343 (B20 17/17); `e2e-web` 32/32. Regresión completa: **1780 correctas, 0 fallos** (20 suites).
+
+**Riesgos:** quien tenga marcadores a `/admin` llega ahora al Inicio, y Usuarios está en `/admin/users`. Las demás rutas antiguas redirigen.
+
+**Pendientes:** coherencia transversal de formularios (B21).

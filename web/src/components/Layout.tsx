@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  FiPlusCircle,
   FiAward,
   FiBarChart2,
   FiBookOpen,
@@ -63,7 +64,11 @@ const ICONS: Record<string, IconType> = {
   '/society/metrics': FiBarChart2,
   '/society': FiGrid,
   '/society/activities': FiCalendar,
-  '/admin': FiUsers,
+  '/admin': FiGrid,
+  '/admin/users': FiUsers,
+  '/director/analytics': FiBarChart2,
+  '/society/participants': FiUsers,
+  '/society/activities?nuevo=1': FiPlusCircle,
   '/admin/mail': FiMail,
   '/admin/areas': FiLayers,
   '/admin/skills': FiAward,

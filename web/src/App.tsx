@@ -1,6 +1,6 @@
 import { MotionConfig } from 'framer-motion';
 import type { ReactNode } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { RolNombre } from './constants';
 import { HOME_BY_ROLE } from './navigation';
@@ -27,27 +27,23 @@ import StudentAffinityPage from './pages/student/Affinity';
 import StudentRecommendationsPage from './pages/student/Recommendations';
 import StudentEvidencesPage from './pages/student/Evidences';
 
-import TeacherDashboard from './pages/teacher/Dashboard';
-import TeacherActivitiesPage from './pages/teacher/Activities';
+import TeacherPanel from './pages/teacher/Panel';
 import TeacherMyActivitiesPage from './pages/teacher/MyActivities';
-import TeacherStudentsPage from './pages/teacher/Students';
-import TeacherReportsPage from './pages/teacher/Reports';
-import TeacherStudentProjectsPage from './pages/teacher/StudentProjects';
 
 import DirectorDashboard from './pages/director/Dashboard';
-import DirectorAffinityMap from './pages/director/AffinityMap';
 import DirectorActivitiesPage from './pages/director/Activities';
 import DirectorConstanciesPage from './pages/director/Constancies';
 import DirectorApprovalsPage from './pages/director/Approvals';
 import AdminAuditPage from './pages/admin/Audit';
 import HelpPage from './pages/help/Help';
 import NotificationsPage from './pages/Notifications';
-import TeacherTeamNeedsPage from './pages/teacher/TeamNeeds';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
-import DirectorTrendsPage from './pages/director/Trends';
+import DirectorAnalyticsPage from './pages/director/Analytics';
 import CredentialReviewsPage from './pages/director/CredentialReviews';
 import RecognitionsPage from './pages/staff/Recognitions';
 import SocietyMetricsPage from './pages/society/Metrics';
+import SocietyParticipantsPage from './pages/society/Participants';
+import AdminHomePage from './pages/admin/Home';
 
 import SocietyDashboard from './pages/society/Dashboard';
 import SocietyActivitiesPage from './pages/society/Activities';
@@ -77,6 +73,17 @@ function RootRedirect() {
  * Guarda de rol dentro del marco común: deja pasar o redirige al inicio del
  * rol, sin desmontar el menú ni la barra.
  */
+/**
+ * V3 §51/§52: una ruta que ahora es pestaña de otra pantalla. Conserva lo que
+ * traía en la consulta (por ejemplo, un filtro) y le agrega la pestaña.
+ */
+function APestana({ to, tab }: { to: string; tab: string }) {
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set('tab', tab);
+  return <Navigate to={`${to}?${params.toString()}`} replace />;
+}
+
 function RoleGate({ roles, children }: { roles: string[]; children: ReactNode }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
@@ -145,13 +152,14 @@ export default function App() {
           </Route>
 
           <Route element={<RoleGate roles={[T]}><Outlet /></RoleGate>}>
-            <Route path="/teacher" element={<TeacherDashboard />} />
-            <Route path="/teacher/activities" element={<TeacherActivitiesPage />} />
+            <Route path="/teacher" element={<TeacherPanel />} />
             <Route path="/teacher/my-activities" element={<TeacherMyActivitiesPage />} />
-            <Route path="/teacher/students" element={<TeacherStudentsPage />} />
-            <Route path="/teacher/projects" element={<TeacherStudentProjectsPage />} />
-            <Route path="/teacher/reports" element={<TeacherReportsPage />} />
-            <Route path="/teacher/team-needs" element={<TeacherTeamNeedsPage />} />
+            {/* V3 §51: las vistas que eran pantallas aparte son pestañas del panel. */}
+            <Route path="/teacher/activities" element={<APestana to="/teacher" tab="actividades" />} />
+            <Route path="/teacher/students" element={<APestana to="/teacher" tab="estudiantes" />} />
+            <Route path="/teacher/projects" element={<APestana to="/teacher" tab="proyectos" />} />
+            <Route path="/teacher/reports" element={<APestana to="/teacher" tab="semestre" />} />
+            <Route path="/teacher/team-needs" element={<APestana to="/teacher" tab="equipos" />} />
             <Route path="/teacher/recognitions" element={<RecognitionsPage />} />
           </Route>
 
@@ -160,9 +168,11 @@ export default function App() {
             <Route path="/director/activities" element={<DirectorActivitiesPage />} />
             <Route path="/director/constancies" element={<DirectorConstanciesPage />} />
             <Route path="/director/approvals" element={<DirectorApprovalsPage />} />
-            <Route path="/director/affinity" element={<DirectorAffinityMap />} />
+            <Route path="/director/analytics" element={<DirectorAnalyticsPage />} />
+            {/* V3 §52: Mapa y Tendencias son pestañas de Analítica. */}
+            <Route path="/director/affinity" element={<APestana to="/director/analytics" tab="afinidad" />} />
             <Route path="/director/resources" element={<DirectorLearningResourcesPage />} />
-            <Route path="/director/trends" element={<DirectorTrendsPage />} />
+            <Route path="/director/trends" element={<APestana to="/director/analytics" tab="evolucion" />} />
             <Route path="/director/credential-reviews" element={<CredentialReviewsPage />} />
             <Route path="/director/recognitions" element={<RecognitionsPage />} />
           </Route>
@@ -171,10 +181,12 @@ export default function App() {
             <Route path="/society" element={<SocietyDashboard />} />
             <Route path="/society/activities" element={<SocietyActivitiesPage />} />
             <Route path="/society/metrics" element={<SocietyMetricsPage />} />
+            <Route path="/society/participants" element={<SocietyParticipantsPage />} />
           </Route>
 
           <Route element={<RoleGate roles={[A]}><Outlet /></RoleGate>}>
-            <Route path="/admin" element={<AdminUsersPage />} />
+            <Route path="/admin" element={<AdminHomePage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/imports" element={<AdminImportsPage />} />
             <Route path="/admin/activities" element={<AdminActivitiesPage />} />
             <Route path="/admin/mail" element={<AdminMailPage />} />

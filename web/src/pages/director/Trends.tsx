@@ -7,7 +7,7 @@ import {
 } from '../../components/ui';
 
 /** Una fila que el umbral de §65 dejó sin desglosar. */
-const suprimida = (f: { suppressed?: boolean }) => f.suppressed === true;
+export const suprimida = (f: { suppressed?: boolean }) => f.suppressed === true;
 
 /**
  * Tendencias de la carrera (§64).
@@ -165,7 +165,7 @@ interface Columna {
  * que ser idéntico en todos: si cada tabla lo resolviera a su manera, en alguna
  * acabaría viéndose un cero donde en realidad hay un dato que no se publica.
  */
-function Tabla({
+export function Tabla({
   filas,
   columnas,
   vacio,
@@ -201,7 +201,7 @@ function Tabla({
                   ) : null;
                 }
                 return (
-                  <td key={c.clave} style={c.numerica ? { textAlign: 'right' } : undefined}>
+                  <td key={c.clave} style={c.numerica ? { textAlign: 'right' } : c.clave === 'period' ? { whiteSpace: 'nowrap' } : undefined}>
                     {f[c.clave] === null || f[c.clave] === undefined ? '—' : String(f[c.clave])}
                   </td>
                 );

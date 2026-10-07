@@ -129,11 +129,19 @@ async function pruebas(browser) {
 
   objective('§77 · Navegación del docente');
   const enlaces = await page.locator('nav a.nav-link').allInnerTexts();
-  check(['Panel académico', 'Necesidades de equipo', 'Mis actividades', 'Ayuda'].every((t) => enlaces.some((e) => e.includes(t))),
-    'WEB.10 §77 El docente tiene Panel académico, Necesidades de equipo, Mis actividades y Ayuda', enlaces.join(' | '));
+  // V3 §51: un solo «Inicio / Panel académico» con pestañas, sin dos resúmenes repetidos.
+  check(['Inicio / Panel académico', 'Mis actividades', 'Ayuda'].every((t) => enlaces.some((e) => e.includes(t)))
+    && enlaces.filter((e) => /Panel/.test(e)).length === 1,
+  'WEB.10 V3 §51 El docente tiene un solo Inicio / Panel académico, Mis actividades y Ayuda', enlaces.join(' | '));
   check(!enlaces.some((e) => /Reportes del curso|Mensajes/.test(e)), 'WEB.11 §62 §57 Sin «Reportes del curso» ni mensajes');
-  await page.click('a[href="/teacher/team-needs"]');
-  check(await page.getByRole('heading', { name: 'Necesidades de equipo' }).first().isVisible(), 'WEB.12 §62 La página de necesidades abre');
+  await page.click('nav a[href="/teacher"]');
+  const pestanasDoc = await page.locator('[role=tab]').allInnerTexts();
+  check(['Resumen', 'Por semestre', 'Estudiantes', 'Proyectos visibles', 'Actividades', 'Necesidades/equipos'].every((t) => pestanasDoc.some((x) => x.includes(t))),
+    'WEB.12 V3 §51 El panel tiene Resumen, Por semestre, Estudiantes, Proyectos visibles, Actividades y Necesidades/equipos', pestanasDoc.join(' | '));
+  await page.goto(`${WEB}/teacher/team-needs`);
+  await page.waitForURL(/\/teacher\?tab=equipos/, { timeout: 8000 }).catch(() => {});
+  check(page.url().includes('/teacher?tab=equipos') && await page.getByText('Lo que buscan los equipos').first().isVisible(),
+    'WEB.12b V3 §51 La ruta antigua de necesidades abre su pestaña (drill-down sin enlaces rotos)', page.url());
   check(errores.length === 0, 'WEB.13 Sin errores de JavaScript en la sesión', errores.join(' | '));
   await ctx.close();
 

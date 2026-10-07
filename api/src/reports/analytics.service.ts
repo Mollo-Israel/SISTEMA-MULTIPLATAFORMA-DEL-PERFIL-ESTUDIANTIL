@@ -1,3 +1,4 @@
+import { AFFINITY_ENGINE_VERSION } from '@perfil/shared';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -189,6 +190,7 @@ export class AnalyticsService {
       tecnologias,
       actividades,
       recursos,
+      evolucionAfinidad,
     ] = await Promise.all([
       this.evolucionInteresPorArea(),
       this.evolucionParticipacion(),
@@ -196,9 +198,11 @@ export class AnalyticsService {
       this.tecnologiasEnProyectos(),
       this.actividadesConMasParticipacion(),
       this.recursosMasConsultados(),
+      this.evolucionAfinidadPorArea(),
     ]);
 
     return {
+      affinityEvolution: evolucionAfinidad,
       interestByArea: interesPorArea,
       participation: participacion,
       areasBySemester: areasPorSemestre,
@@ -207,6 +211,44 @@ export class AnalyticsService {
       resources: recursos,
       note: this.privacy.notice,
     };
+  }
+
+  /**
+   * V3 §52 · Evolución: cómo cambió la afinidad y el respaldo promedio por
+   * área, mes a mes. Se toma la última instantánea de cada estudiante en cada
+   * mes y solo las del motor vigente: mezclar escalas mostraría saltos que no
+   * ocurrieron. Cada fila respeta el umbral de §65.
+   */
+  private async evolucionAfinidadPorArea() {
+    const filas: { period: string; area: string; students: string; affinity: string; support: string }[] =
+      await this.snapshots.query(
+        `WITH ultima AS (
+           SELECT DISTINCT ON (s.student_profile_id, date_trunc('month', s.calculated_at))
+                  s.id, s.student_profile_id, date_trunc('month', s.calculated_at) AS mes
+             FROM affinity_snapshots s
+            WHERE s.engine_version = $1 AND s.calculated_at >= now() - interval '12 months'
+            ORDER BY s.student_profile_id, date_trunc('month', s.calculated_at), s.calculated_at DESC)
+         SELECT to_char(u.mes, 'YYYY-MM') AS period, a.name AS area,
+                COUNT(DISTINCT u.student_profile_id) AS students,
+                AVG(i.score) AS affinity, AVG(i.support_score) AS support
+           FROM ultima u
+           JOIN affinity_snapshot_items i ON i.snapshot_id = u.id
+           JOIN academic_areas a ON a.id = i.academic_area_id
+          GROUP BY u.mes, a.name
+          ORDER BY u.mes ASC, a.name ASC`,
+        [AFFINITY_ENGINE_VERSION],
+      );
+    return this.privacy.protect(
+      filas.map((f) => ({
+        period: f.period,
+        area: f.area,
+        students: num(f.students),
+        averageAffinity: Math.round(num(f.affinity)),
+        averageSupport: Math.round(num(f.support)),
+      })),
+      (f) => f.students,
+      ['period', 'area', 'students'],
+    );
   }
 
   /** Cuántos estudiantes declaran cada área, y desde cuándo. */
@@ -515,7 +557,9 @@ export class AnalyticsService {
       activities: this.privacy.protect(
         filas,
         (f) => f.registrations,
-        ['activityId', 'title', 'type', 'status', 'eventDate', 'registrations'],
+        // V3 §53: área y categoría son de la actividad, no de las personas;
+        // se conservan para que los filtros no dejen fuera las filas suprimidas.
+        ['activityId', 'title', 'type', 'status', 'eventDate', 'registrations', 'area', 'category', 'capacity'],
       ),
       totals: {
         activities: suyas.length,

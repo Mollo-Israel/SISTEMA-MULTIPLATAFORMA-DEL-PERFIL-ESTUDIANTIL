@@ -6,6 +6,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ReportsService } from './reports.service';
 import { AnalyticsService } from './analytics.service';
+import { HomeOverviewService } from './home-overview.service';
 
 @ApiTags('reports')
 @ApiBearerAuth()
@@ -14,7 +15,24 @@ export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,
     private readonly analytics: AnalyticsService,
+    private readonly home: HomeOverviewService,
   ) {}
+
+  // ---------- Inicio (V3 §52, §54) ----------
+
+  @Get('admin/overview')
+  @ApiOperation({ summary: 'Inicio de Administración: usuarios por rol y lo que requiere atención (V3 §54).' })
+  @Roles(RolNombre.ADMIN)
+  adminOverview() {
+    return this.home.admin();
+  }
+
+  @Get('director/pending')
+  @ApiOperation({ summary: 'Inicio de Dirección: aprobaciones, revisiones y constancias pendientes (V3 §52).' })
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  directorPending() {
+    return this.home.directorPending();
+  }
 
   // ---------- Docente ----------
 

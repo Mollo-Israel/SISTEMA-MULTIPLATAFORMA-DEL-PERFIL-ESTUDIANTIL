@@ -53,13 +53,10 @@ export const NAV: Record<string, NavGroup[]> = {
     {
       section: 'Docente',
       items: [
-        { to: '/teacher', label: 'Panel' },
+        // V3 §51: un solo panel con pestañas (Resumen, Por semestre,
+        // Estudiantes, Proyectos visibles, Actividades, Necesidades/equipos).
+        { to: '/teacher', label: 'Inicio / Panel académico' },
         { to: '/teacher/my-activities', label: 'Mis actividades' },
-        { to: '/teacher/activities', label: 'Actividades del programa' },
-        { to: '/teacher/students', label: 'Perfil de estudiante' },
-        { to: '/teacher/projects', label: 'Proyectos estudiantiles' },
-        { to: '/teacher/reports', label: 'Panel académico' },
-        { to: '/teacher/team-needs', label: 'Necesidades de equipo' },
         { to: '/teacher/recognitions', label: 'Retos y recompensas' },
       ],
     },
@@ -72,14 +69,15 @@ export const NAV: Record<string, NavGroup[]> = {
     {
       section: 'Dirección',
       items: [
-        { to: '/director', label: 'Panel general' },
+        // V3 §52: Inicio, Aprobaciones, Actividades, Constancias, Recursos y
+        // Analítica (Panel, Mapa y Tendencias ya no se repiten).
+        { to: '/director', label: 'Inicio' },
         { to: '/director/approvals', label: 'Aprobaciones' },
-        { to: '/director/activities', label: 'Actividades académicas' },
-        { to: '/director/constancies', label: 'Constancias internas' },
+        { to: '/director/activities', label: 'Actividades' },
+        { to: '/director/constancies', label: 'Constancias' },
         { to: '/director/credential-reviews', label: 'Revisión de credenciales' },
-        { to: '/director/affinity', label: 'Mapa de afinidad' },
-        { to: '/director/trends', label: 'Tendencias' },
-        { to: '/director/resources', label: 'Catálogo de recursos' },
+        { to: '/director/resources', label: 'Recursos' },
+        { to: '/director/analytics', label: 'Analítica' },
         { to: '/director/recognitions', label: 'Retos y recompensas' },
       ],
     },
@@ -92,8 +90,11 @@ export const NAV: Record<string, NavGroup[]> = {
     {
       section: 'Sociedad científica',
       items: [
-        { to: '/society', label: 'Panel' },
-        { to: '/society/activities', label: 'Actividades extracurriculares' },
+        // V3 §53.
+        { to: '/society', label: 'Inicio' },
+        { to: '/society/activities', label: 'Mis actividades' },
+        { to: '/society/activities?nuevo=1', label: 'Crear actividad' },
+        { to: '/society/participants', label: 'Participantes' },
         { to: '/society/metrics', label: 'Métricas' },
       ],
     },
@@ -106,16 +107,18 @@ export const NAV: Record<string, NavGroup[]> = {
     {
       section: 'Administración',
       items: [
-        { to: '/admin', label: 'Usuarios' },
+        // V3 §54. Los semestres del docente se gestionan dentro de Usuarios.
+        { to: '/admin', label: 'Inicio' },
+        { to: '/admin/users', label: 'Usuarios' },
         { to: '/admin/imports', label: 'Importar padrón' },
-        { to: '/admin/activities', label: 'Oportunidades' },
         { to: '/admin/areas', label: 'Áreas y habilidades' },
-        { to: '/admin/activity-categories', label: 'Categorías de actividad' },
+        { to: '/admin/activity-categories', label: 'Categorías' },
+        { to: '/admin/activities', label: 'Actividades / oportunidades' },
         { to: '/admin/resources', label: 'Recursos' },
-        { to: '/admin/gamification', label: 'Puntos por logros' },
+        { to: '/admin/gamification', label: 'Gamificación' },
         { to: '/admin/recognitions', label: 'Retos y recompensas' },
         { to: '/admin/audit', label: 'Auditoría' },
-        { to: '/admin/mail', label: 'Correo' },
+        { to: '/admin/mail', label: 'Correo (configuración técnica)' },
       ],
     },
     {

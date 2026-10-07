@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiCalendar, FiCheck, FiEdit2, FiPlus, FiSave, FiSearch, FiSend, FiUserX, FiUsers, FiX,
@@ -378,6 +379,32 @@ export default function ActivityManager({
     }
   };
 
+  /*
+   * V3 §53: enlaces directos. «Crear actividad» llega con ?nuevo=1 y
+   * «Participantes» con ?actividad=<id>. Se atienden una sola vez, cuando ya
+   * hay categorías y actividades cargadas.
+   */
+  const [params, setParams] = useSearchParams();
+  const atendido = useRef(false);
+  useEffect(() => {
+    if (atendido.current || loading) return;
+    const nuevo = params.get('nuevo') === '1';
+    const actividad = params.get('actividad');
+    if (!nuevo && !actividad) return;
+    atendido.current = true;
+    if (nuevo) {
+      setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
+      setShowForm(true);
+    } else if (actividad && activities.some((a) => a.id === actividad)) {
+      void openParticipants(actividad);
+    }
+    const resto = new URLSearchParams(params);
+    resto.delete('nuevo');
+    resto.delete('actividad');
+    setParams(resto, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, activities, categories]);
+
   if (loading) return <Diferido><SkeletonTable rows={5} columns={6} /></Diferido>;
 
   const selectedActivity = activities.find((a) => a.id === selected);
@@ -397,6 +424,7 @@ export default function ActivityManager({
   const okLabel = esExterna ? 'Registrar aceptación' : 'Confirmar participación';
   const full = !!(selectedActivity?.capacity && allConfirmed.length >= selectedActivity.capacity);
   const tipo = activityType === 'academica' ? 'académica' : 'extracurricular';
+
 
   return (
     <div>
