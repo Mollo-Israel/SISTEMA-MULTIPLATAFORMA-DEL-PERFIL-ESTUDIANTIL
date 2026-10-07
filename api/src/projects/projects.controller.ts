@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ProjectsService } from './projects.service';
@@ -104,6 +105,24 @@ export class ProjectsController {
     @Body() dto: RespondInvitationDto,
   ) {
     return this.membersService.respond(user.userId, invitationId, dto.decision);
+  }
+
+  /**
+   * V3 §40: resumen público de un proyecto compartido por enlace. Sin sesión;
+   * el token largo y aleatorio es el único secreto.
+   */
+  @Get('public/:token')
+  @Public()
+  @ApiOperation({ summary: 'Resumen público de un proyecto con visibilidad PUBLIC_LINK.' })
+  findPublic(@Param('token') token: string) {
+    return this.projectsService.findPublic(token);
+  }
+
+  @Get(':id/readiness')
+  @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Qué le falta para pasar a ACTIVE (V3 §22).' })
+  readiness(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.projectsService.readinessForUser(user, id);
   }
 
   @Get(':id')

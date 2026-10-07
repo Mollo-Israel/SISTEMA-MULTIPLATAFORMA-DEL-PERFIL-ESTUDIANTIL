@@ -1,21 +1,23 @@
 /**
- * Nivel de visibilidad de un proyecto del portafolio (RF13).
+ * Nivel de visibilidad de un proyecto del portafolio (RF13, V3 §40).
  *
- * El documento pide un "nivel de visibilidad" y condiciona la consulta docente
- * a que el proyecto este "habilitado para consulta" (RF15, Tabla 2.24). Se
- * modela con tres niveles, de mas cerrado a mas abierto:
+ * De más cerrado a más abierto:
  *
- *  - PRIVATE   Solo el estudiante responsable y los integrantes aceptados.
- *              No aparece en el perfil que consultan los roles institucionales.
- *  - PROFILE   Aparece en el perfil dinamico del estudiante y en la vista
- *              permitida, pero el docente no abre su detalle ni lo comenta.
- *  - TEACHERS  Ademas, el docente de su alcance academico puede abrir el
- *              detalle completo y registrar retroalimentacion (RF16).
+ *  - PRIVATE      Solo el responsable y los integrantes del proyecto.
+ *  - TEAM         Además, los integrantes del equipo de colaboración con el
+ *                 que se creó el proyecto (`team_id`, §21.1).
+ *  - TEACHERS     Además, el docente de su alcance académico abre el detalle y
+ *                 registra retroalimentación (RF16).
+ *  - PROFILE      Aparece en el perfil dinámico del estudiante.
+ *  - PUBLIC_LINK  Cualquiera con el enlace ve un resumen público: nunca la
+ *                 bitácora, la auditoría ni datos privados (§40).
  */
 export enum ProjectVisibility {
   PRIVATE = 'private',
+  TEAM = 'team',
   PROFILE = 'profile',
   TEACHERS = 'teachers',
+  PUBLIC_LINK = 'public_link',
 }
 
 /**

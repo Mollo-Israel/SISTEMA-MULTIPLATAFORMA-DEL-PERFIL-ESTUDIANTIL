@@ -299,3 +299,121 @@ export async function aprobarActividad(managerToken, directorToken, activityId, 
   }
   return aprobada.data;
 }
+
+// ===========================================================================
+//  V3 §22 · Proyectos activos y GitHub simulado
+// ===========================================================================
+
+/**
+ * GitHub simulado para las suites (V3 §22, §24). La API de desarrollo se
+ * arranca con GITHUB_API_BASE_URL=http://127.0.0.1:3996 para usarlo; así las
+ * pruebas no dependen de la cuota pública de GitHub ni de internet.
+ *
+ * Repositorios del dueño `afinia-pruebas`: públicos, salvo los que empiezan
+ * por `privado` (privados) o `inexistente` (404). Cualquier otro dueño: 404.
+ */
+export const GITHUB_SIMULADO_PUERTO = Number(process.env.GITHUB_SIMULADO_PUERTO ?? 3996);
+export const repoDePrueba = (nombre) => `https://github.com/afinia-pruebas/${nombre}`;
+
+let githubSimulado = null;
+export async function asegurarGithubSimulado() {
+  if (githubSimulado) return;
+  const { createServer } = await import('node:http');
+  const json = (rs, code, data) => { rs.writeHead(code, { 'content-type': 'application/json' }); rs.end(JSON.stringify(data)); };
+  const server = createServer((rq, rs) => {
+    const m = /^\/repos\/([^/]+)\/([^/?]+)(\/[^?]*)?/.exec(rq.url ?? '');
+    if (!m || m[1] !== 'afinia-pruebas' || m[2].startsWith('inexistente')) return json(rs, 404, { message: 'Not Found' });
+    const [, owner, name, resto] = m;
+    if (!resto || resto === '/') {
+      return json(rs, 200, {
+        name, owner: { login: owner }, default_branch: 'main', private: name.startsWith('privado'),
+        updated_at: new Date().toISOString(), stargazers_count: 3,
+      });
+    }
+    if (resto === '/languages') return json(rs, 200, { TypeScript: 52000, JavaScript: 3000, CSS: 1200 });
+    if (resto.startsWith('/contents')) {
+      return json(rs, 200, [
+        { name: 'package.json', type: 'file' }, { name: 'README.md', type: 'file' }, { name: 'Dockerfile', type: 'file' },
+      ]);
+    }
+    return json(rs, 404, { message: 'Not Found' });
+  });
+  await new Promise((resolve) => {
+    server.once('error', (e) => {
+      // Otra suite ya lo levantó en este puerto: sirve igual.
+      if (e.code === 'EADDRINUSE') resolve();
+      else throw e;
+    });
+    server.listen(GITHUB_SIMULADO_PUERTO, '127.0.0.1', () => resolve());
+  });
+  server.unref();
+  githubSimulado = server;
+}
+
+/**
+ * Crea un proyecto y lo activa como lo haría un estudiante (V3 §22): borrador
+ * con áreas, tecnologías del catálogo y repositorio público; una evidencia de
+ * funcionamiento; y el paso a ACTIVE. Devuelve `{ status: 201, data }` con el
+ * proyecto activo, o la respuesta que falló.
+ *
+ * Sin `skillIds`, toma del catálogo las tecnologías escritas en
+ * `technologies`; si ninguna está, una del área indicada (o cualquiera).
+ */
+export async function crearProyectoActivo(token, body = {}) {
+  await asegurarGithubSimulado();
+  const { status: _ignorado, areaId, ...resto } = body;
+  let areaIds = body.areaIds ?? (areaId ? [areaId] : []);
+  let skillIds = body.skillIds ?? [];
+  if (!skillIds.length || !areaIds.length) {
+    const catalogo = ((await req('GET', '/skills', { token })).data ?? [])
+      .filter((s) => s.isActive !== false && s.academicAreaId);
+    if (!skillIds.length) {
+      const escritas = new Set((body.technologies ?? []).map((t) => t.toLowerCase()));
+      skillIds = catalogo.filter((s) => escritas.has(s.name.toLowerCase())).map((s) => s.id).slice(0, 20);
+    }
+    if (!skillIds.length) {
+      let elegida = catalogo.find((s) => !areaIds.length || areaIds.includes(s.academicAreaId));
+      if (!elegida && areaIds.length) {
+        // Área recién creada en la suite: Administración registra una
+        // tecnología suya, como haría antes de que un estudiante la elija.
+        const admin = await loginAdmin();
+        const creada = await req('POST', '/skills', {
+          token: admin,
+          body: { name: `Herramienta ${String(Date.now()).slice(-8)}${Math.floor(Math.random() * 90 + 10)}`, academicAreaId: areaIds[0] },
+        });
+        if (creada.status !== 201) throw new Error(`No se pudo registrar una tecnología para el área: ${JSON.stringify(creada.data)}`);
+        elegida = creada.data;
+        catalogo.push(elegida);
+      }
+      if (!elegida) throw new Error('No hay tecnologías en el catálogo para las áreas del proyecto.');
+      skillIds = [elegida.id];
+    }
+    const areasDeSkills = catalogo.filter((s) => skillIds.includes(s.id)).map((s) => s.academicAreaId);
+    areaIds = [...new Set([...areaIds, ...areasDeSkills])].slice(0, 6);
+  }
+  const slug = String(body.title ?? 'proyecto').toLowerCase().normalize('NFD')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'proyecto';
+  const borrador = await req('POST', '/projects', {
+    token,
+    body: { ...resto, areaIds, skillIds, repositoryUrl: body.repositoryUrl ?? repoDePrueba(slug), status: 'draft' },
+  });
+  if (borrador.status !== 201) return borrador;
+  const id = borrador.data.id;
+  const ev = await req('POST', `/projects/${id}/evidences`, {
+    token,
+    body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${id}.png`, description: 'Captura del funcionamiento.' },
+  });
+  if (ev.status !== 201) return ev;
+  const activo = await req('PATCH', `/projects/${id}`, { token, body: { status: 'active' } });
+  if (activo.status !== 200) return activo;
+  return { status: 201, data: activo.data };
+}
+
+/**
+ * Proyecto en borrador (V3 §21): se guarda aunque esté incompleto. Es el
+ * punto de partida de las pruebas que miden cómo un proyecto vacío va
+ * ganando respaldo: un ACTIVE ya nace con repositorio y evidencia (§22).
+ */
+export async function crearProyectoBorrador(token, body = {}) {
+  return req('POST', '/projects', { token, body: { ...body, status: 'draft' } });
+}

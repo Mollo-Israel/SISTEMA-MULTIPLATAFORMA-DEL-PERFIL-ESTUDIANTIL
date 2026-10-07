@@ -12,6 +12,8 @@ import {
   ProjectRepositoryCheck,
 } from '../entities/project-check.entity';
 import { Skill } from '../entities/skill.entity';
+import { ProjectArea, ProjectSkill } from '../entities/project-area.entity';
+import { Team, TeamMember } from '../entities/collaboration.entity';
 import { StorageModule } from '../storage/storage.module';
 import { ProjectEventsService } from './project-events.service';
 import { ProjectBackingService } from './project-backing.service';
@@ -46,6 +48,10 @@ import { ProjectsController } from './projects.controller';
       ProjectLinkCheck,
       ProjectEvent,
       Skill,
+      ProjectArea,
+      ProjectSkill,
+      Team,
+      TeamMember,
     ]),
     TrajectoryModule,
     AccessModule,

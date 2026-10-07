@@ -9,7 +9,7 @@
  */
 
 import {
-  API, PWD, aprobarActividad, codigoUniversitario, loginAdmin, provisionAndActivate, req,
+  API, PWD, aprobarActividad, codigoUniversitario, crearProyectoActivo, loginAdmin, provisionAndActivate, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -625,10 +625,7 @@ async function batch8(ctx) {
   check(regla.status === 201 && regla.data?.ok === true && regla.data?.source === 'rule' && !!regla.data?.result?.areaId,
     'V2.8.5 §23.3 Lo que una regla resuelve no necesita IA, ni siquiera apagada', json(regla.data));
 
-  const proyecto = await req('POST', '/projects', {
-    token: est.token,
-    body: { title: `Proyecto asistido ${TS}`, description: 'Proyecto para probar la IA.', technologies: ['NestJS'], status: 'active' },
-  });
+  const proyecto = await crearProyectoActivo(est.token, { title: `Proyecto asistido ${TS}`, description: 'Proyecto para probar la IA.', technologies: ['NestJS'] });
   const explicacion = await req('POST', '/ai/suggestions', { token: est.token, body: { task: 'INCONSISTENCY_EXPLANATION', projectId: proyecto.data?.id } });
   check(explicacion.status === 201 && explicacion.data?.source === 'rule',
     'V2.8.6 §43 Sin inconsistencias registradas, la explicación la da la regla', json(explicacion.data));

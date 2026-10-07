@@ -490,7 +490,6 @@ function EvidenceForm({
   const [description, setDescription] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const [file, setFile] = useState<StoredFile | null>(null);
-  const [projectId, setProjectId] = useState('');
   const [activityId, setActivityId] = useState('');
   const [academicAreaId, setAcademicAreaId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -510,13 +509,11 @@ function EvidenceForm({
         // §27: se envía el identificador del archivo. Los metadatos los
         // resuelve el servidor a partir de lo que realmente se subió.
         storedFileId: type === 'file' ? file?.id : undefined,
-        projectId: projectId || undefined,
         academicAreaId: academicAreaId || undefined,
       });
       setDescription('');
       setExternalUrl('');
       setFile(null);
-      setProjectId('');
       setActivityId('');
       setAcademicAreaId('');
       onSaved();
@@ -578,17 +575,6 @@ function EvidenceForm({
         </p>
 
         <div className="row">
-          <div className="field">
-            <label>Proyecto</label>
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">Ninguno</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          </div>
           <div className="field">
             <label>Área académica</label>
             <select value={academicAreaId} onChange={(e) => setAcademicAreaId(e.target.value)}>

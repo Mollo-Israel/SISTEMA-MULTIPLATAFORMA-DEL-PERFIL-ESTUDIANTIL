@@ -13,7 +13,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { API, loginAdmin, provisionAndActivate, req, aprobarActividad } from './lib/fixtures.mjs';
+import { API, loginAdmin, provisionAndActivate, req, aprobarActividad, crearProyectoActivo, crearProyectoBorrador } from './lib/fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 const { extractPdfText, esPdf } = require('../api/dist/validation/pdf-text.js');
@@ -87,15 +87,11 @@ async function accionesValidas(ctx) {
     String(trasDeclarar.totalPoints),
   );
 
-  const proyecto = await req('POST', '/projects', {
-    token: ctx.est.token,
-    body: {
+  const proyecto = await crearProyectoBorrador(ctx.est.token, {
       title: `Proyecto vacío ${TS}`,
       description: 'Recién registrado, sin nada que lo respalde.',
       areaId: ctx.area.id,
-      status: 'active',
       visibility: 'profile',
-    },
   });
   check(proyecto.status === 201, 'B9.3 El estudiante registra un proyecto', msgOf(proyecto));
   ctx.proyectoId = proyecto.data.id;
@@ -203,15 +199,11 @@ async function idempotencia(ctx) {
   );
 
   section('El «primer proyecto respaldado» es uno, no uno por proyecto');
-  const otro = await req('POST', '/projects', {
-    token: ctx.est.token,
-    body: {
+  const otro = await crearProyectoBorrador(ctx.est.token, {
       title: `Segundo proyecto ${TS}`,
       description: 'También llegará a tener respaldo.',
       areaId: ctx.area.id,
-      status: 'active',
       visibility: 'profile',
-    },
   });
   await req('POST', `/projects/${otro.data.id}/evidences`, {
     token: ctx.est.token,

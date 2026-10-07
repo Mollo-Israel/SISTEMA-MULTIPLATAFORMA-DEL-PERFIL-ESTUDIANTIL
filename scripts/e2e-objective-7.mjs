@@ -18,7 +18,7 @@
 //  Las cuentas que crea llevan sufijo de tiempo, por lo que puede repetirse.
 // =============================================================================
 
-import { leerCorreo, provisionAndActivate, aprobarActividad } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -340,13 +340,10 @@ async function prepararEscenario(ctx) {
     token: ctx.S1.token,
     body: { improvementAreaIds: [ctx.areaSecundaria.id] },
   });
-  await req('POST', '/projects', {
-    token: ctx.S1.token,
-    body: {
+  await crearProyectoActivo(ctx.S1.token, {
       title: `Tablero de indicadores ${TS}`,
       description: 'Proyecto propio en el area principal.',
-      areaId: ctx.areaPrincipal.id, status: 'active', visibility: 'profile',
-    },
+      areaId: ctx.areaPrincipal.id, visibility: 'profile',
   });
   const interes = await req('POST', '/profiles/me/free-interests', {
     token: ctx.S1.token,

@@ -16,7 +16,8 @@ import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import QRCode from 'qrcode';
 import {
-  API, codigoUniversitario, loginAdmin, provisionAndActivate, req,
+  API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, loginAdmin, provisionAndActivate,
+  repoDePrueba, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -967,7 +968,143 @@ async function batch9(ctx) {
   }
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9 };
+// ===========================================================================
+//  BATCH 10 — Proyectos: multiárea, requisitos de ACTIVE y privacidad (§21, §22, §40)
+// ===========================================================================
+async function batch10(ctx) {
+  objective('BATCH 10 · Borrador incompleto, requisitos para activar, multiárea, TEAM y enlace público');
+  await asegurarGithubSimulado();
+  const est = async (k, nombre) => {
+    const e = await provisionAndActivate(ctx.admin, {
+      firstName: nombre, lastName: 'Proyecto', email: correoEst(`b10${k}`), role: 'STUDENT', semester: 5,
+    });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const ana = await est('a', 'Ana');
+  const beto = await est('b', 'Beto');
+  const caro = await est('c', 'Caro');
+  const letras = (n) => String.fromCharCode(...String(TS + n).slice(-6).split('').map((d) => 65 + Number(d)));
+  const sufijo = letras(10);
+  const area = async (n, tag) => (await req('POST', '/academic-areas', {
+    token: ctx.admin, body: { name: `${n} ${sufijo}`, tags: [`${tag}${sufijo.toLowerCase()}`] },
+  })).data;
+  const areaA = await area('Sistemas Distribuidos', 'sdist');
+  const areaB = await area('Interfaces de Usuario', 'iuser');
+  const areaC = await area('Bioinformatica Aplicada', 'bioin');
+  const skill = async (n, a) => (await req('POST', '/skills', { token: ctx.admin, body: { name: `${n} ${sufijo}`, academicAreaId: a.id } })).data;
+  const sA = await skill('Kafka Streams', areaA);
+  const sB = await skill('Figma Tokens', areaB);
+  const sC = await skill('BLAST Suite', areaC);
+
+  const readiness = async (id, token = ana.token) => (await req('GET', `/projects/${id}/readiness`, { token })).data;
+  const codigos = (r) => (r?.missing ?? []).map((m) => m.code);
+
+  // ----- §21 Borrador incompleto
+  const borrador = await req('POST', '/projects', { token: ana.token, body: { title: `Idea suelta ${TS}` } });
+  check(borrador.status === 201 && borrador.data?.status === 'draft', 'V3.10.1 §21 Un borrador se guarda incompleto', json({ s: borrador.status, st: borrador.data?.status }));
+  const r0 = await readiness(borrador.data.id);
+  check(r0?.ready === false && ['area', 'skill', 'repository', 'evidence'].every((c) => codigos(r0).includes(c)),
+    'V3.10.2 §22 La lista de requisitos dice qué falta', json(codigos(r0)));
+  const activarIncompleto = await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { status: 'active' } });
+  check(activarIncompleto.status === 400 && activarIncompleto.data?.code === 'PROJECT_NOT_READY' && Array.isArray(activarIncompleto.data?.details?.missing),
+    'V3.10.3 §22 Activar sin cumplir los requisitos → 400 con lo que falta', json({ s: activarIncompleto.status, c: activarIncompleto.data?.code }));
+
+  const antes = ((await req('GET', '/projects/my', { token: ana.token })).data ?? []).length;
+  const directo = await req('POST', '/projects', { token: ana.token, body: { title: `Activo de golpe ${TS}`, status: 'active' } });
+  const despues = ((await req('GET', '/projects/my', { token: ana.token })).data ?? []).length;
+  check(directo.status === 400 && antes === despues, 'V3.10.4 §22 Crear como ACTIVE sin requisitos no deja nada a medias', json({ s: directo.status, antes, despues }));
+
+  // ----- §21.2 Multiárea y skills por área
+  const multi = await req('PATCH', `/projects/${borrador.data.id}`, {
+    token: ana.token, body: { areaIds: [areaA.id, areaB.id], skillIds: [sA.id, sB.id] },
+  });
+  check(multi.status === 200 && (multi.data?.projectAreas ?? []).length === 2 && (multi.data?.projectSkills ?? []).length === 2,
+    'V3.10.5 §21.2 Un proyecto toca varias áreas, con tecnologías de cada una', json({ a: multi.data?.projectAreas?.length, s: multi.data?.projectSkills?.length }));
+  const ajena = await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { skillIds: [sA.id, sC.id] } });
+  check(ajena.status === 400 && ajena.data?.fields?.skillIds, 'V3.10.6 §4 Una tecnología de otra área se rechaza', `status ${ajena.status}`);
+
+  // ----- §22 Repositorio público y válido
+  const conRepo = async (url) => {
+    await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { repositoryUrl: url } });
+    return codigos(await readiness(borrador.data.id));
+  };
+  check((await conRepo('https://example.com/no-es-repo')).includes('repository_invalid'),
+    'V3.10.7 §22 Un enlace que no es de repositorio no sirve');
+  check((await conRepo(repoDePrueba(`privado-${TS}`))).includes('repository_not_public'),
+    'V3.10.8 §22 Un repositorio privado no sirve');
+  check((await conRepo(repoDePrueba(`inexistente-${TS}`))).includes('repository_not_public'),
+    'V3.10.9 §22 Uno que no existe tampoco');
+  const r1 = await conRepo(repoDePrueba(`tutorias-${TS}`));
+  check(!r1.some((c) => c.startsWith('repository')), 'V3.10.10 §22 Repositorio público comprobado', json(r1));
+
+  // ----- §22 Integrantes confirmados
+  const inv = await req('POST', `/projects/${borrador.data.id}/invitations`, {
+    token: ana.token, body: { invitedProfileId: beto.profileId, proposedRole: 'Frontend' },
+  });
+  check(inv.status === 201 && codigos(await readiness(borrador.data.id)).includes('members_pending'),
+    'V3.10.11 §22 Una invitación sin responder bloquea la activación', `status ${inv.status}`);
+  await req('PATCH', `/projects/invitations/${inv.data.id}`, { token: beto.token, body: { decision: 'accept' } });
+  const r2 = codigos(await readiness(borrador.data.id));
+  check(r2.includes('members_unconfirmed') && !r2.includes('members_pending'),
+    'V3.10.12 §22 Aceptar no basta: el integrante confirma su contribución', json(r2));
+  await req('PUT', `/projects/${borrador.data.id}/my-contribution`, { token: beto.token, body: { contribution: 'Maqueté la interfaz y los formularios.', skillIds: [sB.id] } });
+  const r3 = codigos(await readiness(borrador.data.id));
+  check(!r3.includes('members_unconfirmed') && r3.includes('evidence'), 'V3.10.13 §22 Confirmada, solo falta la evidencia de funcionamiento', json(r3));
+
+  // ----- §22.1 Evidencia mínima y activación
+  await req('POST', `/projects/${borrador.data.id}/evidences`, {
+    token: ana.token, body: { evidenceType: 'link', externalUrl: 'https://capturas.example.org/tutorias.png', description: 'Captura del panel.' },
+  });
+  const r4 = await readiness(borrador.data.id);
+  check(r4?.ready === true, 'V3.10.14 §22.1 Con una evidencia del funcionamiento, cumple todo', json(r4));
+  const activa = await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { status: 'active' } });
+  check(activa.status === 200 && activa.data?.status === 'active', 'V3.10.15 §22 Pasa a ACTIVE', json({ s: activa.status, st: activa.data?.status }));
+  const bitacora = (await req('GET', `/projects/${borrador.data.id}/timeline`, { token: ana.token })).data ?? [];
+  const auditoria = await req('GET', `/audit/events?eventType=PROJECT_ACTIVATED&entityId=${borrador.data.id}`, { token: ctx.admin });
+  check(bitacora.some((e) => e.eventType === 'project_activated') && (auditoria.data?.items ?? auditoria.data ?? []).length >= 1,
+    'V3.10.16 §39/§65 La activación queda en la bitácora y en la auditoría');
+  const sinArea = await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { areaIds: [] } });
+  check(sinArea.status === 400, 'V3.10.17 §22 Un proyecto activo no puede quedarse sin áreas', `status ${sinArea.status}`);
+  const fixture = await crearProyectoActivo(ana.token, { title: `Proyecto de fixture ${TS}` });
+  check(fixture.status === 201 && fixture.data?.status === 'active', 'V3.10.18 El camino completo de un estudiante deja el proyecto activo', json({ s: fixture.status }));
+
+  // ----- §40 Enlace público
+  const publico = await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { visibility: 'public_link' } });
+  const token = publico.data?.publicLinkToken;
+  check(publico.status === 200 && typeof token === 'string' && token.length >= 20, 'V3.10.19 §40 PUBLIC_LINK genera un enlace secreto', json({ s: publico.status }));
+  const sinSesion = await fetch(`${API}/projects/public/${token}`);
+  const vista = await sinSesion.json();
+  check(sinSesion.status === 200 && vista.title?.startsWith('Idea suelta') && (vista.areas ?? []).length === 2,
+    'V3.10.20 §40 Cualquiera con el enlace ve el resumen, sin iniciar sesión', json(vista));
+  check(!('members' in vista) && !('createdByProfile' in vista) && !('evidences' in vista) && !('publicLinkToken' in vista),
+    'V3.10.21 §40 El resumen no expone integrantes, archivos, bitácora ni auditoría', Object.keys(vista).join(','));
+  check((await fetch(`${API}/projects/public/${'x'.repeat(32)}`)).status === 404, 'V3.10.22 §40 Un enlace inventado no lleva a nada');
+  const cerrado = await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { visibility: 'private' } });
+  check(cerrado.data?.publicLinkToken === null && (await fetch(`${API}/projects/public/${token}`)).status === 404,
+    'V3.10.23 §40 Al cambiar la visibilidad, el enlace deja de funcionar');
+
+  // ----- §40 TEAM
+  const necesidad = (await req('POST', '/team-needs', { token: ana.token, body: { purpose: `Equipo de tutorías ${TS}`, maxMembers: 4 } })).data;
+  const equipo = (await req('POST', `/team-needs/${necesidad.id}/team`, { token: ana.token, body: { name: `Equipo Tutor ${sufijo}` } })).data;
+  const invEq = (await req('POST', `/teams/${equipo.id}/invitations`, { token: ana.token, body: { invitedProfileId: caro.profileId } })).data;
+  await req('PATCH', `/teams/invitations/${invEq.id}`, { token: caro.token, body: { decision: 'accept' } });
+  const ajenoEquipo = await req('PATCH', `/projects/${borrador.data.id}`, { token: beto.token, body: { teamId: equipo.id } });
+  check(ajenoEquipo.status === 403 || ajenoEquipo.status === 400, 'V3.10.24 Solo el responsable vincula el proyecto a un equipo', `status ${ajenoEquipo.status}`);
+  await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { teamId: equipo.id, visibility: 'private' } });
+  check((await req('GET', `/projects/${borrador.data.id}`, { token: caro.token })).status === 403,
+    'V3.10.25 §40 PRIVATE: alguien del equipo que no es integrante del proyecto no lo ve');
+  await req('PATCH', `/projects/${borrador.data.id}`, { token: ana.token, body: { visibility: 'team' } });
+  check((await req('GET', `/projects/${borrador.data.id}`, { token: caro.token })).status === 200,
+    'V3.10.26 §40 TEAM: el equipo vinculado sí lo ve');
+  const equipoDeOtro = await req('PATCH', `/projects/${fixture.data.id}`, { token: beto.token, body: { teamId: equipo.id } });
+  check(equipoDeOtro.status === 403, 'V3.10.27 Nadie vincula el proyecto de otra persona', `status ${equipoDeOtro.status}`);
+  const otroEquipo = (await req('POST', `/team-needs/${(await req('POST', '/team-needs', { token: beto.token, body: { purpose: `Otro equipo ${TS}`, maxMembers: 3 } })).data.id}/team`, { token: beto.token, body: { name: `Equipo Ajeno ${sufijo}` } })).data;
+  const vincularAjeno = await req('PATCH', `/projects/${fixture.data.id}`, { token: ana.token, body: { teamId: otroEquipo.id } });
+  check(vincularAjeno.status === 400 && vincularAjeno.data?.fields?.teamId, 'V3.10.28 §21.1 Solo se vincula un equipo del que se forma parte', `status ${vincularAjeno.status}`);
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

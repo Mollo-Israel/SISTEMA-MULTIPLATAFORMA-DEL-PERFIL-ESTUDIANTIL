@@ -82,6 +82,8 @@ export enum ProjectEventType {
   FEEDBACK_ADDED = 'feedback_added',
   PROJECT_VISIBILITY_CHANGED = 'project_visibility_changed',
   PROJECT_ARCHIVED = 'project_archived',
+  /** V3 §22: pasó a ACTIVE cumpliendo los requisitos. */
+  PROJECT_ACTIVATED = 'project_activated',
   BACKING_TIER_CHANGED = 'backing_tier_changed',
 }
 
@@ -100,5 +102,6 @@ export const PROJECT_EVENT_LABEL: Record<ProjectEventType, string> = {
   [ProjectEventType.FEEDBACK_ADDED]: 'Retroalimentación docente',
   [ProjectEventType.PROJECT_VISIBILITY_CHANGED]: 'Visibilidad cambiada',
   [ProjectEventType.PROJECT_ARCHIVED]: 'Proyecto archivado',
+  [ProjectEventType.PROJECT_ACTIVATED]: 'Proyecto activado',
   [ProjectEventType.BACKING_TIER_CHANGED]: 'Nivel de respaldo recalculado',
 };

@@ -28,7 +28,7 @@ const PUERTO_API = Number(process.env.AI_TEST_API_PORT ?? 3011);
 const PUERTO_IA = Number(process.env.AI_TEST_PROVIDER_PORT ?? 3999);
 const CLAVE = 'clave-de-prueba-0123456789';
 process.env.API_URL = `http://localhost:${PUERTO_API}/api`;
-const { loginAdmin, provisionAndActivate, req } = await import('./lib/fixtures.mjs');
+const { loginAdmin, provisionAndActivate, req, crearProyectoActivo } = await import('./lib/fixtures.mjs');
 
 const TS = Date.now();
 const C = { r: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[90m', ok: '\x1b[32m', bad: '\x1b[31m', head: '\x1b[36m' };
@@ -243,10 +243,7 @@ async function pruebas() {
   check(regla.data?.source === 'rule', 'IA.17 §23.3 Con regla canónica no se consulta a la IA', json(regla.data));
 
   objective('§43.2 · Evidencias e inconsistencias, con el acceso del proyecto');
-  const proyecto = await req('POST', '/projects', {
-    token: est.token,
-    body: { title: `Proyecto IA ${TS}`, description: 'Proyecto de prueba.', technologies: ['NestJS'], status: 'active', visibility: 'teachers' },
-  });
+  const proyecto = await crearProyectoActivo(est.token, { title: `Proyecto IA ${TS}`, description: 'Proyecto de prueba.', technologies: ['NestJS'], visibility: 'teachers' });
   await req('POST', `/projects/${proyecto.data?.id}/evidences`, {
     token: est.token, body: { evidenceType: 'link', description: 'Capturas del sistema', externalUrl: 'https://ejemplo.univalle.edu/capturas?token=secreto123' },
   });

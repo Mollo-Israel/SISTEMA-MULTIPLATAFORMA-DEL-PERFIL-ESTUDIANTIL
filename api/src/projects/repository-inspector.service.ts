@@ -67,8 +67,14 @@ export class RepositoryInspectorService {
   private readonly logger = new Logger(RepositoryInspectorService.name);
   private readonly token: string | null;
   private readonly enabled: boolean;
+  /**
+   * Base de la API de GitHub. Por defecto la pública; se configura para
+   * GitHub Enterprise o, en las pruebas, para un GitHub simulado.
+   */
+  private readonly apiBase: string;
 
   constructor(config: ConfigService) {
+    this.apiBase = (config.get<string>('GITHUB_API_BASE_URL') || 'https://api.github.com').replace(/\/+$/, '');
     // §37: el token es opcional. Sin él se usa la cuota pública, que es menor
     // pero suficiente para el volumen de una carrera.
     const raw = config.get<string>('GITHUB_TOKEN', '').trim();
@@ -98,7 +104,7 @@ export class RepositoryInspectorService {
     }
 
     try {
-      const repo = await this.fetchJson(`https://api.github.com/repos/${ref.owner}/${ref.name}`);
+      const repo = await this.fetchJson(`${this.apiBase}/repos/${ref.owner}/${ref.name}`);
       if (repo.status === 404) {
         return {
           status: LinkCheckStatus.UNAVAILABLE,
@@ -119,6 +125,16 @@ export class RepositoryInspectorService {
         return {
           status: LinkCheckStatus.UNAVAILABLE,
           metadata: this.metadataVacia(ref, `Respuesta inesperada (${repo.status}).`),
+          technologySignals: this.cruzar(declaradas, [], {}),
+        };
+      }
+
+      // V3 §22: con un token, GitHub también devuelve repositorios privados.
+      // Un repositorio privado no es una fuente pública y no respalda nada.
+      if (repo.data.private === true) {
+        return {
+          status: LinkCheckStatus.UNAVAILABLE,
+          metadata: this.metadataVacia(ref, 'El repositorio es privado.'),
           technologySignals: this.cruzar(declaradas, [], {}),
         };
       }
@@ -155,8 +171,10 @@ export class RepositoryInspectorService {
       };
     } catch (error) {
       this.logger.debug(`No se pudo inspeccionar ${repositoryUrl}: ${String(error)}`);
+      // V3 §20: no poder contactar con GitHub no prueba que el repositorio
+      // no exista. Queda sin comprobar, no «no disponible».
       return {
-        status: LinkCheckStatus.UNAVAILABLE,
+        status: LinkCheckStatus.UNVERIFIED,
         metadata: this.metadataVacia(ref, 'No se pudo contactar con el proveedor.'),
         technologySignals: this.cruzar(declaradas, [], {}),
       };
@@ -246,7 +264,7 @@ export class RepositoryInspectorService {
 
   private async fetchLanguages(ref: { owner: string; name: string }): Promise<string[]> {
     const res = await this.fetchJson(
-      `https://api.github.com/repos/${ref.owner}/${ref.name}/languages`,
+      `${this.apiBase}/repos/${ref.owner}/${ref.name}/languages`,
     );
     if (!res.ok || !res.data) return [];
     // El objeto es { lenguaje: bytes }. Se ordena por peso, que es el orden en
@@ -269,7 +287,7 @@ export class RepositoryInspectorService {
     branch: string,
   ): Promise<{ encontrados: string[]; readme: boolean }> {
     const res = await this.fetchJson(
-      `https://api.github.com/repos/${ref.owner}/${ref.name}/contents/?ref=${encodeURIComponent(branch)}`,
+      `${this.apiBase}/repos/${ref.owner}/${ref.name}/contents/?ref=${encodeURIComponent(branch)}`,
     );
     if (!res.ok || !Array.isArray(res.data)) return { encontrados: [], readme: false };
 

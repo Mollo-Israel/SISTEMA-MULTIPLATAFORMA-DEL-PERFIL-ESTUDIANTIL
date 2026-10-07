@@ -555,3 +555,46 @@ describe('V3 §18.3 Open Badges', () => {
     assert.deepEqual(c, { credentialId: true, holder: true, course: true, issuer: false });
   });
 });
+
+// ---------------------------------------------------------------------------
+//  V3 BATCH 10 · Requisitos para activar un proyecto (§22)
+// ---------------------------------------------------------------------------
+import { isRepositoryUrl, projectReadiness } from '../../src/projects/project-readiness.rules';
+
+describe('V3 §22 requisitos de ACTIVE', () => {
+  const listo = {
+    title: 'Plataforma de tutorías',
+    areaCount: 1,
+    skillCount: 2,
+    repositoryUrl: 'https://github.com/ana/tutorias',
+    repositoryCheck: LinkCheckStatus.AVAILABLE,
+    members: [{ confirmed: true }],
+    pendingInvitations: 0,
+    ownContributionConfirmed: true,
+    evidenceCount: 1,
+    demoCheck: null,
+  };
+  const codigos = (i: Parameters<typeof projectReadiness>[0]) => projectReadiness(i).missing.map((m) => m.code);
+  it('con todo, está listo', () => {
+    assert.equal(projectReadiness(listo).ready, true);
+  });
+  it('cada requisito faltante se nombra', () => {
+    assert.deepEqual(codigos({ ...listo, areaCount: 0, skillCount: 0 }), ['area', 'skill']);
+    assert.deepEqual(codigos({ ...listo, repositoryUrl: null }), ['repository']);
+    assert.deepEqual(codigos({ ...listo, pendingInvitations: 1 }), ['members_pending']);
+    assert.deepEqual(codigos({ ...listo, members: [{ confirmed: false }] }), ['members_unconfirmed']);
+  });
+  it('repositorio: forma, público, y «no se pudo comprobar» no bloquea', () => {
+    assert.equal(isRepositoryUrl('https://github.com/ana/tutorias'), true);
+    assert.equal(isRepositoryUrl('https://gitlab.com/ana/tutorias.git'), true);
+    assert.equal(isRepositoryUrl('https://example.com/ana'), false);
+    assert.deepEqual(codigos({ ...listo, repositoryCheck: LinkCheckStatus.UNAVAILABLE }), ['repository_not_public']);
+    const sinComprobar = projectReadiness({ ...listo, repositoryCheck: LinkCheckStatus.UNVERIFIED });
+    assert.equal(sinComprobar.ready, true);
+    assert.equal(sinComprobar.warnings.length, 1);
+  });
+  it('evidencia de funcionamiento, o una demo accesible en su lugar', () => {
+    assert.deepEqual(codigos({ ...listo, evidenceCount: 0 }), ['evidence']);
+    assert.equal(projectReadiness({ ...listo, evidenceCount: 0, demoCheck: LinkCheckStatus.AVAILABLE }).ready, true);
+  });
+});

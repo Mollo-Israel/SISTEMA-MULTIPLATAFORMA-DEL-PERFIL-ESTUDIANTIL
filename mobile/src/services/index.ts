@@ -154,6 +154,8 @@ export const projectService = {
   get: (id: string) => api.get<any>(`/projects/${id}`).then((r) => r.data),
   create: (data: any) => api.post<any>('/projects', data).then((r) => r.data),
   update: (id: string, data: any) => api.patch<any>(`/projects/${id}`, data).then((r) => r.data),
+  /** V3 §22: qué le falta para pasar a ACTIVE. */
+  readiness: (id: string) => api.get<any>(`/projects/${id}/readiness`).then((r) => r.data),
   members: (id: string) => api.get<any[]>(`/projects/${id}/members`).then((r) => r.data),
   removeMember: (id: string, memberId: string) =>
     api.delete(`/projects/${id}/members/${memberId}`).then((r) => r.data),

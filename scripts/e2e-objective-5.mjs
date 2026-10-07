@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
-import { leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, crearProyectoActivo } from './lib/fixtures.mjs';
 
 /**
  * Integrantes aceptados, sin la fila del responsable. Desde la V2 (§34, §48)
@@ -204,18 +204,14 @@ async function rf13(ctx) {
   const { A, B, webArea, dataArea } = ctx;
 
   section('Registro del proyecto');
-  const created = await req('POST', '/projects', {
-    token: A.token,
-    body: {
+  const created = await crearProyectoActivo(A.token, {
       title: `Sistema de monitoreo IoT para laboratorios ${TS}`,
       description: 'Sensores de temperatura y humedad con panel de control en tiempo real.',
       areaId: dataArea.id,
       technologies: ['Python', 'Docker', 'PostgreSQL'],
-      status: 'active',
-      repositoryUrl: 'https://github.com/afinia/iot-labs',
+      repositoryUrl: 'https://github.com/afinia-pruebas/iot-labs',
       demoUrl: 'https://iot-labs.demo.example.com',
       visibility: 'teachers',
-    },
   });
   check(created.status === 201, '13.1 El estudiante crea un proyecto', `status ${created.status} ${msgOf(created)}`);
   const projectId = created.data?.id;
@@ -251,7 +247,9 @@ async function rf13(ctx) {
     body: {
       description: 'Sensores de temperatura, humedad y consumo eléctrico, con alertas por umbral.',
       technologies: ['Python', 'Docker', 'PostgreSQL', 'Grafana'],
-      areaId: webArea.id,
+      // V3 §21.2: el área web pasa a ser la principal; se conservan las de
+      // sus tecnologías, que no pueden quedar fuera de sus áreas (§4).
+      areaIds: [webArea.id, ...(created.data?.projectAreas ?? []).map((a) => a.academicAreaId).filter((x) => x !== webArea.id)],
       status: 'active',
     },
   });
@@ -707,8 +705,8 @@ async function rf15(ctx) {
 
   const checksProyecto = await req('GET', `/projects/${projectId}/checks`, { token: A.token });
   check(
-    checksProyecto.data?.backingTier === 'flagged',
-    '15.28c El proyecto esta FLAGGED: declara un repositorio que no existe (§36)',
+    checksProyecto.data?.backingTier !== 'flagged' && checksProyecto.data?.repository?.status === 'available',
+    '15.28c V3 §22 Un proyecto activo tiene repositorio público comprobado: ya no puede quedar FLAGGED por un repositorio inexistente',
     String(checksProyecto.data?.backingTier),
   );
 

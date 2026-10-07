@@ -615,6 +615,7 @@ export interface ProjectEventItem {
 
 export const PROJECT_EVENT_LABEL: Record<string, string> = {
   project_created: 'Proyecto creado',
+  project_activated: 'Proyecto activado',
   member_invited: 'Integrante invitado',
   member_accepted: 'Invitación aceptada',
   member_declined: 'Invitación rechazada',
@@ -651,6 +652,44 @@ export interface Project {
   evidences?: ProjectEvidence[];
   /** Comentarios docentes recibidos (RF16). Lo calcula GET /projects/mine. */
   feedbackCount?: number;
+  /** V3 §21.2: áreas y tecnologías del catálogo. */
+  projectAreas?: { academicAreaId: string; academicArea?: AcademicArea | null }[];
+  projectSkills?: { skillId: string; skill?: { id: string; name: string } | null }[];
+  /** V3 §40. */
+  visibility?: ProjectVisibility;
+  publicLinkToken?: string | null;
+  teamId?: string | null;
+}
+
+/** V3 §40: de más cerrado a más abierto. */
+export type ProjectVisibility = 'private' | 'team' | 'teachers' | 'profile' | 'public_link';
+
+export const PROJECT_VISIBILITY_LABEL: Record<ProjectVisibility, string> = {
+  private: 'Privado: tú y tus integrantes',
+  team: 'Equipo: además, tu equipo de colaboración',
+  teachers: 'Docentes: además, tus docentes pueden comentarlo',
+  profile: 'Perfil: aparece en tu perfil',
+  public_link: 'Enlace público: un resumen para quien tenga el enlace',
+};
+
+/** V3 §22: qué le falta a un proyecto para pasar a ACTIVE. */
+export interface ProjectReadiness {
+  ready: boolean;
+  missing: { code: string; message: string }[];
+  warnings: string[];
+}
+
+/** V3 §40: resumen público de un proyecto compartido por enlace. */
+export interface PublicProjectView {
+  title: string;
+  description: string | null;
+  status: string;
+  areas: string[];
+  skills: string[];
+  repositoryUrl: string | null;
+  demoUrl: string | null;
+  backingTier: string;
+  updatedAt: string;
 }
 
 export interface ProjectMember {

@@ -11,6 +11,7 @@ import { ConfirmProvider, ToastProvider } from './components/feedback';
 import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 import PublicProfilePage from './pages/PublicProfile';
+import PublicProjectPage from './pages/PublicProject';
 import SetPasswordPage from './pages/auth/SetPasswordPage';
 import RequestTokenPage from './pages/auth/RequestTokenPage';
 
@@ -97,6 +98,7 @@ export default function App() {
           {/* §43: el perfil compartible es la única pantalla sin sesión. Un QR
               que exigiera iniciar sesión no serviría para lo que existe. */}
           <Route path="/p/:slug" element={<PublicProfilePage />} />
+          <Route path="/proyecto/:token" element={<PublicProjectPage />} />
 
           {/* Activación y recuperación: públicas por necesidad (§12, §13). */}
           <Route path="/activar" element={<SetPasswordPage mode="activate" />} />

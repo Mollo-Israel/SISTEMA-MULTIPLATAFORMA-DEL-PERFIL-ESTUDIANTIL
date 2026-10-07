@@ -1151,3 +1151,9 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
   background: #eef2f7; color: #2f4a66; font-size: 0.75rem; font-weight: 600;
 }
 .check-line { display: flex; gap: 0.5rem; align-items: center; font-size: 0.9rem; }
+
+/* V3 §22: requisitos para activar un proyecto */
+.readiness { border: 1px dashed var(--gray-300, #d1d5db); border-radius: 10px; padding: 0.7rem 0.9rem; }
+.readiness-list { list-style: none; padding: 0; margin: 0.4rem 0 0.6rem; display: grid; gap: 0.2rem; font-size: 0.86rem; }
+.readiness-list li.ok { color: var(--green, #15803d); }
+.readiness-list li.falta { color: var(--amber-700, #b45309); }

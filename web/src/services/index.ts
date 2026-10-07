@@ -12,6 +12,8 @@ import type {
   CredentialOpportunity,
   ValidationReference,
   ManualReviewItem,
+  ProjectReadiness,
+  PublicProjectView,
   GamificationCriterion,
   InternalConstancy,
   StoredFile,
@@ -686,6 +688,10 @@ export const projectService = {
   create: (data: Record<string, unknown>) => api.post<Project>('/projects', data).then((r) => r.data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch<Project>(`/projects/${id}`, data).then((r) => r.data),
+  /** V3 §22: requisitos pendientes para activar. */
+  readiness: (id: string) => api.get<ProjectReadiness>(`/projects/${id}/readiness`).then((r) => r.data),
+  /** V3 §40: resumen público por enlace (sin sesión). */
+  publicView: (token: string) => api.get<PublicProjectView>(`/projects/public/${token}`).then((r) => r.data),
   /** Portafolio institucional que consulta el docente (RF15). */
   institutional: (params?: Record<string, string>) =>
     api.get<InstitutionalPortfolio>('/projects/institutional', { params }).then((r) => r.data),

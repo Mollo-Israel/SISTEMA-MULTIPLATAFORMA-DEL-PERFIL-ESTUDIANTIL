@@ -17,7 +17,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-6.mjs
  */
 
-import { loginAdmin, provisionAndActivate, req, aprobarActividad } from './lib/fixtures.mjs';
+import { loginAdmin, provisionAndActivate, req, aprobarActividad, crearProyectoActivo, crearProyectoBorrador } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -163,16 +163,12 @@ async function proyectos(ctx) {
   objective('§47.2 y §48 · El proyecto puntúa por respaldo, en las áreas de las tecnologías del integrante');
   const { est, areaProy, areaOtra } = ctx;
 
-  const creado = await req('POST', '/projects', {
-    token: est.token,
-    body: {
+  const creado = await crearProyectoBorrador(est.token, {
       title: `Plataforma de afinidad ${TS}`,
       description: 'Proyecto para probar la puntuación V3.',
       areaId: areaProy.id,
       technologies: ['React', 'NestJS'],
-      status: 'active',
       visibility: 'teachers',
-    },
   });
   check(creado.status === 201, 'B6.21 El estudiante registra un proyecto', msgOf(creado));
   ctx.projectId = creado.data?.id;

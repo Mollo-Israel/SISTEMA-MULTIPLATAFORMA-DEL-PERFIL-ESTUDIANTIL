@@ -11,7 +11,9 @@
  */
 
 import { Buffer } from 'node:buffer';
-import { API, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import {
+  API, asegurarGithubSimulado, crearProyectoActivo, loginAdmin, provisionAndActivate, repoDePrueba, req,
+} from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -74,8 +76,9 @@ async function alta(ctx) {
       description: 'Proyecto para probar el respaldo derivado.',
       areaId: ctx.area.id,
       technologies: ['React', 'NestJS', 'PostgreSQL', 'Docker'],
-      status: 'active',
       visibility: 'teachers',
+      // V3 §21: un proyecto recién creado, sin nada que lo respalde, es un borrador.
+      status: 'draft',
     },
   });
   check(creado.status === 201, 'B5.1 El estudiante crea un proyecto sin aprobación previa', msgOf(creado));
@@ -203,6 +206,25 @@ async function contribucion(ctx) {
     'B5.17 Declara UNA tecnología, no las cuatro del proyecto (§34)',
     `declaradas ${(confirmada.data?.skillsUsed ?? []).length}`,
   );
+
+  // V3 §21–§22: el borrador pasa a ACTIVE cuando cumple los requisitos; solo
+  // entonces es experiencia que alimenta la afinidad.
+  await asegurarGithubSimulado();
+  await req('PATCH', `/projects/${ctx.projectId}`, {
+    token: ctx.autor.token,
+    body: {
+      areaIds: [...new Set([ctx.area.id, react.academicAreaId].filter(Boolean))],
+      skillIds: [react.id],
+      repositoryUrl: repoDePrueba(`seguimiento-${TS}`),
+    },
+  });
+  await req('POST', `/projects/${ctx.projectId}/evidences`, {
+    token: ctx.autor.token,
+    body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/seguimiento-${TS}.png`, description: 'Captura del panel.' },
+  });
+  const activado = await req('PATCH', `/projects/${ctx.projectId}`, { token: ctx.autor.token, body: { status: 'active' } });
+  check(activado.status === 200 && activado.data?.status === 'active',
+    'B5.17b V3 §22 Con repositorio, tecnologías, integrantes confirmados y evidencia, se activa', msgOf(activado));
 
   const despues = await afinidadDe(ctx.integrante.token);
   check(
@@ -341,7 +363,7 @@ async function respaldo(ctx) {
     body: {
       title: `Proyecto sin repositorio ${TS}`,
       description: 'No tiene repositorio ni demo, y es perfectamente válido.',
-      status: 'active',
+      status: 'draft',
     },
   });
   check(sinNada.status === 201, 'B5.30 Un proyecto sin repositorio se crea igual (§37)', msgOf(sinNada));
@@ -366,7 +388,7 @@ async function respaldo(ctx) {
       title: `Demo interna ${TS}`,
       description: 'Apunta a una dirección que el sistema no debe consultar.',
       demoUrl: 'http://127.0.0.1:3010/api/users',
-      status: 'active',
+      status: 'draft',
     },
   });
   if (conDemoInterna.status === 201) {

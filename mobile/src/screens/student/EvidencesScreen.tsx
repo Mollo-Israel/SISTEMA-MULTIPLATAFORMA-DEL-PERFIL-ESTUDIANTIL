@@ -479,7 +479,6 @@ function EvidenceForm({
   const [type, setType] = useState<'link' | 'file'>('link');
   const [description, setDescription] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
-  const [projectId, setProjectId] = useState('');
   const [activityId, setActivityId] = useState('');
   const [areaId, setAreaId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -498,13 +497,11 @@ function EvidenceForm({
         externalUrl: type === 'link' ? externalUrl : undefined,
         // §27: se adjunta por identificador; los metadatos los pone el servidor.
         storedFileId: type === 'file' ? file?.id : undefined,
-        projectId: projectId || undefined,
         academicAreaId: areaId || undefined,
       });
       setDescription('');
       setExternalUrl('');
       setFile(null);
-      setProjectId('');
       setActivityId('');
       setAreaId('');
       onSaved();
@@ -557,13 +554,6 @@ function EvidenceForm({
         </View>
       )}
 
-      <Picker
-        label="Proyecto"
-        emptyLabel="Ninguno"
-        value={projectId}
-        onChange={setProjectId}
-        options={projects.map((p) => ({ id: p.id, label: p.title }))}
-      />
       <Picker
         label="Área académica"
         emptyLabel="Ninguna"

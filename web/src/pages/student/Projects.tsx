@@ -16,11 +16,16 @@ import {
 import { apiError } from '../../api/client';
 import {
   catalogService,
+  collaborationService,
   evidenceService,
   projectDetailService,
   projectFeedbackService,
   projectService,
+  uploadService,
+  type TeamView,
 } from '../../services';
+import AreaSkillPicker from '../../components/AreaSkillPicker';
+import ProjectReadiness from '../../components/ProjectReadiness';
 import { useAuth } from '../../auth/AuthContext';
 import ProjectContribution from '../../components/ProjectContribution';
 import AiAssist from '../../components/AiAssist';
@@ -28,12 +33,15 @@ import {
   PROJECT_BACKING_HELP,
   PROJECT_BACKING_LABEL,
   PROJECT_EVENT_LABEL,
+  PROJECT_VISIBILITY_LABEL,
 } from '../../services/types';
 import type {
   AcademicArea,
   Project,
   ProjectEventItem,
   ProjectFeedbackItem,
+  ProjectVisibility,
+  Skill,
 } from '../../services/types';
 import {
   Badge,
@@ -51,7 +59,17 @@ import {
 import { useToast } from '../../components/feedback';
 import { PROJECT_STATUS_LABEL, lbl } from '../../constants';
 
-const emptyForm = { title: '', description: '', areaId: '', technologies: '', repositoryUrl: '' };
+const emptyForm = {
+  title: '',
+  description: '',
+  areaIds: [] as string[],
+  skillIds: [] as string[],
+  repositoryUrl: '',
+  demoUrl: '',
+  visibility: 'profile' as ProjectVisibility,
+  teamId: '',
+};
+const VISIBILIDADES = Object.keys(PROJECT_VISIBILITY_LABEL) as ProjectVisibility[];
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -60,6 +78,8 @@ export default function StudentProjectsPage() {
   // Con memoria de la sesión: al volver a «Proyectos» se pinta al instante.
   const [projects, setProjects] = useCachedState<Project[]>('proyectos', []);
   const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
+  const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
+  const [teams, setTeams] = useState<TeamView[]>([]);
   const [loading, setLoading] = useState(() => !enMemoria('proyectos'));
   const [creating, setCreating] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
@@ -97,13 +117,15 @@ export default function StudentProjectsPage() {
   const load = () => projectService.mine().then(setProjects);
 
   useEffect(() => {
-    Promise.all([projectService.mine(), catalogService.areas()])
-      .then(([p, a]) => {
+    Promise.all([projectService.mine(), catalogService.areas(), catalogService.skills()])
+      .then(([p, a, sk]) => {
         setProjects(p);
         setAreas(a);
+        setSkills(sk.filter((x) => x.isActive !== false));
       })
       .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
+    collaborationService.myTeams().then(setTeams).catch(() => setTeams([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -111,7 +133,8 @@ export default function StudentProjectsPage() {
     const q = normalize(query.trim());
     if (!q) return projects;
     return projects.filter((p) =>
-      [p.title, p.description ?? '', p.academicArea?.name ?? '', (p.technologies ?? []).join(' ')]
+      [p.title, p.description ?? '', (p.projectAreas ?? []).map((a) => a.academicArea?.name ?? '').join(' '),
+        p.academicArea?.name ?? '', (p.technologies ?? []).join(' ')]
         .some((field) => normalize(field).includes(q)),
     );
   }, [projects, query]);
@@ -135,6 +158,8 @@ export default function StudentProjectsPage() {
     }
   };
 
+  // V3 §21: se guarda como borrador aunque esté incompleto; se activa cuando
+  // cumple los requisitos (§22), desde la tarjeta del proyecto.
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
@@ -142,20 +167,51 @@ export default function StudentProjectsPage() {
       await projectService.create({
         title: form.title,
         description: form.description || undefined,
-        areaId: form.areaId || undefined,
-        technologies: form.technologies
-          ? form.technologies.split(',').map((t) => t.trim()).filter(Boolean)
-          : undefined,
+        areaIds: form.areaIds,
+        skillIds: form.skillIds,
         repositoryUrl: form.repositoryUrl || undefined,
-        status: 'active',
+        demoUrl: form.demoUrl || undefined,
+        visibility: form.visibility,
+        teamId: form.teamId || undefined,
+        status: 'draft',
       });
       setForm(emptyForm);
       await load();
-      toast.success('Proyecto registrado', 'Ya forma parte de tu portafolio y de tu afinidad.');
+      toast.success('Borrador guardado', 'Completa lo que falta en su tarjeta y actívalo.');
     } catch (err) {
       toast.error(apiError(err));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const cambiarVisibilidad = async (p: Project, visibility: ProjectVisibility) => {
+    try {
+      await projectService.update(p.id, { visibility });
+      await load();
+      toast.success('Visibilidad actualizada', PROJECT_VISIBILITY_LABEL[visibility]);
+    } catch (err) {
+      toast.error(apiError(err));
+    }
+  };
+
+  const enlacePublico = (token: string) => `${window.location.origin}/proyecto/${token}`;
+
+  const subirCaptura = async (projectId: string, file: File) => {
+    setAddingTo(projectId);
+    try {
+      const subido = await uploadService.upload(file);
+      await evidenceService.add(projectId, {
+        evidenceType: 'file',
+        storedFileId: subido.id,
+        description: 'Captura del funcionamiento',
+      });
+      await load();
+      toast.success('Captura agregada al proyecto.');
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally {
+      setAddingTo(null);
     }
   };
 
@@ -185,16 +241,17 @@ export default function StudentProjectsPage() {
   return (
     <div>
       <PageHeader
-        title="Proyectos y evidencias"
-        description="Registra tus proyectos académicos y respáldalos con enlaces. Cuentan para tu perfil y tu afinidad."
+        title="Proyectos"
+        description="Guarda tus proyectos como borrador y actívalos cuando cumplan lo mínimo: áreas, tecnologías, repositorio público, integrantes confirmados y una evidencia de funcionamiento. Las evidencias viven dentro de cada proyecto."
       />
 
-      <Card title="Registrar proyecto">
+      <Card title="Nuevo proyecto">
         <form onSubmit={create}>
           <div className="row">
             <div className="field">
-              <label>Título</label>
+              <label htmlFor="pr-titulo">Título</label>
               <input
+                id="pr-titulo"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Sistema de monitoreo de sensores"
@@ -202,44 +259,67 @@ export default function StudentProjectsPage() {
               />
             </div>
             <div className="field">
-              <label>Área académica</label>
-              <select value={form.areaId} onChange={(e) => setForm({ ...form, areaId: e.target.value })}>
-                <option value="">Sin área</option>
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+              <label htmlFor="pr-visibilidad">Quién lo ve</label>
+              <select
+                id="pr-visibilidad"
+                value={form.visibility}
+                onChange={(e) => setForm({ ...form, visibility: e.target.value as ProjectVisibility })}
+              >
+                {VISIBILIDADES.map((v) => <option key={v} value={v}>{PROJECT_VISIBILITY_LABEL[v]}</option>)}
               </select>
             </div>
           </div>
           <div className="field">
-            <label>Descripción</label>
+            <label htmlFor="pr-descripcion">Descripción</label>
             <textarea
+              id="pr-descripcion"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="Propósito del proyecto y qué resuelve…"
             />
           </div>
+          <AreaSkillPicker
+            areas={areas}
+            skills={skills}
+            value={{ areaIds: form.areaIds, skillIds: form.skillIds }}
+            onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds })}
+            areaLabel="Áreas del proyecto"
+            skillLabel="Tecnologías que usa"
+            maxAreas={6}
+            maxSkills={20}
+          />
           <div className="row">
             <div className="field">
-              <label>Tecnologías</label>
+              <label htmlFor="pr-repo">Repositorio público</label>
               <input
-                value={form.technologies}
-                onChange={(e) => setForm({ ...form, technologies: e.target.value })}
-                placeholder="React, Node.js, PostgreSQL"
-              />
-              <span className="field-hint">Sepáralas con comas.</span>
-            </div>
-            <div className="field">
-              <label>Repositorio</label>
-              <input
+                id="pr-repo"
                 value={form.repositoryUrl}
                 onChange={(e) => setForm({ ...form, repositoryUrl: e.target.value })}
-                placeholder="https://github.com/…"
+                placeholder="https://github.com/usuario/proyecto"
+              />
+              <span className="field-hint">Obligatorio para activarlo; se comprueba que exista y sea público.</span>
+            </div>
+            <div className="field">
+              <label htmlFor="pr-demo">Demo (opcional)</label>
+              <input
+                id="pr-demo"
+                value={form.demoUrl}
+                onChange={(e) => setForm({ ...form, demoUrl: e.target.value })}
+                placeholder="https://mi-proyecto.example.com"
               />
             </div>
           </div>
+          {teams.length > 0 && (
+            <div className="field">
+              <label htmlFor="pr-equipo">Equipo de colaboración (opcional)</label>
+              <select id="pr-equipo" value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
+                <option value="">Sin equipo</option>
+                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          )}
           <Button type="submit" loading={creating} icon={<FiPlus size={15} />}>
-            Crear proyecto
+            Guardar borrador
           </Button>
         </form>
       </Card>
@@ -283,7 +363,12 @@ export default function StudentProjectsPage() {
               {p.description && <p>{p.description}</p>}
 
               <div className="activity-meta">
-                <span><FiFolder size={13} /> {p.academicArea?.name ?? 'Sin área'}</span>
+                <span>
+                  <FiFolder size={13} />{' '}
+                  {(p.projectAreas ?? []).length
+                    ? (p.projectAreas ?? []).map((a) => a.academicArea?.name).filter(Boolean).join(' · ')
+                    : p.academicArea?.name ?? 'Sin área'}
+                </span>
                 <span><FiUsers size={13} /> {p.members?.length ?? 0} integrante{(p.members?.length ?? 0) === 1 ? '' : 's'}</span>
                 {(p.feedbackCount ?? 0) > 0 && (
                   <span><FiMessageSquare size={13} /> {p.feedbackCount} comentario{p.feedbackCount === 1 ? '' : 's'}</span>
@@ -295,11 +380,50 @@ export default function StudentProjectsPage() {
                 )}
               </div>
 
-              {p.technologies && p.technologies.length > 0 && (
+              {(p.projectSkills ?? []).length > 0 ? (
+                <div className="tag-list mt">
+                  {(p.projectSkills ?? []).map((sk) => (
+                    <span key={sk.skillId} className="badge badge-gray">{sk.skill?.name}</span>
+                  ))}
+                </div>
+              ) : p.technologies && p.technologies.length > 0 && (
                 <div className="tag-list mt">
                   {p.technologies.map((t) => (
                     <span key={t} className="badge badge-gray">{t}</span>
                   ))}
+                </div>
+              )}
+
+              {p.status === 'draft' && (
+                <ProjectReadiness projectId={p.id} canActivate={p.isOwner === true} onActivated={load} />
+              )}
+
+              {p.isOwner && (
+                <div className="field mt" style={{ maxWidth: 420 }}>
+                  <label htmlFor={`vis-${p.id}`}>Quién lo ve</label>
+                  <select
+                    id={`vis-${p.id}`}
+                    value={p.visibility ?? 'profile'}
+                    onChange={(e) => cambiarVisibilidad(p, e.target.value as ProjectVisibility)}
+                  >
+                    {VISIBILIDADES.map((v) => <option key={v} value={v}>{PROJECT_VISIBILITY_LABEL[v]}</option>)}
+                  </select>
+                  {p.visibility === 'public_link' && p.publicLinkToken && (
+                    <span className="field-hint">
+                      Enlace:{' '}
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(enlacePublico(p.publicLinkToken!));
+                          toast.success('Enlace copiado.');
+                        }}
+                      >
+                        copiar enlace público
+                      </button>
+                      {p.status === 'draft' && ' (se verá cuando el proyecto esté activo)'}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -507,6 +631,20 @@ export default function StudentProjectsPage() {
                   >
                     Agregar enlace
                   </Button>
+                </div>
+                <div className="field mt">
+                  <label htmlFor={`cap-${p.id}`}>O sube una captura del funcionamiento (PNG, JPG o PDF)</label>
+                  <input
+                    id={`cap-${p.id}`}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    disabled={addingTo === p.id}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) subirCaptura(p.id, f);
+                      e.target.value = '';
+                    }}
+                  />
                 </div>
               </div>
             </Card>

@@ -347,3 +347,39 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 70/70; `e2e-v3` 138 (B9 31/31). Regresión completa: **1563 correctas, 0 fallos** (20 suites). La API de desarrollo para las pruebas se arranca con `MAIL_TRANSPORT=console LINK_CHECK_TEST_ORIGINS=verificador.afinia-pruebas.org:3997=127.0.0.1:3997`.
 
 **Pendientes:** revalidar en cada entorno las credenciales de la versión 1 (`POST /validation/reprocess-outdated`); notificaciones persistentes (B16).
+
+---
+
+## BATCH 10 — Proyectos: modelo, requisitos y privacidad
+
+**ESTADO:** completo
+
+**Objetivo:** que un proyecto pueda guardarse incompleto como borrador y solo pase a ACTIVE cumpliendo lo mínimo; multiárea con tecnologías del catálogo; visibilidad de cinco niveles; evidencias dentro del proyecto (§21, §22, §23, §40).
+
+**Hallazgos iniciales:**
+- Un proyecto se activaba sin ningún requisito; un solo `academic_area_id` y tecnologías como texto libre.
+- Visibilidad solo PRIVATE / PROFILE / TEACHERS.
+- La pantalla de Evidencias permitía adjuntar evidencias a un proyecto desde fuera de él.
+
+**Cambios:**
+- **Multiárea (§21.2):** `project_areas` y `project_skills`. Las tecnologías deben ser del catálogo y de las áreas elegidas (§4, mismo guardián que oportunidades). `academic_area_id` queda como el área principal y `technologies` conserva lo escrito (lo usan el cruce con GitHub y los filtros docentes); el filtro por área del portafolio docente mira todas las áreas.
+- **Requisitos de ACTIVE (§22, reglas puras en `project-readiness.rules.ts`):** título, ≥1 área, ≥1 tecnología, repositorio con forma de repositorio (GitHub, GitLab, Bitbucket) y comprobado como público, invitaciones respondidas, integrantes con su contribución confirmada, contribución propia confirmada, y evidencia de funcionamiento o demo accesible. `GET /projects/:id/readiness` dice qué falta; activar sin cumplir responde 400 `PROJECT_NOT_READY` con la lista en `details.missing` (forma de error de §103). Pedir ACTIVE al crear se evalúa igual y, si no cumple, no deja un borrador a medias. Un ACTIVE no puede quedarse sin áreas, tecnologías ni repositorio.
+- **Repositorio público (§20 aplicado):** un repositorio privado (visible con token) no es público; si GitHub no responde o la cuota se agota, queda «sin comprobar» y eso no bloquea (aviso), porque no poder comprobar no prueba que no exista. `GITHUB_API_BASE_URL` configurable (GitHub Enterprise; GitHub simulado en pruebas).
+- **Activación:** evento `project_activated` en la bitácora y auditoría `PROJECT_ACTIVATED`. Cambiar el estado recalcula la afinidad de todos los integrantes, no solo la del responsable.
+- **Privacidad (§40):** TEAM (el equipo de colaboración vinculado ve el proyecto) y PUBLIC_LINK (token aleatorio de 32 caracteres; `GET /projects/public/:token` sin sesión devuelve un resumen sin integrantes, archivos, bitácora, auditoría ni retroalimentación; al cambiar la visibilidad el enlace deja de funcionar; un borrador no se publica). `team_id` solo con un equipo del que el responsable forma parte.
+- **Evidencias dentro del proyecto (§23):** la tarjeta del proyecto admite enlace o captura (archivo); el formulario genérico de evidencias ya no ofrece elegir proyecto (web y móvil). La API conserva la compatibilidad.
+- **Web:** «Nuevo proyecto» se guarda como borrador, con selector de áreas → tecnologías agrupadas, repositorio, demo, visibilidad de cinco niveles y equipo; cada borrador muestra la lista de requisitos y el botón «Activar proyecto»; selector de visibilidad en la tarjeta con «copiar enlace público»; página pública `/proyecto/:token`. **Móvil:** alta como borrador con áreas y tecnologías por área, visibilidades nuevas y, en el detalle, requisitos y activación.
+
+**Migraciones:** `1780530000000-V3ProjectModel` (tablas `project_areas` y `project_skills` sembradas desde los datos: 983 áreas y 456 tecnologías reconocidas desde el texto; valores `team` y `public_link`; `public_link_token`, `team_id`; evento `project_activated`). Copia de seguridad previa (`pre-v3-b10.dump`); `up` → `down` → `up` probado. Los 1176 proyectos ya activos se conservan como están: los requisitos rigen al activar.
+
+**Pruebas ejecutadas:** unitarias de requisitos (74/74); `e2e-v3 batch10` (V3.10.1–V3.10.28); regresión completa.
+
+**Decisiones:**
+- **Suites adaptadas al camino V3:** las altas de proyectos ACTIVE pasan por el fixture `crearProyectoActivo` (borrador con áreas, tecnologías y repositorio → evidencia → activar), igual que un estudiante, contra un GitHub simulado (`scripts/lib/fixtures.mjs`, `GITHUB_API_BASE_URL=http://127.0.0.1:3996`). Los escenarios que miden cómo un proyecto vacío gana respaldo (B5, B6, B7, B9, Objetivo 6) parten de un borrador (`crearProyectoBorrador`): un ACTIVE ya nace con repositorio y evidencia. `e2e-objective-5` 15.28c: un activo ya no puede tener un repositorio inexistente.
+- **Borradores y afinidad:** §21 dice que un DRAFT no es experiencia respaldada. Excluirlo del motor se hace en B14 (Afinidad V4, que rehace las fuentes de proyecto: solo CORROBORATED/REVIEWED); hacerlo aquí invalidaba las pruebas del motor V3 que B14 reemplaza.
+
+**Riesgos:** ninguno nuevo.
+
+**Resultados:** unitarias 74/74; `e2e-v3` 166 (B10 28/28). Regresión completa: **1592 correctas, 0 fallos** (20 suites). La API de pruebas se arranca además con `GITHUB_API_BASE_URL=http://127.0.0.1:3996`.
+
+**Pendientes:** lectura del contenido de manifiestos, caché con ETag y reintentos (B11); catálogo de roles y bloqueo por confirmaciones con notificación (B12); regla de CORROBORATED del proyecto y estado por skill (B13); exclusión de borradores en afinidad (B14).

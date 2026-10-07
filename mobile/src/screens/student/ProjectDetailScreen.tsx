@@ -34,8 +34,10 @@ const STATUS_LABEL: Record<string, string> = {
 
 const VISIBILITY_OPTIONS = [
   { value: 'private', label: 'Privado', hint: 'Solo tú y tus integrantes lo ven.' },
+  { value: 'team', label: 'Mi equipo', hint: 'Además, tu equipo de colaboración.' },
   { value: 'profile', label: 'En mi perfil', hint: 'Aparece en tu perfil dinámico.' },
   { value: 'teachers', label: 'Visible a docentes', hint: 'Tus docentes pueden revisarlo y comentarlo.' },
+  { value: 'public_link', label: 'Enlace público', hint: 'Un resumen para quien tenga el enlace; nunca la bitácora.' },
 ];
 
 const INVITATION_LABEL: Record<string, string> = {
@@ -112,6 +114,9 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
   const confirm = useConfirm();
 
   const [editing, setEditing] = useState(false);
+  /** V3 §22: qué le falta a un borrador para activarse. */
+  const [readiness, setReadiness] = useState<any>(null);
+  const [activando, setActivando] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
@@ -133,6 +138,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
   const load = useCallback(async () => {
     const p = await projectService.get(projectId);
     setProject(p);
+    setReadiness(p.status === 'draft' ? await projectService.readiness(projectId).catch(() => null) : null);
     setForm({
       title: p.title,
       description: p.description ?? '',
@@ -193,6 +199,19 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
 
   const notify = (t: string, detail?: string) => toast.success(t, detail);
 
+  const activar = async () => {
+    setActivando(true);
+    try {
+      await projectService.update(projectId, { status: 'active' });
+      notify('Proyecto activo.', 'Ya forma parte de tu trayectoria.');
+      await load();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setActivando(false);
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
@@ -204,7 +223,9 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
           : [],
         repositoryUrl: form.repositoryUrl || undefined,
         demoUrl: form.demoUrl || undefined,
-        areaId: form.areaId || undefined,
+        // V3 §21.2: el área solo se envía si cambió; así no se pisan las
+        // demás áreas del proyecto que se eligieron en la web.
+        ...(form.areaId && form.areaId !== project.academicAreaId ? { areaId: form.areaId } : {}),
         status: form.status,
         visibility: form.visibility,
       });
@@ -350,6 +371,26 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
           {isOwner ? 'Responsable' : 'Integrante'}
         </Badge>
       </View>
+
+      {readiness && (
+        <Card title="Para activarlo">
+          {readiness.missing.length === 0 ? (
+            <Muted>Cumple todo lo necesario.</Muted>
+          ) : (
+            readiness.missing.map((m: any) => <Muted key={m.code}>• {m.message}</Muted>)
+          )}
+          {(readiness.warnings ?? []).map((w: string) => <Muted key={w}>{w}</Muted>)}
+          {isOwner && (
+            <Button
+              title="Activar proyecto"
+              icon="check"
+              onPress={activar}
+              loading={activando}
+              disabled={!readiness.ready}
+            />
+          )}
+        </Card>
+      )}
 
 
       {/* ---------------- Datos del proyecto ---------------- */}

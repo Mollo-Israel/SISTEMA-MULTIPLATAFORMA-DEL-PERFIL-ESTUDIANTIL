@@ -15,7 +15,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { API, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { API, loginAdmin, provisionAndActivate, req, crearProyectoActivo } from './lib/fixtures.mjs';
 
 const require = createRequire(import.meta.url);
 const jsQR = require('jsqr').default ?? require('jsqr');
@@ -193,35 +193,23 @@ async function visibilidad(ctx) {
 async function proyectosVisibles(ctx) {
   objective('§106 · Un proyecto privado no sale por activar una casilla');
 
-  const privado = await req('POST', '/projects', {
-    token: ctx.ana.token,
-    body: {
+  const privado = await crearProyectoActivo(ctx.ana.token, {
       title: `Proyecto privado ${TS}`,
       description: 'No debe verse en el perfil compartible.',
       areaId: ctx.area.id,
-      status: 'active',
       visibility: 'private',
-    },
   });
-  const docentes = await req('POST', '/projects', {
-    token: ctx.ana.token,
-    body: {
+  const docentes = await crearProyectoActivo(ctx.ana.token, {
       title: `Proyecto para docentes ${TS}`,
       description: 'Visible para docentes, no para cualquiera.',
       areaId: ctx.area.id,
-      status: 'active',
       visibility: 'teachers',
-    },
   });
-  const publico = await req('POST', '/projects', {
-    token: ctx.ana.token,
-    body: {
+  const publico = await crearProyectoActivo(ctx.ana.token, {
       title: `Proyecto del perfil ${TS}`,
       description: 'Este sí.',
       areaId: ctx.area.id,
-      status: 'active',
       visibility: 'profile',
-    },
   });
   check(
     privado.status === 201 && docentes.status === 201 && publico.status === 201,

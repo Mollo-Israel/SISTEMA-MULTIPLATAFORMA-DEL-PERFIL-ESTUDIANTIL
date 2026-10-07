@@ -36,18 +36,19 @@ const STATUS_LABEL: Record<string, string> = {
 
 const VISIBILITY_OPTIONS = [
   { value: 'private', label: 'Privado', hint: 'Solo tú y tus integrantes.' },
+  { value: 'team', label: 'Mi equipo', hint: 'Además, tu equipo de colaboración.' },
   { value: 'profile', label: 'En mi perfil', hint: 'Aparece en tu perfil dinámico.' },
   { value: 'teachers', label: 'Visible a docentes', hint: 'Tus docentes pueden revisarlo y comentarlo.' },
+  { value: 'public_link', label: 'Enlace público', hint: 'Un resumen para quien tenga el enlace; nunca la bitácora.' },
 ];
 
 const emptyForm = {
   title: '',
   description: '',
-  technologies: '',
   repositoryUrl: '',
   demoUrl: '',
-  areaId: '',
-  status: 'active',
+  areaIds: [] as string[],
+  skillIds: [] as string[],
   visibility: 'profile',
 };
 
@@ -62,6 +63,7 @@ export default function ProjectsScreen({ navigation }: any) {
   const [projects, setProjects] = useState<any[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
+  const [skills, setSkills] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const toast = useToast();
   const confirm = useConfirm();
@@ -82,7 +84,11 @@ export default function ProjectsScreen({ navigation }: any) {
   );
 
   useEffect(() => {
-    Promise.all([load(), catalogService.areas().then(setAreas)])
+    Promise.all([
+      load(),
+      catalogService.areas().then(setAreas),
+      catalogService.skills().then((s) => setSkills(s.filter((x: any) => x.isActive !== false))),
+    ])
       .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,21 +107,21 @@ export default function ProjectsScreen({ navigation }: any) {
   const create = async () => {
     setSaving(true);
     try {
+      // V3 §21: se guarda como borrador; se activa desde su detalle cuando
+      // cumple los requisitos (§22).
       await projectService.create({
         title: form.title,
         description: form.description || undefined,
-        technologies: form.technologies
-          ? form.technologies.split(',').map((t) => t.trim()).filter(Boolean)
-          : undefined,
         repositoryUrl: form.repositoryUrl || undefined,
         demoUrl: form.demoUrl || undefined,
-        areaId: form.areaId || undefined,
-        status: form.status,
+        areaIds: form.areaIds,
+        skillIds: form.skillIds,
+        status: 'draft',
         visibility: form.visibility,
       });
       setForm(emptyForm);
       setShowForm(false);
-      notify('Proyecto registrado en tu portafolio.', 'Ya suma a tu perfil y a tu afinidad.');
+      notify('Borrador guardado.', 'Ábrelo para ver qué le falta y activarlo.');
       await load();
     } catch (e) {
       toast.error(apiError(e));
@@ -233,41 +239,54 @@ export default function ProjectsScreen({ navigation }: any) {
                 placeholder="Qué resuelve el proyecto y cómo."
                 multiline
               />
-              <Field
-                label="Tecnologías (separadas por coma)"
-                value={form.technologies}
-                onChangeText={(t) => setForm({ ...form, technologies: t })}
-                placeholder="Python, Docker, PostgreSQL"
-              />
-
-              <Text style={styles.label}>Área académica</Text>
+              <Text style={styles.label}>Áreas del proyecto</Text>
               <View style={styles.chips}>
-                <Chip
-                  label="Sin área"
-                  on={form.areaId === ''}
-                  onPress={() => setForm({ ...form, areaId: '' })}
-                />
-                {areas.map((a: any) => (
-                  <Chip
-                    key={a.id}
-                    label={a.name}
-                    on={form.areaId === a.id}
-                    onPress={() => setForm({ ...form, areaId: a.id })}
-                  />
-                ))}
+                {areas.map((a: any) => {
+                  const on = form.areaIds.includes(a.id);
+                  return (
+                    <Chip
+                      key={a.id}
+                      label={a.name}
+                      on={on}
+                      onPress={() => {
+                        const areaIds = on ? form.areaIds.filter((x) => x !== a.id) : [...form.areaIds, a.id].slice(0, 6);
+                        // §4: al quitar un área, salen sus tecnologías.
+                        const skillIds = form.skillIds.filter((id) =>
+                          areaIds.includes(skills.find((s: any) => s.id === id)?.academicAreaId));
+                        setForm({ ...form, areaIds, skillIds });
+                      }}
+                    />
+                  );
+                })}
               </View>
 
-              <Text style={styles.label}>Estado</Text>
-              <View style={styles.chips}>
-                {Object.entries(STATUS_LABEL).map(([value, label]) => (
-                  <Chip
-                    key={value}
-                    label={label}
-                    on={form.status === value}
-                    onPress={() => setForm({ ...form, status: value })}
-                  />
-                ))}
-              </View>
+              {form.areaIds.map((areaId) => {
+                const delArea = skills.filter((s: any) => s.academicAreaId === areaId);
+                if (!delArea.length) return null;
+                return (
+                  <View key={areaId}>
+                    <Text style={styles.label}>
+                      Tecnologías · {areas.find((a: any) => a.id === areaId)?.name}
+                    </Text>
+                    <View style={styles.chips}>
+                      {delArea.map((s: any) => {
+                        const on = form.skillIds.includes(s.id);
+                        return (
+                          <Chip
+                            key={s.id}
+                            label={s.name}
+                            on={on}
+                            onPress={() => setForm({
+                              ...form,
+                              skillIds: on ? form.skillIds.filter((x) => x !== s.id) : [...form.skillIds, s.id].slice(0, 20),
+                            })}
+                          />
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })}
 
               <Text style={styles.label}>Visibilidad</Text>
               <View style={styles.chips}>
@@ -283,7 +302,7 @@ export default function ProjectsScreen({ navigation }: any) {
               <Muted>{VISIBILITY_OPTIONS.find((v) => v.value === form.visibility)?.hint}</Muted>
 
               <Field
-                label="Repositorio (opcional)"
+                label="Repositorio público (necesario para activarlo)"
                 value={form.repositoryUrl}
                 onChangeText={(t) => setForm({ ...form, repositoryUrl: t })}
                 placeholder="https://github.com/usuario/proyecto"

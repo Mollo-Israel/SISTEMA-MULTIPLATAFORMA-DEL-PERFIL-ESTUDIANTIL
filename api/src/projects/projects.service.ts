@@ -8,9 +8,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { randomBytes } from 'node:crypto';
 import {
   EvidenceType,
   ProjectEventType,
+  ProjectInvitationStatus,
   ProjectStatus,
   ProjectVisibility,
   RolNombre,
@@ -21,6 +23,12 @@ import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectMemberSkill } from '../entities/project-member-skill.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
+import { ProjectArea, ProjectSkill } from '../entities/project-area.entity';
+import { ProjectInvitation } from '../entities/project-invitation.entity';
+import { Team, TeamMember } from '../entities/collaboration.entity';
+import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
+import { AuditEventType, AuditService } from '../audit/audit.service';
+import { Readiness, projectReadiness } from './project-readiness.rules';
 import { Skill } from '../entities/skill.entity';
 import {
   ProjectLinkCheck,
@@ -47,6 +55,12 @@ import {
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
 
+
+/** Lo escrito primero, en su orden; luego lo del catálogo que falte (sin duplicar por mayúsculas). */
+function unirTecnologias(escritas: string[], delCatalogo: string[]): string[] {
+  const vistas = new Set(escritas.map((t) => t.toLowerCase()));
+  return [...escritas, ...delCatalogo.filter((t) => !vistas.has(t.toLowerCase()) && vistas.add(t.toLowerCase()))];
+}
 
 @Injectable()
 export class ProjectsService {
@@ -77,25 +91,154 @@ export class ProjectsService {
     private readonly validation: ValidationService,
     @Inject(TRAJECTORY_RECALCULATION)
     private readonly trajectory: TrajectoryRecalculationPort,
+    @InjectRepository(ProjectArea) private readonly projectAreas: Repository<ProjectArea>,
+    @InjectRepository(ProjectSkill) private readonly projectSkills: Repository<ProjectSkill>,
+    @InjectRepository(ProjectInvitation) private readonly invitations: Repository<ProjectInvitation>,
+    @InjectRepository(Team) private readonly teams: Repository<Team>,
+    @InjectRepository(TeamMember) private readonly teamMembers: Repository<TeamMember>,
+    private readonly audit: AuditService,
   ) {}
+
+  /** Áreas pedidas: `areaIds`, o el `areaId` de antes. `undefined` si no se tocan. */
+  private areasPedidas(dto: { areaIds?: string[]; areaId?: string | null }): string[] | undefined {
+    if (dto.areaIds !== undefined) return [...new Set(dto.areaIds ?? [])];
+    if (dto.areaId !== undefined) return dto.areaId ? [dto.areaId] : [];
+    return undefined;
+  }
+
+  private async replaceAreas(projectId: string, areaIds: string[]): Promise<void> {
+    await this.projectAreas.delete({ projectId });
+    if (areaIds.length) {
+      await this.projectAreas.save(areaIds.map((academicAreaId) => this.projectAreas.create({ projectId, academicAreaId })));
+    }
+  }
+
+  private async replaceSkills(projectId: string, skillIds: string[]): Promise<void> {
+    await this.projectSkills.delete({ projectId });
+    if (skillIds.length) {
+      await this.projectSkills.save(skillIds.map((skillId) => this.projectSkills.create({ projectId, skillId })));
+    }
+  }
+
+  /** §21.1: solo un equipo del que forma parte (dueño o integrante). */
+  private async assertTeamOfUser(profileId: string, teamId: string): Promise<void> {
+    const team = await this.teams.findOne({ where: { id: teamId } });
+    const propio = team?.ownerProfileId === profileId
+      || await this.teamMembers.exists({ where: { teamId, studentProfileId: profileId } });
+    if (!team || !propio) {
+      const m = 'Solo puedes vincular un equipo del que formas parte.';
+      throw new BadRequestException({ message: m, fields: { teamId: [m] } });
+    }
+  }
+
+  /** §40: el enlace público existe solo mientras la visibilidad es PUBLIC_LINK. */
+  private sincronizarEnlacePublico(project: Project): void {
+    if (project.visibility === ProjectVisibility.PUBLIC_LINK) {
+      project.publicLinkToken ??= randomBytes(24).toString('base64url');
+    } else {
+      project.publicLinkToken = null;
+    }
+  }
+
+  /**
+   * Requisitos para ACTIVE (V3 §22), calculados sobre lo guardado.
+   */
+  async readinessOf(projectId: string): Promise<Readiness> {
+    const project = await this.projects.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Proyecto no encontrado.');
+    const [areaCount, skillCount, repo, demo, miembros, pendientes, evidencias] = await Promise.all([
+      this.projectAreas.count({ where: { projectId } }),
+      this.projectSkills.count({ where: { projectId } }),
+      this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } }),
+      this.linkChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } }),
+      this.members.find({ where: { projectId } }),
+      this.invitations.count({ where: { projectId, status: ProjectInvitationStatus.PENDING } }),
+      this.evidences.count({ where: { projectId } }),
+    ]);
+    const owner = miembros.find((m) => m.isOwner);
+    return projectReadiness({
+      title: project.title,
+      areaCount,
+      skillCount,
+      repositoryUrl: project.repositoryUrl,
+      repositoryCheck: repo && repo.repositoryUrl === project.repositoryUrl ? repo.status : null,
+      members: miembros.filter((m) => !m.isOwner).map((m) => ({ confirmed: m.contributionConfirmedAt !== null })),
+      pendingInvitations: pendientes,
+      ownContributionConfirmed: !!owner?.contributionConfirmedAt,
+      evidenceCount: evidencias,
+      demoCheck: demo && demo.url === project.demoUrl ? demo.status : null,
+    });
+  }
+
+  async readinessForUser(user: AuthenticatedUser, projectId: string): Promise<Readiness> {
+    const project = await this.findOneOrFail(projectId);
+    await this.assertOwnerOrMember(user, project);
+    return this.readinessOf(projectId);
+  }
+
+  private notReady(r: Readiness): BadRequestException {
+    return new BadRequestException({
+      code: 'PROJECT_NOT_READY',
+      message: 'Todavía no puede activarse: ' + r.missing.map((m) => m.message).join(' '),
+      details: { missing: r.missing, warnings: r.warnings },
+      fields: { status: r.missing.map((m) => m.message) },
+    });
+  }
+
+  private async registrarActivacion(project: Project, actorUserId: string): Promise<void> {
+    await this.events.record({
+      projectId: project.id,
+      actorUserId,
+      eventType: ProjectEventType.PROJECT_ACTIVATED,
+      metadata: {},
+    });
+    await this.audit.record({
+      actorUserId,
+      eventType: AuditEventType.PROJECT_ACTIVATED,
+      entityType: 'project',
+      entityId: project.id,
+      metadata: { title: project.title },
+    });
+  }
 
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
     const profile = await this.requireProfile(userId);
-    if (dto.areaId) {
-      await this.assertAreaExists(dto.areaId);
+    const areaIds = this.areasPedidas(dto) ?? [];
+    for (const a of areaIds) await this.assertAreaExists(a);
+    if (dto.skillIds?.length) {
+      await assertSkillsBelongToAreas(this.projects.manager, dto.skillIds, areaIds);
     }
+    if (dto.teamId) await this.assertTeamOfUser(profile.id, dto.teamId);
+    const skillsCatalogo = dto.skillIds?.length
+      ? await this.skills.find({ where: { id: In(dto.skillIds) } })
+      : [];
+    if (skillsCatalogo.length !== (dto.skillIds?.length ?? 0)) {
+      throw new BadRequestException({ message: 'Alguna tecnología no está en el catálogo.', fields: { skillIds: ['Alguna tecnología no está en el catálogo.'] } });
+    }
+
+    // V3 §22: se guarda como borrador y solo pasa a ACTIVE si cumple los
+    // requisitos, que en parte dependen de comprobar el repositorio.
+    const quiereActivo = dto.status === ProjectStatus.ACTIVE;
     const project = this.projects.create({
       title: dto.title,
       description: dto.description ?? null,
-      academicAreaId: dto.areaId ?? null,
-      technologies: dto.technologies ?? null,
-      status: dto.status,
+      academicAreaId: areaIds[0] ?? null,
+      // Las tecnologías escritas se conservan; si vienen del catálogo, sus
+      // nombres alimentan el cruce con el repositorio y los filtros docentes.
+      technologies: skillsCatalogo.length
+        ? unirTecnologias(dto.technologies ?? [], skillsCatalogo.map((s) => s.name))
+        : (dto.technologies ?? null),
+      status: quiereActivo ? ProjectStatus.DRAFT : (dto.status ?? ProjectStatus.DRAFT),
       repositoryUrl: dto.repositoryUrl ?? null,
       demoUrl: dto.demoUrl ?? null,
       visibility: dto.visibility ?? ProjectVisibility.PROFILE,
+      teamId: dto.teamId ?? null,
       createdByProfileId: profile.id,
     });
+    this.sincronizarEnlacePublico(project);
     const saved = await this.projects.save(project);
+    await this.replaceAreas(saved.id, areaIds);
+    await this.replaceSkills(saved.id, dto.skillIds ?? []);
 
     // V2 §34, §48: el responsable también es integrante, para confirmar las
     // tecnologías que usó. Su fila no cuenta como integrante aceptado (§36).
@@ -122,6 +265,18 @@ export class ProjectsService {
     // no se asume: si el alta trajo repositorio o demo, ya hay algo que
     // comprobar.
     await this.checkExternalSources(saved.id, userId);
+
+    if (quiereActivo) {
+      const r = await this.readinessOf(saved.id);
+      if (!r.ready) {
+        // Nadie más lo vio: se deshace el alta para no dejar un borrador que
+        // el estudiante no pidió.
+        await this.projects.delete(saved.id);
+        throw this.notReady(r);
+      }
+      await this.projects.update(saved.id, { status: ProjectStatus.ACTIVE });
+      await this.registrarActivacion(saved, userId);
+    }
     await this.backing.recalculate(saved.id, userId);
 
     await this.trajectory.requestRecalculation(profile.id);
@@ -141,16 +296,43 @@ export class ProjectsService {
       throw new NotFoundException('Proyecto no encontrado.');
     }
     await this.assertIsOwner(user, project);
-    if (dto.areaId !== undefined) {
-      if (dto.areaId) await this.assertAreaExists(dto.areaId);
-      project.academicAreaId = dto.areaId ?? null;
+    const visibilidadAnterior = project.visibility;
+    const estadoAnterior = project.status;
+
+    const areaIds = this.areasPedidas(dto);
+    if (areaIds !== undefined) {
+      for (const a of areaIds) await this.assertAreaExists(a);
+      project.academicAreaId = areaIds[0] ?? null;
     }
+    const areasFinales = areaIds
+      ?? (await this.projectAreas.find({ where: { projectId: id } })).map((x) => x.academicAreaId);
+    if (dto.skillIds !== undefined || areaIds !== undefined) {
+      const skillsFinales = dto.skillIds
+        ?? (await this.projectSkills.find({ where: { projectId: id } })).map((x) => x.skillId);
+      await assertSkillsBelongToAreas(this.projects.manager, skillsFinales, areasFinales);
+    }
+    if (dto.teamId !== undefined) {
+      if (dto.teamId) await this.assertTeamOfUser(project.createdByProfileId, dto.teamId);
+      project.teamId = dto.teamId ?? null;
+    }
+
+    // V3 §22: un ACTIVE no puede quedarse sin lo que lo hizo activable.
+    const sigueActivo = (dto.status ?? project.status) === ProjectStatus.ACTIVE && estadoAnterior === ProjectStatus.ACTIVE;
+    if (sigueActivo) {
+      const quitar: string[] = [];
+      if (areaIds !== undefined && areaIds.length === 0) quitar.push('Un proyecto activo necesita al menos un área.');
+      if (dto.skillIds !== undefined && dto.skillIds.length === 0) quitar.push('Un proyecto activo necesita al menos una tecnología.');
+      if (dto.repositoryUrl !== undefined && !dto.repositoryUrl) quitar.push('Un proyecto activo necesita su repositorio.');
+      if (quitar.length) {
+        throw new BadRequestException({ code: 'PROJECT_ACTIVE_REQUIREMENT', message: quitar.join(' '), fields: { status: quitar } });
+      }
+    }
+
     if (dto.title !== undefined) project.title = dto.title;
     if (dto.description !== undefined) project.description = dto.description;
     if (dto.technologies !== undefined) project.technologies = dto.technologies;
-    if (dto.status !== undefined) project.status = dto.status;
-    const visibilidadAnterior = project.visibility;
-    const estadoAnterior = project.status;
+    const activar = dto.status === ProjectStatus.ACTIVE && estadoAnterior !== ProjectStatus.ACTIVE;
+    if (dto.status !== undefined && !activar) project.status = dto.status;
     const enlacesCambian =
       (dto.repositoryUrl !== undefined && dto.repositoryUrl !== project.repositoryUrl)
       || (dto.demoUrl !== undefined && dto.demoUrl !== project.demoUrl);
@@ -158,8 +340,15 @@ export class ProjectsService {
     if (dto.repositoryUrl !== undefined) project.repositoryUrl = dto.repositoryUrl;
     if (dto.demoUrl !== undefined) project.demoUrl = dto.demoUrl;
     if (dto.visibility !== undefined) project.visibility = dto.visibility;
+    this.sincronizarEnlacePublico(project);
 
     await this.projects.save(project);
+    if (areaIds !== undefined) await this.replaceAreas(project.id, areaIds);
+    if (dto.skillIds !== undefined) {
+      await this.replaceSkills(project.id, dto.skillIds);
+      const nombres = (await this.skills.find({ where: { id: In(dto.skillIds.length ? dto.skillIds : ['00000000-0000-4000-8000-000000000000']) } })).map((s) => s.name);
+      if (nombres.length) await this.projects.update(project.id, { technologies: nombres });
+    }
 
     if (dto.visibility !== undefined && dto.visibility !== visibilidadAnterior) {
       await this.events.record({
@@ -181,9 +370,29 @@ export class ProjectsService {
     // Los enlaces solo se vuelven a comprobar si cambiaron: consultar
     // GitHub en cada edicion del titulo gastaria cuota para nada.
     if (enlacesCambian) await this.checkExternalSources(project.id, user.userId);
+
+    if (activar) {
+      // §22: los requisitos se miden con lo ya guardado y comprobado.
+      const r = await this.readinessOf(project.id);
+      if (!r.ready) throw this.notReady(r);
+      await this.projects.update(project.id, { status: ProjectStatus.ACTIVE });
+      await this.registrarActivacion(project, user.userId);
+    }
     await this.backing.recalculate(project.id, user.userId);
 
     await this.trajectory.requestRecalculation(project.createdByProfileId);
+    // V3 §21: cambiar de estado (activar, archivar, volver a borrador) cambia
+    // también la afinidad de cada integrante, no solo la del responsable.
+    const estadoFinal = activar ? ProjectStatus.ACTIVE : project.status;
+    if (estadoFinal !== estadoAnterior) {
+      const integrantes = await this.members.find({ where: { projectId: project.id } });
+      const perfiles = integrantes.length
+        ? await this.profiles.find({ where: { userId: In(integrantes.map((m) => m.userId)) } })
+        : [];
+      for (const perfil of perfiles) {
+        if (perfil.id !== project.createdByProfileId) await this.trajectory.requestRecalculation(perfil.id);
+      }
+    }
     return this.findOneOrFail(id);
   }
 
@@ -194,7 +403,10 @@ export class ProjectsService {
 
     const owned = await this.projects.find({
       where: { createdByProfileId: profile.id },
-      relations: { academicArea: true, members: true, evidences: true },
+      relations: {
+        academicArea: true, members: true, evidences: true,
+        projectAreas: { academicArea: true }, projectSkills: { skill: true },
+      },
       order: { createdAt: 'DESC' },
     });
     const ownedIds = new Set(owned.map((p) => p.id));
@@ -202,7 +414,10 @@ export class ProjectsService {
     const memberProjects = extraIds.length
       ? await this.projects.find({
           where: { id: In(extraIds) },
-          relations: { academicArea: true, members: true, evidences: true },
+          relations: {
+            academicArea: true, members: true, evidences: true,
+            projectAreas: { academicArea: true }, projectSkills: { skill: true },
+          },
           order: { createdAt: 'DESC' },
         })
       : [];
@@ -274,10 +489,16 @@ export class ProjectsService {
     if (user.role === RolNombre.STUDENT) {
       const isOwner = project.createdByProfile?.userId === user.userId;
       const isMember = project.members?.some((m) => m.userId === user.userId);
-      if (!isOwner && !isMember) {
-        throw new ForbiddenException('No tiene acceso a este proyecto.');
+      if (isOwner || isMember) return;
+      // V3 §40: TEAM abre el proyecto al equipo de colaboración vinculado.
+      if (project.visibility === ProjectVisibility.TEAM && project.teamId) {
+        const perfil = await this.profiles.findOne({ where: { userId: user.userId } });
+        const team = await this.teams.findOne({ where: { id: project.teamId } });
+        const delEquipo = !!perfil && !!team && (team.ownerProfileId === perfil.id
+          || await this.teamMembers.exists({ where: { teamId: team.id, studentProfileId: perfil.id } }));
+        if (delEquipo) return;
       }
-      return;
+      throw new ForbiddenException('No tiene acceso a este proyecto.');
     }
 
     if (user.role === RolNombre.TEACHER) {
@@ -336,7 +557,11 @@ export class ProjectsService {
       qb.andWhere('p.status = :status', { status: filters.status });
     }
     if (filters.areaId) {
-      qb.andWhere('p.academic_area_id = :areaId', { areaId: filters.areaId });
+      // V3 §21.2: cualquiera de sus áreas, no solo la principal.
+      qb.andWhere(
+        '(p.academic_area_id = :areaId OR EXISTS (SELECT 1 FROM project_areas pa WHERE pa.project_id = p.id AND pa.academic_area_id = :areaId))',
+        { areaId: filters.areaId },
+      );
     }
     if (filters.technology) {
       // Coincidencia sin distinguir mayusculas dentro del arreglo de tecnologias.
@@ -761,12 +986,42 @@ export class ProjectsService {
   private async findOneOrFail(id: string): Promise<Project> {
     const project = await this.projects.findOne({
       where: { id },
-      relations: { academicArea: true, members: true, evidences: true, createdByProfile: true },
+      relations: {
+        academicArea: true, members: true, evidences: true, createdByProfile: true,
+        projectAreas: { academicArea: true }, projectSkills: { skill: true },
+      },
     });
     if (!project) {
       throw new NotFoundException('Proyecto no encontrado.');
     }
     return project;
+  }
+
+  /**
+   * Vista pública por enlace (V3 §40).
+   *
+   * Solo lo que describe el proyecto: nunca la bitácora, la auditoría, los
+   * correos, los archivos ni la retroalimentación docente. El token es el
+   * único secreto; si la visibilidad cambia, deja de funcionar.
+   */
+  async findPublic(token: string) {
+    if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) throw new NotFoundException('Enlace no válido.');
+    const p = await this.projects.findOne({
+      where: { publicLinkToken: token, visibility: ProjectVisibility.PUBLIC_LINK },
+      relations: { projectAreas: { academicArea: true }, projectSkills: { skill: true } },
+    });
+    if (!p || p.status === ProjectStatus.DRAFT) throw new NotFoundException('Enlace no válido.');
+    return {
+      title: p.title,
+      description: p.description,
+      status: p.status,
+      areas: (p.projectAreas ?? []).map((a) => a.academicArea?.name).filter(Boolean),
+      skills: (p.projectSkills ?? []).map((s) => s.skill?.name).filter(Boolean),
+      repositoryUrl: p.repositoryUrl,
+      demoUrl: p.demoUrl,
+      backingTier: p.backingTier,
+      updatedAt: p.updatedAt,
+    };
   }
 
   private async requireProfile(userId: string): Promise<StudentProfile> {

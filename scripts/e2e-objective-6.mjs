@@ -18,7 +18,7 @@
 //  Las cuentas que crea llevan sufijo de tiempo, por lo que puede repetirse.
 // =============================================================================
 
-import { leerCorreo, provisionAndActivate, aprobarActividad } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo, crearProyectoBorrador } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -262,16 +262,12 @@ async function rf17Calculo(ctx) {
   check(s?.signalsCount >= 3, '17.5 Pero se tuvieron en cuenta: el resumen cuenta las señales consideradas', `senales ${s?.signalsCount}`);
 
   section('Proyecto propio: respaldo y tecnologías del integrante (V2 §47.2, §48)');
-  const proyecto = await req('POST', '/projects', {
-    token: A.token,
-    body: {
+  const proyecto = await crearProyectoBorrador(A.token, {
       title: `Orquestador de servicios ${TS}`,
       description: 'Proyecto academico del escenario de afinidad.',
       areaId: areaPrincipal.id,
-      status: 'active',
       technologies: ['Kubernetes', 'gRPC'],
       visibility: 'teachers',
-    },
   });
   check(proyecto.status === 201, '17.6 El estudiante registra un proyecto', msgOf(proyecto));
   ctx.proyectoId = proyecto.data?.id;
@@ -368,10 +364,7 @@ async function rf17Explicabilidad(ctx) {
   check((bd.data?.contributions ?? []).some((c) => c.sourceLabel.includes('Proyecto propio')), '17.28 El proyecto propio aparece identificado por su titulo');
 
   section('Deduccion por etiquetas (coincidencias de RN-14)');
-  const porEtiquetas = await req('POST', '/projects', {
-    token: A.token,
-    body: { title: `Visualizador de mallas ${TS}`, description: 'Proyecto sin area declarada, para deduccion por etiquetas.', status: 'active', technologies: ['OpenGL', 'Shaders'], visibility: 'profile' },
-  });
+  const porEtiquetas = await crearProyectoBorrador(A.token, { title: `Visualizador de mallas ${TS}`, description: 'Proyecto sin area declarada, para deduccion por etiquetas.', technologies: ['OpenGL', 'Shaders'], visibility: 'profile' });
   check(porEtiquetas.status === 201, '17.29 Proyecto registrado sin area academica declarada');
   const bdSec = await req('GET', `/affinity/me/areas/${areaSecundaria.id}/breakdown`, { token: A.token });
   check((bdSec.data?.contributions ?? []).some((c) => c.matchType === 'tag'),

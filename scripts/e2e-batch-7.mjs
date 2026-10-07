@@ -11,7 +11,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-7.mjs
  */
 
-import { loginAdmin, provisionAndActivate, req, aprobarActividad } from './lib/fixtures.mjs';
+import { loginAdmin, provisionAndActivate, req, aprobarActividad, crearProyectoActivo, crearProyectoBorrador } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -665,15 +665,12 @@ async function preparar() {
   });
 
   // Un proyecto declarado en el área fuerte: hay afinidad y no hay respaldo.
-  await req('POST', '/projects', {
-    token: est.token,
-    body: {
+  // V3 §21: sin repositorio ni evidencia, es un borrador.
+  await crearProyectoBorrador(est.token, {
       title: `Prototipo del área fuerte ${TS}`,
       description: 'Proyecto declarado, sin nada que corroborar todavía.',
       areaId: areaFuerte.id,
-      status: 'active',
       visibility: 'profile',
-    },
   });
 
   // ------------------------------------------------------------ actividades
@@ -737,15 +734,11 @@ async function preparar() {
     });
   }
 
-  const proyectoRespaldado = await req('POST', '/projects', {
-    token: est.token,
-    body: {
+  const proyectoRespaldado = await crearProyectoActivo(est.token, {
       title: `Proyecto del área respaldada ${TS}`,
       description: 'Con evidencia adjunta.',
       areaId: areaRespaldada.id,
-      status: 'active',
       visibility: 'profile',
-    },
   });
   await req('POST', `/projects/${proyectoRespaldado.data.id}/evidences`, {
     token: est.token,

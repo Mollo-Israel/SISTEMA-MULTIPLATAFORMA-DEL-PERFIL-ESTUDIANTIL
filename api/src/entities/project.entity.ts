@@ -16,6 +16,8 @@ import { ProjectMember } from './project-member.entity';
 import { ProjectEvidence } from './project-evidence.entity';
 import { ProjectInvitation } from './project-invitation.entity';
 import { ProjectFeedback } from './project-feedback.entity';
+import { ProjectArea, ProjectSkill } from './project-area.entity';
+import { Team } from './collaboration.entity';
 import { ProjectBackingTier } from '@perfil/shared';
 
 @Entity('projects')
@@ -67,6 +69,29 @@ export class Project {
 
   @Column({ name: 'demo_url', type: 'varchar', length: 500, nullable: true })
   demoUrl: string | null;
+
+  /**
+   * V3 §40: secreto del enlace público. Solo existe mientras la visibilidad
+   * es PUBLIC_LINK; al cambiarla se borra y el enlace deja de funcionar.
+   */
+  @Column({ name: 'public_link_token', type: 'varchar', length: 64, nullable: true })
+  publicLinkToken: string | null;
+
+  /** V3 §21.1: equipo de colaboración con el que se trabaja el proyecto. */
+  @Column({ name: 'team_id', type: 'uuid', nullable: true })
+  teamId: string | null;
+
+  @ManyToOne(() => Team, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'team_id' })
+  team: Team | null;
+
+  /** V3 §21.2: una o varias áreas. */
+  @OneToMany(() => ProjectArea, (a) => a.project)
+  projectAreas: ProjectArea[];
+
+  /** V3 §21.1: tecnologías del catálogo. */
+  @OneToMany(() => ProjectSkill, (s) => s.project)
+  projectSkills: ProjectSkill[];
 
   /**
    * Nivel de respaldo derivado (§36).

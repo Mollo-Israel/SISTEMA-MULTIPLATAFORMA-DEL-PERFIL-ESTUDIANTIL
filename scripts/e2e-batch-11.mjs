@@ -13,7 +13,7 @@
  */
 
 import { Buffer } from 'node:buffer';
-import { API, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { API, loginAdmin, provisionAndActivate, req, crearProyectoActivo } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -479,16 +479,12 @@ async function urlsSeguras(ctx) {
 
   let rechazados = 0;
   for (const [valor] of peligrosos) {
-    const r = await req('POST', '/projects', {
-      token: ctx.est.token,
-      body: {
+    const r = await crearProyectoActivo(ctx.est.token, {
         title: `Proyecto con enlace raro ${TS}`,
         description: 'Prueba de validación de enlaces.',
         areaId: ctx.area.id,
-        status: 'active',
         visibility: 'private',
         demoUrl: valor,
-      },
     });
     if (r.status === 400) rechazados++;
   }
@@ -498,16 +494,12 @@ async function urlsSeguras(ctx) {
     `rechazados ${rechazados} de ${peligrosos.length}`,
   );
 
-  const bueno = await req('POST', '/projects', {
-    token: ctx.est.token,
-    body: {
+  const bueno = await crearProyectoActivo(ctx.est.token, {
       title: `Proyecto con enlace válido ${TS}`,
       description: 'Prueba de validación de enlaces.',
       areaId: ctx.area.id,
-      status: 'active',
       visibility: 'private',
       demoUrl: 'https://demo.univalle.edu/proyecto',
-    },
   });
   check(bueno.status === 201, 'B11.40 Y un https normal se acepta', String(bueno.status));
 }

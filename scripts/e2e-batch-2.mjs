@@ -16,7 +16,7 @@ import {
   codigoUniversitario,
   loginAdmin,
   provisionAndActivate,
-  req,
+  req, crearProyectoActivo
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -468,15 +468,11 @@ async function habilidades(ctx) {
   check(!(resumen.data?.skills ?? []).some((x) => x.skillId === skill.id),
     'B2.51 Interesarse por una tecnología no la vuelve «respaldada»');
 
-  const proyecto = await req('POST', '/projects', {
-    token: ctx.est.token,
-    body: {
+  const proyecto = await crearProyectoActivo(ctx.est.token, {
       title: `Proyecto de respaldo ${TS}`,
       description: 'Proyecto que usa explícitamente la tecnología declarada.',
-      status: 'active',
       technologies: [skill.name],
       visibility: 'teachers',
-    },
   });
   check(proyecto.status === 201, 'B2.52 El estudiante registra un proyecto con esa tecnología', msgOf(proyecto));
 

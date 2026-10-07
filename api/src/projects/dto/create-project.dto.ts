@@ -37,6 +37,30 @@ export class CreateProjectDto {
   @IsUUID('4')
   areaId?: string;
 
+  /** V3 §21.2: una o varias áreas. `areaId` se mantiene por compatibilidad. */
+  @ApiProperty({ required: false, type: [String], description: 'Áreas académicas (1 a 6)' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6, { message: 'Como máximo 6 áreas.' })
+  @ArrayUnique({ message: 'No repitas áreas.' })
+  @IsUUID('4', { each: true, message: 'Elige áreas del catálogo.' })
+  areaIds?: string[];
+
+  /** V3 §21.1: tecnologías del catálogo, de las áreas elegidas (§4). */
+  @ApiProperty({ required: false, type: [String], description: 'Tecnologías del catálogo (hasta 20)' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20, { message: 'Como máximo 20 tecnologías.' })
+  @ArrayUnique({ message: 'No repitas tecnologías.' })
+  @IsUUID('4', { each: true, message: 'Elige tecnologías del catálogo.' })
+  skillIds?: string[];
+
+  /** V3 §21.1: equipo de colaboración del que forma parte quien registra. */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsUUID('4', { message: 'Elige uno de tus equipos.' })
+  teamId?: string | null;
+
   @ApiProperty({ required: false, type: [String], example: ['React', 'Node.js'] })
   @IsOptional()
   @Transform(trimUniqueArray)
@@ -77,7 +101,8 @@ export class CreateProjectDto {
     required: false,
     default: ProjectVisibility.PROFILE,
     description:
-      'private = solo tú y tus integrantes · profile = visible en tu perfil · teachers = además consultable por tus docentes',
+      'private = solo tú y tus integrantes · team = además tu equipo · teachers = además tus docentes · '
+      + 'profile = visible en tu perfil · public_link = resumen público para quien tenga el enlace',
   })
   @IsOptional()
   @IsEnum(ProjectVisibility, { message: 'El nivel de visibilidad no es válido.' })
