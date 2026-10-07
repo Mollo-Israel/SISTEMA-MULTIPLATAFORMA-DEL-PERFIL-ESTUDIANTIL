@@ -77,6 +77,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/director/approvals', label: 'Aprobaciones' },
         { to: '/director/activities', label: 'Actividades académicas' },
         { to: '/director/constancies', label: 'Constancias internas' },
+        { to: '/director/credential-reviews', label: 'Revisión de credenciales' },
         { to: '/director/affinity', label: 'Mapa de afinidad' },
         { to: '/director/trends', label: 'Tendencias' },
         { to: '/director/resources', label: 'Catálogo de recursos' },

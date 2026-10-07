@@ -1,10 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ProjectVisibility, RolNombre } from '@perfil/shared';
+import { IsNull, Not, Repository } from 'typeorm';
+import { ProjectVisibility, RolNombre, ValidationResourceType } from '@perfil/shared';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
+import { ValidationRecord } from '../entities/validation-record.entity';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -39,6 +40,7 @@ export class FileAccessService {
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(ExternalOpportunityValidationReference)
     private readonly references: Repository<ExternalOpportunityValidationReference>,
+    @InjectRepository(ValidationRecord) private readonly records: Repository<ValidationRecord>,
     private readonly teacherScope: TeacherScopeService,
   ) {}
 
@@ -68,7 +70,17 @@ export class FileAccessService {
       // §105: el archivo del certificado es privado por defecto. Solo su
       // titular y el administrador lo descargan; un docente ve la metadata y
       // el nivel de respaldo, no el PDF.
-      await this.assertOwnerOrAdmin(user, certificate.studentProfileId);
+      // V3 §16: Dirección necesita ver el documento para decidir una
+      // revisión manual excepcional, y solo mientras exista esa revisión.
+      const enRevision = user.role === RolNombre.CAREER_DIRECTOR
+        && await this.records.exists({
+          where: {
+            resourceType: ValidationResourceType.EXTERNAL_CERTIFICATE,
+            resourceId: certificate.id,
+            manualReviewStatus: Not(IsNull()),
+          },
+        });
+      if (!enRevision) await this.assertOwnerOrAdmin(user, certificate.studentProfileId);
       return {
         storageKey,
         downloadName: certificate.certificateName ?? storageKey,

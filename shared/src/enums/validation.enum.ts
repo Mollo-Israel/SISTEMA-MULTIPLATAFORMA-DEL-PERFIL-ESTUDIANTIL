@@ -45,16 +45,63 @@ export enum BackingTier {
   DECLARED = 'declared',
   /** Documento legible y metadata consistente. */
   SUPPORTED = 'supported',
-  /** URL o QR externo accesible y coherente con lo declarado. */
+  /**
+   * Señal verificable fuerte (V3 §19): fuente oficial que identifica la
+   * credencial y coincide, insignia verificable, o la revisión manual
+   * excepcional de Dirección para una histórica sin verificador.
+   */
   CORROBORATED = 'corroborated',
+  /**
+   * V3 §19: contradicción significativa (nombre, curso, emisor, código o
+   * dominio). No se borra: queda señalada y no suma mientras siga así.
+   */
+  FLAGGED = 'flagged',
 }
 
-/** Orden de menor a mayor respaldo, para comparar niveles. */
+/** Orden de menor a mayor respaldo, para comparar niveles. FLAGGED queda por debajo de todo. */
 export const BACKING_TIER_ORDER: readonly BackingTier[] = [
+  BackingTier.FLAGGED,
   BackingTier.DECLARED,
   BackingTier.SUPPORTED,
   BackingTier.CORROBORATED,
 ];
+
+/**
+ * Resultado de la verificación oficial de una credencial externa (V3 §18.2).
+ *
+ * Una página que no responde o que necesita JavaScript no convierte la
+ * credencial en falsa: queda inconclusa o sin prueba legible.
+ */
+export enum CredentialCheckStatus {
+  /** Una fuente oficial identifica la credencial y coincide con el estudiante. */
+  VERIFIED_MATCH = 'verified_match',
+  /** Responde, pero no expone una prueba que pueda leerse. */
+  REACHABLE_NO_STRUCTURED_PROOF = 'reachable_no_structured_proof',
+  /** Contradice: dominio no permitido, destinatario de otro, revocada. */
+  MISMATCH = 'mismatch',
+  /** No se pudo comprobar (verificador apagado o sin salida a internet). */
+  INCONCLUSIVE = 'inconclusive',
+  /** El proveedor no respondió. */
+  UNREACHABLE = 'unreachable',
+  /** La credencial no trae URL, QR ni insignia verificable. */
+  NO_VERIFIER = 'no_verifier',
+}
+
+/** V3 §18.1: el QR no es obligatorio; se registra si estaba o no. */
+export enum QrPresence {
+  QR_PRESENT = 'qr_present',
+  QR_ABSENT = 'qr_absent',
+}
+
+/**
+ * Revisión manual excepcional (V3 §16, §19): solo para credenciales
+ * históricas sin verificador digital, y solo Dirección puede decidirla.
+ */
+export enum ManualReviewStatus {
+  REQUESTED = 'requested',
+  CORROBORATED = 'corroborated',
+  NOT_CORROBORATED = 'not_corroborated',
+}
 
 /**
  * Coincidencia entre el nombre del titular y el que aparece en el documento

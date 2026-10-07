@@ -303,3 +303,47 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 56/56; `e2e-v3` 107 (B8 36/36). Regresión completa: **1532 correctas, 0 fallos** (20 suites; `e2e-ai-provider` 37/37 con correo simulado).
 
 **Pendientes:** comparación de la credencial contra la referencia y validación escalonada (B9); centro de notificaciones (B16).
+
+---
+
+## BATCH 9 — Validación de credenciales externas
+
+**ESTADO:** completo
+
+**Objetivo:** validar las credenciales de forma escalonada y honesta: CORROBORATED solo con una señal verificable fuerte, FLAGGED ante contradicciones, inconcluso cuando no se puede concluir, y una revisión manual excepcional para históricas sin verificador (§18, §19, §20).
+
+**Hallazgos iniciales:**
+- Cualquier URL declarada que respondiera subía el certificado a CORROBORATED, sin mirar el dominio ni el contenido.
+- No existía FLAGGED, ni estados de verificación oficial, ni comparación con la referencia de la oportunidad.
+- El QR se leía después del OCR; no había detección de Open Badges ni revisión manual.
+
+**Cambios:**
+- **Orden §18:** PDF nativo → QR → OCR (solo si falta texto) → URL/QR oficial → comparación → IA (no se usa: nunca decide) → respaldo determinista. Queda registrado en `credential_check.pipeline`.
+- **Verificación oficial (`CredentialVerifierService`, §18.2):** elige la URL (declarada, del QR, del documento o de la insignia), la consulta con la protección SSRF de siempre —también la del QR—, juzga el dominio contra los oficiales (los esperados por la oportunidad o un catálogo inicial de emisores y plataformas de insignias; comparación por dominio, nunca por subcadena) y compara la página. Estados: VERIFIED_MATCH, REACHABLE_NO_STRUCTURED_PROOF, MISMATCH, INCONCLUSIVE, UNREACHABLE y NO_VERIFIER.
+- **Regla de corroboración:** dominio oficial y página que nombra al estudiante con el código o el curso. El código y la URL los escribe quien registra, así que la página de otra persona no corrobora. Un emisor desconocido nunca corrobora por URL (§20).
+- **Open Badges (§18.3, opcional):** aserción OB 2.0 hosted en el dominio oficial con destinatario propio (hash `sha256$` con sal contra el correo del estudiante) → VERIFIED_MATCH; destinatario ajeno o revocada → MISMATCH. Insignias horneadas en PNG (`openbadges` en tEXt/iTXt). En credenciales verificables (OB 3.0/VC) se valida estructura, sujeto y estado; la prueba criptográfica se informa como presente pero no verificada, y por eso no corrobora por sí sola. No se simula lo que no se hace.
+- **QR (§18.1):** `qr_present` / `qr_absent`; la ausencia no falla.
+- **Respaldo (§19, reglas puras en `credential-check.rules.ts`):** FLAGGED si hay contradicción (nombre, código declarado distinto del leído, código fuera del patrón de la referencia, documento de otro curso o emisor que la oportunidad, verificación que no coincide o dirección bloqueada por SSRF); CORROBORATED solo con VERIFIED_MATCH; SUPPORTED con documento legible y coherente, contexto de oportunidad que coincide o página oficial que responde; si no, DECLARED. Las contradicciones solo se evalúan con texto legible: sin texto no se acusa a nadie.
+- **Proveedor caído (§18.2):** UNREACHABLE y la validación queda INCONCLUSIVE, no «falsa».
+- **FLAGGED:** nuevo nivel en el enum; no se borra nada, se avisa al estudiante por el punto de notificación y suma 0 de afinidad y respaldo (§35).
+- **Revisión manual excepcional (§16):** solo para históricas, ya comprobadas, sin verificador que concluya, sin contradicciones y con archivo o enlace. La pide el estudiante (`POST /certificates/external/:id/manual-review`); la decide **solo Dirección** (`GET/POST /validation/manual-reviews`), con motivo obligatorio de al menos 20 caracteres; es la única vía para que una así llegue a CORROBORATED. Mientras exista la revisión, Dirección puede abrir el documento; antes no. Si el estudiante cambia lo declarado, la revisión anterior se anula y se vuelve a comprobar. Auditoría `EXTERNAL_CREDENTIAL_MANUAL_REVIEW_REQUESTED` y `EXTERNAL_CREDENTIAL_MANUAL_REVIEWED`; cada veredicto, `EXTERNAL_CREDENTIAL_CHECKED`.
+- **Versión del validador 2** y `POST /validation/reprocess-outdated` (administración) para revalidar lo anterior sin borrar nada ni reiniciar revisiones.
+- **Pruebas:** `LINK_CHECK_TEST_ORIGINS` permite a las suites simular un verificador local con un nombre de dominio (`nombre:puerto=ip:puerto`). Se ignora siempre con `NODE_ENV=production`, así que la protección SSRF no tiene excepciones en producción.
+- **Web:** el respaldo muestra el nivel (también «Con inconsistencias»), el estado de la verificación, si se leyó QR, las contradicciones en lenguaje claro y el botón «Pedir revisión excepcional». Dirección tiene «Revisión de credenciales» con el documento, el enlace, la nota y la decisión motivada. **Móvil:** niveles y textos actualizados.
+
+**Migraciones:** `1780520000000-V3CredentialValidation` (valor `flagged`, `credential_check` jsonb, columnas de revisión manual con índice parcial). Copia de seguridad previa (`pre-v3-b9.dump`); `up` → `down` → `up` probado (el `down` devuelve FLAGGED a DECLARED).
+
+**Pruebas ejecutadas:** unitarias de dominio, estados, respaldo, Open Badges, PNG horneado y comparación de página (70/70); `e2e-v3 batch9` (V3.9.1–V3.9.31) contra un verificador simulado con página oficial, página de otra persona, página que requiere JavaScript, proveedor caído, insignias propia y ajena, QR a la red interna y QR oficial; regresión completa.
+
+**Decisiones:**
+- Dependencia de desarrollo `qrcode` (solo para generar QR en las pruebas).
+- La revisión manual la decide Dirección, no Administración: §6.5 la define como técnica y §2 dice que no es emisora académica.
+- El catálogo de dominios de emisores es inicial y se dice así en el código (§20: no se promete universalidad).
+
+**Riesgos:** las credenciales ya validadas con la versión 1 conservan su nivel hasta que se revaliden con `reprocess-outdated`; algunas que antes eran CORROBORATED por una URL cualquiera bajarán. Es el comportamiento que pide §19.
+
+**Pruebas adaptadas:** `e2e-batch-3` B3.31 (un certificado con el nombre de otra persona ahora queda FLAGGED, §19, en lugar de DECLARED); `e2e-qa` QA.32 (el nombre de la habilidad de prueba chocaba entre corridas: ahora es único).
+
+**Resultados:** unitarias 70/70; `e2e-v3` 138 (B9 31/31). Regresión completa: **1563 correctas, 0 fallos** (20 suites). La API de desarrollo para las pruebas se arranca con `MAIL_TRANSPORT=console LINK_CHECK_TEST_ORIGINS=verificador.afinia-pruebas.org:3997=127.0.0.1:3997`.
+
+**Pendientes:** revalidar en cada entorno las credenciales de la versión 1 (`POST /validation/reprocess-outdated`); notificaciones persistentes (B16).

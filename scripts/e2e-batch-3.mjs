@@ -416,8 +416,8 @@ async function extraccion(ctx) {
     String(vAjeno?.identityMatchStatus),
   );
   check(
-    vAjeno?.backingTier === 'declared',
-    'B3.31 Con el nombre equivocado no sube de DECLARED, por legible que sea',
+    vAjeno?.backingTier === 'flagged',
+    'B3.31 V3 §19 Con el nombre equivocado queda FLAGGED (no suma), por legible que sea',
     String(vAjeno?.backingTier),
   );
 

@@ -43,11 +43,24 @@ const CLOUD_METADATA = new Set(['169.254.169.254', 'fd00:ec2::254', '100.100.100
 /** Motivo que no es un bloqueo de seguridad sino un servidor ausente. */
 const NO_RESUELVE = 'No se pudo resolver el nombre del servidor.';
 
+/** Lo consultado más el cuerpo, que se usa para comparar y nunca se guarda. */
+export interface FetchedPage {
+  result: LinkCheckResult;
+  body: string | null;
+  contentType: string | null;
+}
+
 @Injectable()
 export class LinkCheckerService {
   private readonly logger = new Logger(LinkCheckerService.name);
   private readonly timeoutMs: number;
   private readonly enabled: boolean;
+  /**
+   * Orígenes `host:puerto` que las suites de integración levantan en local
+   * para simular un verificador oficial. En producción se ignora siempre,
+   * aunque alguien lo configure: ahí la protección SSRF no tiene excepciones.
+   */
+  private readonly testOrigins: Map<string, string>;
 
   constructor(config: ConfigService) {
     const raw = Number(config.get<string>('LINK_CHECK_TIMEOUT_MS'));
@@ -55,9 +68,33 @@ export class LinkCheckerService {
     // Permite apagarlo donde no haya salida a internet. Apagado, todo queda
     // UNVERIFIED, que es honesto: no se comprobó.
     this.enabled = config.get<string>('LINK_CHECK_ENABLED', 'true') !== 'false';
+    const pruebas = (config.get<string>('LINK_CHECK_TEST_ORIGINS') ?? '')
+      .split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+    const produccion = (config.get<string>('NODE_ENV') ?? process.env.NODE_ENV) === 'production';
+    if (pruebas.length && produccion) {
+      this.logger.warn('LINK_CHECK_TEST_ORIGINS se ignora en producción.');
+    }
+    // `host:puerto` permite ese origen tal cual; `nombre:puerto=ip:puerto`
+    // además lo dirige a una IP local, para probar con un nombre de dominio
+    // sin depender del DNS público.
+    this.testOrigins = new Map(
+      (produccion ? [] : pruebas).map((x) => {
+        const [origen, destino] = x.split('=');
+        return [origen, destino ?? origen] as [string, string];
+      }),
+    );
   }
 
   async check(url: string): Promise<LinkCheckResult> {
+    return (await this.fetchPage(url)).result;
+  }
+
+  /**
+   * Igual que `check`, pero devuelve también el cuerpo (como mucho 256 KB)
+   * para comparar la página oficial con lo declarado (V3 §18.2). El cuerpo
+   * no se persiste: puede contener datos de terceros.
+   */
+  async fetchPage(url: string): Promise<FetchedPage> {
     const ahora = new Date().toISOString();
     const base: LinkCheckResult = {
       status: LinkCheckStatus.UNVERIFIED,
@@ -68,13 +105,14 @@ export class LinkCheckerService {
       checkedAt: ahora,
     };
 
-    if (!this.enabled) return base;
+    const sinCuerpo = (result: LinkCheckResult): FetchedPage => ({ result, body: null, contentType: null });
+    if (!this.enabled) return sinCuerpo(base);
 
     let actual: URL;
     try {
       actual = new URL(url);
     } catch {
-      return { ...base, status: LinkCheckStatus.BLOCKED, blockedReason: 'La dirección no es válida.' };
+      return sinCuerpo({ ...base, status: LinkCheckStatus.BLOCKED, blockedReason: 'La dirección no es válida.' });
     }
 
     for (let salto = 0; salto <= MAX_REDIRECTS; salto += 1) {
@@ -84,19 +122,19 @@ export class LinkCheckerService {
         // servidor que no esta. Llamarlo BLOCKED mezclaria «me niego a ir»
         // con «no existe», que es justo lo que §31 separa.
         const inexistente = veredicto === NO_RESUELVE;
-        return {
+        return sinCuerpo({
           ...base,
           status: inexistente ? LinkCheckStatus.UNAVAILABLE : LinkCheckStatus.BLOCKED,
           blockedReason: inexistente ? null : veredicto,
           finalUrl: actual.toString(),
-        };
+        });
       }
 
       let respuesta: Response;
       try {
         respuesta = await this.fetchOnce(actual);
       } catch (error) {
-        return {
+        return sinCuerpo({
           ...base,
           status: LinkCheckStatus.UNAVAILABLE,
           finalUrl: actual.toString(),
@@ -104,39 +142,44 @@ export class LinkCheckerService {
           title: null,
           httpStatus: null,
           ...(this.logFallo(actual, error) ?? {}),
-        };
+        });
       }
 
       const redireccion = respuesta.status >= 300 && respuesta.status < 400;
       const destino = respuesta.headers.get('location');
       if (redireccion && destino) {
         if (salto === MAX_REDIRECTS) {
-          return {
+          return sinCuerpo({
             ...base,
             status: LinkCheckStatus.UNAVAILABLE,
             finalUrl: actual.toString(),
             httpStatus: respuesta.status,
-          };
+          });
         }
         try {
           actual = new URL(destino, actual);
         } catch {
-          return { ...base, status: LinkCheckStatus.UNAVAILABLE, finalUrl: actual.toString() };
+          return sinCuerpo({ ...base, status: LinkCheckStatus.UNAVAILABLE, finalUrl: actual.toString() });
         }
         continue;
       }
 
-      const titulo = await this.readTitle(respuesta);
+      const tipo = respuesta.headers.get('content-type');
+      const texto = await this.readBody(respuesta);
       return {
-        ...base,
-        status: respuesta.ok ? LinkCheckStatus.AVAILABLE : LinkCheckStatus.UNAVAILABLE,
-        finalUrl: actual.toString(),
-        httpStatus: respuesta.status,
-        title: titulo,
+        result: {
+          ...base,
+          status: respuesta.ok ? LinkCheckStatus.AVAILABLE : LinkCheckStatus.UNAVAILABLE,
+          finalUrl: actual.toString(),
+          httpStatus: respuesta.status,
+          title: tipo?.includes('html') && texto ? this.titleOf(texto) : null,
+        },
+        body: respuesta.ok ? texto : null,
+        contentType: tipo,
       };
     }
 
-    return { ...base, status: LinkCheckStatus.UNAVAILABLE, finalUrl: actual.toString() };
+    return sinCuerpo({ ...base, status: LinkCheckStatus.UNAVAILABLE, finalUrl: actual.toString() });
   }
 
   // ====================================================================
@@ -156,6 +199,10 @@ export class LinkCheckerService {
 
     const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
     if (!host) return 'La dirección no tiene servidor.';
+    if (this.testOrigins.size) {
+      const puerto = url.port || (url.protocol === 'https:' ? '443' : '80');
+      if (this.testOrigins.has(`${host}:${puerto}`)) return null;
+    }
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) {
       return 'No se consultan direcciones locales.';
     }
@@ -290,7 +337,16 @@ export class LinkCheckerService {
    * `redirect: 'manual'` es deliberado: seguirlas automáticamente saltaría la
    * comprobación de cada salto, que es justo donde vive el ataque.
    */
-  private async fetchOnce(url: URL): Promise<Response> {
+  private async fetchOnce(original: URL): Promise<Response> {
+    let url = original;
+    if (this.testOrigins.size) {
+      const puerto = original.port || (original.protocol === 'https:' ? '443' : '80');
+      const destino = this.testOrigins.get(`${original.hostname.toLowerCase()}:${puerto}`);
+      if (destino && destino !== `${original.hostname.toLowerCase()}:${puerto}`) {
+        url = new URL(original.toString());
+        url.host = destino;
+      }
+    }
     const control = new AbortController();
     const reloj = setTimeout(() => control.abort(), this.timeoutMs);
     try {
@@ -310,10 +366,10 @@ export class LinkCheckerService {
     }
   }
 
-  /** Título de la página, leyendo solo el principio del cuerpo. */
-  private async readTitle(respuesta: Response): Promise<string | null> {
+  /** Cuerpo de texto (HTML, JSON o texto), leyendo como mucho MAX_BODY_BYTES. */
+  private async readBody(respuesta: Response): Promise<string | null> {
     const tipo = respuesta.headers.get('content-type') ?? '';
-    if (!tipo.includes('html')) return null;
+    if (!/html|json|text/.test(tipo)) return null;
 
     const cuerpo = respuesta.body;
     if (!cuerpo) return null;
@@ -336,7 +392,10 @@ export class LinkCheckerService {
       await lector.cancel().catch(() => {});
     }
 
-    const html = Buffer.concat(trozos.map((t) => Buffer.from(t))).toString('utf8');
+    return Buffer.concat(trozos.map((t) => Buffer.from(t))).toString('utf8').slice(0, MAX_BODY_BYTES);
+  }
+
+  private titleOf(html: string): string | null {
     const m = /<title[^>]*>([\s\S]{0,300}?)<\/title>/i.exec(html);
     if (!m) return null;
     return m[1].replace(/\s+/g, ' ').trim().slice(0, 200) || null;

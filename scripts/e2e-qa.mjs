@@ -215,7 +215,7 @@ async function formularios(ctx) {
     'QA.31 Habilidad: el área es obligatoria', json(skillSinArea.data?.fields));
   const skill = await req('POST', '/skills', {
     token: ctx.admin,
-    body: { name: `Soldadura de placas ${creada.data?.code?.slice(-2) ?? ''}`.trim(), academicAreaId: ctx.areaId },
+    body: { name: `Soldadura de placas ${String(Date.now()).slice(-7)}`, academicAreaId: ctx.areaId },
   });
   check(skill.status === 201 && skill.data?.code, 'QA.32 Habilidad con área: se crea con código', json(skill.data));
 

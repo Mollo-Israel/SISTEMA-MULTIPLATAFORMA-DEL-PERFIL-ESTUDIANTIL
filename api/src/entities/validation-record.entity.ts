@@ -8,8 +8,11 @@ import {
 } from 'typeorm';
 import {
   BackingTier,
+  CredentialCheckStatus,
   IdentityMatchStatus,
   LinkCheckStatus,
+  ManualReviewStatus,
+  QrPresence,
   ValidationResourceType,
   ValidationStatus,
 } from '@perfil/shared';
@@ -28,6 +31,37 @@ export interface ExtractedDocumentData {
   textLength: number;
   /** Contenido de los QR encontrados, si los hubo. */
   qrPayloads?: string[];
+}
+
+/**
+ * Verificación escalonada de una credencial externa (V3 §18).
+ *
+ * Se guarda lo que se comprobó y por qué, para poder explicarlo: el nivel
+ * de respaldo nunca es una caja negra.
+ */
+export interface CredentialCheckResult {
+  status: CredentialCheckStatus;
+  /** URL consultada (declarada, del QR o de la insignia) y adónde llevó. */
+  url: string | null;
+  urlSource: 'declared' | 'qr' | 'document' | 'badge' | null;
+  finalUrl: string | null;
+  /** ¿Dominio oficial? `null` si no había base para juzgarlo. */
+  official: boolean | null;
+  officialDomains: string[] | null;
+  qr: QrPresence;
+  /** Qué encontró en la página oficial. */
+  page: { credentialId: boolean; holder: boolean; course: boolean; issuer: boolean } | null;
+  openBadge: {
+    format: string; recipientMatch: boolean | null; revoked: boolean;
+    hosted: boolean; proofPresent: boolean; proofVerified: boolean;
+  } | null;
+  /** Contradicciones que llevaron a FLAGGED. */
+  contradictions: string[];
+  /** Pasos que se ejecutaron, en orden (§18). */
+  pipeline: string[];
+  /** La IA es opcional y nunca decide el nivel (§18.6). */
+  aiUsed: boolean;
+  checkedAt: string;
 }
 
 /** Lo que se pudo averiguar del enlace de verificacion (§31). */
@@ -99,6 +133,36 @@ export class ValidationRecord {
    */
   @Column({ name: 'duplicate_of_id', type: 'uuid', nullable: true })
   duplicateOfId: string | null;
+
+  /** V3 §18: verificación oficial de una credencial externa. */
+  @Column({ name: 'credential_check', type: 'jsonb', nullable: true })
+  credentialCheck: CredentialCheckResult | null;
+
+  // ------------------------------------------- revisión manual excepcional
+
+  /** V3 §16/§19: solo históricas sin verificador; la decide Dirección. */
+  @Column({
+    name: 'manual_review_status', type: 'enum', enum: ManualReviewStatus,
+    enumName: 'validation_manual_review_enum', nullable: true,
+  })
+  manualReviewStatus: ManualReviewStatus | null;
+
+  /** Lo que el estudiante cuenta a Dirección al pedirla. */
+  @Column({ name: 'manual_review_note', type: 'varchar', length: 300, nullable: true })
+  manualReviewNote: string | null;
+
+  @Column({ name: 'manual_review_requested_at', type: 'timestamptz', nullable: true })
+  manualReviewRequestedAt: Date | null;
+
+  @Column({ name: 'manual_reviewer_id', type: 'uuid', nullable: true })
+  manualReviewerId: string | null;
+
+  @Column({ name: 'manual_reviewed_at', type: 'timestamptz', nullable: true })
+  manualReviewedAt: Date | null;
+
+  /** Cómo lo comprobó quien revisó. Obligatorio al decidir. */
+  @Column({ name: 'manual_review_reason', type: 'varchar', length: 500, nullable: true })
+  manualReviewReason: string | null;
 
   /** Version del validador que produjo el veredicto, para poder reprocesar. */
   @Column({ name: 'validator_version', type: 'smallint', default: 1 })

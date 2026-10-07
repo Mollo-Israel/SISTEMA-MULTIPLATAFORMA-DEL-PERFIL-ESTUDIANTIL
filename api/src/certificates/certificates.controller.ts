@@ -17,6 +17,7 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { CertificatesService } from './certificates.service';
 import { CreateExternalCertificateDto } from './dto/create-external-certificate.dto';
 import { UpdateExternalCertificateDto } from './dto/update-external-certificate.dto';
+import { RequestManualReviewDto } from '../validation/dto/manual-review.dto';
 
 @ApiTags('certificates')
 @ApiBearerAuth()
@@ -54,6 +55,19 @@ export class CertificatesController {
     @Body() dto: UpdateExternalCertificateDto,
   ) {
     return this.certificatesService.update(user.userId, id, dto);
+  }
+
+  @Post(':id/manual-review')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Pide a Dirección la revisión excepcional de una credencial histórica sin verificador (V3 §16).',
+  })
+  requestManualReview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestManualReviewDto,
+  ) {
+    return this.certificatesService.requestManualReview(user.userId, id, dto.note ?? null);
   }
 
   @Delete(':id')

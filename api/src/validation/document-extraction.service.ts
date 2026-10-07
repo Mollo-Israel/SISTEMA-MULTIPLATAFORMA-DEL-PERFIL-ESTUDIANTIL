@@ -3,6 +3,16 @@ import type { ExtractedDocumentData } from '../entities/validation-record.entity
 import { extractMetadata } from './metadata.extractor';
 import { extractPdfText, MIN_USEFUL_TEXT, normalizar } from './pdf-text';
 import { OCR_PORT, OcrPort } from './ocr.port';
+import { readBakedBadge } from './credential-check.rules';
+
+/** Resultado completo: lo persistible más lo que solo se usa para comparar. */
+export interface FullExtraction {
+  data: ExtractedDocumentData;
+  /** Texto normalizado del documento. No se persiste. */
+  text: string;
+  /** Insignia Open Badges horneada en un PNG, si la había (V3 §18.3). */
+  bakedBadge: { json: unknown | null; url: string | null } | null;
+}
 
 /**
  * Extracción documental (especificacion §29).
@@ -13,8 +23,8 @@ import { OCR_PORT, OcrPort } from './ocr.port';
  * fiable y solo se baja un escalón cuando el anterior no dio lo suficiente.
  *
  *   1. texto nativo del PDF;
- *   2. si no hay texto suficiente, OCR;
- *   3. detección de QR;
+ *   2. detección de QR (V3 §18: la URL oficial vale más que cualquier OCR);
+ *   3. si no hay texto suficiente, OCR;
  *   4. normalización;
  *   5. candidatos de metadata.
  *
@@ -29,6 +39,10 @@ export class DocumentExtractionService {
   constructor(@Inject(OCR_PORT) private readonly ocr: OcrPort) {}
 
   async extract(buffer: Buffer, mimeType: string): Promise<ExtractedDocumentData> {
+    return (await this.extractFull(buffer, mimeType)).data;
+  }
+
+  async extractFull(buffer: Buffer, mimeType: string): Promise<FullExtraction> {
     let texto = '';
     let origen: ExtractedDocumentData['source'] = 'none';
     let enlaces: string[] = [];
@@ -50,7 +64,10 @@ export class DocumentExtractionService {
       }
     }
 
-    // ------------------------------------------------------------- 2. OCR
+    // -------------------------------------------------------------- 2. QR
+    const qrPayloads = await this.readQr(buffer, mimeType);
+
+    // ------------------------------------------------------------- 3. OCR
     if (texto.length < MIN_USEFUL_TEXT) {
       const resultado = await this.ocr.recognize(buffer, mimeType);
       const reconocido = normalizar(resultado.text);
@@ -59,9 +76,6 @@ export class DocumentExtractionService {
         origen = 'ocr';
       }
     }
-
-    // -------------------------------------------------------------- 3. QR
-    const qrPayloads = await this.readQr(buffer, mimeType);
     if (texto.length < MIN_USEFUL_TEXT && qrPayloads.length > 0) {
       // Un QR legible en un documento por lo demás ilegible sigue siendo una
       // fuente: lleva la URL de verificación, que es lo que más corrobora.
@@ -72,11 +86,24 @@ export class DocumentExtractionService {
     const limpio = normalizar(texto);
     const metadata = extractMetadata(limpio, { links: enlaces, qrPayloads });
 
+    let bakedBadge: FullExtraction['bakedBadge'] = null;
+    if (mimeType === 'image/png') {
+      try {
+        bakedBadge = readBakedBadge(buffer);
+      } catch {
+        bakedBadge = null;
+      }
+    }
+
     return {
-      ...metadata,
-      source: origen,
-      textLength: limpio.length,
-      qrPayloads: qrPayloads.length > 0 ? qrPayloads : undefined,
+      data: {
+        ...metadata,
+        source: origen,
+        textLength: limpio.length,
+        qrPayloads: qrPayloads.length > 0 ? qrPayloads : undefined,
+      },
+      text: limpio,
+      bakedBadge,
     };
   }
 

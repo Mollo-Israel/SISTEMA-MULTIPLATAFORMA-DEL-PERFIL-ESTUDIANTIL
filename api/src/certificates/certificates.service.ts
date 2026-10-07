@@ -186,6 +186,13 @@ export class CertificatesService {
     return saved;
   }
 
+  /** V3 §16: pide la revisión manual excepcional de una histórica. */
+  async requestManualReview(userId: string, id: string, note: string | null) {
+    const certificate = await this.requireOwned(userId, id);
+    const r = await this.validation.requestManualReview(userId, certificate, note);
+    return { certificateId: id, manualReview: { status: r.manualReviewStatus, requestedAt: r.manualReviewRequestedAt } };
+  }
+
   async remove(userId: string, id: string): Promise<void> {
     const certificate = await this.requireOwned(userId, id);
     const storedFileId = certificate.storedFileId;

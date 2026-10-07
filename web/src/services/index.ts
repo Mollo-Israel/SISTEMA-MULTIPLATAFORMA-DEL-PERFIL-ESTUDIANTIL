@@ -11,6 +11,7 @@ import type {
   ExternalCertificate,
   CredentialOpportunity,
   ValidationReference,
+  ManualReviewItem,
   GamificationCriterion,
   InternalConstancy,
   StoredFile,
@@ -781,9 +782,19 @@ export const certificateService = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch<ExternalCertificate>(`/certificates/external/${id}`, data).then((r) => r.data),
   remove: (id: string) => api.delete(`/certificates/external/${id}`).then((r) => r.data),
+  /** V3 §16: pide a Dirección la revisión excepcional de una histórica sin verificador. */
+  requestManualReview: (id: string, note: string) =>
+    api.post(`/certificates/external/${id}/manual-review`, { note }).then((r) => r.data),
   /** V3 §15: oportunidades terminadas en las que ya puede adjuntar la credencial. */
   eligibleOpportunities: () =>
     api.get<CredentialOpportunity[]>('/certificates/external/eligible-opportunities').then((r) => r.data),
+};
+
+/** V3 §16/§19: revisión manual excepcional (Dirección). */
+export const manualReviewService = {
+  pending: () => api.get<ManualReviewItem[]>('/validation/manual-reviews').then((r) => r.data),
+  decide: (certificateId: string, body: { decision: 'corroborated' | 'not_corroborated'; reason: string }) =>
+    api.post(`/validation/manual-reviews/${certificateId}`, body).then((r) => r.data),
 };
 
 export const validationReferenceService = {

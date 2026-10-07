@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -20,6 +22,7 @@ import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { ValidationService } from './validation.service';
 import { ValidationWorker } from './validation.worker';
+import { DecideManualReviewDto } from './dto/manual-review.dto';
 
 /**
  * Consulta del Motor de Validación (§26, §76).
@@ -66,6 +69,46 @@ export class ValidationController {
     return { procesados };
   }
 
+  @Post('reprocess-outdated')
+  @Roles(RolNombre.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Vuelve a encolar lo validado con una versión anterior del validador.',
+    description: 'Tras subir VALIDATOR_VERSION (V3 §18–§20). No borra nada ni reinicia revisiones manuales.',
+  })
+  reprocessOutdated(@Query('limit') limit?: string) {
+    const tope = Math.min(Math.max(Number(limit) || 200, 1), 2000);
+    return this.validation.reprocessOutdated(tope);
+  }
+
+  @Get('manual-reviews')
+  @Roles(RolNombre.CAREER_DIRECTOR)
+  @ApiOperation({
+    summary: 'Credenciales históricas esperando revisión manual excepcional (V3 §16).',
+  })
+  pendingManualReviews() {
+    return this.validation.pendingManualReviews();
+  }
+
+  @Post('manual-reviews/:certificateId')
+  @Roles(RolNombre.CAREER_DIRECTOR)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Dirección decide la revisión excepcional: es la única vía para corroborar una histórica sin verificador.',
+  })
+  async decideManualReview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('certificateId', ParseUUIDPipe) certificateId: string,
+    @Body() dto: DecideManualReviewDto,
+  ) {
+    const r = await this.validation.decideManualReview(user.userId, certificateId, dto.decision, dto.reason);
+    return {
+      certificateId,
+      backingTier: r.backingTier,
+      manualReview: { status: r.manualReviewStatus, reason: r.manualReviewReason, reviewedAt: r.manualReviewedAt },
+    };
+  }
+
   @Get(':resourceType/:resourceId')
   @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
   @ApiOperation({
@@ -83,6 +126,9 @@ export class ValidationController {
     await this.assertOwnership(user, tipo, resourceId);
 
     const record = await this.validation.findForOrFail(tipo, resourceId);
+    const cert = tipo === ValidationResourceType.EXTERNAL_CERTIFICATE
+      ? await this.certificates.findOne({ where: { id: resourceId } })
+      : null;
     return {
       resourceType: record.resourceType,
       resourceId: record.resourceId,
@@ -96,6 +142,15 @@ export class ValidationController {
       attempts: record.attempts,
       errorCode: record.errorCode,
       finishedAt: record.finishedAt,
+      credentialCheck: record.credentialCheck,
+      manualReview: cert
+        ? {
+          status: record.manualReviewStatus,
+          reason: record.manualReviewReason,
+          reviewedAt: record.manualReviewedAt,
+          canRequest: this.validation.canRequestManualReview(record, cert),
+        }
+        : null,
       /**
        * Se repite en cada respuesta a propósito: quien lea esto debe tener
        * delante que el sistema mide corroboración técnica, no autenticidad.

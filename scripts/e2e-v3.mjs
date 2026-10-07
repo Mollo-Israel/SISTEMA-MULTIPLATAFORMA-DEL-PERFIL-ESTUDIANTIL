@@ -6,8 +6,15 @@
  *
  * Uso:
  *   API_URL=http://localhost:3010/api node scripts/e2e-v3.mjs [batch]
+ *
+ * La sección batch9 levanta un verificador oficial simulado en 127.0.0.1:3997:
+ * la API debe arrancar con
+ *   LINK_CHECK_TEST_ORIGINS=verificador.afinia-pruebas.org:3997=127.0.0.1:3997
  */
 
+import { createHash } from 'node:crypto';
+import { createServer } from 'node:http';
+import QRCode from 'qrcode';
 import {
   API, codigoUniversitario, loginAdmin, provisionAndActivate, req,
 } from './lib/fixtures.mjs';
@@ -668,7 +675,299 @@ async function batch8(ctx) {
     'V3.8.36 §14.2 Una interna que conduce a una credencial también la habilita al confirmar y terminar');
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8 };
+// ===========================================================================
+//  BATCH 9 — Validación escalonada de credenciales (§18, §19, §20)
+// ===========================================================================
+/**
+ * Verificador «oficial» simulado en 127.0.0.1:3997, publicado con un nombre de
+ * dominio. La API de desarrollo debe arrancar con
+ *   LINK_CHECK_TEST_ORIGINS=verificador.afinia-pruebas.org:3997=127.0.0.1:3997
+ * (en producción se ignora): es la única excepción a la protección SSRF.
+ */
+const PUERTO_VERIFICADOR = 3997;
+const DOMINIO_VERIFICADOR = 'afinia-pruebas.org';
+const BASE_VERIFICADOR = `http://verificador.${DOMINIO_VERIFICADOR}:${PUERTO_VERIFICADOR}`;
+
+function levantarVerificador(est) {
+  const sal = 'sal-b9';
+  const hash = createHash('sha256').update(est.email + sal).digest('hex');
+  const asercion = (identity) => JSON.stringify({
+    '@context': 'https://w3id.org/openbadges/v2',
+    type: 'Assertion',
+    id: `${BASE_VERIFICADOR}/badge/${identity === 'propia' ? 'ok' : 'otra'}.json`,
+    recipient: { type: 'email', hashed: true, salt: sal, identity: identity === 'propia' ? `sha256$${hash}` : 'sha256$00ff00' },
+    verification: { type: 'hosted' },
+    badge: { name: 'CCNA Introduction to Networks', issuer: { name: 'Cisco' } },
+  });
+  const server = createServer((rq, rs) => {
+    const html = (cuerpo) => { rs.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); rs.end(`<html><head><title>Credencial</title></head><body>${cuerpo}</body></html>`); };
+    if (rq.url === '/cert/ok') return html(`Credential NA-2026-AB7 issued to ${est.nombre} for CCNA Introduction to Networks by Cisco Networking Academy`);
+    if (rq.url === '/cert/otra') return html('Credential NA-2026-AB7 issued to Persona Distinta for CCNA Introduction to Networks');
+    if (rq.url === '/cert/spa') return html('<div id="root"></div><script>/* requiere JavaScript */</script>');
+    if (rq.url === '/cert/caido') { rs.writeHead(503); return rs.end(); }
+    if (rq.url === '/badge/ok.json' || rq.url === '/badge/otra.json') {
+      rs.writeHead(200, { 'content-type': 'application/json' });
+      return rs.end(asercion(rq.url === '/badge/ok.json' ? 'propia' : 'otra'));
+    }
+    rs.writeHead(404); rs.end();
+  });
+  return new Promise((resolve) => server.listen(PUERTO_VERIFICADOR, '127.0.0.1', () => resolve(server)));
+}
+
+/** PDF mínimo con texto nativo legible (§18.4). */
+function pdfConTexto(lineas) {
+  const contenido = `BT\n/F1 14 Tf\n72 720 Td\n${lineas.map((l, i) => `${i === 0 ? '' : '0 -24 Td\n'}(${l.replace(/([()\\])/g, '\\$1')}) Tj\n`).join('')}ET\n`;
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(contenido, 'latin1')} >>\nstream\n${contenido}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objetos.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = Buffer.byteLength(out, 'latin1');
+  out += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  out += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
+async function subirArchivo(token, buffer, nombre, tipo) {
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: tipo }), nombre);
+  return req('POST', '/uploads', { token, raw: form });
+}
+
+async function batch9(ctx) {
+  objective('BATCH 9 · Validación escalonada: fuente oficial, QR, insignias, FLAGGED y revisión excepcional');
+  const director = await provisionAndActivate(ctx.admin, {
+    firstName: 'Elena', lastName: 'Saavedra', email: correoStaff('b9dir'), role: 'CAREER_DIRECTOR',
+  });
+  const docente = await provisionAndActivate(ctx.admin, {
+    firstName: 'Hugo', lastName: 'Arce', email: correoStaff('b9doc'), role: 'TEACHER',
+  });
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Valeria', lastName: 'Montaño', email: correoEst('b9'), role: 'STUDENT', semester: 6,
+  });
+  est.email = correoEst('b9');
+  est.nombre = 'Valeria Montaño';
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const servidor = await levantarVerificador(est);
+
+  try {
+    const veredicto = async (id) => {
+      for (let i = 0; i < 40; i++) {
+        await req('POST', '/validation/run?limit=50', { token: ctx.admin });
+        const v = await req('GET', `/validation/external_certificate/${id}`, { token: est.token });
+        if (v.data && !['pending', 'processing'].includes(v.data.status)) return v.data;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      return null;
+    };
+    const credencial = async (body) => {
+      const r = await req('POST', '/certificates/external', { token: est.token, body: { issueDate: '2025-06-01', ...body } });
+      if (r.status !== 201) throw new Error(`no se creó la credencial: ${json(r.data)}`);
+      return { id: r.data.id, v: await veredicto(r.data.id) };
+    };
+
+    // ----- Oportunidad externa con referencia (§15, §17)
+    const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+    const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
+    const dia = 86_400_000;
+    const crearExterna = async (titulo) => {
+      const a = (await req('POST', '/activities', {
+        token: director.token,
+        body: {
+          title: `${titulo} ${TS}`, type: 'academica', categoryId: cat.id, status: 'open',
+          originType: 'external', provider: 'Cisco Networking Academy', externalUrl: `${BASE_VERIFICADOR}/curso`,
+          outcomePolicy: 'external_credential_expected', expectedIssuerDomains: [DOMINIO_VERIFICADOR],
+          expectedKeywords: ['Introduction to Networks'],
+          activityDate: new Date(Date.now() + dia).toISOString(), endAt: new Date(Date.now() + 2 * dia).toISOString(),
+        },
+      })).data;
+      await req('PUT', `/activities/${a.id}/validation-reference`, {
+        token: director.token, body: { expectedCourseName: 'CCNA Introduction to Networks', credentialIdPattern: 'NA-####-@@#' },
+      });
+      await req('POST', `/activities/${a.id}/register`, { token: est.token });
+      await req('PATCH', `/activities/${a.id}/confirm-participation`, {
+        token: director.token, body: { studentProfileId: est.profileId, status: 'accepted' },
+      });
+      await req('PATCH', `/activities/${a.id}`, { token: director.token, body: { status: 'finished' } });
+      return a;
+    };
+
+    // Precondición: la API debe poder alcanzar el verificador de prueba.
+    const sonda = await credencial({ certificateName: `Sonda ${TS}`, issuer: 'Academia Sonda', certificateUrl: `${BASE_VERIFICADOR}/cert/spa` });
+    if (sonda.v?.linkCheck?.status === 'blocked') {
+      throw new Error(`La API no tiene LINK_CHECK_TEST_ORIGINS=verificador.${DOMINIO_VERIFICADOR}:3997=127.0.0.1:3997: arránquela así para esta sección.`);
+    }
+
+    const op1 = await crearExterna('CCNA ITN oficial');
+    const ok = await credencial({
+      activityId: op1.id, certificateName: `CCNA Introduction to Networks 1 ${TS}`, issuer: 'Cisco Networking Academy',
+      certificateUrl: `${BASE_VERIFICADOR}/cert/ok`, credentialId: 'NA-2026-AB7',
+    });
+    check(ok.v?.credentialCheck?.status === 'verified_match' && ok.v?.backingTier === 'corroborated',
+      'V3.9.1 §18.2 URL oficial que identifica la credencial y nombra al estudiante: VERIFIED_MATCH → CORROBORATED',
+      json({ c: ok.v?.credentialCheck?.status, t: ok.v?.backingTier }));
+    check((ok.v?.credentialCheck?.pipeline ?? []).join(',').includes('ai:not_used')
+      && ok.v?.credentialCheck?.aiUsed === false,
+    'V3.9.2 §18.6 La IA no interviene en el nivel: respaldo determinista', json(ok.v?.credentialCheck?.pipeline));
+
+    const op2 = await crearExterna('CCNA ITN ajena');
+    const ajena = await credencial({
+      activityId: op2.id, certificateName: `CCNA Introduction to Networks 2 ${TS}`, issuer: 'Cisco Networking Academy',
+      certificateUrl: `${BASE_VERIFICADOR}/cert/otra`, credentialId: 'NA-2026-AB7',
+    });
+    check(ajena.v?.credentialCheck?.status === 'reachable_no_structured_proof' && ajena.v?.backingTier !== 'corroborated',
+      'V3.9.3 §19 La página oficial de otra persona no corrobora (el código lo escribe quien registra)',
+      json({ c: ajena.v?.credentialCheck?.status, t: ajena.v?.backingTier }));
+
+    const spa = sonda.v;
+    check(spa?.credentialCheck?.status === 'reachable_no_structured_proof' && spa?.credentialCheck?.official === null
+      && spa?.backingTier !== 'corroborated',
+    'V3.9.4 §20 Página que requiere JavaScript o emisor desconocido: «responde, sin prueba legible», nunca corrobora',
+    json({ c: spa?.credentialCheck?.status, o: spa?.credentialCheck?.official }));
+
+    const caido = await credencial({ certificateName: `Curso caído ${TS}`, issuer: 'Cisco', certificateUrl: `${BASE_VERIFICADOR}/cert/caido` });
+    check(caido.v?.credentialCheck?.status === 'mismatch' || caido.v?.credentialCheck?.status === 'unreachable',
+      'V3.9.5 (control) Una URL de Cisco fuera de sus dominios no puede corroborar', json(caido.v?.credentialCheck?.status));
+    const caido2 = await credencial({ certificateName: `Proveedor caído ${TS}`, issuer: 'Academia Sin Catálogo', certificateUrl: `${BASE_VERIFICADOR}/cert/caido` });
+    check(caido2.v?.credentialCheck?.status === 'unreachable' && caido2.v?.status === 'inconclusive' && caido2.v?.backingTier !== 'flagged',
+      'V3.9.6 §18.2 Proveedor caído: UNREACHABLE e INCONCLUSIVE, no «falso»', json({ c: caido2.v?.credentialCheck?.status, s: caido2.v?.status, t: caido2.v?.backingTier }));
+
+    const dominio = await credencial({ certificateName: `IBM falso dominio ${TS}`, issuer: 'IBM', certificateUrl: `${BASE_VERIFICADOR}/cert/ok` });
+    check(dominio.v?.credentialCheck?.status === 'mismatch' && dominio.v?.backingTier === 'flagged'
+      && (dominio.v?.credentialCheck?.contradictions ?? []).includes('verification_mismatch'),
+    'V3.9.7 §19 URL a un dominio que no es del emisor declarado: FLAGGED (no se borra)', json({ c: dominio.v?.credentialCheck?.status, t: dominio.v?.backingTier }));
+    const sigue = (await req('GET', '/certificates/external/my', { token: est.token })).data ?? [];
+    check(sigue.some((c) => c.id === dominio.id), 'V3.9.8 §19 La credencial FLAGGED sigue registrada');
+
+    const ssrf = await credencial({ certificateName: `Metadata ${TS}`, issuer: 'Academia X', certificateUrl: 'http://169.254.169.254/latest/meta-data' });
+    check(ssrf.v?.linkCheck?.status === 'blocked' && ssrf.v?.backingTier === 'flagged',
+      'V3.9.9 §49 SSRF: la metadata de la nube no se consulta y la credencial queda señalada', json({ l: ssrf.v?.linkCheck?.status, t: ssrf.v?.backingTier }));
+
+    // ----- QR (§18.1)
+    const qrInterno = await QRCode.toBuffer('http://127.0.0.1:9/interno', { type: 'png', width: 300 });
+    const subidaQr = await subirArchivo(est.token, qrInterno, 'qr-interno.png', 'image/png');
+    const conQr = await credencial({ certificateName: `Con QR interno ${TS}`, issuer: 'Academia Y', storedFileId: subidaQr.data?.id });
+    check(conQr.v?.credentialCheck?.qr === 'qr_present' && conQr.v?.credentialCheck?.urlSource === 'qr'
+      && conQr.v?.linkCheck?.status === 'blocked',
+    'V3.9.10 §18.1/§49 El QR se lee y su URL pasa por la misma protección SSRF (red interna bloqueada)',
+    json({ q: conQr.v?.credentialCheck?.qr, u: conQr.v?.credentialCheck?.urlSource, l: conQr.v?.linkCheck?.status }));
+
+    const op3 = await crearExterna('CCNA ITN por QR');
+    const qrOficial = await QRCode.toBuffer(`${BASE_VERIFICADOR}/cert/ok`, { type: 'png', width: 300 });
+    const subidaQr2 = await subirArchivo(est.token, qrOficial, 'qr-oficial.png', 'image/png');
+    const porQr = await credencial({
+      activityId: op3.id, certificateName: `CCNA Introduction to Networks 3 ${TS}`, issuer: 'Cisco Networking Academy',
+      storedFileId: subidaQr2.data?.id, credentialId: 'NA-2026-AB7',
+    });
+    check(porQr.v?.credentialCheck?.status === 'verified_match' && porQr.v?.backingTier === 'corroborated',
+      'V3.9.11 §19 QR a la verificación oficial que coincide: CORROBORATED', json({ c: porQr.v?.credentialCheck?.status, t: porQr.v?.backingTier }));
+
+    const sinQrPdf = await subirArchivo(est.token, pdfConTexto([`Certificado otorgado a ${est.nombre}`, 'Curso de Fotografia Digital', 'Academia Lumen']), 'sin-qr.pdf', 'application/pdf');
+    const sinQr = await credencial({ certificateName: `Curso de Fotografia Digital ${TS}`, issuer: 'Academia Lumen', storedFileId: sinQrPdf.data?.id });
+    check(sinQr.v?.credentialCheck?.qr === 'qr_absent' && sinQr.v?.status === 'completed' && sinQr.v?.backingTier === 'supported',
+      'V3.9.12 §18.1/§48 Sin QR no falla: archivo legible y coherente queda SUPPORTED (respaldo parcial)',
+      json({ q: sinQr.v?.credentialCheck?.qr, s: sinQr.v?.status, t: sinQr.v?.backingTier }));
+
+    // ----- Open Badges (§18.3)
+    const op4 = await crearExterna('Insignia hosted');
+    const insignia = await credencial({
+      activityId: op4.id, certificateName: `CCNA Introduction to Networks 4 ${TS}`, issuer: 'Cisco Networking Academy',
+      certificateUrl: `${BASE_VERIFICADOR}/badge/ok.json`,
+    });
+    check(insignia.v?.credentialCheck?.openBadge?.format === 'open_badges_2' && insignia.v?.credentialCheck?.openBadge?.recipientMatch === true
+      && insignia.v?.backingTier === 'corroborated',
+    'V3.9.13 §18.3 Open Badge 2.0 hosted del emisor con destinatario propio: CORROBORATED', json(insignia.v?.credentialCheck?.openBadge));
+    const insigniaAjena = await credencial({
+      certificateName: `Insignia ajena ${TS}`, issuer: 'Academia Z', certificateUrl: `${BASE_VERIFICADOR}/badge/otra.json`,
+    });
+    check(insigniaAjena.v?.credentialCheck?.openBadge?.recipientMatch === false && insigniaAjena.v?.backingTier === 'flagged',
+      'V3.9.14 §18.3 Insignia de otra persona: FLAGGED', json({ r: insigniaAjena.v?.credentialCheck?.openBadge?.recipientMatch, t: insigniaAjena.v?.backingTier }));
+
+    // ----- Contradicciones con la referencia (§17, §19)
+    const op5 = await crearExterna('Patrón');
+    const patron = await credencial({
+      activityId: op5.id, certificateName: `CCNA Introduction to Networks 5 ${TS}`, issuer: 'Cisco Networking Academy',
+      credentialId: 'XX-1',
+    });
+    check(patron.v?.backingTier === 'flagged' && (patron.v?.credentialCheck?.contradictions ?? []).includes('credential_id_pattern'),
+      'V3.9.15 §17 Código que no sigue el patrón del proveedor: FLAGGED', json(patron.v?.credentialCheck?.contradictions));
+    const op6 = await crearExterna('Curso cambiado');
+    const otroCursoPdf = await subirArchivo(est.token, pdfConTexto([`Certificate of completion ${est.nombre}`, 'Python for Data Science', 'IBM Skills Network']), 'otro-curso.pdf', 'application/pdf');
+    const otroCurso = await credencial({
+      activityId: op6.id, certificateName: `Python for Data Science ${TS}`, issuer: 'IBM', storedFileId: otroCursoPdf.data?.id,
+    });
+    const cc = otroCurso.v?.credentialCheck?.contradictions ?? [];
+    check(otroCurso.v?.backingTier === 'flagged' && cc.includes('course_mismatch') && cc.includes('issuer_mismatch'),
+      'V3.9.16 §19 El documento es de otro curso y otro emisor que la oportunidad: FLAGGED', json(cc));
+    const op7 = await crearExterna('Contexto coincide');
+    const coincidePdf = await subirArchivo(est.token, pdfConTexto([`Certificate of completion ${est.nombre}`, 'CCNA Introduction to Networks', 'Cisco Networking Academy']), 'coincide.pdf', 'application/pdf');
+    const coincide = await credencial({
+      activityId: op7.id, certificateName: `CCNA Introduction to Networks 6 ${TS}`, issuer: 'Cisco Networking Academy', storedFileId: coincidePdf.data?.id,
+    });
+    check(coincide.v?.backingTier === 'supported' && (coincide.v?.credentialCheck?.contradictions ?? []).length === 0,
+      'V3.9.17 §19 Sin URL, el documento coincide con la oportunidad: SUPPORTED, no CORROBORATED', json({ t: coincide.v?.backingTier }));
+
+    // ----- Revisión manual excepcional (§16)
+    const historicaPdf = await subirArchivo(est.token, pdfConTexto([`Diploma ${est.nombre}`, 'Taller de Robotica Educativa', 'Club Andino de Robotica']), 'historica.pdf', 'application/pdf');
+    const historica = await credencial({ certificateName: `Taller de Robotica Educativa ${TS}`, issuer: 'Club Andino de Robotica', storedFileId: historicaPdf.data?.id });
+    check(historica.v?.credentialCheck?.status === 'no_verifier' && historica.v?.manualReview?.canRequest === true
+      && historica.v?.backingTier !== 'corroborated',
+    'V3.9.18 §16 Histórica sin verificador digital: puede pedirse la revisión excepcional', json({ c: historica.v?.credentialCheck?.status, m: historica.v?.manualReview }));
+    check(ok.v?.manualReview?.canRequest === false, 'V3.9.19 §16 Una credencial de oportunidad no la necesita (se valida con su referencia)');
+    const pedirOp = await req('POST', `/certificates/external/${ok.id}/manual-review`, { token: est.token, body: {} });
+    check(pedirOp.status === 400, 'V3.9.20 §16 Y la API lo impide', `status ${pedirOp.status}`);
+
+    const archivoUrl = (await req('GET', '/certificates/external/my', { token: est.token })).data?.find((c) => c.id === historica.id)?.fileUrl;
+    const bajar = (token) => fetch(`${API.replace(/\/api$/, '')}${archivoUrl}`, { headers: { Authorization: `Bearer ${token}` } });
+    check((await bajar(director.token)).status === 404, 'V3.9.21 §16 Antes de pedirla, Dirección no ve el documento del estudiante');
+
+    const pedir = await req('POST', `/certificates/external/${historica.id}/manual-review`, {
+      token: est.token, body: { note: 'El club confirma por correo a robotica@club.example.' },
+    });
+    check(pedir.status === 200 && pedir.data?.manualReview?.status === 'requested', 'V3.9.22 §16 El estudiante la pide', json(pedir.data));
+    const otraVez = await req('POST', `/certificates/external/${historica.id}/manual-review`, { token: est.token, body: {} });
+    check(otraVez.status === 409, 'V3.9.23 No se pide dos veces', `status ${otraVez.status}`);
+
+    const deDocente = await req('GET', '/validation/manual-reviews', { token: docente.token });
+    const deEst = await req('GET', '/validation/manual-reviews', { token: est.token });
+    const deAdmin = await req('GET', '/validation/manual-reviews', { token: ctx.admin });
+    check(deDocente.status === 403 && deEst.status === 403 && deAdmin.status === 403,
+      'V3.9.24 §6.5 Solo Dirección revisa: ni docente, ni estudiante, ni administración técnica', json([deDocente.status, deEst.status, deAdmin.status]));
+    const pendientes = await req('GET', '/validation/manual-reviews', { token: director.token });
+    const fila = (pendientes.data ?? []).find((x) => x.certificateId === historica.id);
+    check(!!fila && fila.studentName === est.nombre && fila.requestNote?.includes('robotica'),
+      'V3.9.25 §16 Dirección ve la solicitud con su nota', json(fila));
+    check((await bajar(director.token)).status === 200, 'V3.9.26 §16 Con la revisión pedida, Dirección abre el documento');
+
+    const corta = await req('POST', `/validation/manual-reviews/${historica.id}`, { token: director.token, body: { decision: 'corroborated', reason: 'ok' } });
+    check(corta.status === 400, 'V3.9.27 §16 Decidir exige explicar cómo se comprobó', `status ${corta.status}`);
+    const decide = await req('POST', `/validation/manual-reviews/${historica.id}`, {
+      token: director.token, body: { decision: 'corroborated', reason: 'Llamé al club y confirmaron la participación y el nombre.' },
+    });
+    check(decide.status === 200 && decide.data?.backingTier === 'corroborated',
+      'V3.9.28 §16 La revisión excepcional es la única vía para corroborar una histórica sin verificador', json(decide.data));
+    const auditada = await req('GET', `/audit/events?eventType=EXTERNAL_CREDENTIAL_MANUAL_REVIEWED&entityId=${historica.id}`, { token: ctx.admin });
+    check((auditada.data?.items ?? auditada.data ?? []).length >= 1, 'V3.9.29 §65 Queda auditada (EXTERNAL_CREDENTIAL_MANUAL_REVIEWED)');
+
+    await req('PATCH', `/certificates/external/${historica.id}`, { token: est.token, body: { issuer: 'Club Andino de Robotica Educativa' } });
+    const tras = await veredicto(historica.id);
+    check(tras?.manualReview?.status === null && tras?.backingTier !== 'corroborated',
+      'V3.9.30 §19 Si cambia lo declarado, la revisión anterior ya no vale y se vuelve a comprobar', json({ m: tras?.manualReview?.status, t: tras?.backingTier }));
+
+    const reproc = await req('POST', '/validation/reprocess-outdated?limit=1', { token: ctx.admin });
+    check(reproc.status === 200 && typeof reproc.data?.pendientes === 'number',
+      'V3.9.31 Administración puede revalidar lo procesado con una versión anterior del validador', json(reproc.data));
+  } finally {
+    servidor.close();
+  }
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

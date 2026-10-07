@@ -223,18 +223,20 @@ export interface StoredFile {
 }
 
 /** Niveles de respaldo de un documento (§30). */
-export type BackingTier = 'declared' | 'supported' | 'corroborated';
+export type BackingTier = 'declared' | 'supported' | 'corroborated' | 'flagged';
 
 export const BACKING_TIER_LABEL: Record<BackingTier, string> = {
   declared: 'Aportado',
   supported: 'Respaldado',
   corroborated: 'Corroborado',
+  flagged: 'Con inconsistencias',
 };
 
 export const BACKING_TIER_HELP: Record<BackingTier, string> = {
-  declared: 'Lo adjuntaste, pero el sistema no pudo comprobar nada por si mismo.',
-  supported: 'El documento se leyo y coincide con lo que declaraste.',
-  corroborated: 'Ademas, el enlace de verificacion del emisor respondio.',
+  declared: 'Lo adjuntaste, pero el sistema no pudo comprobar nada por sí mismo.',
+  supported: 'El documento se leyó y coincide con lo declarado. Es un respaldo parcial.',
+  corroborated: 'Una fuente oficial del emisor identifica esta credencial y coincide contigo.',
+  flagged: 'Algo no coincide. No se borró: corrige los datos o el archivo y se vuelve a comprobar.',
 };
 
 export const uploadService = {

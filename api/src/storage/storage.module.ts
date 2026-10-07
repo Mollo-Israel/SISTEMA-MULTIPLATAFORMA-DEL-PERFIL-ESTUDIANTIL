@@ -9,6 +9,7 @@ import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
+import { ValidationRecord } from '../entities/validation-record.entity';
 import { StoredFileRecord } from '../entities/stored-file.entity';
 import { AccessModule } from '../access/access.module';
 import { LocalStorageDriver } from './local-storage.driver';
@@ -46,6 +47,7 @@ import { storageDriverFactory } from './storage-driver.factory';
       StudentProfile,
       StoredFileRecord,
       ExternalOpportunityValidationReference,
+      ValidationRecord,
     ]),
     AccessModule,
   ],

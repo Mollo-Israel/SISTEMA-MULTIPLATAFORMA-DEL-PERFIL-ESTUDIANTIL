@@ -43,6 +43,7 @@ import HelpPage from './pages/help/Help';
 import TeacherTeamNeedsPage from './pages/teacher/TeamNeeds';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorTrendsPage from './pages/director/Trends';
+import CredentialReviewsPage from './pages/director/CredentialReviews';
 import RecognitionsPage from './pages/staff/Recognitions';
 import SocietyMetricsPage from './pages/society/Metrics';
 
@@ -159,6 +160,7 @@ export default function App() {
             <Route path="/director/affinity" element={<DirectorAffinityMap />} />
             <Route path="/director/resources" element={<DirectorLearningResourcesPage />} />
             <Route path="/director/trends" element={<DirectorTrendsPage />} />
+            <Route path="/director/credential-reviews" element={<CredentialReviewsPage />} />
             <Route path="/director/recognitions" element={<RecognitionsPage />} />
           </Route>
 

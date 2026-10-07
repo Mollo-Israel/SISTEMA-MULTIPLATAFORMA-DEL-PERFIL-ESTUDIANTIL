@@ -53,6 +53,7 @@ const ICONS: Record<string, IconType> = {
   '/director/approvals': FiCheckSquare,
   '/director/activities': FiCalendar,
   '/director/constancies': FiAward,
+  '/director/credential-reviews': FiShield,
   '/director/affinity': FiTarget,
   '/student/collaboration': FiUsers,
   '/student/progress': FiStar,

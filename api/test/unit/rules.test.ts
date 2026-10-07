@@ -405,3 +405,153 @@ describe('V3 §17 patrón del código de credencial', () => {
     assert.equal(CREDENTIAL_PATTERN_CHARS.test('NA-####-@@*'), true);
   });
 });
+
+// ---------------------------------------------------------------------------
+//  V3 BATCH 9 · Validación escalonada de credenciales (§18–§20)
+// ---------------------------------------------------------------------------
+import { createHash } from 'node:crypto';
+import { BackingTier, CredentialCheckStatus, IdentityMatchStatus, LinkCheckStatus } from '@perfil/shared';
+import {
+  comparePage,
+  decideCredentialBacking,
+  decideCredentialCheck,
+  hostMatches,
+  isOfficialUrl,
+  officialDomainsFor,
+  parseOpenBadge,
+  readBakedBadge,
+} from '../../src/validation/credential-check.rules';
+
+describe('V3 §18.2 dominio oficial', () => {
+  it('subdominio sí, subcadena no', () => {
+    assert.equal(hostMatches('www.credly.com', 'credly.com'), true);
+    assert.equal(hostMatches('evilcredly.com', 'credly.com'), false);
+    assert.equal(hostMatches('credly.com.evil.io', 'credly.com'), false);
+  });
+  it('emisor conocido, oportunidad con dominios, o sin base para juzgar', () => {
+    assert.ok(officialDomainsFor('Cisco Networking Academy')?.includes('netacad.com'));
+    assert.ok(officialDomainsFor('Proveedor X', ['proveedorx.org'])?.includes('proveedorx.org'));
+    assert.equal(officialDomainsFor('Academia Desconocida'), null);
+    assert.equal(isOfficialUrl('https://cert.evil.io/x', officialDomainsFor('IBM')), false);
+    assert.equal(isOfficialUrl('https://www.ibm.com/badge/x', officialDomainsFor('IBM')), true);
+    assert.equal(isOfficialUrl('https://algo.org', null), null);
+  });
+});
+
+describe('V3 §18.2 estado de la verificación', () => {
+  const disponible = { status: LinkCheckStatus.AVAILABLE };
+  const pagina = (o: Partial<{ credentialId: boolean; holder: boolean; course: boolean; issuer: boolean }>) =>
+    ({ credentialId: false, holder: false, course: false, issuer: false, ...o });
+  it('oficial, con el titular y el código: VERIFIED_MATCH', () => {
+    assert.equal(
+      decideCredentialCheck({ link: disponible, official: true, page: pagina({ holder: true, credentialId: true }), openBadge: null }),
+      CredentialCheckStatus.VERIFIED_MATCH,
+    );
+  });
+  it('el código de otra persona en su página oficial no basta sin el titular', () => {
+    assert.equal(
+      decideCredentialCheck({ link: disponible, official: true, page: pagina({ credentialId: true }), openBadge: null }),
+      CredentialCheckStatus.REACHABLE_NO_STRUCTURED_PROOF,
+    );
+  });
+  it('dominio desconocido nunca verifica, aunque la página coincida', () => {
+    assert.equal(
+      decideCredentialCheck({ link: disponible, official: null, page: pagina({ holder: true, credentialId: true }), openBadge: null }),
+      CredentialCheckStatus.REACHABLE_NO_STRUCTURED_PROOF,
+    );
+  });
+  it('dominio no permitido o bloqueado por SSRF: MISMATCH', () => {
+    assert.equal(decideCredentialCheck({ link: disponible, official: false, page: null, openBadge: null }), CredentialCheckStatus.MISMATCH);
+    assert.equal(
+      decideCredentialCheck({ link: { status: LinkCheckStatus.BLOCKED }, official: null, page: null, openBadge: null }),
+      CredentialCheckStatus.MISMATCH,
+    );
+  });
+  it('proveedor caído: UNREACHABLE, no falso; verificador apagado: INCONCLUSIVE; sin URL: NO_VERIFIER', () => {
+    assert.equal(
+      decideCredentialCheck({ link: { status: LinkCheckStatus.UNAVAILABLE }, official: true, page: null, openBadge: null }),
+      CredentialCheckStatus.UNREACHABLE,
+    );
+    assert.equal(
+      decideCredentialCheck({ link: { status: LinkCheckStatus.UNVERIFIED }, official: true, page: null, openBadge: null }),
+      CredentialCheckStatus.INCONCLUSIVE,
+    );
+    assert.equal(decideCredentialCheck({ link: null, official: null, page: null, openBadge: null }), CredentialCheckStatus.NO_VERIFIER);
+  });
+});
+
+describe('V3 §19 respaldo determinista', () => {
+  const base = {
+    identity: IdentityMatchStatus.UNKNOWN,
+    check: CredentialCheckStatus.NO_VERIFIER,
+    metadataCoherent: false,
+    opportunityContextMatch: false,
+    officialReachable: false,
+    contradictions: [] as never[],
+  };
+  it('FLAGGED gana a todo', () => {
+    assert.equal(
+      decideCredentialBacking({ ...base, check: CredentialCheckStatus.VERIFIED_MATCH, contradictions: ['holder_mismatch'] as never[] }),
+      BackingTier.FLAGGED,
+    );
+  });
+  it('CORROBORATED solo con señal verificable fuerte', () => {
+    assert.equal(decideCredentialBacking({ ...base, check: CredentialCheckStatus.VERIFIED_MATCH }), BackingTier.CORROBORATED);
+    assert.equal(decideCredentialBacking({ ...base, metadataCoherent: true, officialReachable: true }), BackingTier.SUPPORTED);
+  });
+  it('archivo legible coherente u oportunidad que coincide: SUPPORTED; nada: DECLARED', () => {
+    assert.equal(decideCredentialBacking({ ...base, opportunityContextMatch: true }), BackingTier.SUPPORTED);
+    assert.equal(decideCredentialBacking(base), BackingTier.DECLARED);
+  });
+});
+
+describe('V3 §18.3 Open Badges', () => {
+  const email = 'ana.perez@est.univalle.edu';
+  const salt = 'sal123';
+  const hash = createHash('sha256').update(email + salt).digest('hex');
+  const asercion = (identity: string) => ({
+    '@context': 'https://w3id.org/openbadges/v2',
+    type: 'Assertion',
+    id: 'https://badges.netacad.com/a/1',
+    recipient: { type: 'email', hashed: true, salt, identity },
+    verification: { type: 'hosted' },
+    badge: { name: 'CCNA ITN', issuer: { name: 'Cisco' } },
+  });
+  const ctx = { fetchedUrl: 'https://badges.netacad.com/a/1', emails: [email], holderName: 'Ana Perez' };
+  it('OB 2.0 hosted con destinatario propio', () => {
+    const r = parseOpenBadge(asercion('sha256$' + hash), ctx);
+    assert.equal(r?.recipientMatch, true);
+    assert.equal(r?.hosted, true);
+    assert.equal(
+      decideCredentialCheck({ link: { status: LinkCheckStatus.AVAILABLE }, official: true, page: null, openBadge: r }),
+      CredentialCheckStatus.VERIFIED_MATCH,
+    );
+  });
+  it('destinatario de otra persona: MISMATCH', () => {
+    const r = parseOpenBadge(asercion('sha256$00ff'), ctx);
+    assert.equal(r?.recipientMatch, false);
+    assert.equal(
+      decideCredentialCheck({ link: { status: LinkCheckStatus.AVAILABLE }, official: true, page: null, openBadge: r }),
+      CredentialCheckStatus.MISMATCH,
+    );
+  });
+  it('insignia horneada en un PNG (bloque tEXt «openbadges»)', () => {
+    const chunk = (tipo: string, datos: Buffer) => {
+      const l = Buffer.alloc(4);
+      l.writeUInt32BE(datos.length);
+      return Buffer.concat([l, Buffer.from(tipo, 'latin1'), datos, Buffer.alloc(4)]);
+    };
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk('tEXt', Buffer.concat([Buffer.from('openbadges', 'latin1'), Buffer.from([0]), Buffer.from('https://badges.netacad.com/a/1', 'latin1')])),
+      chunk('IEND', Buffer.alloc(0)),
+    ]);
+    assert.deepEqual(readBakedBadge(png), { json: null, url: 'https://badges.netacad.com/a/1' });
+  });
+  it('compara la página oficial con lo declarado', () => {
+    const c = comparePage('Credential AB-77 issued to Ana María Pérez for CCNA Introduction to Networks', {
+      holderName: 'Ana María Pérez', credentialId: 'AB-77', course: 'CCNA Introduction to Networks', issuer: 'Cisco',
+    });
+    assert.deepEqual(c, { credentialId: true, holder: true, course: true, issuer: false });
+  });
+});

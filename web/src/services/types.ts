@@ -734,19 +734,77 @@ export interface StoredFile {
 }
 
 /** Niveles de respaldo de un documento (§30). */
-export type BackingTier = 'declared' | 'supported' | 'corroborated';
+export type BackingTier = 'declared' | 'supported' | 'corroborated' | 'flagged';
 
 export const BACKING_TIER_LABEL: Record<BackingTier, string> = {
   declared: 'Aportado',
   supported: 'Respaldado',
   corroborated: 'Corroborado',
+  flagged: 'Con inconsistencias',
 };
 
 export const BACKING_TIER_HELP: Record<BackingTier, string> = {
   declared: 'Adjuntaste el documento, pero el sistema no pudo comprobar nada por sí mismo.',
-  supported: 'El documento se leyó y sus datos coinciden con lo que declaraste.',
-  corroborated: 'Además, el enlace de verificación del emisor respondió.',
+  supported: 'El documento se leyó y coincide con lo declarado. Es un respaldo parcial: no prueba autenticidad.',
+  corroborated: 'Una fuente oficial del emisor identifica esta credencial y coincide contigo.',
+  flagged: 'Algo no coincide. No se borró: corrige los datos o el archivo y se vuelve a comprobar.',
 };
+
+/** V3 §18.2: resultado de la verificación oficial (URL, QR o insignia). */
+export type CredentialCheckStatus =
+  | 'verified_match' | 'reachable_no_structured_proof' | 'mismatch'
+  | 'inconclusive' | 'unreachable' | 'no_verifier';
+
+export const CREDENTIAL_CHECK_LABEL: Record<CredentialCheckStatus, string> = {
+  verified_match: 'Verificada en la fuente oficial',
+  reachable_no_structured_proof: 'La fuente responde, sin prueba legible',
+  mismatch: 'La verificación no coincide',
+  inconclusive: 'Sin poder concluir',
+  unreachable: 'El proveedor no respondió',
+  no_verifier: 'Sin verificador digital',
+};
+
+export const CREDENTIAL_CONTRADICTION_LABEL: Record<string, string> = {
+  holder_mismatch: 'el nombre del documento no es el tuyo',
+  credential_id_mismatch: 'el código declarado no es el que figura en el documento',
+  credential_id_pattern: 'el código no tiene el formato que usa este proveedor',
+  course_mismatch: 'el documento no menciona el curso esperado',
+  issuer_mismatch: 'el documento no menciona al proveedor esperado',
+  verification_mismatch: 'el enlace o la insignia no corresponden a una fuente oficial o a ti',
+};
+
+export interface CredentialCheck {
+  status: CredentialCheckStatus;
+  url: string | null;
+  official: boolean | null;
+  qr: 'qr_present' | 'qr_absent';
+  openBadge: { format: string; recipientMatch: boolean | null; revoked: boolean } | null;
+  contradictions: string[];
+  pipeline: string[];
+}
+
+export interface ManualReviewState {
+  status: 'requested' | 'corroborated' | 'not_corroborated' | null;
+  reason: string | null;
+  reviewedAt: string | null;
+  canRequest: boolean;
+}
+
+/** Credencial esperando la revisión excepcional de Dirección. */
+export interface ManualReviewItem {
+  certificateId: string;
+  certificateName: string;
+  issuer: string;
+  issueDate: string | null;
+  credentialId: string | null;
+  certificateUrl: string | null;
+  fileUrl: string | null;
+  studentName: string;
+  semester: number | null;
+  credentialCheck: CredentialCheckStatus | null;
+  requestNote: string | null;
+  requestedAt: string;
+}
 
 export type ValidationStatus =
   | 'pending' | 'processing' | 'completed' | 'inconclusive' | 'failed';
@@ -804,6 +862,9 @@ export interface ValidationVerdict {
   } | null;
   isDuplicate: boolean;
   validatorVersion: number;
+  /** V3 §18: solo en credenciales externas. */
+  credentialCheck?: CredentialCheck | null;
+  manualReview?: ManualReviewState | null;
   attempts: number;
   errorCode: string | null;
   finishedAt: string | null;

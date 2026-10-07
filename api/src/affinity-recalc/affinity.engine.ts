@@ -204,6 +204,8 @@ const CERTIFICATE_CODE: Record<BackingTier, AffinityWeightCode> = {
   [BackingTier.DECLARED]: AffinityWeightCode.CERTIFICATE_DECLARED,
   [BackingTier.SUPPORTED]: AffinityWeightCode.CERTIFICATE_SUPPORTED,
   [BackingTier.CORROBORATED]: AffinityWeightCode.CERTIFICATE_CORROBORATED,
+  // V3 §19/§35: señalada por una contradicción, no suma mientras siga así.
+  [BackingTier.FLAGGED]: AffinityWeightCode.CERTIFICATE_DECLARED,
 };
 
 /** Puntos de respaldo de un certificado segun su nivel (§53.3). */
@@ -211,12 +213,14 @@ const CERTIFICATE_SUPPORT: Record<BackingTier, number> = {
   [BackingTier.DECLARED]: SUPPORT_POINTS.CERTIFICATE_DECLARED,
   [BackingTier.SUPPORTED]: SUPPORT_POINTS.CERTIFICATE_SUPPORTED,
   [BackingTier.CORROBORATED]: SUPPORT_POINTS.CERTIFICATE_CORROBORATED,
+  [BackingTier.FLAGGED]: 0,
 };
 
 const CERTIFICATE_TIER_LABEL: Record<BackingTier, string> = {
   [BackingTier.DECLARED]: 'declarado',
   [BackingTier.SUPPORTED]: 'respaldado',
   [BackingTier.CORROBORATED]: 'corroborado',
+  [BackingTier.FLAGGED]: 'con inconsistencias (no suma mientras siga así)',
 };
 
 /** Topes de afinidad por cubeta (§51). */
@@ -601,7 +605,7 @@ export class AffinityEngineService {
           matchType: c.academicAreaId ? AffinityMatchType.DECLARED : AffinityMatchType.TEXT,
           sourceEntityType: AffinitySourceEntityType.EXTERNAL_CERTIFICATE,
           sourceId: c.id,
-          base: weightOf.get(code) ?? 0,
+          base: tier === BackingTier.FLAGGED ? 0 : (weightOf.get(code) ?? 0),
           supportBase: CERTIFICATE_SUPPORT[tier],
           affinityBucket: 'certificate',
           supportBucket: 'certificate',

@@ -25,6 +25,8 @@ const normalize = (s: string) =>
 import {
   BACKING_TIER_HELP,
   BACKING_TIER_LABEL,
+  CREDENTIAL_CHECK_LABEL,
+  CREDENTIAL_CONTRADICTION_LABEL,
   LINK_CHECK_LABEL,
 } from '../../services/types';
 import type {
@@ -864,6 +866,7 @@ function CertificateForm({
 function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
   const [verdict, setVerdict] = useState<ValidationVerdict | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [pidiendo, setPidiendo] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -884,12 +887,54 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
 
   const tono = verdict.backingTier === 'corroborated'
     ? 'green'
-    : verdict.backingTier === 'supported' ? 'bordo' : 'gray';
+    : verdict.backingTier === 'supported'
+      ? 'bordo'
+      : verdict.backingTier === 'flagged' ? 'red' : 'gray';
+  const chequeo = verdict.credentialCheck;
+  const revision = verdict.manualReview;
+
+  const pedirRevision = async () => {
+    const nota = window.prompt(
+      'Cuéntale a Dirección cómo puede comprobar esta credencial (opcional):',
+      '',
+    );
+    if (nota === null) return;
+    setPidiendo(true);
+    try {
+      await certificateService.requestManualReview(certificateId, nota.trim());
+      setVerdict(await validationService.forResource('external_certificate', certificateId));
+    } catch (e) {
+      window.alert(apiError(e));
+    } finally {
+      setPidiendo(false);
+    }
+  };
 
   return (
     <div className="respaldo">
       <Badge tone={tono}>{BACKING_TIER_LABEL[verdict.backingTier]}</Badge>
       <span className="muted">{BACKING_TIER_HELP[verdict.backingTier]}</span>
+      {chequeo && (
+        <span className="muted">
+          Verificación: {CREDENTIAL_CHECK_LABEL[chequeo.status].toLowerCase()}
+          {chequeo.qr === 'qr_present' ? ' · QR leído' : ''}
+        </span>
+      )}
+      {chequeo && chequeo.contradictions.length > 0 && (
+        <span className="respaldo-aviso">
+          {chequeo.contradictions.map((c) => CREDENTIAL_CONTRADICTION_LABEL[c] ?? c).join('; ')}.
+        </span>
+      )}
+      {revision?.status === 'requested' && <span className="muted">Revisión excepcional pedida a Dirección.</span>}
+      {revision?.status === 'corroborated' && <span className="muted">Corroborada por revisión de Dirección.</span>}
+      {revision?.status === 'not_corroborated' && (
+        <span className="muted">Dirección no pudo corroborarla: {revision.reason}</span>
+      )}
+      {revision?.canRequest && (
+        <button type="button" className="link-button" disabled={pidiendo} onClick={pedirRevision}>
+          {pidiendo ? 'Enviando…' : 'Pedir revisión excepcional'}
+        </button>
+      )}
 
       {verdict.identityMatchStatus === 'mismatch' && (
         <span className="respaldo-aviso">

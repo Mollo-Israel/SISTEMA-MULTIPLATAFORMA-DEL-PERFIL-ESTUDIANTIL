@@ -6,6 +6,8 @@ import { StoredFileRecord } from '../entities/stored-file.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
+import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
+import { CredentialVerifierService } from './credential-verifier.service';
 import { StorageModule } from '../storage/storage.module';
 import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { OCR_PORT, TesseractOcrAdapter } from './ocr.port';
@@ -35,6 +37,7 @@ import { ValidationController } from './validation.controller';
       ProjectEvidence,
       ExternalCertificate,
       StudentProfile,
+      ExternalOpportunityValidationReference,
     ]),
     StorageModule,
     TrajectoryModule,
@@ -48,6 +51,7 @@ import { ValidationController } from './validation.controller';
     },
     DocumentExtractionService,
     LinkCheckerService,
+    CredentialVerifierService,
     ValidationService,
     ValidationWorker,
   ],
