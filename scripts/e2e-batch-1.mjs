@@ -355,23 +355,35 @@ async function sesiones(ctx) {
 
   // Recargar la página en medio de una renovación descarta la respuesta con el
   // token nuevo: el cliente vuelve a presentar el anterior. Dentro de la gracia
-  // (REFRESH_TOKEN_REUSE_GRACE_SECONDS) sirve, pero una sola vez.
+  // (REFRESH_TOKEN_REUSE_GRACE_SECONDS) sirve, incluso si la recarga se repite.
   const reutilizado = await req('POST', '/auth/refresh', { body: { refreshToken: primer } });
   check(
     reutilizado.status === 200 && !!reutilizado.data?.refreshToken && reutilizado.data.refreshToken !== refrescado.data?.refreshToken,
-    'B3.3 Recarga en medio de la renovación: el token recién reemplazado sirve una vez y emite otro',
+    'B3.3 Recarga en medio de la renovación: el token recién reemplazado sirve y emite otro',
     `status ${reutilizado.status}`,
   );
+  // F5 repetido: otra renovación perdida, con la misma cookie vieja. La
+  // ventana sigue anclada a la primera rotación, así que sigue sirviendo.
+  const repetido = await req('POST', '/auth/refresh', { body: { refreshToken: primer } });
+  check(
+    repetido.status === 200,
+    'B3.3e F5 repetido (varias renovaciones perdidas seguidas): la sesión sigue viva',
+    `status ${repetido.status}`,
+  );
+
+  // En cuanto la sesión se renueva con normalidad con el token nuevo, el
+  // anterior queda definitivamente fuera.
+  const normal = await req('POST', '/auth/refresh', { body: { refreshToken: repetido.data?.refreshToken } });
   const otraVez = await req('POST', '/auth/refresh', { body: { refreshToken: primer } });
   check(
-    otraVez.status === 401,
-    'B3.3c Usado otra vez, el token anterior ya no sirve -> 401',
-    `status ${otraVez.status}`,
+    normal.status === 200 && otraVez.status === 401,
+    'B3.3c Tras una renovación normal con el token nuevo, el anterior ya no sirve -> 401',
+    `normal ${normal.status}, anterior ${otraVez.status}`,
   );
 
   // Dos renovaciones a la vez con el mismo token (dos pestañas, o un 401 en
   // varias peticiones juntas): ninguna puede tumbar la sesión de la otra.
-  const actual = reutilizado.data?.refreshToken;
+  const actual = normal.data?.refreshToken;
   const [a1, a2] = await Promise.all([
     req('POST', '/auth/refresh', { body: { refreshToken: actual } }),
     req('POST', '/auth/refresh', { body: { refreshToken: actual } }),

@@ -109,13 +109,13 @@ export class AuthService {
       throw new UnauthorizedException(this.explainStatus(session.user.status));
     }
 
-    let rotated = await this.sessions.rotate(session);
+    let rotated = await this.sessions.rotate(session, refreshToken);
     if (!rotated) {
       // Otra renovacion con el mismo token gano la carrera por milesimas. Si
       // sigue dentro de la gracia, se rota desde el token que ella dejo
       // vigente; si no, el token ya no sirve.
       const vigente = await this.sessions.findUsable(refreshToken);
-      if (vigente) rotated = await this.sessions.rotate(vigente);
+      if (vigente) rotated = await this.sessions.rotate(vigente, refreshToken);
     }
     if (!rotated) {
       throw new UnauthorizedException('La sesión expiró o fue cerrada. Inicie sesión de nuevo.');

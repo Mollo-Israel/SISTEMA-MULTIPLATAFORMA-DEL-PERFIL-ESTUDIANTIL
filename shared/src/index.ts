@@ -20,3 +20,4 @@ export * from './enums/project-backing.enum';
 export * from './enums/skill-interest.enum';
 export * from './enums/ai.enum';
 export * from './enums/university-code';
+export * from './enums/avatar';

@@ -59,7 +59,7 @@ export const HELP: Record<string, HelpTopic[]> = {
   [RolNombre.STUDENT]: [
     { question: '¿Por qué mi afinidad no sube si marqué que me interesa un área?', answer: 'Los intereses orientan tus recomendaciones, pero la afinidad solo cuenta lo que hiciste y está respaldado: actividades confirmadas, proyectos con evidencia y certificados.', to: '/student/affinity' },
     { question: '¿Qué significa «con respaldo»?', answer: 'Que hay algo que lo sostiene además de tu palabra: una evidencia, una confirmación del organizador o la revisión de un docente. «No se pudo comprobar» quiere decir que la verificación automática no encontró el recurso; no es una sanción.' },
-    { question: '¿Quién puede ver mi perfil?', answer: 'Nadie fuera del sistema, salvo que actives tu perfil compartible. Tú eliges qué se muestra; tu correo institucional y tu código no aparecen nunca por omisión.', to: '/student/privacy' },
+    { question: '¿Quién puede ver mi perfil?', answer: 'Nadie fuera del sistema, salvo que actives tu perfil compartible. Tú eliges qué se muestra; tu correo institucional y tu código no aparecen nunca por omisión.', to: '/student/profile?tab=visibilidad' },
     { question: '¿Cómo me contactan si no hay chat?', answer: 'Configura tus canales (Teams, WhatsApp, LinkedIn, correo o un enlace) en Colaboración. Tus contactos aceptados los ven; en tu perfil público, solo los que marques.', to: '/student/collaboration' },
     { question: '¿El CV es un documento oficial?', answer: 'No. Resume lo registrado en Afinia y lo dice en el propio PDF. Si usas la ayuda de redacción, nada entra al CV hasta que eliges la propuesta.', to: '/student/progress' },
   ],

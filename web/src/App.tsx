@@ -18,7 +18,6 @@ import StudentDashboard from './pages/student/Dashboard';
 import StudentProfilePage from './pages/student/Profile';
 import WelcomeWizard from './pages/student/Welcome';
 import OnboardingGate from './components/OnboardingGate';
-import StudentPrivacyPage from './pages/student/Privacy';
 import StudentCollaborationPage from './pages/student/Collaboration';
 import StudentProgressPage from './pages/student/Progress';
 import StudentProjectsPage from './pages/student/Projects';
@@ -128,9 +127,9 @@ export default function App() {
             <Route path="/student" element={<StudentDashboard />} />
             <Route path="/student/profile" element={<StudentProfilePage />} />
             {/* Intereses y cuestionario viven ahora dentro de «Mi perfil». */}
-            <Route path="/student/onboarding" element={<Navigate to="/student/profile?tab=cuestionario" replace />} />
+            <Route path="/student/onboarding" element={<Navigate to="/student/profile?tab=intereses" replace />} />
             <Route path="/student/interests" element={<Navigate to="/student/profile?tab=intereses" replace />} />
-            <Route path="/student/privacy" element={<StudentPrivacyPage />} />
+            <Route path="/student/privacy" element={<Navigate to="/student/profile?tab=visibilidad" replace />} />
             <Route path="/student/collaboration" element={<StudentCollaborationPage />} />
             <Route path="/student/progress" element={<StudentProgressPage />} />
             <Route path="/student/projects" element={<StudentProjectsPage />} />

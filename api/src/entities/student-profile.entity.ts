@@ -49,6 +49,10 @@ export class StudentProfile {
   @Column({ type: 'smallint', nullable: true })
   semester: number | null;
 
+  /** Avatar de catálogo elegido (V3 §11.2), una de `AVATAR_KEYS`. */
+  @Column({ name: 'avatar_key', type: 'varchar', length: 40, nullable: true })
+  avatarKey: string | null;
+
   /** Copia de `users.academic_scope_semesters` (V3 §8.1), para el alcance docente. */
   @Column({ name: 'academic_scope_semesters', type: 'smallint', array: true, default: () => "'{}'" })
   academicScopeSemesters: number[];

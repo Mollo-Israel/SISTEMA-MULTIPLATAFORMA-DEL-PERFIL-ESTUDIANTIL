@@ -163,3 +163,34 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 - Regresión completa (20 suites, correo simulado, sin cambios de código durante la ejecución): **1458 correctas, 0 fallos**. Incluye `e2e-v3` (37: B2 24 + B4 13).
 - Una ejecución anterior marcó un fallo pasajero en `WEB.19b` porque la API se estaba recompilando por ediciones en curso; repetida con la API estable, pasó dos veces seguidas y en la regresión limpia.
 - Builds de `api`, `web` y `mobile` en verde.
+
+---
+
+## BATCH 5 — Perfil y onboarding
+
+**ESTADO:** completo
+
+**Objetivo:** Mi Perfil por pestañas, sin entradas duplicadas en el menú, con avatares de catálogo (§11).
+
+**Hallazgos iniciales:**
+- Mi Perfil tenía «Sobre mí» (que mezclaba biografía, áreas a mejorar y disponibilidad), «Intereses y habilidades» y «Cuestionario»; Privacidad era otra pantalla.
+- El menú del estudiante repetía «Preferencias» (pestaña de intereses) y «Privacidad».
+- No había avatar.
+
+**Cambios:**
+- Mi Perfil en cuatro pestañas (§11.1): **Sobre mí** (avatar y biografía), **Intereses y objetivos** (áreas a mejorar, intereses por área, tecnologías de interés y a mejorar, tecnologías respaldadas y el cuestionario opcional), **Disponibilidad** (cómo le gusta colaborar) y **Visibilidad** (la configuración de privacidad, incrustada). Cada pestaña guarda solo lo suyo; errores por campo.
+- Enlaces antiguos redirigen: `?tab=cuestionario` → Intereses y objetivos; `/student/privacy` → Visibilidad; `/student/interests` y `/student/onboarding` siguen funcionando.
+- Menú del estudiante sin «Preferencias» ni «Privacidad».
+- Avatares de catálogo (§11.2): 12 ilustraciones (`AVATAR_KEYS` en `shared`); la API rechaza cualquier otra clave o URL; sin avatar se muestran las iniciales. No hay fotos que moderar.
+- **Sesión (corrección encontrada en la regresión):** cinco F5 muy seguidos podían cerrar la sesión, porque cada recarga cortaba la renovación anterior y el servidor rotaba varias veces sin que el navegador recibiera ninguna cookie. Ahora, cuando un token entra por la gracia, la sesión rota pero conserva ese token como «anterior» con la ventana anclada a la primera rotación (no se alarga). Tras una renovación normal con el token nuevo, el anterior responde 401.
+
+**Migraciones:** `1780480000000-V3ProfileAvatar` (`student_profiles.avatar_key`).
+
+**Pruebas ejecutadas:** `e2e-v3 batch5` (V3.5.1–V3.5.5); `e2e-web` WEB.15–WEB.15d (menú y pestañas) y WEB.19c–e (tres ejecuciones seguidas); `e2e-batch-1` B3.3–B3.3e (nuevo: F5 repetido); `e2e-v2` V2.2.8–V2.2.10; unitarias; regresión completa.
+
+**Decisiones:**
+- Pruebas ajustadas a la regla nueva: `WEB.15` exigía «Preferencias» y «Privacidad» en el menú (V3 los retira); `B3.3c` y `V2.2.8b` exigían que el token anterior sirviera «una sola vez» (ahora: durante la ventana, hasta la siguiente renovación normal).
+
+**Riesgos:** ninguno nuevo; la ventana de reutilización sigue acotada a 60 s desde la primera rotación.
+
+**Resultados:** unitarias 47/47; regresión completa **1467 correctas, 0 fallos** (20 suites, `e2e-v3` 42).

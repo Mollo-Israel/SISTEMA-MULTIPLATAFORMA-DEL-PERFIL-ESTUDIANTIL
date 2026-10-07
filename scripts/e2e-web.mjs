@@ -159,8 +159,19 @@ async function pruebas(browser) {
   check(await omitir.isVisible(), 'WEB.14b §65 El estudiante también recibe su tutorial');
   await omitir.click();
   const items = await p3.locator('nav a.nav-link').allInnerTexts();
-  check(['Equipos', 'CV / Exportar', 'Preferencias', 'Ayuda', 'Privacidad'].every((t) => items.some((e) => e.includes(t))),
-    'WEB.15 §77 El estudiante tiene Equipos, CV / Exportar, Preferencias, Privacidad y Ayuda', items.join(' | '));
+  check(['Mi perfil', 'Equipos', 'CV / Exportar', 'Ayuda'].every((t) => items.some((e) => e.includes(t))),
+    'WEB.15 §77 El estudiante tiene Mi perfil, Equipos, CV / Exportar y Ayuda', items.join(' | '));
+  check(!items.some((e) => /Preferencias|Privacidad/.test(e)),
+    'WEB.15b V3 §11.1 Intereses y privacidad viven dentro de Mi perfil: sin entradas duplicadas en el menú', items.join(' | '));
+  // V3 §11.1: Mi perfil en cuatro pestañas; los enlaces antiguos llegan a la suya.
+  await p3.goto(`${WEB}/student/privacy`);
+  await p3.waitForURL(/tab=visibilidad/);
+  const pestanas = await p3.locator('[role=tab]').allInnerTexts();
+  check(['Sobre mí', 'Intereses y objetivos', 'Disponibilidad', 'Visibilidad'].every((t) => pestanas.some((x) => x.includes(t))),
+    'WEB.15c V3 §11.1 Mi perfil: Sobre mí, Intereses y objetivos, Disponibilidad y Visibilidad', pestanas.join(' | '));
+  await p3.getByText('Perfil compartible').first().waitFor({ timeout: 8000 }).catch(() => {});
+  check(await p3.getByText('Perfil compartible').first().isVisible(),
+    'WEB.15d V3 §11.1 /student/privacy abre la pestaña Visibilidad con la configuración', p3.url());
   await p3.click('a[href="/student/collaboration?tab=equipos"]');
   await p3.waitForURL(/tab=equipos/);
   const activos = await p3.locator('nav a.nav-link.active').allInnerTexts();

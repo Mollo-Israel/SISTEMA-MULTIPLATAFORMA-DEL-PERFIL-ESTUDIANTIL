@@ -168,9 +168,11 @@ flowchart TD
 - **Recargar la página no cierra la sesión.** El access token vive en memoria,
   así que tras un F5 la web lo renueva con la cookie. Si el F5 cae justo en
   medio de una renovación, el servidor ya rotó el token pero el navegador
-  descarta la cookie nueva. Por eso el token recién reemplazado sirve **una
-  vez más** durante 60 s (`REFRESH_TOKEN_REUSE_GRACE_SECONDS`); usado de nuevo,
-  responde 401. En el cliente hay una sola renovación en vuelo, compartida por
+  descarta la cookie nueva. Por eso el token recién reemplazado sigue sirviendo
+  durante 60 s desde la primera rotación (`REFRESH_TOKEN_REUSE_GRACE_SECONDS`),
+  incluso si el F5 se repite y se pierden varias renovaciones seguidas; la
+  ventana no se alarga, y en cuanto la sesión se renueva con normalidad con el
+  token nuevo, el anterior responde 401. En el cliente hay una sola renovación en vuelo, compartida por
   toda la página y coordinada entre pestañas (Web Locks), y solo un 401 real
   cierra la sesión: un corte de red o un 429 no. `/auth/refresh` tiene su
   propio límite (60 por minuto); el del login sigue en 10.

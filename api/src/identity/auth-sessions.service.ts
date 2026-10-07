@@ -93,21 +93,34 @@ export class AuthSessionsService {
    * puede reintentar (ver AuthService.refresh): dentro de la gracia, su token
    * ya figura como el anterior y la sesion vuelve a rotar desde el vigente.
    */
-  async rotate(session: AuthSession): Promise<{ refreshToken: string; expiresAt: Date } | null> {
+  async rotate(
+    session: AuthSession,
+    presentedToken?: string,
+  ): Promise<{ refreshToken: string; expiresAt: Date } | null> {
     const refreshToken = randomBytes(48).toString('base64url');
     const expiresAt = new Date(Date.now() + this.ttlMs());
-
     const ahora = new Date();
+    // Entró por la gracia (presentó el token anterior): el navegador nunca
+    // recibió la cookie nueva. Se rota, pero el «anterior» sigue siendo el que
+    // presentó y la ventana sigue anclada a la primera rotación. Así varias
+    // renovaciones perdidas seguidas (F5 repetido) no cierran la sesión, y la
+    // ventana no se alarga: a los N segundos de la primera rotación, muere.
+    const porGracia = !!presentedToken
+      && hash(presentedToken) === session.previousRefreshTokenHash
+      && hash(presentedToken) !== session.refreshTokenHash;
+
     const result = await this.sessions.update(
       { id: session.id, refreshTokenHash: session.refreshTokenHash, revokedAt: IsNull() },
-      {
-        refreshTokenHash: hash(refreshToken),
-        // El que se reemplaza queda aceptado durante la gracia (ver findUsable).
-        previousRefreshTokenHash: session.refreshTokenHash,
-        rotatedAt: ahora,
-        expiresAt,
-        lastUsedAt: ahora,
-      },
+      porGracia
+        ? { refreshTokenHash: hash(refreshToken), expiresAt, lastUsedAt: ahora }
+        : {
+          refreshTokenHash: hash(refreshToken),
+          // El que se reemplaza queda aceptado durante la gracia (ver findUsable).
+          previousRefreshTokenHash: session.refreshTokenHash,
+          rotatedAt: ahora,
+          expiresAt,
+          lastUsedAt: ahora,
+        },
     );
     if (!result.affected) return null;
 

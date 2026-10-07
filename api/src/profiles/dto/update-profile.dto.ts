@@ -15,12 +15,10 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  IsIn,
+  ValidateIf,
 } from 'class-validator';
-import {
-  AvailabilityStatus,
-  CollaborationInterest,
-  CollaborationMode,
-} from '@perfil/shared';
+import { AVATAR_KEYS, AvailabilityStatus, CollaborationInterest, CollaborationMode } from '@perfil/shared';
 import { cleanText } from '../../common/validation';
 
 /** Preferencias de colaboración (§17.2). */
@@ -88,6 +86,13 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsBoolean({ message: 'La preferencia de aparecer en sugerencias debe ser verdadero o falso.' })
   peerDiscoverable?: boolean;
+
+  /** V3 §11.2: ilustración de catálogo, o null para quitarla. */
+  @ApiProperty({ required: false, nullable: true, enum: AVATAR_KEYS })
+  @IsOptional()
+  @ValidateIf((o: UpdateProfileDto) => o.avatarKey !== null)
+  @IsIn(AVATAR_KEYS as unknown as string[], { message: 'Ese avatar no está en el catálogo.' })
+  avatarKey?: string | null;
 
   @ApiProperty({ required: false, enum: AvailabilityStatus })
   @IsOptional()

@@ -279,6 +279,8 @@ export interface CollaborationPreferences {
 }
 
 export interface StudentProfile {
+  /** Avatar de catálogo (V3 §11.2). */
+  avatarKey?: string | null;
   id: string;
   userId: string;
   /** Institucional: llega del padrón y el estudiante no lo edita (§17.1). */

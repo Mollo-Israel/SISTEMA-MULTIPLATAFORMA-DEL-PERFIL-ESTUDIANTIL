@@ -23,7 +23,7 @@ const ORDEN: PublicProfileField[] = [
  * institucional, archivos privados, identificadores internos— no aparece aquí
  * porque no hay forma de activarlo.
  */
-export default function StudentPrivacyPage() {
+export default function StudentPrivacyPage({ embedded = false }: { embedded?: boolean } = {}) {
   const toast = useToast();
   const [settings, setSettings] = useCachedState<VisibilitySettings | null>('visibilidad', null);
   const [loading, setLoading] = useState(() => !enMemoria('visibilidad'));
@@ -69,7 +69,7 @@ export default function StudentPrivacyPage() {
   if (loading || !settings) {
     return (
       <div>
-        <PageHeader title="Privacidad" description="Cargando tu configuración…" />
+        {!embedded && <PageHeader title="Privacidad" description="Cargando tu configuración…" />}
         <Diferido><Card><SkeletonCards count={2} /></Card></Diferido>
       </div>
     );
@@ -79,10 +79,16 @@ export default function StudentPrivacyPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Privacidad"
-        description="Tú decides qué se muestra de tu perfil cuando lo compartes. Nada se comparte si no lo activas."
-      />
+      {embedded ? (
+        <p className="muted" style={{ marginTop: 0 }}>
+          Tú decides qué se muestra de tu perfil cuando lo compartes. Nada se comparte si no lo activas.
+        </p>
+      ) : (
+        <PageHeader
+          title="Privacidad"
+          description="Tú decides qué se muestra de tu perfil cuando lo compartes. Nada se comparte si no lo activas."
+        />
+      )}
 
       <Card
         title="Perfil compartible"

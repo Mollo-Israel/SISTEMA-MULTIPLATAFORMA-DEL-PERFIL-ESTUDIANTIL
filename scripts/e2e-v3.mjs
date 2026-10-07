@@ -246,7 +246,33 @@ async function batch4(ctx) {
   check(dentro.status === 201, 'V3.4.13 §4 Con el área de la habilidad elegida, se publica', `status ${dentro.status}`);
 }
 
-const BATCHES = { batch2, batch4 };
+// ===========================================================================
+//  BATCH 5 — Perfil y onboarding (§11)
+// ===========================================================================
+async function batch5(ctx) {
+  objective('BATCH 5 · Mi perfil por pestañas y avatar de catálogo');
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Iver', lastName: 'Antezana', email: correoEst('avatar'), role: 'STUDENT', semester: 5,
+  });
+  await req('POST', '/profiles/me', { token: est.token, body: { improvementAreaIds: [] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+
+  const conAvatar = await req('PATCH', '/profiles/me', { token: est.token, body: { avatarKey: 'database' } });
+  check(conAvatar.status === 200 && conAvatar.data?.avatarKey === 'database',
+    'V3.5.1 §11.2 El estudiante elige un avatar del catálogo', json({ s: conAvatar.status, a: conAvatar.data?.avatarKey }));
+  const ajeno = await req('PATCH', '/profiles/me', { token: est.token, body: { avatarKey: 'https://x.test/foto.png' } });
+  check(ajeno.status === 400, 'V3.5.2 §11.2 Nada fuera del catálogo: ni URLs ni claves inventadas', `status ${ajeno.status}`);
+  const sinAvatar = await req('PATCH', '/profiles/me', { token: est.token, body: { avatarKey: null } });
+  check(sinAvatar.status === 200 && sinAvatar.data?.avatarKey === null, 'V3.5.3 §11.2 Puede quitarlo', `status ${sinAvatar.status}`);
+
+  const soloBio = await req('PATCH', '/profiles/me', { token: est.token, body: { bio: 'Me interesan los datos.' } });
+  check(soloBio.status === 200 && soloBio.data?.bio === 'Me interesan los datos.' && soloBio.data?.availability === 'open',
+    'V3.5.4 §11.1 Cada pestaña guarda lo suyo: cambiar «Sobre mí» no toca la disponibilidad', json({ b: soloBio.data?.bio, d: soloBio.data?.availability }));
+  const semestre = await req('PATCH', '/profiles/me', { token: est.token, body: { semester: 2 } });
+  check(semestre.status === 400, 'V3.5.5 §6.1 El semestre sigue siendo institucional (400)', `status ${semestre.status}`);
+}
+
+const BATCHES = { batch2, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

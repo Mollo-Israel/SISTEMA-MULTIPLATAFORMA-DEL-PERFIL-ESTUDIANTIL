@@ -419,6 +419,7 @@ export class ProfilesService {
       profile.improvementAreaIds = dto.improvementAreaIds;
     }
     if (dto.bio !== undefined) profile.bio = dto.bio;
+    if (dto.avatarKey !== undefined) profile.avatarKey = dto.avatarKey;
     if (dto.peerDiscoverable !== undefined) profile.peerDiscoverable = dto.peerDiscoverable;
     if (dto.availability !== undefined) {
       profile.availability = dto.availability;

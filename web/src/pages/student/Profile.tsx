@@ -24,6 +24,9 @@ import { Badge, Button, Card, Diferido, PageHeader, ProgressBar, SkeletonCards, 
 import { useToast } from '../../components/feedback';
 import { AreaChooser, InterestChooser, SkillInterestChooser } from '../../components/Declarations';
 import QuestionnaireRunner from '../../components/QuestionnaireRunner';
+import Avatar, { AvatarChooser } from '../../components/Avatar';
+import StudentPrivacyPage from './Privacy';
+import { useAuth } from '../../auth/AuthContext';
 
 const AVAILABILITIES: AvailabilityStatus[] = ['looking', 'open', 'busy', 'unspecified'];
 const MODES: CollaborationMode[] = ['remote', 'in_person', 'hybrid'];
@@ -31,7 +34,10 @@ const COLLAB_INTERESTS: CollaborationInterest[] = [
   'projects', 'research', 'competitions', 'study_groups', 'volunteering',
 ];
 
-type Pestana = 'datos' | 'intereses' | 'cuestionario';
+type Pestana = 'datos' | 'intereses' | 'disponibilidad' | 'visibilidad';
+
+/** Enlaces antiguos que siguen funcionando: van a la pestaña que los absorbió. */
+const ALIAS_PESTANA: Record<string, Pestana> = { cuestionario: 'intereses', privacidad: 'visibilidad' };
 
 /**
  * Mi perfil: todo lo que el estudiante declara de sí mismo, en un solo sitio.
@@ -43,9 +49,10 @@ type Pestana = 'datos' | 'intereses' | 'cuestionario';
  */
 export default function StudentProfilePage() {
   const [params, setParams] = useSearchParams();
-  const tab = (['datos', 'intereses', 'cuestionario'].includes(params.get('tab') ?? '')
-    ? params.get('tab')
-    : 'datos') as Pestana;
+  const pedida = params.get('tab') ?? '';
+  const tab: Pestana = (['datos', 'intereses', 'disponibilidad', 'visibilidad'] as string[]).includes(pedida)
+    ? (pedida as Pestana)
+    : ALIAS_PESTANA[pedida] ?? 'datos';
 
   // Con memoria de la sesión: al volver a «Mi perfil» se pinta al instante.
   const [profile, setProfile] = useCachedState<StudentProfile | null>('perfil', null);
@@ -53,6 +60,8 @@ export default function StudentProfilePage() {
   const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
   const [loading, setLoading] = useState(() => !enMemoria('perfil'));
   const toast = useToast();
+  const { user } = useAuth();
+  const nombreVisible = user ? `${user.firstName} ${user.lastName}` : '';
 
   const recargar = async () => {
     const p = await profileService.getMine().catch(() => null);
@@ -82,6 +91,10 @@ export default function StudentProfilePage() {
           title="Tu perfil va así"
           actions={<Badge tone={profile.completionPercentage >= 80 ? 'green' : 'amber'}>{profile.completionPercentage}%</Badge>}
         >
+          <div className="flex" style={{ gap: '0.8rem', alignItems: 'center', marginBottom: '0.6rem' }}>
+            <Avatar avatarKey={profile.avatarKey} nombre={nombreVisible} size={44} />
+            <strong>{nombreVisible}</strong>
+          </div>
           <ProgressBar
             value={profile.completionPercentage}
             label="Completitud"
@@ -106,8 +119,9 @@ export default function StudentProfilePage() {
       <Tabs
         items={[
           { key: 'datos', label: 'Sobre mí' },
-          { key: 'intereses', label: 'Intereses y habilidades' },
-          { key: 'cuestionario', label: 'Cuestionario de orientación' },
+          { key: 'intereses', label: 'Intereses y objetivos' },
+          { key: 'disponibilidad', label: 'Disponibilidad' },
+          { key: 'visibilidad', label: 'Visibilidad' },
         ]}
         value={tab}
         onChange={(k) => setParams(k === 'datos' ? {} : { tab: k }, { replace: true })}
@@ -116,11 +130,17 @@ export default function StudentProfilePage() {
       {loading ? (
         <Diferido><Card><SkeletonCards count={3} /></Card></Diferido>
       ) : tab === 'datos' ? (
-        <DatosTab profile={profile} areas={areas} onSaved={(p) => setProfile(p)} />
+        <SobreMiTab profile={profile} onSaved={(p) => setProfile(p)} />
       ) : tab === 'intereses' ? (
-        <InteresesTab areas={areas} skills={skills} mejora={profile?.improvementAreaIds ?? []} onSaved={recargar} />
+        <>
+          <MejoraCard profile={profile} areas={areas} onSaved={(p) => setProfile(p)} />
+          <InteresesTab areas={areas} skills={skills} mejora={profile?.improvementAreaIds ?? []} onSaved={recargar} />
+          <CuestionarioTab />
+        </>
+      ) : tab === 'disponibilidad' ? (
+        <DisponibilidadTab profile={profile} onSaved={(p) => setProfile(p)} />
       ) : (
-        <CuestionarioTab />
+        <StudentPrivacyPage embedded />
       )}
     </div>
   );
@@ -128,7 +148,65 @@ export default function StudentProfilePage() {
 
 // ===========================================================================
 
-function DatosTab({
+/** Guarda un cambio parcial del perfil y avisa. */
+function useGuardarPerfil(onSaved: (p: StudentProfile) => void) {
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const guardar = async (payload: Record<string, unknown>, mensaje: string) => {
+    setSaving(true);
+    try {
+      const result = await profileService.update(payload);
+      onSaved(result);
+      toast.success(mensaje, `Tu perfil está al ${result.completionPercentage}%.`);
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return { saving, guardar };
+}
+
+function SobreMiTab({ profile, onSaved }: { profile: StudentProfile | null; onSaved: (p: StudentProfile) => void }) {
+  const [bio, setBio] = useState(profile?.bio ?? '');
+  const [avatar, setAvatar] = useState<string | null>(profile?.avatarKey ?? null);
+  const { saving, guardar } = useGuardarPerfil(onSaved);
+  if (!profile) return <SinPerfil />;
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        // §17.1: ni semestre ni código universitario: son institucionales.
+        void guardar({ bio: bio || undefined, avatarKey: avatar }, 'Perfil guardado');
+      }}
+    >
+      <Card title="Tu avatar">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Elige una ilustración. No subimos fotos: así tu imagen no circula y nadie tiene que revisarla.
+        </p>
+        <AvatarChooser value={avatar} onChange={setAvatar} />
+      </Card>
+      <Card title="Sobre ti">
+        <div className="field">
+          <label htmlFor="perfil-bio">Cuéntanos de ti</label>
+          <textarea
+            id="perfil-bio"
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Tus intereses y metas, en pocas palabras…"
+            maxLength={1000}
+          />
+          <span className="field-hint">{bio.length} de 1000 caracteres</span>
+        </div>
+        <Button type="submit" loading={saving} icon={<FiSave size={15} />}>
+          Guardar
+        </Button>
+      </Card>
+    </form>
+  );
+}
+
+function MejoraCard({
   profile,
   areas,
   onSaved,
@@ -137,9 +215,46 @@ function DatosTab({
   areas: AcademicArea[];
   onSaved: (p: StudentProfile) => void;
 }) {
+  const [mejora, setMejora] = useState<string[]>(profile?.improvementAreaIds ?? []);
+  const [error, setError] = useState<string | null>(null);
+  const { saving, guardar } = useGuardarPerfil(onSaved);
+  if (!profile) return <SinPerfil />;
+  return (
+    <Card
+      title="¿En qué áreas quieres mejorar?"
+      actions={
+        <Button
+          size="sm"
+          loading={saving}
+          icon={<FiSave size={14} />}
+          onClick={() => {
+            if (mejora.length === 0) {
+              setError('Elige al menos un área donde quieras mejorar.');
+              return;
+            }
+            setError(null);
+            void guardar({ improvementAreaIds: mejora }, 'Áreas a mejorar guardadas');
+          }}
+        >
+          Guardar áreas
+        </Button>
+      }
+    >
+      <p className="muted" style={{ marginTop: 0 }}>Te recomendaremos cursos y actividades para crecer en ellas.</p>
+      <AreaChooser areas={areas} value={mejora} onChange={(v) => { setMejora(v); setError(null); }} />
+      {error && <span className="field-error">{error}</span>}
+    </Card>
+  );
+}
+
+function DisponibilidadTab({
+  profile,
+  onSaved,
+}: {
+  profile: StudentProfile | null;
+  onSaved: (p: StudentProfile) => void;
+}) {
   const [form, setForm] = useState({
-    bio: profile?.bio ?? '',
-    improvementAreaIds: profile?.improvementAreaIds ?? [],
     availability: (profile?.availability ?? 'unspecified') as AvailabilityStatus,
     modes: profile?.collaborationPreferences?.modes ?? [],
     collabInterests: profile?.collaborationPreferences?.interests ?? [],
@@ -148,70 +263,36 @@ function DatosTab({
       : '',
     notes: profile?.collaborationPreferences?.notes ?? '',
   });
-  const [saving, setSaving] = useState(false);
-  const toast = useToast();
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (form.improvementAreaIds.length === 0) {
-      toast.error('Elige al menos un área donde quieras mejorar.');
-      return;
-    }
-    const horas = form.hoursPerWeek ? Number(form.hoursPerWeek) : null;
-    if (horas !== null && (!Number.isInteger(horas) || horas < 1 || horas > 40)) {
-      toast.error('Las horas por semana van de 1 a 40.');
-      return;
-    }
-    setSaving(true);
-    // §17.1: ni semestre ni código universitario: son institucionales.
-    const payload = {
-      bio: form.bio || undefined,
-      improvementAreaIds: form.improvementAreaIds,
-      availability: form.availability,
-      collaborationPreferences: {
-        modes: form.modes,
-        interests: form.collabInterests,
-        hoursPerWeek: horas,
-        notes: form.notes || null,
-      },
-    };
-    try {
-      const result = profile ? await profileService.update(payload) : await profileService.create(payload);
-      onSaved(result);
-      toast.success('Perfil guardado', `Tu perfil está al ${result.completionPercentage}%.`);
-    } catch (err) {
-      toast.error(apiError(err));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const [errorHoras, setErrorHoras] = useState<string | null>(null);
+  const { saving, guardar } = useGuardarPerfil(onSaved);
+  if (!profile) return <SinPerfil />;
 
   const toggle = <T,>(lista: T[], v: T) => (lista.includes(v) ? lista.filter((x) => x !== v) : [...lista, v]);
 
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    const horas = form.hoursPerWeek ? Number(form.hoursPerWeek) : null;
+    if (horas !== null && (!Number.isInteger(horas) || horas < 1 || horas > 40)) {
+      setErrorHoras('Las horas por semana van de 1 a 40.');
+      return;
+    }
+    setErrorHoras(null);
+    void guardar(
+      {
+        availability: form.availability,
+        collaborationPreferences: {
+          modes: form.modes,
+          interests: form.collabInterests,
+          hoursPerWeek: horas,
+          notes: form.notes || null,
+        },
+      },
+      'Disponibilidad guardada',
+    );
+  };
+
   return (
     <form onSubmit={save}>
-      <Card title="¿En qué áreas quieres mejorar?">
-        <p className="muted" style={{ marginTop: 0 }}>Te recomendaremos cursos y actividades para crecer en ellas.</p>
-        <AreaChooser
-          areas={areas}
-          value={form.improvementAreaIds}
-          onChange={(v) => setForm({ ...form, improvementAreaIds: v })}
-        />
-      </Card>
-
-      <Card title="Sobre ti">
-        <div className="field">
-          <label>Cuéntanos de ti</label>
-          <textarea
-            value={form.bio}
-            onChange={(e) => setForm({ ...form, bio: e.target.value })}
-            placeholder="Tus intereses y metas, en pocas palabras…"
-            maxLength={1000}
-          />
-          <span className="field-hint">{form.bio.length} de 1000 caracteres</span>
-        </div>
-      </Card>
-
       <Card title="Cómo te gusta trabajar">
         <div className="field">
           <label>¿Buscas con quién trabajar?</label>
@@ -247,16 +328,19 @@ function DatosTab({
             </div>
           </div>
           <div className="field">
-            <label>Horas por semana</label>
+            <label htmlFor="perfil-horas">Horas por semana</label>
             <input
+              id="perfil-horas"
               type="number"
               inputMode="numeric"
               min={1}
               max={40}
               value={form.hoursPerWeek}
-              onChange={(e) => setForm({ ...form, hoursPerWeek: e.target.value.replace(/\D/g, '') })}
+              onChange={(e) => { setForm({ ...form, hoursPerWeek: e.target.value.replace(/\D/g, '') }); setErrorHoras(null); }}
               placeholder="Por ejemplo, 8"
+              aria-invalid={!!errorHoras}
             />
+            {errorHoras && <span className="field-error">{errorHoras}</span>}
           </div>
         </div>
         <div className="field">
@@ -276,8 +360,9 @@ function DatosTab({
           </div>
         </div>
         <div className="field">
-          <label>Nota para quien quiera invitarte</label>
+          <label htmlFor="perfil-nota">Nota para quien quiera invitarte</label>
           <input
+            id="perfil-nota"
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
             placeholder="Por ejemplo, disponible por las tardes"
@@ -285,10 +370,21 @@ function DatosTab({
           />
         </div>
         <Button type="submit" loading={saving} icon={<FiSave size={15} />}>
-          Guardar cambios
+          Guardar disponibilidad
         </Button>
       </Card>
     </form>
+  );
+}
+
+/** Sin perfil todavía: la bienvenida lo crea (OnboardingGate lleva allí). */
+function SinPerfil() {
+  return (
+    <Card>
+      <p className="muted" style={{ margin: 0 }}>
+        Todavía no tienes perfil. Completa la bienvenida y vuelve aquí para ajustarlo.
+      </p>
+    </Card>
   );
 }
 
@@ -468,7 +564,7 @@ function CuestionarioTab() {
   }
 
   return (
-    <Card title="Cuestionario de orientación">
+    <Card title="Cuestionario de orientación (opcional)">
       <p className="muted" style={{ marginTop: 0 }}>
         Unas 10 preguntas sobre lo que te gusta; las primeras se adaptan a las áreas que declaraste. No es
         un examen: solo afina tus recomendaciones. Puedes repetirlo cuando quieras.

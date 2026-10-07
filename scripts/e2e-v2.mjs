@@ -127,16 +127,21 @@ async function batch2(ctx) {
   const renovada = await crudo('POST', '/auth/refresh', {
     body: {}, cookie, headers: { 'X-Session-Transport': 'cookie' },
   });
-  const cookie2 = cookieDe(renovada.setCookie);
+  let cookie2 = cookieDe(renovada.setCookie);
   check(renovada.status === 200 && Boolean(renovada.data?.accessToken) && Boolean(cookie2) && cookie2 !== cookie,
     'V2.2.7 §18 Con la cookie se renueva y la cookie rota', `status ${renovada.status}`);
   // F5 en medio de la renovación: el navegador perdió la cookie nueva y vuelve
-  // con la anterior. Dentro de la gracia sirve una vez; después, ya no.
+  // con la anterior. Dentro de la gracia sirve; tras una renovación normal con
+  // la cookie nueva, ya no.
   const vieja = await crudo('POST', '/auth/refresh', { body: {}, cookie, headers: { 'X-Session-Transport': 'cookie' } });
-  check(vieja.status === 200 && Boolean(cookieDe(vieja.setCookie)),
-    'V2.2.8 §18 F5 en medio de la renovación: la cookie anterior sirve una vez y rota', `status ${vieja.status}`);
+  const cookie3 = cookieDe(vieja.setCookie);
+  check(vieja.status === 200 && Boolean(cookie3),
+    'V2.2.8 §18 F5 en medio de la renovación: la cookie anterior sirve y rota', `status ${vieja.status}`);
+  const conNueva = await crudo('POST', '/auth/refresh', { body: {}, cookie: cookie3, headers: { 'X-Session-Transport': 'cookie' } });
   const viejaOtraVez = await crudo('POST', '/auth/refresh', { body: {}, cookie, headers: { 'X-Session-Transport': 'cookie' } });
-  check(viejaOtraVez.status === 401, 'V2.2.8b §18 Usada otra vez, la cookie anterior ya no sirve (rotación)', `status ${viejaOtraVez.status}`);
+  check(conNueva.status === 200 && viejaOtraVez.status === 401,
+    'V2.2.8b §18 Tras renovar con la cookie nueva, la anterior ya no sirve (rotación)', `nueva ${conNueva.status}, anterior ${viejaOtraVez.status}`);
+  cookie2 = cookieDe(conNueva.setCookie) ?? cookie2;
 
   const salir = await crudo('POST', '/auth/logout', { body: {}, cookie: cookie2, headers: { 'X-Session-Transport': 'cookie' } });
   check(salir.status === 200 && salir.setCookie.some((c) => /^afinia_rt=;/.test(c) || /Expires=Thu, 01 Jan 1970/i.test(c)),
