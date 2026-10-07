@@ -1,4 +1,5 @@
-import { Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { ProjectSkillEvidenceStatus } from '@perfil/shared';
 import { Project } from './project.entity';
 import { AcademicArea } from './academic-area.entity';
 import { Skill } from './skill.entity';
@@ -45,4 +46,25 @@ export class ProjectSkill {
   @ManyToOne(() => Skill, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'skill_id' })
   skill: Skill;
+
+  /** V3 §24.4: cómo se corroboró. Sin rastro, DECLARED (§29). */
+  @Column({
+    name: 'evidence_status', type: 'enum', enum: ProjectSkillEvidenceStatus,
+    enumName: 'project_skill_evidence_enum', default: ProjectSkillEvidenceStatus.DECLARED,
+  })
+  evidenceStatus: ProjectSkillEvidenceStatus;
+
+  /** De dónde: `languages`, `package.json (react)`… */
+  @Column({ name: 'evidence_source', type: 'varchar', length: 200, nullable: true })
+  evidenceSource: string | null;
+
+  /** V3 §29: confirmación de un docente autorizado. */
+  @Column({ name: 'academic_reviewed_by', type: 'uuid', nullable: true })
+  academicReviewedById: string | null;
+
+  @Column({ name: 'academic_reviewed_at', type: 'timestamptz', nullable: true })
+  academicReviewedAt: Date | null;
+
+  @Column({ name: 'academic_review_comment', type: 'varchar', length: 500, nullable: true })
+  academicReviewComment: string | null;
 }

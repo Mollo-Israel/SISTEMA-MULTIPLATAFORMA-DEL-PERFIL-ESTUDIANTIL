@@ -127,3 +127,17 @@ export const PROJECT_ROLES = [
   'Otro',
 ] as const;
 export type ProjectRole = (typeof PROJECT_ROLES)[number];
+
+/**
+ * Respaldo de cada tecnología de un proyecto (V3 §24.4, §29).
+ *
+ * Lo que no se detecta queda DECLARED: no es falso ni resta. El repositorio
+ * puede no dejar rastro de Redis y aun así haberse usado.
+ */
+export enum ProjectSkillEvidenceStatus {
+  DECLARED = 'declared',
+  CORROBORATED_BY_GITHUB_LANGUAGE = 'corroborated_by_github_language',
+  CORROBORATED_BY_MANIFEST = 'corroborated_by_manifest',
+  /** Un docente autorizado la confirmó con retroalimentación específica (§29). */
+  CORROBORATED_BY_ACADEMIC_REVIEW = 'corroborated_by_academic_review',
+}

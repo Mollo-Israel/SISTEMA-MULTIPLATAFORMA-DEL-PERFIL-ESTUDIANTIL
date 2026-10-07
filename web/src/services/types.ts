@@ -654,12 +654,30 @@ export interface Project {
   feedbackCount?: number;
   /** V3 §21.2: áreas y tecnologías del catálogo. */
   projectAreas?: { academicAreaId: string; academicArea?: AcademicArea | null }[];
-  projectSkills?: { skillId: string; skill?: { id: string; name: string } | null }[];
+  projectSkills?: {
+    skillId: string;
+    skill?: { id: string; name: string } | null;
+    /** V3 §24.4: cómo se corroboró esta tecnología. */
+    evidenceStatus?: SkillEvidenceStatus;
+    evidenceSource?: string | null;
+    academicReviewedAt?: string | null;
+  }[];
   /** V3 §40. */
   visibility?: ProjectVisibility;
   publicLinkToken?: string | null;
   teamId?: string | null;
 }
+
+/** V3 §24.4, §29: respaldo de cada tecnología de un proyecto. */
+export type SkillEvidenceStatus =
+  | 'declared' | 'corroborated_by_github_language' | 'corroborated_by_manifest' | 'corroborated_by_academic_review';
+
+export const SKILL_EVIDENCE_LABEL: Record<SkillEvidenceStatus, string> = {
+  declared: 'Declarada',
+  corroborated_by_github_language: 'Corroborada por los lenguajes',
+  corroborated_by_manifest: 'Corroborada por un manifiesto',
+  corroborated_by_academic_review: 'Confirmada por un docente',
+};
 
 /** V3 §30.1: catálogo controlado de roles de proyecto. */
 export const PROJECT_ROLES = [

@@ -627,3 +627,38 @@ describe('V3 §24.3 dependencia → tecnología', () => {
     assert.deepEqual(tec('package.json', '{ roto'), []);
   });
 });
+
+// ---------------------------------------------------------------------------
+//  V3 BATCH 13 · Respaldo del proyecto (§28) y por tecnología (§24.4, §29)
+// ---------------------------------------------------------------------------
+import { ProjectBackingTier, ProjectSkillEvidenceStatus, TechnologyStatus } from '@perfil/shared';
+import { decideProjectBacking, skillEvidenceFromSignal } from '../../src/projects/project-backing.rules';
+
+describe('V3 §28 respaldo del proyecto', () => {
+  const base = {
+    repositoryAccessible: true, technicalCorroborations: 0, demoAccessible: false,
+    confirmedMembers: 0, evidenceCount: 0, feedbackCount: 0, problems: [] as string[],
+  };
+  it('sin repositorio accesible: DECLARED, aunque haya evidencias', () => {
+    assert.equal(decideProjectBacking({ ...base, repositoryAccessible: false, evidenceCount: 3 }), ProjectBackingTier.DECLARED);
+  });
+  it('repositorio + una señal: SUPPORTED', () => {
+    assert.equal(decideProjectBacking({ ...base, evidenceCount: 1 }), ProjectBackingTier.SUPPORTED);
+    assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 2 }), ProjectBackingTier.SUPPORTED);
+  });
+  it('CORROBORATED exige corroboración técnica Y una señal independiente', () => {
+    assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 1, demoAccessible: true }), ProjectBackingTier.CORROBORATED);
+    assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 1, confirmedMembers: 1 }), ProjectBackingTier.CORROBORATED);
+    assert.equal(decideProjectBacking({ ...base, demoAccessible: true, confirmedMembers: 2 }), ProjectBackingTier.SUPPORTED);
+  });
+  it('REVIEWED con retroalimentación; FLAGGED manda', () => {
+    assert.equal(decideProjectBacking({ ...base, evidenceCount: 1, feedbackCount: 1 }), ProjectBackingTier.REVIEWED);
+    assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 3, demoAccessible: true, problems: ['x'] }), ProjectBackingTier.FLAGGED);
+  });
+  it('estado por tecnología: lenguaje, manifiesto, revisión docente o declarada', () => {
+    assert.equal(skillEvidenceFromSignal({ status: TechnologyStatus.BOTH, source: 'languages' }, false).status, ProjectSkillEvidenceStatus.CORROBORATED_BY_GITHUB_LANGUAGE);
+    assert.equal(skillEvidenceFromSignal({ status: TechnologyStatus.BOTH, source: 'package.json (react)' }, false).status, ProjectSkillEvidenceStatus.CORROBORATED_BY_MANIFEST);
+    assert.equal(skillEvidenceFromSignal({ status: TechnologyStatus.DECLARED, source: null }, true).status, ProjectSkillEvidenceStatus.CORROBORATED_BY_ACADEMIC_REVIEW);
+    assert.equal(skillEvidenceFromSignal(undefined, false).status, ProjectSkillEvidenceStatus.DECLARED);
+  });
+});

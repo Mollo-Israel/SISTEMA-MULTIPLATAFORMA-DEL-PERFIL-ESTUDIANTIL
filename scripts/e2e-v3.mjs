@@ -1310,7 +1310,88 @@ async function batch12(ctx) {
   check(activo.status === 200 && activo.data?.status === 'active', 'V3.12.15 §30 Cuando todos confirman, se activa', json({ s: activo.status, c: activo.data?.code }));
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
+// ===========================================================================
+//  BATCH 13 — Respaldo del proyecto (§28) y por tecnología (§24.4, §29)
+// ===========================================================================
+async function batch13(ctx) {
+  objective('BATCH 13 · CORROBORATED técnico + independiente, estado por tecnología y revisión docente');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Bruno', lastName: 'Respaldo', email: correoEst('b13'), role: 'STUDENT', semester: 4,
+  });
+  const docente = await provisionAndActivate(ctx.admin, {
+    firstName: 'Olga', lastName: 'Revisora', email: correoStaff('b13doc'), role: 'TEACHER',
+  });
+  const ajeno = await provisionAndActivate(ctx.admin, {
+    firstName: 'Ivo', lastName: 'Fuera', email: correoStaff('b13ajeno'), role: 'TEACHER',
+  });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [4] } });
+  await req('PUT', `/users/${ajeno.userId}/semesters`, { token: ctx.admin, body: { semesters: [9] } });
+
+  const catalogo = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const sk = (n) => catalogo.find((s) => s.name.toLowerCase() === n.toLowerCase() && s.academicAreaId);
+  const [react, redis, ts] = [sk('React'), sk('Redis'), sk('TypeScript')];
+  const crear = (titulo, skills, repo, extra = {}) => req('POST', '/projects', {
+    token: est.token,
+    body: {
+      title: `${titulo} ${TS}`, areaIds: [...new Set(skills.map((x) => x.academicAreaId))], skillIds: skills.map((x) => x.id),
+      ...(repo ? { repositoryUrl: repoDePrueba(repo) } : {}), visibility: 'teachers', status: 'draft', ...extra,
+    },
+  });
+  const proyecto = async (id) => (await req('GET', `/projects/${id}`, { token: est.token })).data;
+  const estado = (p, s) => (p?.projectSkills ?? []).find((x) => x.skillId === s.id)?.evidenceStatus;
+
+  // ----- §24.4 Estado por tecnología
+  const p1 = await crear('Panel de becas', [react, redis], `stack-b13-${TS}`);
+  let v = await proyecto(p1.data.id);
+  check(estado(v, react) === 'corroborated_by_manifest', 'V3.13.1 §24.4 React: corroborada por manifiesto', json(v?.projectSkills));
+  check(estado(v, redis) === 'declared', 'V3.13.2 §29 Redis sin rastro: DECLARADA, no falsa ni restada', json(estado(v, redis)));
+  const p2 = await crear('Servicio en TypeScript', [ts], `generico-b13-${TS}`);
+  check(estado(await proyecto(p2.data.id), ts) === 'corroborated_by_github_language',
+    'V3.13.3 §24.4 TypeScript: corroborada por los lenguajes del repositorio');
+
+  // ----- §28 Reglas del proyecto
+  check(v?.backingTier === 'supported', 'V3.13.4 §28 Repositorio + corroboración técnica, sin señal independiente: SUPPORTED', json(v?.backingTier));
+  await req('POST', `/projects/${p1.data.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: 'https://capturas.example.org/b13.png', description: 'Captura.' } });
+  v = await proyecto(p1.data.id);
+  check(v?.backingTier === 'corroborated', 'V3.13.5 §28 + una señal independiente (evidencia de contexto): CORROBORATED', json({ t: v?.backingTier, r: v?.backingReasons }));
+  check((v?.backingReasons ?? []).some((r) => r.includes('React')), 'V3.13.6 §25 La explicación nombra la tecnología respaldada', json(v?.backingReasons));
+  const sinRepo = await crear('Idea sin repositorio', [react], null);
+  await req('POST', `/projects/${sinRepo.data.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: 'https://capturas.example.org/b13b.png', description: 'Captura.' } });
+  const vs = await proyecto(sinRepo.data.id);
+  check(vs?.backingTier === 'declared', 'V3.13.7 §28 Sin repositorio, una evidencia no basta: DECLARED', json(vs?.backingTier));
+  const p3 = await crear('Solo contexto', [redis], `generico-ctx-${TS}`, { demoUrl: undefined });
+  await req('POST', `/projects/${p3.data.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: 'https://capturas.example.org/b13c.png', description: 'Captura.' } });
+  check((await proyecto(p3.data.id))?.backingTier === 'supported',
+    'V3.13.8 §28 Repositorio + contexto, sin corroboración técnica: SUPPORTED, no CORROBORATED');
+
+  // ----- §29 Revisión docente
+  const ruta = (pid, sid) => `/projects/${pid}/feedback/skills/${sid}`;
+  const deEst = await req('POST', ruta(p1.data.id, redis.id), { token: est.token, body: { comment: 'Me confirmo yo mismo Redis.' } });
+  check(deEst.status === 403, 'V3.13.9 §29 El estudiante no confirma sus propias tecnologías', `status ${deEst.status}`);
+  const fuera = await req('POST', ruta(p1.data.id, redis.id), { token: ajeno.token, body: { comment: 'Vi el uso de Redis para la caché.' } });
+  check(fuera.status === 403, 'V3.13.10 §8.2 Un docente fuera de su alcance no puede', `status ${fuera.status}`);
+  const corta = await req('POST', ruta(p1.data.id, redis.id), { token: docente.token, body: { comment: 'ok' } });
+  check(corta.status === 400, 'V3.13.11 §29 Confirmar exige retroalimentación específica', `status ${corta.status}`);
+  const confirma = await req('POST', ruta(p1.data.id, redis.id), {
+    token: docente.token, body: { comment: 'Revisé en clase la caché de sesiones con Redis y su configuración.' },
+  });
+  check(confirma.status === 201 && confirma.data?.evidenceStatus === 'corroborated_by_academic_review',
+    'V3.13.12 §29 El docente autorizado confirma Redis: CORROBORATED_BY_ACADEMIC_REVIEW', json(confirma.data));
+  v = await proyecto(p1.data.id);
+  check(v?.backingTier === 'reviewed', 'V3.13.13 §28 Con retroalimentación docente: REVIEWED (no es aprobación oficial)', json(v?.backingTier));
+  const fb = (await req('GET', `/projects/${p1.data.id}/feedback`, { token: est.token })).data ?? [];
+  check(fb.some((f) => f.comment.startsWith('Tecnología confirmada: Redis')), 'V3.13.14 La confirmación queda como retroalimentación visible para el equipo');
+  const otraSkill = await req('POST', ruta(p1.data.id, ts.id), { token: docente.token, body: { comment: 'Esta tecnología no está en el proyecto.' } });
+  check(otraSkill.status === 404, 'V3.13.15 Solo se confirma una tecnología declarada en el proyecto', `status ${otraSkill.status}`);
+
+  // ----- Recalculo masivo
+  const masivo = await req('POST', '/projects/admin/recompute-backing?limit=50', { token: ctx.admin });
+  check(masivo.status === 201 && masivo.data?.procesados === 50, 'V3.13.16 Administración recalcula el respaldo con las reglas vigentes, en tandas', json(masivo.data));
+  check((await req('POST', '/projects/admin/recompute-backing', { token: est.token })).status === 403, 'V3.13.17 Solo administración');
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

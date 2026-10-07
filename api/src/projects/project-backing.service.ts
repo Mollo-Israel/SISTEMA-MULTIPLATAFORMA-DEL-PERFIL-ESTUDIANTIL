@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import {
   LinkCheckStatus,
   ProjectBackingTier,
@@ -21,6 +21,8 @@ import {
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
 import { StudentProfile } from '../entities/student-profile.entity';
+import { ProjectSkill } from '../entities/project-area.entity';
+import { TECHNICAL_EVIDENCE, decideProjectBacking } from './project-backing.rules';
 
 /**
  * Nivel de respaldo de un proyecto (especificacion §36).
@@ -48,6 +50,8 @@ export class ProjectBackingService {
     private readonly linkChecks: Repository<ProjectLinkCheck>,
     @InjectRepository(StudentProfile)
     private readonly profiles: Repository<StudentProfile>,
+    @InjectRepository(ProjectSkill)
+    private readonly projectSkills: Repository<ProjectSkill>,
     private readonly events: ProjectEventsService,
     @Inject(TRAJECTORY_RECALCULATION)
     private readonly trajectory: TrajectoryRecalculationPort,
@@ -73,56 +77,51 @@ export class ProjectBackingService {
     if (!project) return null;
 
     const [
-      integrantes,
+      confirmados,
       evidencias,
       comentarios,
       repoCheck,
       demoCheck,
+      tecnicas,
     ] = await Promise.all([
-      // El responsable no es una señal adicional de sí mismo (§36).
-      this.members.count({ where: { projectId, isOwner: false } }),
+      this.members.count({ where: { projectId, isOwner: false, contributionConfirmedAt: Not(IsNull()) } }),
       this.evidences.count({ where: { projectId } }),
       this.feedback.count({ where: { projectId } }),
       this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } }),
       this.linkChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } }),
+      this.projectSkills.find({ where: { projectId, evidenceStatus: In([...TECHNICAL_EVIDENCE]) }, relations: { skill: true } }),
     ]);
 
     const razones: string[] = [];
 
-    // ---------------------------------------------------- señales
-    const repoAccesible = repoCheck?.status === LinkCheckStatus.AVAILABLE;
-    const demoAccesible = demoCheck?.status === LinkCheckStatus.AVAILABLE;
+    // V3 §28: solo vale la comprobación del repositorio que el proyecto
+    // declara hoy, no la de una URL anterior.
+    const repoAccesible = repoCheck?.status === LinkCheckStatus.AVAILABLE
+      && repoCheck.repositoryUrl === project.repositoryUrl;
+    const demoAccesible = demoCheck?.status === LinkCheckStatus.AVAILABLE && demoCheck.url === project.demoUrl;
 
-    if (integrantes > 0) razones.push(`${integrantes} integrante(s) aceptado(s)`);
-    if (evidencias > 0) razones.push(`${evidencias} evidencia(s) adjunta(s)`);
     if (repoAccesible) razones.push('Repositorio público accesible');
+    else razones.push('Sin repositorio público comprobado: no hay respaldo técnico suficiente (§28).');
+    if (tecnicas.length > 0) {
+      razones.push(`Tecnologías respaldadas por el repositorio: ${tecnicas.map((t) => t.skill?.name).filter(Boolean).join(', ')}`);
+    }
     if (demoAccesible) razones.push('Demo accesible');
+    if (confirmados > 0) razones.push(`${confirmados} integrante(s) con su contribución confirmada`);
+    if (evidencias > 0) razones.push(`${evidencias} evidencia(s) de contexto`);
     if (comentarios > 0) razones.push(`${comentarios} retroalimentación(es) docente(s)`);
 
-    const senales = [integrantes > 0, evidencias > 0, repoAccesible, demoAccesible]
-      .filter(Boolean).length;
-    // §36: una corroboración técnica es algo que responde por sí mismo, no
-    // algo que alguien escribió. Un integrante o una evidencia son fuentes
-    // adicionales, pero no corroboran técnicamente nada.
-    const corroboracionTecnica = repoAccesible || demoAccesible;
-
-    let tier = ProjectBackingTier.DECLARED;
-    if (senales >= 1) tier = ProjectBackingTier.SUPPORTED;
-    if (senales >= 2 && corroboracionTecnica) tier = ProjectBackingTier.CORROBORATED;
-    if (tier !== ProjectBackingTier.DECLARED && comentarios > 0) {
-      tier = ProjectBackingTier.REVIEWED;
-    }
-
-    // ---------------------------------------------------- inconsistencias
     const problemas = this.detectarProblemas(project, repoCheck, demoCheck);
-    if (problemas.length > 0) {
-      tier = ProjectBackingTier.FLAGGED;
-      razones.push(...problemas);
-    }
-
-    if (razones.length === 0) {
-      razones.push('Solo información declarada por su autor.');
-    }
+    const tier = decideProjectBacking({
+      repositoryAccessible: repoAccesible,
+      technicalCorroborations: tecnicas.length,
+      demoAccessible: demoAccesible,
+      confirmedMembers: confirmados,
+      evidenceCount: evidencias,
+      feedbackCount: comentarios,
+      problems: problemas,
+    });
+    if (problemas.length > 0) razones.push(...problemas);
+    const senales = { tecnicas: tecnicas.length, demo: demoAccesible, confirmados, evidencias };
 
     const anterior = project.backingTier;
     if (anterior === tier && this.mismasRazones(project.backingReasons, razones)) {
@@ -201,7 +200,8 @@ export class ProjectBackingService {
     if (demoCheck?.status === LinkCheckStatus.BLOCKED) {
       problemas.push('La demo apunta a una dirección que el sistema no consulta.');
     }
-    if (project.repositoryUrl && repoCheck?.metadata && !repoCheck.metadata.exists
+    if (project.repositoryUrl && repoCheck?.repositoryUrl === project.repositoryUrl
+      && repoCheck?.metadata && !repoCheck.metadata.exists
       && repoCheck.status === LinkCheckStatus.UNAVAILABLE) {
       problemas.push('El repositorio declarado no existe o dejó de ser público.');
     }

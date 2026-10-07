@@ -10,7 +10,8 @@ import {
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { useCachedState, viewCache } from '../../hooks/viewCache';
-import { catalogService, projectFeedbackService, projectService } from '../../services';
+import { catalogService, projectDetailService, projectFeedbackService, projectService } from '../../services';
+import { SKILL_EVIDENCE_LABEL } from '../../services/types';
 import {
   AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
   SkeletonCards, SkeletonTable, Stagger,
@@ -18,6 +19,7 @@ import {
 import { useConfirm, useToast } from '../../components/feedback';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUSES, lbl } from '../../constants';
 import type {
+  Project,
   AcademicArea,
   InstitutionalPortfolio,
   ProjectFeedbackItem,
@@ -94,18 +96,44 @@ export default function TeacherStudentProjectsPage() {
 
   const notify = (t: string, detail?: string) => toast.success(t, detail);
 
+  // V3 §29: tecnologías declaradas con su respaldo, para confirmarlas.
+  const [detalle, setDetalle] = useState<Project | null>(null);
+  const confirmarTecnologia = async (skillId: string, nombre: string) => {
+    if (!selectedId) return;
+    const comentario = window.prompt(
+      `¿Qué comprobaste sobre ${nombre}? Quedará como retroalimentación visible para el equipo.`,
+      '',
+    );
+    if (comentario === null) return;
+    if (comentario.trim().length < 10) {
+      toast.error('Escribe una retroalimentación específica (al menos 10 caracteres).');
+      return;
+    }
+    try {
+      await projectDetailService.confirmSkill(selectedId, skillId, comentario.trim());
+      notify('Tecnología confirmada', `${nombre} · confirmada por revisión docente`);
+      const [f, d] = await Promise.all([projectFeedbackService.list(selectedId), projectService.get(selectedId)]);
+      setFeedback(f);
+      setDetalle(d);
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
   const openProject = async (id: string) => {
     setSelectedId(id);
     setDetailLoading(true);
     setComment('');
     setEditingId(null);
     try {
-      const [m, f] = await Promise.all([
+      const [m, f, d] = await Promise.all([
         projectService.members(id).catch(() => []),
         projectFeedbackService.list(id),
+        projectService.get(id).catch(() => null),
       ]);
       setMembers(m);
       setFeedback(f);
+      setDetalle(d);
     } catch (e) {
       toast.error(apiError(e, 'No se pudo cargar el proyecto.'));
       setMembers([]);
@@ -359,7 +387,26 @@ export default function TeacherStudentProjectsPage() {
             <div className="grid cols-2 mt">
               <div>
                 <strong>Tecnologías</strong>
-                {selected.technologies?.length ? (
+                {(detalle?.projectSkills ?? []).length ? (
+                  <ul className="plain-list mt">
+                    {(detalle?.projectSkills ?? []).map((sk) => {
+                      const estado = sk.evidenceStatus ?? 'declared';
+                      return (
+                        <li key={sk.skillId} className="flex between" style={{ gap: '0.5rem' }}>
+                          <span>
+                            {sk.skill?.name}{' '}
+                            <span className="muted small">· {SKILL_EVIDENCE_LABEL[estado]}</span>
+                          </span>
+                          {estado === 'declared' && (
+                            <Button size="sm" variant="secondary" onClick={() => confirmarTecnologia(sk.skillId, sk.skill?.name ?? '')}>
+                              Confirmar
+                            </Button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : selected.technologies?.length ? (
                   <div className="tag-list mt">
                     {selected.technologies.map((t) => (
                       <Badge key={t} tone="gray">

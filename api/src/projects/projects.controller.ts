@@ -141,6 +141,17 @@ export class ProjectsController {
     return this.projectsService.findPublic(token);
   }
 
+  @Post('admin/recompute-backing')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Recalcula el respaldo de los proyectos con las reglas vigentes (V3 §28), en tandas.',
+    description: 'No consulta GitHub: usa la última comprobación guardada. Repite con `after` hasta que `siguiente` sea null.',
+  })
+  recomputeBacking(@Query('limit') limit?: string, @Query('after') after?: string) {
+    const tope = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+    return this.projectsService.recomputeBacking(tope, after && /^[0-9a-f-]{36}$/i.test(after) ? after : undefined);
+  }
+
   @Get(':id/readiness')
   @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
   @ApiOperation({ summary: 'Qué le falta para pasar a ACTIVE (V3 §22).' })

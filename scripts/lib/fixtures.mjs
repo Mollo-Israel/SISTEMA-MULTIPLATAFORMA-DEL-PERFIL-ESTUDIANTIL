@@ -486,5 +486,14 @@ export async function crearProyectoActivo(token, body = {}) {
  * ganando respaldo: un ACTIVE ya nace con repositorio y evidencia (§22).
  */
 export async function crearProyectoBorrador(token, body = {}) {
-  return req('POST', '/projects', { token, body: { ...body, status: 'draft' } });
+  // V3 §28: sin repositorio accesible no hay respaldo posible; el borrador
+  // declara uno público (genérico: no respalda ninguna tecnología por sí
+  // solo) para que las pruebas midan cómo gana respaldo. `repositoryUrl:
+  // null` lo omite.
+  await asegurarGithubSimulado();
+  const slug = String(body.title ?? 'borrador').toLowerCase().normalize('NFD')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'borrador';
+  const { repositoryUrl, ...resto } = body;
+  const repo = repositoryUrl === null ? {} : { repositoryUrl: repositoryUrl ?? repoDePrueba(`borrador-${slug}`) };
+  return req('POST', '/projects', { token, body: { ...resto, ...repo, status: 'draft' } });
 }

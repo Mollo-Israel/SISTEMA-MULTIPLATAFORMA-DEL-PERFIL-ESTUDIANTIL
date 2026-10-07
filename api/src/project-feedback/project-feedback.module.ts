@@ -1,3 +1,4 @@
+import { ProjectSkill } from '../entities/project-area.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
@@ -11,7 +12,7 @@ import { ProjectFeedbackController } from './project-feedback.controller';
  * de alcance academico, en lugar de duplicarlo.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([ProjectFeedback, Project]), ProjectsModule],
+  imports: [TypeOrmModule.forFeature([ProjectFeedback, Project, ProjectSkill]), ProjectsModule],
   controllers: [ProjectFeedbackController],
   providers: [ProjectFeedbackService],
   exports: [ProjectFeedbackService],

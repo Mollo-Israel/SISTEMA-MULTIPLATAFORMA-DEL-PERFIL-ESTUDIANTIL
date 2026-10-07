@@ -29,6 +29,7 @@ import { Team, TeamMember } from '../entities/collaboration.entity';
 import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { Readiness, projectReadiness } from './project-readiness.rules';
+import { skillEvidenceFromSignal } from './project-backing.rules';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { Skill } from '../entities/skill.entity';
 import {
@@ -115,10 +116,39 @@ export class ProjectsService {
     }
   }
 
+  /**
+   * Reemplaza las tecnologías sin perder el respaldo de las que se quedan
+   * (V3 §24.4): solo salen las quitadas y entran las nuevas, y luego se
+   * cruzan con la última comprobación del repositorio.
+   */
   private async replaceSkills(projectId: string, skillIds: string[]): Promise<void> {
-    await this.projectSkills.delete({ projectId });
-    if (skillIds.length) {
-      await this.projectSkills.save(skillIds.map((skillId) => this.projectSkills.create({ projectId, skillId })));
+    const actuales = await this.projectSkills.find({ where: { projectId } });
+    const quitar = actuales.filter((a) => !skillIds.includes(a.skillId)).map((a) => a.skillId);
+    if (quitar.length) await this.projectSkills.delete({ projectId, skillId: In(quitar) });
+    const nuevas = skillIds.filter((id) => !actuales.some((a) => a.skillId === id));
+    if (nuevas.length) {
+      await this.projectSkills.save(nuevas.map((skillId) => this.projectSkills.create({ projectId, skillId })));
+    }
+    await this.syncSkillEvidence(projectId);
+  }
+
+  /**
+   * Estado de cada tecnología según la última comprobación del repositorio
+   * declarado (V3 §24.4). Lo no detectado queda DECLARED, nunca falso (§29).
+   */
+  async syncSkillEvidence(projectId: string): Promise<void> {
+    const project = await this.projects.findOne({ where: { id: projectId } });
+    if (!project) return;
+    const check = await this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } });
+    const vigente = check && check.repositoryUrl === project.repositoryUrl ? check : null;
+    const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
+    const senales = new Map((vigente?.technologySignals ?? []).map((t) => [norm(t.name), t]));
+    const filas = await this.projectSkills.find({ where: { projectId }, relations: { skill: true } });
+    for (const f of filas) {
+      const e = skillEvidenceFromSignal(senales.get(norm(f.skill?.name ?? '')), !!f.academicReviewedAt);
+      if (f.evidenceStatus !== e.status || f.evidenceSource !== e.source) {
+        await this.projectSkills.update({ projectId, skillId: f.skillId }, { evidenceStatus: e.status, evidenceSource: e.source });
+      }
     }
   }
 
@@ -941,6 +971,7 @@ export class ProjectsService {
             checkedAt: new Date(),
           }),
         );
+        await this.syncSkillEvidence(projectId);
         await this.events.record({
           projectId,
           actorUserId,
@@ -1037,6 +1068,22 @@ export class ProjectsService {
         'Las tecnologías detectadas indican que se encontraron indicios compatibles '
         + 'en fuentes públicas. No afirman dominio ni autoría.',
     };
+  }
+
+  /**
+   * V3 §28: recalcula el respaldo de los proyectos con las reglas vigentes,
+   * en tandas. Primero pone al día el estado de cada tecnología con la
+   * última comprobación guardada; no vuelve a consultar GitHub.
+   */
+  async recomputeBacking(limit: number, after?: string): Promise<{ procesados: number; siguiente: string | null }> {
+    const qb = this.projects.createQueryBuilder('p').select('p.id', 'id').orderBy('p.id', 'ASC').limit(limit);
+    if (after) qb.where('p.id > :after', { after });
+    const filas: { id: string }[] = await qb.getRawMany();
+    for (const f of filas) {
+      await this.syncSkillEvidence(f.id);
+      await this.backing.recalculate(f.id, null);
+    }
+    return { procesados: filas.length, siguiente: filas.length === limit ? filas[filas.length - 1].id : null };
   }
 
   /** Vuelve a comprobar las fuentes externas a petición del responsable. */

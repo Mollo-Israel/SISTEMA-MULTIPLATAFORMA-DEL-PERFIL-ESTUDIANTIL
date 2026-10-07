@@ -448,3 +448,38 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 79/79; `e2e-v3` 198 (B12 15/15). Regresión completa: 19 suites sin fallos; en `e2e-v3` el observador de la API de desarrollo se reinició a mitad de la suite (no hubo cambios en `api/src`; solo escrituras del buzón de correo simulado) y las secciones 6 a 12 no pudieron conectar. Repetida sola: 198/198. Total efectivo **1624/0**.
 
 **Pendientes:** regla de CORROBORATED del proyecto y estado por skill (B13).
+
+---
+
+## BATCH 13 — Respaldo de proyecto
+
+**ESTADO:** completo
+
+**Objetivo:** aplicar la regla de §28 (CORROBORATED = corroboración técnica + señal independiente) y registrar el respaldo de cada tecnología del proyecto sin castigar lo que la automatización no detecta (§24.4, §29).
+
+**Hallazgos iniciales:**
+- CORROBORATED se alcanzaba con dos señales cualesquiera y un repositorio o demo que respondiera, sin exigir que el repositorio respaldara ninguna tecnología.
+- SUPPORTED se alcanzaba sin repositorio (con una evidencia o un integrante).
+- No había estado por tecnología ni forma de que un docente confirmara una.
+
+**Cambios:**
+- **Reglas puras (`project-backing.rules.ts`):** DECLARED sin repositorio público comprobado (el de la URL vigente); SUPPORTED con repositorio y al menos una señal técnica o contextual; CORROBORATED con repositorio, al menos una tecnología declarada respaldada por lenguaje o manifiesto, y al menos una señal independiente (demo accesible, integrante con contribución confirmada o evidencia de contexto); REVIEWED con retroalimentación docente sobre SUPPORTED o CORROBORATED; FLAGGED ante contradicción (manda). Los integrantes cuentan solo si confirmaron su contribución.
+- **Estado por tecnología (§24.4):** columnas en `project_skills` (`evidence_status`, `evidence_source`, revisión académica): DECLARED, CORROBORATED_BY_GITHUB_LANGUAGE, CORROBORATED_BY_MANIFEST, CORROBORATED_BY_ACADEMIC_REVIEW. Se sincroniza tras cada comprobación del repositorio. Editar las tecnologías conserva el estado de las que se quedan. Lo no detectado queda DECLARED y no resta (§29).
+- **Revisión docente (§29):** `POST /projects/:id/feedback/skills/:skillId`. Solo un docente que puede ver el proyecto (visibilidad y alcance), con retroalimentación específica (al menos 10 caracteres), y solo sobre una tecnología declarada en el proyecto. Queda como retroalimentación visible para el equipo y en la bitácora. No es la corroboración técnica de §28.
+- **Explicación (§25):** los motivos del respaldo nombran las tecnologías respaldadas, la demo, los integrantes confirmados y las evidencias, o que falta un repositorio comprobado.
+- **Recálculo:** `POST /projects/admin/recompute-backing` (administración), en tandas con `after`, sin volver a consultar GitHub.
+- **Web:** cada tecnología del proyecto muestra si está respaldada y por qué. El docente ve las tecnologías con su estado y puede confirmar las declaradas.
+
+**Migraciones:** `1780560000000-V3ProjectSkillEvidence`. `up` → `down` → `up` probado.
+
+**Pruebas ejecutadas:** unitarias de las reglas (84/84); `e2e-v3 batch13` (V3.13.1–V3.13.17); regresión completa.
+
+**Decisiones:**
+- Las suites que miden cómo un borrador gana respaldo (B6, B9, Objetivo 6) declaran ahora un repositorio público genérico desde el fixture: bajo §28, sin repositorio no hay respaldo posible.
+- Se usaron columnas en `project_skills` en lugar de la tabla `project_skill_evidence` prevista en el plan: hay un estado por tecnología del proyecto y esa fila ya existe.
+
+**Riesgos:** los respaldos guardados con la regla anterior se actualizan al próximo cambio del proyecto o con el recálculo de administración.
+
+**Resultados:** unitarias 84/84; `e2e-v3` 215 (B13 17/17). Regresión completa: **1641 correctas, 0 fallos** (20 suites). (La sesión anterior se cerró a mitad de la primera corrida; Docker y la API se levantaron de nuevo y la regresión se repitió completa.)
+
+**Pendientes:** Afinidad V4 con fuentes endurecidas y exclusión de borradores (B14).

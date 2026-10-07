@@ -51,6 +51,20 @@ export class ProjectFeedbackController {
     return this.service.create(user, projectId, dto);
   }
 
+  @Post('skills/:skillId')
+  @Roles(RolNombre.TEACHER)
+  @ApiOperation({
+    summary: 'El docente confirma una tecnología declarada con retroalimentación específica (V3 §29).',
+  })
+  confirmSkill(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('skillId', ParseUUIDPipe) skillId: string,
+    @Body() dto: CreateProjectFeedbackDto,
+  ) {
+    return this.service.confirmSkill(user, projectId, skillId, dto.comment);
+  }
+
   @Patch(':feedbackId')
   @Roles(RolNombre.TEACHER)
   @ApiOperation({ summary: 'Editar la retroalimentación propia.' })

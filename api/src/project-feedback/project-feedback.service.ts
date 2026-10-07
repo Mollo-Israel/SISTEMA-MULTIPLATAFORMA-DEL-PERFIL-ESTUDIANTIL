@@ -1,3 +1,4 @@
+import { ProjectSkill } from '../entities/project-area.entity';
 import {
   ForbiddenException,
   Injectable,
@@ -6,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RolNombre } from '@perfil/shared';
-import { ProjectEventType } from '@perfil/shared';
+import { ProjectSkillEvidenceStatus, ProjectEventType } from '@perfil/shared';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
 import { ProjectEventsService } from '../projects/project-events.service';
 import { ProjectBackingService } from '../projects/project-backing.service';
@@ -39,7 +40,43 @@ export class ProjectFeedbackService {
     private readonly projectsService: ProjectsService,
     private readonly events: ProjectEventsService,
     private readonly backing: ProjectBackingService,
+    @InjectRepository(ProjectSkill) private readonly projectSkills: Repository<ProjectSkill>,
   ) {}
+
+  /**
+   * V3 §29: un docente autorizado confirma una tecnología declarada con
+   * retroalimentación específica. Queda CORROBORATED_BY_ACADEMIC_REVIEW si el
+   * repositorio no la respaldaba, y el comentario es retroalimentación
+   * docente visible para el equipo. No es una nota ni una aprobación oficial.
+   */
+  async confirmSkill(user: AuthenticatedUser, projectId: string, skillId: string, comment: string) {
+    await this.projectsService.findOneForUser(user, projectId);
+    const fila = await this.projectSkills.findOne({ where: { projectId, skillId }, relations: { skill: true } });
+    if (!fila) throw new NotFoundException('Esa tecnología no está declarada en el proyecto.');
+
+    await this.feedback.save(this.feedback.create({
+      projectId,
+      teacherUserId: user.userId,
+      comment: `Tecnología confirmada: ${fila.skill?.name ?? ''}. ${comment}`.slice(0, 1000),
+    }));
+    fila.academicReviewedById = user.userId;
+    fila.academicReviewedAt = new Date();
+    fila.academicReviewComment = comment.slice(0, 500);
+    if (fila.evidenceStatus === ProjectSkillEvidenceStatus.DECLARED) {
+      fila.evidenceStatus = ProjectSkillEvidenceStatus.CORROBORATED_BY_ACADEMIC_REVIEW;
+      fila.evidenceSource = 'revisión docente';
+    }
+    await this.projectSkills.save(fila);
+
+    await this.events.record({
+      projectId,
+      actorUserId: user.userId,
+      eventType: ProjectEventType.FEEDBACK_ADDED,
+      metadata: { tecnologiaConfirmada: fila.skill?.name ?? skillId },
+    });
+    await this.backing.recalculate(projectId, user.userId);
+    return { skillId, name: fila.skill?.name ?? null, evidenceStatus: fila.evidenceStatus, academicReviewedAt: fila.academicReviewedAt };
+  }
 
   async create(
     user: AuthenticatedUser,

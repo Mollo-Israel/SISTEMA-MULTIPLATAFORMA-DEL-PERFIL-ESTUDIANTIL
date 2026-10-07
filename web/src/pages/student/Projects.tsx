@@ -35,6 +35,7 @@ import {
   PROJECT_BACKING_LABEL,
   PROJECT_EVENT_LABEL,
   PROJECT_VISIBILITY_LABEL,
+  SKILL_EVIDENCE_LABEL,
 } from '../../services/types';
 import type {
   AcademicArea,
@@ -396,9 +397,18 @@ export default function StudentProjectsPage() {
 
               {(p.projectSkills ?? []).length > 0 ? (
                 <div className="tag-list mt">
-                  {(p.projectSkills ?? []).map((sk) => (
-                    <span key={sk.skillId} className="badge badge-gray">{sk.skill?.name}</span>
-                  ))}
+                  {(p.projectSkills ?? []).map((sk) => {
+                    const estado = sk.evidenceStatus ?? 'declared';
+                    return (
+                      <span
+                        key={sk.skillId}
+                        className={`badge ${estado === 'declared' ? 'badge-gray' : 'badge-green'}`}
+                        title={`${SKILL_EVIDENCE_LABEL[estado]}${sk.evidenceSource ? ` · ${sk.evidenceSource}` : ''}`}
+                      >
+                        {sk.skill?.name}{estado !== 'declared' ? ' ✓' : ''}
+                      </span>
+                    );
+                  })}
                 </div>
               ) : p.technologies && p.technologies.length > 0 && (
                 <div className="tag-list mt">
