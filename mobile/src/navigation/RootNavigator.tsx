@@ -1,6 +1,6 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import { Icon, TAB_ICON } from '../components/icons';
@@ -23,6 +23,9 @@ import ProjectDetailScreen from '../screens/student/ProjectDetailScreen';
 import AffinityScreen from '../screens/student/AffinityScreen';
 import RecommendationsScreen from '../screens/student/RecommendationsScreen';
 import WelcomeScreen from '../screens/student/WelcomeScreen';
+import NotificationsScreen from '../screens/student/NotificationsScreen';
+import TrajectoryScreen from '../screens/student/TrajectoryScreen';
+import { notificationService } from '../services';
 import { profileService } from '../services';
 import { Loading } from '../components/ui';
 
@@ -79,6 +82,8 @@ function PerfilStack() {
         component={ProgressScreen}
         options={{ title: 'Mi progreso' }}
       />
+      {/* V3 §42 */}
+      <Stack.Screen name="Trayectoria" component={TrajectoryScreen} options={{ title: 'Mi trayectoria' }} />
     </Stack.Navigator>
   );
 }
@@ -105,11 +110,23 @@ function ActividadesStack() {
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen name="ListaActividades" component={ActivitiesScreen} options={{ title: 'Actividades', ...withLogout }} />
       <Stack.Screen name="MisActividades" component={MyActivitiesScreen} options={{ title: 'Mis actividades' }} />
+      {/* V3 §34.2: lo que no es una actividad (recursos, áreas, compañeros). */}
+      <Stack.Screen name="MasSugerencias" component={RecommendationsScreen} options={{ title: 'Más sugerencias' }} />
     </Stack.Navigator>
   );
 }
 
 function StudentTabs() {
+  // Número de avisos sin leer en la pestaña: se consulta al entrar y cada minuto.
+  const [noLeidas, setNoLeidas] = useState(0);
+  const refrescar = useCallback(() => {
+    notificationService.unreadCount().then((r) => setNoLeidas(r.unread)).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    refrescar();
+    const id = setInterval(refrescar, 60_000);
+    return () => clearInterval(id);
+  }, [refrescar]);
   return (
     <Tab.Navigator screenOptions={screenOptions}>
       <Tab.Screen
@@ -139,12 +156,13 @@ function StudentTabs() {
         component={AffinityScreen}
         options={{ title: 'Mis afinidades', tabBarIcon: tabIcon('Afinidad'), ...withLogout }}
       />
-      {/* RF18 nombra la pantalla "Recomendaciones". La pestana usa una
-          etiqueta corta porque ya son seis en la barra inferior. */}
+      {/* V3 §33: el centro de avisos. Las recomendaciones pasaron a «Para ti»
+          dentro de Actividades (§34.2), con «Más sugerencias» al lado. */}
       <Tab.Screen
-        name="Sugerencias"
-        component={RecommendationsScreen}
-        options={{ title: 'Recomendaciones', tabBarIcon: tabIcon('Sugerencias'), ...withLogout }}
+        name="Avisos"
+        component={NotificationsScreen}
+        options={{ title: 'Avisos', tabBarIcon: tabIcon('Avisos'), tabBarBadge: noLeidas > 0 ? (noLeidas > 99 ? '99+' : noLeidas) : undefined, ...withLogout }}
+        listeners={{ focus: refrescar }}
       />
     </Tab.Navigator>
   );

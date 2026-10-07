@@ -2116,7 +2116,59 @@ async function batch20(ctx) {
   check(!(soc.data?.activities ?? []).some((a) => a.students || a.profiles), 'V3.20.14 Y ningún dato de perfiles');
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19, batch20 };
+// ===========================================================================
+//  BATCH 22 — Mobile: contrato de lo que usa la app (§60)
+// ===========================================================================
+async function batch22(ctx) {
+  objective('BATCH 22 · La app del estudiante: avisos, actividades con pestañas, trayectoria y equipos');
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Movil', lastName: 'Estudiante', email: correoEst('b22'), role: 'STUDENT', semester: 4 });
+  const lider = await provisionAndActivate(ctx.admin, { firstName: 'Movil', lastName: 'Lider', email: correoEst('b22l'), role: 'STUDENT', semester: 4 });
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Movil', lastName: 'Director', email: correoStaff('b22dir'), role: 'CAREER_DIRECTOR' });
+  const perfil = (await req('GET', '/profiles/me', { token: est.token })).data;
+
+  // ----- Avisos: la pestaña muestra el contador y la lista (NotificationsScreen)
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cat = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const act = (await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `Taller móvil ${TS}`, type: 'academica', categoryId: cat.id, status: 'open', activityDate: new Date(Date.now() + 5 * 86_400_000).toISOString() },
+  })).data;
+  await req('POST', `/activities/${act.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${act.id}/confirm-participation`, { token: director.token, body: { studentProfileId: perfil.id, status: 'confirmed' } });
+  const cuenta = (await req('GET', '/notifications/me/unread-count', { token: est.token })).data;
+  const lista = (await req('GET', '/notifications/me', { token: est.token })).data ?? [];
+  check(typeof cuenta?.unread === 'number' && cuenta.unread >= 1, 'V3.22.1 §60 La pestaña Avisos tiene su contador', JSON.stringify(cuenta));
+  check(lista.every((n) => n.id && n.title && n.body && 'link' in n && 'readAt' in n && n.createdAt),
+    'V3.22.2 Cada aviso trae título, texto, enlace y estado de lectura');
+  check(lista.some((n) => n.link?.startsWith('/student/activities')), 'V3.22.3 El enlace lleva a una sección que la app sabe abrir (Actividades)');
+
+  // ----- Actividades: Para ti, Interesadas/Inscritas/Historial
+  const recs = (await req('GET', '/recommendations/me', { token: est.token })).data;
+  check(Array.isArray(recs?.groups) && recs.groups.every((g) => Array.isArray(g.items)) && typeof recs.message === 'string',
+    'V3.22.4 «Para ti» recibe grupos con ítems, motivo y estado', `outcome ${recs?.outcome}`);
+  const regs = (await req('GET', '/activities/my-registrations', { token: est.token })).data ?? [];
+  check(regs.some((r) => r.status === 'confirmed' && r.activity?.title), 'V3.22.5 «Historial» se arma con las inscripciones confirmadas');
+
+  // ----- Mi trayectoria
+  const tray = (await req('GET', '/trajectory/me', { token: est.token })).data;
+  check(tray?.levels?.length === 5 && tray.entries.some((e) => e.kind === 'activity' && e.levelLabel === 'Corroborado'),
+    'V3.22.6 §42 Mi trayectoria en la app: niveles y la actividad confirmada');
+
+  // ----- Equipos: necesidades y postulaciones
+  const nec = (await req('POST', '/team-needs', { token: lider.token, body: { purpose: `Equipo móvil ${TS}`, targetSemesters: [4], maxMembers: 3 } })).data;
+  const abiertas = (await req('GET', '/team-needs', { token: est.token })).data ?? [];
+  const vista = abiertas.find((n) => n.id === nec.id);
+  check(!!vista && 'myApplication' in vista && typeof vista.openings === 'number' && Array.isArray(vista.targetSemesters),
+    'V3.22.7 §55 La app ve la necesidad con cupos, semestres y su postulación');
+  const post = await req('POST', `/team-needs/${nec.id}/applications`, { token: est.token, body: { message: 'Desde la app.' } });
+  const mias = (await req('GET', '/team-applications/mine', { token: est.token })).data ?? [];
+  check(post.status === 201 && mias.some((p) => p.id === post.data.id && p.need?.purpose && p.status === 'pending'),
+    'V3.22.8 Postula desde la app y la ve en «Mis postulaciones»');
+  const ret = await req('DELETE', `/team-applications/${post.data.id}`, { token: est.token });
+  check(ret.status === 200, 'V3.22.9 Y puede retirarla', `status ${ret.status}`);
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19, batch20, batch22 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

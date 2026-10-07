@@ -23,6 +23,7 @@ import { useConfirm, useToast } from '../../components/feedback';
 import { Icon } from '../../components/icons';
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
 import { colors } from '../../theme';
+import { MisInscripciones, ParaTi } from './ActivityTabs';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -40,7 +41,17 @@ const MODALITY_FILTERS = [
   { value: 'hibrida', label: 'Híbrida' },
 ];
 
+const PESTANAS = [
+  { key: 'parati', label: 'Para ti' },
+  { key: 'todas', label: 'Todas' },
+  { key: 'interesadas', label: 'Interesadas' },
+  { key: 'inscritas', label: 'Inscritas' },
+  { key: 'historial', label: 'Historial' },
+] as const;
+type Pestana = (typeof PESTANAS)[number]['key'];
+
 export default function ActivitiesScreen({ navigation }: any) {
+  const [pestana, setPestana] = useState<Pestana>('parati');
   // Filtros del RF8: categoría, área, modalidad y fecha. Se aplican en el
   // servidor para que el resultado sea el mismo desde cualquier cliente.
   const [type, setType] = useState('');
@@ -168,13 +179,17 @@ export default function ActivitiesScreen({ navigation }: any) {
         description="Marca interés o inscríbete. Tu participación la confirma el responsable de la actividad y alimenta tu perfil dinámico."
       />
 
-      <Button
-        title="Ver mis actividades"
-        icon="list"
-        variant="secondary"
-        onPress={() => navigation.navigate('MisActividades')}
-      />
+      {/* V3 §34.2: las mismas pestañas que la web; las sugerencias viven aquí. */}
+      <View style={styles.filterRow} accessibilityRole="tablist">
+        {PESTANAS.map((t) => (
+          <Chip key={t.key} label={t.label} on={pestana === t.key} onPress={() => setPestana(t.key)} />
+        ))}
+      </View>
 
+      {pestana === 'parati' && <ParaTi onMas={() => navigation.navigate('MasSugerencias')} />}
+      {(pestana === 'interesadas' || pestana === 'inscritas' || pestana === 'historial') && <MisInscripciones grupo={pestana} />}
+
+      {pestana === 'todas' && (<>
       <View style={{ marginTop: 12 }}>
         <SearchInput
           value={query}
@@ -448,6 +463,7 @@ export default function ActivitiesScreen({ navigation }: any) {
           </FadeIn>
         );
       })}
+      </>)}
     </Screen>
   );
 }

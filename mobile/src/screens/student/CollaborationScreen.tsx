@@ -5,6 +5,7 @@ import {
   collaborationService, type ContactChannelType, type ContactChannelView, type ContactView,
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import TeamNeedsSection from './TeamNeedsSection';
 import {
   Badge, Button, Card, EmptyState, Field, Muted, SkeletonCards,
 } from '../../components/ui';
@@ -272,6 +273,9 @@ export default function CollaborationScreen() {
           ))}
         </Card>
       )}
+
+      {/* V3 §31, §55 */}
+      <TeamNeedsSection />
 
       <Card title="Mis contactos">
         {contactosState.loading && !contactosState.data && <SkeletonCards count={2} />}

@@ -442,6 +442,45 @@ export const collaborationService = {
   myTeamInvitations: () => api.get<any[]>('/teams/invitations/mine').then((r) => r.data),
   decideTeamInvitation: (id: string, decision: 'accept' | 'decline') =>
     api.patch(`/teams/invitations/${id}`, { decision }).then((r) => r.data),
+  // V3 §31, §55: necesidades abiertas para su semestre y postulaciones.
+  openNeeds: () => api.get<any[]>('/team-needs').then((r) => r.data),
+  applyToNeed: (needId: string, message?: string) =>
+    api.post(`/team-needs/${needId}/applications`, { message: message || undefined }).then((r) => r.data),
+  myApplications: () => api.get<any[]>('/team-applications/mine').then((r) => r.data),
+  withdrawApplication: (id: string) => api.delete(`/team-applications/${id}`).then((r) => r.data),
+};
+
+/** V3 §33: centro de notificaciones. */
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  link: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export const notificationService = {
+  mine: (unread = false) =>
+    api.get<NotificationItem[]>('/notifications/me', { params: unread ? { unread: 'true' } : {} }).then((r) => r.data),
+  unreadCount: () => api.get<{ unread: number }>('/notifications/me/unread-count').then((r) => r.data),
+  markRead: (id: string) => api.patch(`/notifications/${id}/read`).then((r) => r.data),
+  markAllRead: () => api.post('/notifications/me/read-all').then((r) => r.data),
+};
+
+/** V3 §42: Mi trayectoria, con el nivel de cada cosa. */
+export interface TrajectoryHistory {
+  levels: { key: string; label: string; explain: string; count: number }[];
+  entries: {
+    kind: string; id: string; title: string; date: string | null;
+    level: string | null; levelLabel: string | null; detail: string; cvEligible: boolean;
+  }[];
+  evolution: { area: string | null; score: number; supportScore: number | null }[];
+}
+
+export const trajectoryService = {
+  history: () => api.get<TrajectoryHistory>('/trajectory/me').then((r) => r.data),
 };
 
 /** Gamificacion (§66). Los puntos reconocen hechos; no alimentan la afinidad. */

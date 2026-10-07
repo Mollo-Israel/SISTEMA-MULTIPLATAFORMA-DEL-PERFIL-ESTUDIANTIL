@@ -863,3 +863,52 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Riesgos:** los errores que devuelve la API siguen mostrándose en el aviso general, con el mensaje específico del servidor; los del cliente ya van por campo.
 
 **Pendientes:** la app móvil (B22).
+
+---
+
+## BATCH 22 — Mobile
+
+**ESTADO:** completo, con una limitación de entorno declarada
+
+**Objetivo:** la app del estudiante (Expo) a la par de V3: notificaciones, actividades con «Para ti», trayectoria, perfil, proyectos y equipos (§60).
+
+**Hallazgos iniciales:**
+- La app tenía una pestaña «Sugerencias» aparte, y V3 §34.2 pone las sugerencias dentro de Actividades.
+- No había centro de avisos, ni «Mi trayectoria», ni postulaciones a necesidades de equipo.
+- Los campos de texto no tenían etiqueta accesible: el lector de pantalla no los nombraba.
+- Ya estaban a la par:
+  - Proyectos, con preparación para activarse y confirmación de contribución (B10 a B13).
+  - Evidencias y credenciales, con origen y oportunidad elegible (B8).
+- `expo-doctor` 18/18 y typecheck limpio antes de empezar.
+
+**Cambios:**
+- **Pestaña «Avisos»** (en lugar de «Sugerencias»):
+  - Lista de notificaciones con filtro «Sin leer» y «Marcar todo como leído».
+  - Tocar un aviso lo marca como leído y lleva a la sección que corresponde: Actividades, Proyectos, Colaboración, Evidencias o Trayectoria.
+  - Insignia con el número sin leer, que se actualiza al entrar a la pestaña y cada minuto.
+- **Actividades (§34.2):** pestañas Para ti / Todas / Interesadas / Inscritas / Historial.
+  - «Para ti» muestra las oportunidades sugeridas con su motivo, «Guardar» y «No me interesa», que avisa que los intereses no cambian.
+  - «Más sugerencias» (la pantalla de recomendaciones) queda dentro de la pila de Actividades.
+- **Mi trayectoria (§42):** leyenda de niveles, filtro por nivel, cada entrada con su nivel y si puede ir al currículo, y afinidad y respaldo actuales. El currículo se arma desde la web.
+- **Colaboración (§31, §55):**
+  - «Necesidades abiertas para ti» muestra semestres, habilidades buscadas, cupos y la postulación propia. Se puede postular con una presentación breve o retirarse.
+  - «Mis postulaciones» muestra la respuesta y el motivo.
+- **Perfil:** accesos a «Mi trayectoria» y a «Colaboración y equipos».
+- **Accesibilidad:** `Field` anuncia cada campo por su etiqueta (`accessibilityLabel`).
+- **Maestro:** el flujo del estudiante (`mobile/.maestro/flujo-estudiante.yaml`) recorre Para ti, Todas, Historial, Avisos, Mi trayectoria y Colaboración, y comprueba que no hay chat.
+
+**Migraciones:** ninguna.
+
+**Pruebas ejecutadas:**
+- `tsc --noEmit` limpio y `expo-doctor` 18/18.
+- `expo export --platform android`: Metro empaqueta la app completa (bytecode Hermes, 2,58 MB) sin errores de resolución ni de importación.
+- `e2e-v3 batch22` (V3.22.1–V3.22.9): el contrato exacto que usa la app —contador y forma de los avisos, enlace a una sección conocida, grupos de «Para ti», historial, trayectoria, necesidad con cupos, semestres y postulación, postular y retirar.
+- `e2e-v3` completo.
+
+**Prueba en dispositivo:** en esta máquina no hay SDK de Android ni emulador, así que el flujo Maestro queda listo para ejecutarse (`maestro test mobile/.maestro/flujo-estudiante.yaml -e EMAIL=… -e PASSWORD=…`) pero **no se ejecutó**. El empaquetado de Android y el contrato de la API sí se verificaron.
+
+**Resultados:** `e2e-v3` **352 correctas, 0 fallos**. Desde la regresión completa de B21 (1786/0) solo cambió código móvil, que ninguna suite ejecuta, y este bloque de pruebas: no se tocó la API, la web ni `shared`.
+
+**Riesgos:** la insignia de avisos se actualiza al entrar a la pestaña y cada minuto; no hay notificaciones push (no las pide la especificación).
+
+**Pendientes:** ejecutar el flujo Maestro en un emulador o dispositivo (B23 / defensa).

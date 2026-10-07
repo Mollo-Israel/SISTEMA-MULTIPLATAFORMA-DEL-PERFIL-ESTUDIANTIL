@@ -1,4 +1,4 @@
-# Flujo representativo del estudiante en la app móvil (V2 §79.5).
+# Flujo representativo del estudiante en la app móvil (V2 §79.5; V3 BATCH 22).
 #
 # Requiere Android Emulator (o un dispositivo) con un Expo Development Build
 # instalado y la API accesible desde el emulador (10.0.2.2:3010). En esta
@@ -18,15 +18,28 @@ appId: host.exp.exponent
 - inputText: ${PASSWORD}
 - tapOn: "Ingresar"
 - assertVisible: "Inicio"
-# Actividades: ver el listado y abrir una.
+# Actividades (V3 §34.2): «Para ti» primero, luego todas, inscritas e historial.
 - tapOn: "Actividades"
-- assertVisible: "Actividades"
+- assertVisible: "Para ti"
+- assertVisible: "Más sugerencias"
+- tapOn: "Todas"
+- assertVisible: "Buscar por título, lugar, categoría o área…"
+- tapOn: "Historial"
+# Avisos (V3 §33): el centro de notificaciones con su contador.
+- tapOn: "Avisos"
+- assertVisible: "Sin leer"
 # Afinidad: el detalle explica de dónde sale cada punto.
 - tapOn: "Afinidad"
 - assertVisible: "Mis afinidades"
-# Colaboración: canales de contacto (no hay chat, V2 §57).
+# Mi trayectoria (V3 §42): niveles en palabras.
 - tapOn: "Perfil"
-- tapOn: "Colaboración"
+- tapOn: "Mi trayectoria"
+- assertVisible: "Cómo leerla"
+- assertVisible: "Corroborado"
+- back
+# Colaboración (V3 §55): necesidades abiertas y canales; no hay chat (V2 §57).
+- tapOn: "Colaboración y equipos"
+- assertVisible: "Necesidades abiertas para ti"
 - assertVisible: "Cómo contactarte"
 - assertNotVisible: "Mensajes"
 # Salir.

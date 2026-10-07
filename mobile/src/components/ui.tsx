@@ -129,6 +129,8 @@ export function Field({
       <Text style={styles.label}>{label}</Text>
       <TextInput
         style={[styles.input, multiline && { height: 80, textAlignVertical: 'top' }]}
+        // V3 B22: el lector de pantalla anuncia el campo por su etiqueta.
+        accessibilityLabel={label}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
