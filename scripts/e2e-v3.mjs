@@ -1970,7 +1970,86 @@ async function batch18(ctx) {
   check(!pdf.includes('Taller de pruebas'), 'V3.18.27 Y sin lo que no se marcó');
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18 };
+// ===========================================================================
+//  BATCH 19 — Gamificación independiente (§57)
+// ===========================================================================
+async function batch19(ctx) {
+  objective('BATCH 19 · Puntos por hechos controlados, idempotentes y sin tocar la afinidad');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Gael', lastName: 'Puntos', email: correoEst('b19'), role: 'STUDENT', semester: 4 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const amiga = await provisionAndActivate(ctx.admin, { firstName: 'Mila', lastName: 'Contacto', email: correoEst('b19b'), role: 'STUDENT', semester: 4 });
+  amiga.profileId = (await req('GET', '/profiles/me', { token: amiga.token })).data?.id;
+
+  const progreso = async (token = est.token) => (await req('GET', '/gamification/me', { token })).data;
+  const eventos = (p, trigger) => (p?.events ?? []).filter((e) => e.trigger === trigger);
+  const afinidad = async () => JSON.stringify(((await req('GET', '/affinity/me', { token: est.token })).data?.areas ?? [])
+    .map((a) => [a.academicAreaId ?? a.areaId, a.score, a.supportScore]));
+
+  // ----- Autodeclaraciones: no dan puntos
+  const inicio = (await progreso())?.totalPoints ?? 0;
+  const areas = (await req('GET', '/academic-areas', { token: est.token })).data ?? [];
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: areas[0].id, priority: 1 }] } });
+  await req('POST', '/certificates/external', { token: est.token, body: { certificateName: `Curso declarado ${TS}`, issuer: 'Plataforma Y' } });
+  check(((await progreso())?.totalPoints ?? 0) === inicio, 'V3.19.1 §57 Marcar intereses o declarar un certificado no da puntos', `${inicio}`);
+
+  // ----- Borrador con evidencias y repositorio que corrobora: nada
+  const catalogo = ((await req('GET', '/skills', { token: est.token })).data ?? []).filter((s) => s.academicAreaId);
+  const sk = catalogo[0];
+  const borrador = (await req('POST', '/projects', {
+    token: est.token,
+    body: { title: `Borrador con capturas ${TS}`, areaIds: [sk.academicAreaId], skillIds: [sk.id], repositoryUrl: repoQueCorrobora(sk.name), visibility: 'teachers', status: 'draft' },
+  })).data;
+  for (let i = 0; i < 3; i += 1) {
+    await req('POST', `/projects/${borrador.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${borrador.id}-${i}.png`, description: `Captura ${i}.` } });
+  }
+  await req('PUT', `/projects/${borrador.id}/my-contribution`, { token: est.token, body: { contribution: 'Todo el sistema.', skillIds: [sk.id] } });
+  let p = await progreso();
+  check(eventos(p, 'primer_proyecto_respaldado').length === 0 && eventos(p, 'proyecto_corroborado').length === 0 && (p?.totalPoints ?? 0) === inicio,
+    'V3.19.2 §57 Un borrador no da puntos, aunque se le suban varias capturas', `${p?.totalPoints}`);
+
+  // ----- Al activarse, sí: una sola vez
+  await req('PATCH', `/projects/${borrador.id}`, { token: est.token, body: { status: 'active' } });
+  p = await progreso();
+  check(eventos(p, 'primer_proyecto_respaldado').length === 1 && eventos(p, 'proyecto_corroborado').length === 1,
+    'V3.19.3 Activo y corroborado: se reconoce el primero respaldado y el corroborado', JSON.stringify((p?.events ?? []).map((e) => e.trigger)));
+  const tras = p.totalPoints;
+  await req('POST', `/projects/${borrador.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${borrador.id}-otra.png`, description: 'Otra captura.' } });
+  const p2 = await progreso();
+  const p3 = await progreso();
+  check(p2.totalPoints === tras && p3.totalPoints === tras && eventos(p3, 'proyecto_corroborado').length === 1,
+    'V3.19.4 Idempotente: consultar o sumar archivos no repite puntos', `${tras} / ${p2.totalPoints} / ${p3.totalPoints}`);
+
+  // ----- Contactos: ya no suman (spam)
+  const enlace = (await req('GET', '/profiles/me/public-link', { token: amiga.token })).data;
+  await req('PUT', '/profiles/me/visibility', { token: amiga.token, body: { publicProfileEnabled: true, fields: { bio: true } } });
+  const sol = await req('POST', '/contacts/requests', { token: est.token, body: { slug: enlace?.slug } });
+  const dec = await req('PATCH', `/contacts/requests/${sol.data?.id}`, { token: amiga.token, body: { decision: 'accept' } });
+  const pc = await progreso();
+  const pa = await progreso(amiga.token);
+  check(dec.status === 200 && pc.totalPoints === tras && !(pa?.events ?? []).some((e) => e.sourceEntityType === 'contact'),
+    'V3.19.5 §32/§57 Aceptar contactos no da puntos: no se puede acumular aceptándose entre amigos', `${dec.status} ${pc.totalPoints}`);
+
+  // ----- Puntos y afinidad, independientes
+  const afinidadAntes = await afinidad();
+  const nec = (await req('POST', '/team-needs', { token: amiga.token, body: { purpose: `Equipo de puntos ${TS}`, maxMembers: 3 } })).data;
+  const eq = (await req('POST', `/team-needs/${nec.id}/team`, { token: amiga.token, body: { name: `Equipo Puntos ${String(TS).slice(-5)}` } })).data;
+  const inv = await req('POST', `/teams/${eq.id}/invitations`, { token: amiga.token, body: { invitedProfileId: est.profileId } });
+  await req('PATCH', `/teams/invitations/${inv.data.id}`, { token: est.token, body: { decision: 'accept' } });
+  const pe = await progreso();
+  check(pe.totalPoints > tras && eventos(pe, 'colaboracion_aceptada').length === 1, 'V3.19.6 Una colaboración aceptada (equipo) sí se reconoce', `${tras} → ${pe.totalPoints}`);
+  check(await afinidad() === afinidadAntes, 'V3.19.7 §57 Y los puntos no mueven la afinidad ni el respaldo');
+  const desglose = JSON.stringify((await req('GET', '/affinity/me/summary', { token: est.token })).data ?? {});
+  check(!/gamif|insignia|badge|puntos de/i.test(desglose), 'V3.19.8 §57 El desglose de afinidad no menciona puntos ni insignias');
+
+  // ----- Criterios y recompensas
+  const criterios = await req('GET', '/gamification-criteria', { token: ctx.admin });
+  check(criterios.status === 200 && Array.isArray(criterios.data), 'V3.19.9 Los criterios se administran y se consultan', `status ${criterios.status}`);
+  check((pe.badges ?? []).every((b) => typeof b.earned === 'boolean' || b.awardedAt !== undefined || b.progress !== undefined),
+    'V3.19.10 Las insignias muestran si se obtuvieron y su avance');
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

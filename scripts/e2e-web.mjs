@@ -180,6 +180,8 @@ async function pruebas(browser) {
   await p3.click('a[href="/student/progress?tab=resumen"]');
   check(await p3.getByText('Plantilla', { exact: true }).first().isVisible(), 'WEB.18 §61 CV / Exportar abre el generador con plantillas');
   await p3.getByText('Paso 1 · Qué secciones incluir').first().waitFor({ timeout: 8000 }).catch(() => {});
+  // Las casillas llegan con la respuesta de secciones: se esperan, no se suponen.
+  await p3.getByLabel('Credenciales / cursos externos').first().waitFor({ timeout: 8000 }).catch(() => {});
   check(await p3.getByText('Paso 1 · Qué secciones incluir').first().isVisible()
     && await p3.getByLabel('Credenciales / cursos externos').first().isVisible(),
   'WEB.18b V3 §43 El currículo se elige en dos niveles, con casillas etiquetadas');

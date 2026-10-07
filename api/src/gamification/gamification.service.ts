@@ -8,6 +8,7 @@ import {
   SYSTEM_GAMIFICATION_TRIGGERS,
   GamificationTrigger,
   ProjectBackingTier,
+  ProjectStatus,
   PUBLISHABLE_REVIEW_STATUSES,
   RegistrationStatus,
 } from '@perfil/shared';
@@ -260,7 +261,11 @@ export class GamificationService {
         })
       : [];
 
-    const todos = [...propios, ...ajenos.filter((p) => p.createdByProfileId !== studentProfileId)];
+    // V3 §21 / §57: un borrador no da puntos aunque tenga evidencias o un
+    // repositorio que corrobore. Si diera, subir una captura a un borrador
+    // sería una forma de sumar, y §57 excluye puntos por subir archivos.
+    const todos = [...propios, ...ajenos.filter((p) => p.createdByProfileId !== studentProfileId)]
+      .filter((p) => p.status !== ProjectStatus.DRAFT);
     const conRespaldo = todos.filter(
       (p) =>
         p.backingTier === ProjectBackingTier.SUPPORTED
@@ -311,30 +316,26 @@ export class GamificationService {
   /**
    * Colaboraciones aceptadas (§66).
    *
-   * Tres formas de la misma cosa: un contacto que la otra persona aceptó, una
-   * pertenencia a un equipo y una contribución a un proyecto ajeno confirmada
-   * por su autor. En las tres, alguien más tuvo que decir que sí — que es lo
-   * que separa colaborar de declarar que uno colabora.
+   * Dos formas de la misma cosa: una pertenencia a un equipo y una
+   * contribución a un proyecto ajeno confirmada por su autor. En las dos,
+   * alguien más tuvo que decir que sí — que es lo que separa colaborar de
+   * declarar que uno colabora.
+   *
+   * V3 §32 / §57: un contacto ya no suma. Dos compañeros podían aceptarse
+   * mutuamente sin límite para acumular puntos (spam), y la cantidad de
+   * contactos no indica nada. Los puntos ya otorgados por contactos se
+   * conservan: no se destruyen datos.
    */
   private async colaboracionesAceptadas(
     studentProfileId: string,
     userId: string,
   ): Promise<Hecho[]> {
-    const [contactos, equipos, contribuciones] = await Promise.all([
-      this.contacts.find({
-        where: [{ profileAId: studentProfileId }, { profileBId: studentProfileId }],
-      }),
+    const [equipos, contribuciones] = await Promise.all([
       this.teamMembers.find({ where: { studentProfileId }, relations: { team: true } }),
       this.members.find({ where: { userId }, relations: { project: true } }),
     ]);
 
-    const hechos: Hecho[] = contactos.map((c) => ({
-      trigger: GamificationTrigger.COLABORACION_ACEPTADA,
-      dedupeKey: `contacto:${c.id}`,
-      reason: 'Una solicitud de contacto aceptada',
-      sourceEntityType: 'contact',
-      sourceEntityId: c.id,
-    }));
+    const hechos: Hecho[] = [];
 
     equipos.forEach((m) =>
       hechos.push({

@@ -705,3 +705,48 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 - Regresión completa: **1749 correctas, 0 fallos** (20 suites).
 
 **Pendientes:** trayectoria y currículo en móvil (B22).
+
+---
+
+## BATCH 19 — Gamificación
+
+**ESTADO:** completo
+
+**Objetivo:** mantener la gamificación como incentivo independiente (§57): puntos por hechos controlados, idempotentes, con insignias y recompensas, sin ninguna conexión con la afinidad.
+
+**Hallazgos iniciales:**
+- Ya estaban bien:
+  - Idempotencia por `(estudiante, dedupe_key)`.
+  - Total recalculado sumando eventos.
+  - Insignias únicas por estudiante.
+  - Disparadores de autodeclaración retirados desde V2.
+  - El motor de afinidad no lee puntos ni insignias.
+- **Fuga 1:** «primer proyecto respaldado» y «proyecto corroborado» contaban también los **borradores** (V3 §21). Subir una captura a un borrador daba puntos, y §57 excluye puntos por subir archivos.
+- **Fuga 2:** cada **contacto** aceptado daba puntos. Dos compañeros podían aceptarse entre sí sin límite (spam, §57), y la cantidad de contactos no indica nada (§32).
+- La pantalla de recompensas no decía que las entrega la Universidad.
+
+**Cambios:**
+- Los proyectos en borrador no generan eventos. Al activarse, el reconocimiento llega una sola vez.
+- Los contactos ya no suman. Pertenecer a un equipo y una contribución confirmada en un proyecto ajeno siguen sumando, porque en ambos alguien más tuvo que aceptar. Los puntos ya otorgados por contactos se conservan: no se destruyen datos.
+- Recompensas: aviso de que las ofrecen y entregan docentes y Dirección de la Universidad, de que Afinia solo registra el canje y de que los puntos no cambian la afinidad ni las notas.
+
+**Migraciones:** ninguna.
+
+**Pruebas ejecutadas:**
+- `e2e-v3 batch19` (V3.19.1–V3.19.10): autodeclaraciones sin puntos, borrador con varias capturas sin puntos, activación con reconocimiento único, idempotencia al consultar y al sumar archivos, contactos sin puntos, equipo con puntos, afinidad y desglose intactos, criterios e insignias.
+- `e2e-batch-9` actualizado a V3 sin borrar comprobaciones:
+  - B9.10a: el borrador no da puntos.
+  - B9.10b: con tecnología y evidencia se activa.
+  - B9.15b: el contacto no da puntos.
+  - B9.16: la colaboración aceptada ahora es un equipo.
+- Regresión completa.
+
+**Resultados:**
+- Regresión completa: 1754 correctas y 5 fallos.
+  - Cuatro, en `e2e-batch-9`, eran las expectativas de V2 que este batch cambia a propósito: tras actualizarlas, `e2e-batch-9` da 52/0.
+  - Uno, en `e2e-web` (WEB.18b), era de espera: las casillas llegan con la respuesta de secciones y la prueba ahora las espera. `e2e-web` da 31/0.
+- Total efectivo: **1762 correctas, 0 fallos**.
+
+**Riesgos:** los estudiantes que sumaban puntos por contactos dejan de hacerlo desde ahora; su histórico se mantiene.
+
+**Pendientes:** ninguno propio del batch.

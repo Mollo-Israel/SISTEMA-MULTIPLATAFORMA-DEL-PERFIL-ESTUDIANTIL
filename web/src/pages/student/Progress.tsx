@@ -334,6 +334,11 @@ function Recompensas() {
       </AsyncView>
 
       <Card title="Qué puedes conseguir">
+        {/* V3 §57: las recompensas físicas dependen de la Universidad, no de Afinia. */}
+        <p className="muted" style={{ marginTop: 0 }}>
+          Las recompensas las ofrecen y entregan docentes y Dirección de la Universidad; Afinia solo registra
+          el canje. Los puntos no cambian tu afinidad ni tus notas.
+        </p>
         <AsyncView
           loading={catalogo.loading}
           error={catalogo.error}

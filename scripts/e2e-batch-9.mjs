@@ -152,6 +152,21 @@ async function accionesValidas(ctx) {
       externalUrl: `https://ejemplo.univalle.edu/b9-${TS}`,
     },
   });
+  // V3 §21/§57: un borrador no da puntos; al activarse, con su evidencia, sí.
+  const borradorSinPuntos = await progreso(ctx.est.token);
+  check(
+    eventosCon(borradorSinPuntos, 'primer_proyecto_respaldado').length === 0,
+    'B9.10a V3 §57 Mientras es borrador, subirle evidencias no da puntos',
+  );
+  // V3 §21: para activarse, el proyecto necesita una tecnología del catálogo de su área.
+  const tecnologia = await req('POST', '/skills', {
+    token: await loginAdmin(),
+    body: { name: `Tecnología B9 ${String(TS).slice(-8)}`, academicAreaId: ctx.area.id },
+  });
+  ctx.skillId = tecnologia.data?.id;
+  await req('PATCH', `/projects/${ctx.proyectoId}`, { token: ctx.est.token, body: { skillIds: [ctx.skillId] } });
+  const activar = await req('PATCH', `/projects/${ctx.proyectoId}`, { token: ctx.est.token, body: { status: 'active' } });
+  check(activar.status === 200, 'B9.10b V3 §21 Con tecnología y evidencia, el proyecto se activa', JSON.stringify(activar.data?.code ?? activar.status));
   const trasRespaldo = await progreso(ctx.est.token);
   check(
     eventosCon(trasRespaldo, 'primer_proyecto_respaldado').length === 1,
@@ -213,6 +228,8 @@ async function idempotencia(ctx) {
       externalUrl: `https://ejemplo.univalle.edu/b9b-${TS}`,
     },
   });
+  await req('PATCH', `/projects/${otro.data.id}`, { token: ctx.est.token, body: { skillIds: [ctx.skillId] } });
+  await req('PATCH', `/projects/${otro.data.id}`, { token: ctx.est.token, body: { status: 'active' } });
   const conDos = await progreso(ctx.est.token);
   check(
     eventosCon(conDos, 'primer_proyecto_respaldado').length === 1,
@@ -232,7 +249,9 @@ async function independencia(ctx) {
   const puntosAntes = (await progreso(ctx.est.token)).totalPoints;
 
   // Más colaboraciones aceptadas: suben los puntos sin tocar ninguna señal de
-  // afinidad, que es exactamente el caso que §66 quiere aislar.
+  // afinidad, que es exactamente el caso que §66 quiere aislar. V3 §57: un
+  // contacto ya no suma (se podía acumular aceptándose entre amigos); entrar
+  // a un equipo sí.
   await req('PUT', '/profiles/me/visibility', {
     token: ctx.otro.token,
     body: { publicProfileEnabled: true, fields: { bio: true } },
@@ -246,6 +265,15 @@ async function independencia(ctx) {
     token: ctx.otro.token,
     body: { decision: 'accept' },
   });
+  check(
+    (await progreso(ctx.est.token)).totalPoints === puntosAntes,
+    'B9.15b V3 §57 Aceptar un contacto ya no da puntos',
+  );
+  const estPerfil = (await req('GET', '/profiles/me', { token: ctx.est.token })).data;
+  const necesidad = (await req('POST', '/team-needs', { token: ctx.otro.token, body: { purpose: `Equipo B9 ${TS}`, maxMembers: 3 } })).data;
+  const equipo = (await req('POST', `/team-needs/${necesidad.id}/team`, { token: ctx.otro.token, body: { name: `Equipo Nueve ${String(TS).slice(-5)}` } })).data;
+  const invitacion = await req('POST', `/teams/${equipo.id}/invitations`, { token: ctx.otro.token, body: { invitedProfileId: estPerfil.id } });
+  await req('PATCH', `/teams/invitations/${invitacion.data.id}`, { token: ctx.est.token, body: { decision: 'accept' } });
 
   const puntosDespues = (await progreso(ctx.est.token)).totalPoints;
   const afinidadDespues = (await req('GET', '/affinity/me/summary', { token: ctx.est.token }))
