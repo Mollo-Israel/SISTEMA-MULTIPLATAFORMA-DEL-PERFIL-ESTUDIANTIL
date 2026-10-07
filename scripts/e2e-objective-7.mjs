@@ -693,7 +693,7 @@ async function rf14Directorio(ctx) {
   const proyecto = (mios.data ?? []).find((p) => p.isOwner);
   const invitacion = await req('POST', `/projects/${proyecto.id}/invitations`, {
     token: ctx.S1.token,
-    body: { invitedProfileId: ctx.S4.profileId, proposedRole: 'Analista de datos' },
+    body: { invitedProfileId: ctx.S4.profileId, proposedRole: 'Datos/IA' },
   });
   check(invitacion.status === 201, '18.74 Invitar al companero encontrado funciona de punta a punta', msgOf(invitacion));
 

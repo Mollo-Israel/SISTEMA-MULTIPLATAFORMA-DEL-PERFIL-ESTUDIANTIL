@@ -5,6 +5,7 @@ import { catalogService, projectDetailService } from '../services';
 import { useToast } from './feedback';
 import { Badge, Button, Card, EmptyState, SearchInput, SkeletonText } from './ui';
 import type { ProjectMemberDetailed, Skill } from '../services/types';
+import { PROJECT_ROLES } from '../services/types';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -72,6 +73,25 @@ export default function ProjectContribution({
     return skills.filter((s) => normalize(s.name).includes(q)).slice(0, 40);
   }, [skills, query]);
 
+  // V3 §30: si lo que te propusieron no es lo que hiciste, pídele que lo corrija.
+  const pedirCorreccion = async () => {
+    const nota = window.prompt('¿Qué hay que corregir de lo que te propusieron?', '');
+    if (!nota || nota.trim().length < 10) {
+      if (nota !== null) toast.error('Explica qué hay que corregir (al menos 10 caracteres).');
+      return;
+    }
+    setSaving(true);
+    try {
+      await projectDetailService.requestCorrection(projectId, nota.trim());
+      toast.success('Corrección pedida', 'El responsable recibirá tu nota.');
+      await load();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const guardar = async () => {
     setSaving(true);
     try {
@@ -134,13 +154,16 @@ export default function ProjectContribution({
           </div>
 
           <div className="field">
-            <label>Tu rol</label>
-            <input
+            <label htmlFor={`rol-${projectId}`}>Tu rol</label>
+            <select
+              id={`rol-${projectId}`}
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
-              placeholder="Backend"
-              maxLength={80}
-            />
+            >
+              <option value="">Elige tu rol…</option>
+              {PROJECT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+            <span className="field-hint">El rol describe lo que hiciste; tu afinidad sale de las tecnologías que confirmas.</span>
           </div>
 
           <div className="field">
@@ -188,9 +211,16 @@ export default function ProjectContribution({
             )}
           </div>
 
-          <Button onClick={guardar} loading={saving} icon={<FiSave size={15} />}>
-            {mine.contributionConfirmed ? 'Guardar y reconfirmar' : 'Confirmar mi contribución'}
-          </Button>
+          <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Button onClick={guardar} loading={saving} icon={<FiSave size={15} />}>
+              {mine.contributionConfirmed ? 'Guardar y reconfirmar' : 'Confirmar mi contribución'}
+            </Button>
+            {!isOwner && (
+              <Button variant="secondary" onClick={pedirCorreccion} loading={saving}>
+                Pedir corrección al responsable
+              </Button>
+            )}
+          </div>
         </Card>
       )}
 

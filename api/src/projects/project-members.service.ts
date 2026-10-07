@@ -13,6 +13,7 @@ import {
   ProjectInvitationStatus,
   RolNombre,
   UserStatus,
+  PROJECT_ROLES,
 } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
@@ -22,6 +23,8 @@ import { ProjectBackingService } from './project-backing.service';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { InviteMemberDto } from './dto/invite-member.dto';
+import { Team, TeamMember } from '../entities/collaboration.entity';
+import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
@@ -46,7 +49,54 @@ export class ProjectMembersService {
     private readonly backing: ProjectBackingService,
     @Inject(TRAJECTORY_RECALCULATION)
     private readonly trajectory: TrajectoryRecalculationPort,
+    @InjectRepository(Team) private readonly teams: Repository<Team>,
+    @InjectRepository(TeamMember) private readonly teamMembers: Repository<TeamMember>,
+    @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
+
+  /** Las notificaciones nunca deshacen una operación (B16 las persiste). */
+  private async avisar(evento: Parameters<NotificationEmitter['emit']>[0]): Promise<void> {
+    try {
+      await this.notifications.emit(evento);
+    } catch {
+      // sin efecto sobre la operación
+    }
+  }
+
+  /**
+   * V3 §31: «usar uno de mis equipos». Invita a los integrantes del equipo
+   * vinculado al proyecto; cada uno acepta y confirma su propia
+   * contribución. Quien ya es integrante o tiene una invitación pendiente se
+   * salta. El rol del equipo se conserva si está en el catálogo (§30.1).
+   */
+  async inviteTeam(user: AuthenticatedUser, projectId: string): Promise<{ invitados: number; omitidos: number }> {
+    const project = await this.requireOwnedProject(user, projectId);
+    if (!project.teamId) {
+      throw new BadRequestException('El proyecto no tiene un equipo vinculado.');
+    }
+    const team = await this.teams.findOne({ where: { id: project.teamId } });
+    if (!team) throw new BadRequestException('El equipo vinculado ya no existe.');
+    const filas = await this.teamMembers.find({ where: { teamId: team.id } });
+    const perfiles = new Map<string, string | null>([[team.ownerProfileId, 'Responsable']]);
+    for (const f of filas) perfiles.set(f.studentProfileId, f.role);
+    perfiles.delete(project.createdByProfileId);
+
+    let invitados = 0;
+    let omitidos = 0;
+    for (const [profileId, rolEquipo] of perfiles) {
+      const rol = rolEquipo && (PROJECT_ROLES as readonly string[]).includes(rolEquipo) && rolEquipo !== 'Responsable'
+        ? rolEquipo
+        : 'Otro';
+      try {
+        await this.invite(user, projectId, { invitedProfileId: profileId, proposedRole: rol }, { teamId: team.id });
+        invitados += 1;
+      } catch {
+        // Ya integrante, ya invitado o cuenta inactiva: no se fuerza nada.
+        omitidos += 1;
+      }
+    }
+    return { invitados, omitidos };
+  }
 
   // ------------------------------------------------------------------
   // Envio de invitaciones (estudiante responsable)
@@ -56,6 +106,7 @@ export class ProjectMembersService {
     user: AuthenticatedUser,
     projectId: string,
     dto: InviteMemberDto,
+    origen: { teamId?: string } = {},
   ): Promise<ProjectInvitation> {
     const project = await this.requireOwnedProject(user, projectId);
 
@@ -111,7 +162,16 @@ export class ProjectMembersService {
       projectId,
       actorUserId: user.userId,
       eventType: ProjectEventType.MEMBER_INVITED,
-      metadata: { rol: invitation.proposedRole },
+      // §31: la bitácora conserva si la invitación salió de un equipo.
+      metadata: { rol: invitation.proposedRole, ...(origen.teamId ? { desdeEquipo: origen.teamId } : {}) },
+    });
+    await this.avisar({
+      userId: invited.userId,
+      kind: 'PROJECT_INVITATION',
+      title: 'Te invitaron a un proyecto',
+      body: `Te invitaron a «${project.title}» como ${invitation.proposedRole}.`,
+      link: '/student/projects',
+      dedupeKey: `project-invitation:${saved.id}`,
     });
 
     return this.findInvitationOrFail(saved.id);
@@ -303,6 +363,15 @@ export class ProjectMembersService {
     // confirmar. Hasta que el integrante la confirme, el proyecto no aporta
     // a su afinidad: nadie puede atribuirle experiencia por el.
     await this.trajectory.requestRecalculation(profile.id);
+    // V3 §30: el proyecto no se activa hasta que confirme; se le avisa.
+    await this.avisar({
+      userId,
+      kind: 'PROJECT_MEMBER_CONFIRMATION_REQUIRED',
+      title: 'Confirma tu contribución',
+      body: `Entraste a «${invitation.project.title}». Confirma qué hiciste y qué tecnologías usaste.`,
+      link: '/student/projects',
+      dedupeKey: `project-confirmation:${invitation.projectId}:${userId}`,
+    });
     return this.findInvitationOrFail(invitation.id);
   }
 

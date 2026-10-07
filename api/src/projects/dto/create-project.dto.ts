@@ -4,6 +4,7 @@ import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -54,6 +55,15 @@ export class CreateProjectDto {
   @ArrayUnique({ message: 'No repitas tecnologías.' })
   @IsUUID('4', { each: true, message: 'Elige tecnologías del catálogo.' })
   skillIds?: string[];
+
+  /**
+   * V3 §31: «usar uno de mis equipos». Con `teamId`, invita a sus
+   * integrantes; cada uno acepta y confirma su propia contribución.
+   */
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  inviteTeamMembers?: boolean;
 
   /** V3 §21.1: equipo de colaboración del que forma parte quien registra. */
   @ApiProperty({ required: false, nullable: true })

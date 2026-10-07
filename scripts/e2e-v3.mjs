@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import QRCode from 'qrcode';
 import {
-  API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, loginAdmin, provisionAndActivate,
+  API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, crearProyectoBorrador, loginAdmin, provisionAndActivate,
   githubSimuladoLog, repoDePrueba, req,
 } from './lib/fixtures.mjs';
 
@@ -1214,7 +1214,103 @@ async function batch11(ctx) {
   }
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
+// ===========================================================================
+//  BATCH 12 — Equipos y contribuciones (§30, §31)
+// ===========================================================================
+async function batch12(ctx) {
+  objective('BATCH 12 · Roles controlados, «usar uno de mis equipos», confirmación y corrección');
+  await asegurarGithubSimulado();
+  const est = async (k, nombre) => {
+    const e = await provisionAndActivate(ctx.admin, {
+      firstName: nombre, lastName: 'Equipo', email: correoEst(`b12${k}`), role: 'STUDENT', semester: 7,
+    });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const lider = await est('l', 'Lidia');
+  const uno = await est('u', 'Umberto');
+  const dos = await est('d', 'Dalia');
+  const letras = (n) => String.fromCharCode(...String(TS + n).slice(-6).split('').map((d) => 65 + Number(d)));
+
+  // ----- §31 Equipo real antes del proyecto
+  const necesidad = (await req('POST', '/team-needs', { token: lider.token, body: { purpose: `Equipo del sistema de becas ${TS}`, maxMembers: 4 } })).data;
+  const equipo = (await req('POST', `/team-needs/${necesidad.id}/team`, { token: lider.token, body: { name: `Equipo Becas ${letras(12)}` } })).data;
+  for (const m of [uno, dos]) {
+    const inv = (await req('POST', `/teams/${equipo.id}/invitations`, { token: lider.token, body: { invitedProfileId: m.profileId } })).data;
+    await req('PATCH', `/teams/invitations/${inv.id}`, { token: m.token, body: { decision: 'accept' } });
+  }
+
+  // ----- §30.1 Catálogo de roles
+  const borrador = await crearProyectoBorrador(lider.token, { title: `Sistema de becas ${TS}` });
+  const rolLibre = await req('POST', `/projects/${borrador.data.id}/invitations`, {
+    token: lider.token, body: { invitedProfileId: uno.profileId, proposedRole: 'Arquitecto galáctico' },
+  });
+  check(rolLibre.status === 400, 'V3.12.1 §30.1 El rol propuesto sale de un catálogo controlado', `status ${rolLibre.status}`);
+
+  // ----- §31 Usar uno de mis equipos
+  const catalogo = ((await req('GET', '/skills', { token: lider.token })).data ?? []).filter((s) => s.academicAreaId);
+  const sk = catalogo[0];
+  const proyecto = await req('POST', '/projects', {
+    token: lider.token,
+    body: {
+      title: `Portal de becas ${TS}`, areaIds: [sk.academicAreaId], skillIds: [sk.id],
+      repositoryUrl: repoDePrueba(`becas-${TS}`), teamId: equipo.id, inviteTeamMembers: true, status: 'draft',
+    },
+  });
+  check(proyecto.status === 201 && proyecto.data?.teamId === equipo.id, 'V3.12.2 §31 Se crea el proyecto con uno de mis equipos', json({ s: proyecto.status }));
+  const id = proyecto.data.id;
+  const invitaciones = (await req('GET', `/projects/${id}/invitations`, { token: lider.token })).data ?? [];
+  const pendientes = invitaciones.filter((i) => i.status === 'pending');
+  check(pendientes.length === 2 && pendientes.every((i) => i.proposedRole === 'Otro'),
+    'V3.12.3 §31 Se precargan los integrantes del equipo como invitaciones (sin el responsable)', json(invitaciones.map((i) => [i.status, i.proposedRole])));
+  const bitacora = (await req('GET', `/projects/${id}/timeline`, { token: lider.token })).data ?? [];
+  check(bitacora.filter((e) => e.eventType === 'member_invited').length === 2
+    && bitacora.filter((e) => e.eventType === 'member_invited').every((e) => e.metadata?.desdeEquipo === equipo.id),
+  'V3.12.4 §31 La bitácora conserva que las invitaciones salieron del equipo', json(bitacora.map((e) => e.eventType)));
+  const otraVez = await req('POST', `/projects/${id}/invite-team`, { token: lider.token });
+  check(otraVez.status === 201 && otraVez.data?.invitados === 0 && otraVez.data?.omitidos === 2,
+    'V3.12.5 Repetirlo no duplica invitaciones', json(otraVez.data));
+  const ajeno = await req('POST', `/projects/${id}/invite-team`, { token: uno.token });
+  check(ajeno.status === 403, 'V3.12.6 Solo el responsable invita al equipo', `status ${ajeno.status}`);
+
+  // ----- §30 Confirmación individual
+  await req('POST', `/projects/${id}/evidences`, { token: lider.token, body: { evidenceType: 'link', externalUrl: 'https://capturas.example.org/becas.png', description: 'Captura.' } });
+  const codigos = async () => ((await req('GET', `/projects/${id}/readiness`, { token: lider.token })).data?.missing ?? []).map((m) => m.code);
+  check((await codigos()).includes('members_pending'), 'V3.12.7 §30 Mientras no respondan, no se activa');
+  const mias = async (m) => (await req('GET', '/projects/invitations/mine', { token: m.token })).data ?? [];
+  for (const m of [uno, dos]) {
+    const suya = (await mias(m)).find((i) => (i.projectId ?? i.project?.id) === id && i.status === 'pending');
+    await req('PATCH', `/projects/invitations/${suya.id}`, { token: m.token, body: { decision: 'accept' } });
+  }
+  check((await codigos()).includes('members_unconfirmed'), 'V3.12.8 §30 Aceptar no basta: cada uno confirma su contribución');
+
+  const rolMalo = await req('PUT', `/projects/${id}/my-contribution`, { token: uno.token, body: { role: 'Mago', contribution: 'Todo.' } });
+  check(rolMalo.status === 400, 'V3.12.9 §30.1 Al confirmar, el rol también es del catálogo', `status ${rolMalo.status}`);
+  await req('PUT', `/projects/${id}/my-contribution`, { token: uno.token, body: { role: 'Backend', contribution: 'Implementé la API de postulaciones.', skillIds: [sk.id] } });
+
+  // ----- §30 Corrección
+  const detallados = (await req('GET', `/projects/${id}/members/detailed`, { token: lider.token })).data ?? [];
+  const deDos = detallados.find((m) => m.userId === dos.userId);
+  await req('PATCH', `/projects/${id}/members/${deDos.id}/contribution`, { token: lider.token, body: { contribution: 'Hizo todo el backend.', role: 'Backend' } });
+  const corta = await req('POST', `/projects/${id}/my-contribution/correction`, { token: dos.token, body: { note: 'no' } });
+  check(corta.status === 400, 'V3.12.10 §30 Pedir una corrección exige explicar qué', `status ${corta.status}`);
+  const correccion = await req('POST', `/projects/${id}/my-contribution/correction`, {
+    token: dos.token, body: { note: 'No hice el backend: me encargué de las pruebas y la documentación.' },
+  });
+  check(correccion.status === 201 && correccion.data?.contributionConfirmed === false,
+    'V3.12.11 §30 El integrante pide corregir lo que le propusieron; queda sin confirmar', json(correccion.data));
+  const bit2 = (await req('GET', `/projects/${id}/timeline`, { token: lider.token })).data ?? [];
+  check(bit2.some((e) => e.eventType === 'contribution_correction_requested'), 'V3.12.12 §39 La corrección queda en la bitácora');
+  const delLider = await req('POST', `/projects/${id}/my-contribution/correction`, { token: lider.token, body: { note: 'Quiero corregirme a mí mismo.' } });
+  check(delLider.status === 400, 'V3.12.13 El responsable edita su contribución directamente', `status ${delLider.status}`);
+  check((await codigos()).includes('members_unconfirmed'), 'V3.12.14 §30 Con una corrección pendiente, el proyecto no se activa');
+
+  await req('PUT', `/projects/${id}/my-contribution`, { token: dos.token, body: { role: 'QA', contribution: 'Escribí las pruebas y la documentación.', skillIds: [sk.id] } });
+  const activo = await req('PATCH', `/projects/${id}`, { token: lider.token, body: { status: 'active' } });
+  check(activo.status === 200 && activo.data?.status === 'active', 'V3.12.15 §30 Cuando todos confirman, se activa', json({ s: activo.status, c: activo.data?.code }));
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

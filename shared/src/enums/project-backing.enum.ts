@@ -84,6 +84,8 @@ export enum ProjectEventType {
   PROJECT_ARCHIVED = 'project_archived',
   /** V3 §22: pasó a ACTIVE cumpliendo los requisitos. */
   PROJECT_ACTIVATED = 'project_activated',
+  /** V3 §30: el integrante pide corregir lo que le propusieron. */
+  CONTRIBUTION_CORRECTION_REQUESTED = 'contribution_correction_requested',
   BACKING_TIER_CHANGED = 'backing_tier_changed',
 }
 
@@ -103,5 +105,25 @@ export const PROJECT_EVENT_LABEL: Record<ProjectEventType, string> = {
   [ProjectEventType.PROJECT_VISIBILITY_CHANGED]: 'Visibilidad cambiada',
   [ProjectEventType.PROJECT_ARCHIVED]: 'Proyecto archivado',
   [ProjectEventType.PROJECT_ACTIVATED]: 'Proyecto activado',
+  [ProjectEventType.CONTRIBUTION_CORRECTION_REQUESTED]: 'Corrección de contribución pedida',
   [ProjectEventType.BACKING_TIER_CHANGED]: 'Nivel de respaldo recalculado',
 };
+
+/**
+ * Roles de proyecto (V3 §30.1): catálogo controlado y amigable. El rol
+ * describe; nunca es fuente de afinidad (lo son las skills corroboradas).
+ */
+export const PROJECT_ROLES = [
+  'Responsable',
+  'Frontend',
+  'Backend',
+  'Base de Datos',
+  'Mobile',
+  'QA',
+  'UX/UI',
+  'DevOps',
+  'Datos/IA',
+  'Documentación',
+  'Otro',
+] as const;
+export type ProjectRole = (typeof PROJECT_ROLES)[number];

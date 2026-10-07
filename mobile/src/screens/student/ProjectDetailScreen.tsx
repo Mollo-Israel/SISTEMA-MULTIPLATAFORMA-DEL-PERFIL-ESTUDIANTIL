@@ -47,13 +47,10 @@ const INVITATION_LABEL: Record<string, string> = {
   cancelled: 'Cancelada',
 };
 
+/** V3 §30.1: catálogo controlado de roles de proyecto. */
 const ROLE_SUGGESTIONS = [
-  'Desarrollador Backend',
-  'Desarrollador Frontend',
-  'Diseñador UX',
-  'Analista',
-  'Tester',
-  'Líder Técnico',
+  'Responsable', 'Frontend', 'Backend', 'Base de Datos', 'Mobile', 'QA',
+  'UX/UI', 'DevOps', 'Datos/IA', 'Documentación', 'Otro',
 ];
 
 /**
@@ -541,12 +538,18 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
             placeholder="Implementé la API de inscripciones."
             multiline
           />
-          <Field
-            label="Tu rol"
-            value={contribForm.role}
-            onChangeText={(t) => setContribForm({ ...contribForm, role: t })}
-            placeholder="Backend"
-          />
+          <Text style={styles.label}>Tu rol</Text>
+          <View style={styles.chips}>
+            {ROLE_SUGGESTIONS.filter((r) => r !== 'Responsable').map((r) => (
+              <Pressable
+                key={r}
+                onPress={() => setContribForm({ ...contribForm, role: r })}
+                style={[styles.chip, contribForm.role === r && styles.chipOn]}
+              >
+                <Text style={contribForm.role === r ? styles.chipOnText : styles.chipText}>{r}</Text>
+              </Pressable>
+            ))}
+          </View>
 
           <Text style={styles.label}>Tecnologías que usaste tú</Text>
           <Muted>
@@ -657,12 +660,6 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
                 </Pressable>
               ))}
             </View>
-            <Field
-              label="O escribe un rol"
-              value={role}
-              onChangeText={setRole}
-              placeholder="Desarrollador Backend"
-            />
             <Button
               title={inviting ? 'Enviando…' : 'Enviar invitación'}
               onPress={sendInvite}

@@ -763,6 +763,9 @@ export const projectDetailService = {
     .then((r) => r.data),
   checks: (projectId: string) =>
     api.get<ProjectChecks>(`/projects/${projectId}/checks`).then((r) => r.data),
+  /** V3 §30: el integrante pide corregir lo que le propusieron. */
+  requestCorrection: (projectId: string, note: string) =>
+    api.post(`/projects/${projectId}/my-contribution/correction`, { note }).then((r) => r.data),
   recheck: (projectId: string) =>
     api.post<ProjectChecks>(`/projects/${projectId}/checks/recheck`).then((r) => r.data),
   timeline: (projectId: string) =>

@@ -29,6 +29,7 @@ import { Team, TeamMember } from '../entities/collaboration.entity';
 import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { Readiness, projectReadiness } from './project-readiness.rules';
+import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { Skill } from '../entities/skill.entity';
 import {
   ProjectLinkCheck,
@@ -97,6 +98,7 @@ export class ProjectsService {
     @InjectRepository(Team) private readonly teams: Repository<Team>,
     @InjectRepository(TeamMember) private readonly teamMembers: Repository<TeamMember>,
     private readonly audit: AuditService,
+    @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
 
   /** Áreas pedidas: `areaIds`, o el `areaId` de antes. `undefined` si no se tocan. */
@@ -770,6 +772,14 @@ export class ProjectsService {
     if (dto.role !== undefined) member.role = dto.role ?? null;
     member.contributionConfirmedAt = null;
     await this.members.save(member);
+    await this.avisar({
+      userId: member.userId,
+      kind: 'PROJECT_CONTRIBUTION_CHANGED',
+      title: 'Revisa tu contribución',
+      body: `El responsable de «${project.title}» propuso cambios en tu contribución. Confírmala o pide una corrección.`,
+      link: '/student/projects',
+      dedupeKey: `project-contribution-changed:${member.id}:${Date.now()}`,
+    });
 
     await this.events.record({
       projectId,
@@ -779,6 +789,51 @@ export class ProjectsService {
     });
 
     return this.memberView(member.id);
+  }
+
+  /**
+   * V3 §30: el integrante no está de acuerdo con lo que le propusieron y
+   * pide corregirlo. Su contribución queda sin confirmar —así el proyecto no
+   * se activa con información que él no reconoce— y se avisa al responsable.
+   */
+  async requestCorrection(userId: string, projectId: string, note: string) {
+    const project = await this.findOneOrFail(projectId);
+    const member = await this.members.findOne({ where: { projectId, userId } });
+    if (!member) throw new NotFoundException('No eres integrante aceptado de este proyecto.');
+    if (member.isOwner) {
+      throw new BadRequestException('Como responsable, tu contribución la editas tú directamente.');
+    }
+    member.contributionConfirmedAt = null;
+    await this.members.save(member);
+    await this.events.record({
+      projectId,
+      actorUserId: userId,
+      eventType: ProjectEventType.CONTRIBUTION_CORRECTION_REQUESTED,
+      metadata: { memberId: member.id, nota: note },
+    });
+    const responsable = project.createdByProfile?.userId;
+    if (responsable) {
+      await this.avisar({
+        userId: responsable,
+        kind: 'PROJECT_CONTRIBUTION_CORRECTION_REQUESTED',
+        title: 'Un integrante pide corregir su contribución',
+        body: `En «${project.title}»: ${note}`,
+        link: '/student/projects',
+        dedupeKey: `project-correction:${member.id}:${Date.now()}`,
+      });
+    }
+    const profile = await this.profiles.findOne({ where: { userId } });
+    if (profile) await this.trajectory.requestRecalculation(profile.id);
+    return this.memberView(member.id);
+  }
+
+  /** Las notificaciones nunca deshacen una operación (B16 las persiste). */
+  private async avisar(evento: Parameters<NotificationEmitter['emit']>[0]): Promise<void> {
+    try {
+      await this.notifications.emit(evento);
+    } catch {
+      // sin efecto sobre la operación
+    }
   }
 
   /** Integrantes con su contribución, sus tecnologías y si están confirmadas. */

@@ -661,6 +661,12 @@ export interface Project {
   teamId?: string | null;
 }
 
+/** V3 §30.1: catálogo controlado de roles de proyecto. */
+export const PROJECT_ROLES = [
+  'Responsable', 'Frontend', 'Backend', 'Base de Datos', 'Mobile', 'QA',
+  'UX/UI', 'DevOps', 'Datos/IA', 'Documentación', 'Otro',
+] as const;
+
 /** V3 §40: de más cerrado a más abierto. */
 export type ProjectVisibility = 'private' | 'team' | 'teachers' | 'profile' | 'public_link';
 

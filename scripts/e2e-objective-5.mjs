@@ -363,7 +363,7 @@ async function rf14(ctx) {
   section('Envio de la invitacion');
   const selfInvite = await req('POST', `/projects/${projectId}/invitations`, {
     token: A.token,
-    body: { invitedProfileId: A.profileId, proposedRole: 'Líder Técnico' },
+    body: { invitedProfileId: A.profileId, proposedRole: 'Responsable' },
   });
   check(selfInvite.status === 400, '14.1 El responsable NO se invita a si mismo -> 400', `status ${selfInvite.status}`);
 
@@ -375,28 +375,28 @@ async function rf14(ctx) {
 
   const invite = await req('POST', `/projects/${projectId}/invitations`, {
     token: A.token,
-    body: { invitedProfileId: B.profileId, proposedRole: 'Desarrollador Backend' },
+    body: { invitedProfileId: B.profileId, proposedRole: 'Backend' },
   });
   check(invite.status === 201, '14.3 El responsable invita a otro estudiante', msgOf(invite));
   check(invite.data?.status === 'pending', '14.4 La invitacion nace PENDIENTE');
-  check(invite.data?.proposedRole === 'Desarrollador Backend', '14.5 El rol propuesto queda registrado');
+  check(invite.data?.proposedRole === 'Backend', '14.5 El rol propuesto queda registrado');
   const invitationId = invite.data?.id;
 
   const duplicate = await req('POST', `/projects/${projectId}/invitations`, {
     token: A.token,
-    body: { invitedProfileId: B.profileId, proposedRole: 'Tester' },
+    body: { invitedProfileId: B.profileId, proposedRole: 'QA' },
   });
   check(duplicate.status === 409, '14.6 Invitacion pendiente duplicada -> 409', `status ${duplicate.status}`);
 
   const notAStudent = await req('POST', `/projects/${projectId}/invitations`, {
     token: A.token,
-    body: { invitedProfileId: '00000000-0000-0000-0000-000000000000', proposedRole: 'Analista' },
+    body: { invitedProfileId: '00000000-0000-0000-0000-000000000000', proposedRole: 'Datos/IA' },
   });
   check(notAStudent.status === 400, '14.7 Invitar a un perfil inexistente -> 400');
 
   const foreignInvite = await req('POST', `/projects/${projectId}/invitations`, {
     token: C.token,
-    body: { invitedProfileId: B.profileId, proposedRole: 'Tester' },
+    body: { invitedProfileId: B.profileId, proposedRole: 'QA' },
   });
   check(
     foreignInvite.status === 403,
@@ -421,7 +421,7 @@ async function rf14(ctx) {
   check(inbox.status === 200 && inbox.data.some((i) => i.id === invitationId), '14.11 El invitado ve su invitacion');
   const own = inbox.data.find((i) => i.id === invitationId);
   check(own?.project?.title?.includes('IoT'), '14.12 La invitacion muestra la informacion del proyecto');
-  check(own?.proposedRole === 'Desarrollador Backend', '14.13 La invitacion muestra el rol propuesto');
+  check(own?.proposedRole === 'Backend', '14.13 La invitacion muestra el rol propuesto');
 
   const otherAccepts = await req('PATCH', `/projects/invitations/${invitationId}`, {
     token: C.token,
@@ -436,7 +436,7 @@ async function rf14(ctx) {
   section('Rechazo: no genera pertenencia');
   const inviteC = await req('POST', `/projects/${projectId}/invitations`, {
     token: A.token,
-    body: { invitedProfileId: C.profileId, proposedRole: 'Analista' },
+    body: { invitedProfileId: C.profileId, proposedRole: 'Datos/IA' },
   });
   const rejected = await req('PATCH', `/projects/invitations/${inviteC.data?.id}`, {
     token: C.token,
@@ -473,7 +473,7 @@ async function rf14(ctx) {
   const membersAfter = await req('GET', `/projects/${projectId}/members`, { token: A.token });
   check(integrantes(membersAfter.data).length === 1, '14.20 Se crea el integrante al aceptar');
   check(
-    integrantes(membersAfter.data)[0]?.role === 'Desarrollador Backend',
+    integrantes(membersAfter.data)[0]?.role === 'Backend',
     '14.21 El rol propuesto queda persistido en la pertenencia',
   );
 
@@ -481,11 +481,11 @@ async function rf14(ctx) {
   const sharedEntry = portfolioBAfter.data.find((p) => p.id === projectId);
   check(!!sharedEntry, '14.22 El proyecto aparece en el portafolio del nuevo integrante');
   check(sharedEntry?.isOwner === false, '14.23 Se distingue como proyecto colaborativo, no propio');
-  check(sharedEntry?.myRole === 'Desarrollador Backend', '14.24 El portafolio muestra su rol');
+  check(sharedEntry?.myRole === 'Backend', '14.24 El portafolio muestra su rol');
 
   const inviteAgain = await req('POST', `/projects/${projectId}/invitations`, {
     token: A.token,
-    body: { invitedProfileId: B.profileId, proposedRole: 'Tester' },
+    body: { invitedProfileId: B.profileId, proposedRole: 'QA' },
   });
   check(
     inviteAgain.status === 409,

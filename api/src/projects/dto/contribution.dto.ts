@@ -1,3 +1,4 @@
+import { PROJECT_ROLES } from '@perfil/shared';
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
@@ -7,8 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  MaxLength,
-} from 'class-validator';
+  MaxLength, IsIn, MinLength } from 'class-validator';
 import { cleanLine, cleanText } from '../../common/validation';
 
 /**
@@ -29,8 +29,7 @@ export class ConfirmContributionDto {
   @ApiProperty({ required: false, example: 'Frontend' })
   @IsOptional()
   @Transform(cleanLine)
-  @IsString()
-  @MaxLength(80, { message: 'El rol no puede superar 80 caracteres.' })
+  @IsIn([...PROJECT_ROLES], { message: `El rol debe ser uno de: ${PROJECT_ROLES.join(', ')}.` })
   role?: string;
 
   @ApiProperty({
@@ -63,7 +62,16 @@ export class ProposeContributionDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @Transform(cleanLine)
-  @IsString()
-  @MaxLength(80, { message: 'El rol no puede superar 80 caracteres.' })
+  @IsIn([...PROJECT_ROLES], { message: `El rol debe ser uno de: ${PROJECT_ROLES.join(', ')}.` })
   role?: string;
+}
+
+/** V3 §30: el integrante pide corregir lo que le propusieron. */
+export class RequestCorrectionDto {
+  @ApiProperty({ example: 'No hice el backend: me encargué de las pruebas.' })
+  @Transform(cleanText)
+  @IsString()
+  @MinLength(10, { message: 'Explica qué hay que corregir (al menos 10 caracteres).' })
+  @MaxLength(500, { message: 'La nota no puede superar 500 caracteres.' })
+  note: string;
 }

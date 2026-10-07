@@ -417,3 +417,34 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 79/79; `e2e-v3` 183 (B11 17/17). Regresión completa: 1608 correctas y 1 fallo en V3.11.15 por tiempo de la prueba (esperaba 2,6 s y el reinicio simulado de la cuota puede llegar a 3 s); corregida la espera a 3,6 s y repetida dos veces sin fallos. Total efectivo **1609/0**.
 
 **Pendientes:** estado por skill con CORROBORATED_BY_ACADEMIC_REVIEW y regla de CORROBORATED del proyecto (B13).
+
+---
+
+## BATCH 12 — Equipos y contribuciones
+
+**ESTADO:** completo
+
+**Objetivo:** confirmación individual de contribuciones con roles controlados, uso de un equipo al crear el proyecto y avisos de confirmación requerida (§30, §31).
+
+**Hallazgos iniciales:**
+- El rol era texto libre («Desarrollador Backend», «Líder Técnico»…).
+- No había forma de usar un equipo de colaboración al crear un proyecto.
+- El integrante solo podía confirmar o editar; no había forma de pedir al responsable que corrigiera lo que le propuso.
+- El bloqueo de la activación hasta que todos confirmen ya estaba en los requisitos de B10.
+
+**Cambios:**
+- **Roles (§30.1):** catálogo `PROJECT_ROLES` en `shared` (Responsable, Frontend, Backend, Base de Datos, Mobile, QA, UX/UI, DevOps, Datos/IA, Documentación, Otro). Se exige al invitar, al proponer y al confirmar. Los roles ya guardados se conservan. El rol no es fuente de afinidad.
+- **«Usar uno de mis equipos» (§31):** al crear el proyecto con `teamId` e `inviteTeamMembers`, o después con `POST /projects/:id/invite-team`, se invita a los integrantes del equipo (sin el responsable). Se conserva su rol de equipo si está en el catálogo; si no, «Otro». Quien ya es integrante o tiene invitación pendiente se omite, así que repetirlo no duplica. La bitácora registra `desdeEquipo`. Cada integrante acepta y confirma su contribución.
+- **Corrección (§30):** `POST /projects/:id/my-contribution/correction` con una nota (al menos 10 caracteres). Deja la contribución sin confirmar —el proyecto no se activa con información que el integrante no reconoce—, queda en la bitácora (`contribution_correction_requested`) y se avisa al responsable. El responsable edita la suya directamente.
+- **Avisos (punto de emisión para B16):** invitación a proyecto, `PROJECT_MEMBER_CONFIRMATION_REQUIRED` al aceptar, `PROJECT_CONTRIBUTION_CHANGED` cuando el responsable propone cambios, y corrección pedida.
+- **Web:** el rol se elige del catálogo; botón «Pedir corrección al responsable»; al elegir un equipo en el alta, opción «Invitar a los integrantes del equipo». **Móvil:** roles del catálogo al invitar y al confirmar.
+
+**Migraciones:** `1780550000000-V3ProjectTeams` (evento `contribution_correction_requested`). `up` → `down` → `up` probado.
+
+**Pruebas ejecutadas:** `e2e-v3 batch12` (V3.12.1–V3.12.15); suites con roles libres adaptadas al catálogo (`e2e-objective-5`: «Desarrollador Backend» → «Backend», «Tester» → «QA», «Analista» → «Datos/IA», «Líder Técnico» → «Responsable»; `e2e-objective-7`); regresión completa.
+
+**Riesgos:** ninguno nuevo.
+
+**Resultados:** unitarias 79/79; `e2e-v3` 198 (B12 15/15). Regresión completa: 19 suites sin fallos; en `e2e-v3` el observador de la API de desarrollo se reinició a mitad de la suite (no hubo cambios en `api/src`; solo escrituras del buzón de correo simulado) y las secciones 6 a 12 no pudieron conectar. Repetida sola: 198/198. Total efectivo **1624/0**.
+
+**Pendientes:** regla de CORROBORATED del proyecto y estado por skill (B13).

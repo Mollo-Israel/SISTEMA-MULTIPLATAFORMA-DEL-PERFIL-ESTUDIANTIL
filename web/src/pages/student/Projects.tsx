@@ -69,6 +69,7 @@ const emptyForm = {
   demoUrl: '',
   visibility: 'profile' as ProjectVisibility,
   teamId: '',
+  inviteTeamMembers: true,
 };
 const VISIBILIDADES = Object.keys(PROJECT_VISIBILITY_LABEL) as ProjectVisibility[];
 
@@ -175,6 +176,7 @@ export default function StudentProjectsPage() {
         demoUrl: form.demoUrl || undefined,
         visibility: form.visibility,
         teamId: form.teamId || undefined,
+        inviteTeamMembers: form.teamId ? form.inviteTeamMembers : undefined,
         status: 'draft',
       });
       setForm(emptyForm);
@@ -318,6 +320,16 @@ export default function StudentProjectsPage() {
                 <option value="">Sin equipo</option>
                 {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
+              {form.teamId && (
+                <label className="check-line" style={{ marginTop: '0.4rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.inviteTeamMembers}
+                    onChange={(e) => setForm({ ...form, inviteTeamMembers: e.target.checked })}
+                  />
+                  Invitar a los integrantes del equipo (cada uno acepta y confirma su contribución)
+                </label>
+              )}
             </div>
           )}
           <Button type="submit" loading={creating} icon={<FiPlus size={15} />}>

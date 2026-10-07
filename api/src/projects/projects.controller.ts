@@ -24,8 +24,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddEvidenceDto } from './dto/add-evidence.dto';
 import {
   ConfirmContributionDto,
-  ProposeContributionDto,
-} from './dto/contribution.dto';
+  ProposeContributionDto, RequestCorrectionDto } from './dto/contribution.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { InviteMemberDto, RespondInvitationDto } from './dto/invite-member.dto';
 
@@ -49,8 +48,32 @@ export class ProjectsController {
   @Post()
   @Roles(RolNombre.STUDENT)
   @ApiOperation({ summary: 'Registrar un proyecto en el portafolio.' })
-  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateProjectDto) {
-    return this.projectsService.create(user.userId, dto);
+  async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateProjectDto) {
+    const { inviteTeamMembers, ...datos } = dto;
+    const creado = await this.projectsService.create(user.userId, datos);
+    // V3 §31: «usar uno de mis equipos» precarga las invitaciones.
+    if (inviteTeamMembers && creado.teamId) {
+      await this.membersService.inviteTeam(user, creado.id);
+    }
+    return creado;
+  }
+
+  @Post(':id/invite-team')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Invita a los integrantes del equipo vinculado (V3 §31).' })
+  inviteTeam(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.membersService.inviteTeam(user, id);
+  }
+
+  @Post(':id/my-contribution/correction')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'El integrante pide corregir lo que le propusieron (V3 §30).' })
+  requestCorrection(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestCorrectionDto,
+  ) {
+    return this.projectsService.requestCorrection(user.userId, id, dto.note);
   }
 
   @Patch(':id')
