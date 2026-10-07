@@ -327,11 +327,34 @@ export interface TeamNeedView {
   status: 'open' | 'closed';
   maxMembers: number;
   availabilityRequirement: string;
+  /** V3 §55: semestres que pueden verla y postular. Vacío = cualquiera. */
+  targetSemesters: number[];
   isOwner: boolean;
   owner: { profileId: string; name: string };
+  /** Solo en las abiertas: cupos que quedan, si ya está dentro y su postulación. */
+  openings?: number;
+  isMember?: boolean;
+  myApplication?: { id: string; status: TeamApplicationStatus } | null;
   requiredSkills: { skillId: string; name: string | null }[];
   preferredAreas: { academicAreaId: string; name: string | null }[];
   createdAt: string;
+}
+
+export type TeamApplicationStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
+
+/** V3 §55: una postulación, vista por quien postuló o por el responsable. */
+export interface TeamApplicationView {
+  id: string;
+  status: TeamApplicationStatus;
+  message: string | null;
+  rejectionReason: string | null;
+  rejectionReasonLabel: string | null;
+  rejectionComment: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+  need: { id: string; purpose: string; status: string; owner: string | null } | null;
+  applicant?: { profileId: string; name: string; semester: number | null; availability: string | null };
+  coversSkills?: { skillId: string; name: string }[];
 }
 
 export interface TeamSuggestionsView {
@@ -410,6 +433,16 @@ export const collaborationService = {
   myTeamInvitations: () => api.get<any[]>('/teams/invitations/mine').then((r) => r.data),
   decideTeamInvitation: (id: string, decision: 'accept' | 'decline') =>
     api.patch(`/teams/invitations/${id}`, { decision }).then((r) => r.data),
+
+  // V3 §31, §55 · postulaciones
+  applyToNeed: (needId: string, message?: string) =>
+    api.post<TeamApplicationView>(`/team-needs/${needId}/applications`, { message: message || undefined }).then((r) => r.data),
+  applicationsForNeed: (needId: string) =>
+    api.get<TeamApplicationView[]>(`/team-needs/${needId}/applications`).then((r) => r.data),
+  myApplications: () => api.get<TeamApplicationView[]>('/team-applications/mine').then((r) => r.data),
+  decideApplication: (id: string, body: { decision: 'accept' | 'reject'; reason?: string; comment?: string }) =>
+    api.patch(`/team-applications/${id}`, body).then((r) => r.data),
+  withdrawApplication: (id: string) => api.delete(`/team-applications/${id}`).then((r) => r.data),
 
   // V2 §59 y §56 (el chat se retiró, §57)
   myChannels: () => api.get<ContactChannelView[]>('/profiles/me/contact-channels').then((r) => r.data),

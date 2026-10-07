@@ -25,10 +25,13 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { PublicProfileService } from './public-profile.service';
 import { ContactsService } from './contacts.service';
 import { TeamsService } from './teams.service';
+import { TeamApplicationsService } from './team-applications.service';
 import {
   CreateContactRequestDto,
   CreateTeamDto,
   CreateTeamNeedDto,
+  ApplyToTeamNeedDto,
+  DecideTeamApplicationDto,
   DecideContactRequestDto,
   DecideTeamInvitationDto,
   ContactNoteDto,
@@ -56,6 +59,7 @@ export class CollaborationController {
     private readonly publicProfiles: PublicProfileService,
     private readonly contacts: ContactsService,
     private readonly teams: TeamsService,
+    private readonly applications: TeamApplicationsService,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
   ) {}
 
@@ -245,6 +249,65 @@ export class CollaborationController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.teams.suggestions(await this.profileId(user), id);
+  }
+
+  // V3 §31, §55 · Postulaciones ----------------------------------------------
+
+  @ApiBearerAuth()
+  @Post('team-needs/:id/applications')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Postula a una necesidad abierta para tu semestre (V3 §55).' })
+  async apply(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApplyToTeamNeedDto,
+  ) {
+    return this.applications.apply(await this.profileId(user), id, dto.message);
+  }
+
+  @ApiBearerAuth()
+  @Get('team-needs/:id/applications')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Postulaciones a una necesidad propia, con lo que cada una cubre.' })
+  async applicationsForNeed(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.applications.forNeed(await this.profileId(user), id);
+  }
+
+  @ApiBearerAuth()
+  @Get('team-applications/mine')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Mis postulaciones y su respuesta.' })
+  async myApplications(@CurrentUser() user: AuthenticatedUser) {
+    return this.applications.mine(await this.profileId(user));
+  }
+
+  @ApiBearerAuth()
+  @Patch('team-applications/:id')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'El responsable acepta o rechaza una postulación (V3 §55).',
+    description: 'Rechazar exige un motivo predefinido; «other» exige además un comentario breve.',
+  })
+  async decideApplication(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DecideTeamApplicationDto,
+  ) {
+    return this.applications.decide(await this.profileId(user), id, dto);
+  }
+
+  @ApiBearerAuth()
+  @Delete('team-applications/:id')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Retira una postulación propia pendiente.' })
+  async withdrawApplication(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.applications.withdraw(await this.profileId(user), id);
   }
 
   @ApiBearerAuth()

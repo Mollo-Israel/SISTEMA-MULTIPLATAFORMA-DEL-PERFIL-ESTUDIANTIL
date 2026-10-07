@@ -37,6 +37,8 @@ import {
   TeamNeedSkill,
 } from '../entities/collaboration.entity';
 import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
+import { TeamApplication } from '../entities/collaboration.entity';
+import { semestreElegible } from './team-need.rules';
 
 /** Cuántos candidatos se devuelven como máximo. */
 const MAX_SUGERENCIAS = 10;
@@ -70,6 +72,7 @@ export class TeamsService {
     @InjectRepository(TeamMember) private readonly members: Repository<TeamMember>,
     @InjectRepository(TeamInvitation)
     private readonly invitations: Repository<TeamInvitation>,
+    @InjectRepository(TeamApplication) private readonly applications: Repository<TeamApplication>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(AffinityResult) private readonly affinities: Repository<AffinityResult>,
     private readonly backedSkills: BackedSkillsService,
@@ -140,6 +143,7 @@ export class TeamsService {
       availabilityRequirement?: AvailabilityRequirement;
       requiredSkillIds?: string[];
       preferredAreaIds?: string[];
+      targetSemesters?: number[];
     },
   ) {
     // V3 §4: cada habilidad que falta pertenece a una de las áreas elegidas.
@@ -153,6 +157,7 @@ export class TeamsService {
         activityId: dto.activityId ?? null,
         maxMembers: dto.maxMembers ?? 5,
         availabilityRequirement: dto.availabilityRequirement ?? AvailabilityRequirement.ANY,
+        targetSemesters: [...(dto.targetSemesters ?? [])].sort((a, b) => a - b),
         status: TeamNeedStatus.OPEN,
       }),
     );
@@ -172,6 +177,7 @@ export class TeamsService {
       status?: TeamNeedStatus;
       requiredSkillIds?: string[];
       preferredAreaIds?: string[];
+      targetSemesters?: number[];
     },
   ) {
     const need = await this.ownNeed(ownerProfileId, needId);
@@ -193,6 +199,7 @@ export class TeamsService {
       need.availabilityRequirement = dto.availabilityRequirement;
     }
     if (dto.status !== undefined) need.status = dto.status;
+    if (dto.targetSemesters !== undefined) need.targetSemesters = [...dto.targetSemesters].sort((a, b) => a - b);
     await this.needs.save(need);
 
     if (dto.requiredSkillIds !== undefined) {
@@ -204,9 +211,13 @@ export class TeamsService {
     return this.findNeed(need.id, ownerProfileId);
   }
 
-  /** Las necesidades abiertas de la carrera, para quien busca a qué sumarse. */
+  /**
+   * Las necesidades abiertas para el semestre del estudiante (V3 §55), con su
+   * postulación si ya tiene una y los cupos que quedan.
+   */
   async openNeeds(studentProfileId: string) {
-    const filas = await this.needs.find({
+    const yo = await this.profiles.findOne({ where: { id: studentProfileId }, select: { id: true, semester: true } });
+    const todas = await this.needs.find({
       where: { status: TeamNeedStatus.OPEN },
       relations: {
         owner: { user: true },
@@ -214,9 +225,30 @@ export class TeamsService {
         preferredAreas: { academicArea: true },
       },
       order: { createdAt: 'DESC' },
-      take: 50,
+      take: 100,
     });
-    return filas.map((n) => this.vistaNecesidad(n, n.ownerProfileId === studentProfileId));
+    const filas = todas
+      .filter((n) => n.ownerProfileId === studentProfileId || semestreElegible(n.targetSemesters, yo?.semester))
+      .slice(0, 50);
+    if (filas.length === 0) return [];
+    const ids = filas.map((n) => n.id);
+    const [mias, equipos] = await Promise.all([
+      this.applications.find({ where: { applicantProfileId: studentProfileId, teamNeedId: In(ids) } }),
+      this.teams.find({ where: { teamNeedId: In(ids) }, relations: { members: true } }),
+    ]);
+    const miaDe = new Map(mias.map((a) => [a.teamNeedId, a]));
+    const equipoDe = new Map(equipos.map((t) => [t.teamNeedId!, t]));
+    return filas.map((n) => {
+      const equipo = equipoDe.get(n.id);
+      const mia = miaDe.get(n.id);
+      const dentro = equipo?.members?.length ?? 1;
+      return {
+        ...this.vistaNecesidad(n, n.ownerProfileId === studentProfileId),
+        openings: Math.max(0, n.maxMembers - dentro),
+        isMember: !!equipo?.members?.some((m) => m.studentProfileId === studentProfileId),
+        myApplication: mia ? { id: mia.id, status: mia.status } : null,
+      };
+    });
   }
 
   async myNeeds(ownerProfileId: string) {
@@ -307,6 +339,10 @@ export class TeamsService {
       .where('p.peer_discoverable = true')
       .andWhere('u.status = :activo', { activo: UserStatus.ACTIVE })
       .andWhere('p.id NOT IN (:...dentro)', { dentro: [...dentro] })
+      // V3 §56: solo quien cursa un semestre objetivo, si la necesidad los fija.
+      .andWhere(need.targetSemesters?.length ? 'p.semester IN (:...semestres)' : '1 = 1', {
+        semestres: need.targetSemesters?.length ? need.targetSemesters : [0],
+      })
       .getRawMany<{
         profileId: string;
         semester: number | null;
@@ -762,6 +798,7 @@ export class TeamsService {
       status: need.status,
       maxMembers: need.maxMembers,
       availabilityRequirement: need.availabilityRequirement,
+      targetSemesters: (need.targetSemesters ?? []).map(Number),
       projectId: need.projectId,
       activityId: need.activityId,
       isOwner: esPropia,

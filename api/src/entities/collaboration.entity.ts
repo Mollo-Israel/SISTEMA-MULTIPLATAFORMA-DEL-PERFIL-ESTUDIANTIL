@@ -16,6 +16,7 @@ import {
   ContactRequestStatus,
   ContactSource,
   ConversationKind,
+  TeamApplicationStatus,
   TeamInvitationStatus,
   TeamNeedStatus,
   TeamStatus,
@@ -172,6 +173,10 @@ export class TeamNeed {
 
   @Column({ name: 'max_members', type: 'smallint', default: 5 })
   maxMembers: number;
+
+  /** V3 §55: semestres que pueden verla y postular. Vacío = cualquiera. */
+  @Column({ name: 'target_semesters', type: 'smallint', array: true, default: () => "'{}'" })
+  targetSemesters: number[];
 
   @Column({
     name: 'availability_requirement',
@@ -389,6 +394,61 @@ export class TeamInvitation {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+}
+
+/**
+ * Postulación a una necesidad de equipo (V3 §31, §55).
+ *
+ * Una fila por (necesidad, estudiante). El rechazo lleva un motivo
+ * predefinido y, si ayuda, un comentario breve: nada de texto libre largo.
+ */
+@Entity('team_applications')
+@Unique('uq_team_application', ['teamNeedId', 'applicantProfileId'])
+@Index('idx_team_applications_necesidad', ['teamNeedId', 'status'])
+export class TeamApplication {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'team_need_id', type: 'uuid' })
+  teamNeedId: string;
+
+  @ManyToOne(() => TeamNeed, { nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'team_need_id' })
+  need: TeamNeed;
+
+  @Index('idx_team_applications_postulante')
+  @Column({ name: 'applicant_profile_id', type: 'uuid' })
+  applicantProfileId: string;
+
+  @ManyToOne(() => StudentProfile, { nullable: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'applicant_profile_id' })
+  applicant: StudentProfile;
+
+  @Column({ type: 'varchar', length: 300, nullable: true })
+  message: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: TeamApplicationStatus,
+    enumName: 'team_application_status_enum',
+    default: TeamApplicationStatus.PENDING,
+  })
+  status: TeamApplicationStatus;
+
+  @Column({ name: 'rejection_reason', type: 'varchar', length: 40, nullable: true })
+  rejectionReason: string | null;
+
+  @Column({ name: 'rejection_comment', type: 'varchar', length: 200, nullable: true })
+  rejectionComment: string | null;
+
+  @Column({ name: 'decided_at', type: 'timestamptz', nullable: true })
+  decidedAt: Date | null;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 }
 
 /**

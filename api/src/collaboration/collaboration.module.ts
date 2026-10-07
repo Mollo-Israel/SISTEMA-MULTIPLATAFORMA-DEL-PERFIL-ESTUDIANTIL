@@ -10,6 +10,7 @@ import {
   Contact,
   ContactRequest,
   Team,
+  TeamApplication,
   TeamInvitation,
   TeamMember,
   TeamNeed,
@@ -19,6 +20,7 @@ import {
 import { PublicProfileService } from './public-profile.service';
 import { ContactsService } from './contacts.service';
 import { TeamsService } from './teams.service';
+import { TeamApplicationsService } from './team-applications.service';
 import { ContactNote, StudentContactChannel } from '../entities/contact-channel.entity';
 import { CollaborationController } from './collaboration.controller';
 import { AiModule } from '../ai/ai.module';
@@ -49,6 +51,7 @@ import { AiModule } from '../ai/ai.module';
       Team,
       TeamMember,
       TeamInvitation,
+      TeamApplication,
       StudentContactChannel,
       ContactNote,
     ]),
@@ -56,7 +59,7 @@ import { AiModule } from '../ai/ai.module';
     AiModule,
   ],
   controllers: [CollaborationController],
-  providers: [PublicProfileService, ContactsService, TeamsService],
+  providers: [PublicProfileService, ContactsService, TeamsService, TeamApplicationsService],
   exports: [ContactsService, TeamsService],
 })
 export class CollaborationModule {}

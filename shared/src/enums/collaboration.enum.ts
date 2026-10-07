@@ -54,6 +54,29 @@ export enum TeamStatus {
   CLOSED = 'closed',
 }
 
+/** Estado de una postulación a una necesidad de equipo (V3 §31, §55). */
+export enum TeamApplicationStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+  /** El propio estudiante la retiró; puede volver a postular. */
+  WITHDRAWN = 'withdrawn',
+}
+
+/**
+ * Motivos de rechazo predefinidos (V3 §55): sin texto libre innecesario.
+ * «Otro motivo» exige un comentario breve; en los demás es opcional.
+ */
+export const TEAM_APPLICATION_REJECTION_REASONS = [
+  { code: 'skills_not_matching', label: 'Buscamos otras habilidades' },
+  { code: 'team_full', label: 'El equipo ya está completo' },
+  { code: 'schedule', label: 'La disponibilidad no coincide' },
+  { code: 'chose_other_profile', label: 'Elegimos otro perfil para este cupo' },
+  { code: 'other', label: 'Otro motivo' },
+] as const;
+
+export type TeamApplicationRejectionReason = (typeof TEAM_APPLICATION_REJECTION_REASONS)[number]['code'];
+
 /** Estado de una invitación a un equipo (§47). */
 export enum TeamInvitationStatus {
   PENDING = 'pending',

@@ -38,6 +38,7 @@ import { storageDriverFactory } from '../../src/storage/storage-driver.factory';
 import { parseAuthorizedSemesters } from '../../src/imports/teacher-import.service';
 import { effectiveSemesters, inTeacherScope, scopeSql } from '../../src/access/teacher-scope.service';
 
+import { semestreElegible } from '../../src/collaboration/team-need.rules';
 describe('Afinidad V3 (§45–§47)', () => {
   it('es la versión 4 del motor (V3.1 §35)', () => assert.equal(AFFINITY_ENGINE_VERSION, 4));
 
@@ -682,5 +683,19 @@ describe('V3 §35 pesos y rendimientos de la Afinidad V4', () => {
   it('rendimientos: actividades 1/0,7/0,5/0,3; proyectos y credenciales 1/0,75/0,5/0,25', () => {
     assert.deepEqual([...DIM_V4.ACTIVITY], [1, 0.7, 0.5, 0.3]);
     assert.deepEqual([...DIM_V4.PROJECT], [1, 0.75, 0.5, 0.25]);
+  });
+});
+
+describe('V3 §55 · Elegibilidad por semestre de una necesidad', () => {
+  it('sin semestres objetivo la ve cualquiera, incluso sin semestre registrado', () => {
+    assert.equal(semestreElegible([], 3), true);
+    assert.equal(semestreElegible(null, null), true);
+  });
+  it('con semestres objetivo, solo quien cursa uno de ellos', () => {
+    assert.equal(semestreElegible([5, 6], 5), true);
+    assert.equal(semestreElegible([5, 6], 2), false);
+  });
+  it('un perfil sin semestre no entra cuando hay semestres objetivo', () => {
+    assert.equal(semestreElegible([5], null), false);
   });
 });

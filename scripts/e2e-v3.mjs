@@ -1701,7 +1701,136 @@ async function batch16(ctx) {
     'V3.16.17 Marcar todas como leídas', JSON.stringify(todas.data));
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16 };
+// ===========================================================================
+//  BATCH 17 — Colaboración, contactos y equipos (§31, §32, §55, §56)
+// ===========================================================================
+async function batch17(ctx) {
+  objective('BATCH 17 · Necesidad → semestres → áreas/skills → cupos → postulación → aceptar/rechazar → equipo');
+  const alumno = async (sufijo, nombre, semestre) => {
+    const e = await provisionAndActivate(ctx.admin, { firstName: nombre, lastName: 'Equipo', email: correoEst(`b17${sufijo}`), role: 'STUDENT', semester: semestre });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const lider = await alumno('lid', 'Lía', 5);
+  const ana = await alumno('ana', 'Ana', 5);
+  const beto = await alumno('bet', 'Beto', 6);
+  const caro = await alumno('car', 'Caro', 2);
+  const dani = await alumno('dan', 'Dani', 5);
+  const eli = await alumno('eli', 'Eli', 6);
+
+  const catalogo = ((await req('GET', '/skills', { token: lider.token })).data ?? []).filter((s) => s.academicAreaId);
+  const sk = catalogo[0];
+  const ajena = catalogo.find((s) => s.academicAreaId !== sk.academicAreaId);
+
+  // ----- Área → solo skills de esa área (§55)
+  const mala = await req('POST', '/team-needs', {
+    token: lider.token,
+    body: { purpose: `Mal armada ${TS}`, preferredAreaIds: [sk.academicAreaId], requiredSkillIds: [ajena.id], targetSemesters: [5] },
+  });
+  check(mala.status === 400, 'V3.17.1 §55 Una habilidad de otra área se rechaza', `status ${mala.status}`);
+  const semMala = await req('POST', '/team-needs', { token: lider.token, body: { purpose: `Semestre 13 ${TS}`, targetSemesters: [13] } });
+  check(semMala.status === 400, 'V3.17.2 Semestres fuera de rango se rechazan', `status ${semMala.status}`);
+
+  const nec = await req('POST', '/team-needs', {
+    token: lider.token,
+    body: {
+      purpose: `Plataforma de tutorías ${TS}`, preferredAreaIds: [sk.academicAreaId], requiredSkillIds: [sk.id],
+      targetSemesters: [6, 5], maxMembers: 3, availabilityRequirement: 'any',
+    },
+  });
+  check(nec.status === 201 && JSON.stringify(nec.data?.targetSemesters) === '[5,6]', 'V3.17.3 §55 Necesidad con semestres objetivo, áreas, skills y cupos', JSON.stringify(nec.data?.targetSemesters));
+  const necId = nec.data.id;
+
+  // ----- Visibilidad por semestre
+  const ve = async (e) => ((await req('GET', '/team-needs', { token: e.token })).data ?? []).find((n) => n.id === necId);
+  const vistaAna = await ve(ana);
+  check(!!vistaAna && vistaAna.openings === 2 && vistaAna.myApplication === null, 'V3.17.4 La ve quien cursa un semestre objetivo, con sus cupos', JSON.stringify(vistaAna && { o: vistaAna.openings }));
+  check(!(await ve(caro)), 'V3.17.5 §55 No la ve quien está en otro semestre');
+  const fuera = await req('POST', `/team-needs/${necId}/applications`, { token: caro.token, body: {} });
+  check(fuera.status === 404, 'V3.17.6 Ni puede postular cambiando el id a mano -> 404', `status ${fuera.status}`);
+  const propia = await req('POST', `/team-needs/${necId}/applications`, { token: lider.token, body: {} });
+  check(propia.status === 400, 'V3.17.7 El responsable no postula a su propia necesidad', `status ${propia.status}`);
+
+  // ----- Postular
+  const pAna = await req('POST', `/team-needs/${necId}/applications`, { token: ana.token, body: { message: 'Hice el backend de dos proyectos.' } });
+  check(pAna.status === 201 && pAna.data?.status === 'pending', 'V3.17.8 §31 Postula', `status ${pAna.status}`);
+  const otra = await req('POST', `/team-needs/${necId}/applications`, { token: ana.token, body: {} });
+  check(otra.status === 409 && otra.data?.code === 'TEAM_APPLICATION_PENDING', 'V3.17.9 No se postula dos veces', JSON.stringify(otra.data?.code));
+  const larga = await req('POST', `/team-needs/${necId}/applications`, { token: beto.token, body: { message: 'x'.repeat(301) } });
+  check(larga.status === 400, 'V3.17.10 §55 Sin abuso de texto libre: presentación de hasta 300', `status ${larga.status}`);
+  const pBeto = await req('POST', `/team-needs/${necId}/applications`, { token: beto.token, body: {} });
+  const pDani = await req('POST', `/team-needs/${necId}/applications`, { token: dani.token, body: {} });
+  const notifLider = ((await req('GET', '/notifications/me', { token: lider.token })).data ?? []).filter((n) => n.type === 'TEAM_APPLICATION');
+  check(notifLider.length === 3, 'V3.17.11 §33 TEAM_APPLICATION al responsable por cada una', `${notifLider.length}`);
+
+  // ----- Solo el responsable decide y ve
+  const ajenas = await req('GET', `/team-needs/${necId}/applications`, { token: ana.token });
+  check(ajenas.status === 403, 'V3.17.12 Otro estudiante no ve las postulaciones', `status ${ajenas.status}`);
+  const robo = await req('PATCH', `/team-applications/${pBeto.data.id}`, { token: ana.token, body: { decision: 'accept' } });
+  check(robo.status === 404, 'V3.17.13 Ni decide sobre ellas -> 404', `status ${robo.status}`);
+  const lista = (await req('GET', `/team-needs/${necId}/applications`, { token: lider.token })).data ?? [];
+  check(lista.length === 3 && lista.every((p) => p.applicant?.name && Array.isArray(p.coversSkills) && !('score' in p)),
+    'V3.17.14 El responsable ve quién, su semestre y qué cubre, sin ranking', `${lista.length}`);
+
+  // ----- Rechazar con motivo controlado
+  const sinMotivo = await req('PATCH', `/team-applications/${pDani.data.id}`, { token: lider.token, body: { decision: 'reject' } });
+  check(sinMotivo.status === 400 && sinMotivo.data?.code === 'TEAM_APPLICATION_REASON_REQUIRED', 'V3.17.15 §55 Rechazar exige un motivo', JSON.stringify(sinMotivo.data?.code));
+  const inventado = await req('PATCH', `/team-applications/${pDani.data.id}`, { token: lider.token, body: { decision: 'reject', reason: 'me_cae_mal' } });
+  check(inventado.status === 400, 'V3.17.16 §55 Solo motivos predefinidos', `status ${inventado.status}`);
+  const otroSin = await req('PATCH', `/team-applications/${pDani.data.id}`, { token: lider.token, body: { decision: 'reject', reason: 'other' } });
+  check(otroSin.status === 400 && otroSin.data?.code === 'TEAM_APPLICATION_COMMENT_REQUIRED', 'V3.17.17 «Otro motivo» pide un comentario breve', JSON.stringify(otroSin.data?.code));
+  const rech = await req('PATCH', `/team-applications/${pDani.data.id}`, { token: lider.token, body: { decision: 'reject', reason: 'schedule', comment: 'Nos reunimos por las mañanas.' } });
+  check(rech.status === 200 && rech.data?.reasonLabel === 'La disponibilidad no coincide', 'V3.17.18 Rechaza con motivo y comentario opcional', JSON.stringify(rech.data));
+  const nDani = ((await req('GET', '/notifications/me', { token: dani.token })).data ?? []).find((n) => n.type === 'TEAM_APPLICATION_REJECTED');
+  check(!!nDani && nDani.body.includes('La disponibilidad no coincide'), 'V3.17.19 §33 TEAM_APPLICATION_REJECTED con el motivo', nDani?.body);
+  const insiste = await req('POST', `/team-needs/${necId}/applications`, { token: dani.token, body: {} });
+  check(insiste.status === 409 && insiste.data?.code === 'TEAM_APPLICATION_REJECTED', 'V3.17.20 Un rechazo no se reabre insistiendo', JSON.stringify(insiste.data?.code));
+
+  // ----- Aceptar constituye el equipo
+  const acA = await req('PATCH', `/team-applications/${pAna.data.id}`, { token: lider.token, body: { decision: 'accept' } });
+  check(acA.status === 200 && !!acA.data?.teamId && acA.data?.needClosed === false, 'V3.17.21 §31 Aceptar constituye el equipo si no existía', JSON.stringify(acA.data));
+  const nAna = ((await req('GET', '/notifications/me', { token: ana.token })).data ?? []).filter((n) => n.type === 'TEAM_APPLICATION_ACCEPTED');
+  check(nAna.length === 1, 'V3.17.22 §33 TEAM_APPLICATION_ACCEPTED');
+  const equipoAna = ((await req('GET', '/teams/mine', { token: ana.token })).data ?? []).find((t) => t.id === acA.data.teamId);
+  check(!!equipoAna && equipoAna.members.length === 2 && equipoAna.openings === 1, 'V3.17.23 Entra al equipo y baja el cupo', JSON.stringify(equipoAna && equipoAna.members.length));
+
+  // Eli postula en el último momento; al llenarse los cupos queda respondida.
+  const pEli = await req('POST', `/team-needs/${necId}/applications`, { token: eli.token, body: {} });
+  const acB = await req('PATCH', `/team-applications/${pBeto.data.id}`, { token: lider.token, body: { decision: 'accept' } });
+  check(acB.status === 200 && acB.data?.needClosed === true, 'V3.17.24 Con los cupos llenos la necesidad se cierra', JSON.stringify(acB.data));
+  const eliVe = ((await req('GET', '/team-applications/mine', { token: eli.token })).data ?? []).find((p) => p.id === pEli.data.id);
+  check(eliVe?.status === 'rejected' && eliVe?.rejectionReason === 'team_full', 'V3.17.25 Y quien esperaba recibe «equipo completo», no silencio', JSON.stringify(eliVe && eliVe.rejectionReason));
+  const cerrada = await req('POST', `/team-needs/${necId}/applications`, { token: dani.token, body: {} });
+  check([404, 409].includes(cerrada.status), 'V3.17.26 Una necesidad cerrada no recibe postulaciones', `status ${cerrada.status}`);
+
+  // ----- Retirar y volver a postular
+  const nec2 = (await req('POST', '/team-needs', { token: lider.token, body: { purpose: `Segunda búsqueda ${TS}`, maxMembers: 4 } })).data;
+  const p2 = await req('POST', `/team-needs/${nec2.id}/applications`, { token: caro.token, body: {} });
+  check(p2.status === 201, 'V3.17.27 Sin semestres objetivo la ve y postula cualquiera', `status ${p2.status}`);
+  const ret = await req('DELETE', `/team-applications/${p2.data.id}`, { token: caro.token });
+  const vuelve = await req('POST', `/team-needs/${nec2.id}/applications`, { token: caro.token, body: {} });
+  check(ret.status === 200 && vuelve.status === 201 && vuelve.data.id === p2.data.id, 'V3.17.28 Retirar permite volver a postular, sin filas nuevas');
+
+  // ----- Sugerencias respetan el semestre (§56)
+  const sug = await req('GET', `/team-needs/${necId}/suggestions`, { token: lider.token });
+  check(sug.status === 200 && !(sug.data?.candidates ?? []).some((c) => c.semester !== null && ![5, 6].includes(c.semester)),
+    'V3.17.29 §56 Las sugerencias solo traen semestres elegibles', `status ${sug.status}`);
+
+  // ----- Usar el equipo en un proyecto (§31) y el chat sigue retirado
+  const proy = await req('POST', '/projects', {
+    token: lider.token,
+    body: {
+      title: `Proyecto del equipo ${TS}`, areaIds: [sk.academicAreaId], skillIds: [sk.id],
+      repositoryUrl: repoDePrueba(`tutorias-${TS}`), teamId: acA.data.teamId, inviteTeamMembers: true, status: 'draft',
+    },
+  });
+  const precargadas = (await req('GET', `/projects/${proy.data?.id}/invitations`, { token: lider.token })).data ?? [];
+  check(proy.status === 201 && precargadas.length === 2, 'V3.17.30 §31 El equipo formado por postulaciones se usa en un proyecto: precarga sus integrantes', `${proy.status} ${precargadas.length}`);
+  const chat = await req('GET', '/conversations', { token: ana.token });
+  check(chat.status === 410, 'V3.17.31 §32 Sin chat: la mensajería sigue retirada (410)', `status ${chat.status}`);
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

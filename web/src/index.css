@@ -1185,3 +1185,8 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 .notif-item .notif-text span { font-size: 0.84rem; overflow-wrap: anywhere; }
 .notif-item time { font-size: 0.72rem; color: var(--gray-500); white-space: nowrap; }
 .notif-dot { width: 8px; height: 8px; margin-top: 0.4rem; border-radius: 50%; background: var(--bordo); flex-shrink: 0; }
+
+/* --- Grupo de opciones con leyenda (V3 §55: semestres objetivo) --- */
+fieldset.field { border: none; padding: 0; margin: 0 0 1rem; min-width: 0; }
+fieldset.field > legend { padding: 0; margin-bottom: 0.35rem; font-size: 0.85rem; font-weight: 600; color: var(--gray-700); }
+button.chip { cursor: pointer; font-family: var(--font); }

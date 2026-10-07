@@ -24,6 +24,8 @@ import {
   CONTACT_CONTEXT_MAX,
   ContactChannelType,
   ContactSource,
+  TEAM_APPLICATION_REJECTION_REASONS,
+  TeamApplicationRejectionReason,
   TeamNeedStatus,
 } from '@perfil/shared';
 
@@ -113,6 +115,17 @@ export class CreateTeamNeedDto {
   @ArrayUnique({ message: 'No repita áreas.' })
   @IsUUID('4', { each: true })
   preferredAreaIds?: string[];
+
+  /** V3 §55: semestres objetivo. Vacío = cualquiera. */
+  @ApiProperty({ required: false, type: [Number], example: [5, 6] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ArrayUnique({ message: 'No repita semestres.' })
+  @IsInt({ each: true, message: 'Cada semestre debe ser un número.' })
+  @Min(1, { each: true, message: 'El semestre mínimo es 1.' })
+  @Max(12, { each: true, message: 'El semestre máximo es 12.' })
+  targetSemesters?: number[];
 }
 
 export class UpdateTeamNeedDto {
@@ -163,6 +176,46 @@ export class UpdateTeamNeedDto {
   @ArrayUnique()
   @IsUUID('4', { each: true })
   preferredAreaIds?: string[];
+
+  /** V3 §55: semestres objetivo. Vacío = cualquiera. */
+  @ApiProperty({ required: false, type: [Number], example: [5, 6] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ArrayUnique({ message: 'No repita semestres.' })
+  @IsInt({ each: true, message: 'Cada semestre debe ser un número.' })
+  @Min(1, { each: true, message: 'El semestre mínimo es 1.' })
+  @Max(12, { each: true, message: 'El semestre máximo es 12.' })
+  targetSemesters?: number[];
+}
+
+/** V3 §55: postular a una necesidad, con una presentación breve opcional. */
+export class ApplyToTeamNeedDto {
+  @ApiProperty({ required: false, example: 'Hice el backend de dos proyectos con NestJS.' })
+  @IsOptional()
+  @Transform(limpiar)
+  @IsString()
+  @MaxLength(300, { message: 'La presentación no puede superar 300 caracteres.' })
+  message?: string;
+}
+
+/** V3 §55: aceptar, o rechazar con un motivo predefinido y comentario breve. */
+export class DecideTeamApplicationDto {
+  @ApiProperty({ enum: ['accept', 'reject'] })
+  @IsIn(['accept', 'reject'], { message: 'La decisión debe ser accept o reject.' })
+  decision: 'accept' | 'reject';
+
+  @ApiProperty({ required: false, enum: TEAM_APPLICATION_REJECTION_REASONS.map((r) => r.code) })
+  @IsOptional()
+  @IsIn(TEAM_APPLICATION_REJECTION_REASONS.map((r) => r.code), { message: 'Motivo no válido.' })
+  reason?: TeamApplicationRejectionReason;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(limpiar)
+  @IsString()
+  @MaxLength(200, { message: 'El comentario no puede superar 200 caracteres.' })
+  comment?: string;
 }
 
 export class CreateTeamDto {

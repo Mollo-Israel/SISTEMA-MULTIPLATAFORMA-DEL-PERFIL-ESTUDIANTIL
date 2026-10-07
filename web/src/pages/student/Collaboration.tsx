@@ -11,6 +11,7 @@ import {
   type ContactChannelView,
   type ContactView,
   type PublicLinkView,
+  type TeamApplicationView,
   type TeamNeedView,
   type TeamSuggestionsView,
   type TeamView,
@@ -22,6 +23,29 @@ import { useConfirm, useToast } from '../../components/feedback';
 import {
   Badge, Button, Card, Diferido, EmptyState, Loading, PageHeader, Tabs,
 } from '../../components/ui';
+
+/** V3 §55: los mismos motivos predefinidos que valida la API. */
+const MOTIVOS_RECHAZO = [
+  { code: 'skills_not_matching', label: 'Buscamos otras habilidades' },
+  { code: 'team_full', label: 'El equipo ya está completo' },
+  { code: 'schedule', label: 'La disponibilidad no coincide' },
+  { code: 'chose_other_profile', label: 'Elegimos otro perfil para este cupo' },
+  { code: 'other', label: 'Otro motivo' },
+];
+const SEMESTRES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const REQUISITO: Record<string, string> = {
+  any: 'Cualquier disponibilidad',
+  open_or_looking: 'Que escuche propuestas o busque equipo',
+  looking: 'Solo quien busca equipo',
+};
+const ESTADO_POSTULACION: Record<string, { label: string; tone: string }> = {
+  pending: { label: 'Pendiente', tone: 'amber' },
+  accepted: { label: 'Aceptada', tone: 'green' },
+  rejected: { label: 'No aceptada', tone: 'gray' },
+  withdrawn: { label: 'Retirada', tone: 'gray' },
+};
+const semestresTexto = (s: number[]) =>
+  s.length === 0 ? 'Cualquier semestre' : `Semestre${s.length > 1 ? 's' : ''} ${s.join(', ')}`;
 
 const DISPONIBILIDAD: Record<string, string> = {
   looking: 'Busca equipo',
@@ -560,7 +584,17 @@ function Equipos({ toast }: { toast: any }) {
   const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
   const [sugerencias, setSugerencias] = useState<TeamSuggestionsView | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
-  const [form, setForm] = useState({ purpose: '', maxMembers: 4, skillIds: [] as string[], areaIds: [] as string[] });
+  const [form, setForm] = useState({
+    purpose: '', maxMembers: 4, skillIds: [] as string[], areaIds: [] as string[],
+    targetSemesters: [] as number[], availabilityRequirement: 'open_or_looking',
+  });
+  const [abiertas, setAbiertas] = useCachedState<TeamNeedView[] | null>('necesidades-abiertas', null);
+  const [misPostulaciones, setMisPostulaciones] = useCachedState<TeamApplicationView[]>('mis-postulaciones', []);
+  /** Necesidad ajena a la que se está postulando y su presentación. */
+  const [postulando, setPostulando] = useState<{ needId: string; message: string } | null>(null);
+  /** Postulaciones recibidas de la necesidad abierta en pantalla. */
+  const [recibidas, setRecibidas] = useState<{ needId: string; items: TeamApplicationView[] } | null>(null);
+  const [rechazo, setRechazo] = useState<{ id: string; reason: string; comment: string } | null>(null);
   const [creando, setCreando] = useState(false);
   /** Nombre en edición: del equipo nuevo (clave = necesidad) o de uno existente. */
   const [nombres, setNombres] = useState<Record<string, string>>({});
@@ -570,14 +604,18 @@ function Equipos({ toast }: { toast: any }) {
 
   const cargar = async () => {
     try {
-      const [n, t, i] = await Promise.all([
+      const [n, t, i, a, p] = await Promise.all([
         collaborationService.myNeeds(),
         collaborationService.myTeams(),
         collaborationService.myTeamInvitations(),
+        collaborationService.openNeeds(),
+        collaborationService.myApplications(),
       ]);
       setNecesidades(n);
       setEquipos(t);
       setInvitaciones(i);
+      setAbiertas(a.filter((x) => !x.isOwner));
+      setMisPostulaciones(p);
     } catch (e) {
       toast.error(apiError(e));
       setNecesidades([]);
@@ -600,10 +638,11 @@ function Equipos({ toast }: { toast: any }) {
         maxMembers: form.maxMembers,
         requiredSkillIds: form.skillIds,
         preferredAreaIds: form.areaIds,
-        availabilityRequirement: 'open_or_looking',
+        targetSemesters: form.targetSemesters,
+        availabilityRequirement: form.availabilityRequirement,
       });
-      toast.success('Necesidad publicada.', 'Ya puedes ver quién podría cubrir lo que falta.');
-      setForm({ purpose: '', maxMembers: 4, skillIds: [], areaIds: [] });
+      toast.success('Necesidad publicada.', 'Los estudiantes de los semestres elegidos ya pueden postular.');
+      setForm({ purpose: '', maxMembers: 4, skillIds: [], areaIds: [], targetSemesters: [], availabilityRequirement: 'open_or_looking' });
       await cargar();
     } catch (err) {
       toast.error(apiError(err));
@@ -668,6 +707,62 @@ function Equipos({ toast }: { toast: any }) {
     }
   };
 
+  const postular = async () => {
+    if (!postulando) return;
+    setOcupado(postulando.needId);
+    try {
+      await collaborationService.applyToNeed(postulando.needId, postulando.message.trim());
+      toast.success('Postulación enviada.', 'El responsable la verá en su lista y te avisaremos de su respuesta.');
+      setPostulando(null);
+      await cargar();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const retirar = async (id: string) => {
+    setOcupado(id);
+    try {
+      await collaborationService.withdrawApplication(id);
+      toast.success('Postulación retirada.');
+      await cargar();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const verPostulaciones = async (needId: string) => {
+    if (recibidas?.needId === needId) { setRecibidas(null); return; }
+    try {
+      setRecibidas({ needId, items: await collaborationService.applicationsForNeed(needId) });
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  const decidirPostulacion = async (needId: string, id: string, body: { decision: 'accept' | 'reject'; reason?: string; comment?: string }) => {
+    setOcupado(id);
+    try {
+      const r = await collaborationService.decideApplication(id, body);
+      if (body.decision === 'accept') {
+        toast.success('Postulación aceptada.', r?.needClosed ? 'Se llenaron los cupos: la necesidad se cerró.' : 'Ya forma parte del equipo.');
+      } else {
+        toast.success('Respuesta enviada.', 'Recibirá el motivo que elegiste.');
+      }
+      setRechazo(null);
+      setRecibidas({ needId, items: await collaborationService.applicationsForNeed(needId) });
+      await cargar();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
   const decidirInvitacion = async (id: string, decision: 'accept' | 'decline') => {
     try {
       await collaborationService.decideTeamInvitation(id, decision);
@@ -704,6 +799,96 @@ function Equipos({ toast }: { toast: any }) {
         </Card>
       )}
 
+      <Card title="Necesidades abiertas para ti">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Equipos que buscan integrantes de tu semestre. Postula a los que te interesen; el responsable
+          decide y te avisamos.
+        </p>
+        {!abiertas && <Diferido><Loading /></Diferido>}
+        {abiertas && abiertas.length === 0 && (
+          <EmptyState message="Por ahora no hay necesidades abiertas para tu semestre." />
+        )}
+        {(abiertas ?? []).map((n) => {
+          const mia = n.myApplication;
+          return (
+            <div key={n.id} className="necesidad">
+              <div className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                <strong>{n.purpose}</strong>
+                <span className="flex" style={{ gap: '0.35rem' }}>
+                  {mia && <Badge tone={ESTADO_POSTULACION[mia.status]?.tone}>{ESTADO_POSTULACION[mia.status]?.label}</Badge>}
+                  <Badge tone={(n.openings ?? 0) > 0 ? 'green' : 'gray'}>
+                    {(n.openings ?? 0) > 0 ? `${n.openings} cupo(s)` : 'Sin cupos'}
+                  </Badge>
+                </span>
+              </div>
+              <span className="muted">
+                {n.owner.name} · {semestresTexto(n.targetSemesters ?? [])} · {REQUISITO[n.availabilityRequirement] ?? ''}
+              </span>
+              {n.description && <p style={{ margin: 0 }}>{n.description}</p>}
+              <div className="chip-row">
+                {n.preferredAreas.map((a) => <span key={a.academicAreaId} className="chip on">{a.name}</span>)}
+                {n.requiredSkills.map((s) => <span key={s.skillId} className="chip">{s.name}</span>)}
+              </div>
+              {n.isMember ? (
+                <span className="muted">Ya formas parte de este equipo.</span>
+              ) : mia?.status === 'pending' ? (
+                <div>
+                  <Button size="sm" variant="secondary" loading={ocupado === mia.id} onClick={() => retirar(mia.id)}>
+                    Retirar postulación
+                  </Button>
+                </div>
+              ) : mia?.status === 'rejected' || mia?.status === 'accepted' ? null : postulando?.needId === n.id ? (
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label htmlFor={`postular-${n.id}`}>Preséntate en una o dos líneas (opcional)</label>
+                  <textarea
+                    id={`postular-${n.id}`}
+                    rows={2}
+                    maxLength={300}
+                    value={postulando.message}
+                    onChange={(e) => setPostulando({ needId: n.id, message: e.target.value })}
+                    placeholder="Qué puedes aportar y tu disponibilidad."
+                  />
+                  <div className="flex mt" style={{ gap: '0.4rem' }}>
+                    <Button size="sm" loading={ocupado === n.id} onClick={postular}>Enviar postulación</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setPostulando(null)}>Cancelar</Button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Button
+                    size="sm"
+                    icon={<FiUserPlus size={13} />}
+                    disabled={(n.openings ?? 0) === 0}
+                    onClick={() => setPostulando({ needId: n.id, message: '' })}
+                  >
+                    Postular
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </Card>
+
+      {misPostulaciones.length > 0 && (
+        <Card title="Mis postulaciones">
+          {misPostulaciones.map((p) => (
+            <div key={p.id} className="flex between solicitud-fila">
+              <div>
+                <strong>{p.need?.purpose}</strong>
+                {p.need?.owner && <span className="muted"> · {p.need.owner}</span>}
+                {p.status === 'rejected' && (
+                  <p className="muted" style={{ margin: 0 }}>
+                    {p.rejectionReasonLabel}{p.rejectionComment ? `: ${p.rejectionComment}` : ''}
+                  </p>
+                )}
+              </div>
+              <Badge tone={ESTADO_POSTULACION[p.status]?.tone}>{ESTADO_POSTULACION[p.status]?.label}</Badge>
+            </div>
+          ))}
+        </Card>
+      )}
+
       <Card title="¿Qué le falta a tu equipo?">
         <p className="muted" style={{ marginTop: 0 }}>
           Declara lo que <strong>falta</strong>, no lo que ya tienes: el sistema busca quien
@@ -711,8 +896,9 @@ function Equipos({ toast }: { toast: any }) {
         </p>
         <form onSubmit={crear}>
           <div className="field">
-            <label>Para qué buscas gente</label>
+            <label htmlFor="necesidad-proposito">Para qué buscas gente</label>
             <input
+              id="necesidad-proposito"
               value={form.purpose}
               onChange={(e) => setForm({ ...form, purpose: e.target.value })}
               placeholder="Armar el panel de control del laboratorio"
@@ -728,6 +914,52 @@ function Equipos({ toast }: { toast: any }) {
             areaLabel="Áreas del trabajo"
             skillLabel="Habilidades que faltan"
           />
+          <fieldset className="field">
+            <legend>Semestres que pueden postular</legend>
+            <div className="chip-row">
+              {SEMESTRES.map((s) => {
+                const on = form.targetSemesters.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`chip ${on ? 'on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => setForm({
+                      ...form,
+                      targetSemesters: on ? form.targetSemesters.filter((x) => x !== s) : [...form.targetSemesters, s].sort((a, b) => a - b),
+                    })}
+                  >
+                    {s}.º
+                  </button>
+                );
+              })}
+            </div>
+            <small className="muted">Sin marcar ninguno, la ve cualquier semestre.</small>
+          </fieldset>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="necesidad-cupos">Integrantes en total (contigo)</label>
+              <input
+                id="necesidad-cupos"
+                type="number"
+                min={2}
+                max={20}
+                value={form.maxMembers}
+                onChange={(e) => setForm({ ...form, maxMembers: Number(e.target.value) || 2 })}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="necesidad-disponibilidad">Disponibilidad que pides</label>
+              <select
+                id="necesidad-disponibilidad"
+                value={form.availabilityRequirement}
+                onChange={(e) => setForm({ ...form, availabilityRequirement: e.target.value })}
+              >
+                {Object.entries(REQUISITO).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          </div>
           <Button type="submit" loading={creando} icon={<FiUsers size={15} />}>
             Publicar necesidad
           </Button>
@@ -747,11 +979,99 @@ function Equipos({ toast }: { toast: any }) {
                 {n.status === 'open' ? 'Abierta' : 'Cerrada'}
               </Badge>
             </div>
+            <span className="muted">{semestresTexto(n.targetSemesters ?? [])} · hasta {n.maxMembers} integrantes</span>
             <div className="chip-row">
               {n.requiredSkills.map((s) => (
                 <span key={s.skillId} className="chip">{s.name}</span>
               ))}
             </div>
+            <div>
+              <Button size="sm" variant="secondary" onClick={() => verPostulaciones(n.id)}>
+                {recibidas?.needId === n.id ? 'Ocultar postulaciones' : 'Ver postulaciones'}
+              </Button>
+            </div>
+            {recibidas?.needId === n.id && (
+              <div>
+                {recibidas.items.length === 0 && <EmptyState message="Todavía nadie postuló." />}
+                {recibidas.items.map((p) => (
+                  <div key={p.id} className="candidato">
+                    <div className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div>
+                        <strong>{p.applicant?.name}</strong>
+                        {p.applicant?.semester && <span className="muted"> · {p.applicant.semester}.º semestre</span>}
+                        {p.applicant?.availability && (
+                          <span className="muted"> · {DISPONIBILIDAD[p.applicant.availability] ?? p.applicant.availability}</span>
+                        )}
+                      </div>
+                      <Badge tone={ESTADO_POSTULACION[p.status]?.tone}>{ESTADO_POSTULACION[p.status]?.label}</Badge>
+                    </div>
+                    {p.message && <p className="muted" style={{ margin: '0.3rem 0' }}>«{p.message}»</p>}
+                    <div className="chip-row">
+                      {(p.coversSkills ?? []).map((s) => <span key={s.skillId} className="chip on">{s.name}</span>)}
+                      {(p.coversSkills ?? []).length === 0 && (
+                        <span className="muted">No tiene respaldada ninguna de las habilidades que faltan.</span>
+                      )}
+                    </div>
+                    {p.status === 'rejected' && (
+                      <p className="muted" style={{ margin: 0 }}>{p.rejectionReasonLabel}{p.rejectionComment ? `: ${p.rejectionComment}` : ''}</p>
+                    )}
+                    {p.status === 'pending' && (rechazo?.id === p.id ? (
+                      <div className="mt">
+                        <div className="field">
+                          <label htmlFor={`motivo-${p.id}`}>Motivo</label>
+                          <select
+                            id={`motivo-${p.id}`}
+                            value={rechazo.reason}
+                            onChange={(e) => setRechazo({ ...rechazo, reason: e.target.value })}
+                          >
+                            <option value="">Elige un motivo…</option>
+                            {MOTIVOS_RECHAZO.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label htmlFor={`comentario-${p.id}`}>
+                            Comentario {rechazo.reason === 'other' ? '(obligatorio)' : '(opcional)'}
+                          </label>
+                          <input
+                            id={`comentario-${p.id}`}
+                            maxLength={200}
+                            value={rechazo.comment}
+                            onChange={(e) => setRechazo({ ...rechazo, comment: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex" style={{ gap: '0.4rem' }}>
+                          <Button
+                            size="sm"
+                            loading={ocupado === p.id}
+                            disabled={!rechazo.reason || (rechazo.reason === 'other' && !rechazo.comment.trim())}
+                            onClick={() => decidirPostulacion(n.id, p.id, {
+                              decision: 'reject', reason: rechazo.reason, comment: rechazo.comment.trim() || undefined,
+                            })}
+                          >
+                            Enviar respuesta
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setRechazo(null)}>Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex mt" style={{ gap: '0.4rem' }}>
+                        <Button
+                          size="sm"
+                          icon={<FiCheck size={13} />}
+                          loading={ocupado === p.id}
+                          onClick={() => decidirPostulacion(n.id, p.id, { decision: 'accept' })}
+                        >
+                          Aceptar
+                        </Button>
+                        <Button size="sm" variant="secondary" icon={<FiX size={13} />} onClick={() => setRechazo({ id: p.id, reason: '', comment: '' })}>
+                          No aceptar
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
             {!equipoDe(n.id) && (
               <div className="flex mt" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
                 <input

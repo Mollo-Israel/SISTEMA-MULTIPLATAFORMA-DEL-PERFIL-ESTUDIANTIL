@@ -587,3 +587,63 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 - Causa: el límite por tipo de recomendaciones compite con las actividades abiertas que dejan las demás suites, así que depende del orden de ejecución. B16 no toca recomendaciones. Queda anotado para el endurecimiento de B23.
 
 **Pendientes:** notificaciones en móvil (B22); `TEAM_APPLICATION*` llegan con las postulaciones (B17).
+
+---
+
+## BATCH 17 — Colaboración, contactos y equipos
+
+**ESTADO:** completo
+
+**Objetivo:** el flujo de §31 y §55 completo: crear necesidad → semestres objetivo → áreas → skills faltantes → cupos → estudiantes ven y postulan → responsable acepta o rechaza → equipo constituido → usarlo en un proyecto. QR y contactos según §32, y sin chat.
+
+**Hallazgos iniciales:**
+- Las necesidades no tenían semestres objetivo. Cualquiera las veía y las sugerencias ignoraban el semestre (§56).
+- No existían postulaciones: la única forma de entrar a un equipo era una invitación del responsable.
+- La pantalla de Colaboración no mostraba las necesidades de otros, así que un estudiante no podía encontrar a qué sumarse.
+- Ya estaban cubiertos:
+  - Área → skills (`assertSkillsBelongToAreas`, B4).
+  - Usar un equipo en un proyecto (B12).
+  - QR con slug opaco y contacto por solicitud.
+  - Chat retirado (410).
+
+**Cambios:**
+- **`team_needs.target_semesters`**: vacío significa cualquier semestre. Solo ve la necesidad, y puede postular, quien cursa uno de esos semestres. Quien no, recibe 404 aunque cambie el id a mano. Las sugerencias del motor también filtran por semestre (§56).
+- **`team_applications`**: una fila por (necesidad, estudiante), con una presentación breve opcional de hasta 300 caracteres.
+  - Retirarse permite volver a postular sin crear filas nuevas. Un rechazo no se reabre insistiendo.
+  - El responsable ve quién postuló, su semestre, su disponibilidad y qué habilidades de las que faltan tiene respaldadas. No hay puntajes ni ranking.
+  - Rechazar exige un motivo predefinido (§55):
+    - Buscamos otras habilidades.
+    - El equipo ya está completo.
+    - La disponibilidad no coincide.
+    - Elegimos otro perfil para este cupo.
+    - Otro motivo (pide un comentario breve).
+  - El comentario es opcional en los demás motivos y tiene un máximo de 200 caracteres.
+- **Aceptar constituye el equipo** si todavía no existía, con el responsable dentro, y cancela una invitación pendiente a la misma persona. Al llenarse los cupos, la necesidad se cierra y las postulaciones pendientes reciben «El equipo ya está completo», para que nadie espere en silencio.
+- **Notificaciones (§33):** `TEAM_APPLICATION` al responsable; `TEAM_APPLICATION_ACCEPTED` y `TEAM_APPLICATION_REJECTED` (con el motivo) a quien postuló.
+- **API:**
+  - `POST /team-needs/:id/applications`
+  - `GET /team-needs/:id/applications` (solo el responsable)
+  - `GET /team-applications/mine`
+  - `PATCH /team-applications/:id` (decidir; 404 si no es su necesidad)
+  - `DELETE /team-applications/:id` (retirar)
+- **Web (Colaboración → Equipos):**
+  - «Necesidades abiertas para ti», con semestres, áreas, skills y cupos, y los botones Postular y Retirar.
+  - «Mis postulaciones», con la respuesta y el motivo.
+  - En «Mis necesidades», «Ver postulaciones» con Aceptar o No aceptar (motivo en una lista y comentario).
+  - El formulario de la necesidad suma semestres objetivo, integrantes en total y la disponibilidad que se pide, con etiquetas asociadas a cada campo.
+
+**Migraciones:** `1780590000000-V3TeamApplications`. Copia de seguridad previa (`pre-v3-b17.dump`); probado `up` → `down` → `up`. Las necesidades existentes quedan sin semestres objetivo (sin cambio de comportamiento).
+
+**Pruebas ejecutadas:**
+- Unitarias de la elegibilidad por semestre (89/89).
+- `e2e-v3 batch17` (V3.17.1–V3.17.31): área → skill, rango de semestres, visibilidad, el 404 por id manual, el propio responsable, doble postulación, límite de texto, notificaciones, propiedad de las postulaciones, motivos obligatorios, predefinidos y «otro» con comentario, aceptar constituye el equipo, cierre por cupos con respuesta a quien esperaba, retirar y volver, sugerencias por semestre, el equipo usado en un proyecto y el chat retirado.
+- Regresión completa.
+
+**Riesgos:** la invitación directa (§47) sigue disponible junto a la postulación. Cuando una invitación aceptada llena los cupos, la necesidad no se cierra sola; se cierra a mano o en la siguiente aceptación.
+
+**Resultados:**
+- Unitarias: 89/89.
+- `e2e-v3`: 288 (B17 31/31).
+- Regresión completa: **1719 correctas, 0 fallos** (20 suites).
+
+**Pendientes:** postulaciones en móvil (B22).
