@@ -19,6 +19,7 @@ import type {
   ImportApplyResult,
   ImportBatchDetail,
   ImportBatchSummary,
+  ImportKind,
   ImportPreview,
   OnboardingRun,
   ProjectChecks,
@@ -26,6 +27,7 @@ import type {
   ProjectMemberDetailed,
   ValidationVerdict,
   Questionnaire,
+  AreaTagAnalysis,
   SkillClassification,
   SkillInterest,
   SkillInterestKind,
@@ -103,20 +105,20 @@ export const mailService = {
 
 /** Importación de padrón institucional (§10). */
 export const importsService = {
-  preview: (file: File) => {
+  preview: (file: File, kind: ImportKind = 'students') => {
     const form = new FormData();
     form.append('file', file);
     return api
-      .post<ImportPreview>('/imports/students/preview', form)
+      .post<ImportPreview>(`/imports/${kind}/preview`, form)
       .then((r) => r.data);
   },
-  apply: (batchId: string) =>
-    api.post<ImportApplyResult>(`/imports/students/${batchId}/apply`).then((r) => r.data),
-  discard: (batchId: string) =>
-    api.post(`/imports/students/${batchId}/discard`).then((r) => r.data),
-  list: () => api.get<ImportBatchSummary[]>('/imports/students').then((r) => r.data),
-  detail: (batchId: string) =>
-    api.get<ImportBatchDetail>(`/imports/students/${batchId}`).then((r) => r.data),
+  apply: (batchId: string, kind: ImportKind = 'students') =>
+    api.post<ImportApplyResult>(`/imports/${kind}/${batchId}/apply`).then((r) => r.data),
+  discard: (batchId: string, kind: ImportKind = 'students') =>
+    api.post(`/imports/${kind}/${batchId}/discard`).then((r) => r.data),
+  list: (kind: ImportKind = 'students') => api.get<ImportBatchSummary[]>(`/imports/${kind}`).then((r) => r.data),
+  detail: (batchId: string, kind: ImportKind = 'students') =>
+    api.get<ImportBatchDetail>(`/imports/${kind}/${batchId}`).then((r) => r.data),
 };
 
 export const profileService = {
@@ -1024,6 +1026,9 @@ export const adminService = {
 
   // Catalogos (RF4)
   createArea: (data: Record<string, unknown>) => api.post('/academic-areas', data).then((r) => r.data),
+  /** Riesgos de unas etiquetas antes de guardar (V3 §9.4). No guarda nada. */
+  analyzeAreaTags: (tags: string[], exceptId?: string) =>
+    api.post<AreaTagAnalysis>('/academic-areas/tag-analysis', { tags, exceptId }).then((r) => r.data),
   updateArea: (id: string, data: Record<string, unknown>) =>
     api.patch(`/academic-areas/${id}`, data).then((r) => r.data),
   createSkill: (data: Record<string, unknown>) => api.post('/skills', data).then((r) => r.data),

@@ -1,6 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsInt,
+  Max,
+  Min,
   IsEmail,
   IsEnum,
   IsIn,
@@ -123,6 +129,21 @@ export class CreateUserDto {
    * formato `PREFIJO-XXXXXXX`. El prefijo depende del rol (EST, DOC, DIR o
    * ADM); esa correspondencia la comprueba el servicio.
    */
+  /**
+   * Semestres adicionales por arrastre o repetición (V3 §8.1). Solo para
+   * estudiantes; el semestre actual no hace falta repetirlo.
+   */
+  @ApiProperty({ required: false, type: [Number], example: [1] })
+  @IsOptional()
+  @IsArray({ message: 'Los semestres adicionales deben ser una lista.' })
+  @ArrayMaxSize(12)
+  @ArrayUnique({ message: 'No se permiten semestres repetidos.' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: 'Cada semestre debe ser un número entero.' })
+  @Min(1, { each: true, message: 'El semestre mínimo es 1.' })
+  @Max(12, { each: true, message: 'El semestre máximo es 12.' })
+  academicScopeSemesters?: number[];
+
   @ApiProperty({ example: 'EST-38DJ1HA', description: 'PREFIJO-XXXXXXX: EST, DOC, DIR o ADM según el rol.' })
   @Transform(({ value }) => (typeof value === 'string' ? normalizeUniversityCode(value) : value))
   @IsString({ message: 'El código universitario es obligatorio.' })

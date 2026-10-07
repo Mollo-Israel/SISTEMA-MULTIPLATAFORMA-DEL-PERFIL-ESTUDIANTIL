@@ -12,6 +12,8 @@ export interface PublicUser {
   /** Semestre institucional. Solo para estudiantes. */
   semester?: number | null;
   /** Código universitario. Solo para estudiantes. */
+  /** Semestres adicionales por arrastre o repetición (V3 §8.1). */
+  academicScopeSemesters?: number[];
   universityCode?: string | null;
   /**
    * En qué quedó el último correo de cuenta. Nunca trae el enlace ni el
@@ -100,6 +102,8 @@ export interface ImportRow {
   firstName: string | null;
   lastName: string | null;
   semester: number | null;
+  /** Semestres autorizados de una fila de docente (V3 §7.1). */
+  semesters?: number[] | null;
   status: ImportRowStatus;
   /** Motivo del rechazo o del conflicto; null cuando la fila es limpia. */
   message: string | null;
@@ -107,8 +111,12 @@ export interface ImportRow {
 
 export type ImportCounts = Record<ImportRowStatus, number>;
 
+/** Padrón de estudiantes o de docentes (V3 §7.1). */
+export type ImportKind = 'students' | 'teachers';
+
 export interface ImportPreview {
   batchId: string;
+  kind?: ImportKind;
   counts: ImportCounts;
   totalRows: number;
   rows: ImportRow[];
@@ -127,6 +135,7 @@ export interface ImportBatchDetail {
 
 export interface ImportBatchSummary {
   id: string;
+  kind?: ImportKind;
   filename: string;
   status: 'PREVIEWED' | 'APPLIED' | 'DISCARDED';
   totalRows: number;
@@ -201,6 +210,13 @@ export const SKILL_INTEREST_LABEL: Record<SkillInterestKind, string> = {
   interest: 'Me interesa',
   improve: 'Quiero mejorar',
 };
+
+/** Riesgos de un conjunto de etiquetas de área (V3 §9.4). */
+export interface AreaTagAnalysis {
+  tags: string[];
+  generic: string[];
+  shared: { tag: string; areas: { id: string; name: string }[] }[];
+}
 
 export interface SkillClassification {
   rule: 'canonical' | 'suggested' | 'none';

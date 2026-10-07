@@ -29,7 +29,7 @@ import {
 } from './dto/learning-resource.dto';
 import { slugCode } from '../common/validation';
 import { AuditEventType, AuditService } from '../audit/audit.service';
-import { classifySkill, Classification, normalizeTerm } from './skill-classification';
+import { analyzeAreaTags, AreaTagAnalysis, classifySkill, Classification, normalizeTerm } from './skill-classification';
 
 /**
  * Conflicto que señala el campo culpable, para que el formulario ponga el
@@ -146,6 +146,11 @@ export class CatalogsService {
     });
   }
 
+  /** Riesgos de unas etiquetas antes de guardarlas (V3 §9.4). */
+  async analyzeTags(tags: string[], exceptId?: string): Promise<AreaTagAnalysis> {
+    return analyzeAreaTags(tags ?? [], await this.areas.find(), exceptId);
+  }
+
   async createArea(dto: CreateAcademicAreaDto): Promise<AcademicArea> {
     const exists = await this.areas.findOne({ where: { name: ILike(dto.name) } });
     if (exists) {
@@ -229,9 +234,13 @@ export class CatalogsService {
   }
 
   /** Clasificación sugerida para una tecnología (V2 §23.3), sin guardar nada. */
-  async classify(name: string, aliases: string[]): Promise<Classification> {
-    const areas = await this.areas.find();
-    return classifySkill(name, aliases, areas);
+  async classify(name: string, aliases: string[], exceptSkillId?: string): Promise<Classification> {
+    const [areas, catalogo] = await Promise.all([
+      this.areas.find(),
+      // La propia habilidad (al editar) no puede sugerirse a sí misma.
+      this.skills.find({ where: exceptSkillId ? { isActive: true, id: Not(exceptSkillId) } : { isActive: true } }),
+    ]);
+    return classifySkill(name, aliases, areas, catalogo);
   }
 
   /**
@@ -249,7 +258,7 @@ export class CatalogsService {
     actorUserId: string | null,
     skillId: string | null,
   ): Promise<void> {
-    const c = await this.classify(name, aliases);
+    const c = await this.classify(name, aliases, skillId ?? undefined);
     if (c.rule === 'none' || c.areaIds.includes(areaId)) return;
     if (c.rule === 'canonical') {
       throw new ConflictException({

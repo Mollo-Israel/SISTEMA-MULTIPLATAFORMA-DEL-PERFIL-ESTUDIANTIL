@@ -46,6 +46,14 @@ export class User {
   @Column({ type: 'smallint', nullable: true })
   semester: number | null;
 
+  /**
+   * Semestres adicionales que cursa un estudiante por arrastre o repetición
+   * (V3 §8.1). Los gestiona Administración; el estudiante no los edita. El
+   * alcance docente considera el semestre actual **y** estos.
+   */
+  @Column({ name: 'academic_scope_semesters', type: 'smallint', array: true, default: () => "'{}'" })
+  academicScopeSemesters: number[];
+
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
 

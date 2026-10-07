@@ -34,6 +34,7 @@ import {
   TeamNeedArea,
   TeamNeedSkill,
 } from '../entities/collaboration.entity';
+import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
 
 /** Cuántos candidatos se devuelven como máximo. */
 const MAX_SUGERENCIAS = 10;
@@ -138,6 +139,8 @@ export class TeamsService {
       preferredAreaIds?: string[];
     },
   ) {
+    // V3 §4: cada habilidad que falta pertenece a una de las áreas elegidas.
+    await assertSkillsBelongToAreas(this.needs.manager, dto.requiredSkillIds, dto.preferredAreaIds, 'requiredSkillIds');
     const need = await this.needs.save(
       this.needs.create({
         ownerProfileId,
@@ -169,6 +172,17 @@ export class TeamsService {
     },
   ) {
     const need = await this.ownNeed(ownerProfileId, needId);
+    if (dto.requiredSkillIds !== undefined || dto.preferredAreaIds !== undefined) {
+      const vigentes = await this.needAreas.find({ where: { teamNeedId: need.id } });
+      const habilidades = dto.requiredSkillIds
+        ?? (await this.needSkills.find({ where: { teamNeedId: need.id } })).map((s) => s.skillId);
+      await assertSkillsBelongToAreas(
+        this.needs.manager,
+        habilidades,
+        dto.preferredAreaIds ?? vigentes.map((a) => a.academicAreaId),
+        'requiredSkillIds',
+      );
+    }
     if (dto.purpose !== undefined) need.purpose = dto.purpose;
     if (dto.description !== undefined) need.description = dto.description ?? null;
     if (dto.maxMembers !== undefined) need.maxMembers = dto.maxMembers;

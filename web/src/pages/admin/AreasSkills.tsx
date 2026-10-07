@@ -135,6 +135,39 @@ function AreaForm({
   );
 }
 
+/**
+ * Antes de guardar, hace visible el riesgo de las etiquetas (V3 §9.4): las
+ * genéricas no distinguen el área y las compartidas la confunden con otra. No
+ * se prohíben —una etiqueta puede repetirse—, pero se confirman.
+ * `previas` evita volver a preguntar por las que el área ya tenía.
+ */
+async function confirmarEtiquetas(
+  confirm: ReturnType<typeof useConfirm>,
+  tags: string[],
+  exceptId?: string,
+  previas: string[] = [],
+): Promise<boolean> {
+  let analisis;
+  try {
+    analisis = await adminService.analyzeAreaTags(tags, exceptId);
+  } catch {
+    return true; // Sin análisis no se bloquea: el servidor valida igual.
+  }
+  const antes = new Set(previas.map((t) => t.toLowerCase()));
+  const genericas = analisis.generic.filter((t) => !antes.has(t));
+  const compartidas = analisis.shared.filter((x) => !antes.has(x.tag));
+  if (genericas.length === 0 && compartidas.length === 0) return true;
+  const lineas = [
+    ...genericas.map((t) => `«${t}» es demasiado general: casi cualquier tema de la carrera la usa.`),
+    ...compartidas.map((x) => `«${x.tag}» ya la usa${x.areas.length > 1 ? 'n' : ''}: ${x.areas.map((a) => a.name).slice(0, 4).join(', ')}${x.areas.length > 4 ? '…' : ''}.`),
+  ];
+  return confirm({
+    title: 'Revisa estas etiquetas',
+    message: `${lineas.join(' ')} Las etiquetas ayudan a reconocer el área; si se repiten, las sugerencias pueden confundirla con otra. ¿Guardar de todas formas?`,
+    confirmLabel: 'Guardar de todas formas',
+  });
+}
+
 function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onChanged: () => void }) {
   const { data, loading, error } = state;
   const [form, setForm] = useState(areaVacia);
@@ -162,6 +195,7 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
       errores.setErrors(locales);
       return;
     }
+    if (!(await confirmarEtiquetas(confirm, parseTags(form.tags)))) return;
     setSaving(true);
     try {
       await adminService.createArea({
@@ -327,6 +361,7 @@ function EditAreaDialog({ area, onClose, onSaved }: { area: AcademicArea; onClos
   const [codeTouched, setCodeTouched] = useState(true);
   const [saving, setSaving] = useState(false);
   const errores = useFormErrors(CAMPOS_AREA);
+  const confirm = useConfirm();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -335,6 +370,7 @@ function EditAreaDialog({ area, onClose, onSaved }: { area: AcademicArea; onClos
       errores.setErrors(locales);
       return;
     }
+    if (!(await confirmarEtiquetas(confirm, parseTags(form.tags), area.id, area.tags ?? []))) return;
     setSaving(true);
     try {
       await adminService.updateArea(area.id, {

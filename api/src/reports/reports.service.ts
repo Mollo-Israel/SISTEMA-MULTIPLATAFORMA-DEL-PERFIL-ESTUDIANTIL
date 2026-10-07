@@ -8,7 +8,7 @@ import { Project } from '../entities/project.entity';
 import { Activity } from '../entities/activity.entity';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { AffinityEngineService } from '../affinity-recalc/affinity.engine';
-import { TeacherScopeService } from '../access/teacher-scope.service';
+import { TeacherScopeService, scopeSql } from '../access/teacher-scope.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 
 const num = (value: unknown): number => Number(value ?? 0);
@@ -343,7 +343,9 @@ export class ReportsService {
       .addSelect('p.completion_percentage', 'completionPercentage')
       .addSelect("CONCAT(u.first_name, ' ', u.last_name)", 'studentName')
       .orderBy('p.completion_percentage', 'ASC');
-    if (scope) qb.andWhere('p.semester IN (:...scope)', { scope });
+    // Listado de personas: incluye a quien cursa por arrastre (V3 §8.1). Los
+    // conteos por semestre siguen el semestre actual para no duplicar.
+    if (scope) qb.andWhere(scopeSql('p', 'scope'), { scope });
     const rows = await qb.getRawMany();
     return rows.map((r) => ({
       profileId: r.profileId,
@@ -458,9 +460,7 @@ export class ReportsService {
       .orderBy('p.createdAt', 'DESC')
       .take(limit);
     if (scope) {
-      qb.innerJoin('p.createdByProfile', 'owner').andWhere('owner.semester IN (:...scope)', {
-        scope,
-      });
+      qb.innerJoin('p.createdByProfile', 'owner').andWhere(scopeSql('owner', 'scope'), { scope });
     }
     const rows = await qb.getMany();
     return rows.map((p) => ({

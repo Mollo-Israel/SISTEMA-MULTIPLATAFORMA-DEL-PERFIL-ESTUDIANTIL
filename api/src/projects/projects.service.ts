@@ -34,7 +34,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddEvidenceDto } from './dto/add-evidence.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
-import { TeacherScopeService } from '../access/teacher-scope.service';
+import { TeacherScopeService, scopeSql } from '../access/teacher-scope.service';
 import { LinkCheckerService } from '../validation/link-checker.service';
 import { ValidationService } from '../validation/validation.service';
 import { UploadsService } from '../storage/uploads.service';
@@ -326,7 +326,8 @@ export class ProjectsService {
       .orderBy('p.updated_at', 'DESC');
 
     if (restricted) {
-      qb.andWhere('prof.semester IN (:...semesters)', { semesters: scope });
+      // Semestre actual o de arrastre del responsable (V3 §8.1).
+      qb.andWhere(scopeSql('prof', 'semesters'), { semesters: scope });
     }
     if (filters.semester) {
       qb.andWhere('prof.semester = :semester', { semester: filters.semester });

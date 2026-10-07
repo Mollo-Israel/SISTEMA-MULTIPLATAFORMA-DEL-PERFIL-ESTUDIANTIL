@@ -65,8 +65,50 @@ export function tagOfArea(area: AreaLike): AreaTag | null {
   );
 }
 
+/**
+ * Etiquetas demasiado genéricas para distinguir un área (V3 §9.4): aparecen en
+ * casi cualquier tema de la carrera, así que harían coincidir todo con todo.
+ */
+export const GENERIC_AREA_TAGS = [
+  'sistemas', 'sistema', 'tecnologia', 'tecnologias', 'informatica', 'ingenieria', 'software',
+  'programacion', 'desarrollo', 'computacion', 'computadora', 'general', 'varios', 'otros', 'otro',
+  'ti', 'it', 'tic', 'tics', 'digital', 'proyecto', 'proyectos', 'aplicacion', 'aplicaciones',
+];
+
+export interface AreaTagAnalysis {
+  /** Etiquetas como quedarán guardadas. */
+  tags: string[];
+  /** Las que no distinguen nada. */
+  generic: string[];
+  /** Las que ya usa otra área, con cuáles. */
+  shared: { tag: string; areas: { id: string; name: string }[] }[];
+}
+
+/**
+ * Riesgos de un conjunto de etiquetas frente al catálogo (V3 §9.4). No
+ * prohíbe nada: una etiqueta puede repetirse entre áreas; lo que se exige es
+ * que el riesgo sea visible y se confirme.
+ */
+export function analyzeAreaTags(tags: string[], areas: AreaLike[], exceptId?: string): AreaTagAnalysis {
+  const limpias = [...new Set(tags.map((t) => t.trim().toLowerCase().replace(/\s+/g, ' ')).filter(Boolean))];
+  const otras = areas.filter((a) => a.id !== exceptId && a.isActive !== false);
+  const shared = limpias
+    .map((tag) => ({
+      tag,
+      areas: otras
+        .filter((a) => (a.tags ?? []).some((t) => normalizeTerm(t) === normalizeTerm(tag)))
+        .map((a) => ({ id: a.id, name: a.name })),
+    }))
+    .filter((s) => s.areas.length > 0);
+  return {
+    tags: limpias,
+    generic: limpias.filter((t) => GENERIC_AREA_TAGS.includes(normalizeTerm(t))),
+    shared,
+  };
+}
+
 export interface Classification {
-  /** `canonical`: regla dura; `suggested`: coincidencia por etiquetas; `none`. */
+  /** `canonical`: regla dura; `suggested`: etiquetas o habilidades ya clasificadas; `none`. */
   rule: 'canonical' | 'suggested' | 'none';
   /** Áreas que la regla o la sugerencia aceptan. */
   areaIds: string[];
@@ -74,8 +116,70 @@ export interface Classification {
   reason: string | null;
 }
 
-/** Clasifica una tecnología contra el catálogo de áreas activas. */
-export function classifySkill(name: string, aliases: string[], areas: AreaLike[]): Classification {
+/** Una habilidad ya clasificada del catálogo, para la sugerencia dinámica. */
+export interface SkillLike {
+  name: string;
+  aliases: string[] | null;
+  academicAreaId: string | null;
+  isActive?: boolean;
+}
+
+/** Términos de un texto, por palabra (sin tildes, en minúsculas). */
+function tokens(texto: string): string[] {
+  return normalizeTerm(texto).split(/[\s/,()]+/).filter(Boolean);
+}
+
+/** ¿La secuencia `aguja` aparece completa y contigua dentro de `pajar`? */
+function contiene(pajar: string[], aguja: string[]): boolean {
+  if (aguja.length === 0 || aguja.length > pajar.length) return false;
+  for (let i = 0; i + aguja.length <= pajar.length; i++) {
+    if (aguja.every((t, j) => pajar[i + j] === t)) return true;
+  }
+  return false;
+}
+
+/**
+ * Áreas sugeridas por las habilidades **ya clasificadas** del catálogo (V3 §9.3).
+ *
+ * Si el nombre nuevo contiene, como palabra completa, el nombre o un alias de
+ * una habilidad existente («React Router» ⊃ «React», «PostgreSQL 16» ⊃
+ * «PostgreSQL»), su área es una buena candidata. Es determinista y usa el
+ * catálogo vigente: lo que el administrador clasificó ayer ya sirve hoy, sin
+ * tocar código. Se exige al menos dos caracteres para no casar «C» con todo.
+ */
+export function suggestFromCatalog(
+  terminos: string[],
+  catalogo: SkillLike[],
+): Map<string, string[]> {
+  const nuevos = terminos.map(tokens).filter((t) => t.length > 0);
+  const porArea = new Map<string, string[]>();
+  for (const skill of catalogo) {
+    if (skill.isActive === false || !skill.academicAreaId) continue;
+    const conocidos = [skill.name, ...(skill.aliases ?? [])]
+      .map(tokens)
+      .filter((t) => t.join(' ').length >= 2);
+    const coincide = nuevos.some((n) => conocidos.some((k) => contiene(n, k) || contiene(k, n)));
+    if (!coincide) continue;
+    const lista = porArea.get(skill.academicAreaId) ?? [];
+    if (!lista.includes(skill.name)) lista.push(skill.name);
+    porArea.set(skill.academicAreaId, lista);
+  }
+  return porArea;
+}
+
+/**
+ * Clasifica una tecnología contra el catálogo (V2 §23.3, V3 §9.3).
+ *
+ * Orden: regla canónica (inequívoca) → sugerencia dinámica por etiquetas de
+ * áreas **y** por habilidades ya clasificadas → nada. No depende solo de una
+ * tabla fija: el catálogo actual participa en cada sugerencia.
+ */
+export function classifySkill(
+  name: string,
+  aliases: string[],
+  areas: AreaLike[],
+  catalogo: SkillLike[] = [],
+): Classification {
   const activas = areas.filter((a) => a.isActive !== false);
   const terminos = [name, ...aliases].map(normalizeTerm).filter(Boolean);
 
@@ -94,12 +198,24 @@ export function classifySkill(name: string, aliases: string[], areas: AreaLike[]
 
   const palabras = new Set(terminos.flatMap((t) => [t, ...t.split(/[ ./-]+/).filter((p) => p.length >= 3)]));
   const porEtiqueta = activas.filter((a) => (a.tags ?? []).some((tag) => palabras.has(normalizeTerm(tag))));
-  if (porEtiqueta.length > 0) {
+  const porCatalogo = suggestFromCatalog([name, ...aliases], catalogo);
+  const activasIds = new Set(activas.map((a) => a.id));
+  const ids = [...new Set([...porEtiqueta.map((a) => a.id), ...[...porCatalogo.keys()].filter((id) => activasIds.has(id))])];
+  if (ids.length > 0) {
+    const nombre = (id: string) => activas.find((a) => a.id === id)!.name;
+    const motivos: string[] = [];
+    if (porEtiqueta.length > 0) motivos.push(`sus etiquetas (${porEtiqueta.map((a) => a.name).join(', ')})`);
+    const similares = [...porCatalogo.entries()].filter(([id]) => activasIds.has(id));
+    if (similares.length > 0) {
+      motivos.push(
+        `habilidades ya clasificadas (${similares.map(([id, ss]) => `${ss.slice(0, 3).join(', ')} en ${nombre(id)}`).join('; ')})`,
+      );
+    }
     return {
       rule: 'suggested',
-      areaIds: porEtiqueta.map((a) => a.id),
-      areaNames: porEtiqueta.map((a) => a.name),
-      reason: `Por sus etiquetas, «${name}» parece de ${porEtiqueta.map((a) => a.name).join(' o ')}.`,
+      areaIds: ids,
+      areaNames: ids.map(nombre),
+      reason: `Por ${motivos.join(' y ')}, «${name}» parece de ${ids.map(nombre).join(' o ')}.`,
     };
   }
   return { rule: 'none', areaIds: [], areaNames: [], reason: null };

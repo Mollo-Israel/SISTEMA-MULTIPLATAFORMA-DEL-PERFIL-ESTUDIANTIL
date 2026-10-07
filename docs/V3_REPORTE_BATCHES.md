@@ -79,3 +79,87 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Pendientes:** ninguno del batch.
 
 **Riesgos:** ninguno nuevo.
+
+---
+
+## BATCH 2 — Identidad, códigos, importación y semestres
+
+**ESTADO:** completo
+
+**Objetivo:**
+- Importar Estudiantes y Docentes en la misma experiencia, con alcance académico coherente (§7, §8, §72 B2).
+
+**Hallazgos iniciales:**
+- `university_code` en todos los roles y prefijos ya existían (commit `9c95580`).
+- El importador solo conocía estudiantes; no existía `academic_scope_semesters`; el menú tenía «Alcance docente» como entrada aparte de «Usuarios».
+
+**Cambios:**
+- Padrón de **docentes** (`/imports/teachers/*`): columnas `university_code` (DOC-), `first_name`, `last_name`, `institutional_email`, `authorized_semesters` (`1;5`, `1|5`…). Preview NEW / UPDATE / UNCHANGED / CONFLICT / INVALID, idempotente; NEW crea la cuenta pendiente con su alcance y su invitación; UPDATE corrige datos y reemplaza semestres (auditoría `TEACHER_SCOPE_CHANGED`). Conflictos: correo o código de una cuenta que no es docente, código y correo de cuentas distintas, repetidos en el archivo.
+- El padrón de estudiantes acepta `current_semester` como nombre de la columna y rechaza los lotes de docentes.
+- `academic_scope_semesters` (arrastre o repetición): lo fija Administración al editar un estudiante; se normaliza (sin repetidos, ordenado, sin el semestre actual); el estudiante no puede tocarlo.
+- Alcance docente = semestre actual **o** de arrastre, en el control de acceso y en los listados (`scopeSql`, `inTeacherScope`). Los conteos por semestre de los paneles siguen el semestre actual, para no contar dos veces a la misma persona.
+- Web: Importar padrón con selector [Estudiantes] [Docentes], plantilla y ejemplo por tipo; Usuarios muestra y edita el arrastre; se retira «Alcance docente» del menú (vive en Usuarios → filtrar Docentes, §8.2).
+
+**Migraciones:** `1780470000000-V3AcademicScopeAndTeacherImport` (`users.academic_scope_semesters` + copia en `student_profiles` con índice GIN, `import_batches.kind`, `import_batch_rows.semesters`). Copia de seguridad previa; `up` → `down` → `up` probado; los 306 lotes existentes quedan como `students`.
+
+**Pruebas ejecutadas:** unitarias (`parseAuthorizedSemesters`, `effectiveSemesters`, `inTeacherScope`, `scopeSql`); `e2e-v3 batch2` (V3.2.1–V3.2.23); regresión completa.
+
+**Decisiones:**
+- Semestres autorizados de docente: 1 a 8, como en la pantalla de Usuarios.
+- Los reportes agregados por semestre usan el semestre actual (explicado arriba).
+
+**Riesgos:** ninguno nuevo.
+
+---
+
+## BATCH 3 — Activación, sesión y correo
+
+**ESTADO:** completo (verificado; sin cambios de código)
+
+**Hallazgos y evidencia:**
+- Enlace + código de 6 dígitos como un mismo evento; usar uno marca el otro como usado: `QA.17`, `QA.18`.
+- Activación manual por código obligatoria en pruebas: `QA.17`.
+- Límite de intentos del código (`ACTIVATION_CODE_MAX_ATTEMPTS=10`) y bloqueo: `e2e-qa` (intentos fallidos repetidos).
+- Recuperación de contraseña por código: `QA.20`–`QA.23`.
+- Renovación sin carrera destructiva, cookie HttpOnly en la web: commit `710ab6f` (gracia de 60 s, Web Locks), `B3.3`–`B3.3d`, `V2.2.8`, `WEB.19c`–`WEB.19e`.
+- SecureStore en el móvil: `mobile/src/api/client.ts`.
+- SMTP real con adaptador, cola y errores explícitos: probado con Gmail (05/10/2026).
+
+**Migraciones:** ninguna. **Regresiones:** ninguna.
+
+---
+
+## BATCH 4 — Taxonomía inteligente y UX relacional
+
+**ESTADO:** completo
+
+**Objetivo:** que el catálogo actual participe en las sugerencias y que el riesgo de etiquetas y la relación área → habilidades sean visibles (§4, §9).
+
+**Hallazgos iniciales:**
+- La sugerencia de área usaba reglas fijas y etiquetas, no las habilidades ya clasificadas.
+- Las etiquetas repetidas en una misma área se quitaban en silencio; no había aviso de etiquetas genéricas ni compartidas.
+- El formulario de necesidad de equipo ofrecía las primeras 40 habilidades del catálogo, sin áreas ni agrupación.
+
+**Cambios:**
+- §9.3 Sugerencia **dinámica**: además de las reglas canónicas y las etiquetas, compara por palabra completa con el nombre y los alias de las habilidades ya clasificadas («React Router» ⊃ «React»). Determinista, sin IA. Afecta también a la validación al guardar: un área incoherente pide confirmación con motivo (auditado).
+- §9.4 Etiquetas: se normalizan (minúsculas, espacios) y una repetida en la misma área se **bloquea**; nuevo `POST /academic-areas/tag-analysis` (Administración) que devuelve genéricas y áreas que comparten cada etiqueta; la pantalla exige confirmar antes de guardar si hay riesgo (al editar, solo por las etiquetas nuevas).
+- §4 Componente `AreaSkillPicker`: áreas primero, luego solo sus habilidades agrupadas por área; quitar un área quita sus habilidades. Usado en la necesidad de equipo (que ahora guarda también sus áreas).
+- §67 Servidor: `assertSkillsBelongToAreas` rechaza «pertenece a otra área» por campo; aplicado a necesidades de equipo y disponible para actividades, proyectos y equipos (B6, B10, B17).
+
+**Migraciones:** ninguna.
+
+**Pruebas ejecutadas:** unitarias de taxonomía (5); `e2e-v3 batch4` (V3.4.1–V3.4.13); regresión completa.
+
+**Decisiones:**
+- Una etiqueta compartida entre áreas sigue siendo válida (§9.4 «no significa que una tag jamás pueda repetirse»): se confirma, no se prohíbe; así las suites existentes, que crean áreas con etiquetas comunes, siguen siendo válidas.
+
+**Riesgos:** la sugerencia dinámica puede pedir confirmación en casos que antes pasaban; es el comportamiento que pide §74 («skill no puede guardar área incoherente silenciosamente»).
+
+---
+
+### Resultados comunes de los batches 2, 3 y 4
+
+- `npm run test:unit`: **47/47**.
+- Regresión completa (20 suites, correo simulado, sin cambios de código durante la ejecución): **1458 correctas, 0 fallos**. Incluye `e2e-v3` (37: B2 24 + B4 13).
+- Una ejecución anterior marcó un fallo pasajero en `WEB.19b` porque la API se estaba recompilando por ediciones en curso; repetida con la API estable, pasó dos veces seguidas y en la regresión limpia.
+- Builds de `api`, `web` y `mobile` en verde.

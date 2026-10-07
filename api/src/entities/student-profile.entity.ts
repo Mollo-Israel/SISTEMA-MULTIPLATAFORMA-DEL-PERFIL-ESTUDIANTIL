@@ -49,6 +49,10 @@ export class StudentProfile {
   @Column({ type: 'smallint', nullable: true })
   semester: number | null;
 
+  /** Copia de `users.academic_scope_semesters` (V3 §8.1), para el alcance docente. */
+  @Column({ name: 'academic_scope_semesters', type: 'smallint', array: true, default: () => "'{}'" })
+  academicScopeSemesters: number[];
+
   @Column({ type: 'text', nullable: true })
   bio: string | null;
 

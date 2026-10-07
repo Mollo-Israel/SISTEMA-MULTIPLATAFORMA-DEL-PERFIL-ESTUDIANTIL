@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -75,6 +75,19 @@ export class CatalogsController {
   @Roles(RolNombre.ADMIN)
   createArea(@Body() dto: CreateAcademicAreaDto) {
     return this.catalogsService.createArea(dto);
+  }
+
+  @Post('academic-areas/tag-analysis')
+  @Roles(RolNombre.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Riesgos de unas etiquetas antes de guardar un área (V3 §9.4).',
+    description: 'Devuelve las etiquetas normalizadas, las genéricas y las que ya usan otras áreas. No guarda nada.',
+  })
+  analyzeTags(@Body() body: { tags?: string[]; exceptId?: string }) {
+    const tags = Array.isArray(body?.tags) ? body.tags.filter((t) => typeof t === 'string').slice(0, 20) : [];
+    const exceptId = typeof body?.exceptId === 'string' && /^[0-9a-f-]{36}$/i.test(body.exceptId) ? body.exceptId : undefined;
+    return this.catalogsService.analyzeTags(tags, exceptId);
   }
 
   @Patch('academic-areas/:id')

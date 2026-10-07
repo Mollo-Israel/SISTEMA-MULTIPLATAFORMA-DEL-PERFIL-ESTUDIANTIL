@@ -8,7 +8,7 @@ import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
-import { TeacherScopeService } from '../access/teacher-scope.service';
+import { TeacherScopeService, inTeacherScope } from '../access/teacher-scope.service';
 
 export interface ResolvedFile {
   /** Nombre en disco. Ya validado: no contiene separadores ni rutas relativas. */
@@ -113,7 +113,7 @@ export class FileAccessService {
 
       const owner = await this.profiles.findOne({ where: { id: ownerProfileId } });
       const allowed = await this.teacherScope.allowedSemesters(user.userId);
-      if (!owner?.semester || !allowed.includes(owner.semester)) {
+      if (!owner || !inTeacherScope(owner, allowed)) {
         throw new ForbiddenException('El estudiante no pertenece a sus semestres habilitados.');
       }
       return;

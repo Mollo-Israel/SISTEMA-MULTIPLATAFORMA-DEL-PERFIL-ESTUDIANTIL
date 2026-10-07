@@ -79,6 +79,11 @@ export class ImportsService {
   ): Promise<{ batchId: string; counts: Record<string, number>; totalRows: number; rows: unknown[] }> {
     const content = file.buffer.toString('utf8');
     const parsed = parseCsv(content);
+    // V3 §7.1 nombra la columna `current_semester`; se acepta igual que `semester`.
+    if (!parsed.headers.includes('semester') && parsed.headers.includes('current_semester')) {
+      parsed.headers.push('semester');
+      for (const r of parsed.rows) r.values.semester = r.values.current_semester;
+    }
 
     const missing = REQUIRED_HEADERS.filter((h) => !parsed.headers.includes(h));
     if (missing.length > 0) {
@@ -336,7 +341,7 @@ export class ImportsService {
    */
   async apply(adminUserId: string, batchId: string) {
     const batch = await this.batches.findOne({ where: { id: batchId } });
-    if (!batch) throw new NotFoundException('Lote de importación no encontrado.');
+    if (!batch || batch.kind !== 'students') throw new NotFoundException('Lote de importación no encontrado.');
     if (batch.status === ImportBatchStatus.APPLIED) {
       throw new BadRequestException('Este lote ya se aplicó.');
     }
@@ -478,14 +483,16 @@ export class ImportsService {
     return { message: 'Previsualización descartada.' };
   }
 
-  async listBatches(limit = 20) {
+  async listBatches(limit = 20, kind?: 'students' | 'teachers') {
     const rows = await this.batches.find({
+      where: kind ? { kind } : {},
       order: { createdAt: 'DESC' },
       take: Math.min(Math.max(limit, 1), 100),
       relations: { importedBy: true },
     });
     return rows.map((b) => ({
       id: b.id,
+      kind: b.kind,
       filename: b.originalFilename,
       status: b.status,
       totalRows: b.totalRows,
@@ -505,6 +512,7 @@ export class ImportsService {
     const rows = await this.rows.find({ where: { batchId }, order: { rowNumber: 'ASC' } });
     return {
       id: batch.id,
+      kind: batch.kind,
       filename: batch.originalFilename,
       status: batch.status,
       counts: batch.counts,
@@ -518,6 +526,7 @@ export class ImportsService {
         firstName: r.firstName,
         lastName: r.lastName,
         semester: r.semester,
+        semesters: r.semesters,
         status: r.status,
         message: r.message,
       })),

@@ -1120,3 +1120,10 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 .help-topic p { margin: 0.4rem 0 0.3rem; }
 .help-steps { padding-left: 1.2rem; margin: 0; }
 .help-steps li { margin-bottom: 0.5rem; }
+
+/* V3 §4 · Selección área → habilidades agrupadas por área */
+.area-skill-picker .skill-group { margin: 0.35rem 0 0.6rem; }
+.area-skill-picker .skill-group-title {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--bordo); text-transform: uppercase; margin-bottom: 0.3rem;
+}

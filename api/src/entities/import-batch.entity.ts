@@ -18,6 +18,9 @@ import { User } from './user.entity';
  * §10.4 exige poder responder despues quien importo que, cuando y con que
  * resultado. El hash del archivo permite reconocer una reimportacion identica.
  */
+/** Tipo de padrón (V3 §7.1). */
+export type ImportKind = 'students' | 'teachers';
+
 @Entity('import_batches')
 export class ImportBatch {
   @PrimaryGeneratedColumn('uuid')
@@ -38,6 +41,10 @@ export class ImportBatch {
     default: ImportBatchStatus.PREVIEWED,
   })
   status: ImportBatchStatus;
+
+  /** Padrón de estudiantes o de docentes (V3 §7.1). */
+  @Column({ type: 'varchar', length: 20, default: 'students' })
+  kind: ImportKind;
 
   @Column({ name: 'imported_by_user_id', type: 'uuid' })
   importedByUserId: string;
@@ -103,6 +110,10 @@ export class ImportBatchRow {
 
   @Column({ type: 'int', nullable: true })
   semester: number | null;
+
+  /** Semestres autorizados de una fila de docente (V3 §7.1). */
+  @Column({ type: 'smallint', array: true, nullable: true })
+  semesters: number[] | null;
 
   @Column({
     type: 'enum',

@@ -16,7 +16,8 @@ import {
   type TeamView,
 } from '../../services';
 import { catalogService } from '../../services';
-import type { Skill } from '../../services/types';
+import type { AcademicArea, Skill } from '../../services/types';
+import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { useConfirm, useToast } from '../../components/feedback';
 import {
   Badge, Button, Card, Diferido, EmptyState, Loading, PageHeader, Tabs,
@@ -556,9 +557,10 @@ function Equipos({ toast }: { toast: any }) {
   const [equipos, setEquipos] = useCachedState<TeamView[]>('equipos', []);
   const [invitaciones, setInvitaciones] = useCachedState<any[]>('invitaciones-equipo', []);
   const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
+  const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
   const [sugerencias, setSugerencias] = useState<TeamSuggestionsView | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
-  const [form, setForm] = useState({ purpose: '', maxMembers: 4, skillIds: [] as string[] });
+  const [form, setForm] = useState({ purpose: '', maxMembers: 4, skillIds: [] as string[], areaIds: [] as string[] });
   const [creando, setCreando] = useState(false);
   /** Nombre en edición: del equipo nuevo (clave = necesidad) o de uno existente. */
   const [nombres, setNombres] = useState<Record<string, string>>({});
@@ -585,6 +587,7 @@ function Equipos({ toast }: { toast: any }) {
   useEffect(() => {
     void cargar();
     catalogService.skills().then(setSkills).catch(() => {});
+    catalogService.areas().then(setAreas).catch(() => {});
     // eslint-disable-next-line
   }, []);
 
@@ -596,10 +599,11 @@ function Equipos({ toast }: { toast: any }) {
         purpose: form.purpose,
         maxMembers: form.maxMembers,
         requiredSkillIds: form.skillIds,
+        preferredAreaIds: form.areaIds,
         availabilityRequirement: 'open_or_looking',
       });
       toast.success('Necesidad publicada.', 'Ya puedes ver quién podría cubrir lo que falta.');
-      setForm({ purpose: '', maxMembers: 4, skillIds: [] });
+      setForm({ purpose: '', maxMembers: 4, skillIds: [], areaIds: [] });
       await cargar();
     } catch (err) {
       toast.error(apiError(err));
@@ -716,30 +720,14 @@ function Equipos({ toast }: { toast: any }) {
               required
             />
           </div>
-          <div className="field">
-            <label>Habilidades que faltan</label>
-            <div className="chip-row">
-              {skills.slice(0, 40).map((s) => {
-                const on = form.skillIds.includes(s.id);
-                return (
-                  <button
-                    type="button"
-                    key={s.id}
-                    className={`chip ${on ? 'on' : ''}`}
-                    aria-pressed={on}
-                    onClick={() => setForm({
-                      ...form,
-                      skillIds: on
-                        ? form.skillIds.filter((x) => x !== s.id)
-                        : [...form.skillIds, s.id],
-                    })}
-                  >
-                    {s.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <AreaSkillPicker
+            areas={areas}
+            skills={skills}
+            value={{ areaIds: form.areaIds, skillIds: form.skillIds }}
+            onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds })}
+            areaLabel="Áreas del trabajo"
+            skillLabel="Habilidades que faltan"
+          />
           <Button type="submit" loading={creando} icon={<FiUsers size={15} />}>
             Publicar necesidad
           </Button>

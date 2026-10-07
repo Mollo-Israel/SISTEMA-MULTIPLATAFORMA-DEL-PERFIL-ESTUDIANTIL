@@ -31,10 +31,12 @@ import { checkTeamName, forbiddenTerms, normalizeWord } from '../../src/collabor
 import { checkContactChannel } from '../../src/collaboration/contact-channel.rules';
 import { PROMPTS, VALIDATE, inputFingerprint, parseJsonLoose, sanitizeForAi } from '../../src/ai/ai-text';
 import { helpVideo } from '../../src/help/help-video';
-import { classifySkill } from '../../src/catalogs/skill-classification';
+import { analyzeAreaTags, classifySkill, suggestFromCatalog } from '../../src/catalogs/skill-classification';
 import { assertClientAllowsRole } from '../../src/auth/auth.service';
 import { PDF_THEMES, PdfWriter } from '../../src/trajectory/pdf-writer';
 import { storageDriverFactory } from '../../src/storage/storage-driver.factory';
+import { parseAuthorizedSemesters } from '../../src/imports/teacher-import.service';
+import { effectiveSemesters, inTeacherScope, scopeSql } from '../../src/access/teacher-scope.service';
 
 describe('Afinidad V3 (§45–§47)', () => {
   it('es la versión 3 del motor', () => assert.equal(AFFINITY_ENGINE_VERSION, 3));
@@ -278,5 +280,69 @@ describe('Configuración (V3 BATCH 1)', () => {
   });
   it('un driver desconocido detiene el arranque', () => {
     assert.throws(() => storageDriverFactory(conf('s3'), 'disco'), /STORAGE_DRIVER=s3 no está soportado/);
+  });
+});
+
+describe('Importación de docentes y alcance académico (V3 §7.1, §8)', () => {
+  it('lee los semestres autorizados con ; | espacio o coma, sin repetidos', () => {
+    assert.deepEqual(parseAuthorizedSemesters('5;1|5'), [1, 5]);
+    assert.deepEqual(parseAuthorizedSemesters(' 2 3 '), [2, 3]);
+    assert.deepEqual(parseAuthorizedSemesters('1,4'), [1, 4]);
+    assert.deepEqual(parseAuthorizedSemesters(''), []);
+  });
+  it('rechaza semestres fuera de 1 a 8 o que no son números', () => {
+    assert.match(String(parseAuthorizedSemesters('9')), /no válido/);
+    assert.match(String(parseAuthorizedSemesters('1;dos')), /no válido/);
+  });
+  it('el alcance docente cuenta el semestre actual y los de arrastre', () => {
+    const est = { semester: 2, academicScopeSemesters: [1] };
+    assert.deepEqual(effectiveSemesters(est).sort(), [1, 2]);
+    assert.equal(inTeacherScope(est, [1, 5]), true);
+    assert.equal(inTeacherScope(est, [3, 4]), false);
+    assert.equal(inTeacherScope({ semester: null, academicScopeSemesters: [] }, [1]), false);
+  });
+  it('la condición SQL combina semestre actual y arrastre', () => {
+    assert.equal(
+      scopeSql('p', 's'),
+      '(p.semester IN (:...s) OR p.academic_scope_semesters && ARRAY[:...s]::smallint[])',
+    );
+  });
+});
+
+describe('Taxonomía dinámica (V3 §9.3, §9.4)', () => {
+  const areas = [
+    { id: 'web', name: 'Desarrollo Web', tags: ['frontend', 'html'] },
+    { id: 'db', name: 'Bases de Datos', tags: ['sql', 'datos'] },
+    { id: 'net', name: 'Redes', tags: ['routing', 'sistemas'] },
+  ];
+  const catalogo = [
+    { name: 'React', aliases: ['ReactJS'], academicAreaId: 'web' },
+    { name: 'PostgreSQL', aliases: ['Postgres'], academicAreaId: 'db' },
+    { name: 'C', aliases: [], academicAreaId: 'net' },
+  ];
+  it('una tecnología nueva hereda el área de una ya clasificada que contiene', () => {
+    const c = classifySkill('React Router', [], areas, catalogo);
+    assert.equal(c.rule, 'suggested');
+    assert.deepEqual(c.areaIds, ['web']);
+    assert.match(c.reason ?? '', /habilidades ya clasificadas \(React en Desarrollo Web\)/);
+  });
+  it('también por alias, y por palabra completa (no «C» dentro de cualquier palabra)', () => {
+    assert.deepEqual(classifySkill('Postgres 16', [], areas, catalogo).areaIds, ['db']);
+    assert.equal(suggestFromCatalog(['Cassandra'], catalogo).size, 0);
+  });
+  it('sin catálogo ni etiquetas no sugiere nada', () => {
+    assert.equal(classifySkill('Elixir', [], areas, catalogo).rule, 'none');
+  });
+  it('etiquetas: genéricas y compartidas con otras áreas, normalizadas', () => {
+    const r = analyzeAreaTags(['  SQL ', 'Sistemas', 'big   data'], areas, 'web');
+    assert.deepEqual(r.tags, ['sql', 'sistemas', 'big data']);
+    assert.deepEqual(r.generic, ['sistemas']);
+    assert.deepEqual(r.shared.map((s) => [s.tag, s.areas.map((a) => a.name)]), [
+      ['sql', ['Bases de Datos']],
+      ['sistemas', ['Redes']],
+    ]);
+  });
+  it('al editar, el área no choca consigo misma', () => {
+    assert.equal(analyzeAreaTags(['sql'], areas, 'db').shared.length, 0);
   });
 });

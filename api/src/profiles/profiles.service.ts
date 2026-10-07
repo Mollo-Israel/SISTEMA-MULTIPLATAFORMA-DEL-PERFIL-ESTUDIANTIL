@@ -39,7 +39,7 @@ import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
-import { TeacherScopeService } from '../access/teacher-scope.service';
+import { TeacherScopeService, scopeSql } from '../access/teacher-scope.service';
 import { CreateFreeInterestDto, UpdateFreeInterestDto } from './dto/free-interest.dto';
 import { CreateProfileDto } from './dto/create-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -339,7 +339,8 @@ export class ProfilesService {
       .addOrderBy('u.last_name', 'ASC');
 
     if (restricted) {
-      qb.andWhere('p.semester IN (:...semesters)', { semesters: scope });
+      // Semestre actual o de arrastre (V3 §8.1).
+      qb.andWhere(scopeSql('p', 'semesters'), { semesters: scope });
     }
 
     const term = search?.trim();

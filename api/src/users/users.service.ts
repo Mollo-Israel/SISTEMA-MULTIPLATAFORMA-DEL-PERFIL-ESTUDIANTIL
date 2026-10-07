@@ -43,6 +43,7 @@ interface CreateUserParams {
   /** Obligatorio para estudiantes: sin semestre el perfil no puede completarse. */
   semester?: number;
   universityCode?: string;
+  academicScopeSemesters?: number[];
 }
 
 interface UpdateUserParams {
@@ -53,6 +54,7 @@ interface UpdateUserParams {
   status?: UserStatus;
   semester?: number;
   universityCode?: string;
+  academicScopeSemesters?: number[];
 }
 
 /** Contexto minimo que los guards necesitan en cada peticion. */
@@ -116,6 +118,7 @@ export class UsersService {
           roleId: role.id,
           universityCode,
           semester: llevaSemestre ? params.semester! : null,
+          academicScopeSemesters: esEstudiante ? this.alcanceAdicional(params.academicScopeSemesters, params.semester) : [],
           // §9.2: una cuenta nace provisionada. Quien la crea no fija la
           // contrasena definitiva; la fija su titular al activar.
           status: params.status ?? UserStatus.PENDING_ACTIVATION,
@@ -129,6 +132,7 @@ export class UsersService {
             userId: user.id,
             semester: params.semester!,
             universityCode,
+            academicScopeSemesters: user.academicScopeSemesters,
           }),
         );
       }
@@ -278,7 +282,11 @@ export class UsersService {
     if (params.firstName !== undefined) user.firstName = params.firstName;
     if (params.lastName !== undefined) user.lastName = params.lastName;
     if (params.status !== undefined) user.status = params.status;
-    const antes = { semester: user.semester, universityCode: user.universityCode };
+    const antes = {
+      semester: user.semester,
+      universityCode: user.universityCode,
+      academicScopeSemesters: user.academicScopeSemesters ?? [],
+    };
     if (params.role !== undefined && params.role !== user.role.name) {
       const role = await this.rolesService.findByName(params.role);
       user.roleId = role.id;
@@ -312,28 +320,50 @@ export class UsersService {
       user.semester = null;
     }
 
+    // Arrastre o repetición (V3 §8.1): solo estudiantes.
+    if (rol === RolNombre.STUDENT) {
+      if (params.academicScopeSemesters !== undefined || params.semester !== undefined) {
+        user.academicScopeSemesters = this.alcanceAdicional(
+          params.academicScopeSemesters ?? user.academicScopeSemesters,
+          user.semester,
+        );
+      }
+    } else {
+      user.academicScopeSemesters = [];
+    }
+
     const saved = await this.usersRepository.save(user);
 
     // El perfil del estudiante guarda una copia de su semestre y su código.
     if (rol === RolNombre.STUDENT) {
       const perfiles = this.dataSource.getRepository(StudentProfile);
       const perfil = (await perfiles.findOne({ where: { userId: saved.id } })) ?? perfiles.create({ userId: saved.id });
-      if (perfil.semester !== saved.semester || perfil.universityCode !== saved.universityCode) {
+      const mismoAlcance = (perfil.academicScopeSemesters ?? []).join() === (saved.academicScopeSemesters ?? []).join();
+      if (perfil.semester !== saved.semester || perfil.universityCode !== saved.universityCode || !mismoAlcance) {
         perfil.semester = saved.semester;
         perfil.universityCode = saved.universityCode;
+        perfil.academicScopeSemesters = saved.academicScopeSemesters ?? [];
         await perfiles.save(perfil);
       }
     }
 
     // Cambiar el semestre mueve a la persona dentro o fuera del alcance de un
     // docente: queda registrado quién lo hizo, igual que el código.
-    if (antes.semester !== saved.semester || antes.universityCode !== saved.universityCode) {
+    const cambioAlcance = antes.academicScopeSemesters.join() !== (saved.academicScopeSemesters ?? []).join();
+    if (antes.semester !== saved.semester || antes.universityCode !== saved.universityCode || cambioAlcance) {
       await this.audit.record({
         actorUserId: actorUserId ?? null,
         eventType: AuditEventType.INSTITUTIONAL_DATA_CHANGED,
         entityType: 'user',
         entityId: saved.id,
-        metadata: { antes, despues: { semester: saved.semester, universityCode: saved.universityCode } },
+        metadata: {
+          antes,
+          despues: {
+            semester: saved.semester,
+            universityCode: saved.universityCode,
+            academicScopeSemesters: saved.academicScopeSemesters ?? [],
+          },
+        },
       });
     }
     return toPublicUser(saved);
@@ -547,6 +577,16 @@ export class UsersService {
       map.set(row.teacherId, list);
     }
     return map;
+  }
+
+  /**
+   * Semestres de arrastre normalizados: sin repetidos, ordenados y sin el
+   * semestre actual, que ya cuenta por sí mismo.
+   */
+  private alcanceAdicional(semestres: number[] | undefined, actual: number | null | undefined): number[] {
+    return [...new Set((semestres ?? []).map(Number))]
+      .filter((s) => Number.isInteger(s) && s >= 1 && s <= 12 && s !== actual)
+      .sort((a, b) => a - b);
   }
 
   /** Reemplaza el conjunto completo de semestres habilitados de un docente. */

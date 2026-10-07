@@ -17,7 +17,7 @@ import {
 import { GamificationEvent, StudentPoints } from '../entities/gamification.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
-import { TeacherScopeService } from '../access/teacher-scope.service';
+import { TeacherScopeService, scopeSql } from '../access/teacher-scope.service';
 import { GamificationService } from './gamification.service';
 
 export interface ChallengeInput {
@@ -347,7 +347,7 @@ export class GamificationExtrasService {
       .orderBy('points', 'DESC')
       .addOrderBy('"name"', 'ASC')
       .limit(200);
-    if (alcance) qb.where('p.semester IN (:...alcance)', { alcance });
+    if (alcance) qb.where(scopeSql('p', 'alcance'), { alcance });
     const filas = await qb.getRawMany<{ profileId: string; name: string; semester: number; points: string }>();
     return {
       period: periodo,

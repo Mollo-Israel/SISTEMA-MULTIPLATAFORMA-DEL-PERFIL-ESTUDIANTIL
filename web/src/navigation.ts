@@ -111,7 +111,6 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin', label: 'Usuarios' },
         { to: '/admin/imports', label: 'Importar padrón' },
         { to: '/admin/areas', label: 'Áreas y habilidades' },
-        { to: '/admin?role=TEACHER', label: 'Alcance docente' },
         { to: '/admin/activity-categories', label: 'Categorías de actividad' },
         { to: '/admin/resources', label: 'Recursos' },
         { to: '/admin/gamification', label: 'Puntos por logros' },

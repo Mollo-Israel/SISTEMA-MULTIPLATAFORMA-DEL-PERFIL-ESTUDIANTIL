@@ -7,6 +7,35 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 
 /**
+ * Semestres que cuentan para el alcance docente de un estudiante (V3 §8.1): el
+ * actual y los de arrastre o repetición.
+ */
+export function effectiveSemesters(profile: {
+  semester: number | null;
+  academicScopeSemesters?: number[] | null;
+}): number[] {
+  const todos = [profile.semester, ...(profile.academicScopeSemesters ?? [])];
+  return [...new Set(todos.filter((s): s is number => typeof s === 'number'))];
+}
+
+/** ¿El estudiante entra en alguno de estos semestres habilitados? */
+export function inTeacherScope(
+  profile: { semester: number | null; academicScopeSemesters?: number[] | null },
+  allowed: number[],
+): boolean {
+  return effectiveSemesters(profile).some((s) => allowed.includes(s));
+}
+
+/**
+ * La misma regla en SQL, para los listados: el semestre actual **o** uno de
+ * arrastre está en el alcance. `param` es el nombre del parámetro con la lista
+ * de semestres; el alias apunta a `student_profiles`.
+ */
+export function scopeSql(alias: string, param = 'scope'): string {
+  return `(${alias}.semester IN (:...${param}) OR ${alias}.academic_scope_semesters && ARRAY[:...${param}]::smallint[])`;
+}
+
+/**
  * Alcance de consulta del docente sobre perfiles de estudiantes (RF3 + privacidad
  * del Objetivo 2).
  *
@@ -78,7 +107,7 @@ export class TeacherScopeService {
         'No tiene semestres habilitados. Solicite al administrador que le asigne los semestres que debe acompañar.',
       );
     }
-    if (profile.semester === null || !semesters.includes(profile.semester)) {
+    if (!inTeacherScope(profile, semesters)) {
       throw new ForbiddenException(
         'Este estudiante no pertenece a los semestres que tiene habilitados.',
       );

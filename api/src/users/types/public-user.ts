@@ -14,6 +14,8 @@ export interface PublicUser {
   semesters?: number[];
   /** Semestre que cursa, en los roles que lo indican. */
   semester?: number | null;
+  /** Semestres adicionales por arrastre o repetición (V3 §8.1). Solo estudiantes. */
+  academicScopeSemesters?: number[];
   /** Código universitario (`PREFIJO-XXXXXXX`). Toda cuenta lo tiene. */
   universityCode?: string | null;
   /**
@@ -56,6 +58,7 @@ export function toPublicUser(user: User): PublicUser {
     lastName: user.lastName,
     universityCode: user.universityCode ?? null,
     semester: user.semester ?? null,
+    academicScopeSemesters: user.academicScopeSemesters ?? [],
     status: user.status,
     role: user.role.name,
     createdAt: user.createdAt,

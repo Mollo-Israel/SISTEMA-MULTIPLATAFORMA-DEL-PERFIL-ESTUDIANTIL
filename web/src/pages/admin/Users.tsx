@@ -82,7 +82,7 @@ function describirInvitacion(inv?: InvitationView): { tono: 'ok' | 'warn' | 'err
 export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [applied, setApplied] = useState('');
-  // V2 §77: «Alcance docente» abre esta lista con ?role=TEACHER, donde cada
+  // V3 §8.2: el alcance docente vive aquí; ?role=TEACHER filtra los docentes y cada
   // docente muestra y edita sus semestres habilitados.
   const [params, setParams] = useSearchParams();
   const rol = params.get('role') ?? '';
@@ -568,7 +568,12 @@ function SemestreCelda({
   }
   if (SEMESTER_ROLES.includes(user.role as RolNombre)) {
     return user.semester ? (
-      <Badge tone="bordo">{user.semester}º semestre</Badge>
+      <span className="flex" style={{ gap: '0.3rem', flexWrap: 'wrap' }}>
+        <Badge tone="bordo">{user.semester}º semestre</Badge>
+        {(user.academicScopeSemesters ?? []).length > 0 && (
+          <Badge tone="gray">+ {user.academicScopeSemesters!.map((s) => `${s}º`).join(', ')}</Badge>
+        )}
+      </span>
     ) : (
       <button type="button" className="link-warn" onClick={onStudent} title="Falta el semestre que cursa">
         <FiAlertTriangle size={13} /> Asignar semestre
@@ -627,6 +632,7 @@ function EditUserDialog({
     semester: user.semester ? String(user.semester) : '',
     universityCode: user.universityCode ?? '',
   });
+  const [arrastre, setArrastre] = useState<number[]>(user.academicScopeSemesters ?? []);
   const [saving, setSaving] = useState(false);
   const errores = useFormErrors(CAMPOS);
   const rolEditado = form.role as RolNombre;
@@ -654,6 +660,9 @@ function EditUserDialog({
       if (canChangeRole) body.role = form.role;
       body.universityCode = normalizeUniversityCode(form.universityCode);
       if (llevaSemestre) body.semester = Number(form.semester);
+      if (rolEditado === RolNombre.STUDENT) {
+        body.academicScopeSemesters = arrastre.filter((x) => x !== Number(form.semester));
+      }
       await adminService.updateUser(user.id, body);
       onSaved();
     } catch (e2) {
@@ -712,6 +721,29 @@ function EditUserDialog({
             />
           </FormField>
         </div>
+        {rolEditado === RolNombre.STUDENT && (
+          <FormField
+            label="Semestres adicionales (arrastre o repetición)"
+            hint="Solo en casos excepcionales. El docente de esos semestres también podrá acompañar a este estudiante."
+          >
+            <div className="flex" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
+              {SEMESTERS.filter((x) => x !== Number(form.semester)).map((x) => {
+                const marcado = arrastre.includes(x);
+                return (
+                  <button
+                    key={x}
+                    type="button"
+                    className={`chip ${marcado ? 'on' : ''}`}
+                    aria-pressed={marcado}
+                    onClick={() => setArrastre((a) => (marcado ? a.filter((y) => y !== x) : [...a, x].sort((p, q) => p - q)))}
+                  >
+                    {x}º
+                  </button>
+                );
+              })}
+            </div>
+          </FormField>
+        )}
         <FormField label="Rol" error={errores.errors.role}>
           {canChangeRole ? (
             <select value={form.role} onChange={(e) => set('role', e.target.value)}>

@@ -11,17 +11,45 @@ import {
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
 import type {
-  ImportBatchDetail, ImportPreview, ImportRow, ImportRowStatus,
+  ImportBatchDetail, ImportKind, ImportPreview, ImportRow, ImportRowStatus,
 } from '../../services/types';
 
-/** Columnas mínimas que exige el servidor (§10). */
-const PLANTILLA = 'university_code,first_name,last_name,institutional_email,semester';
-
-const EJEMPLO = [
-  PLANTILLA,
-  'EST-38DJ1HA,Ana,Rojas Vargas,ana.rojas@est.univalle.edu,5',
-  'EST-4KQ7M2B,Luis,Mamani Quispe,luis.mamani@est.univalle.edu,3',
-].join('\n');
+/** Esquema de cada padrón (V3 §7.1): columnas, ejemplo y explicación. */
+const PADRON: Record<ImportKind, {
+  etiqueta: string; plantilla: string; ejemplo: string[]; archivo: string; formato: JSX.Element;
+}> = {
+  students: {
+    etiqueta: 'Estudiantes',
+    plantilla: 'university_code,first_name,last_name,institutional_email,semester',
+    ejemplo: [
+      'EST-38DJ1HA,Ana,Rojas Vargas,ana.rojas@est.univalle.edu,5',
+      'EST-4KQ7M2B,Luis,Mamani Quispe,luis.mamani@est.univalle.edu,3',
+    ],
+    archivo: 'plantilla-padron-estudiantes.csv',
+    formato: (
+      <>
+        El código universitario sigue el formato <code>EST-</code> y 7 letras o números (por ejemplo{' '}
+        <code>EST-38DJ1HA</code>). La columna del semestre también puede llamarse <code>current_semester</code>.
+      </>
+    ),
+  },
+  teachers: {
+    etiqueta: 'Docentes',
+    plantilla: 'university_code,first_name,last_name,institutional_email,authorized_semesters',
+    ejemplo: [
+      'DOC-7RQ2M4A,Carlos,Pérez Rojas,carlos.perez@univalle.edu,1;2',
+      'DOC-K93TB1Z,María,Gutiérrez,maria.gutierrez@univalle.edu,5|6|7',
+    ],
+    archivo: 'plantilla-padron-docentes.csv',
+    formato: (
+      <>
+        El código sigue el formato <code>DOC-</code> y 7 letras o números. En{' '}
+        <code>authorized_semesters</code> van los semestres que acompaña, del 1 al 8, separados por{' '}
+        <code>;</code> o <code>|</code> (por ejemplo <code>1;5</code>). Esos semestres se convierten en su alcance.
+      </>
+    ),
+  },
+};
 
 const VERDICTO: Record<ImportRowStatus, { label: string; tone: string; icon: JSX.Element; help: string }> = {
   NEW: {
@@ -82,14 +110,24 @@ export default function AdminImportsPage() {
   const [applying, setApplying] = useState(false);
   const [filtro, setFiltro] = useState<ImportRowStatus | 'ALL'>('ALL');
   const [detalle, setDetalle] = useState<ImportBatchDetail | null>(null);
+  const [kind, setKind] = useState<ImportKind>('students');
+  const padron = PADRON[kind];
 
-  const historial = useAsync(() => importsService.list(), []);
+  const historial = useAsync(() => importsService.list(kind), [kind]);
+
+  const cambiarPadron = (k: ImportKind) => {
+    if (k === kind) return;
+    setKind(k);
+    setPreview(null);
+    setFilename('');
+    setFiltro('ALL');
+  };
 
   const subir = async (file: File) => {
     setUploading(true);
     setPreview(null);
     try {
-      const result = await importsService.preview(file);
+      const result = await importsService.preview(file, kind);
       setPreview(result);
       setFilename(file.name);
       setFiltro('ALL');
@@ -122,7 +160,7 @@ export default function AdminImportsPage() {
 
     setApplying(true);
     try {
-      const res = await importsService.apply(preview.batchId);
+      const res = await importsService.apply(preview.batchId, kind);
       toast.success('Importación aplicada.', res.message);
       setPreview(null);
       setFilename('');
@@ -144,7 +182,7 @@ export default function AdminImportsPage() {
     });
     if (!ok) return;
     try {
-      await importsService.discard(preview.batchId);
+      await importsService.discard(preview.batchId, kind);
       setPreview(null);
       setFilename('');
       toast.success('Previsualización descartada.');
@@ -156,7 +194,7 @@ export default function AdminImportsPage() {
 
   const verDetalle = async (batchId: string) => {
     try {
-      setDetalle(await importsService.detail(batchId));
+      setDetalle(await importsService.detail(batchId, kind));
     } catch (e) {
       toast.error(apiError(e, 'No se pudo abrir el lote.'));
     }
@@ -164,11 +202,12 @@ export default function AdminImportsPage() {
 
   const descargarPlantilla = () => {
     // BOM para que Excel abra el archivo en UTF-8 sin romper las tildes.
-    const blob = new Blob([`﻿${EJEMPLO}\n`], { type: 'text/csv;charset=utf-8' });
+    const ejemplo = [padron.plantilla, ...padron.ejemplo].join('\n');
+    const blob = new Blob([`﻿${ejemplo}\n`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'plantilla-padron-afinia.csv';
+    a.download = padron.archivo;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -184,11 +223,26 @@ export default function AdminImportsPage() {
     <div>
       <PageHeader
         title="Importar padrón"
-        description="Alta masiva de estudiantes desde el padrón institucional. Primero se previsualiza fila por fila y solo después se aplica."
+        description="Alta masiva de estudiantes o docentes desde el padrón institucional. Primero se previsualiza fila por fila y solo después se aplica."
       />
 
+      <div className="li-tabs" role="tablist" aria-label="Tipo de padrón" style={{ marginBottom: '0.9rem' }}>
+        {(['students', 'teachers'] as ImportKind[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={kind === k}
+            className={kind === k ? 'on' : ''}
+            onClick={() => cambiarPadron(k)}
+          >
+            {PADRON[k].etiqueta}
+          </button>
+        ))}
+      </div>
+
       <Card
-        title="Subir archivo CSV"
+        title={`Subir padrón de ${padron.etiqueta.toLowerCase()} (CSV)`}
         actions={
           <Button variant="ghost" size="sm" onClick={descargarPlantilla} icon={<FiDownload size={14} />}>
             Descargar plantilla
@@ -197,8 +251,7 @@ export default function AdminImportsPage() {
       >
         <p className="muted" style={{ marginTop: 0 }}>
           El archivo debe tener estas columnas en la primera fila:{' '}
-          <code>{PLANTILLA}</code>. El código universitario sigue el formato{' '}
-          <code>EST-</code> y 7 letras o números (por ejemplo <code>EST-38DJ1HA</code>).
+          <code>{padron.plantilla}</code>. {padron.formato}
         </p>
 
         <label className="import-drop">
@@ -378,7 +431,7 @@ function TablaFilas({ rows }: { rows: ImportRow[] }) {
             <th>Código</th>
             <th>Nombre</th>
             <th>Correo institucional</th>
-            <th>Sem.</th>
+            <th>Semestre(s)</th>
             <th>Veredicto</th>
             <th>Observación</th>
           </tr>
@@ -390,7 +443,7 @@ function TablaFilas({ rows }: { rows: ImportRow[] }) {
               <td>{r.universityCode ?? '—'}</td>
               <td>{[r.firstName, r.lastName].filter(Boolean).join(' ') || '—'}</td>
               <td className="muted">{r.institutionalEmail ?? '—'}</td>
-              <td>{r.semester ?? '—'}</td>
+              <td>{r.semesters ? (r.semesters.length ? r.semesters.join(', ') : 'Ninguno') : (r.semester ?? '—')}</td>
               <td>
                 <Badge tone={VERDICTO[r.status]?.tone ?? 'gray'}>
                   {VERDICTO[r.status]?.label ?? r.status}

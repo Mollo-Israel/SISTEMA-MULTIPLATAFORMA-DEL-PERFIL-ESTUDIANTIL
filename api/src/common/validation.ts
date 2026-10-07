@@ -308,11 +308,16 @@ export function IsSkillName(validationOptions?: ValidationOptions) {
 }
 
 /** Pasa a minúsculas y limpia cada etiqueta antes de validarla. */
+/**
+ * Etiquetas de área (V3 §9.4): limpia espacios y mayúsculas, pero **no** quita
+ * repetidas en silencio. Una etiqueta duplicada (aunque cambie la mayúscula)
+ * llega a `ArrayUnique` y se rechaza con su mensaje: se bloquea, no se oculta.
+ */
 export const lowerTags = ({ value }: { value: unknown }) => {
-  const limpio = trimUniqueArray({ value });
-  return Array.isArray(limpio)
-    ? limpio.map((t) => (typeof t === 'string' ? t.toLowerCase() : t))
-    : limpio;
+  if (!Array.isArray(value)) return value;
+  return value
+    .map((t) => (typeof t === 'string' ? stripInvisible(t.normalize('NFC')).replace(/\s+/g, ' ').trim().toLowerCase() : t))
+    .filter((t) => t !== '' && t !== null && t !== undefined);
 };
 
 /** Cada etiqueta, con el motivo exacto si alguna no sirve. */
