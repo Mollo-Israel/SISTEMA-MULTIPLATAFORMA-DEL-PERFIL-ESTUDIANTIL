@@ -8,7 +8,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Repository } from 'typeorm';
-import { ValidationResourceType } from '@perfil/shared';
+import { ExternalCredentialSource, ValidationResourceType } from '@perfil/shared';
+import { AuditEventType, AuditService } from '../audit/audit.service';
+import { CredentialEligibilityService } from '../activities/credential-eligibility.service';
 import { ExternalCertificate, ExternalCertificateSkill } from '../entities/external-certificate.entity';
 import { Skill } from '../entities/skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
@@ -37,7 +39,15 @@ export class CertificatesService {
     private readonly validation: ValidationService,
     @Inject(TRAJECTORY_RECALCULATION)
     private readonly trajectory: TrajectoryRecalculationPort,
+    private readonly eligibility: CredentialEligibilityService,
+    private readonly audit: AuditService,
   ) {}
+
+  /** V3 §15: oportunidades en las que ya puede adjuntar su credencial. */
+  async eligibleOpportunities(userId: string) {
+    const profile = await this.requireProfile(userId);
+    return this.eligibility.eligibleFor(profile.id);
+  }
 
   async create(userId: string, dto: CreateExternalCertificateDto): Promise<ExternalCertificate> {
     const profile = await this.requireProfile(userId);
@@ -49,6 +59,20 @@ export class CertificatesService {
     }
     await this.assertAreaExists(dto.academicAreaId);
     await this.assertSkillsExist(dto.skillIds);
+
+    // V3 §15/§16: el origen lo decide el servidor. Con oportunidad, solo si
+    // de verdad es elegible para este estudiante: no basta con conocer un id.
+    if (dto.activityId) {
+      if (await this.eligibility.alreadyAttached(profile.id, dto.activityId)) {
+        const m = 'Ya adjuntaste la credencial de esta oportunidad.';
+        throw new ConflictException({ code: 'CREDENTIAL_ALREADY_ATTACHED', message: m, fields: { activityId: [m] } });
+      }
+      if (!(await this.eligibility.assertEligible(profile.id, dto.activityId))) {
+        const m = 'Esta oportunidad no admite todavía tu credencial: debe haber terminado y el responsable '
+          + 'debe haber registrado tu aceptación (o tu participación, si es interna).';
+        throw new BadRequestException({ code: 'CREDENTIAL_OPPORTUNITY_NOT_ELIGIBLE', message: m, fields: { activityId: [m] } });
+      }
+    }
 
     // §27: solo se adjunta un archivo propio, y sus metadatos los resuelve
     // el servidor a partir del registro.
@@ -70,9 +94,19 @@ export class CertificatesService {
       fileName: archivo?.originalFilename ?? null,
       mimeType: archivo?.mimeTypeDetected ?? null,
       fileSize: archivo?.sizeBytes ?? null,
+      activityId: dto.activityId ?? null,
+      source: dto.activityId ? ExternalCredentialSource.OPPORTUNITY : ExternalCredentialSource.HISTORICAL_EXTERNAL,
     });
     const saved = await this.certificates.save(certificate);
     if (dto.skillIds?.length) await this.replaceSkills(saved.id, dto.skillIds);
+
+    await this.audit.record({
+      actorUserId: userId,
+      eventType: AuditEventType.EXTERNAL_CREDENTIAL_CREATED,
+      entityType: 'external_certificate',
+      entityId: saved.id,
+      metadata: { source: saved.source, activityId: saved.activityId },
+    });
 
     // §26: el certificado existe desde ya; lo que puede corroborarse se
     // averigua aparte y sin hacer esperar a nadie.
@@ -85,13 +119,18 @@ export class CertificatesService {
     return saved;
   }
 
-  async findMine(userId: string): Promise<ExternalCertificate[]> {
+  async findMine(userId: string) {
     const profile = await this.requireProfile(userId);
-    return this.certificates.find({
+    const lista = await this.certificates.find({
       where: { studentProfileId: profile.id },
-      relations: { academicArea: true, skills: { skill: true } },
+      relations: { academicArea: true, skills: { skill: true }, activity: true },
       order: { createdAt: 'DESC' },
     });
+    // De la oportunidad solo hace falta lo que se muestra.
+    return lista.map(({ activity, ...c }) => ({
+      ...c,
+      activity: activity ? { id: activity.id, title: activity.title, provider: activity.provider } : null,
+    }));
   }
 
   async update(

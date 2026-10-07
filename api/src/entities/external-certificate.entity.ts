@@ -13,6 +13,8 @@ import { Skill } from './skill.entity';
 import { StudentProfile } from './student-profile.entity';
 import { AcademicArea } from './academic-area.entity';
 import { StoredFileRecord } from './stored-file.entity';
+import { Activity } from './activity.entity';
+import { ExternalCredentialSource } from '@perfil/shared';
 
 /**
  * Certificado emitido por una entidad externa y adjuntado por el estudiante.
@@ -96,6 +98,24 @@ export class ExternalCertificate {
   @ManyToOne(() => StoredFileRecord, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'stored_file_id' })
   storedFile: StoredFileRecord | null;
+
+  /**
+   * V3 §15/§16: de una oportunidad en la que participó o histórica. Lo decide
+   * el servidor según venga o no `activityId`, nunca el cliente.
+   */
+  @Column({
+    type: 'enum', enum: ExternalCredentialSource, enumName: 'external_credential_source_enum',
+    default: ExternalCredentialSource.HISTORICAL_EXTERNAL,
+  })
+  source: ExternalCredentialSource;
+
+  /** Oportunidad de la que viene, si viene de una (§15). */
+  @Column({ name: 'activity_id', type: 'uuid', nullable: true })
+  activityId: string | null;
+
+  @ManyToOne(() => Activity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'activity_id' })
+  activity: Activity | null;
 
   /** V2 §41: las tecnologías que el certificado acredita haber trabajado. */
   @OneToMany(() => ExternalCertificateSkill, (s) => s.certificate)

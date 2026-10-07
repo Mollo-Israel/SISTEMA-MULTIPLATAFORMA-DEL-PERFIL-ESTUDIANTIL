@@ -267,3 +267,39 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 47/47; `e2e-v3` 71 (B7 13/13). Regresión completa: **1496 correctas, 0 fallos** (20 suites). `e2e-ai-provider` levanta su propia API: el script de regresión ahora fuerza `MAIL_TRANSPORT=console` para que nunca herede el SMTP real del `.env` (la suite lo detecta y se niega a correr, que es lo que pasó en la primera vuelta).
 
 **Pendientes:** aceptación de externas, elegibilidad y referencia de validación (B8).
+
+---
+
+## BATCH 8 — Oportunidades externas y credenciales
+
+**ESTADO:** completo
+
+**Objetivo:** separar «aceptado por el proveedor» de «obtuvo la credencial», habilitar adjuntarla solo cuando la oportunidad terminó, distinguir credenciales de oportunidad e históricas y permitir una referencia de validación (§15, §16, §17).
+
+**Hallazgos iniciales:**
+- No existía el estado ACCEPTED: una externa solo podía «confirmarse» como si fuera asistencia interna.
+- El estudiante registraba cualquier certificado sin vínculo con la oportunidad y sin `source`.
+- No había referencia de validación ni un punto de emisión de notificaciones.
+
+**Cambios:**
+- **Aceptación (§15):** nuevo estado de inscripción `accepted` con `accepted_at`. En una externa el responsable registra la aceptación (`confirmed` → 400 `EXTERNAL_USES_ACCEPTANCE`); en una interna no existe (`ACCEPTANCE_ONLY_EXTERNAL`). La aceptación ocupa cupo, no alimenta la trayectoria ni la afinidad, y el estudiante ya no se da de baja solo. Auditoría `EXTERNAL_OPPORTUNITY_ACCEPTED`.
+- **Elegibilidad (§15):** `CredentialEligibilityService` con reglas puras (`credential-eligibility.rules.ts`): externa aceptada, o interna con credencial de un tercero (§14.2) confirmada, y oportunidad terminada (`end_at`/fecha pasada o FINISHED; cancelada nunca). Se calcula al consultar: no depende de ninguna tarea programada. `GET /certificates/external/eligible-opportunities`; `myRegistration.evidenceEligible` y `participants[].evidenceEligible`.
+- **Credencial con origen (§15/§16):** `external_certificates.source` (`opportunity` / `historical_external`) y `activity_id`. Lo decide el servidor: con `activityId` solo si es elegible para ese estudiante (400 `CREDENTIAL_OPPORTUNITY_NOT_ELIGIBLE`), una por oportunidad (409, índice único parcial). El origen no se edita (el DTO de edición lo omite). Las 1467 credenciales existentes quedan `historical_external`. Auditoría `EXTERNAL_CREDENTIAL_CREATED`.
+- **Referencia de validación (§17):** tabla `external_opportunity_validation_references` (curso esperado, patrón del código, certificado de ejemplo, notas). Proveedor, dominios y palabras clave siguen en la oportunidad (§12) y se devuelven junto, sin duplicarse. `GET/PUT /activities/:id/validation-reference` solo para quien gestiona la oportunidad y solo si espera credencial. El patrón usa comodines (`#` dígito, `@` letra, `*` varios), nunca una expresión regular libre (sin ReDoS). El ejemplo debe ser un archivo propio; lo abren responsable, creador, Dirección y administración, nunca un estudiante; la limpieza de huérfanos lo respeta. Los responsables pueden subir archivos para esto. Auditoría `VALIDATION_REFERENCE_UPDATED`.
+- **Punto de notificación (B16):** puerto `NOTIFICATION_EMITTER` con `dedupe_key`; la implementación provisional solo registra. Se emite `EXTERNAL_EVIDENCE_ENABLED` (también auditado) al aceptar en una oportunidad ya terminada y al darla por finalizada.
+- **Web:** «Adjuntar credencial externa» con «¿De dónde viene?» (oportunidades elegibles o histórica) que precarga nombre y emisor; la lista muestra la procedencia. En Actividades, el estudiante ve «aceptado» y cuándo puede adjuntar. En la gestión, una externa muestra «Registrar aceptación» y el grupo «Aceptados»; el bloque externo suma la referencia de validación con el ejemplo.
+- **Móvil:** el mismo selector de origen, el estado «aceptado» en Actividades y en Mis actividades.
+
+**Migraciones:** `1780510000000-V3ExternalCredentials` (valor `accepted` del enum, `accepted_at`, `source` + `activity_id` con índice único parcial, tabla de referencias). Copia de seguridad previa (`pre-v3-b8.dump`); `up` → `down` → `up` probado (el `down` recrea el enum sin `accepted` y devuelve esas inscripciones a `registered`).
+
+**Pruebas ejecutadas:** `e2e-v3 batch8` (V3.8.1–V3.8.36); unitarias nuevas de elegibilidad y patrón (56/56); regresión completa.
+
+**Decisiones:**
+- La comparación de la credencial contra la referencia (dominio, curso, patrón) es parte de la validación escalonada de B9; aquí queda guardada y expuesta.
+- La notificación por fecha cumplida sin acción de nadie (recordatorio) la programa B16; la elegibilidad ya es correcta sin ella porque se calcula al consultar.
+
+**Riesgos:** ninguno nuevo. Abrir `POST /uploads` a los roles de gestión no da acceso a archivos ajenos: el archivo queda del que lo sube y solo él puede enlazarlo.
+
+**Resultados:** unitarias 56/56; `e2e-v3` 107 (B8 36/36). Regresión completa: **1532 correctas, 0 fallos** (20 suites; `e2e-ai-provider` 37/37 con correo simulado).
+
+**Pendientes:** comparación de la credencial contra la referencia y validación escalonada (B9); centro de notificaciones (B16).

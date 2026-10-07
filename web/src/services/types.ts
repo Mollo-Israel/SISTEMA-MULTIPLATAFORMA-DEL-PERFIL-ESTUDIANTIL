@@ -483,7 +483,8 @@ export interface Activity {
   seatsLeft?: number | null;
   registrationBlockReason?: string | null;
   /** Situación del estudiante que consulta. Solo llega en su listado. */
-  myRegistration?: { id: string; status: RegistrationStatus } | null;
+  /** `evidenceEligible`: V3 §15, ya puede adjuntar la credencial del proveedor. */
+  myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean } | null;
   /** Revisión de Dirección (V2 §27). null = sin enviar. */
   reviewStatus?: ActivityReviewStatus | null;
   requiresReview?: boolean;
@@ -506,7 +507,7 @@ export const ACTIVITY_REVIEW_LABEL: Record<ActivityReviewStatus | 'unsubmitted',
 
 /** Participación de un estudiante en una actividad (§23). */
 export type RegistrationStatus =
-  | 'interested' | 'registered' | 'confirmed' | 'absent' | 'cancelled';
+  | 'interested' | 'registered' | 'accepted' | 'confirmed' | 'absent' | 'cancelled';
 
 export interface Participant {
   id: string;
@@ -842,7 +843,34 @@ export interface ExternalCertificate {
   fileSize: number | null;
   /** V2 §41: tecnologías que el certificado acredita. */
   skills?: { skillId: string; skill?: { id: string; name: string } | null }[];
+  /** V3 §15/§16: de una oportunidad en la que participó o histórica. */
+  source?: 'opportunity' | 'historical_external';
+  activityId?: string | null;
+  activity?: { id: string; title: string; provider: string | null } | null;
   createdAt: string;
+}
+
+/** V3 §15: oportunidad terminada que ya admite adjuntar su credencial. */
+export interface CredentialOpportunity {
+  activityId: string;
+  title: string;
+  provider: string | null;
+  endAt: string | null;
+  originType: 'internal' | 'external';
+  expectedCourseName: string | null;
+}
+
+/** V3 §17: referencia de validación de una oportunidad externa. */
+export interface ValidationReference {
+  activityId: string;
+  expectedCourseName: string | null;
+  credentialIdPattern: string | null;
+  sampleStoredFileId: string | null;
+  sampleFileName: string | null;
+  notes: string | null;
+  provider: string | null;
+  expectedIssuerDomains: string[];
+  expectedKeywords: string[];
 }
 
 export interface EligibleParticipant {

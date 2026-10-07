@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -20,6 +21,7 @@ import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivitiesDto } from './dto/query-activities.dto';
 import { ConfirmParticipationDto } from './dto/confirm-participation.dto';
+import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 
 /**
  * Actividades academicas y extracurriculares (Objetivo 3) y registro de
@@ -201,5 +203,26 @@ export class ActivitiesController {
   @ApiOperation({ summary: 'Participantes de la actividad, para el responsable.' })
   getParticipants(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.activitiesService.getParticipants(user, id);
+  }
+
+  @Get(':id/validation-reference')
+  @Roles(...MANAGER_ROLES)
+  @ApiOperation({ summary: 'Referencia de validación de una oportunidad externa (V3 §17).' })
+  getValidationReference(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.getValidationReference(user, id);
+  }
+
+  @Put(':id/validation-reference')
+  @Roles(...MANAGER_ROLES)
+  @ApiOperation({
+    summary: 'Registra la referencia de validación (V3 §17): curso esperado, patrón del código, ejemplo.',
+    description: 'Ayuda a leer y comparar la credencial que adjunte el estudiante. Parecerse al ejemplo no prueba autenticidad.',
+  })
+  saveValidationReference(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveValidationReferenceDto,
+  ) {
+    return this.activitiesService.saveValidationReference(user, id, dto);
   }
 }

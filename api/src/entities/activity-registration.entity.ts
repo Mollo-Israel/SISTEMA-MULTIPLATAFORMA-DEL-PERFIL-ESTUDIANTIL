@@ -45,6 +45,10 @@ export class ActivityRegistration {
   @Column({ type: 'enum', enum: RegistrationStatus, default: RegistrationStatus.INTERESTED })
   status: RegistrationStatus;
 
+  /** V3 §15: cuándo registró el responsable que el proveedor lo aceptó. */
+  @Column({ name: 'accepted_at', type: 'timestamptz', nullable: true })
+  acceptedAt: Date | null;
+
   @Column({ name: 'confirmed_by', type: 'uuid', nullable: true })
   confirmedById: string | null;
 

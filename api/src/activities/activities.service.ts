@@ -41,6 +41,12 @@ import { ActivityCategory } from '../entities/activity-category.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
 import { ActivityArea } from '../entities/activity-area.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
+import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
+import { CREDENTIAL_PATTERN_CHARS } from './credential-pattern';
+import { FILES_ROUTE } from '../storage/local-storage.driver';
+import { UploadsService } from '../storage/uploads.service';
+import { CredentialEligibilityService } from './credential-eligibility.service';
+import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 import { User } from '../entities/user.entity';
 import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
@@ -117,7 +123,7 @@ export interface ActivityWithCounts extends Activity {
    * Solo se rellena para el rol estudiante: a un docente no le sirve de
    * nada y consultarlo seria trabajo tirado.
    */
-  myRegistration?: { id: string; status: RegistrationStatus } | null;
+  myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean } | null;
 }
 
 /**
@@ -176,6 +182,10 @@ export class ActivitiesService {
     @InjectRepository(GamificationCriterion)
     private readonly criteria: Repository<GamificationCriterion>,
     private readonly config: ConfigService,
+    @InjectRepository(ExternalOpportunityValidationReference)
+    private readonly references: Repository<ExternalOpportunityValidationReference>,
+    private readonly eligibility: CredentialEligibilityService,
+    private readonly uploads: UploadsService,
   ) {}
 
   // =========================================================================
@@ -708,13 +718,17 @@ export class ActivitiesService {
       : null;
 
     const confirmed = await this.registrations.count({
-      where: { activityId: activity.id, status: RegistrationStatus.CONFIRMED },
+      where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
     });
 
     return {
       ...vistaEstudiante(activity),
       myRegistration: registration
-        ? { id: registration.id, status: registration.status }
+        ? {
+          id: registration.id,
+          status: registration.status,
+          evidenceEligible: CredentialEligibilityService.elegible(activity, registration.status),
+        }
         : null,
       confirmedCount: confirmed,
       seatsLeft: activity.capacity ? Math.max(activity.capacity - confirmed, 0) : null,
@@ -845,6 +859,16 @@ export class ActivitiesService {
         entityId: activity.id,
         metadata: { de: estadoAnterior, a: dto.status },
       });
+      // §15: al darla por finalizada, quienes fueron aceptados (o
+      // confirmados, si es interna con credencial de un tercero) ya pueden
+      // adjuntar su credencial.
+      if (dto.status === ActivityStatus.FINISHED && CredentialEligibilityService.esperaCredencial(activity)) {
+        const habilitadas = await this.registrations.find({
+          where: { activityId: activity.id, status: CredentialEligibilityService.estadoQueHabilita(activity) },
+          relations: { studentProfile: true },
+        });
+        await this.eligibility.announce(activity, habilitadas, user.userId);
+      }
     }
 
     return this.findOne(id);
@@ -876,6 +900,11 @@ export class ActivitiesService {
     });
     if (!registration) {
       throw new NotFoundException('No está inscrito ni manifestó interés en esta actividad.');
+    }
+    if (registration.status === RegistrationStatus.ACCEPTED) {
+      throw new BadRequestException(
+        'El responsable ya registró que el proveedor te aceptó. Si hubo un error, avísale.',
+      );
     }
     if (registration.status === RegistrationStatus.CONFIRMED) {
       throw new BadRequestException(
@@ -930,17 +959,31 @@ export class ActivitiesService {
       );
     }
 
-    // El cupo se controla al aprobar: solo los confirmados ocupan lugar.
-    if (
-      status === RegistrationStatus.CONFIRMED &&
-      registration.status !== RegistrationStatus.CONFIRMED
-    ) {
+    // V3 §15: en una externa no se confirma asistencia —no ocurre en la
+    // carrera—; se registra que el proveedor lo aceptó. Y al revés, una
+    // interna no tiene «aceptación del proveedor».
+    const externa = activity.originType === ActivityOrigin.EXTERNAL;
+    if (externa && status === RegistrationStatus.CONFIRMED) {
+      const m = 'En una oportunidad externa se registra la aceptación del proveedor; '
+        + 'la credencial la adjunta el estudiante cuando termine.';
+      throw new BadRequestException({ code: 'EXTERNAL_USES_ACCEPTANCE', message: m, fields: { status: [m] } });
+    }
+    if (!externa && status === RegistrationStatus.ACCEPTED) {
+      const m = 'La aceptación del proveedor solo existe en oportunidades externas.';
+      throw new BadRequestException({ code: 'ACCEPTANCE_ONLY_EXTERNAL', message: m, fields: { status: [m] } });
+    }
+
+    // El cupo se controla al aprobar: solo los confirmados (o aceptados) ocupan lugar.
+    if (OCCUPYING_STATUSES.includes(status) && !OCCUPYING_STATUSES.includes(registration.status)) {
       await this.assertConfirmCapacity(activity);
     }
 
     const anterior = registration.status;
     registration.status = status;
     registration.confirmedById = confirmer.userId;
+    registration.acceptedAt = status === RegistrationStatus.ACCEPTED
+      ? (anterior === RegistrationStatus.ACCEPTED ? registration.acceptedAt : new Date())
+      : null;
     const saved = await this.registrations.save(registration);
 
     // §23: confirmar dispara trayectoria, afinidad, recomendaciones,
@@ -954,7 +997,9 @@ export class ActivitiesService {
 
     await this.audit.record({
       actorUserId: confirmer.userId,
-      eventType: AuditEventType.PARTICIPATION_CONFIRMED,
+      eventType: status === RegistrationStatus.ACCEPTED
+        ? AuditEventType.EXTERNAL_OPPORTUNITY_ACCEPTED
+        : AuditEventType.PARTICIPATION_CONFIRMED,
       entityType: 'activity_registration',
       entityId: saved.id,
       metadata: {
@@ -964,6 +1009,11 @@ export class ActivitiesService {
         a: status,
       },
     });
+
+    // Si la oportunidad ya terminó, desde ahora puede adjuntar su credencial.
+    if (status !== anterior) {
+      await this.eligibility.announce(activity, [saved], confirmer.userId);
+    }
 
     return saved;
   }
@@ -984,6 +1034,8 @@ export class ActivitiesService {
       id: r.id,
       studentProfileId: r.studentProfileId,
       status: r.status,
+      acceptedAt: r.acceptedAt,
+      evidenceEligible: CredentialEligibilityService.elegible(activity, r.status),
       studentName: r.studentProfile?.user
         ? `${r.studentProfile.user.firstName} ${r.studentProfile.user.lastName}`
         : null,
@@ -1008,6 +1060,92 @@ export class ActivitiesService {
       status: r.status,
       activity: r.activity,
     }));
+  }
+
+  // ------------------------------------------------------------------
+  // V3 §17 · Referencia de validación de una oportunidad externa
+  // ------------------------------------------------------------------
+
+  async getValidationReference(user: AuthenticatedUser, activityId: string) {
+    const activity = await this.findOne(activityId);
+    await this.assertCanManage(user, activity, 'Solo el responsable de la oportunidad puede ver su referencia de validación.');
+    this.assertEsperaCredencial(activity);
+    return this.vistaReferencia(activity, await this.references.findOne({
+      where: { activityId },
+      relations: { sampleStoredFile: true },
+    }));
+  }
+
+  async saveValidationReference(user: AuthenticatedUser, activityId: string, dto: SaveValidationReferenceDto) {
+    const activity = await this.findOne(activityId);
+    await this.assertCanManage(user, activity, 'Solo el responsable de la oportunidad puede registrar su referencia de validación.');
+    this.assertEsperaCredencial(activity);
+
+    if (dto.credentialIdPattern && !CREDENTIAL_PATTERN_CHARS.test(dto.credentialIdPattern)) {
+      const m = 'El patrón solo admite letras, números, punto, guion, barra, espacio y los comodines # @ *.';
+      throw new BadRequestException({ message: m, fields: { credentialIdPattern: [m] } });
+    }
+
+    let ref = await this.references.findOne({ where: { activityId } });
+    if (!ref) ref = this.references.create({ activityId });
+
+    if (dto.sampleStoredFileId !== undefined) {
+      // §27: solo un archivo propio. Si no cambia, no se vuelve a exigir:
+      // otro responsable puede editar el resto sin ser dueño del ejemplo.
+      if (dto.sampleStoredFileId && dto.sampleStoredFileId !== ref.sampleStoredFileId) {
+        await this.uploads.requireOwned(user.userId, dto.sampleStoredFileId);
+      }
+      ref.sampleStoredFileId = dto.sampleStoredFileId ?? null;
+    }
+    if (dto.expectedCourseName !== undefined) ref.expectedCourseName = dto.expectedCourseName || null;
+    if (dto.credentialIdPattern !== undefined) ref.credentialIdPattern = dto.credentialIdPattern || null;
+    if (dto.notes !== undefined) ref.notes = dto.notes || null;
+    ref.updatedById = user.userId;
+    const saved = await this.references.save(ref);
+
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.VALIDATION_REFERENCE_UPDATED,
+      entityType: 'activity',
+      entityId: activity.id,
+      metadata: {
+        expectedCourseName: saved.expectedCourseName,
+        credentialIdPattern: saved.credentialIdPattern,
+        conEjemplo: !!saved.sampleStoredFileId,
+      },
+    });
+
+    return this.vistaReferencia(activity, await this.references.findOne({
+      where: { id: saved.id },
+      relations: { sampleStoredFile: true },
+    }));
+  }
+
+  private assertEsperaCredencial(activity: Activity): void {
+    if (!CredentialEligibilityService.esperaCredencial(activity)) {
+      throw new BadRequestException({
+        code: 'NO_CREDENTIAL_EXPECTED',
+        message: 'Solo una oportunidad externa, o una interna que conduce a una credencial de un tercero, lleva referencia de validación.',
+      });
+    }
+  }
+
+  private vistaReferencia(activity: Activity, ref: ExternalOpportunityValidationReference | null) {
+    const archivo = ref?.sampleStoredFile ?? null;
+    return {
+      activityId: activity.id,
+      expectedCourseName: ref?.expectedCourseName ?? null,
+      credentialIdPattern: ref?.credentialIdPattern ?? null,
+      sampleStoredFileId: ref?.sampleStoredFileId ?? null,
+      sampleFileName: archivo?.originalFilename ?? null,
+      sampleFileUrl: archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null,
+      notes: ref?.notes ?? null,
+      // Lo que ya declara la oportunidad (§12): se muestra junto, no se duplica.
+      provider: activity.provider,
+      expectedIssuerDomains: activity.expectedIssuerDomains ?? [],
+      expectedKeywords: activity.expectedKeywords ?? [],
+      updatedAt: ref?.updatedAt ?? null,
+    };
   }
 
   // ------------------------------------------------------------------
@@ -1043,6 +1181,7 @@ export class ActivitiesService {
       });
     } else if (
       registration.status === RegistrationStatus.CONFIRMED ||
+      registration.status === RegistrationStatus.ACCEPTED ||
       registration.status === RegistrationStatus.ABSENT
     ) {
       throw new BadRequestException(
@@ -1100,7 +1239,7 @@ export class ActivitiesService {
   private async assertConfirmCapacity(activity: Activity): Promise<void> {
     if (!activity.capacity) return;
     const confirmed = await this.registrations.count({
-      where: { activityId: activity.id, status: RegistrationStatus.CONFIRMED },
+      where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
     });
     if (confirmed >= activity.capacity) {
       throw new BadRequestException(
@@ -1148,7 +1287,7 @@ export class ActivitiesService {
 
     if (next === ActivityStatus.DRAFT) {
       const confirmed = await this.registrations.count({
-        where: { activityId: activity.id, status: RegistrationStatus.CONFIRMED },
+        where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
       });
       if (confirmed > 0) {
         throw new BadRequestException(
@@ -1254,7 +1393,13 @@ export class ActivitiesService {
       const propia = porActividad.get(a.id);
       return {
         ...a,
-        myRegistration: propia ? { id: propia.id, status: propia.status } : null,
+        myRegistration: propia
+          ? {
+            id: propia.id,
+            status: propia.status,
+            evidenceEligible: CredentialEligibilityService.elegible(a, propia.status),
+          }
+          : null,
       };
     });
   }
@@ -1389,7 +1534,7 @@ export class ActivitiesService {
     for (const row of rows) {
       const entry = byActivity.get(row.activityId) ?? { registered: 0, confirmed: 0 };
       const total = Number(row.total);
-      if (row.status === RegistrationStatus.CONFIRMED) entry.confirmed += total;
+      if (OCCUPYING_STATUSES.includes(row.status)) entry.confirmed += total;
       if (row.status !== RegistrationStatus.ABSENT) entry.registered += total;
       byActivity.set(row.activityId, entry);
     }

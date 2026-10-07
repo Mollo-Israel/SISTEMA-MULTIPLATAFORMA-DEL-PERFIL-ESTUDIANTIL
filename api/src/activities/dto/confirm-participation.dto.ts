@@ -7,11 +7,15 @@ export class ConfirmParticipationDto {
   @IsUUID('4')
   studentProfileId: string;
 
+  /**
+   * `confirmed` en una interna; `accepted` en una externa (V3 §15: el
+   * proveedor lo aceptó); `absent` en ambas.
+   */
   @ApiProperty({
-    enum: [RegistrationStatus.CONFIRMED, RegistrationStatus.ABSENT],
+    enum: [RegistrationStatus.CONFIRMED, RegistrationStatus.ACCEPTED, RegistrationStatus.ABSENT],
     example: RegistrationStatus.CONFIRMED,
   })
   @IsEnum(RegistrationStatus)
-  @IsIn([RegistrationStatus.CONFIRMED, RegistrationStatus.ABSENT])
+  @IsIn([RegistrationStatus.CONFIRMED, RegistrationStatus.ACCEPTED, RegistrationStatus.ABSENT])
   status: RegistrationStatus;
 }

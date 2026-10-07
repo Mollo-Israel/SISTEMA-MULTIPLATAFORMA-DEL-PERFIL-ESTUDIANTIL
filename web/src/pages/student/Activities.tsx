@@ -237,12 +237,19 @@ export default function StudentActivitiesPage() {
                       experiencia registrada y solo el responsable la corrige.
                     */}
                     {a.myRegistration?.status === 'confirmed'
+                      || a.myRegistration?.status === 'accepted'
                       || a.myRegistration?.status === 'absent' ? (
                         <p className="inline-note" style={{ margin: 0 }}>
                           <FiAlertCircle size={13} />{' '}
-                          {a.myRegistration.status === 'confirmed'
-                            ? 'Tu participación ya fue confirmada. Si hay un error, avisa al responsable.'
-                            : 'El responsable registró tu ausencia.'}
+                          {a.myRegistration.status === 'accepted'
+                            ? a.myRegistration.evidenceEligible
+                              ? 'Terminó y fuiste aceptado: ya puedes adjuntar tu credencial en Evidencias.'
+                              : 'Fuiste aceptado. Cuando termine, podrás adjuntar la credencial que emita el proveedor.'
+                            : a.myRegistration.status === 'confirmed'
+                              ? a.myRegistration.evidenceEligible
+                                ? 'Participación confirmada. Ya puedes adjuntar en Evidencias la credencial del proveedor.'
+                                : 'Tu participación ya fue confirmada. Si hay un error, avisa al responsable.'
+                              : 'El responsable registró tu ausencia.'}
                         </p>
                       ) : (
                         <>

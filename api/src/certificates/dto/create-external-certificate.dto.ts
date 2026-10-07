@@ -94,6 +94,16 @@ export class CreateExternalCertificateDto {
   @IsUUID('4', { message: 'El archivo debe identificarse por el id que devolvió la subida.' })
   storedFileId?: string;
 
+  /**
+   * V3 §15: oportunidad de la que viene la credencial. Solo una en la que el
+   * estudiante fue aceptado (externa) o confirmado (interna con credencial de
+   * un tercero) y que ya terminó. Sin ella, la credencial es histórica (§16).
+   */
+  @ApiProperty({ required: false, description: 'Oportunidad terminada de la que viene (V3 §15)' })
+  @IsOptional()
+  @IsUUID('4', { message: 'Elige una oportunidad de la lista.' })
+  activityId?: string;
+
   /** V2 §41: tecnologías del catálogo que el certificado acredita. */
   @ApiProperty({ required: false, type: [String] })
   @IsOptional()

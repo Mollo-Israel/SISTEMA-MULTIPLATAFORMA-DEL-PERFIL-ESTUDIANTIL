@@ -22,6 +22,20 @@ export enum ActivityOutcomePolicy {
   OTHER_AUTHORIZED_RESOURCE = 'other_authorized_resource',
 }
 
+/**
+ * De dónde viene una credencial externa (V3 §15, §16).
+ *
+ *   OPPORTUNITY         — de una oportunidad de Afinia en la que el estudiante
+ *                         fue aceptado (externa) o confirmado (interna que
+ *                         conduce a una credencial de un tercero).
+ *   HISTORICAL_EXTERNAL — obtenida antes de Afinia o fuera de ella. No exige
+ *                         recrear ninguna oportunidad.
+ */
+export enum ExternalCredentialSource {
+  OPPORTUNITY = 'opportunity',
+  HISTORICAL_EXTERNAL = 'historical_external',
+}
+
 export enum ActivityType {
   ACADEMICA = 'academica',
   EXTRACURRICULAR = 'extracurricular',

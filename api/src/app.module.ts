@@ -8,6 +8,7 @@ import { rateLimits } from './config/identity.config';
 import { buildDatabaseConfig } from './config/database.config';
 import { HealthController } from './health/health.controller';
 import { AuditModule } from './audit/audit.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { MailModule } from './mail/mail.module';
 import { IdentityModule } from './identity/identity.module';
 import { ImportsModule } from './imports/imports.module';
@@ -57,6 +58,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
       ],
     }),
     AuditModule,
+    NotificationsModule,
     BackedSkillsModule,
     MailModule,
     IdentityModule,

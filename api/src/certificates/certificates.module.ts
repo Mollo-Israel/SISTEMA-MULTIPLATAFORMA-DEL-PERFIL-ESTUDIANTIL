@@ -6,6 +6,7 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { StorageModule } from '../storage/storage.module';
 import { TrajectoryModule } from '../trajectory/trajectory.module';
+import { ActivitiesModule } from '../activities/activities.module';
 import { CertificatesService } from './certificates.service';
 import { CertificatesController } from './certificates.controller';
 
@@ -14,6 +15,7 @@ import { CertificatesController } from './certificates.controller';
     TypeOrmModule.forFeature([ExternalCertificate, ExternalCertificateSkill, Skill, StudentProfile, AcademicArea]),
     TrajectoryModule,
     StorageModule,
+    ActivitiesModule,
   ],
   controllers: [CertificatesController],
   providers: [CertificatesService],

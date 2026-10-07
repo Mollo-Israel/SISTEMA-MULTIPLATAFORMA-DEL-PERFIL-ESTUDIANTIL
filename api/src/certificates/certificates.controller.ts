@@ -31,6 +31,15 @@ export class CertificatesController {
     return this.certificatesService.create(user.userId, dto);
   }
 
+  @Get('eligible-opportunities')
+  @ApiOperation({
+    summary: 'Oportunidades terminadas en las que ya puede adjuntar su credencial (V3 §15).',
+    description: 'Externas en las que fue aceptado e internas con credencial de un tercero en las que fue confirmado, ya finalizadas y sin credencial adjunta.',
+  })
+  eligibleOpportunities(@CurrentUser() user: AuthenticatedUser) {
+    return this.certificatesService.eligibleOpportunities(user.userId);
+  }
+
   @Get('my')
   @ApiOperation({ summary: 'Certificados externos propios, con sus tecnologías.' })
   findMine(@CurrentUser() user: AuthenticatedUser) {

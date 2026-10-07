@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ProjectVisibility, RolNombre } from '@perfil/shared';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
+import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -36,6 +37,8 @@ export class FileAccessService {
     @InjectRepository(Project) private readonly projects: Repository<Project>,
     @InjectRepository(ProjectMember) private readonly members: Repository<ProjectMember>,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
+    @InjectRepository(ExternalOpportunityValidationReference)
+    private readonly references: Repository<ExternalOpportunityValidationReference>,
     private readonly teacherScope: TeacherScopeService,
   ) {}
 
@@ -71,6 +74,31 @@ export class FileAccessService {
         downloadName: certificate.certificateName ?? storageKey,
         ownerProfileId: certificate.studentProfileId,
       };
+    }
+
+    // V3 §17: certificado de ejemplo de una oportunidad externa. Lo ven
+    // quienes responden por ella y Dirección; un estudiante nunca: es
+    // material interno de validación, no una plantilla para imitar.
+    const ref = await this.references
+      .createQueryBuilder('r')
+      .innerJoinAndSelect('r.sampleStoredFile', 'f')
+      .innerJoinAndSelect('r.activity', 'a')
+      .where('f.storage_key = :k', { k: storageKey })
+      .getOne();
+    if (ref?.sampleStoredFile) {
+      const a = ref.activity;
+      const puede = user.role === RolNombre.ADMIN
+        || user.role === RolNombre.CAREER_DIRECTOR
+        || a.creatorId === user.userId
+        || a.responsibleUserId === user.userId
+        || ref.sampleStoredFile.uploadedByUserId === user.userId;
+      if (puede) {
+        return {
+          storageKey,
+          downloadName: ref.sampleStoredFile.originalFilename ?? storageKey,
+          ownerProfileId: '',
+        };
+      }
     }
 
     // Mismo error para "no existe" y "no autorizado": distinguirlos permitiría

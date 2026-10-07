@@ -104,6 +104,7 @@ export const REGISTRATION_BADGE: Record<string, string> = {
   interested: 'badge-gray',
   registered: 'badge-amber',
   confirmed: 'badge-green',
+  accepted: 'badge-green',
   absent: 'badge-red',
   cancelled: 'badge-gray',
 };
@@ -132,6 +133,7 @@ export const REGISTRATION_STATUS_LABEL: Record<string, string> = {
   interested: 'Interesado',
   registered: 'Inscrito',
   confirmed: 'Participación confirmada',
+  accepted: 'Aceptado por el proveedor',
   absent: 'Ausente',
   cancelled: 'Baja',
 };

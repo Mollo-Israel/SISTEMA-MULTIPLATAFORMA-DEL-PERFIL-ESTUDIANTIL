@@ -19,7 +19,7 @@ export const affinityColor = (level: string) =>
   level === 'high' ? colors.green : level === 'medium' ? colors.amber : colors.gray500;
 
 export const registrationColor = (status: string) =>
-  status === 'confirmed'
+  status === 'confirmed' || status === 'accepted'
     ? colors.green
     : status === 'registered'
       ? colors.amber

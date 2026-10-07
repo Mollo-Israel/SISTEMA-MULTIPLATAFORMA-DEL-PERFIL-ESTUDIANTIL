@@ -346,3 +346,62 @@ describe('Taxonomía dinámica (V3 §9.3, §9.4)', () => {
     assert.equal(analyzeAreaTags(['sql'], areas, 'db').shared.length, 0);
   });
 });
+
+// ---------------------------------------------------------------------------
+//  V3 BATCH 8 · Elegibilidad de credenciales (§15, §14.2) y patrón (§17)
+// ---------------------------------------------------------------------------
+import { ActivityOrigin, ActivityOutcomePolicy, ActivityStatus, RegistrationStatus } from '@perfil/shared';
+import { elegible, terminada } from '../../src/activities/credential-eligibility.rules';
+import { CREDENTIAL_PATTERN_CHARS, credentialPatternToRegExp } from '../../src/activities/credential-pattern';
+
+describe('V3 §15 elegibilidad para adjuntar credencial', () => {
+  const ayer = new Date(Date.now() - 86_400_000);
+  const manana = new Date(Date.now() + 86_400_000);
+  const externa = {
+    originType: ActivityOrigin.EXTERNAL,
+    outcomePolicy: ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED,
+    status: ActivityStatus.OPEN,
+    endAt: ayer,
+    eventDate: null,
+  };
+  it('externa aceptada y terminada: elegible', () => {
+    assert.equal(elegible(externa, RegistrationStatus.ACCEPTED), true);
+  });
+  it('aceptada pero en curso: todavía no (ACCEPTED ≠ CREDENTIAL_EARNED)', () => {
+    assert.equal(elegible({ ...externa, endAt: manana }, RegistrationStatus.ACCEPTED), false);
+  });
+  it('solo inscrita: no', () => {
+    assert.equal(elegible(externa, RegistrationStatus.REGISTERED), false);
+  });
+  it('dada por finalizada sin fecha: elegible; cancelada: nunca', () => {
+    assert.equal(elegible({ ...externa, endAt: null, status: ActivityStatus.FINISHED }, RegistrationStatus.ACCEPTED), true);
+    assert.equal(terminada({ ...externa, status: ActivityStatus.CANCELLED }), false);
+  });
+  it('interna con credencial de un tercero: confirmada y terminada (§14.2)', () => {
+    const interna = { ...externa, originType: ActivityOrigin.INTERNAL };
+    assert.equal(elegible(interna, RegistrationStatus.CONFIRMED), true);
+    assert.equal(elegible(interna, RegistrationStatus.ACCEPTED), false);
+  });
+  it('interna sin credencial esperada: nunca', () => {
+    const charla = { ...externa, originType: ActivityOrigin.INTERNAL, outcomePolicy: ActivityOutcomePolicy.NONE };
+    assert.equal(elegible(charla, RegistrationStatus.CONFIRMED), false);
+  });
+});
+
+describe('V3 §17 patrón del código de credencial', () => {
+  it('# dígito, @ letra, * varios; el resto literal', () => {
+    const re = credentialPatternToRegExp('NA-####-@@*');
+    assert.equal(re.test('NA-2026-AB7X'), true);
+    assert.equal(re.test('NA-2026-AB'), true);
+    assert.equal(re.test('NA-26-AB'), false);
+    assert.equal(re.test('XNA-2026-AB'), false);
+  });
+  it('los metacaracteres se toman literales', () => {
+    assert.equal(credentialPatternToRegExp('A.B').test('AxB'), false);
+    assert.equal(credentialPatternToRegExp('A.B').test('A.B'), true);
+  });
+  it('no admite expresiones libres', () => {
+    assert.equal(CREDENTIAL_PATTERN_CHARS.test('(a+)+$'), false);
+    assert.equal(CREDENTIAL_PATTERN_CHARS.test('NA-####-@@*'), true);
+  });
+});

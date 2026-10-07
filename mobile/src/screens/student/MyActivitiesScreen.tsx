@@ -17,6 +17,7 @@ const EXPLANATION: Record<string, string> = {
   interested: 'Marcaste interés. Inscríbete para que el responsable pueda registrar tu asistencia.',
   registered: 'Tu inscripción está pendiente de que el responsable registre tu participación.',
   confirmed: 'Tu participación fue confirmada y ya cuenta en tu perfil y en tus áreas de afinidad.',
+  accepted: 'El responsable registró que el proveedor te aceptó. Al terminar podrás adjuntar tu credencial en Evidencias.',
   absent: 'El responsable te registró como ausente en esta actividad.',
 };
 
@@ -37,6 +38,7 @@ export default function MyActivitiesScreen() {
 
   const groups = [
     { key: 'confirmed', title: 'Participación confirmada' },
+    { key: 'accepted', title: 'Aceptado en oportunidades externas' },
     { key: 'registered', title: 'Inscripciones pendientes' },
     { key: 'interested', title: 'Marcadas como interés' },
     { key: 'absent', title: 'Ausencias registradas' },

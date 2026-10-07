@@ -94,6 +94,9 @@ export class OrphanFilesService implements OnModuleInit, OnApplicationShutdown {
           AND NOT EXISTS (
             SELECT 1 FROM project_evidences e WHERE e.stored_file_id = f.id)
           AND NOT EXISTS (
+            SELECT 1 FROM external_opportunity_validation_references r
+             WHERE r.sample_stored_file_id = f.id)
+          AND NOT EXISTS (
             SELECT 1 FROM stored_files d WHERE d.duplicate_of_id = f.id)
         ORDER BY f.created_at
         LIMIT $2`,

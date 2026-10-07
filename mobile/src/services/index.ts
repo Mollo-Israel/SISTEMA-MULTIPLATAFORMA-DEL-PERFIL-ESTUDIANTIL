@@ -273,6 +273,9 @@ export const certificateService = {
   mine: () => api.get<any[]>('/certificates/external/my').then((r) => r.data),
   create: (data: any) => api.post<any>('/certificates/external', data).then((r) => r.data),
   remove: (id: string) => api.delete(`/certificates/external/${id}`).then((r) => r.data),
+  /** V3 §15: oportunidades terminadas en las que ya puede adjuntar la credencial. */
+  eligibleOpportunities: () =>
+    api.get<any[]>('/certificates/external/eligible-opportunities').then((r) => r.data),
 };
 
 export const constancyService = {

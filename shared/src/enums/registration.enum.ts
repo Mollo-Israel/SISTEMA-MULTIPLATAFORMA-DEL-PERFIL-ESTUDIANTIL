@@ -14,6 +14,12 @@
 export enum RegistrationStatus {
   INTERESTED = 'interested',
   REGISTERED = 'registered',
+  /**
+   * V3 §15: en una oportunidad externa, el responsable registra que el
+   * proveedor aceptó al estudiante. Aceptado no es haber obtenido la
+   * credencial: no alimenta la trayectoria; habilita adjuntarla al terminar.
+   */
+  ACCEPTED = 'accepted',
   CONFIRMED = 'confirmed',
   /** Se inscribió y no asistió. Lo marca el responsable. */
   ABSENT = 'absent',
@@ -29,6 +35,7 @@ export const EXPERIENCE_STATUSES: readonly RegistrationStatus[] = [
 /** Estados que ocupan un lugar del cupo. */
 export const OCCUPYING_STATUSES: readonly RegistrationStatus[] = [
   RegistrationStatus.CONFIRMED,
+  RegistrationStatus.ACCEPTED,
 ];
 
 /**

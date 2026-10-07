@@ -470,7 +470,205 @@ async function batch7(ctx) {
   'V3.7.13 §14.2 Una interna puede conducir a una credencial de un tercero (con su proveedor)', json({ o: haciaCredencial.data?.originType, c: haciaCredencial.data?.credentialExpected }));
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7 };
+// ===========================================================================
+//  BATCH 8 — Oportunidades externas y credenciales (§15, §16, §17)
+// ===========================================================================
+async function batch8(ctx) {
+  objective('BATCH 8 · Aceptación, elegibilidad, credencial histórica y referencia de validación');
+  const director = await provisionAndActivate(ctx.admin, {
+    firstName: 'Paula', lastName: 'Rengel', email: correoStaff('b8dir'), role: 'CAREER_DIRECTOR',
+  });
+  const docente = await provisionAndActivate(ctx.admin, {
+    firstName: 'Mario', lastName: 'Quispe', email: correoStaff('b8doc'), role: 'TEACHER',
+  });
+  const estudiante = async (k, nombre) => {
+    const e = await provisionAndActivate(ctx.admin, {
+      firstName: nombre, lastName: 'Villca', email: correoEst(`b8${k}`), role: 'STUDENT', semester: 4,
+    });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const est = await estudiante('a', 'Lucia');
+  const otro = await estudiante('b', 'Ramiro');
+
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const dia = 24 * 3600 * 1000;
+  const crear = (titulo, extra = {}) => req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${TS}`, type: 'academica', categoryId: cat.id, status: 'open', ...extra },
+  });
+  const externa = (titulo, extra = {}) => crear(titulo, {
+    originType: 'external', provider: 'Cisco Networking Academy', externalUrl: 'https://www.netacad.com/courses',
+    outcomePolicy: 'external_credential_expected', expectedIssuerDomains: ['netacad.com', 'credly.com'],
+    expectedKeywords: ['Introduction to Networks'], ...extra,
+  });
+  const decidir = (actividad, e, status) => req('PATCH', `/activities/${actividad.id}/confirm-participation`, {
+    token: director.token, body: { studentProfileId: e.profileId, status },
+  });
+  const elegibles = async (e) => (await req('GET', '/certificates/external/eligible-opportunities', { token: e.token })).data ?? [];
+  const auditoria = async (tipo, entityId) => {
+    const r = await req('GET', `/audit/events?eventType=${tipo}&entityId=${entityId}`, { token: ctx.admin });
+    return r.data?.items ?? r.data ?? [];
+  };
+
+  // ----- §15 Aceptación: externa en curso
+  const ccna = (await externa('CCNA Introduction to Networks', {
+    activityDate: new Date(Date.now() + 2 * dia).toISOString(),
+    endAt: new Date(Date.now() + 30 * dia).toISOString(),
+    capacity: 1,
+  })).data;
+  check(!!ccna?.id && ccna.originType === 'external', 'V3.8.1 §12 Se crea la oportunidad externa del proveedor', json({ o: ccna?.originType }));
+
+  const insc = await req('POST', `/activities/${ccna.id}/register`, { token: est.token });
+  await req('POST', `/activities/${ccna.id}/register`, { token: otro.token });
+  check(insc.status === 201 || insc.status === 200, 'V3.8.2 §15 El estudiante se registra (REGISTERED)', `status ${insc.status}`);
+
+  const confirmarExterna = await decidir(ccna, est, 'confirmed');
+  check(confirmarExterna.status === 400 && confirmarExterna.data?.code === 'EXTERNAL_USES_ACCEPTANCE',
+    'V3.8.3 §15 En una externa no se «confirma asistencia»: se registra la aceptación', json({ s: confirmarExterna.status, c: confirmarExterna.data?.code }));
+
+  const aceptada = await decidir(ccna, est, 'accepted');
+  check(aceptada.status === 200 && aceptada.data?.status === 'accepted' && !!aceptada.data?.acceptedAt,
+    'V3.8.4 §15 El responsable registra que el proveedor lo aceptó (ACCEPTED)', json({ s: aceptada.status, st: aceptada.data?.status }));
+  check((await auditoria('EXTERNAL_OPPORTUNITY_ACCEPTED', aceptada.data?.id)).length >= 1,
+    'V3.8.5 §65 La aceptación queda auditada (EXTERNAL_OPPORTUNITY_ACCEPTED)');
+
+  const sinCupo = await decidir(ccna, otro, 'accepted');
+  check(sinCupo.status === 400, 'V3.8.6 §12 La aceptación ocupa cupo: con cupo 1, no entra un segundo', `status ${sinCupo.status}`);
+
+  const baja = await req('POST', `/activities/${ccna.id}/cancel-registration`, { token: est.token });
+  check(baja.status === 400, 'V3.8.7 Aceptado, el estudiante ya no se da de baja por su cuenta', `status ${baja.status}`);
+
+  const detalle = await req('GET', `/activities/${ccna.id}`, { token: est.token });
+  check(detalle.data?.myRegistration?.status === 'accepted' && detalle.data?.myRegistration?.evidenceEligible === false,
+    'V3.8.8 §15 ACCEPTED ≠ CREDENTIAL_EARNED: mientras no termine, no habilita adjuntar', json(detalle.data?.myRegistration));
+  check(!(await elegibles(est)).some((o) => o.activityId === ccna.id),
+    'V3.8.9 §15 La oportunidad en curso no aparece en «Adjuntar credencial»');
+  const antes = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: { certificateName: `CCNA ITN ${TS}`, issuer: 'Cisco', activityId: ccna.id },
+  });
+  check(antes.status === 400 && antes.data?.code === 'CREDENTIAL_OPPORTUNITY_NOT_ELIGIBLE',
+    'V3.8.10 §15 Y la API lo rechaza aunque se envíe el id a mano', json({ s: antes.status, c: antes.data?.code }));
+
+  const interna = (await crear('Charla de redes', { outcomePolicy: 'none' })).data;
+  await req('POST', `/activities/${interna.id}/register`, { token: est.token });
+  const aceptarInterna = await decidir(interna, est, 'accepted');
+  check(aceptarInterna.status === 400 && aceptarInterna.data?.code === 'ACCEPTANCE_ONLY_EXTERNAL',
+    'V3.8.11 §15 Una interna no tiene «aceptación del proveedor»', json({ s: aceptarInterna.status, c: aceptarInterna.data?.code }));
+
+  // ----- §17 Referencia de validación
+  const ref = (actividad, token, body) => req('PUT', `/activities/${actividad.id}/validation-reference`, { token, body });
+  const deEst = await req('GET', `/activities/${ccna.id}/validation-reference`, { token: est.token });
+  check(deEst.status === 403, 'V3.8.12 §17 Un estudiante no ve la referencia de validación -> 403', `status ${deEst.status}`);
+  const deDocente = await ref(ccna, docente.token, { expectedCourseName: 'Otro curso' });
+  check(deDocente.status === 403, 'V3.8.13 §17 Un docente que no responde por la oportunidad no la edita -> 403', `status ${deDocente.status}`);
+  const patronMalo = await ref(ccna, director.token, { credentialIdPattern: '(a+)+$' });
+  check(patronMalo.status === 400 && patronMalo.data?.fields?.credentialIdPattern,
+    'V3.8.14 §17 El patrón del código no admite expresiones libres (sin ReDoS)', json({ s: patronMalo.status }));
+  const enInterna = await ref(interna, director.token, { expectedCourseName: 'x' });
+  check(enInterna.status === 400 && enInterna.data?.code === 'NO_CREDENTIAL_EXPECTED',
+    'V3.8.15 §17 Solo una oportunidad que espera credencial lleva referencia', json({ s: enInterna.status, c: enInterna.data?.code }));
+
+  const pdf = Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n', 'utf8');
+  const subir = async (token, nombre) => {
+    const form = new FormData();
+    form.append('file', new Blob([pdf], { type: 'application/pdf' }), nombre);
+    return req('POST', '/uploads', { token, raw: form });
+  };
+  const ejemplo = await subir(director.token, 'ejemplo-ccna.pdf');
+  check(ejemplo.status === 201, 'V3.8.16 §17 El responsable sube el certificado de ejemplo', `status ${ejemplo.status}`);
+  const ajeno = await subir(est.token, 'mio.pdf');
+  const conAjeno = await ref(ccna, director.token, { sampleStoredFileId: ajeno.data?.id });
+  check(conAjeno.status === 403 || conAjeno.status === 404,
+    'V3.8.17 §27 No puede enlazar como ejemplo un archivo de otra persona', `status ${conAjeno.status}`);
+  const guardada = await ref(ccna, director.token, {
+    expectedCourseName: 'CCNA: Introduction to Networks', credentialIdPattern: 'NA-####-@@*', sampleStoredFileId: ejemplo.data?.id,
+  });
+  check(guardada.status === 200 && guardada.data?.expectedCourseName === 'CCNA: Introduction to Networks'
+    && guardada.data?.credentialIdPattern === 'NA-####-@@*' && guardada.data?.sampleFileName === 'ejemplo-ccna.pdf'
+    && (guardada.data?.expectedIssuerDomains ?? []).includes('netacad.com') && guardada.data?.provider === 'Cisco Networking Academy',
+  'V3.8.18 §17 Referencia: curso esperado, patrón, ejemplo, y los dominios y proveedor de la oportunidad', json(guardada.data));
+  check((await auditoria('VALIDATION_REFERENCE_UPDATED', ccna.id)).length >= 1, 'V3.8.19 §65 La referencia queda auditada');
+  const url = guardada.data?.sampleFileUrl ?? '';
+  const archivo = (token) => fetch(`${API.replace(/\/api$/, '')}${url}`, { headers: { Authorization: `Bearer ${token}` } });
+  check((await archivo(director.token)).status === 200, 'V3.8.20 §17 El responsable abre el ejemplo');
+  check((await archivo(est.token)).status === 404, 'V3.8.21 §17 Un estudiante no puede bajar el ejemplo (no es una plantilla para imitar)');
+
+  // ----- §15 Finaliza → elegible
+  const cerrar = await req('PATCH', `/activities/${ccna.id}`, { token: director.token, body: { status: 'finished' } });
+  check(cerrar.status === 200, 'V3.8.22 El responsable da por finalizada la oportunidad', `status ${cerrar.status}`);
+  const lista = await elegibles(est);
+  const item = lista.find((o) => o.activityId === ccna.id);
+  check(!!item && item.provider === 'Cisco Networking Academy' && item.expectedCourseName === 'CCNA: Introduction to Networks',
+    'V3.8.23 §15 Terminada y aceptado: aparece en «Adjuntar credencial» (EVIDENCE_ELIGIBLE)', json(lista));
+  check((await auditoria('EXTERNAL_EVIDENCE_ENABLED', aceptada.data?.id)).length >= 1,
+    'V3.8.24 §15 Se registra que la evidencia quedó habilitada (punto de notificación para B16)');
+  check(!(await elegibles(otro)).some((o) => o.activityId === ccna.id),
+    'V3.8.25 §15 A quien no fue aceptado no le aparece');
+  const ajena = await req('POST', '/certificates/external', {
+    token: otro.token, body: { certificateName: `CCNA ajeno ${TS}`, issuer: 'Cisco', activityId: ccna.id },
+  });
+  check(ajena.status === 400, 'V3.8.26 §15 Ni puede adjuntar una credencial a esa oportunidad', `status ${ajena.status}`);
+
+  const credencial = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: { certificateName: `CCNA ITN ${TS}`, issuer: 'Cisco Networking Academy', activityId: ccna.id, credentialId: 'NA-2026-AB7' },
+  });
+  check(credencial.status === 201 && credencial.data?.source === 'opportunity' && credencial.data?.activityId === ccna.id,
+    'V3.8.27 §15 Adjunta la credencial de la oportunidad (source = opportunity)', json({ s: credencial.status, src: credencial.data?.source }));
+  check((await auditoria('EXTERNAL_CREDENTIAL_CREATED', credencial.data?.id)).length >= 1,
+    'V3.8.28 §65 Auditada (EXTERNAL_CREDENTIAL_CREATED)');
+  const repetida = await req('POST', '/certificates/external', {
+    token: est.token, body: { certificateName: `CCNA ITN bis ${TS}`, issuer: 'Cisco', activityId: ccna.id },
+  });
+  check(repetida.status === 409, 'V3.8.29 Una sola credencial por oportunidad', `status ${repetida.status}`);
+  check(!(await elegibles(est)).some((o) => o.activityId === ccna.id),
+    'V3.8.30 Ya adjunta, deja de aparecer en el selector');
+  const mias = (await req('GET', '/certificates/external/my', { token: est.token })).data ?? [];
+  const vista = mias.find((c) => c.id === credencial.data?.id);
+  check(vista?.activity?.title?.startsWith('CCNA Introduction to Networks') && vista?.activity?.creatorId === undefined,
+    'V3.8.31 §5.6 La procedencia se ve: de qué oportunidad viene (sin datos internos de la oportunidad)', json(vista?.activity));
+  const cambiar = await req('PATCH', `/certificates/external/${credencial.data?.id}`, {
+    token: est.token, body: { activityId: interna.id },
+  });
+  check(cambiar.status === 400, 'V3.8.32 §16 El origen no se cambia editando la credencial', `status ${cambiar.status}`);
+
+  // ----- §16 Histórica
+  const historica = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: { certificateName: `AWS Cloud Practitioner ${TS}`, issuer: 'Amazon Web Services', issueDate: '2024-05-10', credentialId: 'AWS-123' },
+  });
+  check(historica.status === 201 && historica.data?.source === 'historical_external' && historica.data?.activityId === null,
+    'V3.8.33 §16 Una credencial histórica no exige oportunidad previa (source = historical_external)', json({ s: historica.status, src: historica.data?.source }));
+
+  // ----- Aceptar una externa que ya terminó la habilita en el acto
+  // Se inscribió mientras estaba abierta; el responsable registra la
+  // aceptación cuando ya terminó.
+  const futuro = { activityDate: new Date(Date.now() + 3 * dia).toISOString(), endAt: new Date(Date.now() + 4 * dia).toISOString() };
+  const yaPaso = { activityDate: new Date(Date.now() - 40 * dia).toISOString(), endAt: new Date(Date.now() - 10 * dia).toISOString() };
+  const pasada = (await externa('Cybersecurity Essentials', futuro)).data;
+  await req('POST', `/activities/${pasada.id}/register`, { token: otro.token });
+  await req('PATCH', `/activities/${pasada.id}`, { token: director.token, body: yaPaso });
+  const tarde = await decidir(pasada, otro, 'accepted');
+  check(tarde.status === 200 && (await elegibles(otro)).some((o) => o.activityId === pasada.id),
+    'V3.8.34 §15 Aceptado en una que ya terminó: elegible de inmediato', `status ${tarde.status}`);
+  check((await auditoria('EXTERNAL_EVIDENCE_ENABLED', tarde.data?.id)).length >= 1,
+    'V3.8.35 §15 Y queda registrado el aviso de evidencia habilitada');
+
+  // ----- §14.2 Interna con credencial de un tercero
+  const prepa = (await crear('Taller preparatorio Linux Essentials', {
+    outcomePolicy: 'external_credential_expected', provider: 'Linux Professional Institute', ...futuro,
+  })).data;
+  await req('POST', `/activities/${prepa.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${prepa.id}`, { token: director.token, body: yaPaso });
+  await decidir(prepa, est, 'confirmed');
+  check((await elegibles(est)).some((o) => o.activityId === prepa.id && o.originType === 'internal'),
+    'V3.8.36 §14.2 Una interna que conduce a una credencial también la habilita al confirmar y terminar');
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

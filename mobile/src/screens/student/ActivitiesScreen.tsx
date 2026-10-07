@@ -377,6 +377,10 @@ export default function ActivitiesScreen({ navigation }: any) {
                       Tu estado:{' '}
                       {mine.status === 'confirmed'
                         ? 'participación confirmada'
+                        : mine.status === 'accepted'
+                          ? mine.evidenceEligible
+                            ? 'aceptado; ya puedes adjuntar tu credencial en Evidencias'
+                            : 'aceptado por el proveedor'
                         : mine.status === 'registered'
                           ? 'inscrito, pendiente de registro por el responsable'
                           : mine.status === 'absent'
@@ -392,7 +396,7 @@ export default function ActivitiesScreen({ navigation }: any) {
                   <View style={styles.blocked}>
                     <Text style={styles.blockedText}>{blocked}</Text>
                   </View>
-                ) : mine?.status === 'confirmed' || mine?.status === 'absent' ? (
+                ) : mine?.status === 'confirmed' || mine?.status === 'accepted' || mine?.status === 'absent' ? (
                   <Muted>
                     Tu participación ya fue registrada por el responsable y no puede modificarse.
                   </Muted>

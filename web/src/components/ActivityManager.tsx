@@ -7,7 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { enMemoria, useCachedState } from '../hooks/viewCache';
 import AiAssist from './AiAssist';
 import { apiError } from '../api/client';
-import { activityService, adminService, catalogService } from '../services';
+import { activityService, adminService, catalogService, uploadService, validationReferenceService } from '../services';
 import type { AcademicArea, Activity, ActivityCategoryItem, Participant, PublicUser, Skill } from '../services/types';
 import AreaSkillPicker from './AreaSkillPicker';
 import {
@@ -39,6 +39,11 @@ const emptyForm = {
   outcomePolicy: 'none' as 'none' | 'internal_constancy' | 'external_credential_expected' | 'other_authorized_resource',
   expectedIssuerDomains: '',
   expectedKeywords: '',
+  // V3 §17: referencia de validación para la credencial que llegue después.
+  expectedCourseName: '',
+  credentialIdPattern: '',
+  sampleStoredFileId: '',
+  sampleFileName: '',
   responsibleUserId: '',
   activityDate: '',
   location: '',
@@ -189,13 +194,25 @@ export default function ActivityManager({
         : [],
     };
     if (editing && necesitaRevision) delete payload.status;
+    const conReferencia = form.originType === 'external' || form.outcomePolicy === 'external_credential_expected';
+    const guardarReferencia = async (id: string) => {
+      if (!conReferencia) return;
+      if (!editing && !form.expectedCourseName.trim() && !form.credentialIdPattern.trim() && !form.sampleStoredFileId) return;
+      await validationReferenceService.save(id, {
+        expectedCourseName: form.expectedCourseName.trim() || null,
+        credentialIdPattern: form.credentialIdPattern.trim() || null,
+        sampleStoredFileId: form.sampleStoredFileId || null,
+      });
+    };
     try {
       if (editing) {
         delete payload.type;
         await activityService.update(editing.id, payload);
+        await guardarReferencia(editing.id);
         notify('Actividad actualizada.');
       } else {
-        await activityService.create(payload as never);
+        const creada = await activityService.create(payload as never);
+        await guardarReferencia((creada as Activity).id);
         notify(
           necesitaRevision
             ? 'Actividad guardada como borrador. Envíala a revisión de Dirección para publicarla.'
@@ -239,7 +256,20 @@ export default function ActivityManager({
       status: a.status,
       semesterScope: a.semesterScope ?? [],
       points: String(a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.points ?? ''),
+      expectedCourseName: '',
+      credentialIdPattern: '',
+      sampleStoredFileId: '',
+      sampleFileName: '',
     });
+    if (a.originType === 'external' || a.outcomePolicy === 'external_credential_expected') {
+      validationReferenceService.get(a.id).then((r) => setForm((f) => ({
+        ...f,
+        expectedCourseName: r.expectedCourseName ?? '',
+        credentialIdPattern: r.credentialIdPattern ?? '',
+        sampleStoredFileId: r.sampleStoredFileId ?? '',
+        sampleFileName: r.sampleFileName ?? '',
+      }))).catch(() => {});
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -306,7 +336,7 @@ export default function ActivityManager({
   const decide = async (
     activityId: string,
     row: Participant,
-    status: 'confirmed' | 'absent',
+    status: 'confirmed' | 'absent' | 'accepted',
   ) => {
     const who = row.studentName ?? 'el estudiante';
     if (status === 'absent') {
@@ -330,8 +360,16 @@ export default function ActivityManager({
       setParticipants(await activityService.participants(activityId));
       await load();
       notify(
-        status === 'confirmed' ? 'Participación confirmada.' : 'Registrado como ausente.',
-        `${who} · ${status === 'confirmed' ? 'suma a su perfil' : 'ya no cuenta en su perfil'}`,
+        status === 'confirmed'
+          ? 'Participación confirmada.'
+          : status === 'accepted'
+            ? 'Aceptación registrada.'
+            : 'Registrado como ausente.',
+        `${who} · ${status === 'confirmed'
+          ? 'suma a su perfil'
+          : status === 'accepted'
+            ? 'podrá adjuntar su credencial cuando termine la oportunidad'
+            : 'ya no cuenta en su perfil'}`,
       );
     } catch (e) {
       toast.error(apiError(e));
@@ -349,9 +387,14 @@ export default function ActivityManager({
     : participants;
   const pending = shownParticipants.filter((r) => r.status === 'registered');
   const interested = shownParticipants.filter((r) => r.status === 'interested');
-  const confirmed = shownParticipants.filter((r) => r.status === 'confirmed');
+  const confirmed = shownParticipants.filter((r) => r.status === 'confirmed' || r.status === 'accepted');
   const absent = shownParticipants.filter((r) => r.status === 'absent');
-  const allConfirmed = participants.filter((r) => r.status === 'confirmed');
+  const allConfirmed = participants.filter((r) => r.status === 'confirmed' || r.status === 'accepted');
+  // V3 §15: en una externa el responsable registra la aceptación; la
+  // credencial la emite el proveedor y la adjunta el estudiante al terminar.
+  const esExterna = activities.find((a) => a.id === selected)?.originType === 'external';
+  const okStatus: 'confirmed' | 'accepted' = esExterna ? 'accepted' : 'confirmed';
+  const okLabel = esExterna ? 'Registrar aceptación' : 'Confirmar participación';
   const full = !!(selectedActivity?.capacity && allConfirmed.length >= selectedActivity.capacity);
   const tipo = activityType === 'academica' ? 'académica' : 'extracurricular';
 
@@ -521,6 +564,63 @@ export default function ActivityManager({
                       placeholder="Introduction to Networks, CCNA"
                     />
                   </div>
+                </div>
+                <p className="muted small" style={{ margin: '0.4rem 0' }}>
+                  Referencia de validación (opcional): ayuda a leer y comparar la credencial que adjunte el
+                  estudiante. Parecerse al ejemplo no prueba que una credencial sea auténtica.
+                </p>
+                <div className="row">
+                  <div className="field">
+                    <label htmlFor="op-curso">Nombre esperado del curso</label>
+                    <input
+                      id="op-curso"
+                      value={form.expectedCourseName}
+                      onChange={(e) => setForm({ ...form, expectedCourseName: e.target.value })}
+                      placeholder="CCNA: Introduction to Networks"
+                      maxLength={200}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="op-patron">Patrón del código de credencial</label>
+                    <input
+                      id="op-patron"
+                      value={form.credentialIdPattern}
+                      onChange={(e) => setForm({ ...form, credentialIdPattern: e.target.value })}
+                      placeholder="NA-####-@@*"
+                      maxLength={80}
+                    />
+                    <span className="field-hint"># = dígito · @ = letra · * = varios caracteres; el resto se copia tal cual.</span>
+                  </div>
+                </div>
+                <div className="field">
+                  <label htmlFor="op-ejemplo">Certificado de ejemplo (PDF o imagen)</label>
+                  <input
+                    id="op-ejemplo"
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      try {
+                        const subido = await uploadService.upload(f);
+                        setForm((x) => ({ ...x, sampleStoredFileId: subido.id, sampleFileName: subido.originalFilename ?? f.name }));
+                      } catch (err) {
+                        toast.error(apiError(err));
+                      }
+                    }}
+                  />
+                  {form.sampleStoredFileId && (
+                    <span className="field-hint">
+                      Adjunto: {form.sampleFileName || 'certificado de ejemplo'} ·{' '}
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => setForm({ ...form, sampleStoredFileId: '', sampleFileName: '' })}
+                      >
+                        quitar
+                      </button>
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -903,7 +1003,7 @@ export default function ActivityManager({
           }
         >
           <p className="muted">
-            Confirmados: <strong>{allConfirmed.length}</strong> de{' '}
+            {esExterna ? 'Aceptados' : 'Confirmados'}: <strong>{allConfirmed.length}</strong> de{' '}
             {selectedActivity.capacity ?? 'cupo ilimitado'}
             {full && ' · el cupo está lleno'}
           </p>
@@ -938,10 +1038,10 @@ export default function ActivityManager({
                       disabled={full}
                       loading={busyRow === r.id}
                       title={full ? 'El cupo está lleno' : 'Registrar asistencia'}
-                      onClick={() => decide(selectedActivity.id, r, 'confirmed')}
+                      onClick={() => decide(selectedActivity.id, r, okStatus)}
                       icon={<FiCheck size={14} />}
                     >
-                      Confirmar participación
+                      {okLabel}
                     </Button>
                     <Button
                       variant="secondary"
@@ -966,18 +1066,18 @@ export default function ActivityManager({
                     size="sm"
                     disabled={full}
                     loading={busyRow === r.id}
-                    onClick={() => decide(selectedActivity.id, r, 'confirmed')}
+                    onClick={() => decide(selectedActivity.id, r, okStatus)}
                     icon={<FiCheck size={14} />}
                   >
-                    Confirmar participación
+                    {okLabel}
                   </Button>
                 )}
               />
 
               <ParticipantGroup
-                title={`Participación confirmada (${confirmed.length})`}
+                title={esExterna ? `Aceptados (${confirmed.length})` : `Participación confirmada (${confirmed.length})`}
                 rows={confirmed}
-                empty="Todavía no hay participación confirmada."
+                empty={esExterna ? 'Todavía no registras aceptados.' : 'Todavía no hay participación confirmada.'}
                 render={(r) => (
                   <Button
                     variant="secondary"
@@ -1002,10 +1102,10 @@ export default function ActivityManager({
                       size="sm"
                       disabled={full}
                       loading={busyRow === r.id}
-                      onClick={() => decide(selectedActivity.id, r, 'confirmed')}
+                      onClick={() => decide(selectedActivity.id, r, okStatus)}
                       icon={<FiCheck size={14} />}
                     >
-                      Confirmar participación
+                      {okLabel}
                     </Button>
                   )}
                 />

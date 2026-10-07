@@ -595,11 +595,29 @@ function CertificateForm({
   const [areaId, setAreaId] = useState('');
   const [saving, setSaving] = useState(false);
   const { file, setFile, pick, busy } = useFilePicker(onError);
+  // V3 §15/§16: de una oportunidad terminada en la que participó, o histórica.
+  const [oportunidades, setOportunidades] = useState<any[]>([]);
+  const [activityId, setActivityId] = useState('');
+  useEffect(() => {
+    certificateService.eligibleOpportunities().then(setOportunidades).catch(() => setOportunidades([]));
+  }, []);
+  const elegir = (id: string) => {
+    setActivityId(id);
+    const o = oportunidades.find((x) => x.activityId === id);
+    if (o) {
+      setForm((f) => ({
+        ...f,
+        certificateName: f.certificateName || o.expectedCourseName || o.title,
+        issuer: f.issuer || o.provider || '',
+      }));
+    }
+  };
 
   const submit = async () => {
     setSaving(true);
     try {
       await certificateService.create({
+        activityId: activityId || undefined,
         certificateName: form.certificateName,
         issuer: form.issuer,
         issueDate: form.issueDate || undefined,
@@ -610,6 +628,8 @@ function CertificateForm({
       setForm({ certificateName: '', issuer: '', issueDate: '', description: '' });
       setAreaId('');
       setFile(null);
+      setActivityId('');
+      certificateService.eligibleOpportunities().then(setOportunidades).catch(() => {});
       onSaved();
     } catch (e) {
       onError(apiError(e));
@@ -619,7 +639,17 @@ function CertificateForm({
   };
 
   return (
-    <Card title="Registrar certificado externo">
+    <Card title="Adjuntar credencial externa">
+      <Picker
+        label="¿De dónde viene?"
+        emptyLabel="Histórica: la obtuve antes o fuera de Afinia"
+        value={activityId}
+        onChange={elegir}
+        options={oportunidades.map((o) => ({
+          id: o.activityId,
+          label: o.provider ? `${o.title} · ${o.provider}` : o.title,
+        }))}
+      />
       <Field
         label="Nombre del certificado"
         value={form.certificateName}
@@ -667,7 +697,7 @@ function CertificateForm({
         )}
       </View>
       <Button
-        title="Registrar certificado"
+        title="Adjuntar credencial"
         icon="award"
         onPress={submit}
         loading={saving}

@@ -35,7 +35,15 @@ export class UploadsController {
   ) {}
 
   @Post()
-  @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
+  // V3 §17: los responsables suben el certificado de ejemplo de una
+  // oportunidad externa. El archivo queda suyo y solo lo enlaza su dueño.
+  @Roles(
+    RolNombre.STUDENT,
+    RolNombre.TEACHER,
+    RolNombre.CAREER_DIRECTOR,
+    RolNombre.SCIENTIFIC_SOCIETY,
+    RolNombre.ADMIN,
+  )
   @ApiOperation({
     summary: `Subir un archivo. Máximo ${Math.round(MAX_FILE_BYTES / (1024 * 1024))} MB. Formatos: ${HUMAN_ACCEPTED}.`,
     description:

@@ -32,6 +32,7 @@ import type {
   Activity,
   Evidence,
   ExternalCertificate,
+  CredentialOpportunity,
   Project,
   Skill,
   StoredFile,
@@ -295,6 +296,11 @@ export default function StudentEvidencesPage() {
                     <tr key={c.id}>
                       <td>
                         <strong>{c.certificateName}</strong>
+                        <div className="muted small">
+                          {c.source === 'opportunity' && c.activity
+                            ? `De la oportunidad «${c.activity.title}»`
+                            : 'Histórica'}
+                        </div>
                         {c.description && <div className="muted">{c.description}</div>}
                         {(c.skills ?? []).length > 0 && (
                           <div className="muted small">
@@ -620,6 +626,24 @@ function CertificateForm({
     certificateUrl: '',
     credentialId: '',
   });
+  // V3 §15/§16: viene de una oportunidad terminada en la que participó, o
+  // es histórica (anterior a Afinia o de algo que no pasó por aquí).
+  const [oportunidades, setOportunidades] = useState<CredentialOpportunity[]>([]);
+  const [activityId, setActivityId] = useState('');
+  useEffect(() => {
+    certificateService.eligibleOpportunities().then(setOportunidades).catch(() => setOportunidades([]));
+  }, []);
+  const elegirOportunidad = (id: string) => {
+    setActivityId(id);
+    const o = oportunidades.find((x) => x.activityId === id);
+    if (o) {
+      setForm((f) => ({
+        ...f,
+        certificateName: f.certificateName || o.expectedCourseName || o.title,
+        issuer: f.issuer || o.provider || '',
+      }));
+    }
+  };
   const [file, setFile] = useState<StoredFile | null>(null);
   const [saving, setSaving] = useState(false);
   // V2 §41: tecnologías que el certificado acredita, del catálogo.
@@ -649,6 +673,7 @@ function CertificateForm({
         credentialId: form.credentialId || undefined,
         storedFileId: file?.id,
         skillIds: skillIds.length ? skillIds : undefined,
+        activityId: activityId || undefined,
       });
       setForm({
         certificateName: '',
@@ -662,6 +687,8 @@ function CertificateForm({
       setFile(null);
       setSkillIds([]);
       setBusqueda('');
+      setActivityId('');
+      certificateService.eligibleOpportunities().then(setOportunidades).catch(() => {});
       onSaved();
     } catch (e2) {
       onError(apiError(e2));
@@ -671,12 +698,29 @@ function CertificateForm({
   };
 
   return (
-    <Card title="Registrar certificado externo">
+    <Card title="Adjuntar credencial externa">
       <form onSubmit={submit}>
+        <div className="field">
+          <label htmlFor="cert-origen">¿De dónde viene?</label>
+          <select id="cert-origen" value={activityId} onChange={(e) => elegirOportunidad(e.target.value)}>
+            <option value="">Histórica: la obtuve antes o fuera de Afinia</option>
+            {oportunidades.map((o) => (
+              <option key={o.activityId} value={o.activityId}>
+                {o.title}{o.provider ? ` · ${o.provider}` : ''}
+              </option>
+            ))}
+          </select>
+          <span className="field-hint">
+            {oportunidades.length
+              ? 'Aparecen las oportunidades terminadas en las que fuiste aceptado o confirmado.'
+              : 'Cuando termine una oportunidad externa en la que te acepten, aparecerá aquí.'}
+          </span>
+        </div>
         <div className="row">
           <div className="field">
-            <label>Nombre del certificado</label>
+            <label htmlFor="cert-nombre">Nombre del certificado</label>
             <input
+              id="cert-nombre"
               value={form.certificateName}
               onChange={(e) => setForm({ ...form, certificateName: e.target.value })}
               placeholder="Fundamentos de pruebas automatizadas"
@@ -684,8 +728,9 @@ function CertificateForm({
             />
           </div>
           <div className="field">
-            <label>Entidad emisora</label>
+            <label htmlFor="cert-emisor">Entidad emisora</label>
             <input
+              id="cert-emisor"
               value={form.issuer}
               onChange={(e) => setForm({ ...form, issuer: e.target.value })}
               placeholder="Plataforma externa de formación"
@@ -799,7 +844,7 @@ function CertificateForm({
           label="Archivo del certificado (opcional)"
         />
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? 'Guardando…' : 'Registrar certificado'}
+          {saving ? 'Guardando…' : 'Adjuntar credencial'}
         </button>
       </form>
     </Card>

@@ -9,6 +9,8 @@ import type {
   EligibleParticipant,
   Evidence,
   ExternalCertificate,
+  CredentialOpportunity,
+  ValidationReference,
   GamificationCriterion,
   InternalConstancy,
   StoredFile,
@@ -779,6 +781,16 @@ export const certificateService = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch<ExternalCertificate>(`/certificates/external/${id}`, data).then((r) => r.data),
   remove: (id: string) => api.delete(`/certificates/external/${id}`).then((r) => r.data),
+  /** V3 §15: oportunidades terminadas en las que ya puede adjuntar la credencial. */
+  eligibleOpportunities: () =>
+    api.get<CredentialOpportunity[]>('/certificates/external/eligible-opportunities').then((r) => r.data),
+};
+
+export const validationReferenceService = {
+  get: (activityId: string) =>
+    api.get<ValidationReference>(`/activities/${activityId}/validation-reference`).then((r) => r.data),
+  save: (activityId: string, data: Record<string, unknown>) =>
+    api.put<ValidationReference>(`/activities/${activityId}/validation-reference`, data).then((r) => r.data),
 };
 
 export const constancyService = {
