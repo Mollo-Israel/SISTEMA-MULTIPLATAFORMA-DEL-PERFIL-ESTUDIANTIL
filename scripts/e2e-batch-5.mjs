@@ -215,7 +215,8 @@ async function contribucion(ctx) {
     body: {
       areaIds: [...new Set([ctx.area.id, react.academicAreaId].filter(Boolean))],
       skillIds: [react.id],
-      repositoryUrl: repoDePrueba(`seguimiento-${TS}`),
+      // V4 §35.3: el repositorio corrobora React (package.json), así puede sumar afinidad.
+      repositoryUrl: repoDePrueba(`stack-seguimiento-${TS}`),
     },
   });
   await req('POST', `/projects/${ctx.projectId}/evidences`, {

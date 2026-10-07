@@ -843,6 +843,8 @@ export interface AffinityArea {
   supportLevel: 'low' | 'medium' | 'high';
   /** Familias independientes que respaldan el área (§54). */
   supportFamilies: string[];
+  /** V3 §36: habilidades respaldadas, con su origen. Sin porcentaje de dominio. */
+  backedSkills?: { skillId: string; name: string; sources: { type: 'project' | 'credential' | 'activity'; title: string }[] }[];
   rank: number;
 }
 

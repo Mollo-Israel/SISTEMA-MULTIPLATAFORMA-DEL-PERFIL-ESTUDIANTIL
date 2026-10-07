@@ -17,7 +17,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-6.mjs
  */
 
-import { loginAdmin, provisionAndActivate, req, aprobarActividad, crearProyectoActivo, crearProyectoBorrador } from './lib/fixtures.mjs';
+import { loginAdmin, provisionAndActivate, req, aprobarActividad, crearProyectoActivo, crearProyectoBorrador, repoQueCorrobora } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -85,7 +85,7 @@ async function declarado(ctx) {
   check(areaDe(s, areaC.id) === null, 'B6.2 Un área de mejora tampoco (§45.1)');
   check(s?.status === 'insufficient_data', 'B6.3 Sin trayectoria respaldada, el estado lo dice', String(s?.status));
   check(s?.maxRawPoints === 100, 'B6.4 La escala es directa sobre 100 (§47)', `max ${s?.maxRawPoints}`);
-  check(s?.engineVersion === 3, 'B6.5 El motor vigente es la versión 3 (§45)', `versión ${s?.engineVersion}`);
+  check(s?.engineVersion === 4, 'B6.5 El motor vigente es la versión 4 (V3.1 §35)', `versión ${s?.engineVersion}`);
 }
 
 // ===========================================================================
@@ -165,7 +165,7 @@ async function proyectos(ctx) {
 
   const creado = await crearProyectoBorrador(est.token, {
       title: `Plataforma de afinidad ${TS}`,
-      description: 'Proyecto para probar la puntuación V3.',
+      description: 'Proyecto para probar la puntuación V4.',
       areaId: areaProy.id,
       technologies: ['React', 'NestJS'],
       visibility: 'teachers',
@@ -187,8 +187,20 @@ async function proyectos(ctx) {
   s = await resumen(est.token);
   check(crudo(s, areaProy.id) === 0,
     'B6.24 Sin tecnologías confirmadas por el integrante, el proyecto no suma afinidad (§48)', `crudo ${crudo(s, areaProy.id)}`);
-  check(respaldo(s, areaProy.id) === 8,
-    'B6.25 Pero su respaldo sí cuenta en el área del proyecto (8, §49)', `respaldo ${respaldo(s, areaProy.id)}`);
+  check(respaldo(s, areaProy.id) === 0,
+    'B6.25 V4 §35.1 Un borrador no es trayectoria: tampoco suma respaldo', `respaldo ${respaldo(s, areaProy.id)}`);
+
+  // V3 §22: se activa con su tecnología del catálogo y un repositorio que la
+  // corrobora (lenguaje informado por GitHub, §24.2).
+  const activo = await req('PATCH', `/projects/${ctx.projectId}`, {
+    token: est.token,
+    body: { skillIds: [ctx.skillProy.id], repositoryUrl: repoQueCorrobora(ctx.skillProy.name), status: 'active' },
+  });
+  check(activo.status === 200 && activo.data?.status === 'active' && activo.data?.backingTier === 'corroborated',
+    'B6.25b §28 Activo, con la tecnología corroborada y una evidencia de contexto: CORROBORATED', JSON.stringify({ s: activo.status, t: activo.data?.backingTier, c: activo.data?.code }));
+  s = await resumen(est.token);
+  check(crudo(s, areaProy.id) === 0 && respaldo(s, areaProy.id) === 15,
+    'B6.25c V4 §35.3 Sin tecnologías confirmadas por el integrante no suma afinidad; su respaldo sí cuenta (15)', `crudo ${crudo(s, areaProy.id)} / respaldo ${respaldo(s, areaProy.id)}`);
 
   const mia = await req('PUT', `/projects/${ctx.projectId}/my-contribution`, {
     token: est.token,
@@ -196,7 +208,7 @@ async function proyectos(ctx) {
   });
   check(mia.status === 200, 'B6.26 El responsable confirma las tecnologías que usó (§34)', msgOf(mia));
   s = await resumen(est.token);
-  check(crudo(s, areaProy.id) === 10, 'B6.27 Ahora el proyecto SUPPORTED suma 10 en esa área (§47.2, §48)', `crudo ${crudo(s, areaProy.id)}`);
+  check(crudo(s, areaProy.id) === 18, 'B6.27 V4 §35.3 Ahora el proyecto CORROBORATED suma 18 en esa área', `crudo ${crudo(s, areaProy.id)}`);
 
   for (let i = 0; i < 3; i++) {
     await req('POST', `/projects/${ctx.projectId}/evidences`, {
@@ -205,7 +217,7 @@ async function proyectos(ctx) {
     });
   }
   s = await resumen(est.token);
-  check(crudo(s, areaProy.id) === 10, 'B6.28 Tres evidencias más no multiplican el proyecto (§50)', `crudo ${crudo(s, areaProy.id)}`);
+  check(crudo(s, areaProy.id) === 18, 'B6.28 Tres evidencias más no multiplican el proyecto (§38)', `crudo ${crudo(s, areaProy.id)}`);
   const d = await desglose(est.token, areaProy.id);
   const evidencias = (d.notContributing ?? []).filter((c) => c.weightCode === 'evidence');
   check(evidencias.length === 4, 'B6.29 Las cuatro evidencias figuran en «no contribuye», con su motivo', `listadas ${evidencias.length}`);
@@ -222,8 +234,14 @@ async function proyectos(ctx) {
     token: ctx.companero.token, body: { role: 'Frontend', contribution: 'Interfaz', skillIds: [ctx.skillOtra.id] },
   });
   sc = await resumen(ctx.companero.token);
-  check(crudo(sc, areaOtra.id) === 10 && crudo(sc, areaProy.id) === 0,
-    'B6.31 El integrante suma en el área de su tecnología, no en el área del proyecto (§48)', JSON.stringify(sc?.areas?.map((a) => [a.area, a.rawPoints])));
+  check(crudo(sc, areaOtra.id) === 0 && crudo(sc, areaProy.id) === 0,
+    'B6.31 V4 §35.3 Su tecnología no está corroborada en el proyecto: no suma, y no se le reparten las del proyecto', JSON.stringify(sc?.areas?.map((a) => [a.area, a.rawPoints])));
+  await req('PUT', `/projects/${ctx.projectId}/my-contribution`, {
+    token: ctx.companero.token, body: { role: 'Frontend', contribution: 'Interfaz y pruebas', skillIds: [ctx.skillOtra.id, ctx.skillProy.id] },
+  });
+  sc = await resumen(ctx.companero.token);
+  check(crudo(sc, areaProy.id) === 18 && crudo(sc, areaOtra.id) === 0,
+    'B6.31b V4 §35.3 Suma en el área de la tecnología que confirmó y está corroborada', JSON.stringify(sc?.areas?.map((a) => [a.area, a.rawPoints])));
   s = await resumen(est.token);
   check(crudo(s, areaOtra.id) === 0, 'B6.32 Y al responsable no se le atribuye la tecnología del compañero (§34)', `crudo ${crudo(s, areaOtra.id)}`);
 }
@@ -275,15 +293,15 @@ async function determinismoYExplicacion(ctx) {
   check((d.contributions ?? []).every((c) => !!c.signalFamily && !!c.reason && c.rawPoints !== undefined
     && c.multiplier !== undefined && c.supportPoints !== undefined),
   'B6.40 Cada contribución lleva familia, motivo, base, multiplicador y respaldo (§51)');
-  check(d.engineVersion === 3, 'B6.41 Y la versión del motor que la produjo (§51)', `versión ${d.engineVersion}`);
+  check(d.engineVersion === 4, 'B6.41 Y la versión del motor que la produjo (§51)', `versión ${d.engineVersion}`);
 
   const dA = await desglose(est.token, ctx.areaA.id);
   check((dA.notContributing ?? []).some((c) => c.weightCode?.startsWith('interest') && c.points === 0 && /no suma afinidad/.test(c.reason ?? '')),
     'B6.42 El interés declarado figura como «no contribuye» con su motivo (§45.1)', JSON.stringify(dA.notContributing?.slice(0, 2)));
 
   const reglas = (await req('GET', '/affinity/weights', { token: est.token })).data;
-  check(reglas?.engineVersion === 3 && reglas?.maxRawPoints === 100,
-    'B6.43 El motor publica versión 3 y máximo 100', JSON.stringify([reglas?.engineVersion, reglas?.maxRawPoints]));
+  check(reglas?.engineVersion === 4 && reglas?.maxRawPoints === 100,
+    'B6.43 El motor publica versión 4 y máximo 100', JSON.stringify([reglas?.engineVersion, reglas?.maxRawPoints]));
   check(reglas?.caps?.ACTIVITY === 25 && reglas?.caps?.PROJECT === 50 && reglas?.caps?.CERTIFICATE === 25 && reglas?.caps?.PREFERENCE === 0,
     'B6.44 Topes por familia 25 / 50 / 25 y 0 para lo declarado (§47)', JSON.stringify(reglas?.caps));
   check(Array.isArray(reglas?.diminishing?.ACTIVITY) && reglas.diminishing.ACTIVITY.join() === '1,0.7,0.5,0.3'

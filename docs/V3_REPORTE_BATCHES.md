@@ -483,3 +483,35 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 84/84; `e2e-v3` 215 (B13 17/17). Regresión completa: **1641 correctas, 0 fallos** (20 suites). (La sesión anterior se cerró a mitad de la primera corrida; Docker y la API se levantaron de nuevo y la regresión se repitió completa.)
 
 **Pendientes:** Afinidad V4 con fuentes endurecidas y exclusión de borradores (B14).
+
+---
+
+## BATCH 14 — Afinidad V4
+
+**ESTADO:** completo
+
+**Objetivo:** que la afinidad mida solo trayectoria corroborada (§35), con habilidades respaldadas por área sin porcentaje de dominio (§36) y el respaldo separado (§37).
+
+**Hallazgos iniciales:**
+- Motor v3: un proyecto o un certificado SUPPORTED sumaban 10 y 8 de afinidad; los borradores contaban; un proyecto atribuía al integrante todas las tecnologías que él confirmaba, estuvieran o no corroboradas.
+- Las actividades puntuaban solo en su área principal.
+- No había una vista de habilidades respaldadas por área.
+
+**Cambios:**
+- **`AFFINITY_ENGINE_VERSION = 4`.** Las instantáneas de V1, V2 y V3 se conservan: la poda solo actúa sobre la versión vigente. Al arrancar, el recálculo masivo pasó **1233 perfiles** al motor v4 sin errores (snapshots: v1 3604, v2 5380, v3 11115, v4 1233).
+- **Fuentes (§35.1):** puntúan solo la participación interna confirmada, los proyectos CORROBORATED o REVIEWED y las credenciales CORROBORATED. No puntúan intereses, áreas de mejora, borradores, tecnologías solo declaradas, credenciales DECLARED/SUPPORTED, evidencias por cantidad ni IA. Todo eso aparece en el desglose con su motivo.
+- **Actividades (§35.2):** 10, con rendimientos 1 / 0,7 / 0,5 / 0,3 y tope 25, en **todas** las áreas configuradas en la actividad.
+- **Proyectos (§35.3):** CORROBORATED 18, REVIEWED 22, FLAGGED 0; rendimientos 1 / 0,75 / 0,5 / 0,25 y tope 50. Para cada integrante, solo las tecnologías que él confirmó **y** están corroboradas en el proyecto (repositorio o docente). Nunca se reparten las del proyecto. Un proyecto SUPPORTED no suma afinidad, pero sí respaldo (§37). Un borrador no cuenta para nada.
+- **Credenciales (§35.4):** solo CORROBORATED, 15, con los mismos rendimientos y tope 25.
+- **Pesos:** `AFFINITY_POINTS_V4` en `shared` y migración que deja `project_supported` y `certificate_supported` en 0 en `affinity_weights` (el `down` restaura 10 y 8 con sus descripciones originales).
+- **Habilidades respaldadas (§36):** el resumen trae, por área, cada tecnología respaldada con sus orígenes (proyecto, credencial o actividad), sin puntaje ni porcentaje. Web («Habilidades respaldadas») y móvil.
+
+**Migraciones:** `1780570000000-V3AffinityV4Weights`. Copia de seguridad previa (`pre-v3-b14.dump`); `up` → `down` → `up` probado.
+
+**Pruebas ejecutadas:** unitarias (86/86, con los pesos y rendimientos V4); `e2e-v3 batch14` (V3.14.1–V3.14.13); suites del motor reescritas a V4 en lugar de borrarlas: `e2e-batch-6` (§47 → §35: el borrador no suma ni respaldo; el proyecto se activa con un repositorio que corrobora la tecnología y vale 18; un integrante solo suma con tecnologías corroboradas), `e2e-objective-6` (17.9 y siguientes: CORROBORATED 18/15; el borrador no aparece ni deducido por etiquetas), `e2e-batch-5` (el repositorio del proyecto corrobora React). El GitHub simulado suma repositorios `lenguaje-X`, que corroboran por lenguaje (§24.2).
+
+**Riesgos:** las afinidades de los estudiantes bajan donde se sostenían en proyectos o certificados solo SUPPORTED; es el comportamiento que pide §35. El historial V3 sigue consultable.
+
+**Resultados:** unitarias 86/86; `e2e-v3` 228 (B14 13/13). Regresión completa: **1659 correctas, 0 fallos** (20 suites).
+
+**Pendientes:** recomendaciones sin afinidad como factor (B15).

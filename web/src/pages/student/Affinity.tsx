@@ -145,6 +145,32 @@ export default function StudentAffinityPage() {
                     loadBreakdown={(areaId) => affinityService.breakdown(areaId)}
                   />
                 </Card>
+
+                {/* V3 §36: granularidad sin fingir «React = 87 % de dominio». */}
+                {summary.areas.some((a) => (a.backedSkills ?? []).length > 0) && (
+                  <Card title="Habilidades respaldadas">
+                    <p className="muted" style={{ marginTop: 0 }}>
+                      Tecnologías que tu trayectoria corrobora, con de dónde sale cada una. No es un
+                      porcentaje de dominio.
+                    </p>
+                    {summary.areas.filter((a) => (a.backedSkills ?? []).length > 0).map((a) => (
+                      <div key={a.academicAreaId} className="mt">
+                        <strong>{a.area}</strong>
+                        <ul className="plain-list">
+                          {(a.backedSkills ?? []).map((h) => (
+                            <li key={h.skillId}>
+                              {h.name}
+                              <span className="muted small">
+                                {' · '}
+                                {h.sources.map((x) => `${x.type === 'project' ? 'Proyecto' : x.type === 'credential' ? 'Credencial' : 'Actividad'}: ${x.title}`).join(' · ')}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </Card>
+                )}
               </>
             )
           }

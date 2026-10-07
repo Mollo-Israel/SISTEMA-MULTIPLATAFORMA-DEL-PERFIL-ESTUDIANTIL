@@ -7,7 +7,7 @@ import {
   AFFINITY_ENGINE_VERSION,
   AFFINITY_EXCLUDED_REASON,
   AFFINITY_MAX_RAW,
-  AFFINITY_POINTS_V3,
+  AFFINITY_POINTS_V4,
   AffinityCalculationStatus,
   AffinityLevel,
   AffinityMatchType,
@@ -26,6 +26,8 @@ import {
   SUPPORT_POINTS,
   ValidationResourceType,
   diminishingFactor,
+  ProjectStatus,
+  ProjectSkillEvidenceStatus,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
@@ -43,6 +45,9 @@ import { AffinityWeight } from '../entities/affinity-weight.entity';
 import { AffinityContribution } from '../entities/affinity-contribution.entity';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { AffinitySnapshotItem } from '../entities/affinity-snapshot-item.entity';
+import { ProjectSkill } from '../entities/project-area.entity';
+import { ActivitySkill } from '../entities/activity-skill.entity';
+import { ExternalCertificateSkill } from '../entities/external-certificate.entity';
 
 interface AreaInfo {
   id: string;
@@ -122,19 +127,19 @@ const DEFAULT_WEIGHTS: Record<AffinityWeightCode, number> = {
   // ------------------------------------------------ V3 §47.1 · actividades
   [AffinityWeightCode.ACTIVITY_INTERESTED]: 0,
   [AffinityWeightCode.ACTIVITY_REGISTERED]: 0,
-  [AffinityWeightCode.ACTIVITY_CONFIRMED]: AFFINITY_POINTS_V3.ACTIVITY_CONFIRMED,
+  [AffinityWeightCode.ACTIVITY_CONFIRMED]: AFFINITY_POINTS_V4.ACTIVITY_CONFIRMED,
   // -------------------------------------------------- V3 §47.2 · proyectos
-  [AffinityWeightCode.PROJECT_DECLARED]: AFFINITY_POINTS_V3.PROJECT_DECLARED,
-  [AffinityWeightCode.PROJECT_SUPPORTED]: AFFINITY_POINTS_V3.PROJECT_SUPPORTED,
-  [AffinityWeightCode.PROJECT_CORROBORATED]: AFFINITY_POINTS_V3.PROJECT_CORROBORATED,
-  [AffinityWeightCode.PROJECT_REVIEWED]: AFFINITY_POINTS_V3.PROJECT_REVIEWED,
-  [AffinityWeightCode.PROJECT_FLAGGED]: AFFINITY_POINTS_V3.PROJECT_FLAGGED,
+  [AffinityWeightCode.PROJECT_DECLARED]: AFFINITY_POINTS_V4.PROJECT_DECLARED,
+  [AffinityWeightCode.PROJECT_SUPPORTED]: AFFINITY_POINTS_V4.PROJECT_SUPPORTED,
+  [AffinityWeightCode.PROJECT_CORROBORATED]: AFFINITY_POINTS_V4.PROJECT_CORROBORATED,
+  [AffinityWeightCode.PROJECT_REVIEWED]: AFFINITY_POINTS_V4.PROJECT_REVIEWED,
+  [AffinityWeightCode.PROJECT_FLAGGED]: AFFINITY_POINTS_V4.PROJECT_FLAGGED,
   [AffinityWeightCode.PROJECT_OWNED]: 0,
   [AffinityWeightCode.PROJECT_MEMBER]: 0,
   // ----------------------------------------------- V3 §47.3 · certificados
-  [AffinityWeightCode.CERTIFICATE_DECLARED]: AFFINITY_POINTS_V3.CERTIFICATE_DECLARED,
-  [AffinityWeightCode.CERTIFICATE_SUPPORTED]: AFFINITY_POINTS_V3.CERTIFICATE_SUPPORTED,
-  [AffinityWeightCode.CERTIFICATE_CORROBORATED]: AFFINITY_POINTS_V3.CERTIFICATE_CORROBORATED,
+  [AffinityWeightCode.CERTIFICATE_DECLARED]: AFFINITY_POINTS_V4.CERTIFICATE_DECLARED,
+  [AffinityWeightCode.CERTIFICATE_SUPPORTED]: AFFINITY_POINTS_V4.CERTIFICATE_SUPPORTED,
+  [AffinityWeightCode.CERTIFICATE_CORROBORATED]: AFFINITY_POINTS_V4.CERTIFICATE_CORROBORATED,
   [AffinityWeightCode.CERTIFICATE]: 0,
   // ------------------------------------------------------------ §46, §50
   // La evidencia mejora el respaldo del proyecto y la constancia el de la
@@ -303,6 +308,10 @@ export class AffinityEngineService {
     private readonly contributions: Repository<AffinityContribution>,
     @InjectRepository(AffinitySnapshot)
     private readonly snapshots: Repository<AffinitySnapshot>,
+    @InjectRepository(ProjectSkill) private readonly projectSkills: Repository<ProjectSkill>,
+    @InjectRepository(ActivitySkill) private readonly activitySkills: Repository<ActivitySkill>,
+    @InjectRepository(ExternalCertificateSkill)
+    private readonly certificateSkills: Repository<ExternalCertificateSkill>,
   ) {}
 
   async requestRecalculation(studentProfileId: string): Promise<void> {
@@ -390,20 +399,26 @@ export class AffinityEngineService {
     // ==================================================== §51.2 · Actividades
     const registrations = await this.registrations.find({
       where: { studentProfileId },
-      relations: { activity: true },
+      relations: { activity: { activityAreas: true } },
     });
     /** Areas con participacion confirmada: la constancia refuerza estas (§55). */
     const areasConParticipacion = new Set<string>();
     const registrationByActivity = new Map<string, ActivityRegistration>();
 
     registrations.forEach((r) => {
-      const areaId = r.activity?.academicAreaId;
-      if (!areaId) return;
+      // V4 §35.2: las áreas configuradas en la actividad (todas), no solo
+      // la principal.
+      const areasDeActividad = [...new Set([
+        ...(r.activity?.activityAreas ?? []).map((x) => x.academicAreaId),
+        ...(r.activity?.academicAreaId ? [r.activity.academicAreaId] : []),
+      ])];
+      if (!areasDeActividad.length) return;
       if (r.activity?.id) registrationByActivity.set(r.activity.id, r);
+      for (const areaId of areasDeActividad) {
 
       if (r.status !== RegistrationStatus.CONFIRMED) {
         const code = this.activityWeightCode(r.status);
-        if (!code) return;
+        if (!code) continue;
         add({
           areaId,
           family: AffinitySignalFamily.ACTIVITY,
@@ -416,7 +431,7 @@ export class AffinityEngineService {
             `${r.activity?.title ?? 'Actividad'}: `
             + `${AFFINITY_EXCLUDED_REASON[code] ?? 'no suma afinidad'}`,
         });
-        return;
+        continue;
       }
 
       areasConParticipacion.add(areaId);
@@ -434,6 +449,7 @@ export class AffinityEngineService {
         scale: DIMINISHING.ACTIVITY,
         reason: `Participacion confirmada: ${r.activity?.title ?? 'actividad'}`,
       });
+      }
     });
 
     // ====================================================== §51.3 · Proyectos
@@ -450,6 +466,18 @@ export class AffinityEngineService {
       ? await this.projects.find({ where: { id: In(collaborativeIds) } })
       : [];
     const membershipByProject = new Map(memberships.map((m) => [m.projectId, m]));
+    // V4 §35.3: tecnologías del proyecto corroboradas (repositorio o docente).
+    const todosLosProyectos = [...owned, ...collaborative].map((p) => p.id);
+    const corroboradasPorProyecto = new Map<string, Set<string>>();
+    if (todosLosProyectos.length) {
+      const filas = await this.projectSkills.find({ where: { projectId: In(todosLosProyectos) } });
+      for (const f of filas) {
+        if (f.evidenceStatus === ProjectSkillEvidenceStatus.DECLARED) continue;
+        const set = corroboradasPorProyecto.get(f.projectId) ?? new Set<string>();
+        set.add(f.skillId);
+        corroboradasPorProyecto.set(f.projectId, set);
+      }
+    }
 
     const areasByProject = new Map<string, string[]>();
     const proyectosContados: Project[] = [];
@@ -463,17 +491,26 @@ export class AffinityEngineService {
       if (!isOwned && (!membership || !membership.contributionConfirmedAt)) {
         continue;
       }
+      // V4 §35.1: un borrador no es trayectoria respaldada.
+      if (project.status === ProjectStatus.DRAFT) continue;
 
       // V3 §48: el proyecto pertenece, para este estudiante, a las áreas de
       // las tecnologías que ÉL confirmó haber usado (`skills_used`). Ni las
       // tecnologías generales del proyecto ni su área principal atribuyen
       // experiencia a nadie.
-      const habilidades = (membership?.memberSkills ?? []).filter((s) => s.skill);
-      const areasPropias = [
+      // V4 §35.3: solo las tecnologías que ÉL confirmó y que además están
+      // corroboradas en el proyecto. Nunca todas las del proyecto para todos.
+      const corroboradas = corroboradasPorProyecto.get(project.id) ?? new Set<string>();
+      const confirmadas = (membership?.memberSkills ?? []).filter((s) => s.skill);
+      const habilidades = confirmadas.filter((s) => corroboradas.has(s.skillId));
+      const tierBase = project.backingTier ?? ProjectBackingTier.DECLARED;
+      const puntua = tierBase === ProjectBackingTier.CORROBORATED || tierBase === ProjectBackingTier.REVIEWED;
+      const areasPropias = puntua ? [
+
         ...new Set(
           habilidades.map((s) => s.skill!.academicAreaId).filter((a): a is string => !!a),
         ),
-      ];
+      ] : [];
       const tier = project.backingTier ?? ProjectBackingTier.DECLARED;
       const code = PROJECT_CODE[tier];
       const rol = isOwned ? 'propio' : 'como integrante';
@@ -508,9 +545,17 @@ export class AffinityEngineService {
       // Sin tecnologías propias confirmadas no hay afinidad (§48), pero el
       // respaldo del proyecto sigue contando en su área principal: la
       // trayectoria existe aunque falte decir con qué se hizo.
-      const fallback = project.academicAreaId
-        ? [project.academicAreaId]
-        : this.inferAreasByTech(project.technologies, areas);
+      const areasDeConfirmadas = [...new Set(confirmadas.map((s) => s.skill!.academicAreaId).filter((a): a is string => !!a))];
+      const fallback = areasDeConfirmadas.length
+        ? areasDeConfirmadas
+        : project.academicAreaId
+          ? [project.academicAreaId]
+          : this.inferAreasByTech(project.technologies, areas);
+      const motivoV4 = !puntua
+        ? `V4 §35.3: un proyecto ${PROJECT_TIER_LABEL[tier]} no suma afinidad; solo CORROBORATED o REVIEWED. Su respaldo sí cuenta.`
+        : confirmadas.length
+          ? 'V4 §35.3: las tecnologías que confirmaste no están corroboradas en el proyecto (repositorio o docente). Su respaldo sí cuenta.'
+          : AFFINITY_EXCLUDED_REASON.project_without_skills;
       areasByProject.set(project.id, fallback);
       fallback.forEach((areaId) =>
         add({
@@ -524,9 +569,7 @@ export class AffinityEngineService {
           supportBase: PROJECT_SUPPORT[tier],
           supportBucket: 'project',
           scale: DIMINISHING.PROJECT,
-          reason:
-            `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title}. `
-            + AFFINITY_EXCLUDED_REASON.project_without_skills,
+          reason: `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title}. ${motivoV4}`,
         }),
       );
     }
@@ -871,12 +914,13 @@ export class AffinityEngineService {
    * hacia un area, y cuanta informacion trazable sostiene esa inclinacion.
    */
   async getSummary(studentProfileId: string) {
-    const [results, snapshot] = await Promise.all([
+    const [results, snapshot, respaldadas] = await Promise.all([
       this.getForProfile(studentProfileId),
       this.snapshots.findOne({
         where: { studentProfileId },
         order: { calculatedAt: 'DESC' },
       }),
+      this.backedSkills(studentProfileId),
     ]);
 
     const status =
@@ -907,9 +951,72 @@ export class AffinityEngineService {
         supportScore: r.supportScore,
         supportLevel: r.supportLevel,
         supportFamilies: r.supportFamilies ?? [],
+        backedSkills: respaldadas.get(r.academicAreaId) ?? [],
         rank: index + 1,
       })),
     };
+  }
+
+  /**
+   * Habilidades respaldadas por área (V3 §36), sin porcentaje de dominio.
+   *
+   * Cada tecnología lista de dónde sale: proyectos CORROBORATED/REVIEWED en
+   * los que el estudiante la confirmó y está corroborada, credenciales
+   * CORROBORATED que la acreditan y actividades confirmadas que la trabajan.
+   */
+  async backedSkills(studentProfileId: string): Promise<Map<string, { skillId: string; name: string; sources: { type: string; title: string }[] }[]>> {
+    const profile = await this.profiles.findOne({ where: { id: studentProfileId } });
+    const salida = new Map<string, Map<string, { skillId: string; name: string; sources: { type: string; title: string }[] }>>();
+    if (!profile) return new Map();
+    const sumar = (areaId: string | null | undefined, skillId: string, name: string, type: string, title: string) => {
+      if (!areaId) return;
+      const area = salida.get(areaId) ?? new Map();
+      const e = area.get(skillId) ?? { skillId, name, sources: [] };
+      if (!e.sources.some((x: { type: string; title: string }) => x.type === type && x.title === title)) e.sources.push({ type, title });
+      area.set(skillId, e);
+      salida.set(areaId, area);
+    };
+
+    // Proyectos
+    const memberships = await this.projectMembers.find({
+      where: { userId: profile.userId },
+      relations: { memberSkills: { skill: true }, project: true },
+    });
+    const validos = memberships.filter((m) => m.project
+      && m.project.status !== ProjectStatus.DRAFT
+      && (m.isOwner || m.contributionConfirmedAt)
+      && (m.project.backingTier === ProjectBackingTier.CORROBORATED || m.project.backingTier === ProjectBackingTier.REVIEWED));
+    if (validos.length) {
+      const filas = await this.projectSkills.find({ where: { projectId: In(validos.map((m) => m.projectId)) } });
+      const corroboradas = new Set(filas.filter((f) => f.evidenceStatus !== ProjectSkillEvidenceStatus.DECLARED).map((f) => `${f.projectId}:${f.skillId}`));
+      for (const m of validos) {
+        for (const ms of m.memberSkills ?? []) {
+          if (ms.skill && corroboradas.has(`${m.projectId}:${ms.skillId}`)) {
+            sumar(ms.skill.academicAreaId, ms.skillId, ms.skill.name, 'project', m.project.title);
+          }
+        }
+      }
+    }
+
+    // Credenciales CORROBORATED
+    const certs = await this.certificates.find({ where: { studentProfileId } });
+    const tiers = await this.backingTiersOf(ValidationResourceType.EXTERNAL_CERTIFICATE, certs.map((c) => c.id), true);
+    const corroborados = certs.filter((c) => tiers.get(c.id)?.tier === BackingTier.CORROBORATED && !tiers.get(c.id)?.duplicado);
+    if (corroborados.length) {
+      const filas = await this.certificateSkills.find({ where: { certificateId: In(corroborados.map((c) => c.id)) }, relations: { skill: true } });
+      const nombre = new Map(corroborados.map((c) => [c.id, c.certificateName]));
+      for (const f of filas) if (f.skill) sumar(f.skill.academicAreaId, f.skillId, f.skill.name, 'credential', nombre.get(f.certificateId) ?? '');
+    }
+
+    // Actividades confirmadas
+    const regs = await this.registrations.find({ where: { studentProfileId, status: RegistrationStatus.CONFIRMED }, relations: { activity: true } });
+    if (regs.length) {
+      const filas = await this.activitySkills.find({ where: { activityId: In(regs.map((r) => r.activityId)) }, relations: { skill: true } });
+      const titulo = new Map(regs.map((r) => [r.activityId, r.activity?.title ?? '']));
+      for (const f of filas) if (f.skill) sumar(f.skill.academicAreaId, f.skillId, f.skill.name, 'activity', titulo.get(f.activityId) ?? '');
+    }
+
+    return new Map([...salida].map(([areaId, m]) => [areaId, [...m.values()].sort((a, b) => b.sources.length - a.sources.length)]));
   }
 
   /**

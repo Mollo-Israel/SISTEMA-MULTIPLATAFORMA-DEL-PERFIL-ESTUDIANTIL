@@ -263,6 +263,14 @@ export default function AffinityScreen() {
                         </Text>
                       </View>
 
+                      {/* V3 §36: habilidades respaldadas, sin porcentaje de dominio. */}
+                      {((a as any).backedSkills ?? []).length > 0 && (
+                        <Text style={styles.shareText}>
+                          Habilidades respaldadas:{' '}
+                          {((a as any).backedSkills ?? []).map((h: any) => `${h.name} (${h.sources.map((x: any) => x.title).join(', ')})`).join(' · ')}
+                        </Text>
+                      )}
+
                       <Text style={styles.shareText}>
                         <Text style={styles.link}>{open ? 'ocultar detalle' : 'ver por que'}</Text>
                       </Text>

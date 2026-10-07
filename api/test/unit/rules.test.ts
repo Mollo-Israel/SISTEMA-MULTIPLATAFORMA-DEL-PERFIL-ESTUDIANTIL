@@ -39,7 +39,7 @@ import { parseAuthorizedSemesters } from '../../src/imports/teacher-import.servi
 import { effectiveSemesters, inTeacherScope, scopeSql } from '../../src/access/teacher-scope.service';
 
 describe('Afinidad V3 (§45–§47)', () => {
-  it('es la versión 3 del motor', () => assert.equal(AFFINITY_ENGINE_VERSION, 3));
+  it('es la versión 4 del motor (V3.1 §35)', () => assert.equal(AFFINITY_ENGINE_VERSION, 4));
 
   it('lo declarado no suma; los topes directos suman 100', () => {
     assert.equal(AFFINITY_CAPS.PREFERENCE + AFFINITY_CAPS.INTEREST + AFFINITY_CAPS.SKILL, 0);
@@ -660,5 +660,26 @@ describe('V3 §28 respaldo del proyecto', () => {
     assert.equal(skillEvidenceFromSignal({ status: TechnologyStatus.BOTH, source: 'package.json (react)' }, false).status, ProjectSkillEvidenceStatus.CORROBORATED_BY_MANIFEST);
     assert.equal(skillEvidenceFromSignal({ status: TechnologyStatus.DECLARED, source: null }, true).status, ProjectSkillEvidenceStatus.CORROBORATED_BY_ACADEMIC_REVIEW);
     assert.equal(skillEvidenceFromSignal(undefined, false).status, ProjectSkillEvidenceStatus.DECLARED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+//  V3 BATCH 14 · Afinidad V4 (§35)
+// ---------------------------------------------------------------------------
+import { AFFINITY_POINTS_V4, DIMINISHING as DIM_V4 } from '@perfil/shared';
+
+describe('V3 §35 pesos y rendimientos de la Afinidad V4', () => {
+  it('solo puntúa lo corroborado', () => {
+    assert.equal(AFFINITY_ENGINE_VERSION, 4);
+    assert.equal(AFFINITY_POINTS_V4.ACTIVITY_CONFIRMED, 10);
+    assert.equal(AFFINITY_POINTS_V4.PROJECT_SUPPORTED, 0);
+    assert.equal(AFFINITY_POINTS_V4.PROJECT_CORROBORATED, 18);
+    assert.equal(AFFINITY_POINTS_V4.PROJECT_REVIEWED, 22);
+    assert.equal(AFFINITY_POINTS_V4.CERTIFICATE_SUPPORTED, 0);
+    assert.equal(AFFINITY_POINTS_V4.CERTIFICATE_CORROBORATED, 15);
+  });
+  it('rendimientos: actividades 1/0,7/0,5/0,3; proyectos y credenciales 1/0,75/0,5/0,25', () => {
+    assert.deepEqual([...DIM_V4.ACTIVITY], [1, 0.7, 0.5, 0.3]);
+    assert.deepEqual([...DIM_V4.PROJECT], [1, 0.75, 0.5, 0.25]);
   });
 });

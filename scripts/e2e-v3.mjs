@@ -17,7 +17,7 @@ import { createServer } from 'node:http';
 import QRCode from 'qrcode';
 import {
   API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, crearProyectoBorrador, loginAdmin, provisionAndActivate,
-  githubSimuladoLog, repoDePrueba, req,
+  githubSimuladoLog, repoDePrueba, repoQueCorrobora, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -1391,7 +1391,147 @@ async function batch13(ctx) {
   check((await req('POST', '/projects/admin/recompute-backing', { token: est.token })).status === 403, 'V3.13.17 Solo administración');
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13 };
+// ===========================================================================
+//  BATCH 14 — Afinidad V4 (§35, §36, §37)
+// ===========================================================================
+async function batch14(ctx) {
+  objective('BATCH 14 · Afinidad V4: solo trayectoria corroborada, habilidades respaldadas sin porcentaje');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Renata', lastName: 'Cuarta', email: correoEst('b14'), role: 'STUDENT', semester: 6,
+  });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Saul', lastName: 'Guia', email: correoStaff('b14doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [6] } });
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Nora', lastName: 'Directa', email: correoStaff('b14dir'), role: 'CAREER_DIRECTOR' });
+
+  const letras = (n) => String.fromCharCode(...String(TS + n).slice(-6).split('').map((d) => 65 + Number(d)));
+  const sufijo = letras(14);
+  const area = async (n, tag) => (await req('POST', '/academic-areas', {
+    token: ctx.admin, body: { name: `${n} ${sufijo}`, tags: [`${tag}${sufijo.toLowerCase()}`] },
+  })).data;
+  const areaP = await area('Ingenieria de Plataformas', 'plataf');
+  const areaQ = await area('Analitica Educativa', 'analed');
+  const areaC = await area('Seguridad de Redes', 'segred');
+  const skill = async (n, a) => (await req('POST', '/skills', { token: ctx.admin, body: { name: `${n}${sufijo}`, academicAreaId: a.id } })).data;
+  const sP = await skill('Plataformix', areaP);
+  const sQ = await skill('Analitix', areaQ);
+  const sC = await skill('Cortafuegox', areaC);
+
+  const resumen = async () => (await req('GET', '/affinity/me', { token: est.token })).data;
+  const resumenFull = async () => (await req('GET', '/affinity/me/summary', { token: est.token })).data;
+  const crudo = (s, a) => Number((s?.areas ?? []).find((x) => x.academicAreaId === a.id)?.rawPoints ?? 0);
+  const respaldo = (s, a) => Number((s?.areas ?? []).find((x) => x.academicAreaId === a.id)?.supportScore ?? 0);
+  const proyecto = (titulo, skills, repo) => req('POST', '/projects', {
+    token: est.token,
+    body: {
+      title: `${titulo} ${TS}`, areaIds: [...new Set(skills.map((x) => x.academicAreaId))], skillIds: skills.map((x) => x.id),
+      repositoryUrl: repo, visibility: 'teachers', status: 'draft',
+    },
+  });
+  const evidencia = (id) => req('POST', `/projects/${id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${id}.png`, description: 'Captura.' } });
+  const confirmar = (id, skills) => req('PUT', `/projects/${id}/my-contribution`, { token: est.token, body: { contribution: 'Diseño e implementación.', skillIds: skills.map((x) => x.id) } });
+
+  let s = await resumenFull();
+  check(s?.engineVersion === 4, 'V3.14.1 §35 El motor vigente es la versión 4', `versión ${s?.engineVersion}`);
+
+  // ----- Borrador
+  const borrador = await proyecto('Borrador de plataforma', [sP], repoQueCorrobora(sP.name));
+  await evidencia(borrador.data.id);
+  await confirmar(borrador.data.id, [sP]);
+  s = await resumenFull();
+  check(crudo(s, areaP) === 0 && respaldo(s, areaP) === 0, 'V3.14.2 §35.1 Un proyecto DRAFT no puntúa, aunque esté corroborado', JSON.stringify(s?.areas));
+
+  // ----- SUPPORTED: respaldo sí, afinidad no
+  const soportado = await proyecto('Analítica soportada', [sQ], repoDePrueba(`generico-b14-${TS}`));
+  await evidencia(soportado.data.id);
+  await req('PATCH', `/projects/${soportado.data.id}`, { token: est.token, body: { status: 'active' } });
+  await confirmar(soportado.data.id, [sQ]);
+  s = await resumenFull();
+  check((await req('GET', `/projects/${soportado.data.id}`, { token: est.token })).data?.backingTier === 'supported'
+    && crudo(s, areaQ) === 0 && respaldo(s, areaQ) > 0,
+  'V3.14.3 §35.3/§37 SUPPORTED no suma afinidad, pero sí respaldo', `crudo ${crudo(s, areaQ)} / respaldo ${respaldo(s, areaQ)}`);
+
+  // ----- CORROBORATED: 18, solo con tecnologías corroboradas para él
+  const activar = await req('PATCH', `/projects/${borrador.data.id}`, { token: est.token, body: { status: 'active' } });
+  s = await resumenFull();
+  check(activar.data?.backingTier === 'corroborated' && crudo(s, areaP) === 18,
+    'V3.14.4 §35.3 CORROBORATED + tecnología confirmada y corroborada: 18', `${activar.data?.backingTier} / crudo ${crudo(s, areaP)}`);
+  const conDeclarada = await req('PATCH', `/projects/${borrador.data.id}`, {
+    token: est.token, body: { areaIds: [areaP.id, areaC.id], skillIds: [sP.id, sC.id] },
+  });
+  await confirmar(borrador.data.id, [sP, sC]);
+  s = await resumenFull();
+  check(conDeclarada.status === 200 && crudo(s, areaC) === 0 && crudo(s, areaP) === 18,
+    'V3.14.5 §35.1 Una tecnología solo declarada en el proyecto no puntúa', `C ${crudo(s, areaC)} / P ${crudo(s, areaP)}`);
+
+  // ----- REVIEWED: 22
+  const fb = await req('POST', `/projects/${borrador.data.id}/feedback`, { token: docente.token, body: { comment: 'Buena separación de servicios y despliegue.' } });
+  s = await resumenFull();
+  check(fb.status === 201 && crudo(s, areaP) === 22, 'V3.14.6 §35.3 REVIEWED: 22', `crudo ${crudo(s, areaP)}`);
+
+  // ----- Credenciales: solo CORROBORATED
+  const pdf = (t) => {
+    const c = `BT\n/F1 14 Tf\n72 720 Td\n(${t}) Tj\nET\n`;
+    const o = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+      `<< /Length ${c.length} >>\nstream\n${c}\nendstream`, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+    let out = '%PDF-1.4\n';
+    const off = [];
+    o.forEach((x, i) => { off.push(out.length); out += `${i + 1} 0 obj\n${x}\nendobj\n`; });
+    const xref = out.length;
+    out += `xref\n0 6\n0000000000 65535 f \n${off.map((n) => `${String(n).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return Buffer.from(out, 'latin1');
+  };
+  const form = new FormData();
+  form.append('file', new Blob([pdf('Diploma Renata Cuarta - Taller de Cortafuegos - Club de Redes')], { type: 'application/pdf' }), 'diploma.pdf');
+  const subida = await req('POST', '/uploads', { token: est.token, raw: form });
+  const cert = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: { certificateName: `Taller de Cortafuegos ${TS}`, issuer: 'Club de Redes', issueDate: '2025-05-01', academicAreaId: areaC.id, storedFileId: subida.data?.id, skillIds: [sC.id] },
+  });
+  for (let i = 0; i < 30; i++) {
+    await req('POST', '/validation/run?limit=50', { token: ctx.admin });
+    const v = (await req('GET', `/validation/external_certificate/${cert.data.id}`, { token: est.token })).data;
+    if (v && !['pending', 'processing'].includes(v.status)) break;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  s = await resumenFull();
+  check(crudo(s, areaC) === 0, 'V3.14.7 §35.4 Una credencial sin corroborar no suma afinidad', `crudo ${crudo(s, areaC)}`);
+  await req('POST', `/certificates/external/${cert.data.id}/manual-review`, { token: est.token, body: { note: 'El club confirma por correo.' } });
+  await req('POST', `/validation/manual-reviews/${cert.data.id}`, { token: director.token, body: { decision: 'corroborated', reason: 'Confirmé con el club la participación y el nombre.' } });
+  s = await resumenFull();
+  check(crudo(s, areaC) === 15, 'V3.14.8 §35.4 CORROBORATED: 15', `crudo ${crudo(s, areaC)}`);
+
+  // ----- Actividad en dos áreas
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const act = (await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `Taller interdisciplinario ${TS}`, type: 'academica', categoryId: taller.id, status: 'open', areaIds: [areaQ.id, areaP.id] },
+  })).data;
+  await req('POST', `/activities/${act.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${act.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
+  s = await resumenFull();
+  check(crudo(s, areaQ) === 10 && crudo(s, areaP) === 32,
+    'V3.14.9 §35.2 Una participación confirmada puntúa en todas las áreas de la actividad', `Q ${crudo(s, areaQ)} / P ${crudo(s, areaP)}`);
+
+  // ----- §36 Habilidades respaldadas, sin porcentaje
+  const aP = (s?.areas ?? []).find((x) => x.academicAreaId === areaP.id);
+  const habP = (aP?.backedSkills ?? []).find((h) => h.skillId === sP.id);
+  check(!!habP && habP.sources.some((x) => x.type === 'project' && x.title.startsWith('Borrador de plataforma')),
+    'V3.14.10 §36 Habilidad respaldada con su origen (proyecto)', JSON.stringify(aP?.backedSkills));
+  const aC = (s?.areas ?? []).find((x) => x.academicAreaId === areaC.id);
+  check((aC?.backedSkills ?? []).some((h) => h.skillId === sC.id && h.sources.some((x) => x.type === 'credential')),
+    'V3.14.11 §36 La credencial corroborada respalda su tecnología', JSON.stringify(aC?.backedSkills));
+  check(!(aC?.backedSkills ?? []).some((h) => h.sources.some((x) => x.type === 'project')),
+    'V3.14.12 §36 La tecnología solo declarada en el proyecto no figura como respaldada por él');
+  check(!JSON.stringify(s).match(/"(percent|mastery|dominio)"/i) && (aP?.backedSkills ?? []).every((h) => !('score' in h)),
+    'V3.14.13 §36 Sin porcentaje ni puntaje de dominio por habilidad');
+  void resumen;
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

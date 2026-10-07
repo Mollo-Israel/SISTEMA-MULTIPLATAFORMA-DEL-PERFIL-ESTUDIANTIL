@@ -18,7 +18,7 @@
 //  Las cuentas que crea llevan sufijo de tiempo, por lo que puede repetirse.
 // =============================================================================
 
-import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo, crearProyectoBorrador } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo, crearProyectoBorrador, repoQueCorrobora } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -283,8 +283,19 @@ async function rf17Calculo(ctx) {
   });
   check(evProyecto.status === 201 || evProyecto.status === 200, '17.8 Adjunta una evidencia al proyecto', msgOf(evProyecto));
   s = await summaryOf(A.token);
-  check(rawOf(s, areaPrincipal.id) === 10 && areaOf(s, areaPrincipal.id)?.supportScore === 8,
-    '17.9 SUPPORTED suma 10 de afinidad y 8 de respaldo en el área de su tecnología (§47.2, §49)',
+  check(rawOf(s, areaPrincipal.id) === 0,
+    '17.9 V4 §35.1 Un borrador SUPPORTED no es trayectoria: no suma', `crudo ${rawOf(s, areaPrincipal.id)}`);
+  // V3 §22 + §28: se activa con su tecnología en el catálogo y un repositorio
+  // que la corrobora; con la evidencia, queda CORROBORATED.
+  const activo = await req('PATCH', `/projects/${ctx.proyectoId}`, {
+    token: A.token,
+    body: { skillIds: [skill.id], repositoryUrl: repoQueCorrobora(skill.name), status: 'active' },
+  });
+  check(activo.status === 200 && activo.data?.backingTier === 'corroborated',
+    '17.9b §28 Activo y CORROBORATED (tecnología corroborada + evidencia de contexto)', JSON.stringify({ s: activo.status, t: activo.data?.backingTier }));
+  s = await summaryOf(A.token);
+  check(rawOf(s, areaPrincipal.id) === 18 && areaOf(s, areaPrincipal.id)?.supportScore === 15,
+    '17.9c V4 §35.3 CORROBORATED suma 18 de afinidad y 15 de respaldo en el área de su tecnología',
     `crudo ${rawOf(s, areaPrincipal.id)} / respaldo ${areaOf(s, areaPrincipal.id)?.supportScore}`);
 
   section('Evidencia suelta y certificado declarado: no suman (§47.3, §50)');
@@ -306,7 +317,7 @@ async function rf17Calculo(ctx) {
   });
   check(cert.status === 201, '17.11 El estudiante adjunta un certificado externo', msgOf(cert));
   s = await summaryOf(A.token);
-  check(rawOf(s, areaPrincipal.id) === 10, '17.12 Ni la evidencia suelta ni el certificado DECLARED suman afinidad', `crudo ${rawOf(s, areaPrincipal.id)}`);
+  check(rawOf(s, areaPrincipal.id) === 18, '17.12 Ni la evidencia suelta ni el certificado sin corroborar suman afinidad (V4 §35.1)', `crudo ${rawOf(s, areaPrincipal.id)}`);
 
   section('Participación confirmada (§47.1)');
   const categorias = (await req('GET', '/activity-categories', { token: ctx.docente.token })).data ?? [];
@@ -367,8 +378,8 @@ async function rf17Explicabilidad(ctx) {
   const porEtiquetas = await crearProyectoBorrador(A.token, { title: `Visualizador de mallas ${TS}`, description: 'Proyecto sin area declarada, para deduccion por etiquetas.', technologies: ['OpenGL', 'Shaders'], visibility: 'profile' });
   check(porEtiquetas.status === 201, '17.29 Proyecto registrado sin area academica declarada');
   const bdSec = await req('GET', `/affinity/me/areas/${areaSecundaria.id}/breakdown`, { token: A.token });
-  check((bdSec.data?.contributions ?? []).some((c) => c.matchType === 'tag'),
-    '17.30 Sin tecnologías propias, el área del proyecto se deduce por etiquetas (solo para el respaldo)', (bdSec.data?.contributions ?? []).map((c) => c.matchType).join(', '));
+  check(!(bdSec.data?.contributions ?? []).some((c) => (c.sourceLabel ?? '').includes('Visualizador de mallas')),
+    '17.30 V4 §35.1 Un borrador no aparece en la afinidad, ni siquiera deducido por etiquetas', (bdSec.data?.contributions ?? []).map((c) => c.sourceLabel).join(' | '));
   check(Math.abs((bdSec.data?.contributions ?? []).reduce((a, c) => a + Number(c.points), 0) - Number(bdSec.data?.rawPoints)) < 0.011,
     '17.31 El invariante tambien se cumple en el area deducida');
 
@@ -379,7 +390,7 @@ async function rf17Explicabilidad(ctx) {
   check((pesos.data?.weights ?? []).every((w) => w.label && w.description && typeof w.points === 'number'), '17.34 Cada ponderacion declara su etiqueta, justificacion y puntos');
   const codigos = new Set((pesos.data?.weights ?? []).map((w) => w.code));
   check(codigos.has('project_corroborated') && codigos.has('certificate_corroborated') && codigos.has('activity_confirmed'),
-    '17.35 Las ponderaciones cubren las fuentes de la afinidad V3 (§46)', [...codigos].join(', '));
+    '17.35 Las ponderaciones cubren las fuentes de la afinidad V4 (§35.1)', [...codigos].join(', '));
   check(pesos.data?.caps?.PROJECT === 50 && pesos.data?.supportCaps?.PROJECT === 45 && Array.isArray(pesos.data?.diminishing?.PROJECT),
     '17.35b Y se publican los topes y los rendimientos decrecientes (§47, §49)', JSON.stringify([pesos.data?.caps, pesos.data?.supportCaps]));
 }

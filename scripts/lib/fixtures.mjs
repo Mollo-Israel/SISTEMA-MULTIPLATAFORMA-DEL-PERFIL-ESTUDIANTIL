@@ -324,10 +324,14 @@ let githubSimulado = null;
  *   py-*        Python: FastAPI y psycopg2 en requirements.txt.
  *   cuota-*     GitHub responde «cuota agotada» (403, reinicio en 2 s).
  *   inestable-* Falla con 500 las dos primeras veces y luego responde.
+ *   lenguaje-X  GitHub informa el lenguaje «X» (corrobora una tecnología X).
  *   resto       Node con Express y un Dockerfile.
  */
 function contenidoSimulado(nombre) {
   const b64 = (t) => Buffer.from(t, 'utf8').toString('base64');
+  if (nombre.startsWith('lenguaje-')) {
+    return { languages: { [nombre.slice('lenguaje-'.length)]: 9000 }, files: { 'README.md': '# Proyecto' } };
+  }
   if (nombre.startsWith('stack-')) {
     return {
       languages: { TypeScript: 80000, JavaScript: 2000 },
@@ -354,6 +358,10 @@ function contenidoSimulado(nombre) {
     b64,
   };
 }
+
+/** Repositorio simulado cuyo lenguaje corrobora la tecnología `nombre` (§24.2). */
+export const repoQueCorrobora = (nombre) =>
+  repoDePrueba(`lenguaje-${nombre.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '')}`);
 
 /** Peticiones recibidas por el GitHub simulado, para que las suites las inspeccionen. */
 export const githubSimuladoLog = [];

@@ -29,8 +29,15 @@
  * explicable. Dos ejecuciones con los mismos datos dan el mismo resultado.
  */
 
-/** Versión del motor que produjo un cálculo (§56). */
-export const AFFINITY_ENGINE_VERSION = 3;
+/**
+ * Versión del motor que produjo un cálculo (§56).
+ *
+ * 4 — V3.1 §35: solo puntúan participación interna confirmada, proyectos
+ *     CORROBORATED/REVIEWED (con las tecnologías corroboradas que cada
+ *     integrante confirmó) y credenciales externas CORROBORATED. Las
+ *     instantáneas de V2 y V3 se conservan.
+ */
+export const AFFINITY_ENGINE_VERSION = 4;
 
 /**
  * Familia de señal para el respaldo y la regla de diversidad (§53, §54).
@@ -140,6 +147,16 @@ export const AFFINITY_POINTS_V3 = {
   CERTIFICATE_DECLARED: 0,
   CERTIFICATE_SUPPORTED: 8,
   CERTIFICATE_CORROBORATED: 15,
+} as const;
+
+/**
+ * Puntos base de afinidad V4 (V3.1 §35). Lo SUPPORTED ya no suma afinidad:
+ * puede sumar respaldo (§37), pero la afinidad mide trayectoria corroborada.
+ */
+export const AFFINITY_POINTS_V4 = {
+  ...AFFINITY_POINTS_V3,
+  PROJECT_SUPPORTED: 0,
+  CERTIFICATE_SUPPORTED: 0,
 } as const;
 
 /**
