@@ -1,11 +1,8 @@
 /**
- * Punto de emisión de notificaciones (V3 §72: B8, B12 y B17 dejan listo el
- * evento; B16 lo conecta al centro de notificaciones).
- *
- * Los servicios de negocio emiten aquí sin saber cómo se entrega. Mientras
- * no exista el centro, la implementación por defecto solo deja rastro en el
- * registro: la operación de negocio nunca depende de que la notificación
- * llegue.
+ * Punto de emisión de notificaciones (V3 §33). Los servicios de negocio
+ * emiten aquí sin saber cómo se entrega; el centro de notificaciones (B16)
+ * las persiste con su clave de deduplicación. La operación de negocio nunca
+ * depende de que la notificación llegue.
  */
 export const NOTIFICATION_EMITTER = Symbol('NOTIFICATION_EMITTER');
 
@@ -18,6 +15,9 @@ export interface NotificationEvent {
   body: string;
   /** Ruta de la interfaz a la que lleva la notificación. */
   link?: string;
+  /** Entidad de la que trata, para filtrar y para enlazar. */
+  entityType?: string;
+  entityId?: string;
   /**
    * Clave de deduplicación: el mismo hecho no se notifica dos veces
    * aunque el evento se emita más de una vez.

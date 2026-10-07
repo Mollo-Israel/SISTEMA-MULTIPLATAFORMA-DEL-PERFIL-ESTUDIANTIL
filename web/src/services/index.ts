@@ -1168,3 +1168,24 @@ export const auditService = {
   list: (params: { eventType?: string; entityType?: string; limit?: number }) =>
     api.get<AuditEventView[]>('/audit/events', { params }).then((r) => r.data),
 };
+
+/** V3 §33: centro de notificaciones del usuario. */
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  link: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export const notificationService = {
+  mine: (unread = false) =>
+    api.get<NotificationItem[]>('/notifications/me', { params: unread ? { unread: 'true' } : {} }).then((r) => r.data),
+  unreadCount: () => api.get<{ unread: number }>('/notifications/me/unread-count').then((r) => r.data),
+  markRead: (id: string) => api.patch<NotificationItem>(`/notifications/${id}/read`).then((r) => r.data),
+  markAllRead: () => api.post<{ marked: number }>('/notifications/me/read-all').then((r) => r.data),
+};

@@ -1,6 +1,8 @@
+import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { ProjectSkill } from '../entities/project-area.entity';
 import {
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -41,7 +43,31 @@ export class ProjectFeedbackService {
     private readonly events: ProjectEventsService,
     private readonly backing: ProjectBackingService,
     @InjectRepository(ProjectSkill) private readonly projectSkills: Repository<ProjectSkill>,
+    @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
+
+  /** V3 §33: TEACHER_FEEDBACK_RECEIVED, al responsable y a los integrantes. */
+  private async avisarEquipo(projectId: string, feedbackId: string): Promise<void> {
+    try {
+      const p = await this.projects.findOne({ where: { id: projectId }, relations: { members: true, createdByProfile: true } });
+      if (!p) return;
+      const usuarios = new Set<string>([...(p.members ?? []).map((m) => m.userId), ...(p.createdByProfile ? [p.createdByProfile.userId] : [])]);
+      for (const userId of usuarios) {
+        await this.notifications.emit({
+          userId,
+          kind: 'TEACHER_FEEDBACK_RECEIVED',
+          title: 'Retroalimentación docente',
+          body: `Un docente comentó «${p.title}». Es orientación, no una nota.`,
+          link: '/student/projects',
+          entityType: 'project',
+          entityId: projectId,
+          dedupeKey: `teacher-feedback:${feedbackId}:${userId}`,
+        });
+      }
+    } catch {
+      // sin efecto sobre la operación
+    }
+  }
 
   /**
    * V3 §29: un docente autorizado confirma una tecnología declarada con
@@ -75,6 +101,7 @@ export class ProjectFeedbackService {
       metadata: { tecnologiaConfirmada: fila.skill?.name ?? skillId },
     });
     await this.backing.recalculate(projectId, user.userId);
+    await this.avisarEquipo(projectId, `skill-${skillId}-${Date.now()}`);
     return { skillId, name: fila.skill?.name ?? null, evidenceStatus: fila.evidenceStatus, academicReviewedAt: fila.academicReviewedAt };
   }
 
@@ -106,6 +133,7 @@ export class ProjectFeedbackService {
       metadata: { longitud: dto.comment.length },
     });
     await this.backing.recalculate(projectId, user.userId);
+    await this.avisarEquipo(projectId, saved.id);
 
     return this.findOneOrFail(saved.id);
   }

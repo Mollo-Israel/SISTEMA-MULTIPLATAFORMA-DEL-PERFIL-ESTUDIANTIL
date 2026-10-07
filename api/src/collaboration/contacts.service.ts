@@ -1,5 +1,7 @@
+import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import {
   BadRequestException,
+  Inject,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -58,7 +60,17 @@ export class ContactsService {
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     @InjectRepository(StudentContactChannel) private readonly channels: Repository<StudentContactChannel>,
     @InjectRepository(ContactNote) private readonly notes: Repository<ContactNote>,
+    @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
+
+  /** Las notificaciones nunca deshacen una operación (V3 §33). */
+  private async avisar(evento: Parameters<NotificationEmitter['emit']>[0]): Promise<void> {
+    try {
+      await this.notifications.emit(evento);
+    } catch {
+      // sin efecto sobre la operación
+    }
+  }
 
   // =========================================================================
   // V2 §59 · Canales de contacto
@@ -197,7 +209,7 @@ export class ContactsService {
       throw new ConflictException('Ya hay una solicitud pendiente entre ustedes.');
     }
 
-    return this.requests.save(
+    const guardada = await this.requests.save(
       this.requests.create({
         requesterProfileId,
         targetProfileId: destino.id,
@@ -206,6 +218,19 @@ export class ContactsService {
         status: ContactRequestStatus.PENDING,
       }),
     );
+    // V3 §33: CONTACT_REQUEST. Se dice quién, no se expone nada más.
+    const nombre = (await this.namesOf([requesterProfileId])).get(requesterProfileId) ?? 'Un estudiante';
+    await this.avisar({
+      userId: destino.userId,
+      kind: 'CONTACT_REQUEST',
+      title: 'Nueva solicitud de contacto',
+      body: `${nombre} quiere agregarte como contacto.`,
+      link: '/student/collaboration',
+      entityType: 'contact_request',
+      entityId: guardada.id,
+      dedupeKey: `contact-request:${guardada.id}`,
+    });
+    return guardada;
   }
 
   /** Solicitudes que le llegaron, pendientes de responder. */

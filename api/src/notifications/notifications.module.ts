@@ -1,28 +1,26 @@
-import { Global, Injectable, Logger, Module } from '@nestjs/common';
-import { NOTIFICATION_EMITTER, NotificationEmitter, NotificationEvent } from './notification.port';
+import { Global, Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Notification } from '../entities/notification.entity';
+import { ActivityRegistration } from '../entities/activity-registration.entity';
+import { StudentProfile } from '../entities/student-profile.entity';
+import { NOTIFICATION_EMITTER } from './notification.port';
+import { NotificationsService, PersistentNotificationEmitter } from './notifications.service';
+import { ActivityRemindersService } from './activity-reminders.service';
+import { NotificationsController } from './notifications.controller';
 
 /**
- * Implementación provisional: registra el evento y no hace nada más.
- *
- * Se mantiene la deduplicación en memoria para que, mientras tanto, el
- * registro no se llene con el mismo hecho repetido.
+ * Centro de notificaciones (V3 §33). Global: cualquier servicio de negocio
+ * inyecta NOTIFICATION_EMITTER sin importar este módulo.
  */
-@Injectable()
-export class LoggingNotificationEmitter implements NotificationEmitter {
-  private readonly logger = new Logger('Notificaciones');
-  private readonly vistas = new Set<string>();
-
-  async emit(event: NotificationEvent): Promise<void> {
-    if (this.vistas.has(event.dedupeKey)) return;
-    this.vistas.add(event.dedupeKey);
-    if (this.vistas.size > 5000) this.vistas.clear();
-    this.logger.log(`${event.kind} → ${event.userId}: ${event.title}`);
-  }
-}
-
 @Global()
 @Module({
-  providers: [{ provide: NOTIFICATION_EMITTER, useClass: LoggingNotificationEmitter }],
-  exports: [NOTIFICATION_EMITTER],
+  imports: [TypeOrmModule.forFeature([Notification, ActivityRegistration, StudentProfile])],
+  controllers: [NotificationsController],
+  providers: [
+    NotificationsService,
+    ActivityRemindersService,
+    { provide: NOTIFICATION_EMITTER, useClass: PersistentNotificationEmitter },
+  ],
+  exports: [NOTIFICATION_EMITTER, NotificationsService],
 })
 export class NotificationsModule {}

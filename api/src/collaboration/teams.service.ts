@@ -1,5 +1,7 @@
+import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import {
   BadRequestException,
+  Inject,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -74,6 +76,7 @@ export class TeamsService {
     private readonly ai: AiService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
+    @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
 
   /**
@@ -514,6 +517,7 @@ export class TeamsService {
     if (previa && previa.status === TeamInvitationStatus.PENDING) {
       throw new ConflictException('Ya tiene una invitación pendiente.');
     }
+    let guardada: TeamInvitation;
     if (previa) {
       // Se reutiliza la fila: la clave única es (equipo, invitado), y volver a
       // invitar a quien declinó es legítimo mientras no se convierta en insistir.
@@ -521,19 +525,44 @@ export class TeamsService {
       previa.message = message ?? null;
       previa.decidedAt = null;
       previa.invitedByProfileId = ownerProfileId;
-      return this.invitations.save(previa);
+      guardada = await this.invitations.save(previa);
+    } else {
+      guardada = await this.invitations.save(
+        this.invitations.create({
+          teamId: equipo.id,
+          invitedProfileId,
+          invitedByProfileId: ownerProfileId,
+          message: message ?? null,
+          status: TeamInvitationStatus.PENDING,
+        }),
+      );
     }
-
-    return this.invitations.save(
-      this.invitations.create({
-        teamId: equipo.id,
-        invitedProfileId,
-        invitedByProfileId: ownerProfileId,
-        message: message ?? null,
-        status: TeamInvitationStatus.PENDING,
-      }),
-    );
+    // V3 §33: TEAM_INVITATION.
+    const invitado = await this.profiles.findOne({ where: { id: invitedProfileId } });
+    if (invitado) {
+      await this.avisar({
+        userId: invitado.userId,
+        kind: 'TEAM_INVITATION',
+        title: 'Te invitaron a un equipo',
+        body: `Te invitaron al equipo «${equipo.name}».`,
+        link: '/student/collaboration',
+        entityType: 'team_invitation',
+        entityId: guardada.id,
+        // Cada (re)invitación es un hecho nuevo; repetir el mismo envío no.
+        dedupeKey: `team-invitation:${guardada.id}:${guardada.createdAt?.getTime?.() ?? 0}:${previa ? Date.now() : 0}`,
+      });
+    }
+    return guardada;
   }
+  /** Las notificaciones nunca deshacen una operación (V3 §33). */
+  private async avisar(evento: Parameters<NotificationEmitter['emit']>[0]): Promise<void> {
+    try {
+      await this.notifications.emit(evento);
+    } catch {
+      // sin efecto sobre la operación
+    }
+  }
+
 
   async myInvitations(studentProfileId: string) {
     const filas = await this.invitations.find({

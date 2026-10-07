@@ -134,7 +134,7 @@ export class CredentialEligibilityService {
       try {
         await this.notifications.emit({
           userId: profile.userId,
-          kind: 'EXTERNAL_EVIDENCE_ENABLED',
+          kind: 'EXTERNAL_EVIDENCE_AVAILABLE',
           title: 'Ya puedes adjuntar tu credencial',
           body: `Terminó «${activity.title}». Adjunta la credencial que emitió ${activity.provider ?? 'el proveedor'} para que se valide.`,
           link: '/student/evidences',

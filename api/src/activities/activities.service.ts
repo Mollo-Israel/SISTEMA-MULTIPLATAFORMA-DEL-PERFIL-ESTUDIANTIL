@@ -1,3 +1,4 @@
+import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import {
   BadRequestException,
   ConflictException,
@@ -186,6 +187,7 @@ export class ActivitiesService {
     private readonly references: Repository<ExternalOpportunityValidationReference>,
     private readonly eligibility: CredentialEligibilityService,
     private readonly uploads: UploadsService,
+    @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
 
   // =========================================================================
@@ -1013,6 +1015,25 @@ export class ActivitiesService {
     // Si la oportunidad ya terminó, desde ahora puede adjuntar su credencial.
     if (status !== anterior) {
       await this.eligibility.announce(activity, [saved], confirmer.userId);
+      // V3 §33: PARTICIPATION_CONFIRMED / ACTIVITY_REGISTRATION_ACCEPTED.
+      if (status === RegistrationStatus.CONFIRMED || status === RegistrationStatus.ACCEPTED) {
+        try {
+          await this.notifications.emit({
+            userId: profile.userId,
+            kind: status === RegistrationStatus.CONFIRMED ? 'PARTICIPATION_CONFIRMED' : 'ACTIVITY_REGISTRATION_ACCEPTED',
+            title: status === RegistrationStatus.CONFIRMED ? 'Participación confirmada' : 'Te aceptaron',
+            body: status === RegistrationStatus.CONFIRMED
+              ? `El responsable confirmó tu participación en «${activity.title}». Ya cuenta en tu trayectoria.`
+              : `El proveedor te aceptó en «${activity.title}». Al terminar podrás adjuntar tu credencial.`,
+            link: '/student/activities',
+            entityType: 'activity_registration',
+            entityId: saved.id,
+            dedupeKey: `registration-${status}:${saved.id}`,
+          });
+        } catch {
+          // sin efecto sobre la operación
+        }
+      }
     }
 
     return saved;

@@ -1609,7 +1609,99 @@ async function batch15(ctx) {
   check(pts(de(m2), 'similar_saved') === 5, 'V3.15.12 §34 Guardar algo parecido suma el 5 % de feedback', JSON.stringify(de(m2)?.reasons));
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15 };
+// ===========================================================================
+//  BATCH 16 — Notificaciones (§33)
+// ===========================================================================
+async function batch16(ctx) {
+  objective('BATCH 16 · Centro de notificaciones: eventos, leído/no leído, dedupe y recordatorios');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Noa', lastName: 'Avisos', email: correoEst('b16'), role: 'STUDENT', semester: 2 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const otro = await provisionAndActivate(ctx.admin, { firstName: 'Leo', lastName: 'Ajeno', email: correoEst('b16b'), role: 'STUDENT', semester: 2 });
+  otro.profileId = (await req('GET', '/profiles/me', { token: otro.token })).data?.id;
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Ada', lastName: 'Aviso', email: correoStaff('b16dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: 'Comenta', email: correoStaff('b16doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [2] } });
+
+  const bandeja = async (token, extra = '') => (await req('GET', `/notifications/me${extra}`, { token })).data ?? [];
+  const deTipo = async (token, tipo) => (await bandeja(token)).filter((n) => n.type === tipo);
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const hora = 3_600_000;
+  const actividad = async (titulo, enHoras) => (await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${TS}`, type: 'academica', categoryId: taller.id, status: 'open', activityDate: new Date(Date.now() + enHoras * hora).toISOString() },
+  })).data;
+
+  // ----- PARTICIPATION_CONFIRMED + dedupe
+  const a1 = await actividad('Charla de bienvenida', 72);
+  await req('POST', `/activities/${a1.id}/register`, { token: est.token });
+  const confirmar = (status) => req('PATCH', `/activities/${a1.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status } });
+  await confirmar('confirmed');
+  let n = await deTipo(est.token, 'PARTICIPATION_CONFIRMED');
+  check(n.length === 1 && n[0].link && !n[0].readAt && n[0].entityType === 'activity_registration',
+    'V3.16.1 §33 PARTICIPATION_CONFIRMED llega al estudiante, no leída, con enlace', JSON.stringify(n[0] ?? null));
+  await confirmar('absent');
+  await confirmar('confirmed');
+  check((await deTipo(est.token, 'PARTICIPATION_CONFIRMED')).length === 1, 'V3.16.2 §33.1 La misma alerta no se repite (dedupe_key)');
+
+  // ----- leído / no leído
+  const antes = (await req('GET', '/notifications/me/unread-count', { token: est.token })).data?.unread;
+  const ajena = await req('PATCH', `/notifications/${n[0].id}/read`, { token: otro.token });
+  check(ajena.status === 404, 'V3.16.3 Nadie marca ni ve una notificación ajena -> 404', `status ${ajena.status}`);
+  check(!(await bandeja(otro.token)).some((x) => x.id === n[0].id), 'V3.16.4 La bandeja de otro no la incluye');
+  const leida = await req('PATCH', `/notifications/${n[0].id}/read`, { token: est.token });
+  const despues = (await req('GET', '/notifications/me/unread-count', { token: est.token })).data?.unread;
+  check(leida.status === 200 && !!leida.data?.readAt && despues === antes - 1, 'V3.16.5 Marcar como leída baja el contador', `${antes} → ${despues}`);
+  check((await bandeja(est.token, '?unread=true')).every((x) => !x.readAt), 'V3.16.6 Filtro de no leídas');
+
+  // ----- Recordatorios con frecuencia controlada
+  const manana = await actividad('Taller de mañana', 20);
+  const pronto = await actividad('Taller en dos horas', 2);
+  const interes = await actividad('Seminario de interés', 18);
+  await req('POST', `/activities/${manana.id}/register`, { token: est.token });
+  await req('POST', `/activities/${pronto.id}/register`, { token: est.token });
+  await req('POST', `/activities/${interes.id}/register-interest`, { token: est.token });
+  const lejana = await actividad('Congreso lejano', 24 * 10);
+  await req('POST', `/activities/${lejana.id}/register`, { token: est.token });
+  const vuelta = await req('POST', '/notifications/admin/run-reminders', { token: ctx.admin });
+  check(vuelta.status === 200, 'V3.16.7 La vuelta de recordatorios corre (cada media hora sola)', `status ${vuelta.status}`);
+  await req('POST', '/notifications/admin/run-reminders', { token: ctx.admin });
+  const recordatorios = await deTipo(est.token, 'ACTIVITY_STARTING');
+  const de = (act) => recordatorios.filter((x) => x.entityId === act.id).length;
+  check(de(manana) === 1, 'V3.16.8 §33.1 Inscrito: aviso el día antes, una sola vez aunque la vuelta corra dos veces', `${de(manana)}`);
+  check(de(pronto) === 2, 'V3.16.9 §33.1 Y otro unas horas antes', `${de(pronto)}`);
+  check(de(lejana) === 0, 'V3.16.10 Nada para lo que falta mucho');
+  const deInteres = (await deTipo(est.token, 'ACTIVITY_INTEREST_REMINDER')).filter((x) => x.entityId === interes.id);
+  check(deInteres.length === 1, 'V3.16.11 §33.1 Interesado: un solo aviso, con menos frecuencia', `${deInteres.length}`);
+
+  // ----- Equipos y proyectos
+  const nec = (await req('POST', '/team-needs', { token: est.token, body: { purpose: `Equipo de avisos ${TS}`, maxMembers: 3 } })).data;
+  const eq = (await req('POST', `/team-needs/${nec.id}/team`, { token: est.token, body: { name: `Equipo Aviso ${String(TS).slice(-5)}` } })).data;
+  await req('POST', `/teams/${eq.id}/invitations`, { token: est.token, body: { invitedProfileId: otro.profileId } });
+  check((await deTipo(otro.token, 'TEAM_INVITATION')).length === 1, 'V3.16.12 §33 TEAM_INVITATION');
+
+  const proy = await crearProyectoBorrador(est.token, { title: `Proyecto con avisos ${TS}`, visibility: 'teachers' });
+  const inv = await req('POST', `/projects/${proy.data.id}/invitations`, { token: est.token, body: { invitedProfileId: otro.profileId, proposedRole: 'Backend' } });
+  check((await deTipo(otro.token, 'PROJECT_INVITATION')).length === 1, 'V3.16.13 Invitación a proyecto');
+  await req('PATCH', `/projects/invitations/${inv.data.id}`, { token: otro.token, body: { decision: 'accept' } });
+  check((await deTipo(otro.token, 'PROJECT_MEMBER_CONFIRMATION_REQUIRED')).length === 1, 'V3.16.14 §33 PROJECT_MEMBER_CONFIRMATION_REQUIRED al aceptar');
+  const detallados = (await req('GET', `/projects/${proy.data.id}/members/detailed`, { token: est.token })).data ?? [];
+  const suyo = detallados.find((m) => m.userId === otro.userId);
+  await req('PATCH', `/projects/${proy.data.id}/members/${suyo.id}/contribution`, { token: est.token, body: { contribution: 'API y pruebas.' } });
+  check((await deTipo(otro.token, 'PROJECT_CONTRIBUTION_CHANGED')).length === 1, 'V3.16.15 §33 PROJECT_CONTRIBUTION_CHANGED');
+  const fb = await req('POST', `/projects/${proy.data.id}/feedback`, { token: docente.token, body: { comment: 'Buen avance en la arquitectura del proyecto.' } });
+  check(fb.status === 201 && (await deTipo(est.token, 'TEACHER_FEEDBACK_RECEIVED')).length === 1
+    && (await deTipo(otro.token, 'TEACHER_FEEDBACK_RECEIVED')).length === 1,
+  'V3.16.16 §33 TEACHER_FEEDBACK_RECEIVED al responsable y a los integrantes', `status ${fb.status}`);
+
+  // ----- Todas leídas
+  const todas = await req('POST', '/notifications/me/read-all', { token: est.token });
+  check(todas.status === 200 && (await req('GET', '/notifications/me/unread-count', { token: est.token })).data?.unread === 0,
+    'V3.16.17 Marcar todas como leídas', JSON.stringify(todas.data));
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

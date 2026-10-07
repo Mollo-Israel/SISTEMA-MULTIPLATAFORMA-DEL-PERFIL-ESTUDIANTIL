@@ -33,6 +33,7 @@ import { useAuth } from '../auth/AuthContext';
 import { NAV } from '../navigation';
 import { TopProgress } from './feedback';
 import UserMenu from './UserMenu';
+import NotificationBell from './NotificationBell';
 import Tutorial from './Tutorial';
 import { PrimeraVisita, vistasVisitadas } from './primeraVisita';
 
@@ -211,7 +212,10 @@ export default function Layout() {
             </button>
             <span className="page-title">{currentTitle(user.role, location.pathname)}</span>
           </div>
-          <UserMenu />
+          <div className="flex" style={{ gap: '0.4rem' }}>
+            <NotificationBell />
+            <UserMenu />
+          </div>
         </header>
         {/* Sin `key` ni fundido: antes cada cambio de ruta desmontaba este
             contenedor y lo volvía a montar con opacidad 0, y la página
@@ -228,6 +232,7 @@ export default function Layout() {
 }
 
 function currentTitle(role: string, path: string): string {
+  if (path === '/notificaciones') return 'Notificaciones';
   for (const group of NAV[role] ?? []) {
     const match = group.items.find((i) => i.to === path);
     if (match) return match.label;

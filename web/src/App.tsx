@@ -41,6 +41,7 @@ import DirectorConstanciesPage from './pages/director/Constancies';
 import DirectorApprovalsPage from './pages/director/Approvals';
 import AdminAuditPage from './pages/admin/Audit';
 import HelpPage from './pages/help/Help';
+import NotificationsPage from './pages/Notifications';
 import TeacherTeamNeedsPage from './pages/teacher/TeamNeeds';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorTrendsPage from './pages/director/Trends';
@@ -188,6 +189,8 @@ export default function App() {
 
           {/* V2 §65: la ayuda es de todos los actores. */}
           <Route path="/ayuda" element={<HelpPage />} />
+          {/* V3 §33: cada actor tiene su bandeja; la API solo devuelve las suyas. */}
+          <Route path="/notificaciones" element={<NotificationsPage />} />
           </Route>
 
           <Route path="*" element={<RootRedirect />} />

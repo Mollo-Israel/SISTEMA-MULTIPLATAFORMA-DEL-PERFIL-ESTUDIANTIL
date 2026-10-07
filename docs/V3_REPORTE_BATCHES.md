@@ -545,3 +545,45 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Riesgos:** ninguno nuevo.
 
 **Resultados:** unitarias 86/86; `e2e-v3` 240 (B15 12/12). Regresión completa: 1670 correctas y 1 fallo en `e2e-web` (WEB.19b: al volver a Actividades, «Para ti» volvía a cargar con esqueleto). Corregido con la memoria de sesión y el esqueleto diferido que usan las demás vistas; `e2e-web` 29/29. Total efectivo **1671/0**.
+
+---
+
+## BATCH 16 — Notificaciones
+
+**ESTADO:** completo
+
+**Objetivo:** que las notificaciones sean un módulo funcional (§33): persistidas, con leído/no leído, sin repetir la misma alerta y con recordatorios de actividades de frecuencia controlada (§33.1).
+
+**Hallazgos iniciales:**
+- El punto de emisión (`NOTIFICATION_EMITTER`) existía desde B8, pero solo escribía en el registro: no había bandeja, ni lectura, ni deduplicación persistente.
+- Faltaban los eventos `CONTACT_REQUEST`, `TEAM_INVITATION`, `TEACHER_FEEDBACK_RECEIVED`, `PARTICIPATION_CONFIRMED`, `ACTIVITY_REGISTRATION_ACCEPTED`, `ACTIVITY_STARTING` y `ACTIVITY_INTEREST_REMINDER`. `EXTERNAL_EVIDENCE_ENABLED` no coincidía con el nombre de §33.
+
+**Cambios:**
+- **Tabla `notifications`** con `type`, `recipient_user_id`, `entity_type`, `entity_id`, `dedupe_key`, `created_at`, `read_at` y `delivered_at` (§33.1). La clave (destinatario, `dedupe_key`) es única y la inserción usa `ON CONFLICT DO NOTHING`, así que la misma alerta no se repite aunque el evento se emita dos veces o en paralelo. Una notificación que falla nunca deshace la operación que la originó.
+- **API:**
+  - `GET /notifications/me` (`?unread=true`) devuelve solo las propias; mostrarlas las marca como entregadas.
+  - `GET /notifications/me/unread-count`.
+  - `PATCH /notifications/:id/read` responde 404 si la notificación es de otra persona.
+  - `POST /notifications/me/read-all`.
+  - `POST /notifications/admin/run-reminders` (solo administración, para diagnóstico).
+- **Eventos conectados:** solicitud de contacto, invitación a equipo, retroalimentación docente (al responsable y a cada integrante, también al confirmar una tecnología), participación confirmada o aceptada, credencial externa disponible (renombrado a `EXTERNAL_EVIDENCE_AVAILABLE`), además de los de proyecto y credenciales de B8, B9 y B12.
+- **Recordatorios (§33.1):** una tarea cada 30 minutos (`NOTIFICATION_REMINDERS_ENABLED`, `NOTIFICATION_REMINDERS_INTERVAL_MINUTES`).
+  - Inscritos o aceptados reciben un aviso el día antes y otro unas horas antes.
+  - Interesados reciben un único aviso el día antes.
+  - Cada aviso tiene su propia clave, así que correr la tarea varias veces no repite nada.
+- **Web:** una campana en la barra superior con el número de no leídas. Se consulta al cambiar de página, cada minuto y al volver a la pestaña, nunca con la pestaña oculta. La página `/notificaciones` tiene las pestañas Todas / Sin leer y «Marcar todas como leídas»; abrir un aviso lo marca como leído y lleva a su enlace.
+
+**Migraciones:** `1780580000000-V3Notifications`. Copia de seguridad previa (`pre-v3-b16.dump`); probado `up` → `down` → `up`.
+
+**Pruebas ejecutadas:** `e2e-v3 batch16` (V3.16.1–V3.16.17): evento por evento, deduplicación, propiedad (404), filtro de no leídas, recordatorios del día antes, de unas horas antes y para interesados, y que la tarea corra dos veces sin duplicar. También unitarias y la regresión completa.
+
+**Riesgos:** los enlaces de los avisos apuntan a las rutas web; la app móvil los mostrará en B22.
+
+**Resultados:**
+- Unitarias: 86/86.
+- `e2e-v3`: 257 (B16 17/17).
+- Regresión completa: 1677 correctas y 2 fallos en `e2e-batch-7` (B7.47 y B7.48: la recomendación del taller del área nueva no apareció).
+- Al repetir esa suite sola: 57/57.
+- Causa: el límite por tipo de recomendaciones compite con las actividades abiertas que dejan las demás suites, así que depende del orden de ejecución. B16 no toca recomendaciones. Queda anotado para el endurecimiento de B23.
+
+**Pendientes:** notificaciones en móvil (B22); `TEAM_APPLICATION*` llegan con las postulaciones (B17).
