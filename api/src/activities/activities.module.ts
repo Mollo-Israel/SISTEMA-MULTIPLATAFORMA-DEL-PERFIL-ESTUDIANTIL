@@ -6,6 +6,7 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
+import { ActivityArea } from '../entities/activity-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
@@ -23,6 +24,7 @@ import { ActivitiesController } from './activities.controller';
       AcademicArea,
       ActivityCategory,
       ActivitySkill,
+      ActivityArea,
       Skill,
       ActivityReview,
       ActivityGamificationRule,

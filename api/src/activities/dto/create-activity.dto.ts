@@ -13,6 +13,7 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -21,12 +22,20 @@ import {
 } from 'class-validator';
 import {
   ActivityModality,
+  ActivityOrigin,
   ActivityStatus,
   ActivityType,
   GamificationTrigger,
   RegistrationMode,
 } from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
+
+/** Dominio de un emisor: `netacad.com`, `credly.com` (sin esquema ni ruta). */
+const DOMINIO_RE = /^(?=.{3,120}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+const minusculas = ({ value }: { value: unknown }) =>
+  Array.isArray(value)
+    ? [...new Set(value.map((v) => (typeof v === 'string' ? v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '') : v)).filter(Boolean))]
+    : value;
 
 /** Regla de puntos de la actividad (V2 §31.2): un hecho permitido y sus puntos. */
 export class ActivityGamificationRuleDto {
@@ -104,10 +113,68 @@ export class CreateActivityDto {
   @Max(1000, { message: 'El cupo máximo es 1000.' })
   capacity?: number;
 
-  @ApiProperty({ required: false, description: 'ID del área académica' })
+  @ApiProperty({ required: false, description: 'ID del área académica principal (compatibilidad; preferir areaIds)' })
   @IsOptional()
   @IsUUID('4')
   areaId?: string;
+
+  /** V3 §12.1 `areas[]`: una oportunidad puede tocar varias áreas. La primera es la principal. */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6, { message: 'Como máximo 6 áreas.' })
+  @ArrayUnique({ message: 'No repitas áreas.' })
+  @IsUUID('4', { each: true, message: 'Área no válida.' })
+  areaIds?: string[];
+
+  /** V3 §12: interna (la organiza la carrera) o externa (un proveedor). */
+  @ApiProperty({ required: false, enum: ActivityOrigin, default: ActivityOrigin.INTERNAL })
+  @IsOptional()
+  @IsEnum(ActivityOrigin, { message: 'El origen debe ser interno o externo.' })
+  originType?: ActivityOrigin;
+
+  /** V3 §12.1 · Externa: proveedor (obligatorio si es externa). */
+  @ApiProperty({ required: false, example: 'Cisco Networking Academy' })
+  @IsOptional()
+  @Transform(cleanLine)
+  @IsString()
+  @MaxLength(160, { message: 'El proveedor es demasiado largo.' })
+  provider?: string;
+
+  /** V3 §12.1 · Externa: si al terminar se espera una credencial del proveedor. */
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  credentialExpected?: boolean;
+
+  /** V3 §12.1 · Dominios oficiales del emisor (para validar la credencial). */
+  @ApiProperty({ required: false, type: [String], example: ['netacad.com', 'credly.com'] })
+  @IsOptional()
+  @Transform(minusculas)
+  @IsArray()
+  @ArrayMaxSize(10, { message: 'Como máximo 10 dominios.' })
+  @Matches(DOMINIO_RE, { each: true, message: 'Cada dominio debe tener la forma «proveedor.com».' })
+  expectedIssuerDomains?: string[];
+
+  /** V3 §12.1 · Palabras que se esperan en la credencial (nombre del curso…). */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @Transform(trimUniqueArray)
+  @IsArray()
+  @ArrayMaxSize(15, { message: 'Como máximo 15 palabras clave.' })
+  @IsString({ each: true })
+  @MaxLength(60, { each: true, message: 'Cada palabra clave es demasiado larga.' })
+  expectedKeywords?: string[];
+
+  /**
+   * V3 §6.5, §12.2: responsable de la oportunidad. Obligatorio cuando la crea
+   * Administración —que no es emisor académico—; en los demás casos es quien
+   * la crea.
+   */
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsUUID('4', { message: 'El responsable no es válido.' })
+  responsibleUserId?: string;
 
   @ApiProperty({ required: false, type: [String] })
   @IsOptional()

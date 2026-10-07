@@ -272,7 +272,118 @@ async function batch5(ctx) {
   check(semestre.status === 400, 'V3.5.5 §6.1 El semestre sigue siendo institucional (400)', `status ${semestre.status}`);
 }
 
-const BATCHES = { batch2, batch4, batch5 };
+// ===========================================================================
+//  BATCH 6 — Modelo unificado de oportunidades (§12)
+// ===========================================================================
+async function batch6(ctx) {
+  objective('BATCH 6 · Internas y externas, multiárea, revisión por actor y responsable');
+  const letras = (n) => String.fromCharCode(...String(TS + n).slice(-6).split('').map((d) => 65 + Number(d)));
+  const sufijo = letras(9);
+  const staff = (k, role) => provisionAndActivate(ctx.admin, { firstName: 'Opor', lastName: 'Tunidad', email: correoStaff(`b6${k}`), role });
+  const director = await staff('dir', 'CAREER_DIRECTOR');
+  const docente = await staff('doc', 'TEACHER');
+  const sociedad = await staff('soc', 'SCIENTIFIC_SOCIETY');
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [1, 2, 3, 4] } });
+
+  const area = async (n, tag) => (await req('POST', '/academic-areas', {
+    token: ctx.admin, body: { name: `${n} ${sufijo}`, tags: [`${tag}${sufijo.toLowerCase()}`] },
+  })).data;
+  const areaA = await area('Robotica Movil', 'robmov');
+  const areaB = await area('Vision Artificial', 'vision');
+  const areaC = await area('Contabilidad Digital', 'conta');
+  const skill = async (n, a) => (await req('POST', '/skills', { token: ctx.admin, body: { name: `${n} ${sufijo}`, academicAreaId: a.id } })).data;
+  const sA = await skill('Lidar Kit', areaA);
+  const sB = await skill('Optic Flow', areaB);
+  const sC = await skill('Ledger Pro', areaC);
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const extra = cats.find((c) => c.appliesTo === 'extracurricular') ?? cats[0];
+
+  // ----- §12.1 Multiárea + habilidades de esas áreas
+  const base = { type: 'academica', categoryId: taller.id, semesterScope: [1, 2] };
+  const multi = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...base, title: `Taller de percepción ${TS}`, areaIds: [areaA.id, areaB.id], skillIds: [sA.id, sB.id], status: 'open' },
+  });
+  check(multi.status === 201 && (multi.data?.activityAreas ?? []).length === 2 && multi.data?.academicAreaId === areaA.id,
+    'V3.6.1 §12.1 Una oportunidad toca varias áreas; la primera es la principal', json({ s: multi.status, n: multi.data?.activityAreas?.length }));
+  check(multi.data?.originType === 'internal' && multi.data?.reviewStatus === 'not_required',
+    'V3.6.2 §12.2 Dirección crea internas académicas sin revisión (NOT_REQUIRED)', json({ o: multi.data?.originType, r: multi.data?.reviewStatus }));
+  const ajena = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...base, title: `Taller incoherente ${TS}`, areaIds: [areaA.id], skillIds: [sC.id] },
+  });
+  check(ajena.status === 400 && /otra área/.test(json(ajena.data?.fields?.skillIds)),
+    'V3.6.3 §4 Una habilidad de un área no elegida → 400 en su campo', json(ajena.data?.fields));
+
+  // ----- §12.1 Externas
+  const sinProveedor = await req('POST', '/activities', {
+    token: docente.token,
+    body: { ...base, title: `Curso CCNA ${TS}`, originType: 'external', areaIds: [areaA.id] },
+  });
+  check(sinProveedor.status === 400 && sinProveedor.data?.fields?.provider && sinProveedor.data?.fields?.externalUrl,
+    'V3.6.4 §12.1 Una externa exige proveedor y enlace oficial (errores por campo)', json(sinProveedor.data?.fields));
+  const externa = await req('POST', '/activities', {
+    token: docente.token,
+    body: {
+      ...base, title: `Curso CCNA ${TS}`, originType: 'external', areaIds: [areaA.id],
+      provider: 'Cisco Networking Academy', externalUrl: 'https://www.netacad.com/courses/ccna',
+      credentialExpected: true, expectedIssuerDomains: ['https://www.NetAcad.com/path', 'credly.com'],
+      expectedKeywords: ['Introduction to Networks'],
+    },
+  });
+  check(externa.status === 201 && externa.data?.originType === 'external' && externa.data?.credentialExpected === true,
+    'V3.6.5 §12.1 El docente propone una externa con proveedor y credencial esperada', json({ s: externa.status, o: externa.data?.originType }));
+  check(json(externa.data?.expectedIssuerDomains) === json(['www.netacad.com', 'credly.com']),
+    'V3.6.6 §17 Los dominios del emisor se guardan normalizados', json(externa.data?.expectedIssuerDomains));
+  check(externa.data?.requiresReview === true && externa.data?.status === 'draft',
+    'V3.6.7 §12.2 Lo que propone el docente (también externas) pasa por Dirección', json({ r: externa.data?.requiresReview, st: externa.data?.status }));
+  const dominioMalo = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...base, title: `Curso raro ${TS}`, originType: 'external', provider: 'X', externalUrl: 'https://x.test', expectedIssuerDomains: ['no es un dominio'] },
+  });
+  check(dominioMalo.status === 400, 'V3.6.8 §49 Un dominio inválido → 400', `status ${dominioMalo.status}`);
+  const deSociedad = await req('POST', '/activities', {
+    token: sociedad.token,
+    body: {
+      title: `Bootcamp externo ${TS}`, type: 'extracurricular', categoryId: extra.id, originType: 'external',
+      provider: 'IBM SkillsBuild', externalUrl: 'https://skillsbuild.org', areaIds: [areaB.id],
+    },
+  });
+  check(deSociedad.status === 201 && deSociedad.data?.requiresReview === true,
+    'V3.6.9 §12.2 La Sociedad propone externas complementarias que revisa Dirección', json({ s: deSociedad.status, r: deSociedad.data?.requiresReview }));
+
+  // ----- §6.5, §12.2 Administración excepcional con responsable
+  const adminSin = await req('POST', '/activities', { token: ctx.admin, body: { ...base, title: `Operativa ${TS}`, status: 'open' } });
+  check(adminSin.status === 400 && adminSin.data?.fields?.responsibleUserId,
+    'V3.6.10 §6.5 Administración debe nombrar un responsable académico', json(adminSin.data?.fields));
+  const adminConSociedad = await req('POST', '/activities', {
+    token: ctx.admin, body: { ...base, title: `Operativa ${TS}`, responsibleUserId: sociedad.userId },
+  });
+  check(adminConSociedad.status === 400, 'V3.6.11 §12.2 El responsable de una académica es docente o Dirección', `status ${adminConSociedad.status}`);
+  const adminOk = await req('POST', '/activities', {
+    token: ctx.admin, body: { ...base, title: `Operativa ${TS}`, responsibleUserId: docente.userId, status: 'open' },
+  });
+  check(adminOk.status === 201 && adminOk.data?.reviewStatus === 'not_required' && adminOk.data?.responsibleUserId === docente.userId,
+    'V3.6.12 §12.2 Administración publica sin revisión y conserva al responsable real', json({ r: adminOk.data?.reviewStatus, resp: adminOk.data?.responsibleUserId === docente.userId }));
+  const reasignaDocente = await req('PATCH', `/activities/${multi.data.id}`, { token: director.token, body: { responsibleUserId: docente.userId } });
+  check(reasignaDocente.status === 403, 'V3.6.13 Solo Administración reasigna el responsable', `status ${reasignaDocente.status}`);
+
+  // ----- Listados
+  const soloExternas = await req('GET', '/activities?originType=external', { token: director.token });
+  check((soloExternas.data ?? []).length > 0 && (soloExternas.data ?? []).every((x) => x.originType === 'external'),
+    'V3.6.14 §12 Se filtran las externas', `${(soloExternas.data ?? []).length} filas`);
+  const porAreaB = await req('GET', `/activities?areaId=${areaB.id}`, { token: director.token });
+  check((porAreaB.data ?? []).some((x) => x.id === multi.data.id),
+    'V3.6.15 §12.1 Filtrar por un área encuentra las oportunidades que la tienen como secundaria', `${(porAreaB.data ?? []).length} filas`);
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Ruth', lastName: 'Saavedra', email: correoEst('b6'), role: 'STUDENT', semester: 2 });
+  const vistas = await req('GET', '/activities', { token: est.token });
+  const vista = (vistas.data ?? []).find((x) => x.id === multi.data.id);
+  check(vista?.originType === 'internal' && (vista?.activityAreas ?? []).length === 2 && vista?.provider === null,
+    'V3.6.16 §12 El estudiante ve un único universo: origen y áreas de cada oportunidad', json({ o: vista?.originType, n: vista?.activityAreas?.length }));
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

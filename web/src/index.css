@@ -1140,3 +1140,14 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 }
 .avatar-opcion:hover { transform: translateY(-1px); }
 .avatar-opcion.on { border-color: var(--bordo); }
+
+/* V3 §12 · Oportunidad externa */
+.external-box {
+  border: 1px dashed var(--border, #e5d7da); border-radius: 12px; padding: 0.8rem 0.9rem;
+  margin: 0.4rem 0 0.9rem; background: rgba(122, 31, 43, 0.03);
+}
+.badge-externa {
+  display: inline-flex; align-items: center; padding: 0.1rem 0.5rem; border-radius: 999px;
+  background: #eef2f7; color: #2f4a66; font-size: 0.75rem; font-weight: 600;
+}
+.check-line { display: flex; gap: 0.5rem; align-items: center; font-size: 0.9rem; }

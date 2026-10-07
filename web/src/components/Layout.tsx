@@ -75,6 +75,7 @@ const ICONS: Record<string, IconType> = {
   '/teacher/team-needs': FiUsers,
   '/teacher/my-activities': FiCalendar,
   '/admin/imports': FiUpload,
+  '/admin/activities': FiCalendar,
   '/admin/resources': FiBookOpen,
   '/admin/audit': FiShield,
   '/ayuda': FiHelpCircle,

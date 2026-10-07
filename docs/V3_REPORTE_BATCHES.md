@@ -194,3 +194,40 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Riesgos:** ninguno nuevo; la ventana de reutilización sigue acotada a 60 s desde la primera rotación.
 
 **Resultados:** unitarias 47/47; regresión completa **1467 correctas, 0 fallos** (20 suites, `e2e-v3` 42).
+
+---
+
+## BATCH 6 — Modelo unificado de oportunidades
+
+**ESTADO:** completo
+
+**Objetivo:** un único universo de oportunidades, internas y externas, con multiárea, revisión por actor y responsable real (§12, §6.5).
+
+**Hallazgos iniciales:**
+- Las oportunidades externas vivían como categorías (curso externo recomendado, recurso de apoyo); no existía `origin_type` ni campos de proveedor.
+- Una sola área por actividad; el formulario no permitía elegir habilidades.
+- **Hallazgo nuevo (no estaba en la auditoría):** Administración pasaba por revisión de Dirección (V3: `NOT_REQUIRED`) y el responsable era siempre quien creaba (V3: Administración debe nombrar un responsable académico real).
+- Administración no tenía pantalla de oportunidades operativas (§54).
+
+**Cambios:**
+- `origin_type` interno/externo; el `type` existente (académica / extracurricular) es el `internal_type`.
+- Externas: `provider` y `externalUrl` obligatorios (errores por campo), `credential_expected`, `expected_issuer_domains` (normalizados: sin esquema ni ruta, en minúsculas, validados) y `expected_keywords`. Una interna no conserva datos de proveedor.
+- Multiárea (`activity_areas`, `areaIds`); `academic_area_id` queda como área principal para no romper los motores actuales (afinidad y recomendaciones migran en B14 y B15). Las habilidades deben pertenecer a las áreas elegidas.
+- Revisión: Docente y Sociedad proponen (internas y externas) y decide Dirección; Dirección y Administración publican con `NOT_REQUIRED`.
+- Administración: responsable obligatorio (docente o Dirección para académicas; Sociedad o Dirección para extracurriculares; cuenta activa); solo Administración puede reasignarlo; auditoría con `responsibleUserId` y `viaAdmin`.
+- Listados: filtro por origen y por **cualquiera** de las áreas.
+- Web: selector de origen, `AreaSkillPicker`, bloque de datos externos, selector de responsable para Administración, distintivo «Externa · proveedor» en gestión y en la vista del estudiante; nueva pantalla **Administración → Oportunidades** (académicas y extracurriculares).
+
+**Migraciones:** `1780490000000-V3OpportunityModel`. Copia de seguridad previa; 77 actividades de cursos externos y recursos de apoyo pasan a externas; 2124 filas de `activity_areas` desde el área existente; `up` → `down` → `up` probado.
+
+**Pruebas ejecutadas:** `e2e-v3 batch6` (V3.6.1–V3.6.16); unitarias; regresión completa.
+
+**Decisiones:**
+- Se conserva `academic_area_id` como área principal en lugar de eliminarlo: los motores lo leen y cambiarlos es alcance de B14/B15.
+- Los recursos de aprendizaje (`learning_resources`) siguen siendo el catálogo de Dirección/Administración (§52, §54 «Recursos»); las oportunidades externas con fecha, aceptación y credencial son actividades de origen externo.
+
+**Pendientes:** aceptación y elegibilidad de evidencia de externas (B8); referencia de validación (B8).
+
+**Riesgos:** un `down` de la migración pierde la marca «externa» de las oportunidades creadas después (el `up` solo la deduce de la categoría); por eso se exige copia de seguridad antes de revertir en un entorno con datos.
+
+**Resultados:** unitarias 47/47; `e2e-v3` 58 (B6: 16/16). Regresión completa: 1479 correctas y 4 fallos, todos en `e2e-batch-4` (B4.22–B4.26), porque la suite V2 declaraba habilidades de otra área; es la regla nueva de §4/§67. Corregida la suite para declarar las áreas de esas habilidades: `e2e-batch-4` 48/48. Total efectivo **1483/0**.

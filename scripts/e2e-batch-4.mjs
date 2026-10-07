@@ -287,7 +287,8 @@ async function habilidades(ctx) {
       title: `Taller con habilidades ${TS}`,
       type: 'academica',
       categoryId: ctx.categoria.id,
-      areaId: ctx.area.id,
+      // V3 §4: cada habilidad pertenece a una de las áreas declaradas.
+      areaIds: [...new Set([ctx.area.id, ...ctx.skills.slice(0, 2).map((s) => s.academicAreaId).filter(Boolean)])],
       skillIds: ctx.skills.slice(0, 2).map((s) => s.id),
       // Publicada: un estudiante no ve borradores, y es el estudiante
       // quien necesita saber que trabaja la actividad.

@@ -460,6 +460,14 @@ export interface Activity {
   requirements: string | null;
   /** Habilidades que la actividad trabaja (§73.3). */
   activitySkills?: { id: string; skillId: string; skill?: Skill | null }[];
+  /** V3 §12.1: todas sus áreas; `academicAreaId` es la principal. */
+  activityAreas?: { activityId: string; academicAreaId: string; academicArea?: AcademicArea | null }[];
+  /** V3 §12: interna (de la carrera) o externa (de un proveedor). */
+  originType?: 'internal' | 'external';
+  provider?: string | null;
+  credentialExpected?: boolean;
+  expectedIssuerDomains?: string[];
+  expectedKeywords?: string[];
   location: string | null;
   capacity: number | null;
   status: ActivityStatus;

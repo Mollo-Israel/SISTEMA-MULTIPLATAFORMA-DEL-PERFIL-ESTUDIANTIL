@@ -10,6 +10,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import {
+  ActivityOrigin,
   ActivityModality,
   ActivityReviewStatus,
   ActivityStatus,
@@ -21,6 +22,7 @@ import { AcademicArea } from './academic-area.entity';
 import { ActivityCategory } from './activity-category.entity';
 import { ActivityRegistration } from './activity-registration.entity';
 import { ActivitySkill } from './activity-skill.entity';
+import { ActivityArea } from './activity-area.entity';
 
 @Entity('activities')
 export class Activity {
@@ -57,6 +59,27 @@ export class Activity {
 
   @Column({ name: 'external_url', type: 'varchar', length: 500, nullable: true })
   externalUrl: string | null;
+
+  /** V3 §12: interna (la organiza la carrera) o externa (un proveedor). */
+  @Index('idx_activities_origin')
+  @Column({ name: 'origin_type', type: 'enum', enum: ActivityOrigin, enumName: 'activity_origin_enum', default: ActivityOrigin.INTERNAL })
+  originType: ActivityOrigin;
+
+  /** V3 §12.1 · Externa: quién la ofrece (Cisco, IBM, Coursera…). */
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  provider: string | null;
+
+  /** V3 §12.1 · Externa: si al terminarla se espera una credencial del proveedor. */
+  @Column({ name: 'credential_expected', type: 'boolean', default: false })
+  credentialExpected: boolean;
+
+  /** V3 §12.1 · Dominios oficiales del emisor, para validar credenciales (B9). */
+  @Column({ name: 'expected_issuer_domains', type: 'text', array: true, default: () => "'{}'" })
+  expectedIssuerDomains: string[];
+
+  /** V3 §12.1 · Palabras que se esperan en la credencial (nombre del curso…). */
+  @Column({ name: 'expected_keywords', type: 'text', array: true, default: () => "'{}'" })
+  expectedKeywords: string[];
 
   @Column({ name: 'evidence_required', type: 'boolean', default: false })
   evidenceRequired: boolean;
@@ -182,6 +205,10 @@ export class Activity {
   /** Habilidades que la actividad trabaja (§22, §73.3). */
   @OneToMany(() => ActivitySkill, (link) => link.activity)
   activitySkills: ActivitySkill[];
+
+  /** Todas sus áreas (V3 §12.1); `academicAreaId` es la principal. */
+  @OneToMany(() => ActivityArea, (link) => link.activity)
+  activityAreas: ActivityArea[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

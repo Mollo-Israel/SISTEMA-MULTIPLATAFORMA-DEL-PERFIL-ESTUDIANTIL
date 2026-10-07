@@ -7,8 +7,9 @@ import { useAuth } from '../auth/AuthContext';
 import { enMemoria, useCachedState } from '../hooks/viewCache';
 import AiAssist from './AiAssist';
 import { apiError } from '../api/client';
-import { activityService, catalogService } from '../services';
-import type { AcademicArea, Activity, ActivityCategoryItem, Participant } from '../services/types';
+import { activityService, adminService, catalogService } from '../services';
+import type { AcademicArea, Activity, ActivityCategoryItem, Participant, PublicUser, Skill } from '../services/types';
+import AreaSkillPicker from './AreaSkillPicker';
 import {
   Badge, Button, Card, Diferido, EmptyState, ResultCount, SearchInput, SkeletonTable, Stagger,
 } from './ui';
@@ -31,7 +32,14 @@ const emptyForm = {
   description: '',
   categoryId: '',
   modality: 'presencial',
-  areaId: '',
+  areaIds: [] as string[],
+  skillIds: [] as string[],
+  originType: 'internal' as 'internal' | 'external',
+  provider: '',
+  credentialExpected: false,
+  expectedIssuerDomains: '',
+  expectedKeywords: '',
+  responsibleUserId: '',
   activityDate: '',
   location: '',
   externalUrl: '',
@@ -60,12 +68,16 @@ export default function ActivityManager({
   activityType: 'academica' | 'extracurricular';
 }) {
   const { user } = useAuth();
-  /** Docente, Sociedad (y Administración) proponen; Dirección decide (V2 §27). */
-  const necesitaRevision = user?.role !== 'CAREER_DIRECTOR';
+  /** Docente y Sociedad proponen; Dirección decide. Dirección y Administración publican sin revisión (V3 §12.2). */
+  const necesitaRevision = user?.role !== 'CAREER_DIRECTOR' && user?.role !== 'ADMIN';
+  const esAdmin = user?.role === 'ADMIN';
   // Con memoria de la sesión: al volver a la gestión se pinta al instante.
   const [semestresPermitidos, setSemestresPermitidos] = useCachedState<number[]>('semestres', [1, 2, 3, 4, 5, 6, 7, 8]);
   const [activities, setActivities] = useCachedState<Activity[]>(`actividades-${activityType}`, []);
   const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
+  const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
+  /** Administración nombra un responsable real (V3 §6.5). */
+  const [responsables, setResponsables] = useCachedState<PublicUser[]>(`responsables-${activityType}`, []);
   const [loading, setLoading] = useState(() => !enMemoria(`actividades-${activityType}`));
   /** Solo el fallo de la carga inicial: el resto de errores son avisos flotantes. */
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +119,13 @@ export default function ActivityManager({
     Promise.all([
       load(),
       catalogService.areas().then(setAreas),
+      catalogService.skills().then((s) => setSkills(s.filter((x) => x.isActive))),
+      esAdmin
+        ? Promise.all(
+          (activityType === 'academica' ? ['TEACHER', 'CAREER_DIRECTOR'] : ['SCIENTIFIC_SOCIETY', 'CAREER_DIRECTOR'])
+            .map((r) => adminService.listUsersByRole(r)),
+        ).then((ls) => setResponsables(ls.flat().filter((u) => u.status === 'active')))
+        : Promise.resolve(),
       catalogService.activityCategories().then(setCategories),
       user?.role === 'TEACHER'
         ? activityService.myScope().then((r) => setSemestresPermitidos(r.semesters))
@@ -142,7 +161,18 @@ export default function ActivityManager({
       type: activityType,
       categoryId: form.categoryId,
       modality: form.modality,
-      areaId: form.areaId || undefined,
+      areaIds: form.areaIds,
+      skillIds: form.skillIds,
+      originType: form.originType,
+      ...(form.originType === 'external'
+        ? {
+          provider: form.provider.trim(),
+          credentialExpected: form.credentialExpected,
+          expectedIssuerDomains: form.expectedIssuerDomains.split(',').map((t) => t.trim()).filter(Boolean),
+          expectedKeywords: form.expectedKeywords.split(',').map((t) => t.trim()).filter(Boolean),
+        }
+        : {}),
+      ...(esAdmin && form.responsibleUserId ? { responsibleUserId: form.responsibleUserId } : {}),
       activityDate: form.activityDate ? new Date(form.activityDate).toISOString() : undefined,
       location: form.location || undefined,
       externalUrl: form.externalUrl || undefined,
@@ -193,7 +223,16 @@ export default function ActivityManager({
       description: a.description ?? '',
       categoryId: a.categoryId,
       modality: a.modality,
-      areaId: a.academicAreaId ?? '',
+      areaIds: (a.activityAreas ?? []).map((x) => x.academicAreaId).length
+        ? (a.activityAreas ?? []).map((x) => x.academicAreaId)
+        : a.academicAreaId ? [a.academicAreaId] : [],
+      skillIds: (a.activitySkills ?? []).map((x) => x.skillId),
+      originType: a.originType ?? 'internal',
+      provider: a.provider ?? '',
+      credentialExpected: !!a.credentialExpected,
+      expectedIssuerDomains: (a.expectedIssuerDomains ?? []).join(', '),
+      expectedKeywords: (a.expectedKeywords ?? []).join(', '),
+      responsibleUserId: a.responsibleUserId ?? '',
       activityDate: a.eventDate ? a.eventDate.slice(0, 16) : '',
       location: a.location ?? '',
       externalUrl: a.externalUrl ?? '',
@@ -353,6 +392,23 @@ export default function ActivityManager({
           }
         >
           <form onSubmit={submit}>
+            <div className="field">
+              <label>Origen</label>
+              <div className="li-tabs" role="radiogroup" aria-label="Origen de la oportunidad">
+                {(['internal', 'external'] as const).map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.originType === o}
+                    className={form.originType === o ? 'on' : ''}
+                    onClick={() => setForm({ ...form, originType: o })}
+                  >
+                    {o === 'internal' ? 'Interna (la organiza la carrera)' : 'Externa (de un proveedor)'}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="row">
               <div className="field">
                 <label>Título</label>
@@ -415,21 +471,86 @@ export default function ActivityManager({
                   ))}
                 </select>
               </div>
+            </div>
+
+            <AreaSkillPicker
+              areas={areas}
+              skills={skills}
+              value={{ areaIds: form.areaIds, skillIds: form.skillIds }}
+              onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds })}
+              areaLabel="Áreas que trabaja"
+              skillLabel="Habilidades que trabaja"
+              maxAreas={6}
+            />
+
+            {form.originType === 'external' && (
+              <div className="external-box">
+                <div className="row">
+                  <div className="field">
+                    <label htmlFor="op-proveedor">Proveedor</label>
+                    <input
+                      id="op-proveedor"
+                      value={form.provider}
+                      onChange={(e) => setForm({ ...form, provider: e.target.value })}
+                      placeholder="Cisco Networking Academy, IBM SkillsBuild, Coursera…"
+                      maxLength={160}
+                      required
+                    />
+                  </div>
+                  <label className="check-line" style={{ alignSelf: 'end' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.credentialExpected}
+                      onChange={(e) => setForm({ ...form, credentialExpected: e.target.checked })}
+                    />
+                    Al terminar, el proveedor emite una credencial
+                  </label>
+                </div>
+                <div className="row">
+                  <div className="field">
+                    <label htmlFor="op-dominios">Dominios oficiales del emisor (separados por coma)</label>
+                    <input
+                      id="op-dominios"
+                      value={form.expectedIssuerDomains}
+                      onChange={(e) => setForm({ ...form, expectedIssuerDomains: e.target.value })}
+                      placeholder="netacad.com, credly.com"
+                    />
+                    <span className="field-hint">Sirven para comprobar después la credencial que adjunte el estudiante.</span>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="op-claves">Palabras clave esperadas (separadas por coma)</label>
+                    <input
+                      id="op-claves"
+                      value={form.expectedKeywords}
+                      onChange={(e) => setForm({ ...form, expectedKeywords: e.target.value })}
+                      placeholder="Introduction to Networks, CCNA"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {esAdmin && (
               <div className="field">
-                <label>Área académica</label>
+                <label htmlFor="op-responsable">Responsable académico</label>
                 <select
-                  value={form.areaId}
-                  onChange={(e) => setForm({ ...form, areaId: e.target.value })}
+                  id="op-responsable"
+                  value={form.responsibleUserId}
+                  onChange={(e) => setForm({ ...form, responsibleUserId: e.target.value })}
+                  required={!editing}
                 >
-                  <option value="">Sin área</option>
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
+                  <option value="">Elige quién responde por esta oportunidad…</option>
+                  {responsables.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.firstName} {u.lastName} · {u.role === 'CAREER_DIRECTOR' ? 'Dirección' : u.role === 'TEACHER' ? 'Docente' : 'Sociedad científica'}
                     </option>
                   ))}
                 </select>
+                <span className="field-hint">
+                  Administración puede publicarla, pero no es su emisor académico: el responsable confirma la asistencia y responde por ella.
+                </span>
               </div>
-            </div>
+            )}
 
             <div className="row">
               <div className="field">
@@ -441,7 +562,7 @@ export default function ActivityManager({
                 />
               </div>
               <div className="field">
-                <label>Enlace externo</label>
+                <label>{form.originType === 'external' ? 'Enlace oficial' : 'Enlace externo'}</label>
                 <input
                   type="url"
                   value={form.externalUrl}
@@ -645,6 +766,9 @@ export default function ActivityManager({
                     <tr key={a.id} className={selected === a.id ? 'row-picked' : undefined}>
                       <td>
                         <strong>{a.title}</strong>
+                        {a.originType === 'external' && (
+                          <div><Badge tone="gray">Externa{a.provider ? ` · ${a.provider}` : ''}</Badge></div>
+                        )}
                         {a.location && <div className="muted">{a.location}</div>}
                       </td>
                       <td className="muted">{a.category?.name ?? '—'}</td>

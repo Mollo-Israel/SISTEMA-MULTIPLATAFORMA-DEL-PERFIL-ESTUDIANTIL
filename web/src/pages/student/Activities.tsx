@@ -197,6 +197,9 @@ export default function StudentActivitiesPage() {
                   actions={<Badge tone="bordo">{lbl(ACTIVITY_TYPE_LABEL, a.type)}</Badge>}
                 >
                   <div className="activity-meta" style={{ marginTop: 0 }}>
+                    {a.originType === 'external' && (
+                      <span className="badge-externa">Externa{a.provider ? ` · ${a.provider}` : ''}</span>
+                    )}
                     <span><FiTag size={13} /> {a.category?.name ?? 'Sin categoría'}</span>
                     <span><FiCheckCircle size={13} /> {lbl(ACTIVITY_STATUS_LABEL, a.status)}</span>
                     {a.academicArea?.name && <span><FiHeart size={13} /> {a.academicArea.name}</span>}

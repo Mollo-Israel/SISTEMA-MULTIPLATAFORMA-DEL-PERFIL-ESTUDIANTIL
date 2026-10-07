@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsISO8601, IsOptional, IsUUID, ValidateIf } from 'class-validator';
-import { ActivityModality, ActivityStatus, ActivityType } from '@perfil/shared';
+import { ActivityModality, ActivityOrigin, ActivityStatus, ActivityType } from '@perfil/shared';
 import { IsNotBeforeField, trim } from '../../common/validation';
 
 /**
@@ -32,10 +32,15 @@ export class QueryActivitiesDto {
   @IsEnum(ActivityModality, { message: 'La modalidad no es válida.' })
   modality?: ActivityModality;
 
-  @ApiPropertyOptional({ description: 'Filtrar por área académica' })
+  @ApiPropertyOptional({ description: 'Filtrar por área académica (cualquiera de sus áreas)' })
   @IsOptional()
   @IsUUID('4', { message: 'El área académica indicada no es válida.' })
   areaId?: string;
+
+  @ApiPropertyOptional({ enum: ActivityOrigin, description: 'Interna o externa (V3 §12)' })
+  @IsOptional()
+  @IsEnum(ActivityOrigin, { message: 'El origen debe ser interno o externo.' })
+  originType?: ActivityOrigin;
 
   @ApiPropertyOptional({
     example: '2026-09-01',

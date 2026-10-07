@@ -1,3 +1,13 @@
+/**
+ * Origen de una oportunidad (V3 §12): una interna la organiza la carrera; una
+ * externa la ofrece un proveedor (Cisco, IBM, Coursera…). Para el estudiante
+ * es un único universo de oportunidades.
+ */
+export enum ActivityOrigin {
+  INTERNAL = 'internal',
+  EXTERNAL = 'external',
+}
+
 export enum ActivityType {
   ACADEMICA = 'academica',
   EXTRACURRICULAR = 'extracurricular',

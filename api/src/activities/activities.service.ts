@@ -17,6 +17,7 @@ import {
 } from 'typeorm';
 import {
   ACTIVITY_STATUS_LABEL,
+  ActivityOrigin,
   ActivityReviewStatus,
   ActivityStatus,
   ActivityType,
@@ -36,6 +37,9 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
+import { ActivityArea } from '../entities/activity-area.entity';
+import { User } from '../entities/user.entity';
+import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
 import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
@@ -154,6 +158,8 @@ export class ActivitiesService {
     private readonly categories: Repository<ActivityCategory>,
     @InjectRepository(ActivitySkill)
     private readonly activitySkills: Repository<ActivitySkill>,
+    @InjectRepository(ActivityArea)
+    private readonly activityAreas: Repository<ActivityArea>,
     @InjectRepository(Skill) private readonly skills: Repository<Skill>,
     @Inject(TRAJECTORY_RECALCULATION)
     private readonly trajectory: TrajectoryRecalculationPort,
@@ -173,7 +179,69 @@ export class ActivitiesService {
 
   /** Docente, Sociedad (y Administración) proponen; Dirección decide (§27.3–§27.5). */
   private requiereRevision(role: RolNombre): boolean {
-    return role !== RolNombre.CAREER_DIRECTOR;
+    // V3 §12.2: Dirección y Administración publican sin revisión
+    // (NOT_REQUIRED); Docente y Sociedad proponen y Dirección decide.
+    return role !== RolNombre.CAREER_DIRECTOR && role !== RolNombre.ADMIN;
+  }
+
+  /** Áreas pedidas: `areaIds` (V3) o el `areaId` de siempre. */
+  private areasPedidas(dto: { areaIds?: string[]; areaId?: string | null }): string[] | undefined {
+    if (dto.areaIds !== undefined) return [...new Set(dto.areaIds)];
+    if (dto.areaId !== undefined) return dto.areaId ? [dto.areaId] : [];
+    return undefined;
+  }
+
+  /** Reemplaza las áreas de una oportunidad; la primera es la principal. */
+  private async replaceAreas(activityId: string, areaIds: string[]): Promise<void> {
+    await this.activityAreas.delete({ activityId });
+    if (areaIds.length > 0) {
+      await this.activityAreas.save(areaIds.map((academicAreaId) => this.activityAreas.create({ activityId, academicAreaId })));
+    }
+  }
+
+  /**
+   * Una externa nombra a su proveedor y su enlace (V3 §12.1); una interna no
+   * lleva datos de proveedor.
+   */
+  private assertExterna(origen: ActivityOrigin, provider: string | null | undefined, url: string | null | undefined): void {
+    if (origen !== ActivityOrigin.EXTERNAL) return;
+    const fields: Record<string, string[]> = {};
+    if (!provider?.trim()) fields.provider = ['Indica el proveedor de la oportunidad externa.'];
+    if (!url?.trim()) fields.externalUrl = ['Indica el enlace oficial de la oportunidad externa.'];
+    if (Object.keys(fields).length) {
+      throw new BadRequestException({ message: 'Faltan datos de la oportunidad externa.', fields });
+    }
+  }
+
+  /**
+   * Responsable (V3 §6.5, §12.2). Quien crea responde por lo suyo; cuando crea
+   * Administración —autoridad técnica, no emisor académico— debe nombrar a un
+   * responsable real del rol que gestiona ese tipo de oportunidad.
+   */
+  private async resolverResponsable(
+    user: AuthenticatedUser,
+    type: ActivityType,
+    responsibleUserId: string | undefined,
+  ): Promise<string> {
+    if (user.role !== RolNombre.ADMIN) return user.userId;
+    if (!responsibleUserId) {
+      const msg = 'Como Administración, indica quién es el responsable académico de esta oportunidad.';
+      throw new BadRequestException({ message: msg, fields: { responsibleUserId: [msg] } });
+    }
+    const responsable = await this.activities.manager.getRepository(User).findOne({
+      where: { id: responsibleUserId },
+      relations: { role: true },
+    });
+    const permitidos = type === ActivityType.ACADEMICA
+      ? [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR]
+      : [RolNombre.SCIENTIFIC_SOCIETY, RolNombre.CAREER_DIRECTOR];
+    if (!responsable || responsable.status !== 'active' || !permitidos.includes(responsable.role?.name as RolNombre)) {
+      const msg = type === ActivityType.ACADEMICA
+        ? 'El responsable de una oportunidad académica debe ser un docente o la Dirección, con la cuenta activa.'
+        : 'El responsable de una oportunidad extracurricular debe ser la Sociedad científica o la Dirección, con la cuenta activa.';
+      throw new BadRequestException({ message: msg, fields: { responsibleUserId: [msg] } });
+    }
+    return responsable.id;
   }
 
   /**
@@ -183,7 +251,8 @@ export class ActivitiesService {
    */
   private cambiaContenido(dto: UpdateActivityDto): boolean {
     return [
-      dto.title, dto.description, dto.type, dto.categoryId, dto.areaId, dto.skillIds,
+      dto.title, dto.description, dto.type, dto.categoryId, dto.areaId, dto.areaIds, dto.skillIds,
+      dto.originType, dto.provider, dto.credentialExpected, dto.expectedIssuerDomains, dto.expectedKeywords,
       dto.semesterScope, dto.internalConstancyEnabled, dto.gamificationRules, dto.evidenceRequired,
     ].some((v) => v !== undefined);
   }
@@ -278,7 +347,7 @@ export class ActivitiesService {
     }
     const lista = await this.activities.find({
       where: { reviewStatus: ActivityReviewStatus.PENDING },
-      relations: { academicArea: true, creator: true, category: true, activitySkills: { skill: true } },
+      relations: { academicArea: true, creator: true, category: true, activitySkills: { skill: true }, activityAreas: { academicArea: true } },
       order: { submittedAt: 'ASC' },
     });
     const reglas = lista.length
@@ -348,10 +417,14 @@ export class ActivitiesService {
 
   async create(user: AuthenticatedUser, dto: CreateActivityDto): Promise<Activity> {
     this.assertCanPublish(user.role, dto.type);
-    if (dto.areaId) {
-      await this.assertAreaExists(dto.areaId);
-    }
+    const areas = this.areasPedidas(dto) ?? [];
+    // V3 §4: las habilidades pertenecen a las áreas elegidas (y las áreas existen).
+    await assertSkillsBelongToAreas(this.activities.manager, dto.skillIds, areas, 'skillIds');
+    for (const areaId of areas) await this.assertAreaExists(areaId);
     await this.assertCategoryUsable(dto.categoryId, dto.type);
+    const origen = dto.originType ?? ActivityOrigin.INTERNAL;
+    this.assertExterna(origen, dto.provider, dto.externalUrl);
+    const responsable = await this.resolverResponsable(user, dto.type, dto.responsibleUserId);
 
     // §22: un docente solo alcanza a sus semestres habilitados, y eso
     // incluye lo que declara al crear. Sin esto bastaria con publicar una
@@ -376,9 +449,14 @@ export class ActivitiesService {
       type: dto.type,
       categoryId: dto.categoryId,
       modality: dto.modality,
-      academicAreaId: dto.areaId ?? null,
+      academicAreaId: areas[0] ?? null,
       creatorId: user.userId,
-      responsibleUserId: user.userId,
+      responsibleUserId: responsable,
+      originType: origen,
+      provider: origen === ActivityOrigin.EXTERNAL ? dto.provider?.trim() ?? null : null,
+      credentialExpected: origen === ActivityOrigin.EXTERNAL ? dto.credentialExpected ?? false : false,
+      expectedIssuerDomains: origen === ActivityOrigin.EXTERNAL ? dto.expectedIssuerDomains ?? [] : [],
+      expectedKeywords: origen === ActivityOrigin.EXTERNAL ? dto.expectedKeywords ?? [] : [],
       eventDate: dto.activityDate ? new Date(dto.activityDate) : null,
       endAt: dto.endAt ? new Date(dto.endAt) : null,
       semesterScope,
@@ -396,6 +474,7 @@ export class ActivitiesService {
     });
     const saved = await this.activities.save(activity);
 
+    await this.replaceAreas(saved.id, areas);
     if (dto.skillIds?.length) {
       await this.replaceSkills(saved.id, dto.skillIds);
     }
@@ -408,7 +487,14 @@ export class ActivitiesService {
       eventType: AuditEventType.ACTIVITY_CREATED,
       entityType: 'activity',
       entityId: saved.id,
-      metadata: { type: dto.type, status: saved.status, semesterScope },
+      metadata: {
+        type: dto.type,
+        origin: origen,
+        status: saved.status,
+        semesterScope,
+        responsibleUserId: responsable,
+        viaAdmin: user.role === RolNombre.ADMIN,
+      },
     });
 
     return this.findOne(saved.id);
@@ -428,7 +514,12 @@ export class ActivitiesService {
     if (filters.categoryId) where.categoryId = filters.categoryId;
     if (filters.status) where.status = filters.status;
     if (filters.modality) where.modality = filters.modality;
-    if (filters.areaId) where.academicAreaId = filters.areaId;
+    if (filters.originType) where.originType = filters.originType;
+    if (filters.areaId) {
+      // V3 §12.1: una oportunidad entra si **cualquiera** de sus áreas coincide.
+      const ids = (await this.activityAreas.find({ where: { academicAreaId: filters.areaId } })).map((a) => a.activityId);
+      where.id = In(ids.length ? ids : ['00000000-0000-4000-8000-000000000000']);
+    }
 
     // Rango de fechas (RF8). Una actividad sin fecha declarada queda fuera
     // cuando se filtra por fecha: no hay forma de ubicarla en el rango.
@@ -443,7 +534,7 @@ export class ActivitiesService {
 
     const activities = await this.activities.find({
       where,
-      relations: { academicArea: true, creator: true, category: true },
+      relations: { academicArea: true, creator: true, category: true, activityAreas: { academicArea: true } },
       order: { eventDate: 'DESC', createdAt: 'DESC' },
     });
 
@@ -462,7 +553,7 @@ export class ActivitiesService {
   /** Actividades cuyo responsable es el usuario (panel de gestion). */
   async findManagedBy(user: AuthenticatedUser): Promise<ActivityWithCounts[]> {
     const activities = await this.activities.find({
-      relations: { academicArea: true, creator: true, category: true },
+      relations: { academicArea: true, creator: true, category: true, activityAreas: { academicArea: true } },
       order: { createdAt: 'DESC' },
     });
     return this.attachCounts(
@@ -480,6 +571,7 @@ export class ActivitiesService {
         // §73.3: quien mira la actividad debe poder ver que trabaja, no
         // solo en que area cae.
         activitySkills: { skill: true },
+        activityAreas: { academicArea: true },
       },
     });
     if (!activity) {
@@ -553,9 +645,35 @@ export class ActivitiesService {
       this.assertCanPublish(user.role, dto.type);
       activity.type = dto.type;
     }
-    if (dto.areaId !== undefined) {
-      if (dto.areaId) await this.assertAreaExists(dto.areaId);
-      activity.academicAreaId = dto.areaId ?? null;
+    const areasNuevas = this.areasPedidas(dto);
+    if (areasNuevas !== undefined || dto.skillIds !== undefined) {
+      const areasFinales = areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
+      const skillsFinales = dto.skillIds ?? (activity.activitySkills ?? []).map((s) => s.skillId);
+      await assertSkillsBelongToAreas(this.activities.manager, skillsFinales, areasFinales, 'skillIds');
+      if (areasNuevas !== undefined) {
+        for (const areaId of areasNuevas) await this.assertAreaExists(areaId);
+        activity.academicAreaId = areasNuevas[0] ?? null;
+        await this.replaceAreas(activity.id, areasNuevas);
+      }
+    }
+    if (dto.originType !== undefined) activity.originType = dto.originType;
+    if (dto.provider !== undefined) activity.provider = dto.provider?.trim() || null;
+    if (dto.credentialExpected !== undefined) activity.credentialExpected = dto.credentialExpected;
+    if (dto.expectedIssuerDomains !== undefined) activity.expectedIssuerDomains = dto.expectedIssuerDomains;
+    if (dto.expectedKeywords !== undefined) activity.expectedKeywords = dto.expectedKeywords;
+    if (dto.externalUrl !== undefined) activity.externalUrl = dto.externalUrl;
+    this.assertExterna(activity.originType, activity.provider, activity.externalUrl);
+    if (activity.originType === ActivityOrigin.INTERNAL) {
+      activity.provider = null;
+      activity.credentialExpected = false;
+      activity.expectedIssuerDomains = [];
+      activity.expectedKeywords = [];
+    }
+    if (dto.responsibleUserId !== undefined) {
+      if (user.role !== RolNombre.ADMIN) {
+        throw new ForbiddenException('Solo Administración reasigna el responsable de una oportunidad.');
+      }
+      activity.responsibleUserId = await this.resolverResponsable(user, activity.type, dto.responsibleUserId);
     }
     if (dto.categoryId !== undefined) {
       await this.assertCategoryUsable(dto.categoryId, dto.type ?? activity.type);
@@ -570,7 +688,6 @@ export class ActivitiesService {
     if (dto.location !== undefined) activity.location = dto.location;
     if (dto.capacity !== undefined) activity.capacity = dto.capacity;
     if (dto.tags !== undefined) activity.tags = dto.tags;
-    if (dto.externalUrl !== undefined) activity.externalUrl = dto.externalUrl;
     if (dto.evidenceRequired !== undefined) activity.evidenceRequired = dto.evidenceRequired;
     if (dto.internalConstancyEnabled !== undefined) activity.internalConstancyEnabled = dto.internalConstancyEnabled;
     if (reiniciarRevision) {

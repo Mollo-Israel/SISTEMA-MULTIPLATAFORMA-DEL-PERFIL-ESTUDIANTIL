@@ -51,6 +51,7 @@ import SocietyActivitiesPage from './pages/society/Activities';
 
 import AdminUsersPage from './pages/admin/Users';
 import AdminImportsPage from './pages/admin/Imports';
+import AdminActivitiesPage from './pages/admin/Activities';
 import AdminMailPage from './pages/admin/Mail';
 import AdminAreasSkillsPage from './pages/admin/AreasSkills';
 import AdminGamificationPage from './pages/admin/Gamification';
@@ -170,6 +171,7 @@ export default function App() {
           <Route element={<RoleGate roles={[A]}><Outlet /></RoleGate>}>
             <Route path="/admin" element={<AdminUsersPage />} />
             <Route path="/admin/imports" element={<AdminImportsPage />} />
+            <Route path="/admin/activities" element={<AdminActivitiesPage />} />
             <Route path="/admin/mail" element={<AdminMailPage />} />
             <Route path="/admin/areas" element={<AdminAreasSkillsPage />} />
             <Route path="/admin/skills" element={<Navigate to="/admin/areas?tab=skills" replace />} />

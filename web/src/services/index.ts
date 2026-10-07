@@ -1000,6 +1000,8 @@ export const reportService = {
 export const adminService = {
   listUsers: (search?: string) =>
     api.get<PublicUser[]>('/users', { params: search ? { search } : undefined }).then((r) => r.data),
+  /** Cuentas de un rol (para elegir responsable, V3 §12.2). */
+  listUsersByRole: (role: string) => api.get<PublicUser[]>('/users', { params: { role } }).then((r) => r.data),
   createUser: (data: Record<string, unknown>) => api.post<PublicUser>('/users', data).then((r) => r.data),
   updateUser: (id: string, data: Record<string, unknown>) =>
     api.patch<PublicUser>(`/users/${id}`, data).then((r) => r.data),
