@@ -34,6 +34,7 @@ import { helpVideo } from '../../src/help/help-video';
 import { classifySkill } from '../../src/catalogs/skill-classification';
 import { assertClientAllowsRole } from '../../src/auth/auth.service';
 import { PDF_THEMES, PdfWriter } from '../../src/trajectory/pdf-writer';
+import { storageDriverFactory } from '../../src/storage/storage-driver.factory';
 
 describe('Afinidad V3 (§45–§47)', () => {
   it('es la versión 3 del motor', () => assert.equal(AFFINITY_ENGINE_VERSION, 3));
@@ -266,5 +267,16 @@ describe('Código universitario (§12)', () => {
     assert.match(universityCodeProblem('EST-38DJ1HAX', RolNombre.STUDENT) ?? '', /Formato/);
     assert.match(universityCodeProblem('EST-38DJ1HA', RolNombre.TEACHER) ?? '', /DOC-/);
     assert.match(universityCodeProblem('DIR-38DJ1HA', RolNombre.ADMIN) ?? '', /ADM-/);
+  });
+});
+
+describe('Configuración (V3 BATCH 1)', () => {
+  const conf = (v?: string) => ({ get: () => v }) as never;
+  it('STORAGE_DRIVER local (o vacío) usa el disco', () => {
+    assert.equal(storageDriverFactory(conf('local'), 'disco'), 'disco');
+    assert.equal(storageDriverFactory(conf(undefined), 'disco'), 'disco');
+  });
+  it('un driver desconocido detiene el arranque', () => {
+    assert.throws(() => storageDriverFactory(conf('s3'), 'disco'), /STORAGE_DRIVER=s3 no está soportado/);
   });
 });

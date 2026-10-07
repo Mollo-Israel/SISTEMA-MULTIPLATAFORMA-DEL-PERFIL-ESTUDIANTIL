@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { memoryStorage } from 'multer';
@@ -16,14 +17,16 @@ import { FileAccessService } from './file-access.service';
 import { UploadsService } from './uploads.service';
 import { OrphanFilesService } from './orphan-files.service';
 import { STORAGE_PORT } from './storage.port';
+import { storageDriverFactory } from './storage-driver.factory';
 
 /**
  * Almacenamiento de archivos de evidencia.
  *
- * El driver concreto se resuelve aqui: hoy siempre el disco local, para que el
- * sistema funcione completo sin depender de un servicio externo. Agregar un
- * proveedor remoto es sustituir el useClass de STORAGE_PORT por otra
- * implementacion del mismo puerto.
+ * El driver concreto se resuelve aqui segun `STORAGE_DRIVER`. Hoy el unico es
+ * `local` (disco), para que el sistema funcione completo sin depender de un
+ * servicio externo. Un valor desconocido detiene el arranque: ignorarlo en
+ * silencio guardaria los archivos donde nadie espera. Agregar un proveedor
+ * remoto es sumar otra implementacion del mismo puerto en `storageDriverFactory`.
  *
  * Se usa memoryStorage porque el archivo se valida antes de escribirlo: multer
  * no toca el disco hasta que el driver decide donde y con que nombre guardarlo.
@@ -50,7 +53,7 @@ import { STORAGE_PORT } from './storage.port';
     FileAccessService,
     UploadsService,
     OrphanFilesService,
-    { provide: STORAGE_PORT, useExisting: LocalStorageDriver },
+    { provide: STORAGE_PORT, useFactory: storageDriverFactory, inject: [ConfigService, LocalStorageDriver] },
   ],
   exports: [STORAGE_PORT, UploadsService],
 })

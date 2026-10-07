@@ -715,7 +715,7 @@ export const uploadService = {
   },
   /** URL absoluta para abrir o descargar un archivo ya subido. */
   fileUrl: (relative: string) => {
-    const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api').replace(/\/api$/, '');
+    const base = (import.meta.env.VITE_API_URL ?? 'http://localhost:3010/api').replace(/\/api$/, '');
     return `${base}${relative}`;
   },
 };
