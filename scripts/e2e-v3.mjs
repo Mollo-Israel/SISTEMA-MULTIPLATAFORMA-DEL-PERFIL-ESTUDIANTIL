@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import QRCode from 'qrcode';
 import {
-  API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, crearProyectoBorrador, loginAdmin, provisionAndActivate,
+  API, aprobarActividad, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, crearProyectoBorrador, loginAdmin, provisionAndActivate,
   githubSimuladoLog, repoDePrueba, repoQueCorrobora, req,
 } from './lib/fixtures.mjs';
 
@@ -1830,7 +1830,147 @@ async function batch17(ctx) {
   check(chat.status === 410, 'V3.17.31 §32 Sin chat: la mensajería sigue retirada (410)', `status ${chat.status}`);
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17 };
+// ===========================================================================
+//  BATCH 18 — Trayectoria, perfil y currículo (§41 a §45, §64)
+// ===========================================================================
+async function batch18(ctx) {
+  objective('BATCH 18 · Mi trayectoria con niveles y currículo en dos niveles: secciones → ítems elegibles');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Vera', lastName: 'Curriculum', email: correoEst('b18'), role: 'STUDENT', semester: 7 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const otro = await provisionAndActivate(ctx.admin, { firstName: 'Iker', lastName: 'Ajeno', email: correoEst('b18b'), role: 'STUDENT', semester: 7 });
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: 'Directora', email: correoStaff('b18dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Tito', lastName: 'Tutor', email: correoStaff('b18doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [7] } });
+  const sociedad = await provisionAndActivate(ctx.admin, { firstName: 'Sol', lastName: 'Sociedad', email: correoStaff('b18soc'), role: 'SCIENTIFIC_SOCIETY' });
+
+  // ----- Proyectos: uno corroborado y uno en borrador
+  const catalogo = ((await req('GET', '/skills', { token: est.token })).data ?? []).filter((s) => s.academicAreaId);
+  const sk = catalogo[0];
+  const nuevo = (titulo, repo) => req('POST', '/projects', {
+    token: est.token,
+    body: { title: `${titulo} ${TS}`, areaIds: [sk.academicAreaId], skillIds: [sk.id], repositoryUrl: repo, visibility: 'teachers', status: 'draft' },
+  });
+  const corroborado = (await nuevo('Sistema de turnos', repoQueCorrobora(sk.name))).data;
+  await req('POST', `/projects/${corroborado.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${corroborado.id}.png`, description: 'Captura.' } });
+  await req('PUT', `/projects/${corroborado.id}/my-contribution`, { token: est.token, body: { contribution: 'Backend y base de datos.', skillIds: [sk.id] } });
+  const activo = await req('PATCH', `/projects/${corroborado.id}`, { token: est.token, body: { status: 'active' } });
+  const borrador = (await nuevo('Idea sin terminar', repoDePrueba(`generico-b18-${TS}`))).data;
+
+  // ----- Actividades: académica con constancia, extracurricular y una sin confirmar
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const catAcad = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const catExtra = cats.find((c) => c.appliesTo === 'extracurricular') ?? cats.find((c) => c.code === 'reto') ?? cats[0];
+  const actividad = async (titulo, type, categoryId, dias, extra = {}, quien = director) => {
+    const r = await req('POST', '/activities', {
+      token: quien.token,
+      // La Sociedad crea en borrador y la Dirección aprueba (V2 §27).
+      body: { title: `${titulo} ${TS}`, type, categoryId, ...(quien === director ? { status: 'open' } : {}), activityDate: new Date(Date.now() + dias * 86_400_000).toISOString(), ...extra },
+    });
+    if (r.status !== 201) throw new Error(`No se pudo crear «${titulo}»: ${JSON.stringify(r.data)}`);
+    // V2 §27: lo de la Sociedad pasa por Dirección.
+    if (r.data.requiresReview) await aprobarActividad(quien.token, director.token, r.data.id);
+    return r.data;
+  };
+  // §14.1: con esta política, confirmar la participación emite la constancia.
+  const acad1 = await actividad('Clase espejo de bases de datos', 'academica', catAcad.id, 3, { outcomePolicy: 'internal_constancy' });
+  const acad2 = await actividad('Taller de pruebas', 'academica', catAcad.id, 4);
+  const extra = await actividad('Hackatón interna', 'extracurricular', catExtra.id, 5, {}, sociedad);
+  const pendiente = await actividad('Seminario por confirmar', 'academica', catAcad.id, 6);
+  for (const a of [acad1, acad2, extra, pendiente]) await req('POST', `/activities/${a.id}/register`, { token: est.token });
+  for (const [a, quien] of [[acad1, director], [acad2, director], [extra, sociedad]]) {
+    await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: quien.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
+  }
+  const constancia = { status: ((await req('GET', '/constancies/internal/my', { token: est.token })).data ?? []).some((c) => c.activityId === acad1.id) ? 201 : 404 };
+
+  // ----- Credencial externa declarada (no corroborada)
+  const cert = await req('POST', '/certificates/external', { token: est.token, body: { certificateName: `Curso de Docker ${TS}`, issuer: 'Plataforma X' } });
+
+  // ----- Retroalimentación docente
+  await req('POST', `/projects/${corroborado.id}/feedback`, { token: docente.token, body: { comment: 'Buena separación de capas en el backend.' } });
+
+  check(activo.data?.backingTier === 'corroborated' && constancia.status === 201 && cert.status === 201,
+    'V3.18.0 Preparación: proyecto corroborado, constancia emitida y credencial declarada',
+    JSON.stringify({ t: activo.data?.backingTier, c: constancia.status, x: cert.status }));
+
+  // =========================================================== §42 Trayectoria
+  const tray = await req('GET', '/trajectory/me', { token: est.token });
+  const entrada = (kind, id) => (tray.data?.entries ?? []).find((e) => e.kind === kind && e.id === id);
+  check(tray.status === 200 && (tray.data?.levels ?? []).map((l) => l.label).join('|') === 'Declarado|Con respaldo|Corroborado|Revisado|Inconcluso',
+    'V3.18.1 §42 Distingue Declarado, Con respaldo, Corroborado, Revisado e Inconcluso', JSON.stringify(tray.data?.levels?.map((l) => l.label)));
+  // Con la retroalimentación docente, el proyecto corroborado pasa a REVIEWED.
+  check(entrada('project', corroborado.id)?.levelLabel === 'Revisado' && entrada('project', corroborado.id)?.cvEligible === true,
+    'V3.18.2 El proyecto revisado por un docente aparece como tal y es elegible para el currículo', entrada('project', corroborado.id)?.levelLabel);
+  check(entrada('project', borrador.id)?.levelLabel === 'Inconcluso' && entrada('project', borrador.id)?.cvEligible === false,
+    'V3.18.3 El borrador sigue en la trayectoria como inconcluso, explicado', entrada('project', borrador.id)?.detail);
+  check(entrada('activity', pendiente.id)?.levelLabel === 'Inconcluso' && /confirme/.test(entrada('activity', pendiente.id)?.detail ?? ''),
+    'V3.18.4 La inscripción sin confirmar dice qué le falta', entrada('activity', pendiente.id)?.detail);
+  check(entrada('activity', acad1.id)?.levelLabel === 'Corroborado', 'V3.18.5 La participación confirmada está corroborada por el responsable');
+  check(entrada('credential', cert.data.id)?.cvEligible === false && ['Declarado', 'Con respaldo', 'Inconcluso'].includes(entrada('credential', cert.data.id)?.levelLabel),
+    'V3.18.6 La credencial sin corroborar sigue en la trayectoria, sin ofrecerse al currículo', entrada('credential', cert.data.id)?.levelLabel);
+  check((tray.data?.entries ?? []).some((e) => e.kind === 'feedback' && e.levelLabel === 'Revisado') && (tray.data?.entries ?? []).some((e) => e.kind === 'constancy'),
+    'V3.18.7 §42 Incluye constancias y feedback docente');
+  check(Array.isArray(tray.data?.evolution), 'V3.18.8 §42 Y la evolución de afinidad y respaldo');
+  const docenteVe = await req('GET', '/trajectory/me', { token: docente.token });
+  check(docenteVe.status === 403, 'V3.18.9 La trayectoria es del estudiante: otro rol no la pide', `status ${docenteVe.status}`);
+
+  // ======================================================= §43 Ítems elegibles
+  const secciones = await req('GET', '/trajectory-summary/sections', { token: est.token });
+  check((secciones.data?.cvSections ?? []).map((s) => s.label).join('|')
+    === 'Perfil / resumen|Proyectos|Actividades académicas internas|Actividades extracurriculares internas|Credenciales / cursos externos|Constancias|Habilidades respaldadas|Insignias|Contacto',
+  'V3.18.10 §43.1 Paso 1: las nueve secciones, en orden');
+  const items = await req('GET', '/trajectory-summary/items', { token: est.token });
+  const sec = (k) => (items.data?.sections ?? []).find((s) => s.key === k);
+  check(sec('projects')?.items.map((i) => i.id).join() === corroborado.id && sec('projects')?.excluded?.count === 1,
+    'V3.18.11 §43.3 Proyectos: solo el activo y corroborado; el borrador queda fuera con su motivo', JSON.stringify(sec('projects')));
+  check(sec('academic_activities')?.items.length === 2 && sec('extracurricular_activities')?.items.map((i) => i.id).join() === extra.id,
+    'V3.18.12 §43.1 Actividades internas confirmadas, separadas en académicas y extracurriculares');
+  check(!sec('academic_activities')?.items.some((i) => i.id === pendiente.id) && sec('academic_activities')?.excluded?.count === 1,
+    'V3.18.13 §44 La inscripción sin confirmar no se ofrece');
+  check(sec('academic_activities')?.items.find((i) => i.id === acad1.id)?.detail?.includes('Constancia interna disponible'),
+    'V3.18.14 §44 La constancia se indica en la misma actividad');
+  check(sec('certificates')?.items.length === 0 && sec('certificates')?.excluded?.count === 1 && /corroboradas/.test(sec('certificates')?.excluded?.reason ?? ''),
+    'V3.18.15 §45 Una credencial no corroborada no se ofrece: no prueba que terminaste', JSON.stringify(sec('certificates')?.excluded));
+
+  // ================================================== §43.2 Selección de ítems
+  const cv = (body) => req('POST', '/trajectory-summary/preview', { token: est.token, body });
+  const soloUna = await cv({ sections: ['academic_activities', 'constancies'], items: { academic_activities: [acad2.id] } });
+  check(soloUna.status === 201 && soloUna.data?.academicActivities?.map((a) => a.id).join() === acad2.id,
+    'V3.18.16 §43.2 Paso 2: entra solo el ítem marcado', JSON.stringify(soloUna.data?.academicActivities));
+  check((soloUna.data?.constancies ?? []).length === 1, 'V3.18.17 La constancia de una actividad no marcada sigue como constancia');
+  const conAmbas = await cv({ sections: ['academic_activities', 'constancies'], items: { academic_activities: [acad2.id, acad1.id] } });
+  check(conAmbas.data?.academicActivities?.map((a) => a.id).join() === `${acad2.id},${acad1.id}`,
+    'V3.18.18 §43.4 El orden elegido se respeta');
+  check((conAmbas.data?.constancies ?? []).length === 0 && conAmbas.data?.academicActivities?.find((a) => a.id === acad1.id)?.constancy === true,
+    'V3.18.19 §44 Si la actividad ya está, su constancia no se duplica como otra experiencia');
+  const certNo = await cv({ sections: ['certificates'], items: { certificates: [cert.data.id] } });
+  check(certNo.status === 400 && certNo.data?.code === 'CV_ITEM_NOT_ELIGIBLE', 'V3.18.20 §43.3 Pedir una credencial no corroborada por id se rechaza', JSON.stringify(certNo.data?.code));
+  const borradorNo = await cv({ sections: ['projects'], items: { projects: [borrador.id] } });
+  check(borradorNo.status === 400 && borradorNo.data?.code === 'CV_ITEM_NOT_ELIGIBLE', 'V3.18.21 Y un borrador también');
+  const ajeno = await req('POST', '/projects', { token: otro.token, body: { title: `Ajeno ${TS}`, areaIds: [sk.academicAreaId], skillIds: [sk.id], status: 'draft' } });
+  const robo = await cv({ sections: ['projects'], items: { projects: [ajeno.data?.id ?? corroborado.id] } });
+  check(robo.status === 400 && robo.data?.code === 'CV_ITEM_NOT_ELIGIBLE', 'V3.18.22 Ni el proyecto de otra persona metiendo su id');
+  const raro = await cv({ sections: ['projects'], items: { nota_final: [corroborado.id] } });
+  check(raro.status === 400, 'V3.18.23 Una sección inventada en la selección se rechaza', `status ${raro.status}`);
+  const proy = await cv({ sections: ['projects', 'contributions'] });
+  check(proy.data?.projects?.length === 1 && proy.data.projects[0].id === corroborado.id && proy.data.projects[0].level === 'Revisado',
+    'V3.18.24 Sin lista, entran todos los elegibles con su nivel', JSON.stringify(proy.data?.projects?.map((p) => p.level)));
+
+  // ================================================================ §43.4 PDF
+  const res = await fetch(`${API}/trajectory-summary/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${est.token}` },
+    body: JSON.stringify({ sections: ['projects', 'academic_activities', 'extracurricular_activities'], items: { academic_activities: [acad1.id] } }),
+  });
+  const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
+  check(res.status === 201 && pdf.startsWith('%PDF-') && pdf.includes('Participaci') && pdf.includes('Constancia interna disponible'),
+    'V3.18.25 §43.4 El PDF sale de la misma selección', `status ${res.status}`);
+  check(pdf.includes('registrada y respaldada en Afinia') && pdf.includes('No constituye historial'),
+    'V3.18.26 §43.6 Con el descargo exacto de V3');
+  check(!pdf.includes('Taller de pruebas'), 'V3.18.27 Y sin lo que no se marcó');
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

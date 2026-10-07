@@ -179,6 +179,14 @@ async function pruebas(browser) {
   check(await p3.getByText('¿Qué le falta a tu equipo?').isVisible(), 'WEB.17 §77 Y abre directo la pestaña de equipos');
   await p3.click('a[href="/student/progress?tab=resumen"]');
   check(await p3.getByText('Plantilla', { exact: true }).first().isVisible(), 'WEB.18 §61 CV / Exportar abre el generador con plantillas');
+  await p3.getByText('Paso 1 · Qué secciones incluir').first().waitFor({ timeout: 8000 }).catch(() => {});
+  check(await p3.getByText('Paso 1 · Qué secciones incluir').first().isVisible()
+    && await p3.getByLabel('Credenciales / cursos externos').first().isVisible(),
+  'WEB.18b V3 §43 El currículo se elige en dos niveles, con casillas etiquetadas');
+  await p3.click('nav a[href="/student/progress"]');
+  await p3.getByText('Cómo leer tu trayectoria').first().waitFor({ timeout: 8000 }).catch(() => {});
+  check(await p3.getByText('Cómo leer tu trayectoria').first().isVisible(),
+    'WEB.18c V3 §42 «Mi progreso» abre en Mi trayectoria, con los niveles explicados');
   check(!(await p3.content()).includes('Mensajes'), 'WEB.19 §57 Ninguna pestaña de mensajes');
 
   objective('Cambio de vista sin parpadeo');

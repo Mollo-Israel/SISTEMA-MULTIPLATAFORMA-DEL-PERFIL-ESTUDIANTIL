@@ -13,7 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import type { Response } from 'express';
 import { Repository } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
-import { ArrayUnique, IsArray, IsEnum, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ArrayUnique, IsArray, IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { CV_SUMMARY_MAX, CvTemplate, RolNombre, TrajectorySection } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -48,6 +48,16 @@ export class BuildTrajectorySummaryDto {
   @IsOptional()
   @IsUUID('4')
   summaryAiRunId?: string;
+
+  /**
+   * V3 §43.2: ítems concretos por sección, en el orden en que deben salir
+   * (`{ "projects": ["<id>", …] }`). Una sección sin lista incluye todos sus
+   * ítems elegibles. Lo valida el servicio: solo ids elegibles y propios.
+   */
+  @ApiProperty({ required: false, type: 'object', additionalProperties: { type: 'array', items: { type: 'string' } } })
+  @IsOptional()
+  @IsObject({ message: 'La selección de ítems no es válida.' })
+  items?: Partial<Record<TrajectorySection, string[]>>;
 }
 
 /**
@@ -107,6 +117,27 @@ export class GamificationController {
     return this.summary.sections();
   }
 
+  @Get('trajectory-summary/items')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Ítems elegibles por sección para el currículo (V3 §43.2, §43.3).',
+    description: 'Proyectos activos y corroborados o revisados, participaciones confirmadas, credenciales '
+      + 'corroboradas. Dice cuántos quedan fuera y por qué.',
+  })
+  async items(@CurrentUser() user: AuthenticatedUser) {
+    return this.summary.eligibleItems(await this.profileId(user));
+  }
+
+  @Get('trajectory/me')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'Mi trayectoria: histórico completo con el nivel de cada cosa (V3 §42).',
+    description: 'Declarado, con respaldo, corroborado, revisado o inconcluso, en lenguaje natural.',
+  })
+  async history(@CurrentUser() user: AuthenticatedUser) {
+    return this.summary.history(await this.profileId(user));
+  }
+
   @Post('trajectory-summary/preview')
   @Roles(RolNombre.STUDENT)
   @ApiOperation({
@@ -145,6 +176,7 @@ export class GamificationController {
       summaryText: dto.summaryText ?? null,
       summaryAiRunId: dto.summaryAiRunId ?? null,
       userId: user.userId,
+      items: dto.items ?? null,
     };
   }
 

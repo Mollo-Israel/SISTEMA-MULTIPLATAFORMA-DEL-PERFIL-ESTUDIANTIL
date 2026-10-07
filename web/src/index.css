@@ -1190,3 +1190,17 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 fieldset.field { border: none; padding: 0; margin: 0 0 1rem; min-width: 0; }
 fieldset.field > legend { padding: 0; margin-bottom: 0.35rem; font-size: 0.85rem; font-weight: 600; color: var(--gray-700); }
 button.chip { cursor: pointer; font-family: var(--font); }
+
+/* --- Mi trayectoria y currículo en dos niveles (V3 §42, §43) --- */
+.nivel-leyenda { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.trayectoria-lista { list-style: none; margin: 0.8rem 0 0; padding: 0; }
+.trayectoria-lista li { padding: 0.7rem 0; border-bottom: 1px solid var(--gray-100); }
+.trayectoria-lista li:last-child { border-bottom: none; }
+.cv-pasos { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
+.cv-pasos label, .cv-item label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.cv-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0; border-bottom: 1px solid var(--gray-100); }
+.cv-item:last-child { border-bottom: none; }
+.cv-item .detalle { font-size: 0.78rem; color: var(--gray-500); display: block; }
+.cv-orden { display: flex; gap: 0.2rem; }
+.cv-orden button { border: 1px solid var(--gray-200); background: #fff; border-radius: 6px; width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer; color: var(--gray-700); }
+.cv-orden button:disabled { opacity: 0.35; cursor: default; }

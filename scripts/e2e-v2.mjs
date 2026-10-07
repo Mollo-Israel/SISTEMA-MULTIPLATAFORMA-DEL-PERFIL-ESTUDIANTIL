@@ -814,8 +814,9 @@ async function batch12(ctx) {
     'V2.12.1 §61.1 Se pueden elegir insignias y contacto autorizado', json(claves));
   check((secciones.data?.templates ?? []).map((t) => t.key).join() === 'classic,modern,compact',
     'V2.12.2 §61.2 Hay tres plantillas estáticas', json(secciones.data?.templates));
-  const DESCARGO = 'Documento generado a partir de información registrada en Afinia. No constituye historial académico oficial, certificación institucional ni acreditación profesional de competencias.';
-  check(secciones.data?.disclaimer === DESCARGO, 'V2.12.3 §61.4 El descargo es el texto exacto de la especificación');
+  // V3 §43.6 actualiza el texto: «registrada y respaldada».
+  const DESCARGO = 'Documento generado a partir de información registrada y respaldada en Afinia. No constituye historial académico oficial, certificación institucional ni acreditación profesional de competencias.';
+  check(secciones.data?.disclaimer === DESCARGO, 'V2.12.3 §61.4 / V3 §43.6 El descargo es el texto exacto de la especificación');
 
   const vista = await req('POST', '/trajectory-summary/preview', {
     token: est.token, body: { sections: ['bio', 'contact'], template: 'modern', summaryText: 'Estudiante de séptimo semestre con interés en backend.' },

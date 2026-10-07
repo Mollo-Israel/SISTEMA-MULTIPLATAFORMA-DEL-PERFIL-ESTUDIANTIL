@@ -39,6 +39,10 @@ import { parseAuthorizedSemesters } from '../../src/imports/teacher-import.servi
 import { effectiveSemesters, inTeacherScope, scopeSql } from '../../src/access/teacher-scope.service';
 
 import { semestreElegible } from '../../src/collaboration/team-need.rules';
+import {
+  activityCvEligible, certificateCvEligible, certificateLevel, projectCvEligible, projectLevel, registrationLevel,
+} from '../../src/trajectory/cv-eligibility.rules';
+import { ManualReviewStatus, ProjectStatus, TrajectoryLevel } from '@perfil/shared';
 describe('Afinidad V3 (§45–§47)', () => {
   it('es la versión 4 del motor (V3.1 §35)', () => assert.equal(AFFINITY_ENGINE_VERSION, 4));
 
@@ -697,5 +701,42 @@ describe('V3 §55 · Elegibilidad por semestre de una necesidad', () => {
   });
   it('un perfil sin semestre no entra cuando hay semestres objetivo', () => {
     assert.equal(semestreElegible([5], null), false);
+  });
+});
+
+describe('V3 §43.3 / §64 · Elegibilidad para el currículo verificado', () => {
+  it('proyecto: ACTIVE y CORROBORATED o REVIEWED', () => {
+    assert.equal(projectCvEligible(ProjectStatus.ACTIVE, ProjectBackingTier.CORROBORATED), true);
+    assert.equal(projectCvEligible(ProjectStatus.ACTIVE, ProjectBackingTier.REVIEWED), true);
+    assert.equal(projectCvEligible(ProjectStatus.ACTIVE, ProjectBackingTier.SUPPORTED), false);
+    assert.equal(projectCvEligible(ProjectStatus.DRAFT, ProjectBackingTier.CORROBORATED), false);
+  });
+  it('actividad interna: solo participación CONFIRMED', () => {
+    assert.equal(activityCvEligible(RegistrationStatus.CONFIRMED, ActivityOrigin.INTERNAL), true);
+    assert.equal(activityCvEligible(RegistrationStatus.REGISTERED, ActivityOrigin.INTERNAL), false);
+    assert.equal(activityCvEligible(RegistrationStatus.CONFIRMED, ActivityOrigin.EXTERNAL), false);
+  });
+  it('credencial externa: solo CORROBORATED (§45)', () => {
+    assert.equal(certificateCvEligible(BackingTier.CORROBORATED), true);
+    assert.equal(certificateCvEligible(BackingTier.SUPPORTED), false);
+    assert.equal(certificateCvEligible(null), false);
+  });
+});
+
+describe('V3 §42 · Niveles de la trayectoria', () => {
+  it('un borrador es inconcluso aunque esté corroborado', () => {
+    assert.equal(projectLevel(ProjectStatus.DRAFT, ProjectBackingTier.CORROBORATED), TrajectoryLevel.INCOMPLETE);
+    assert.equal(projectLevel(ProjectStatus.ACTIVE, ProjectBackingTier.REVIEWED), TrajectoryLevel.REVIEWED);
+    assert.equal(projectLevel(ProjectStatus.ACTIVE, ProjectBackingTier.DECLARED), TrajectoryLevel.DECLARED);
+  });
+  it('credencial: la revisión manual corroborada es «Revisado» y la señalada queda inconclusa', () => {
+    assert.equal(certificateLevel(BackingTier.CORROBORATED, ManualReviewStatus.CORROBORATED), TrajectoryLevel.REVIEWED);
+    assert.equal(certificateLevel(BackingTier.FLAGGED, null), TrajectoryLevel.INCOMPLETE);
+    assert.equal(certificateLevel(BackingTier.SUPPORTED, null), TrajectoryLevel.SUPPORTED);
+  });
+  it('inscripción: confirmada corrobora, pendiente es inconclusa, ausente no cuenta', () => {
+    assert.equal(registrationLevel(RegistrationStatus.CONFIRMED), TrajectoryLevel.CORROBORATED);
+    assert.equal(registrationLevel(RegistrationStatus.ACCEPTED), TrajectoryLevel.INCOMPLETE);
+    assert.equal(registrationLevel(RegistrationStatus.ABSENT), null);
   });
 });

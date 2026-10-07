@@ -26,6 +26,8 @@ import {
 import { AccessModule } from '../access/access.module';
 import { StudentContactChannel } from '../entities/contact-channel.entity';
 import { AiAssistanceRun } from '../entities/ai-assistance-run.entity';
+import { ValidationRecord } from '../entities/validation-record.entity';
+import { ProjectFeedback } from '../entities/project-feedback.entity';
 import { GamificationExtrasService } from './gamification-extras.service';
 import { TrajectorySummaryService } from '../trajectory/trajectory-summary.service';
 import { GamificationService } from './gamification.service';
@@ -67,6 +69,8 @@ import { GamificationExtrasController } from './gamification-extras.controller';
       ActivityGamificationRule,
       StudentContactChannel,
       AiAssistanceRun,
+      ValidationRecord,
+      ProjectFeedback,
     ]),
     AccessModule,
   ],

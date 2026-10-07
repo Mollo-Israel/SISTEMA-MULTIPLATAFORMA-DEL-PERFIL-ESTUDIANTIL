@@ -647,3 +647,61 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 - Regresión completa: **1719 correctas, 0 fallos** (20 suites).
 
 **Pendientes:** postulaciones en móvil (B22).
+
+---
+
+## BATCH 18 — Trayectoria, perfil y currículo
+
+**ESTADO:** completo
+
+**Objetivo:** «Mi trayectoria» como histórico completo con niveles en lenguaje natural (§42), y un currículo que se elige en dos niveles con solo ítems elegibles, vista previa, PDF, plantillas, IA opcional y el descargo de V3 (§43 a §45, §64).
+
+**Hallazgos iniciales:**
+- El CV se elegía solo por secciones y metía todos los proyectos (incluidos borradores y solo declarados), todos los certificados y las constancias junto a sus actividades (duplicadas).
+- No existía un histórico con niveles: Mi progreso mostraba puntos, recompensas y el CV.
+- El descargo decía «registrada en Afinia» y no «registrada y respaldada».
+
+**Cambios:**
+- **Reglas puras** (`trajectory/cv-eligibility.rules.ts`):
+  - Proyecto: ACTIVE y CORROBORATED o REVIEWED.
+  - Actividad interna: participación CONFIRMED.
+  - Credencial externa: CORROBORATED (§45: la inscripción o una credencial SUPPORTED no prueban que se terminó el curso).
+  - Niveles §42: Declarado, Con respaldo, Corroborado, Revisado e Inconcluso. Un borrador es inconcluso; una revisión manual de Dirección es «Revisado»; una inscripción sin confirmar es inconclusa y dice qué le falta.
+- **Paso 1 (§43.1):** nueve secciones en el orden de la especificación. Las actividades internas se separan en académicas y extracurriculares (nuevas secciones `academic_activities` y `extracurricular_activities`; las de V2 siguen aceptadas).
+- **Paso 2 (§43.2):** `GET /trajectory-summary/items` devuelve los ítems elegibles por sección, junto con cuántos quedan fuera y por qué.
+  - La vista previa y el PDF reciben `items` por sección, en el orden elegido.
+  - Un id que no es elegible, que es de otra persona o que pertenece a una sección inventada se rechaza (`CV_ITEM_NOT_ELIGIBLE` / `CV_ITEMS_INVALID`) en lugar de colarse.
+- **§44:** una participación confirmada sale como «Participación confirmada en …». Si tiene constancia, se indica «Constancia interna disponible» en la misma línea, y la constancia no se repite como otra experiencia.
+- **§42:** `GET /trajectory/me` reúne:
+  - Proyectos, actividades internas y oportunidades externas.
+  - Constancias y credenciales.
+  - Equipos y retroalimentación docente.
+  - La evolución de afinidad y respaldo.
+  
+  Cada entrada indica su nivel, la explicación y si puede ir al currículo.
+- **Descargo exacto de V3 §43.6.** La ayuda de IA solo mejora la redacción y debe aceptarse (§43.5); la pantalla dice que nunca agrega cargos, tecnologías, actividades, certificados ni fechas.
+- **Web (Mi progreso):**
+  - Pestañas: «Mi trayectoria» (por defecto), Puntos e insignias, Recompensas y «Currículo».
+  - La trayectoria muestra la leyenda de niveles, un filtro por nivel y la marca «Puede ir al currículo».
+  - El currículo tiene el Paso 1 con casillas etiquetadas y el Paso 2 con los ítems, flechas para ordenar y lo que queda fuera con su motivo.
+
+**Migraciones:** ninguna (solo lectura y reglas).
+
+**Pruebas ejecutadas:**
+- Unitarias de elegibilidad y niveles (95/95).
+- `e2e-v3 batch18` (V3.18.0–V3.18.27).
+- `e2e-web` WEB.18b y WEB.18c.
+- Suites V2 actualizadas a V3 sin borrar comprobaciones:
+  - B9.30: dieciséis secciones y el paso de nueve.
+  - B9.35: los proyectos sin corroborar quedan fuera con su motivo.
+  - V2.12.3: el descargo exacto de V3.
+- Regresión completa.
+
+**Riesgos:** un estudiante con proyectos solo SUPPORTED verá menos en su currículo que antes. Es lo que pide §43.3, y la pantalla explica qué falta.
+
+**Resultados:**
+- Unitarias: 95/95.
+- `e2e-v3`: 316 (B18 28/28).
+- Regresión completa: **1749 correctas, 0 fallos** (20 suites).
+
+**Pendientes:** trayectoria y currículo en móvil (B22).

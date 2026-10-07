@@ -122,6 +122,9 @@ export enum TrajectorySection {
   SUPPORT = 'support',
   /** V2 §61.1: insignias obtenidas. */
   BADGES = 'badges',
+  /** V3 §43.1: actividades internas, separadas por tipo. */
+  ACADEMIC_ACTIVITIES = 'academic_activities',
+  EXTRACURRICULAR_ACTIVITIES = 'extracurricular_activities',
   /** V2 §61.1: «contacto autorizado», los canales que el estudiante comparte. */
   CONTACT = 'contact',
 }
@@ -141,6 +144,8 @@ export const TRAJECTORY_SECTIONS: readonly TrajectorySection[] = [
   TrajectorySection.SUPPORT,
   TrajectorySection.BADGES,
   TrajectorySection.CONTACT,
+  TrajectorySection.ACADEMIC_ACTIVITIES,
+  TrajectorySection.EXTRACURRICULAR_ACTIVITIES,
 ];
 
 export const TRAJECTORY_SECTION_LABEL: Record<TrajectorySection, string> = {
@@ -158,6 +163,52 @@ export const TRAJECTORY_SECTION_LABEL: Record<TrajectorySection, string> = {
   [TrajectorySection.SUPPORT]: 'Nivel de respaldo',
   [TrajectorySection.BADGES]: 'Insignias',
   [TrajectorySection.CONTACT]: 'Contacto',
+  [TrajectorySection.ACADEMIC_ACTIVITIES]: 'Actividades académicas internas',
+  [TrajectorySection.EXTRACURRICULAR_ACTIVITIES]: 'Actividades extracurriculares internas',
+};
+
+/**
+ * V3 §43.1: paso 1 del currículo, en este orden. El paso 2 elige ítems
+ * concretos dentro de las secciones de `CV_ITEM_SECTIONS`.
+ */
+export const CV_SECTIONS: readonly { key: TrajectorySection; label: string }[] = [
+  { key: TrajectorySection.BIO, label: 'Perfil / resumen' },
+  { key: TrajectorySection.PROJECTS, label: 'Proyectos' },
+  { key: TrajectorySection.ACADEMIC_ACTIVITIES, label: 'Actividades académicas internas' },
+  { key: TrajectorySection.EXTRACURRICULAR_ACTIVITIES, label: 'Actividades extracurriculares internas' },
+  { key: TrajectorySection.CERTIFICATES, label: 'Credenciales / cursos externos' },
+  { key: TrajectorySection.CONSTANCIES, label: 'Constancias' },
+  { key: TrajectorySection.TECHNOLOGIES, label: 'Habilidades respaldadas' },
+  { key: TrajectorySection.BADGES, label: 'Insignias' },
+  { key: TrajectorySection.CONTACT, label: 'Contacto' },
+];
+
+export const CV_ITEM_SECTIONS: readonly TrajectorySection[] = [
+  TrajectorySection.PROJECTS,
+  TrajectorySection.ACTIVITIES,
+  TrajectorySection.ACADEMIC_ACTIVITIES,
+  TrajectorySection.EXTRACURRICULAR_ACTIVITIES,
+  TrajectorySection.CERTIFICATES,
+  TrajectorySection.CONSTANCIES,
+  TrajectorySection.TECHNOLOGIES,
+  TrajectorySection.BADGES,
+];
+
+/** V3 §42: nivel de cada cosa de la trayectoria, en lenguaje natural. */
+export enum TrajectoryLevel {
+  DECLARED = 'declared',
+  SUPPORTED = 'supported',
+  CORROBORATED = 'corroborated',
+  REVIEWED = 'reviewed',
+  INCOMPLETE = 'incomplete',
+}
+
+export const TRAJECTORY_LEVEL_LABEL: Record<TrajectoryLevel, { label: string; explain: string }> = {
+  [TrajectoryLevel.DECLARED]: { label: 'Declarado', explain: 'Lo registraste tú; todavía nada lo respalda.' },
+  [TrajectoryLevel.SUPPORTED]: { label: 'Con respaldo', explain: 'Tiene al menos una fuente que lo apoya.' },
+  [TrajectoryLevel.CORROBORATED]: { label: 'Corroborado', explain: 'Una fuente independiente lo confirma.' },
+  [TrajectoryLevel.REVIEWED]: { label: 'Revisado', explain: 'Un docente o la Dirección lo revisó.' },
+  [TrajectoryLevel.INCOMPLETE]: { label: 'Inconcluso', explain: 'Le falta un paso para contar.' },
 };
 
 /**
@@ -188,6 +239,6 @@ export const CV_SUMMARY_MAX = 1200;
  * haber visto nunca el sistema.
  */
 export const TRAJECTORY_DISCLAIMER =
-  'Documento generado a partir de información registrada en Afinia. '
+  'Documento generado a partir de información registrada y respaldada en Afinia. '
   + 'No constituye historial académico oficial, certificación institucional '
   + 'ni acreditación profesional de competencias.';

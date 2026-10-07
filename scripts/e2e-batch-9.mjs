@@ -349,9 +349,11 @@ async function resumen(ctx) {
   const secciones = await req('GET', '/trajectory-summary/sections', { token: ctx.est.token });
   check(secciones.status === 200, 'B9.29 Las secciones disponibles se consultan', msgOf(secciones));
   check(
-    // V2 §61.1 suma insignias y contacto autorizado a las doce de §67.
-    (secciones.data?.sections ?? []).length === 14,
-    'B9.30 Son las doce de §67 más insignias y contacto (V2 §61.1)',
+    // V2 §61.1 suma insignias y contacto a las doce de §67; V3 §43.1 separa las
+    // actividades internas en académicas y extracurriculares, y propone su
+    // propio paso 1 de nueve secciones.
+    (secciones.data?.sections ?? []).length === 16 && (secciones.data?.cvSections ?? []).length === 9,
+    'B9.30 Las de §67, insignias y contacto (V2 §61.1) y el paso 1 de V3 §43.1',
     String((secciones.data?.sections ?? []).length),
   );
   check(
@@ -386,10 +388,16 @@ async function resumen(ctx) {
       ],
     },
   });
+  // V3 §43.3: un proyecto entra al currículo verificado solo si está activo y
+  // corroborado o revisado. Estos no lo están: siguen en la trayectoria y se
+  // dice cuántos quedan fuera y por qué, en lugar de afirmarlos.
+  const elegibles = await req('GET', '/trajectory-summary/items', { token: ctx.est.token });
+  const seccionProyectos = (elegibles.data?.sections ?? []).find((s) => s.key === 'projects');
   check(
-    Array.isArray(completo.data?.projects) && completo.data.projects.length >= 2,
-    'B9.35 Con todo marcado, aparecen sus proyectos',
-    String(completo.data?.projects?.length),
+    Array.isArray(completo.data?.projects) && completo.data.projects.length === 0
+      && seccionProyectos?.excluded?.count >= 2 && /corroborados o revisados/.test(seccionProyectos?.excluded?.reason ?? ''),
+    'B9.35 Con todo marcado, los proyectos sin corroborar no se afirman: quedan fuera con su motivo (V3 §43.3)',
+    JSON.stringify({ n: completo.data?.projects?.length, fuera: seccionProyectos?.excluded }),
   );
   check(
     Array.isArray(completo.data?.activities) && completo.data.activities.length === 5,

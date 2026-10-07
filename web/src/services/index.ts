@@ -497,6 +497,41 @@ export interface CvRequest {
   template?: CvTemplateOption['key'];
   summaryText?: string;
   summaryAiRunId?: string;
+  /** V3 §43.2: ítems concretos por sección, en orden. */
+  items?: Record<string, string[]>;
+}
+
+/** V3 §43.1: una sección del paso 1 del currículo. */
+export interface CvSectionOption {
+  key: string;
+  label: string;
+  hasItems: boolean;
+}
+
+/** V3 §43.2: los ítems elegibles de una sección y lo que queda fuera. */
+export interface CvItemsSection {
+  key: string;
+  label: string;
+  items: { id: string; title: string; detail: string | null }[];
+  excluded: { count: number; reason: string | null } | null;
+}
+
+/** V3 §42: una entrada de «Mi trayectoria». */
+export interface TrajectoryEntry {
+  kind: 'project' | 'activity' | 'external_opportunity' | 'constancy' | 'credential' | 'team' | 'feedback';
+  id: string;
+  title: string;
+  date: string | null;
+  level: 'declared' | 'supported' | 'corroborated' | 'reviewed' | 'incomplete' | null;
+  levelLabel: string | null;
+  detail: string;
+  cvEligible: boolean;
+}
+
+export interface TrajectoryHistory {
+  levels: { key: string; label: string; explain: string; count: number }[];
+  entries: TrajectoryEntry[];
+  evolution: { area: string | null; score: number; supportScore: number | null; supportLevel: string | null }[];
 }
 
 export const gamificationService = {
@@ -524,10 +559,14 @@ export const gamificationService = {
 export const trajectoryService = {
   sections: () =>
     api
-      .get<{ sections: TrajectorySectionOption[]; disclaimer: string; templates: CvTemplateOption[] }>(
+      .get<{ sections: TrajectorySectionOption[]; cvSections: CvSectionOption[]; disclaimer: string; templates: CvTemplateOption[] }>(
         '/trajectory-summary/sections',
       )
       .then((r) => r.data),
+  /** V3 §43.2: ítems elegibles por sección. */
+  items: () => api.get<{ sections: CvItemsSection[] }>('/trajectory-summary/items').then((r) => r.data),
+  /** V3 §42: histórico completo con niveles. */
+  history: () => api.get<TrajectoryHistory>('/trajectory/me').then((r) => r.data),
   preview: (body: CvRequest) =>
     api
       .post<Record<string, any>>('/trajectory-summary/preview', body)
