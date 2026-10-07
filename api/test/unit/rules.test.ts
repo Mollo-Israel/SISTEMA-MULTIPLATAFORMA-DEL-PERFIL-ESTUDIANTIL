@@ -598,3 +598,32 @@ describe('V3 §22 requisitos de ACTIVE', () => {
     assert.equal(projectReadiness({ ...listo, evidenceCount: 0, demoCheck: LinkCheckStatus.AVAILABLE }).ready, true);
   });
 });
+
+// ---------------------------------------------------------------------------
+//  V3 BATCH 11 · Mapeo determinista de manifiestos (§24.3)
+// ---------------------------------------------------------------------------
+import { signalsFromManifest } from '../../src/projects/dependency-map';
+
+describe('V3 §24.3 dependencia → tecnología', () => {
+  const tec = (f: string, t: string) => signalsFromManifest(f, t).map((s) => s.technology);
+  it('package.json: react, @nestjs/core, pg', () => {
+    const t = tec('package.json', JSON.stringify({ dependencies: { react: '1', '@nestjs/core': '1', pg: '1' } }));
+    assert.ok(t.includes('React') && t.includes('NestJS') && t.includes('PostgreSQL'));
+  });
+  it('requirements.txt con versiones, comentarios y extras', () => {
+    const t = tec('requirements.txt', 'FastAPI==0.1 # web\npsycopg2-binary>=2\n-r base.txt\nscikit_learn\n');
+    assert.ok(t.includes('FastAPI') && t.includes('PostgreSQL') && t.includes('Scikit-learn'));
+  });
+  it('docker-compose: imagen postgres y redis', () => {
+    const t = tec('docker-compose.yml', 'services:\n  db:\n    image: "postgres:16"\n  cache:\n    image: redis:7\n');
+    assert.ok(t.includes('PostgreSQL') && t.includes('Redis') && t.includes('Docker'));
+  });
+  it('package-lock: solo dependencias directas, no transitivas', () => {
+    const lock = { packages: { '': { dependencies: { react: '1' } }, 'node_modules/pg': { version: '8' } } };
+    const t = tec('package-lock.json', JSON.stringify(lock));
+    assert.ok(t.includes('React') && !t.includes('PostgreSQL'));
+  });
+  it('un manifiesto mal formado no aporta ni acusa', () => {
+    assert.deepEqual(tec('package.json', '{ roto'), []);
+  });
+});

@@ -861,15 +861,20 @@ export class ProjectsService {
    *
    * Nunca lanza: que GitHub esté caído no puede impedir crear un proyecto.
    */
-  async checkExternalSources(projectId: string, actorUserId: string | null): Promise<void> {
+  async checkExternalSources(projectId: string, actorUserId: string | null, force = false): Promise<void> {
     const project = await this.projects.findOne({ where: { id: projectId } });
     if (!project) return;
 
     if (project.repositoryUrl) {
       try {
+        // V3 §24.4: se cruza con las tecnologías del catálogo del proyecto;
+        // lo escrito como texto completa lo que el catálogo no tenga.
+        const delCatalogo = (await this.projectSkills.find({ where: { projectId }, relations: { skill: true } }))
+          .map((x) => x.skill?.name).filter((n): n is string => !!n);
         const resultado = await this.repositoryInspector.inspect(
           project.repositoryUrl,
-          project.technologies ?? [],
+          unirTecnologias(delCatalogo, project.technologies ?? []),
+          { force },
         );
         await this.repoChecks.save(
           this.repoChecks.create({
@@ -899,7 +904,13 @@ export class ProjectsService {
       try {
         // §39: se comprueba lo observable. No se infiere backend ni base de
         // datos desde una web desplegada; eso sigue siendo declarado.
-        const check = await this.linkChecker.check(project.demoUrl);
+        const pagina = await this.linkChecker.fetchPage(project.demoUrl);
+        const check = pagina.result;
+        const meta = (prop: string) => {
+          if (!pagina.body || !/html/.test(pagina.contentType ?? '')) return null;
+          const re = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']{1,300})["']`, 'i');
+          return re.exec(pagina.body)?.[1]?.trim() ?? null;
+        };
         await this.linkChecks.save(
           this.linkChecks.create({
             projectId,
@@ -909,6 +920,11 @@ export class ProjectsService {
             title: check.title,
             httpStatus: check.httpStatus,
             blockedReason: check.blockedReason,
+            metadata: {
+              description: meta('og:description') ?? meta('description'),
+              siteName: meta('og:site_name'),
+              finalUrl: check.finalUrl,
+            },
             checkedAt: new Date(),
           }),
         );
@@ -954,6 +970,7 @@ export class ProjectsService {
           title: demo.title,
           httpStatus: demo.httpStatus,
           blockedReason: demo.blockedReason,
+          metadata: demo.metadata,
           checkedAt: demo.checkedAt,
         }
         : null,
@@ -971,7 +988,7 @@ export class ProjectsService {
   async recheckExternalSources(user: AuthenticatedUser, projectId: string) {
     const project = await this.findOneOrFail(projectId);
     await this.assertIsOwner(user, project);
-    await this.checkExternalSources(projectId, user.userId);
+    await this.checkExternalSources(projectId, user.userId, true);
     await this.backing.recalculate(projectId, user.userId);
     return this.externalChecks(user, projectId);
   }

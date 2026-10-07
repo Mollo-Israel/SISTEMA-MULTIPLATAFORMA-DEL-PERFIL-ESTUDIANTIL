@@ -316,27 +316,98 @@ export const GITHUB_SIMULADO_PUERTO = Number(process.env.GITHUB_SIMULADO_PUERTO 
 export const repoDePrueba = (nombre) => `https://github.com/afinia-pruebas/${nombre}`;
 
 let githubSimulado = null;
+
+/**
+ * Contenido de los repositorios simulados (V3 §24). Según el prefijo del
+ * nombre:
+ *   stack-*     Node: React, NestJS, pg, TypeScript; compose con postgres.
+ *   py-*        Python: FastAPI y psycopg2 en requirements.txt.
+ *   cuota-*     GitHub responde «cuota agotada» (403, reinicio en 2 s).
+ *   inestable-* Falla con 500 las dos primeras veces y luego responde.
+ *   resto       Node con Express y un Dockerfile.
+ */
+function contenidoSimulado(nombre) {
+  const b64 = (t) => Buffer.from(t, 'utf8').toString('base64');
+  if (nombre.startsWith('stack-')) {
+    return {
+      languages: { TypeScript: 80000, JavaScript: 2000 },
+      files: {
+        'package.json': JSON.stringify({ dependencies: { react: '^18', '@nestjs/core': '^10', pg: '^8' }, devDependencies: { typescript: '^5' } }),
+        'docker-compose.yml': 'services:\n  db:\n    image: postgres:16\n  api:\n    build: .\n',
+        'README.md': '# Proyecto',
+      },
+    };
+  }
+  if (nombre.startsWith('py-')) {
+    return {
+      languages: { Python: 40000 },
+      files: { 'requirements.txt': 'fastapi==0.110\npsycopg2-binary>=2.9 # base de datos\nuvicorn\n', 'README.md': '# API' },
+    };
+  }
+  return {
+    languages: { TypeScript: 52000, JavaScript: 3000, CSS: 1200 },
+    files: {
+      'package.json': JSON.stringify({ dependencies: { express: '^4' } }),
+      Dockerfile: 'FROM node:20-alpine\nCMD ["node", "index.js"]\n',
+      'README.md': '# Proyecto',
+    },
+    b64,
+  };
+}
+
+/** Peticiones recibidas por el GitHub simulado, para que las suites las inspeccionen. */
+export const githubSimuladoLog = [];
+
 export async function asegurarGithubSimulado() {
   if (githubSimulado) return;
   const { createServer } = await import('node:http');
-  const json = (rs, code, data) => { rs.writeHead(code, { 'content-type': 'application/json' }); rs.end(JSON.stringify(data)); };
+  const { createHash } = await import('node:crypto');
+  const fallos = new Map();
   const server = createServer((rq, rs) => {
-    const m = /^\/repos\/([^/]+)\/([^/?]+)(\/[^?]*)?/.exec(rq.url ?? '');
-    if (!m || m[1] !== 'afinia-pruebas' || m[2].startsWith('inexistente')) return json(rs, 404, { message: 'Not Found' });
+    const url = rq.url ?? '';
+    githubSimuladoLog.push({ url, ifNoneMatch: rq.headers['if-none-match'] ?? null });
+    const json = (code, data, extra = {}) => {
+      const cuerpo = JSON.stringify(data);
+      const etag = `"${createHash('sha1').update(cuerpo).digest('hex')}"`;
+      if (code === 200 && rq.headers['if-none-match'] === etag) {
+        rs.writeHead(304, { etag });
+        return rs.end();
+      }
+      rs.writeHead(code, { 'content-type': 'application/json', ...(code === 200 ? { etag } : {}), ...extra });
+      rs.end(cuerpo);
+    };
+    const m = /^\/repos\/([^/]+)\/([^/?]+)(\/[^?]*)?/.exec(url);
+    if (!m || m[1] !== 'afinia-pruebas' || m[2].startsWith('inexistente')) return json(404, { message: 'Not Found' });
     const [, owner, name, resto] = m;
-    if (!resto || resto === '/') {
-      return json(rs, 200, {
-        name, owner: { login: owner }, default_branch: 'main', private: name.startsWith('privado'),
-        updated_at: new Date().toISOString(), stargazers_count: 3,
+    if (name.startsWith('cuota-')) {
+      return json(403, { message: 'API rate limit exceeded' }, {
+        'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.ceil(Date.now() / 1000) + 2),
       });
     }
-    if (resto === '/languages') return json(rs, 200, { TypeScript: 52000, JavaScript: 3000, CSS: 1200 });
-    if (resto.startsWith('/contents')) {
-      return json(rs, 200, [
-        { name: 'package.json', type: 'file' }, { name: 'README.md', type: 'file' }, { name: 'Dockerfile', type: 'file' },
-      ]);
+    if (name.startsWith('inestable-')) {
+      const n = (fallos.get(url) ?? 0) + 1;
+      fallos.set(url, n);
+      if (n <= 2) { rs.writeHead(500); return rs.end(); }
     }
-    return json(rs, 404, { message: 'Not Found' });
+    const repo = contenidoSimulado(name);
+    if (!resto || resto === '/') {
+      return json(200, {
+        name, owner: { login: owner }, default_branch: 'main', private: name.startsWith('privado'),
+        updated_at: '2026-09-01T10:00:00Z', pushed_at: '2026-09-30T18:00:00Z', stargazers_count: 3,
+      });
+    }
+    if (resto === '/languages') return json(200, repo.languages);
+    if (resto === '/contents/' || resto === '/contents') {
+      return json(200, Object.entries(repo.files).map(([f, t]) => ({ name: f, type: 'file', size: Buffer.byteLength(t) })));
+    }
+    const fichero = /^\/contents\/(.+)$/.exec(resto);
+    if (fichero) {
+      const nombre = decodeURIComponent(fichero[1]);
+      const texto = repo.files[nombre];
+      if (texto === undefined) return json(404, { message: 'Not Found' });
+      return json(200, { name: nombre, encoding: 'base64', size: Buffer.byteLength(texto), content: Buffer.from(texto, 'utf8').toString('base64') });
+    }
+    return json(404, { message: 'Not Found' });
   });
   await new Promise((resolve) => {
     server.once('error', (e) => {

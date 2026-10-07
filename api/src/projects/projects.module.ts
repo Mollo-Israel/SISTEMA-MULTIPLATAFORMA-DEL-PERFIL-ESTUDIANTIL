@@ -13,6 +13,7 @@ import {
 } from '../entities/project-check.entity';
 import { Skill } from '../entities/skill.entity';
 import { ProjectArea, ProjectSkill } from '../entities/project-area.entity';
+import { GithubApiCache } from '../entities/github-api-cache.entity';
 import { Team, TeamMember } from '../entities/collaboration.entity';
 import { StorageModule } from '../storage/storage.module';
 import { ProjectEventsService } from './project-events.service';
@@ -52,6 +53,7 @@ import { ProjectsController } from './projects.controller';
       ProjectSkill,
       Team,
       TeamMember,
+      GithubApiCache,
     ]),
     TrajectoryModule,
     AccessModule,

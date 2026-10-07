@@ -17,7 +17,7 @@ import { createServer } from 'node:http';
 import QRCode from 'qrcode';
 import {
   API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, loginAdmin, provisionAndActivate,
-  repoDePrueba, req,
+  githubSimuladoLog, repoDePrueba, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -1104,7 +1104,117 @@ async function batch10(ctx) {
   check(vincularAjeno.status === 400 && vincularAjeno.data?.fields?.teamId, 'V3.10.28 §21.1 Solo se vincula un equipo del que se forma parte', `status ${vincularAjeno.status}`);
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
+// ===========================================================================
+//  BATCH 11 — GitHub: manifiestos, mapeo determinista, caché y demo (§24, §25, §26)
+// ===========================================================================
+async function batch11(ctx) {
+  objective('BATCH 11 · Dependencias leídas de los manifiestos, ETag, cuota, reintentos y demo');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Gael', lastName: 'Repositorio', email: correoEst('b11'), role: 'STUDENT', semester: 6,
+  });
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const areaBase = areas[0];
+  const catalogo = async () => (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const skill = async (nombre) => {
+    const ya = (await catalogo()).find((s) => s.name.toLowerCase() === nombre.toLowerCase() && s.academicAreaId);
+    if (ya) return ya;
+    let creada = await req('POST', '/skills', { token: ctx.admin, body: { name: nombre, academicAreaId: areaBase.id } });
+    // §9.3: el catálogo sabe a qué área pertenece; se usa la que sugiere.
+    const sugerida = creada.data?.details?.suggestedAreaIds?.[0];
+    if (!creada.data?.id && sugerida) {
+      creada = await req('POST', '/skills', { token: ctx.admin, body: { name: nombre, academicAreaId: sugerida } });
+    }
+    return creada.data?.id ? creada.data : (await catalogo()).find((s) => s.name.toLowerCase() === nombre.toLowerCase());
+  };
+  const s = {};
+  for (const n of ['React', 'NestJS', 'PostgreSQL', 'Redis', 'TypeScript', 'FastAPI']) s[n] = await skill(n);
+  const proyecto = async (titulo, skills, repo, extra = {}) => req('POST', '/projects', {
+    token: est.token,
+    body: {
+      title: `${titulo} ${TS}`,
+      areaIds: [...new Set(skills.map((x) => x.academicAreaId))],
+      skillIds: skills.map((x) => x.id),
+      repositoryUrl: repoDePrueba(repo),
+      status: 'draft',
+      ...extra,
+    },
+  });
+  const checks = async (id) => (await req('GET', `/projects/${id}/checks`, { token: est.token })).data;
+  const senal = (c, nombre) => (c?.repository?.technologySignals ?? []).find((t) => t.name.toLowerCase() === nombre.toLowerCase());
+
+  // ----- §24.3 Manifiestos de Node y docker-compose
+  const stackRepo = `stack-${TS}`;
+  const p1 = await proyecto('Tablero académico', [s.React, s.NestJS, s.PostgreSQL, s.Redis, s.TypeScript], stackRepo);
+  const c1 = await checks(p1.data.id);
+  check(c1?.repository?.status === 'available' && (c1?.repository?.metadata?.manifests ?? []).includes('package.json')
+    && (c1?.repository?.metadata?.manifests ?? []).includes('docker-compose.yml'),
+  'V3.11.1 §24.1 Repositorio público, con su raíz y manifiestos controlados', json(c1?.repository?.metadata?.manifests));
+  check(senal(c1, 'React')?.status === 'both' && /package\.json \(react\)/.test(senal(c1, 'React')?.source ?? ''),
+    'V3.11.2 §24.3 package.json contiene «react» → React corroborada, con su origen', json(senal(c1, 'React')));
+  check(senal(c1, 'NestJS')?.status === 'both' && /@nestjs\/core/.test(senal(c1, 'NestJS')?.source ?? ''),
+    'V3.11.3 §24.3 «@nestjs/core» → NestJS', json(senal(c1, 'NestJS')));
+  check(senal(c1, 'PostgreSQL')?.status === 'both', 'V3.11.4 §24.3 «pg» → señal de PostgreSQL', json(senal(c1, 'PostgreSQL')));
+  const deps = c1?.repository?.metadata?.dependencySignals ?? [];
+  check(deps.some((d) => d.technology === 'PostgreSQL' && d.file === 'docker-compose.yml' && /postgres/.test(d.evidence)),
+    'V3.11.5 §24.3 docker-compose con servicio postgres → señal adicional de PostgreSQL', json(deps.filter((d) => d.file === 'docker-compose.yml')));
+  check(senal(c1, 'Redis')?.status === 'declared', 'V3.11.6 §29 Redis sin rastro queda DECLARADA, no falsa', json(senal(c1, 'Redis')));
+  check(senal(c1, 'Docker')?.status === 'detected', 'V3.11.7 §24.4 Lo encontrado y no declarado se informa sin añadirlo', json(senal(c1, 'Docker')));
+  check(!!c1?.repository?.metadata?.pushedAt && c1?.repository?.metadata?.readmePresence === true,
+    'V3.11.8 §24.1 Último push y README', json({ p: c1?.repository?.metadata?.pushedAt }));
+
+  // ----- Python
+  const p2 = await proyecto('API de inscripciones', [s.FastAPI, s.PostgreSQL], `py-${TS}`);
+  const c2 = await checks(p2.data.id);
+  check(senal(c2, 'FastAPI')?.status === 'both' && senal(c2, 'PostgreSQL')?.status === 'both',
+    'V3.11.9 §24.3 requirements.txt: «fastapi» → FastAPI y «psycopg2-binary» → PostgreSQL', json([senal(c2, 'FastAPI'), senal(c2, 'PostgreSQL')]));
+
+  // ----- §24.6 Caché y ETag
+  const base = `/repos/afinia-pruebas/${stackRepo}`;
+  const antes = githubSimuladoLog.filter((r) => r.url === base).length;
+  const p3 = await proyecto('Mismo repositorio', [s.React], stackRepo);
+  const despues = githubSimuladoLog.filter((r) => r.url === base).length;
+  check(p3.status === 201 && despues === antes, 'V3.11.10 §24.6 Dentro del plazo, la respuesta guardada evita volver a preguntar', `${antes} → ${despues}`);
+  const recheck = await req('POST', `/projects/${p1.data.id}/checks/recheck`, { token: est.token });
+  const ultimas = githubSimuladoLog.filter((r) => r.url === base);
+  check(recheck.status === 200 || recheck.status === 201, 'V3.11.11 El responsable pide volver a comprobar', `status ${recheck.status}`);
+  check(ultimas.length > despues && !!ultimas[ultimas.length - 1].ifNoneMatch,
+    'V3.11.12 §24.6 Al volver a preguntar se manda el ETag (If-None-Match)', json(ultimas.slice(-1)));
+  check(recheck.data?.repository?.metadata?.fromCache === true && senal(recheck.data, 'React')?.status === 'both',
+    'V3.11.13 §24.6 Sin cambios (304), se reutiliza lo guardado sin gastar cuota', json({ c: recheck.data?.repository?.metadata?.fromCache }));
+
+  // ----- Cuota agotada y reintentos
+  const p4 = await proyecto('Sin cuota', [s.React], `cuota-${TS}`);
+  const c4 = await checks(p4.data.id);
+  const r4 = (await req('GET', `/projects/${p4.data.id}/readiness`, { token: est.token })).data;
+  check(c4?.repository?.status === 'unverified' && !(r4?.missing ?? []).some((m) => m.code.startsWith('repository')) && (r4?.warnings ?? []).length > 0,
+    'V3.11.14 §24.6 Cuota agotada: queda «sin comprobar», avisa y no bloquea', json({ s: c4?.repository?.status, w: r4?.warnings }));
+  // El reinicio de la cuota simulada llega en ≤3 s (segundos enteros, redondeados hacia arriba).
+  await new Promise((r) => setTimeout(r, 3600));
+  const p5 = await proyecto('Proveedor inestable', [s.React], `inestable-${TS}`);
+  const c5 = await checks(p5.data.id);
+  check(c5?.repository?.status === 'available', 'V3.11.15 §24.6 Un fallo pasajero se reintenta y se recupera', json(c5?.repository?.status));
+
+  // ----- §26 Demo sin crawler
+  const demo = createServer((rq, rs) => {
+    rs.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    rs.end('<html><head><title>Tablero en vivo</title><meta property="og:description" content="Panel de seguimiento de tutorías"><meta property="og:site_name" content="Tutorías"></head><body>ok</body></html>');
+  });
+  await new Promise((r) => demo.listen(3997, '127.0.0.1', r));
+  try {
+    const p6 = await proyecto('Con demo', [s.React], stackRepo, { demoUrl: 'http://verificador.afinia-pruebas.org:3997/demo' });
+    const c6 = await checks(p6.data.id);
+    check(c6?.demo?.status === 'available' && c6?.demo?.title === 'Tablero en vivo' && c6?.demo?.isHttps === false
+      && c6?.demo?.metadata?.description === 'Panel de seguimiento de tutorías',
+    'V3.11.16 §26 Demo: accesible, título, HTTPS y metadata pública', json(c6?.demo));
+    check(!JSON.stringify(c6?.demo ?? {}).match(/nestjs|postgres/i),
+      'V3.11.17 §26 De una demo no se deduce backend ni base de datos');
+  } finally {
+    demo.close();
+  }
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

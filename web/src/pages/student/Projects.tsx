@@ -26,6 +26,7 @@ import {
 } from '../../services';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import ProjectReadiness from '../../components/ProjectReadiness';
+import ProjectTechnicalCheck from '../../components/ProjectTechnicalCheck';
 import { useAuth } from '../../auth/AuthContext';
 import ProjectContribution from '../../components/ProjectContribution';
 import AiAssist from '../../components/AiAssist';
@@ -93,6 +94,7 @@ export default function StudentProjectsPage() {
   const [openFeedback, setOpenFeedback] = useState<string | null>(null);
   const [openContribution, setOpenContribution] = useState<string | null>(null);
   const [openTimeline, setOpenTimeline] = useState<string | null>(null);
+  const [openCheck, setOpenCheck] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<Record<string, ProjectEventItem[]>>({});
   const { user } = useAuth();
 
@@ -484,6 +486,25 @@ export default function StudentProjectsPage() {
                       isOwner={p.isOwner === true}
                       onChanged={load}
                     />
+                  </div>
+                )}
+              </div>
+
+              {/* V3 §25: de dónde sale cada señal técnica. */}
+              <div className="mt feedback-block">
+                <button
+                  type="button"
+                  className="feedback-toggle"
+                  onClick={() => setOpenCheck(openCheck === p.id ? null : p.id)}
+                  aria-expanded={openCheck === p.id}
+                >
+                  {openCheck === p.id ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                  <FiGithub size={14} />
+                  <span>Validación técnica</span>
+                </button>
+                {openCheck === p.id && (
+                  <div className="feedback-list">
+                    <ProjectTechnicalCheck projectId={p.id} canRecheck={p.isOwner === true} />
                   </div>
                 )}
               </div>

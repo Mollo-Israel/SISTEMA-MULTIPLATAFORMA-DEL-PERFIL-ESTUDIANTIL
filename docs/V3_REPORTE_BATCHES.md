@@ -383,3 +383,37 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Resultados:** unitarias 74/74; `e2e-v3` 166 (B10 28/28). Regresión completa: **1592 correctas, 0 fallos** (20 suites). La API de pruebas se arranca además con `GITHUB_API_BASE_URL=http://127.0.0.1:3996`.
 
 **Pendientes:** lectura del contenido de manifiestos, caché con ETag y reintentos (B11); catálogo de roles y bloqueo por confirmaciones con notificación (B12); regla de CORROBORATED del proyecto y estado por skill (B13); exclusión de borradores en afinidad (B14).
+
+---
+
+## BATCH 11 — GitHub y demo
+
+**ESTADO:** completo
+
+**Objetivo:** leer los manifiestos controlados y mapear dependencias a tecnologías de forma determinista, con caché, ETag, respeto de la cuota y reintentos; demo comprobada sin crawler (§24, §25, §26).
+
+**Hallazgos iniciales:**
+- Solo se detectaba la presencia de un manifiesto (`package.json` → «JavaScript»), sin leer dependencias; faltaban los lockfiles y `docker-compose`.
+- Cada comprobación volvía a consultar GitHub: sin caché, sin ETag, sin reintentos; un fallo de red marcaba el repositorio como no disponible.
+- La interfaz no explicaba de dónde salía cada señal.
+
+**Cambios:**
+- **Lectura de manifiestos (§24.3):** del listado de la raíz («tree limitado») se leen solo `package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `requirements.txt`, `pyproject.toml`, `pom.xml`, `build.gradle`, `Dockerfile` y `docker-compose`, con tope de 1 MB. Reglas puras en `dependency-map.ts`: npm (react, @nestjs/core, pg, mongoose…), PyPI (fastapi, django, psycopg2…), JVM (spring-boot…), imágenes de compose (postgres, redis, mongo…) e imagen base del Dockerfile. De los lockfiles solo cuentan las dependencias directas, no las transitivas. Nada se clona, instala ni ejecuta (§25).
+- **Cruce (§24.4, §29):** cada tecnología declarada queda corroborada (con su origen: `package.json (react)`, `docker-compose.yml (image: postgres:16)`, `languages`) o «Declarada» si no hay rastro, sin marcarla falsa ni restar. Lo encontrado y no declarado se informa sin añadirlo. Se cruza con las tecnologías del catálogo del proyecto (B10).
+- **Resiliencia (§24.6):** tabla `github_api_cache` con ETag. Dentro de `GITHUB_CACHE_TTL_SECONDS` (600) no se pregunta; después se pregunta con `If-None-Match` (un 304 no gasta cuota). Si GitHub informa de cuota agotada, no se insiste hasta la hora de reinicio y se usa lo último guardado. 5xx y fallos de red se reintentan dos veces (300 y 900 ms). Si aun así no responde, queda «sin comprobar», que no bloquea la activación (B10). «Volver a comprobar» salta el plazo, pero sigue mandando el ETag. `GITHUB_TOKEN` sigue siendo opcional.
+- **Metadata (§24.1):** último push, README, manifiestos, señales de dependencias y si vino de la caché.
+- **Demo (§26):** además de accesibilidad, redirecciones seguras, HTTPS, estado y título, se guarda la metadata pública (descripción, nombre del sitio, URL final). No se infiere backend ni base de datos.
+- **Web:** sección «Validación técnica» en cada proyecto: estado del repositorio, lenguajes, último cambio, cada tecnología con su estado y origen, la demo, el aviso de que «detectado» no es dominio, y «Volver a comprobar» para el responsable.
+- **GitHub simulado (pruebas):** repositorios con contenido (Node con compose, Python), ETag/304, cuota agotada con reinicio corto, y uno inestable que falla dos veces antes de responder. Registra las peticiones para verificar el uso de la caché.
+
+**Migraciones:** `1780540000000-V3GithubCache` (`github_api_cache`; `project_link_checks.metadata`). `up` → `down` → `up` probado; no transforma datos.
+
+**Pruebas ejecutadas:** unitarias del mapeo (79/79); `e2e-v3 batch11` (V3.11.1–V3.11.17); regresión completa.
+
+**Decisiones:** SBOM y grafo de dependencias quedan fuera del núcleo (§24.7). `yarn.lock` no distingue dependencias directas: solo se informa el gestor.
+
+**Riesgos:** ninguno nuevo.
+
+**Resultados:** unitarias 79/79; `e2e-v3` 183 (B11 17/17). Regresión completa: 1608 correctas y 1 fallo en V3.11.15 por tiempo de la prueba (esperaba 2,6 s y el reinicio simulado de la cuota puede llegar a 3 s); corregida la espera a 3,6 s y repetida dos veces sin fallos. Total efectivo **1609/0**.
+
+**Pendientes:** estado por skill con CORROBORATED_BY_ACADEMIC_REVIEW y regla de CORROBORATED del proyecto (B13).

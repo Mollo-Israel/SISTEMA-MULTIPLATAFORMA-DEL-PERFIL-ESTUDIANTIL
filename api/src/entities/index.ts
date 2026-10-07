@@ -14,6 +14,7 @@ export * from './activity-registration.entity';
 export * from './external-certificate.entity';
 export * from './external-opportunity-validation-reference.entity';
 export * from './project-area.entity';
+export * from './github-api-cache.entity';
 export * from './internal-constancy.entity';
 export * from './affinity-result.entity';
 export * from './teacher-semester-access.entity';

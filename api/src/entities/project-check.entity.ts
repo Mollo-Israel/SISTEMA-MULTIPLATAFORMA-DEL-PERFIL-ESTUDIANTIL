@@ -20,10 +20,19 @@ export interface RepositoryMetadata {
   /** Lenguajes que reporta el proveedor, de mayor a menor peso. */
   languages: string[];
   updatedAt: string | null;
+  /** V3 §24.1: último push. */
+  pushedAt?: string | null;
   readmePresence: boolean;
-  /** Ficheros de manifiesto encontrados, sin su contenido. */
+  /** Ficheros de manifiesto encontrados en la raíz. */
   manifests: string[];
+  /**
+   * V3 §24.3: tecnologías candidatas leídas de los manifiestos, con el
+   * fichero y la dependencia que las delató.
+   */
+  dependencySignals?: { technology: string; file: string; evidence: string }[];
   stars: number | null;
+  /** V3 §24.6: la respuesta vino de la caché (fresca o confirmada con 304). */
+  fromCache?: boolean;
   /** Motivo por el que no se pudo consultar, si lo hubo. */
   error: string | null;
 }
@@ -118,6 +127,14 @@ export class ProjectLinkCheck {
 
   @Column({ name: 'blocked_reason', type: 'varchar', length: 200, nullable: true })
   blockedReason: string | null;
+
+  /**
+   * V3 §26: metadata pública mínima de la página (descripción, nombre del
+   * sitio, adónde llevó). Prueba que hay un despliegue accesible; nunca se
+   * deduce de aquí el backend ni la base de datos.
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: { description: string | null; siteName: string | null; finalUrl: string | null } | null;
 
   @Column({ name: 'checked_at', type: 'timestamptz', default: () => 'now()' })
   checkedAt: Date;
