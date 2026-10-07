@@ -1,3 +1,4 @@
+import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
 import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import {
@@ -166,6 +167,8 @@ export default function StudentProjectsPage() {
   // cumple los requisitos (§22), desde la tarjeta del proyecto.
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     setCreating(true);
     try {
       await projectService.create({
@@ -251,7 +254,7 @@ export default function StudentProjectsPage() {
       />
 
       <Card title="Nuevo proyecto">
-        <form onSubmit={create}>
+        <form noValidate onSubmit={create}>
           <div className="row">
             <div className="field">
               <label htmlFor="pr-titulo">Título</label>

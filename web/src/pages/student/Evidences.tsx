@@ -1,3 +1,4 @@
+import { validarFormulario } from '../../components/form';
 import { useEffect, useRef, useState } from 'react';
 import {
   FiUpload, FiLink, FiFile, FiTrash2, FiExternalLink, FiAward, FiSearch,
@@ -445,8 +446,8 @@ function FilePicker({
 
   return (
     <div className="field">
-      <label>{label}</label>
-      <input ref={inputRef} type="file" accept={ACCEPT} onChange={pick} disabled={busy} />
+      <label htmlFor="evidences-campo">{label}</label>
+      <input id="evidences-campo" ref={inputRef} type="file" accept={ACCEPT} onChange={pick} disabled={busy} />
       <span className="muted" style={{ fontSize: '0.76rem' }}>
         PDF, PNG, JPG o WEBP · máximo {MAX_MB} MB
       </span>
@@ -496,6 +497,8 @@ function EvidenceForm({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     if (type === 'file' && !file) {
       onError('Selecciona un archivo antes de guardar la evidencia.');
       return;
@@ -526,7 +529,7 @@ function EvidenceForm({
 
   return (
     <Card title="Registrar evidencia">
-      <form onSubmit={submit}>
+      <form noValidate onSubmit={submit}>
         <div className="type-toggle">
           <button
             type="button"
@@ -545,8 +548,8 @@ function EvidenceForm({
         </div>
 
         <div className="field">
-          <label>Descripción</label>
-          <input
+          <label htmlFor="evidences-descripcion">Descripción</label>
+          <input id="evidences-descripcion"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Certificado de asistencia al taller"
@@ -556,8 +559,8 @@ function EvidenceForm({
 
         {type === 'link' ? (
           <div className="field">
-            <label>Enlace</label>
-            <input
+            <label htmlFor="evidences-enlace">Enlace</label>
+            <input id="evidences-enlace"
               type="url"
               value={externalUrl}
               onChange={(e) => setExternalUrl(e.target.value)}
@@ -576,8 +579,8 @@ function EvidenceForm({
 
         <div className="row">
           <div className="field">
-            <label>Área académica</label>
-            <select value={academicAreaId} onChange={(e) => setAcademicAreaId(e.target.value)}>
+            <label htmlFor="evidences-area-academica">Área académica</label>
+            <select id="evidences-area-academica" value={academicAreaId} onChange={(e) => setAcademicAreaId(e.target.value)}>
               <option value="">Ninguna</option>
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -687,7 +690,7 @@ function CertificateForm({
 
   return (
     <Card title="Adjuntar credencial externa">
-      <form onSubmit={submit}>
+      <form noValidate onSubmit={submit}>
         <div className="field">
           <label htmlFor="cert-origen">¿De dónde viene?</label>
           <select id="cert-origen" value={activityId} onChange={(e) => elegirOportunidad(e.target.value)}>
@@ -728,8 +731,8 @@ function CertificateForm({
         </div>
         <div className="row">
           <div className="field">
-            <label>Fecha de emisión</label>
-            <input
+            <label htmlFor="evidences-fecha-de-emision">Fecha de emisión</label>
+            <input id="evidences-fecha-de-emision"
               type="date"
               value={form.issueDate}
               max={new Date().toISOString().slice(0, 10)}
@@ -737,8 +740,8 @@ function CertificateForm({
             />
           </div>
           <div className="field">
-            <label>Área académica</label>
-            <select
+            <label htmlFor="evidences-area-academica-2">Área académica</label>
+            <select id="evidences-area-academica-2"
               value={form.academicAreaId}
               onChange={(e) => setForm({ ...form, academicAreaId: e.target.value })}
             >
@@ -752,8 +755,8 @@ function CertificateForm({
           </div>
         </div>
         <div className="field">
-          <label>Descripción</label>
-          <input
+          <label htmlFor="evidences-descripcion-2">Descripción</label>
+          <input id="evidences-descripcion-2"
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="Curso de 40 horas con evaluación final"
@@ -762,8 +765,8 @@ function CertificateForm({
         </div>
         <div className="row">
           <div className="field">
-            <label>Enlace de verificación (opcional)</label>
-            <input
+            <label htmlFor="evidences-enlace-de-verificacion-opcional">Enlace de verificación (opcional)</label>
+            <input id="evidences-enlace-de-verificacion-opcional"
               type="url"
               value={form.certificateUrl}
               onChange={(e) => setForm({ ...form, certificateUrl: e.target.value })}
@@ -775,8 +778,8 @@ function CertificateForm({
             </span>
           </div>
           <div className="field">
-            <label>Código de credencial (opcional)</label>
-            <input
+            <label htmlFor="evidences-codigo-de-credencial-opcional">Código de credencial (opcional)</label>
+            <input id="evidences-codigo-de-credencial-opcional"
               value={form.credentialId}
               onChange={(e) => setForm({ ...form, credentialId: e.target.value })}
               placeholder="AF-2026-00417"

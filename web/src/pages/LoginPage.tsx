@@ -114,8 +114,8 @@ export default function LoginPage() {
 
           <form onSubmit={submit} noValidate>
             <div className="li-field">
-              <label>Correo institucional</label>
-              <div className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
+              <span className="field-label" id="login-page-correo-institucional">Correo institucional</span>
+              <div role="group" aria-labelledby="login-page-correo-institucional" className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
                 <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="nombre.apellido@univalle.edu" maxLength={160} autoComplete="username" />
                 <span className="ic"><FiMail /></span>
               </div>
@@ -123,8 +123,8 @@ export default function LoginPage() {
             </div>
 
             <div className="li-field">
-              <label>Contraseña</label>
-              <div className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
+              <span className="field-label" id="login-page-contrasena">Contraseña</span>
+              <div role="group" aria-labelledby="login-page-contrasena" className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
                 <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="••••••••" maxLength={128} autoComplete="current-password" />
                 <span className="ic"><FiLock /></span>
                 <button type="button" className="li-eye" onClick={() => setShowPwd((s) => !s)} aria-label="Mostrar u ocultar contraseña">

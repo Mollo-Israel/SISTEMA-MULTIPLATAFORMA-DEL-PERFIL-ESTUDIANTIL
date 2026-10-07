@@ -61,16 +61,16 @@ export default function TeacherActivitiesPage() {
             placeholder="Buscar por título, lugar o área…"
           />
           <div className="field">
-            <label>Tipo</label>
-            <select value={type} onChange={(e) => setType(e.target.value)}>
+            <label htmlFor="activities-tipo">Tipo</label>
+            <select id="activities-tipo" value={type} onChange={(e) => setType(e.target.value)}>
               <option value="">Todos</option>
               <option value="academica">Académica</option>
               <option value="extracurricular">Extracurricular</option>
             </select>
           </div>
           <div className="field">
-            <label>Categoría</label>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <label htmlFor="activities-categoria">Categoría</label>
+            <select id="activities-categoria" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               <option value="">Todas</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>

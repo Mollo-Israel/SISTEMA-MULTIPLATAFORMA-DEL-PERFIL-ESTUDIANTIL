@@ -21,6 +21,9 @@ const LEVEL_COLOR: Record<string, string> = {
 const BORDO = '#6b1220';
 const ROSE = '#d24b60';
 
+/** El nivel se muestra en español (V3 §68: sin términos internos). */
+const NIVEL_ES: Record<string, string> = { high: 'alto', medium: 'medio', low: 'bajo' };
+
 export function AffinityBars({ data }: { data: { area: string; score: number; level: string }[] }) {
   const animar = useContext(PrimeraVisita);
   if (!data.length) return <p className="muted">Sin datos de afinidad.</p>;
@@ -29,7 +32,7 @@ export function AffinityBars({ data }: { data: { area: string; score: number; le
       <BarChart data={data} layout="vertical" margin={{ left: 10, right: 20, top: 4, bottom: 4 }}>
         <XAxis type="number" tick={{ fontSize: 12 }} />
         <YAxis type="category" dataKey="area" width={140} tick={{ fontSize: 12 }} />
-        <Tooltip cursor={{ fill: 'rgba(107,18,32,0.05)' }} formatter={(v: number, _n, p: any) => [`${v} · ${p?.payload?.level}`, 'Puntaje']} />
+        <Tooltip cursor={{ fill: 'rgba(107,18,32,0.05)' }} formatter={(v: number, _n, p: any) => [`${v} · nivel ${NIVEL_ES[p?.payload?.level] ?? p?.payload?.level ?? ''}`, 'Afinidad']} />
         <Bar isAnimationActive={animar} dataKey="score" radius={[0, 6, 6, 0]} barSize={20}>
           {data.map((d, i) => (
             <Cell key={i} fill={LEVEL_COLOR[d.level] ?? BORDO} />

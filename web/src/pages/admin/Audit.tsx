@@ -47,6 +47,7 @@ export default function AdminAuditPage() {
         title="Eventos"
         actions={
           <form
+            noValidate
             className="flex"
             style={{ gap: '0.5rem', flexWrap: 'wrap' }}
             onSubmit={(e) => {

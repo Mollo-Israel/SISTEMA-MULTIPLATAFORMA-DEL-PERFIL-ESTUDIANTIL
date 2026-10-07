@@ -1,3 +1,4 @@
+import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
 import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import { useSearchParams } from 'react-router-dom';
@@ -174,6 +175,7 @@ function SobreMiTab({ profile, onSaved }: { profile: StudentProfile | null; onSa
   if (!profile) return <SinPerfil />;
   return (
     <form
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
         // §17.1: ni semestre ni código universitario: son institucionales.
@@ -271,6 +273,8 @@ function DisponibilidadTab({
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     const horas = form.hoursPerWeek ? Number(form.hoursPerWeek) : null;
     if (horas !== null && (!Number.isInteger(horas) || horas < 1 || horas > 40)) {
       setErrorHoras('Las horas por semana van de 1 a 40.');
@@ -292,11 +296,11 @@ function DisponibilidadTab({
   };
 
   return (
-    <form onSubmit={save}>
+    <form noValidate onSubmit={save}>
       <Card title="Cómo te gusta trabajar">
         <div className="field">
-          <label>¿Buscas con quién trabajar?</label>
-          <div className="chip-row">
+          <span className="field-label" id="profile-buscas-con-quien-trabajar">¿Buscas con quién trabajar?</span>
+          <div role="group" aria-labelledby="profile-buscas-con-quien-trabajar" className="chip-row">
             {AVAILABILITIES.map((a) => (
               <button
                 type="button"
@@ -312,8 +316,8 @@ function DisponibilidadTab({
         </div>
         <div className="row">
           <div className="field">
-            <label>Modo de trabajo</label>
-            <div className="chip-row">
+            <span className="field-label" id="profile-modo-de-trabajo">Modo de trabajo</span>
+            <div role="group" aria-labelledby="profile-modo-de-trabajo" className="chip-row">
               {MODES.map((m) => (
                 <button
                   type="button"
@@ -344,8 +348,8 @@ function DisponibilidadTab({
           </div>
         </div>
         <div className="field">
-          <label>Qué te interesa hacer</label>
-          <div className="chip-row">
+          <span className="field-label" id="profile-que-te-interesa-hacer">Qué te interesa hacer</span>
+          <div role="group" aria-labelledby="profile-que-te-interesa-hacer" className="chip-row">
             {COLLAB_INTERESTS.map((i) => (
               <button
                 type="button"

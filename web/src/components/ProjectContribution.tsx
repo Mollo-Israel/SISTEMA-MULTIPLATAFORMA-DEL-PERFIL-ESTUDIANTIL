@@ -143,8 +143,8 @@ export default function ProjectContribution({
           )}
 
           <div className="field">
-            <label>Qué hiciste</label>
-            <textarea
+            <label htmlFor="project-contribution-que-hiciste">Qué hiciste</label>
+            <textarea id="project-contribution-que-hiciste"
               value={form.contribution}
               onChange={(e) => setForm({ ...form, contribution: e.target.value })}
               placeholder="Implementé la API de inscripciones y las pruebas del módulo."

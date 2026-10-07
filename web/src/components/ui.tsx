@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { PrimeraVisita } from './primeraVisita';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -318,10 +318,14 @@ export function Modal({
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
+  // V3 B21: la etiqueta queda asociada a su campo (clic y lector de pantalla).
+  const auto = `campo-${useId().replace(/:/g, '')}`;
+  const hijo = isValidElement(children) ? (children as ReactElement<{ id?: string }>) : null;
+  const id = hijo?.props.id ?? auto;
   return (
     <div className="field">
-      <label>{label}</label>
-      {children}
+      <label htmlFor={hijo ? id : undefined}>{label}</label>
+      {hijo ? cloneElement(hijo, { id }) : children}
     </div>
   );
 }
@@ -383,6 +387,7 @@ export function SearchInput({
   placeholder = 'Buscar…',
   delay = 350,
   autoFocus,
+  id,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -390,6 +395,8 @@ export function SearchInput({
   placeholder?: string;
   delay?: number;
   autoFocus?: boolean;
+  /** V3 B21: para asociarlo a una etiqueta visible con htmlFor. */
+  id?: string;
 }) {
   const callback = useRef(onDebouncedChange);
   callback.current = onDebouncedChange;
@@ -405,11 +412,12 @@ export function SearchInput({
       <FiSearch size={15} aria-hidden="true" />
       <input
         type="search"
+        id={id}
         value={value}
         placeholder={placeholder}
         autoFocus={autoFocus}
         onChange={(e) => onChange(e.target.value)}
-        aria-label={placeholder}
+        aria-label={id ? undefined : placeholder}
       />
       {value && (
         <button type="button" onClick={() => onChange('')} aria-label="Limpiar búsqueda">

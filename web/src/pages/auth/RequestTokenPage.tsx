@@ -153,8 +153,8 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
           ) : (
             <form onSubmit={submit} noValidate>
               <div className="li-field">
-                <label>Correo institucional</label>
-                <div className={`li-input-wrap ${error ? 'bad' : ''}`}>
+                <span className="field-label" id="request-token-page-correo-institucional">Correo institucional</span>
+                <div role="group" aria-labelledby="request-token-page-correo-institucional" className={`li-input-wrap ${error ? 'bad' : ''}`}>
                   <input
                     type="email"
                     value={email}

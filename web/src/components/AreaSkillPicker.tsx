@@ -77,7 +77,7 @@ export default function AreaSkillPicker({
   return (
     <div className="area-skill-picker">
       <div className="field">
-        <label>{areaLabel}</label>
+        <span className="field-label">{areaLabel}</span>
         <div className="chip-row" role="group" aria-label={areaLabel}>
           {activas.map((a) => {
             const on = value.areaIds.includes(a.id);
@@ -98,7 +98,7 @@ export default function AreaSkillPicker({
       </div>
 
       <div className="field">
-        <label>{skillLabel}</label>
+        <span className="field-label">{skillLabel}</span>
         {value.areaIds.length === 0 ? (
           <p className="muted small" style={{ margin: 0 }}>
             Elige al menos un área para ver sus habilidades.

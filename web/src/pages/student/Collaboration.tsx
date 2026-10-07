@@ -1,3 +1,4 @@
+import { validarFormulario } from '../../components/form';
 import { useSearchParams } from 'react-router-dom';
 import { useCachedState } from '../../hooks/viewCache';
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -233,6 +234,8 @@ function MisCanales({ toast }: { toast: any }) {
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     const lista = CANALES
       .filter((c) => (valores[c.channel]?.value ?? '').trim())
       .map((c) => ({ channel: c.channel, value: valores[c.channel].value.trim(), isPublic: !!valores[c.channel].isPublic }));
@@ -262,7 +265,7 @@ function MisCanales({ toast }: { toast: any }) {
         Afinia no tiene chat: tus contactos te escriben por el canal que elijas. Todos son opcionales.
         Lo que marques como público aparece también en tu perfil compartible.
       </p>
-      <form onSubmit={guardar}>
+      <form noValidate onSubmit={guardar}>
         {CANALES.map((c) => (
           <div key={c.channel} className="field">
             <label htmlFor={`canal-${c.channel}`}>{c.label}</label>
@@ -345,6 +348,8 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
 
   const solicitar = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     setEnviando(true);
     try {
       await collaborationService.requestContact({
@@ -420,11 +425,11 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
           Escanear un QR te lleva al perfil, pero no establece contacto: eso lo decide la otra
           persona. Pega aquí el identificador que aparece al final de su enlace.
         </p>
-        <form onSubmit={solicitar}>
+        <form noValidate onSubmit={solicitar}>
           <div className="grid-2">
             <div className="field">
-              <label>Identificador del perfil</label>
-              <input
+              <label htmlFor="collaboration-identificador-del-perfil">Identificador del perfil</label>
+              <input id="collaboration-identificador-del-perfil"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
                 placeholder="cdwxx59caf76"
@@ -432,8 +437,8 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
               />
             </div>
             <div className="field">
-              <label>Presentación (opcional)</label>
-              <input
+              <label htmlFor="collaboration-presentacion-opcional">Presentación (opcional)</label>
+              <input id="collaboration-presentacion-opcional"
                 value={mensaje}
                 onChange={(e) => setMensaje(e.target.value)}
                 placeholder="Nos vimos en el taller de redes."
@@ -539,20 +544,20 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
                         <td colSpan={5}>
                           <div className="grid-2">
                             <div className="field">
-                              <label>Alias</label>
-                              <input value={nota.alias} maxLength={60} onChange={(e) => setNota({ ...nota, alias: e.target.value })} placeholder="Ana del lab de redes" />
+                              <label htmlFor="collaboration-alias">Alias</label>
+                              <input id="collaboration-alias" value={nota.alias} maxLength={60} onChange={(e) => setNota({ ...nota, alias: e.target.value })} placeholder="Ana del lab de redes" />
                             </div>
                             <div className="field">
-                              <label>Canal preferido</label>
-                              <select value={nota.preferredChannel} onChange={(e) => setNota({ ...nota, preferredChannel: e.target.value })}>
+                              <label htmlFor="collaboration-canal-preferido">Canal preferido</label>
+                              <select id="collaboration-canal-preferido" value={nota.preferredChannel} onChange={(e) => setNota({ ...nota, preferredChannel: e.target.value })}>
                                 <option value="">Sin preferencia</option>
                                 {c.channels.map((k) => <option key={k.channel} value={k.channel}>{k.label}</option>)}
                               </select>
                             </div>
                           </div>
                           <div className="field">
-                            <label>Contexto</label>
-                            <input value={nota.context} maxLength={300} onChange={(e) => setNota({ ...nota, context: e.target.value })} placeholder="Nos conocimos en el hackatón 2026." />
+                            <label htmlFor="collaboration-contexto">Contexto</label>
+                            <input id="collaboration-contexto" value={nota.context} maxLength={300} onChange={(e) => setNota({ ...nota, context: e.target.value })} placeholder="Nos conocimos en el hackatón 2026." />
                           </div>
                           <div className="flex" style={{ gap: '0.4rem' }}>
                             <Button size="sm" onClick={() => guardarNota(c)}>Guardar nota</Button>
@@ -631,6 +636,8 @@ function Equipos({ toast }: { toast: any }) {
 
   const crear = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     setCreando(true);
     try {
       await collaborationService.createTeamNeed({
@@ -894,7 +901,7 @@ function Equipos({ toast }: { toast: any }) {
           Declara lo que <strong>falta</strong>, no lo que ya tienes: el sistema busca quien
           complemente, no quien repita.
         </p>
-        <form onSubmit={crear}>
+        <form noValidate onSubmit={crear}>
           <div className="field">
             <label htmlFor="necesidad-proposito">Para qué buscas gente</label>
             <input

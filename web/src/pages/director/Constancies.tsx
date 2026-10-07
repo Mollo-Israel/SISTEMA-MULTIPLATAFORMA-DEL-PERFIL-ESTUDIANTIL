@@ -1,3 +1,4 @@
+import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
 import { FiAward, FiCalendar, FiCheck, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
@@ -74,6 +75,8 @@ export default function DirectorConstanciesPage() {
 
   const issue = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     if (!target) return;
     const who = target.studentName ?? 'el estudiante';
     const ok = await confirm({
@@ -136,8 +139,8 @@ export default function DirectorConstanciesPage() {
           />
         ) : (
           <div className="field">
-            <label>Actividad</label>
-            <select value={selected} onChange={(e) => loadActivity(e.target.value)}>
+            <label htmlFor="constancies-actividad">Actividad</label>
+            <select id="constancies-actividad" value={selected} onChange={(e) => loadActivity(e.target.value)}>
               <option value="">Seleccione una actividad…</option>
               {activities.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -237,10 +240,10 @@ export default function DirectorConstanciesPage() {
           {target && (
             <Stagger index={0}>
             <Card title={`Emitir constancia · ${target.studentName ?? 'Estudiante'}`}>
-              <form onSubmit={issue}>
+              <form noValidate onSubmit={issue}>
                 <div className="field">
-                  <label>Texto de la constancia</label>
-                  <textarea
+                  <label htmlFor="constancies-texto-de-la-constancia">Texto de la constancia</label>
+                  <textarea id="constancies-texto-de-la-constancia"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     minLength={5}

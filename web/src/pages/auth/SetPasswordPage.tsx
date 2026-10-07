@@ -262,8 +262,8 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                 {via === 'code' && !tokenUrl && (
                   <>
                     <div className="li-field">
-                      <label>Correo institucional</label>
-                      <div className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
+                      <span className="field-label" id="set-password-page-correo-institucional">Correo institucional</span>
+                      <div role="group" aria-labelledby="set-password-page-correo-institucional" className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
                         <input
                           type="email"
                           value={email}
@@ -276,8 +276,8 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                       <Err name="email" />
                     </div>
                     <div className="li-field">
-                      <label>Código de 6 dígitos</label>
-                      <div className={`li-input-wrap li-code ${errors.code ? 'bad' : ''}`}>
+                      <span className="field-label" id="set-password-page-codigo-de-6-digitos">Código de 6 dígitos</span>
+                      <div role="group" aria-labelledby="set-password-page-codigo-de-6-digitos" className={`li-input-wrap li-code ${errors.code ? 'bad' : ''}`}>
                         <input
                           value={code}
                           onChange={(e) => {
@@ -298,8 +298,8 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
 
                 {via === 'link' && !tokenUrl && (
                   <div className="li-field">
-                    <label>Enlace del correo</label>
-                    <div className={`li-input-wrap ${errors.token ? 'bad' : ''}`}>
+                    <span className="field-label" id="set-password-page-enlace-del-correo">Enlace del correo</span>
+                    <div role="group" aria-labelledby="set-password-page-enlace-del-correo" className={`li-input-wrap ${errors.token ? 'bad' : ''}`}>
                       <input
                         value={token}
                         onChange={(e) => { setToken(e.target.value); limpiar('token'); }}
@@ -314,8 +314,8 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                 )}
 
                 <div className="li-field">
-                  <label>Nueva contraseña</label>
-                  <div className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
+                  <span className="field-label" id="set-password-page-nueva-contrasena">Nueva contraseña</span>
+                  <div role="group" aria-labelledby="set-password-page-nueva-contrasena" className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
                     <input
                       type={showPwd ? 'text' : 'password'}
                       value={password}
@@ -358,8 +358,8 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                 </div>
 
                 <div className="li-field">
-                  <label>Confirmar contraseña</label>
-                  <div className={`li-input-wrap ${errors.confirm ? 'bad' : ''}`}>
+                  <span className="field-label" id="set-password-page-confirmar-contrasena">Confirmar contraseña</span>
+                  <div role="group" aria-labelledby="set-password-page-confirmar-contrasena" className={`li-input-wrap ${errors.confirm ? 'bad' : ''}`}>
                     <input
                       type={showPwd ? 'text' : 'password'}
                       value={confirm}

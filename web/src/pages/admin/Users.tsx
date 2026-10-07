@@ -326,7 +326,9 @@ export default function AdminUsersPage() {
         title="Usuarios registrados"
         actions={
           <form
+            noValidate
             className="flex"
+            style={{ gap: '0.5rem', flexWrap: 'wrap' }}
             onSubmit={(e) => {
               e.preventDefault();
               setApplied(search);

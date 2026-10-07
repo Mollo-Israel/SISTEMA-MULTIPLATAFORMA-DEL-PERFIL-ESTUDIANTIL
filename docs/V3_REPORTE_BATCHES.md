@@ -818,3 +818,48 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Riesgos:** quien tenga marcadores a `/admin` llega ahora al Inicio, y Usuarios está en `/admin/users`. Las demás rutas antiguas redirigen.
 
 **Pendientes:** coherencia transversal de formularios (B21).
+
+---
+
+## BATCH 21 — UX Web transversal
+
+**ESTADO:** completo
+
+**Objetivo:** coherencia transversal de la web (formularios, validación, pantallas angostas y terminología), con errores por campo y sin depender del mensaje nativo del navegador (§67, §68, RNF01).
+
+**Hallazgos iniciales:**
+- 61 etiquetas `<label>` no estaban asociadas a su campo: tocarlas no enfocaba el campo y el lector de pantalla no lo anunciaba por su nombre.
+- 14 formularios dependían del globo nativo del navegador (`required` sin `noValidate`) o mostraban el error solo en un aviso general.
+- Solo había pruebas a 375 px para Estudiante y Docente.
+- El gráfico de afinidad mostraba el nivel en inglés («54 · high»).
+
+**Cambios:**
+- **Etiquetas:** 54 asociadas automáticamente (`htmlFor` + `id` únicos por pantalla) y 5 a mano:
+  - `Field` asocia la etiqueta a su campo con `useId`.
+  - `AreaSkillPicker` y la lista de habilidades de Recursos son grupos con encabezado (`role="group"` + `aria-labelledby`), no etiquetas sueltas.
+  - `SearchInput` acepta `id` para una etiqueta visible.
+- **Validación (§67):** `validarFormulario()` en `components/form.tsx`, en todos los formularios que tenían `required`, que ahora usan `noValidate`.
+  - Deja debajo de cada campo un mensaje específico con el nombre de su etiqueta: «Completa «Título».», «Elige …», enlace o correo inválido, longitud o rango.
+  - Marca `aria-invalid`, enlaza el error con `aria-describedby` y lleva el foco al primer campo con error.
+  - Borra el error en cuanto se corrige.
+  - Los formularios de búsqueda también usan `noValidate`.
+- **Pantallas angostas:** tres errores reales encontrados al medir a 375 px, todos corregidos:
+  - La grilla del fondo de los modales crecía con el texto, y el tutorial de primera visita se salía de la pantalla. Ahora usa `minmax(0, 1fr)`.
+  - La búsqueda de Usuarios desbordaba 52 px. Las acciones de una tarjeta ahora bajan de línea (`.card-header` con `flex-wrap`).
+- **Terminología (§68):** el tooltip de afinidad dice «nivel alto/medio/bajo». No se encontró jerga técnica en textos del estudiante ni un «panel admin» en su navegación.
+
+**Migraciones:** ninguna.
+
+**Pruebas ejecutadas:**
+- `e2e-web`:
+  - WEB.22: las pantallas de Dirección, Sociedad y Administración caben en 375 px y no lanzan errores de JavaScript.
+  - WEB.23: el error aparece debajo del campo, con su nombre, con el foco en él y sin diálogo nativo.
+  - WEB.24: al corregir, el error desaparece.
+  - WEB.25: ninguna etiqueta queda sin asociar en el formulario.
+- Typecheck y regresión completa.
+
+**Resultados:** `e2e-web` 38/38. Regresión completa: **1786 correctas, 0 fallos** (20 suites).
+
+**Riesgos:** los errores que devuelve la API siguen mostrándose en el aviso general, con el mensaje específico del servidor; los del cliente ya van por campo.
+
+**Pendientes:** la app móvil (B22).

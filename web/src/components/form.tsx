@@ -108,3 +108,88 @@ export function useFormErrors<K extends string>(campos: readonly K[]) {
 
   return { errors, setErrors, general, setGeneral, fromApi, clear, reset };
 }
+
+// ===========================================================================
+//  V3 §67 · Validación por campo sin el mensaje nativo del navegador
+// ===========================================================================
+
+type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+/** Nombre del campo tal como lo ve la persona: su etiqueta asociada. */
+function nombreDe(c: Control): string {
+  const etiqueta = c.labels?.[0]?.textContent
+    ?? (c.getAttribute('aria-labelledby') ? document.getElementById(c.getAttribute('aria-labelledby')!)?.textContent : null)
+    ?? c.getAttribute('aria-label')
+    ?? c.getAttribute('placeholder')
+    ?? 'este campo';
+  return etiqueta.replace(/\*/g, '').trim();
+}
+
+/** Un mensaje claro y específico, en lugar del globo del navegador. */
+function mensajeDe(c: Control): string | null {
+  const v = c.validity;
+  if (v.valid) return null;
+  const nombre = nombreDe(c);
+  if (v.valueMissing) {
+    return c instanceof HTMLSelectElement ? `Elige ${nombre.toLowerCase()}.` : `Completa «${nombre}».`;
+  }
+  if (v.typeMismatch && c.type === 'url') return 'Escribe un enlace completo, que empiece con https://.';
+  if (v.typeMismatch && c.type === 'email') return 'Escribe un correo válido, por ejemplo nombre@univalle.edu.';
+  if (v.tooShort) return `«${nombre}» necesita al menos ${(c as HTMLInputElement).minLength} caracteres.`;
+  if (v.tooLong) return `«${nombre}» admite hasta ${(c as HTMLInputElement).maxLength} caracteres.`;
+  if (v.rangeUnderflow) return `«${nombre}» debe ser al menos ${(c as HTMLInputElement).min}.`;
+  if (v.rangeOverflow) return `«${nombre}» no puede pasar de ${(c as HTMLInputElement).max}.`;
+  if (v.badInput || v.stepMismatch) return `Revisa el valor de «${nombre}».`;
+  if (v.patternMismatch) return c.title || `Revisa el formato de «${nombre}».`;
+  return `Revisa «${nombre}».`;
+}
+
+const MARCA = 'data-error-auto';
+
+function limpiar(c: Control) {
+  c.removeAttribute('aria-invalid');
+  c.closest('.field')?.classList.remove('has-error');
+  const previo = c.parentElement?.querySelector(`[${MARCA}="${c.id || c.name}"]`);
+  previo?.remove();
+}
+
+/**
+ * Valida un formulario con `noValidate` y deja el error debajo de cada campo
+ * (V3 §67). Devuelve `true` si se puede enviar. El primer campo con error
+ * recibe el foco, y cada error se borra en cuanto la persona lo corrige.
+ */
+export function validarFormulario(form: HTMLFormElement): boolean {
+  const controles = Array.from(form.elements).filter(
+    (e): e is Control => e instanceof HTMLInputElement || e instanceof HTMLSelectElement || e instanceof HTMLTextAreaElement,
+  );
+  let primero: Control | null = null;
+  for (const c of controles) {
+    limpiar(c);
+    if (c.disabled || c.type === 'hidden') continue;
+    const mensaje = mensajeDe(c);
+    if (!mensaje) continue;
+    primero ??= c;
+    c.setAttribute('aria-invalid', 'true');
+    c.closest('.field')?.classList.add('has-error');
+    const span = document.createElement('span');
+    span.className = 'field-error';
+    span.setAttribute('role', 'alert');
+    span.setAttribute(MARCA, c.id || c.name);
+    span.textContent = mensaje;
+    const id = `${c.id || c.name || 'campo'}-error`;
+    span.id = id;
+    c.setAttribute('aria-describedby', id);
+    c.insertAdjacentElement('afterend', span);
+    const alCorregir = () => {
+      if (!mensajeDe(c)) {
+        limpiar(c);
+        c.removeEventListener('input', alCorregir);
+        c.removeEventListener('change', alCorregir);
+      }
+    };
+    c.addEventListener('input', alCorregir);
+    c.addEventListener('change', alCorregir);
+  }
+  primero?.focus();
+  return primero === null;
+}

@@ -1,3 +1,4 @@
+import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
 import { FiBookOpen, FiExternalLink, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
@@ -82,6 +83,8 @@ export default function DirectorLearningResourcesPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     setSaving(true);
     try {
       const payload = {
@@ -159,11 +162,11 @@ export default function DirectorLearningResourcesPage() {
       />
 
       <Card title={editing ? `Editar “${editing.title}”` : 'Incorporar un recurso'}>
-        <form onSubmit={submit}>
+        <form noValidate onSubmit={submit}>
           <div className="grid-2">
             <div className="field">
-              <label>Título</label>
-              <input
+              <label htmlFor="learning-resources-titulo">Título</label>
+              <input id="learning-resources-titulo"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Curso de fundamentos de redes"
@@ -172,8 +175,8 @@ export default function DirectorLearningResourcesPage() {
               />
             </div>
             <div className="field">
-              <label>Quién lo publica</label>
-              <input
+              <label htmlFor="learning-resources-quien-lo-publica">Quién lo publica</label>
+              <input id="learning-resources-quien-lo-publica"
                 value={form.provider}
                 onChange={(e) => setForm({ ...form, provider: e.target.value })}
                 placeholder="Cisco Networking Academy"
@@ -184,8 +187,8 @@ export default function DirectorLearningResourcesPage() {
           </div>
 
           <div className="field">
-            <label>Enlace</label>
-            <input
+            <label htmlFor="learning-resources-enlace">Enlace</label>
+            <input id="learning-resources-enlace"
               value={form.url}
               onChange={(e) => setForm({ ...form, url: e.target.value })}
               placeholder="https://…"
@@ -196,8 +199,8 @@ export default function DirectorLearningResourcesPage() {
           </div>
 
           <div className="field">
-            <label>Descripción</label>
-            <textarea
+            <label htmlFor="learning-resources-descripcion">Descripción</label>
+            <textarea id="learning-resources-descripcion"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="Qué cubre y para quién es útil."
@@ -207,8 +210,8 @@ export default function DirectorLearningResourcesPage() {
 
           <div className="grid-2">
             <div className="field">
-              <label>Área académica</label>
-              <select
+              <label htmlFor="learning-resources-area-academica">Área académica</label>
+              <select id="learning-resources-area-academica"
                 value={form.academicAreaId}
                 onChange={(e) =>
                   setForm({ ...form, academicAreaId: e.target.value, skillIds: [] })}
@@ -221,8 +224,8 @@ export default function DirectorLearningResourcesPage() {
               </select>
             </div>
             <div className="field">
-              <label>Tipo</label>
-              <select
+              <label htmlFor="learning-resources-tipo">Tipo</label>
+              <select id="learning-resources-tipo"
                 value={form.resourceType}
                 onChange={(e) => setForm({ ...form, resourceType: e.target.value })}
               >
@@ -235,11 +238,11 @@ export default function DirectorLearningResourcesPage() {
           </div>
 
           <div className="field">
-            <label>Habilidades que trabaja</label>
+            <span className="field-label" id="learning-resources-habilidades">Habilidades que trabaja</span>
             <p className="muted" style={{ marginTop: 0, fontSize: '0.78rem' }}>
               Opcional. Permite recomendarlo a quien declaró esa habilidad, y no solo por área.
             </p>
-            <div className="chip-row">
+            <div className="chip-row" role="group" aria-labelledby="learning-resources-habilidades">
               {skillsDelArea.slice(0, 40).map((s) => {
                 const on = form.skillIds.includes(s.id);
                 return (

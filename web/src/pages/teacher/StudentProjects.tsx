@@ -1,3 +1,4 @@
+import { validarFormulario } from '../../components/form';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FiFolder,
@@ -145,6 +146,8 @@ export default function TeacherStudentProjectsPage() {
 
   const submitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     if (!selectedId) return;
     const ok = await confirm({
       title: editingId ? 'Guardar los cambios' : 'Publicar la retroalimentación',
@@ -212,6 +215,7 @@ export default function TeacherStudentProjectsPage() {
       ) : (
         <Card title="Buscar proyectos">
           <form
+            noValidate
             className="filters"
             onSubmit={(e) => {
               e.preventDefault();
@@ -219,8 +223,8 @@ export default function TeacherStudentProjectsPage() {
             }}
           >
             <div className="field">
-              <label>Estado</label>
-              <select
+              <label htmlFor="student-projects-estado">Estado</label>
+              <select id="student-projects-estado"
                 value={filters.status}
                 onChange={(e) => setFilters({ ...filters, status: e.target.value })}
               >
@@ -233,8 +237,8 @@ export default function TeacherStudentProjectsPage() {
               </select>
             </div>
             <div className="field">
-              <label>Área académica</label>
-              <select
+              <label htmlFor="student-projects-area-academica">Área académica</label>
+              <select id="student-projects-area-academica"
                 value={filters.areaId}
                 onChange={(e) => setFilters({ ...filters, areaId: e.target.value })}
               >
@@ -247,8 +251,8 @@ export default function TeacherStudentProjectsPage() {
               </select>
             </div>
             <div className="field">
-              <label>Semestre</label>
-              <select
+              <label htmlFor="student-projects-semestre">Semestre</label>
+              <select id="student-projects-semestre"
                 value={filters.semester}
                 onChange={(e) => setFilters({ ...filters, semester: e.target.value })}
               >
@@ -261,16 +265,17 @@ export default function TeacherStudentProjectsPage() {
               </select>
             </div>
             <div className="field">
-              <label>Tecnología</label>
-              <input
+              <label htmlFor="student-projects-tecnologia">Tecnología</label>
+              <input id="student-projects-tecnologia"
                 value={filters.technology}
                 onChange={(e) => setFilters({ ...filters, technology: e.target.value })}
                 placeholder="React"
               />
             </div>
             <div className="field">
-              <label>Estudiante o título</label>
+              <label htmlFor="student-projects-busqueda">Estudiante o título</label>
               <SearchInput
+                id="student-projects-busqueda"
                 value={filters.search}
                 onChange={(value) => setFilters({ ...filters, search: value })}
                 placeholder="Nombre del estudiante o título…"
@@ -462,10 +467,10 @@ export default function TeacherStudentProjectsPage() {
               oficial. El estudiante y sus integrantes la verán en su portafolio.
             </p>
 
-            <form onSubmit={submitFeedback}>
+            <form noValidate onSubmit={submitFeedback}>
               <div className="field">
-                <label>{editingId ? 'Editar su comentario' : 'Nuevo comentario'}</label>
-                <textarea
+                <label htmlFor="student-projects-campo">{editingId ? 'Editar su comentario' : 'Nuevo comentario'}</label>
+                <textarea id="student-projects-campo"
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   minLength={10}

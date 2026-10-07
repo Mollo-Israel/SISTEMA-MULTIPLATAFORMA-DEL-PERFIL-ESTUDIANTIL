@@ -1,3 +1,4 @@
+import { validarFormulario } from './form';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -159,6 +160,8 @@ export default function ActivityManager({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     setSaving(true);
     const payload: Record<string, unknown> = {
       title: form.title,
@@ -459,9 +462,9 @@ export default function ActivityManager({
             </Button>
           }
         >
-          <form onSubmit={submit}>
+          <form noValidate onSubmit={submit}>
             <div className="field">
-              <label>Origen</label>
+              <span className="field-label" id="activity-manager-origen">Origen</span>
               <div className="li-tabs" role="radiogroup" aria-label="Origen de la oportunidad">
                 {(['internal', 'external'] as const).map((o) => (
                   <button
@@ -485,8 +488,8 @@ export default function ActivityManager({
             </div>
             <div className="row">
               <div className="field">
-                <label>Título</label>
-                <input
+                <label htmlFor="activity-manager-titulo">Título</label>
+                <input id="activity-manager-titulo"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder={
@@ -498,8 +501,8 @@ export default function ActivityManager({
                 />
               </div>
               <div className="field">
-                <label>Categoría</label>
-                <select
+                <label htmlFor="activity-manager-categoria">Categoría</label>
+                <select id="activity-manager-categoria"
                   value={form.categoryId}
                   onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
                   required
@@ -515,8 +518,8 @@ export default function ActivityManager({
             </div>
 
             <div className="field">
-              <label>Descripción</label>
-              <textarea
+              <label htmlFor="activity-manager-descripcion">Descripción</label>
+              <textarea id="activity-manager-descripcion"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="Objetivo de la actividad, a quién está dirigida y qué se espera del participante."
@@ -525,16 +528,16 @@ export default function ActivityManager({
 
             <div className="row">
               <div className="field">
-                <label>Fecha y hora</label>
-                <input
+                <label htmlFor="activity-manager-fecha-y-hora">Fecha y hora</label>
+                <input id="activity-manager-fecha-y-hora"
                   type="datetime-local"
                   value={form.activityDate}
                   onChange={(e) => setForm({ ...form, activityDate: e.target.value })}
                 />
               </div>
               <div className="field">
-                <label>Modalidad</label>
-                <select
+                <label htmlFor="activity-manager-modalidad">Modalidad</label>
+                <select id="activity-manager-modalidad"
                   value={form.modality}
                   onChange={(e) => setForm({ ...form, modality: e.target.value })}
                 >
@@ -677,16 +680,16 @@ export default function ActivityManager({
 
             <div className="row">
               <div className="field">
-                <label>Ubicación</label>
-                <input
+                <label htmlFor="activity-manager-ubicacion">Ubicación</label>
+                <input id="activity-manager-ubicacion"
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
                   placeholder="Aula 301, Bloque B"
                 />
               </div>
               <div className="field">
-                <label>{form.originType === 'external' ? 'Enlace oficial' : 'Enlace externo'}</label>
-                <input
+                <label htmlFor="activity-manager-campo">{form.originType === 'external' ? 'Enlace oficial' : 'Enlace externo'}</label>
+                <input id="activity-manager-campo"
                   type="url"
                   value={form.externalUrl}
                   onChange={(e) => setForm({ ...form, externalUrl: e.target.value })}
@@ -694,8 +697,8 @@ export default function ActivityManager({
                 />
               </div>
               <div className="field">
-                <label>Cupo</label>
-                <input
+                <label htmlFor="activity-manager-cupo">Cupo</label>
+                <input id="activity-manager-cupo"
                   type="number"
                   min={1}
                   max={1000}
@@ -708,8 +711,8 @@ export default function ActivityManager({
 
             <div className="row">
               <div className="field">
-                <label>Etiquetas (separadas por coma)</label>
-                <input
+                <label htmlFor="activity-manager-etiquetas-separadas-por-coma">Etiquetas (separadas por coma)</label>
+                <input id="activity-manager-etiquetas-separadas-por-coma"
                   value={form.tags}
                   onChange={(e) => setForm({ ...form, tags: e.target.value })}
                   placeholder="react, arquitectura, backend"
@@ -732,8 +735,8 @@ export default function ActivityManager({
               </div>
               {!necesitaRevision && (
                 <div className="field">
-                  <label>Estado</label>
-                  <select
+                  <label htmlFor="activity-manager-estado">Estado</label>
+                  <select id="activity-manager-estado"
                     value={form.status}
                     onChange={(e) => setForm({ ...form, status: e.target.value })}
                   >
@@ -749,8 +752,8 @@ export default function ActivityManager({
 
             {activityType === 'academica' && (
               <div className="field">
-                <label>Semestres a los que va dirigida</label>
-                <div className="chip-row">
+                <span className="field-label" id="activity-manager-semestres-a-los-que">Semestres a los que va dirigida</span>
+                <div role="group" aria-labelledby="activity-manager-semestres-a-los-que" className="chip-row">
                   {semestresPermitidos.map((n) => {
                     const on = form.semesterScope.includes(n);
                     return (
@@ -800,8 +803,8 @@ export default function ActivityManager({
                 </span>
               </div>
               <div className="field">
-                <label>Puntos por participar (opcional)</label>
-                <input
+                <label htmlFor="activity-manager-puntos-por-participar-opcional">Puntos por participar (opcional)</label>
+                <input id="activity-manager-puntos-por-participar-opcional"
                   inputMode="numeric"
                   value={form.points}
                   onChange={(e) => setForm({ ...form, points: e.target.value.replace(/[^\d]/g, '').slice(0, 3) })}

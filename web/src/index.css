@@ -67,6 +67,9 @@ h3 { font-size: 1.02rem; }
   box-shadow: var(--shadow); padding: 1.1rem 1.2rem; }
 .card + .card { margin-top: 1rem; }
 .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+/* V3 B21: en pantallas angostas las acciones de una tarjeta bajan de línea en vez de desbordar. */
+.card-header { gap: 0.6rem; flex-wrap: wrap; }
+.card-header > .flex, .card-header > form { flex-wrap: wrap; min-width: 0; max-width: 100%; }
 .grid { display: grid; gap: 1rem; }
 /* En una grilla el espacio lo pone `gap`: el margen entre tarjetas seguidas las desalineaba. */
 .grid > .card + .card { margin-top: 0; }
@@ -87,7 +90,7 @@ tbody tr:hover { background: var(--gray-50); }
 
 /* Forms */
 .field { margin-bottom: 0.85rem; }
-.field label { display: block; font-size: 0.8rem; color: var(--gray-700); margin-bottom: 0.3rem; font-weight: 500; }
+.field label, .field .field-label { display: block; font-size: 0.8rem; color: var(--gray-700); margin-bottom: 0.3rem; font-weight: 500; }
 input, select, textarea {
   width: 100%; padding: 0.55rem 0.65rem; border: 1px solid var(--gray-300);
   border-radius: 8px; font-family: var(--font); font-size: 0.88rem; background: var(--white);
@@ -242,6 +245,8 @@ table { border-radius: 10px; overflow: hidden; }
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(27, 20, 22, 0.45);
   display: grid; place-items: center; padding: 1rem; z-index: 50;
+  /* La columna no crece con el texto: en un teléfono el modal se salía de la pantalla. */
+  grid-template-columns: minmax(0, 1fr);
 }
 .modal {
   background: var(--white); border-radius: 16px; width: 100%; max-width: 520px;
@@ -1226,3 +1231,6 @@ button.chip { cursor: pointer; font-family: var(--font); }
 .delta { display: block; font-size: 0.72rem; color: var(--gray-500); }
 .delta.sube { color: #1f7a3d; }
 .delta.baja { color: #a23b2a; }
+
+/* --- V3 §67: error de validación propio, debajo del campo --- */
+[aria-invalid="true"] { border-color: var(--danger, #b42318) !important; box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.12); }

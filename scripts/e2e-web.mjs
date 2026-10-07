@@ -21,7 +21,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
+import { ADMIN_CREDENTIALS, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = 'http://localhost:5173';
@@ -299,6 +299,59 @@ async function pruebas(browser) {
   }
   check(anchasDoc.length === 0, 'WEB.21 §66 Las pantallas del docente también caben en un teléfono', anchasDoc.join(', '));
   await telDoc.close();
+
+  objective('V3 B21 · Todos los actores en un teléfono y validación por campo');
+  const otros = {
+    director: await provisionAndActivate(admin, { firstName: 'Web', lastName: 'Director', email: `web.dir.${TS}@univalle.edu`, role: 'CAREER_DIRECTOR' }),
+    sociedad: await provisionAndActivate(admin, { firstName: 'Web', lastName: 'Sociedad', email: `web.soc.${TS}@univalle.edu`, role: 'SCIENTIFIC_SOCIETY' }),
+    // Administración no se provisiona (por diseño): se usa la cuenta sembrada.
+    admin: { email: ADMIN_CREDENTIALS.email, password: ADMIN_CREDENTIALS.password },
+  };
+  const rutasPorActor = {
+    director: ['/director', '/director/analytics', '/director/analytics?tab=evolucion', '/director/approvals', '/director/constancies'],
+    sociedad: ['/society', '/society/activities', '/society/participants', '/society/metrics'],
+    admin: ['/admin', '/admin/users', '/admin/areas', '/admin/audit'],
+  };
+  for (const [actor, rutas] of Object.entries(rutasPorActor)) {
+    const tel = await browser.newContext({ viewport: { width: 375, height: 740 }, isMobile: true, hasTouch: true });
+    const pt = await tel.newPage();
+    const fallos = [];
+    pt.on('pageerror', (e) => fallos.push(e.message));
+    await entrar(pt, otros[actor].email, otros[actor].password ?? PWD);
+    const anchas = [];
+    for (const ruta of rutas) {
+      await pt.goto(`${WEB}${ruta}`);
+      await espera(900);
+      const sobra = await pt.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      if (sobra > 1) anchas.push(`${ruta} (+${sobra}px)`);
+    }
+    check(anchas.length === 0 && fallos.length === 0, `WEB.22 V3 B21 Las pantallas de ${actor} caben en 375 px y no fallan`, [...anchas, ...fallos].join(', '));
+    await tel.close();
+  }
+
+  const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const pv = await val.newPage();
+  const estVal = await estudianteListo(admin, 'val');
+  await entrar(pv, estVal.email);
+  await pv.goto(`${WEB}/student/projects`);
+  // El tutorial de primera visita se cierra como lo haría la persona.
+  await pv.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await pv.getByRole('button', { name: 'Guardar borrador' }).waitFor({ timeout: 8000 });
+  let nativo = false;
+  pv.on('dialog', () => { nativo = true; });
+  await pv.getByRole('button', { name: 'Guardar borrador' }).click();
+  await espera(300);
+  const errorTitulo = await pv.locator('#pr-titulo + .field-error').textContent().catch(() => null);
+  const foco = await pv.evaluate(() => document.activeElement?.id);
+  check(!!errorTitulo && errorTitulo.includes('Completa «Título»') && foco === 'pr-titulo' && !nativo,
+    'WEB.23 V3 §67 El error aparece debajo del campo, con su nombre, y el foco va a él', `${errorTitulo} · foco ${foco}`);
+  await pv.fill('#pr-titulo', 'Plataforma de prueba');
+  check(await pv.locator('#pr-titulo + .field-error').count() === 0 && await pv.locator('#pr-titulo[aria-invalid=true]').count() === 0,
+    'WEB.24 V3 §67 Al corregirlo, el error se va solo');
+  const sinAsociar = await pv.evaluate(() => Array.from(document.querySelectorAll('label'))
+    .filter((l) => !l.htmlFor && !l.querySelector('input,select,textarea')).map((l) => l.textContent?.trim()));
+  check(sinAsociar.length === 0, 'WEB.25 V3 B21 Cada etiqueta del formulario está asociada a su campo', sinAsociar.join(' | '));
+  await val.close();
 }
 
 async function main() {
