@@ -979,3 +979,72 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 - Las 4 altas de NestJS 10 quedan como riesgo residual mitigado.
 
 **Pendientes:** limpieza y documentación (B24).
+
+---
+
+## BATCH 24 — Cleanup y documentación
+
+**ESTADO:** completo
+
+**Objetivo:** retirar lo obsoleto, documentar la V3 (Swagger, README, diagramas, trazabilidad, guía del documento de grado para los capítulos II y III) y dejar la evidencia final sin cabos sueltos.
+
+**Hallazgos iniciales:**
+- **Auditoría §65:** 13 de los 34 eventos mínimos no se registraban: `PROJECT_CREATED`, `MEMBER_INVITED`, `MEMBER_ACCEPTED`, `CONTRIBUTION_CONFIRMED`, `PROJECT_EVIDENCE_ADDED`, `REPOSITORY_CHECKED`, `DEMO_CHECKED`, `PROJECT_BACKING_CHANGED`, `AFFINITY_RECALCULATED`, `CONTACT_ACCEPTED`, `TEAM_APPLICATION_CREATED`, `TEAM_MEMBER_ACCEPTED`, `CURRICULUM_EXPORTED`. `FEEDBACK_ADDED` existía, pero solo iba a la bitácora del proyecto.
+- **§23:** la web y la app seguían ofreciendo una bandeja genérica «Registrar evidencia», ajena a proyectos y actividades.
+- `pages/teacher/Dashboard.tsx` quedó huérfano tras el panel único de B20.
+- Swagger seguía en la versión 1.0.0 con la descripción de V1.
+- El README describía la V2.
+
+**Cambios:**
+- **Auditoría §65:**
+  - Los 13 eventos se agregan al catálogo (`event_type` es varchar: sin migración).
+  - Los 9 eventos de proyecto, más `FEEDBACK_ADDED`, se registran desde el único punto por el que pasan, la bitácora del proyecto (`ProjectEventsService`), con la misma metadata saneada.
+  - `AFFINITY_RECALCULATED` se registra con el número de áreas y la versión de reglas, sin puntajes.
+  - `CONTACT_ACCEPTED` y `TEAM_MEMBER_ACCEPTED` (por postulación o por invitación) llevan como actor a quien decide.
+  - `TEAM_APPLICATION_CREATED` no incluye el texto de la presentación.
+  - `CURRICULUM_EXPORTED` registra plantilla, secciones y cantidad de ítems, nunca el contenido.
+  - La auditoría nunca deshace la operación.
+- **§23, sin bandeja genérica:**
+  - Web y app: «Evidencias y certificados» pasa a llamarse **«Credenciales y constancias»** y se retira el formulario genérico de evidencias.
+  - Las evidencias registradas antes se siguen viendo (no se borran datos), con una nota de que las de un proyecto se agregan dentro del proyecto.
+  - La ruta de la API se conserva por compatibilidad.
+- Se elimina `pages/teacher/Dashboard.tsx`. No hay pantalla de TeacherScope suelta (vive en Usuarios); la de recomendaciones es «Más sugerencias», enlazada desde «Para ti».
+- **Swagger:** versión 3.1.0 y descripción de la V3, incluido el formato paginado.
+- **Documentación:**
+  - `README.md` actualizado a la V3: roles, flujo, variables, pruebas y documentos.
+  - [`MATRIZ_TRAZABILIDAD_V3.md`](MATRIZ_TRAZABILIDAD_V3.md): RF01–RF30 y RNF01–RNF10 hacia módulo, rutas, pantallas y pruebas.
+  - [`DIAGRAMAS_V3.md`](DIAGRAMAS_V3.md), en Mermaid: arquitectura, estados de actividad y de proyecto, postulación, currículo y modelo de datos V3.
+  - [`CAMBIOS_DOCUMENTO_GRADO_V3.md`](CAMBIOS_DOCUMENTO_GRADO_V3.md): capítulo II (actores, reglas, 25 → 30 RF, 6 → 10 RNF, casos de uso, diagramas, despliegue) y una propuesta de **capítulo III** (transición: pruebas y resultados), que el documento aún no tiene.
+  - `AUDITORIA_GAP_AFINIA_V3.md`: estado al cierre.
+- **Documento de grado:** **no se modificó el `.docx`.** Antes de leerlo se hizo una copia (`docs/respaldo-documento/Documento_Proyecto_Grado_v2_RESPALDO_2026-10-07_V3.docx`, SHA-256 idéntico al original). La guía dice qué cambiar y con qué texto, como en V2.
+
+**Migraciones:** ninguna.
+
+**Pruebas ejecutadas:**
+- `e2e-v3 batch24` (V3.24.1–V3.24.7, 14 comprobaciones): cada evento queda en la auditoría con su entidad y su actor, sin puntajes ni textos privados, y un estudiante no puede consultar la auditoría. `DEMO_CHECKED` usa el mismo mapeo, pero esta prueba no lo ejercita (el proyecto no declara demo).
+- Typecheck de API, web y app; paquete Android.
+- Regresión completa final.
+
+**Resultados:** unitarias 99/99; `e2e-v3` 379 (B24 14/14); `e2e-web` 38/38. Regresión completa final: **1822 correctas, 0 fallos** (20 suites).
+
+**Riesgos:** `AFFINITY_RECALCULATED` agrega una fila de auditoría por recálculo. Es lo que pide §65; si el volumen crece, conviene una política de retención para `audit_events`.
+
+**Pendientes:** ver el estado al cierre en `AUDITORIA_GAP_AFINIA_V3.md` (Maestro en dispositivo, SUS con participantes, NestJS 11/12 y aplicar la guía al `.docx`).
+
+---
+
+## Cierre de la V3.1
+
+| Batch | Commit | Regresión completa |
+|---|---|---|
+| B16 Notificaciones | `886b37a` | 1677 + 2 fallos de orden (57/57 al repetir) |
+| B17 Colaboración | `a6c2ebc` | 1719 / 0 |
+| B18 Trayectoria y currículo | `e29d91d` | 1749 / 0 |
+| B19 Gamificación | `d55f602` | 1762 / 0 |
+| B20 Dashboards | `6f09b1d` | 1780 / 0 |
+| B21 UX web | `ca563be` | 1786 / 0 |
+| B22 Mobile | `cb3bef1` | `e2e-v3` 352 / 0 (solo cambió móvil) |
+| B23 Hardening | `4096e58` | 1808 / 0 |
+| B24 Cleanup | este commit | **1822 / 0** |
+
+Rama `feat/afinia-v3`. Sin merge a `main` y sin push.

@@ -36,6 +36,7 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { TeamMember } from '../entities/collaboration.entity';
 import { ValidationRecord } from '../entities/validation-record.entity';
 import { BackedSkillsService } from '../backed-skills/backed-skills.service';
+import { AuditEventType, AuditService } from '../audit/audit.service';
 import { PDF_THEMES, PdfWriter } from './pdf-writer';
 import { StudentBadge } from '../entities/gamification.entity';
 import { StudentContactChannel } from '../entities/contact-channel.entity';
@@ -123,6 +124,7 @@ export class TrajectorySummaryService {
     @InjectRepository(ProjectFeedback) private readonly feedback: Repository<ProjectFeedback>,
     @InjectRepository(TeamMember) private readonly teamMembers: Repository<TeamMember>,
     private readonly backedSkills: BackedSkillsService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -737,6 +739,19 @@ export class TrajectorySummaryService {
 
     pdf.note(`Generado el ${this.fecha(datos.generatedAt)}.`);
     pdf.note(TRAJECTORY_DISCLAIMER);
+
+    // V3 §65: qué se exportó, sin el contenido.
+    await this.audit.record({
+      actorUserId: opts.userId ?? null,
+      eventType: AuditEventType.CURRICULUM_EXPORTED,
+      entityType: 'student_profile',
+      entityId: studentProfileId,
+      metadata: {
+        plantilla: datos.template,
+        secciones: datos.sections,
+        items: Object.fromEntries(Object.entries(opts.items ?? {}).map(([k, v]) => [k, (v ?? []).length])),
+      },
+    });
 
     const limpio = String(datos.student.name)
       .normalize('NFD')

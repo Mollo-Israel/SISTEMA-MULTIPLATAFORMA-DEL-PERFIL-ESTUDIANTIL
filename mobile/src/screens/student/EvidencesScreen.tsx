@@ -3,12 +3,10 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiError } from '../../api/client';
 import {
-  activityService,
   catalogService,
   certificateService,
   constancyService,
   evidenceService,
-  projectService,
   uploadService,
   type StoredFile,
 } from '../../services';
@@ -49,14 +47,10 @@ export default function EvidencesScreen() {
   const [certificates, setCertificates] = useState<any[]>([]);
   const [constancies, setConstancies] = useState<any[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [activities, setActivities] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
-
-  const [tab, setTab] = useState<'evidencia' | 'certificado'>('evidencia');
 
   const load = useCallback(async () => {
     const [ev, ce, co] = await Promise.all([
@@ -73,11 +67,6 @@ export default function EvidencesScreen() {
     Promise.all([
       load(),
       catalogService.areas().then(setAreas).catch(() => {}),
-      projectService.mine().then(setProjects).catch(() => {}),
-      activityService
-        .myRegistrations()
-        .then((rows: any[]) => setActivities(rows.map((r) => r.activity).filter(Boolean)))
-        .catch(() => {}),
     ])
       .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
@@ -160,46 +149,23 @@ export default function EvidencesScreen() {
   return (
     <Screen refreshing={loading} onRefresh={load}>
       <PageHeader
-        title="Evidencias y certificados"
-        description="Respalda tu trayectoria con enlaces o archivos. Los certificados externos se registran como evidencia: el sistema no los certifica oficialmente."
+        title="Credenciales y constancias"
+        description="Tus credenciales externas y las constancias internas que recibiste. Afinia no las certifica: las valida por niveles."
       />
 
-      <View style={styles.tabs}>
-        <Pressable
-          onPress={() => setTab('evidencia')}
-          style={[styles.tab, tab === 'evidencia' && styles.tabOn]}
-        >
-          <Text style={tab === 'evidencia' ? styles.tabOnText : styles.tabText}>Evidencia</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setTab('certificado')}
-          style={[styles.tab, tab === 'certificado' && styles.tabOn]}
-        >
-          <Text style={tab === 'certificado' ? styles.tabOnText : styles.tabText}>Certificado</Text>
-        </Pressable>
-      </View>
+      {/* V3 §23: ya no hay una bandeja genérica de evidencias; las de un
+          proyecto se agregan dentro del proyecto. Aquí quedan las credenciales,
+          las constancias y las evidencias registradas antes. */}
+      <Muted>Las evidencias de un proyecto se agregan dentro de cada proyecto, en «Proyectos».</Muted>
 
-      {tab === 'evidencia' ? (
-        <EvidenceForm
-          areas={areas}
-          projects={projects}
-          activities={activities}
-          onError={(m: string) => toast.error(m)}
-          onSaved={async () => {
-            notify('Evidencia registrada.');
-            await load();
-          }}
-        />
-      ) : (
-        <CertificateForm
-          areas={areas}
-          onError={(m: string) => toast.error(m)}
-          onSaved={async () => {
-            notify('Certificado registrado.');
-            await load();
-          }}
-        />
-      )}
+      <CertificateForm
+        areas={areas}
+        onError={(m: string) => toast.error(m)}
+        onSaved={async () => {
+          notify('Certificado registrado.');
+          await load();
+        }}
+      />
 
       {(evidences.length > 0 || certificates.length > 0) && (
         <View style={{ marginTop: 14 }}>
@@ -211,7 +177,7 @@ export default function EvidencesScreen() {
         </View>
       )}
 
-      <Card title={`Mis evidencias (${evidences.length})`}>
+      <Card title={`Evidencias registradas antes (${evidences.length})`}>
         {evidences.length > 0 && (
           <ResultCount
             shown={visibleEvidences.length}
@@ -460,110 +426,6 @@ function Picker({
         ))}
       </View>
     </View>
-  );
-}
-
-function EvidenceForm({
-  areas,
-  projects,
-  activities,
-  onSaved,
-  onError,
-}: {
-  areas: any[];
-  projects: any[];
-  activities: any[];
-  onSaved: () => void;
-  onError: (m: string) => void;
-}) {
-  const [type, setType] = useState<'link' | 'file'>('link');
-  const [description, setDescription] = useState('');
-  const [externalUrl, setExternalUrl] = useState('');
-  const [activityId, setActivityId] = useState('');
-  const [areaId, setAreaId] = useState('');
-  const [saving, setSaving] = useState(false);
-  const { file, setFile, pick, busy } = useFilePicker(onError);
-
-  const submit = async () => {
-    if (type === 'file' && !file) {
-      onError('Selecciona y sube un archivo antes de guardar.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await evidenceService.create({
-        evidenceType: type,
-        description: description || undefined,
-        externalUrl: type === 'link' ? externalUrl : undefined,
-        // §27: se adjunta por identificador; los metadatos los pone el servidor.
-        storedFileId: type === 'file' ? file?.id : undefined,
-        academicAreaId: areaId || undefined,
-      });
-      setDescription('');
-      setExternalUrl('');
-      setFile(null);
-      setActivityId('');
-      setAreaId('');
-      onSaved();
-    } catch (e) {
-      onError(apiError(e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card title="Registrar evidencia">
-      <View style={styles.chips}>
-        <Pressable onPress={() => setType('link')} style={[styles.chip, type === 'link' && styles.chipOn]}>
-          <Text style={type === 'link' ? styles.chipOnText : styles.chipText}>Enlace</Text>
-        </Pressable>
-        <Pressable onPress={() => setType('file')} style={[styles.chip, type === 'file' && styles.chipOn]}>
-          <Text style={type === 'file' ? styles.chipOnText : styles.chipText}>Archivo</Text>
-        </Pressable>
-      </View>
-
-      <Field
-        label="Descripción"
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Certificado de asistencia al taller"
-      />
-
-      {type === 'link' ? (
-        <Field
-          label="Enlace"
-          value={externalUrl}
-          onChangeText={setExternalUrl}
-          placeholder="https://github.com/usuario/proyecto"
-        />
-      ) : (
-        <View style={{ marginBottom: 12 }}>
-          <Text style={styles.label}>Archivo (PDF, PNG, JPG o WEBP · máx. 5 MB)</Text>
-          <Button
-            title={busy ? 'Subiendo…' : file ? 'Cambiar archivo' : 'Seleccionar archivo'}
-            variant="secondary"
-            onPress={pick}
-            disabled={busy}
-          />
-          {file && (
-            <Text style={styles.fileChip}>
-              {file.originalFilename} · {humanSize(file.sizeBytes)}
-            </Text>
-          )}
-        </View>
-      )}
-
-      <Picker
-        label="Área académica"
-        emptyLabel="Ninguna"
-        value={areaId}
-        onChange={setAreaId}
-        options={areas.map((a) => ({ id: a.id, label: a.name }))}
-      />
-
-      <Button icon="paperclip" title="Registrar evidencia" onPress={submit} loading={saving} disabled={busy} />
-    </Card>
   );
 }
 

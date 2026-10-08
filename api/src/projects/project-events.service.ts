@@ -3,6 +3,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ProjectEventType } from '@perfil/shared';
 import { ProjectEvent } from '../entities/project-check.entity';
+import { AuditEventType, AuditEventTypeValue, AuditService } from '../audit/audit.service';
+
+/**
+ * V3 §65: los hechos de un proyecto que además van a la auditoría. Se hace
+ * aquí, en el único punto por donde pasan, para que ninguno se olvide.
+ */
+const A_AUDITORIA: Partial<Record<ProjectEventType, AuditEventTypeValue>> = {
+  [ProjectEventType.PROJECT_CREATED]: AuditEventType.PROJECT_CREATED,
+  [ProjectEventType.MEMBER_INVITED]: AuditEventType.MEMBER_INVITED,
+  [ProjectEventType.MEMBER_ACCEPTED]: AuditEventType.MEMBER_ACCEPTED,
+  [ProjectEventType.CONTRIBUTION_CONFIRMED]: AuditEventType.CONTRIBUTION_CONFIRMED,
+  [ProjectEventType.EVIDENCE_ADDED]: AuditEventType.PROJECT_EVIDENCE_ADDED,
+  [ProjectEventType.REPOSITORY_CHECKED]: AuditEventType.REPOSITORY_CHECKED,
+  [ProjectEventType.DEMO_CHECKED]: AuditEventType.DEMO_CHECKED,
+  [ProjectEventType.BACKING_TIER_CHANGED]: AuditEventType.PROJECT_BACKING_CHANGED,
+  [ProjectEventType.FEEDBACK_ADDED]: AuditEventType.FEEDBACK_ADDED,
+};
 
 export interface ProjectEventInput {
   projectId: string;
@@ -31,6 +48,7 @@ export class ProjectEventsService {
 
   constructor(
     @InjectRepository(ProjectEvent) private readonly events: Repository<ProjectEvent>,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -53,6 +71,17 @@ export class ProjectEventsService {
       this.logger.error(
         `No se pudo registrar ${input.eventType} del proyecto ${input.projectId}: ${String(error)}`,
       );
+    }
+    const auditable = A_AUDITORIA[input.eventType];
+    if (auditable) {
+      // `record` nunca lanza, y la metadata pasa por el mismo saneamiento.
+      await this.audit.record({
+        actorUserId: input.actorUserId,
+        eventType: auditable,
+        entityType: 'project',
+        entityId: input.projectId,
+        metadata: this.sanear(input.metadata ?? {}),
+      });
     }
   }
 

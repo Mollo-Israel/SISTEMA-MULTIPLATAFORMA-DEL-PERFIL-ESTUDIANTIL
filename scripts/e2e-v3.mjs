@@ -2217,7 +2217,80 @@ async function batch23(ctx) {
   void perfil;
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19, batch20, batch22, batch23 };
+// ===========================================================================
+//  BATCH 24 — Cierre: los eventos mínimos de auditoría de §65
+// ===========================================================================
+async function batch24(ctx) {
+  objective('BATCH 24 · Cada hecho de §65 deja su evento de auditoría, sin secretos');
+  await asegurarGithubSimulado();
+  const auditoria = async (eventType, entityId) => {
+    const q = `/audit/events?eventType=${eventType}${entityId ? `&entityId=${entityId}` : ''}&limit=20`;
+    return (await req('GET', q, { token: ctx.admin })).data ?? [];
+  };
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Audi', lastName: 'Toria', email: correoEst('b24'), role: 'STUDENT', semester: 6 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const par = await provisionAndActivate(ctx.admin, { firstName: 'Par', lastName: 'Toria', email: correoEst('b24b'), role: 'STUDENT', semester: 6 });
+  par.profileId = (await req('GET', '/profiles/me', { token: par.token })).data?.id;
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Doc', lastName: 'Toria', email: correoStaff('b24doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [6] } });
+
+  // ----- Proyecto: creado, invitado, aceptado, contribución, evidencia, repositorio, respaldo, feedback
+  const catalogo = ((await req('GET', '/skills', { token: est.token })).data ?? []).filter((s) => s.academicAreaId);
+  const sk = catalogo[0];
+  const proy = (await req('POST', '/projects', {
+    token: est.token,
+    body: { title: `Proyecto auditado ${TS}`, areaIds: [sk.academicAreaId], skillIds: [sk.id], repositoryUrl: repoQueCorrobora(sk.name), visibility: 'teachers', status: 'draft' },
+  })).data;
+  const inv = await req('POST', `/projects/${proy.id}/invitations`, { token: est.token, body: { invitedProfileId: par.profileId, proposedRole: 'Backend' } });
+  await req('PATCH', `/projects/invitations/${inv.data.id}`, { token: par.token, body: { decision: 'accept' } });
+  await req('POST', `/projects/${proy.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${proy.id}.png`, description: 'Captura.' } });
+  await req('PUT', `/projects/${proy.id}/my-contribution`, { token: est.token, body: { contribution: 'Diseño e implementación.', skillIds: [sk.id] } });
+  await req('PATCH', `/projects/${proy.id}`, { token: est.token, body: { status: 'active' } });
+  await req('POST', `/projects/${proy.id}/feedback`, { token: docente.token, body: { comment: 'Buena estructura del repositorio.' } });
+  for (const ev of ['PROJECT_CREATED', 'MEMBER_INVITED', 'MEMBER_ACCEPTED', 'PROJECT_EVIDENCE_ADDED', 'CONTRIBUTION_CONFIRMED', 'REPOSITORY_CHECKED', 'PROJECT_BACKING_CHANGED', 'FEEDBACK_ADDED']) {
+    const filas = await auditoria(ev, proy.id);
+    check(filas.length >= 1 && filas.every((f) => f.entityType === 'project'), `V3.24.1 §65 ${ev} queda en la auditoría del proyecto`, `${filas.length}`);
+  }
+
+  // ----- Afinidad recalculada
+  const afin = await auditoria('AFFINITY_RECALCULATED', est.profileId);
+  check(afin.length >= 1 && afin.every((f) => !JSON.stringify(f.metadata ?? {}).match(/score|puntaje/i)),
+    'V3.24.2 §65 AFFINITY_RECALCULATED, sin puntajes en la metadata', `${afin.length}`);
+
+  // ----- Contacto aceptado
+  const enlace = (await req('GET', '/profiles/me/public-link', { token: par.token })).data;
+  await req('PUT', '/profiles/me/visibility', { token: par.token, body: { publicProfileEnabled: true, fields: { bio: true } } });
+  const sol = await req('POST', '/contacts/requests', { token: est.token, body: { slug: enlace?.slug } });
+  await req('PATCH', `/contacts/requests/${sol.data?.id}`, { token: par.token, body: { decision: 'accept' } });
+  const contacto = await auditoria('CONTACT_ACCEPTED', sol.data?.id);
+  check(contacto.length === 1 && contacto[0].actorUserId === par.userId, 'V3.24.3 §65 CONTACT_ACCEPTED, con quien aceptó', JSON.stringify(contacto[0]?.actorUserId));
+
+  // ----- Postulación y aceptación en equipo
+  const nec = (await req('POST', '/team-needs', { token: par.token, body: { purpose: `Equipo auditado ${TS}`, targetSemesters: [6], maxMembers: 3 } })).data;
+  const post = await req('POST', `/team-needs/${nec.id}/applications`, { token: est.token, body: { message: 'Hola.' } });
+  const creada = await auditoria('TEAM_APPLICATION_CREATED', post.data?.id);
+  check(creada.length === 1 && creada[0].actorUserId === est.userId && !JSON.stringify(creada[0].metadata).includes('Hola'),
+    'V3.24.4 §65 TEAM_APPLICATION_CREATED, sin el texto de la presentación');
+  const ac = await req('PATCH', `/team-applications/${post.data?.id}`, { token: par.token, body: { decision: 'accept' } });
+  const aceptado = await auditoria('TEAM_MEMBER_ACCEPTED', ac.data?.teamId);
+  check(aceptado.length === 1 && aceptado[0].metadata?.via === 'postulacion', 'V3.24.5 §65 TEAM_MEMBER_ACCEPTED al aceptar una postulación');
+
+  // ----- Currículo exportado
+  const res = await fetch(`${API}/trajectory-summary/pdf`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${est.token}` },
+    body: JSON.stringify({ sections: ['projects', 'bio'], summaryText: 'Texto privado de presentación.' }),
+  });
+  await res.arrayBuffer();
+  const cv = await auditoria('CURRICULUM_EXPORTED', est.profileId);
+  check(cv.length === 1 && cv[0].actorUserId === est.userId && !JSON.stringify(cv[0].metadata).includes('Texto privado'),
+    'V3.24.6 §65 CURRICULUM_EXPORTED: qué secciones, nunca el contenido', JSON.stringify(cv[0]?.metadata));
+
+  // ----- Solo administración consulta la auditoría
+  const ajeno = await req('GET', '/audit/events?limit=1', { token: est.token });
+  check(ajeno.status === 403, 'V3.24.7 La auditoría no la ve un estudiante', `status ${ajeno.status}`);
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19, batch20, batch22, batch23, batch24 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

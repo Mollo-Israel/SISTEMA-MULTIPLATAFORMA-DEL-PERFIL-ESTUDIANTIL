@@ -71,7 +71,7 @@ function PerfilStack() {
       <Stack.Screen name="MiPerfil" component={ProfileScreen} options={{ title: 'Perfil', ...withLogout }} />
       <Stack.Screen name="Intereses" component={InterestsScreen} options={{ title: 'Intereses' }} />
       <Stack.Screen name="Habilidades" component={SkillsScreen} options={{ title: 'Tecnologías' }} />
-      <Stack.Screen name="Evidencias" component={EvidencesScreen} options={{ title: 'Evidencias' }} />
+      <Stack.Screen name="Evidencias" component={EvidencesScreen} options={{ title: 'Credenciales y constancias' }} />
       <Stack.Screen
         name="Colaboracion"
         component={CollaborationScreen}

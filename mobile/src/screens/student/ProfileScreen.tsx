@@ -169,7 +169,7 @@ export default function ProfileScreen({ navigation }: any) {
 
       <Button icon="target" title="Registrar intereses" variant="secondary" onPress={() => navigation.navigate('Intereses')} />
       <Button icon="award" title="Tecnologías que me interesan" variant="secondary" onPress={() => navigation.navigate('Habilidades')} />
-      <Button icon="paperclip" title="Evidencias y certificados" variant="secondary" onPress={() => navigation.navigate('Evidencias')} />
+      <Button icon="paperclip" title="Credenciales y constancias" variant="secondary" onPress={() => navigation.navigate('Evidencias')} />
       <Button icon="map" title="Mi trayectoria" variant="secondary" onPress={() => navigation.navigate('Trayectoria')} />
       <Button icon="users" title="Colaboración y equipos" variant="secondary" onPress={() => navigation.navigate('Colaboracion')} />
     </Screen>

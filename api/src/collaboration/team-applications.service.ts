@@ -28,6 +28,7 @@ import {
 import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { semestreElegible } from './team-need.rules';
+import { AuditEventType, AuditService } from '../audit/audit.service';
 
 const ENLACE = '/student/collaboration?tab=equipos';
 const motivoDe = (code: string | null) =>
@@ -57,6 +58,7 @@ export class TeamApplicationsService {
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
     private readonly backedSkills: BackedSkillsService,
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
+    private readonly audit: AuditService,
   ) {}
 
   async apply(applicantProfileId: string, needId: string, message?: string) {
@@ -106,6 +108,14 @@ export class TeamApplicationsService {
       }));
     }
 
+    // V3 §65.
+    await this.audit.record({
+      actorUserId: yo.userId,
+      eventType: AuditEventType.TEAM_APPLICATION_CREATED,
+      entityType: 'team_application',
+      entityId: guardada.id,
+      metadata: { necesidad: need.id, conPresentacion: !!message },
+    });
     const nombre = yo.user ? `${yo.user.firstName} ${yo.user.lastName}` : 'Un estudiante';
     await this.avisar({
       userId: need.owner.userId,
@@ -222,6 +232,13 @@ export class TeamApplicationsService {
       await m.update(TeamInvitation,
         { teamId: equipo.id, invitedProfileId: a.applicantProfileId, status: TeamInvitationStatus.PENDING },
         { status: TeamInvitationStatus.CANCELLED, decidedAt: new Date() });
+    });
+    await this.audit.record({
+      actorUserId: need.owner?.userId ?? null,
+      eventType: AuditEventType.TEAM_MEMBER_ACCEPTED,
+      entityType: 'team',
+      entityId: equipo.id,
+      metadata: { integrante: a.applicantProfileId, via: 'postulacion' },
     });
     await this.avisar({
       userId: a.applicant.userId,

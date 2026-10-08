@@ -15,6 +15,7 @@ import {
   ContactSource,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
+import { AuditEventType, AuditService } from '../audit/audit.service';
 import { Contact, ContactRequest } from '../entities/collaboration.entity';
 import { ContactNote, StudentContactChannel } from '../entities/contact-channel.entity';
 import { channelHref, checkContactChannel } from './contact-channel.rules';
@@ -61,6 +62,7 @@ export class ContactsService {
     @InjectRepository(StudentContactChannel) private readonly channels: Repository<StudentContactChannel>,
     @InjectRepository(ContactNote) private readonly notes: Repository<ContactNote>,
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
+    private readonly audit: AuditService,
   ) {}
 
   /** Las notificaciones nunca deshacen una operación (V3 §33). */
@@ -294,6 +296,16 @@ export class ContactsService {
         .execute();
     });
 
+    if (decision === 'accept') {
+      const yo = await this.profiles.findOne({ where: { id: studentProfileId }, select: { id: true, userId: true } });
+      await this.audit.record({
+        actorUserId: yo?.userId ?? null,
+        eventType: AuditEventType.CONTACT_ACCEPTED,
+        entityType: 'contact_request',
+        entityId: solicitud.id,
+        metadata: { origen: solicitud.source },
+      });
+    }
     return { status: solicitud.status, decidedAt: solicitud.decidedAt };
   }
 

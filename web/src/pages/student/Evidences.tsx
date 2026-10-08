@@ -5,12 +5,10 @@ import {
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
-  activityService,
   catalogService,
   certificateService,
   constancyService,
   evidenceService,
-  projectService,
   uploadService,
   validationService,
 } from '../../services';
@@ -32,11 +30,9 @@ import {
 } from '../../services/types';
 import type {
   AcademicArea,
-  Activity,
   Evidence,
   ExternalCertificate,
   CredentialOpportunity,
-  Project,
   Skill,
   StoredFile,
   ValidationVerdict,
@@ -59,19 +55,12 @@ export default function StudentEvidencesPage() {
   const constancies = useAsync(() => constancyService.mine(), []);
 
   const [areas, setAreas] = useState<AcademicArea[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
   const [evidenceQuery, setEvidenceQuery] = useState('');
   const [certificateQuery, setCertificateQuery] = useState('');
   const toast = useToast();
 
   useEffect(() => {
     catalogService.areas().then(setAreas).catch(() => {});
-    projectService.mine().then(setProjects).catch(() => {});
-    activityService
-      .myRegistrations()
-      .then((rows) => setActivities(rows.map((r) => r.activity).filter(Boolean)))
-      .catch(() => {});
   }, []);
 
   const notify = (t: string) => toast.success(t);
@@ -115,23 +104,19 @@ export default function StudentEvidencesPage() {
   return (
     <div>
       <PageHeader
-        title="Evidencias y certificados"
-        description="Respalda tu trayectoria con enlaces o archivos. Los certificados externos se registran como evidencia: el sistema no los certifica ni los valida oficialmente."
+        title="Credenciales y constancias"
+        description="Tus credenciales externas y las constancias internas que recibiste. Afinia no las certifica: las valida por niveles y lo indica en cada una."
       />
 
-      <EvidenceForm
-        areas={areas}
-        projects={projects}
-        activities={activities}
-        onError={(m) => toast.error(m)}
-        onSaved={() => {
-          notify('Evidencia registrada.');
-          evidences.reload();
-        }}
-      />
+      {/* V3 §23: ya no hay una bandeja genérica de evidencias. Las de un
+          proyecto se agregan dentro del proyecto. Las registradas antes se
+          conservan aquí, sin borrar datos. */}
+      <p className="inline-note">
+        Las evidencias de un proyecto (capturas, documentación, repositorio, demo) se agregan dentro de cada proyecto, en «Proyectos».
+      </p>
 
       <Card
-        title="Mis evidencias"
+        title="Evidencias registradas antes"
         actions={
           <SearchInput
             value={evidenceQuery}
@@ -473,132 +458,6 @@ function FilePicker({
     </div>
   );
 }
-
-function EvidenceForm({
-  areas,
-  projects,
-  activities,
-  onSaved,
-  onError,
-}: {
-  areas: AcademicArea[];
-  projects: Project[];
-  activities: Activity[];
-  onSaved: () => void;
-  onError: (m: string) => void;
-}) {
-  const [type, setType] = useState<'link' | 'file'>('link');
-  const [description, setDescription] = useState('');
-  const [externalUrl, setExternalUrl] = useState('');
-  const [file, setFile] = useState<StoredFile | null>(null);
-  const [activityId, setActivityId] = useState('');
-  const [academicAreaId, setAcademicAreaId] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // V3 §67: error debajo de cada campo, no el globo del navegador.
-    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
-    if (type === 'file' && !file) {
-      onError('Selecciona un archivo antes de guardar la evidencia.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await evidenceService.create({
-        evidenceType: type,
-        description: description || undefined,
-        externalUrl: type === 'link' ? externalUrl : undefined,
-        // §27: se envía el identificador del archivo. Los metadatos los
-        // resuelve el servidor a partir de lo que realmente se subió.
-        storedFileId: type === 'file' ? file?.id : undefined,
-        academicAreaId: academicAreaId || undefined,
-      });
-      setDescription('');
-      setExternalUrl('');
-      setFile(null);
-      setActivityId('');
-      setAcademicAreaId('');
-      onSaved();
-    } catch (e2) {
-      onError(apiError(e2));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card title="Registrar evidencia">
-      <form noValidate onSubmit={submit}>
-        <div className="type-toggle">
-          <button
-            type="button"
-            className={type === 'link' ? 'on' : ''}
-            onClick={() => setType('link')}
-          >
-            <FiLink /> Enlace
-          </button>
-          <button
-            type="button"
-            className={type === 'file' ? 'on' : ''}
-            onClick={() => setType('file')}
-          >
-            <FiUpload /> Archivo
-          </button>
-        </div>
-
-        <div className="field">
-          <label htmlFor="evidences-descripcion">Descripción</label>
-          <input id="evidences-descripcion"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Certificado de asistencia al taller"
-            maxLength={300}
-          />
-        </div>
-
-        {type === 'link' ? (
-          <div className="field">
-            <label htmlFor="evidences-enlace">Enlace</label>
-            <input id="evidences-enlace"
-              type="url"
-              value={externalUrl}
-              onChange={(e) => setExternalUrl(e.target.value)}
-              placeholder="https://github.com/usuario/proyecto"
-              required
-            />
-          </div>
-        ) : (
-          <FilePicker file={file} onPicked={setFile} onError={onError} />
-        )}
-
-        <p className="muted" style={{ fontSize: '0.78rem', marginBottom: '0.5rem' }}>
-          Asocia la evidencia a lo que respalda. Puedes dejar los tres campos vacíos si es una
-          evidencia general.
-        </p>
-
-        <div className="row">
-          <div className="field">
-            <label htmlFor="evidences-area-academica">Área académica</label>
-            <select id="evidences-area-academica" value={academicAreaId} onChange={(e) => setAcademicAreaId(e.target.value)}>
-              <option value="">Ninguna</option>
-              {areas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? 'Guardando…' : 'Registrar evidencia'}
-        </button>
-      </form>
-    </Card>
-  );
-}
-
 function CertificateForm({
   areas,
   onSaved,

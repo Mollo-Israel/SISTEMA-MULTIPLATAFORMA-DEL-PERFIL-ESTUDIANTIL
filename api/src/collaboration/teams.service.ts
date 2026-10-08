@@ -668,6 +668,14 @@ export class TeamsService {
       );
     });
 
+    const yo = await this.profiles.findOne({ where: { id: studentProfileId }, select: { id: true, userId: true } });
+    await this.audit.record({
+      actorUserId: yo?.userId ?? null,
+      eventType: AuditEventType.TEAM_MEMBER_ACCEPTED,
+      entityType: 'team',
+      entityId: equipo.id,
+      metadata: { integrante: studentProfileId, via: 'invitacion' },
+    });
     return { status: TeamInvitationStatus.ACCEPTED, teamId: equipo.id };
   }
 

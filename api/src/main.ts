@@ -79,11 +79,14 @@ async function bootstrap() {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Afinia — API')
       .setDescription(
-        'API de Afinia: construcción de la trayectoria académica complementaria del '
-          + 'estudiante. Identidad provisionada, perfil dinámico, actividades, portafolio, '
-          + 'afinidad explicable y recomendaciones.',
+        'API de Afinia (Especificación Maestra V3.1): trayectoria académica complementaria '
+          + 'del estudiante. Identidad provisionada, perfil dinámico, oportunidades internas y '
+          + 'externas, proyectos con corroboración técnica, credenciales validadas por niveles, '
+          + 'afinidad V4 y respaldo, recomendaciones, notificaciones, necesidades de equipo con '
+          + 'postulaciones, trayectoria y currículo seleccionable, y analítica por actor. '
+          + 'Los listados con `limit` devuelven `{ items, total, limit, offset }`.',
       )
-      .setVersion('1.0.0')
+      .setVersion('3.1.0')
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);

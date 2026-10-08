@@ -25,7 +25,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/student', label: 'Inicio' },
         { to: '/student/profile', label: 'Mi perfil' },
         { to: '/student/projects', label: 'Proyectos' },
-        { to: '/student/evidences', label: 'Evidencias y certificados' },
+        { to: '/student/evidences', label: 'Credenciales y constancias' },
         { to: '/student/affinity', label: 'Áreas de afinidad' },
       ],
     },

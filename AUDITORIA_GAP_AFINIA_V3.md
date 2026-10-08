@@ -223,3 +223,35 @@ Se agregan en el batch del módulo que los produce.
 Además, 20 eventos de auditoría de §65 (ver arriba).
 
 Lo más grande, por impacto: el modelo unificado de oportunidades (B6), las oportunidades externas con elegibilidad y la validación de credenciales (B8–B9), los requisitos de proyecto y GitHub con dependencias (B10–B13), la Afinidad V4 (B14), las notificaciones (B16) y el currículo en dos niveles (B18).
+
+---
+
+## 4. Estado al cierre (BATCH 24, 2026-10-07)
+
+Los 90 puntos de la tabla del §3 quedaron atendidos en los batches 1 a 24. El detalle, con pruebas y resultados, está en [`docs/V3_REPORTE_BATCHES.md`](docs/V3_REPORTE_BATCHES.md).
+
+| Estado inicial | Puntos | Al cierre |
+|---|---|---|
+| IMPLEMENTADO | 36 | Conservado; las suites V1/V2 se actualizaron a V3 donde la especificación cambió el comportamiento, sin borrar comprobaciones |
+| PARCIAL | 22 | Completado |
+| INCORRECTO | 11 | Corregido. Ejemplos: afinidad V4, recomendaciones sin afinidad, gamificación sin borradores ni contactos, descargo del currículo |
+| FALTANTE | 20 | Implementado. Ejemplos: notificaciones, postulaciones, currículo en dos niveles, trayectoria con niveles, analítica de evolución |
+| OBSOLETO | 1 | Retirado: la evidencia autoservicio de actividad interna (B7) y la bandeja genérica de evidencias (B24, §23; los datos anteriores se conservan) |
+
+**Eventos de auditoría de §65:** los 34 eventos mínimos existen y se registran.
+- 13 se agregaron en el BATCH 24: `PROJECT_CREATED`, `MEMBER_INVITED`, `MEMBER_ACCEPTED`, `CONTRIBUTION_CONFIRMED`, `PROJECT_EVIDENCE_ADDED`, `REPOSITORY_CHECKED`, `DEMO_CHECKED`, `PROJECT_BACKING_CHANGED`, `AFFINITY_RECALCULATED`, `CONTACT_ACCEPTED`, `TEAM_APPLICATION_CREATED`, `TEAM_MEMBER_ACCEPTED`, `CURRICULUM_EXPORTED`.
+- `FEEDBACK_ADDED` existía en el catálogo, pero solo se escribía en la bitácora del proyecto; ahora también va a la auditoría.
+
+**Fuera del alcance por decisión de la especificación (§75):**
+- OCR de capturas para certificar el stack.
+- Recorrer una demo para inferir tecnologías.
+- IA como autenticadora final.
+- Puntaje de «dominio» por habilidad.
+- Malla curricular.
+- Chat.
+
+**Pendientes que requieren algo externo al código:**
+- Ejecutar el flujo Maestro en un dispositivo.
+- La prueba SUS con participantes.
+- La migración a NestJS 11/12 para cerrar 4 avisos «altos» de dependencias, hoy mitigados.
+- Aplicar al `.docx` la guía [`docs/CAMBIOS_DOCUMENTO_GRADO_V3.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V3.md).

@@ -1,5 +1,6 @@
+import { AuditEventType, AuditService } from '../audit/audit.service';
 import { createHash } from 'crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import {
@@ -287,6 +288,7 @@ export class AffinityEngineService {
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
+    @Optional() private readonly audit: AuditService,
     @InjectRepository(StudentInterest) private readonly interests: Repository<StudentInterest>,
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(ActivityRegistration)
@@ -733,7 +735,16 @@ export class AffinityEngineService {
       );
     });
 
-    return this.persist(studentProfileId, senales, rulesVersion);
+    const resultado = await this.persist(studentProfileId, senales, rulesVersion);
+    // V3 §65: queda constancia de cada recálculo (sin puntajes: solo cuántas áreas).
+    await this.audit?.record({
+      actorUserId: null,
+      eventType: AuditEventType.AFFINITY_RECALCULATED,
+      entityType: 'student_profile',
+      entityId: studentProfileId,
+      metadata: { areas: resultado.length, reglas: rulesVersion },
+    });
+    return resultado;
   }
 
   // =========================================================================
