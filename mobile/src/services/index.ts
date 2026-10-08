@@ -138,6 +138,9 @@ export interface OnboardingState {
 
 export const activityService = {
   list: (params?: Record<string, string>) => api.get<any[]>('/activities', { params }).then((r) => r.data),
+  /** V3 B23: una página del listado, con lo más próximo primero. */
+  page: (params: Record<string, string | number>) =>
+    api.get<{ items: any[]; total: number }>('/activities', { params }).then((r) => r.data),
   /** Detalle: para el estudiante incluye su propio estado y si puede inscribirse. */
   get: (id: string) => api.get<any>(`/activities/${id}`).then((r) => r.data),
   myRegistrations: () => api.get<any[]>('/activities/my-registrations').then((r) => r.data),

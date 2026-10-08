@@ -2168,7 +2168,56 @@ async function batch22(ctx) {
   check(ret.status === 200, 'V3.22.9 Y puede retirarla', `status ${ret.status}`);
 }
 
-const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19, batch20, batch22 };
+// ===========================================================================
+//  BATCH 23 — Hardening: listado de actividades paginado (RNF05)
+// ===========================================================================
+async function batch23(ctx) {
+  objective('BATCH 23 · El listado del estudiante llega por páginas, con lo próximo primero');
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Pagina', lastName: 'Estudiante', email: correoEst('b23'), role: 'STUDENT', semester: 3 });
+  const perfil = (await req('GET', '/profiles/me', { token: est.token })).data;
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Pagina', lastName: 'Director', email: correoStaff('b23dir'), role: 'CAREER_DIRECTOR' });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cat = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const marca = `Paginado${String(TS).slice(-6)}`;
+  const crear = async (titulo, horas, status = 'open') => (await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${marca} ${titulo}`, type: 'academica', categoryId: cat.id, status, activityDate: new Date(Date.now() + horas * 3_600_000).toISOString() },
+  })).data;
+  const lejana = await crear('lejana', 24 * 40);
+  const proxima = await crear('próxima', 2);
+  const media = await crear('media', 24 * 5);
+  const borrador = await crear('borrador', 3, 'draft');
+  const pagina = (q) => req('GET', `/activities?limit=10&q=${encodeURIComponent(marca)}${q}`, { token: est.token });
+
+  const p = await pagina('');
+  check(p.status === 200 && Array.isArray(p.data?.items) && p.data.total === 3 && p.data.limit === 10 && p.data.offset === 0,
+    'V3.23.1 Con limit responde { items, total, limit, offset }', JSON.stringify({ t: p.data?.total, n: p.data?.items?.length }));
+  check(p.data?.items?.map((a) => a.id).join() === [proxima.id, media.id, lejana.id].join(),
+    'V3.23.2 Lo más próximo primero', JSON.stringify(p.data?.items?.map((a) => a.title)));
+  check(!p.data?.items?.some((a) => a.id === borrador?.id), 'V3.23.3 El estudiante no ve borradores');
+  const p2 = await req('GET', `/activities?limit=1&offset=1&q=${encodeURIComponent(marca)}`, { token: est.token });
+  check(p2.data?.items?.length === 1 && p2.data.items[0].id === media.id && p2.data.total === 3, 'V3.23.4 offset avanza por la lista sin cambiar el total');
+  const literal = await req('GET', `/activities?limit=10&q=${encodeURIComponent('%')}${encodeURIComponent(marca)}`, { token: est.token });
+  check(literal.status === 200 && literal.data?.total === 0, 'V3.23.5 Un % en la búsqueda se busca como texto, no como comodín');
+  await req('POST', `/activities/${media.id}/register-interest`, { token: est.token });
+  await req('POST', `/activities/${proxima.id}/register`, { token: est.token });
+  const interesadas = await pagina('&mine=interested');
+  const inscritas = await pagina('&mine=enrolled');
+  check(interesadas.data?.items?.map((a) => a.id).join() === media.id && inscritas.data?.items?.map((a) => a.id).join() === proxima.id,
+    'V3.23.6 «Interesadas» e «Inscritas» salen del servidor');
+  check(inscritas.data?.items?.[0]?.myRegistration?.status === 'registered', 'V3.23.7 Cada ítem trae su propia inscripción');
+  for (const [q, nombre] of [['&limit=0', 'limit 0'], ['&limit=101', 'limit 101'], ['&limit=5&offset=-1', 'offset negativo'], ['&limit=5&mine=todas', 'mine inventado']]) {
+    const r = await req('GET', `/activities?${q.slice(1)}`, { token: est.token });
+    check(r.status === 400, `V3.23.8 Se rechaza ${nombre}`, `status ${r.status}`);
+  }
+  const sinLimite = await req('GET', '/activities', { token: est.token });
+  check(Array.isArray(sinLimite.data), 'V3.23.9 Sin limit, la lista completa de siempre (compatibilidad)');
+  const ajeno = await req('GET', `/activities?limit=10&mine=enrolled&q=${encodeURIComponent(marca)}`, { token: (await provisionAndActivate(ctx.admin, { firstName: 'Otro', lastName: 'Estudiante', email: correoEst('b23o'), role: 'STUDENT', semester: 3 })).token });
+  check(ajeno.data?.total === 0, 'V3.23.10 «Las mías» son solo las propias', `${ajeno.data?.total}`);
+  void perfil;
+}
+
+const BATCHES = { batch2, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16, batch17, batch18, batch19, batch20, batch22, batch23 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.1 — verificación contra la API${C.r}`);

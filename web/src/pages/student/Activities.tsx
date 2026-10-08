@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   FiAlertCircle,
   FiCalendar,
@@ -33,24 +33,17 @@ import {
 import { useConfirm, useToast } from '../../components/feedback';
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
 
-const normalize = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-
 const formatDate = (value: string | null) =>
   value
     ? new Date(value).toLocaleDateString('es-BO', { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
 export default function StudentActivitiesPage() {
-  const { data, loading, error, reload } = useAsync(() => activityService.list(), []);
   const [query, setQuery] = useState('');
+  /** Lo que se busca en el servidor: espera a que se deje de escribir. */
+  const [buscado, setBuscado] = useState('');
   const [type, setType] = useState<'todas' | 'academica' | 'extracurricular'>('todas');
   const [busy, setBusy] = useState<string | null>(null);
-  // Se pintan de a poco: miles de tarjetas a la vez bloqueaban la pantalla al
-  // entrar (y se veía como un tirón). Cambiar un filtro vuelve al principio.
-  const PASO = 24;
-  const [limite, setLimite] = useState(PASO);
-  useEffect(() => setLimite(PASO), [query, type]);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -58,26 +51,43 @@ export default function StudentActivitiesPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') ?? 'para-ti';
   const cambiarTab = (k: string) => setParams(k === 'para-ti' ? {} : { tab: k }, { replace: true });
-  const historial = useAsync(() => (tab === 'historial' ? activityService.myRegistrations() : Promise.resolve(null)), [tab]);
+  // Sus inscripciones: dan el historial y los contadores de las pestañas.
+  const historial = useAsync(() => activityService.myRegistrations(), []);
+  const regs = historial.data ?? [];
 
-  const items = data ?? [];
-  const deLaPestana = (a: Activity) => {
-    const estado = a.myRegistration?.status;
-    if (tab === 'interesadas') return estado === 'interested';
-    if (tab === 'inscritas') return estado === 'registered' || estado === 'accepted' || estado === 'confirmed';
-    return true;
-  };
-
-  const visible = useMemo(() => {
-    const q = normalize(query.trim());
-    return items.filter((a) => {
-      if (!deLaPestana(a)) return false;
-      if (type !== 'todas' && a.type !== type) return false;
-      if (!q) return true;
-      return [a.title, a.description ?? '', a.academicArea?.name ?? '', a.category?.name ?? '', a.location ?? '']
-        .some((field) => normalize(field).includes(q));
-    });
-  }, [items, query, type, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  /*
+   * V3 B23: el listado llega por páginas, con lo más próximo primero. Antes
+   * se descargaban todas las actividades de la carrera en cada visita y se
+   * filtraban aquí; con miles de filas, eso eran megas por pantalla.
+   */
+  const PASO = 24;
+  const lista = tab === 'todas' || tab === 'interesadas' || tab === 'inscritas';
+  const mine = tab === 'interesadas' ? 'interested' as const : tab === 'inscritas' ? 'enrolled' as const : undefined;
+  const [items, setItems] = useState<Activity[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cargado, setCargado] = useState(false);
+  const pedir = useCallback(async (offset: number) => {
+    setLoading(true);
+    try {
+      const r = await activityService.page({
+        limit: PASO, offset, q: buscado.trim() || undefined, type: type === 'todas' ? undefined : type, mine,
+      });
+      setItems((prev) => (offset === 0 ? r.items : [...prev, ...r.items]));
+      setTotal(r.total);
+      setError(null);
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setLoading(false);
+      setCargado(true);
+    }
+  }, [buscado, type, mine]);
+  useEffect(() => { if (lista) void pedir(0); }, [pedir, lista]);
+  const reload = () => { void pedir(0); historial.reload(); };
+  const data = cargado ? items : null;
+  const visible = items;
 
   const run = async (fn: () => Promise<unknown>, id: string, success: string, detail?: string) => {
     setBusy(id);
@@ -155,8 +165,8 @@ export default function StudentActivitiesPage() {
         items={[
           { key: 'para-ti', label: 'Para ti' },
           { key: 'todas', label: 'Todas' },
-          { key: 'interesadas', label: 'Interesadas', count: items.filter((a) => a.myRegistration?.status === 'interested').length },
-          { key: 'inscritas', label: 'Inscritas', count: items.filter((a) => ['registered', 'accepted', 'confirmed'].includes(a.myRegistration?.status ?? '')).length },
+          { key: 'interesadas', label: 'Interesadas', count: regs.filter((r) => r.status === 'interested').length },
+          { key: 'inscritas', label: 'Inscritas', count: regs.filter((r) => ['registered', 'accepted', 'confirmed'].includes(r.status)).length },
           { key: 'historial', label: 'Historial' },
         ]}
       />
@@ -193,7 +203,8 @@ export default function StudentActivitiesPage() {
         <SearchInput
           value={query}
           onChange={setQuery}
-          placeholder="Buscar por título, área, categoría o lugar…"
+          onDebouncedChange={setBuscado}
+          placeholder="Buscar por título, descripción o lugar…"
         />
         <div className="chip-row">
           {([
@@ -211,17 +222,19 @@ export default function StudentActivitiesPage() {
             </button>
           ))}
         </div>
-        <ResultCount shown={visible.length} total={items.length} noun="actividades" />
+        <ResultCount shown={visible.length} total={total} noun="actividades" />
       </div>
 
       {loading && !data ? (
         <Diferido><SkeletonCards count={4} /></Diferido>
       ) : error && !data ? (
         <div className="alert alert-error">{error}</div>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && !buscado && type === 'todas' ? (
         <EmptyState
           icon={<FiCalendar size={22} />}
-          message="Todavía no hay actividades publicadas. Vuelve a consultar más adelante."
+          message={tab === 'interesadas' ? 'Todavía no marcaste interés en ninguna actividad.'
+            : tab === 'inscritas' ? 'Todavía no te inscribiste en ninguna actividad.'
+              : 'Todavía no hay actividades publicadas. Vuelve a consultar más adelante.'}
         />
       ) : visible.length === 0 ? (
         <EmptyState
@@ -233,6 +246,7 @@ export default function StudentActivitiesPage() {
               size="sm"
               onClick={() => {
                 setQuery('');
+                setBuscado('');
                 setType('todas');
               }}
             >
@@ -242,7 +256,7 @@ export default function StudentActivitiesPage() {
         />
       ) : (
         <div className="grid cols-2">
-          {visible.slice(0, limite).map((a, index) => {
+          {visible.map((a, index) => {
             const date = formatDate(a.eventDate);
             const blocked = a.registrationBlockReason;
             const full = a.capacity != null && a.seatsLeft === 0;
@@ -348,10 +362,10 @@ export default function StudentActivitiesPage() {
           })}
         </div>
       )}
-      {visible.length > limite && (
+      {lista && items.length < total && (
         <div style={{ textAlign: 'center', marginTop: '1rem' }}>
-          <Button variant="secondary" onClick={() => setLimite((n) => n + PASO)}>
-            Ver más ({visible.length - limite} restantes)
+          <Button variant="secondary" loading={loading} onClick={() => pedir(items.length)}>
+            Ver más ({total - items.length} restantes)
           </Button>
         </div>
       )}

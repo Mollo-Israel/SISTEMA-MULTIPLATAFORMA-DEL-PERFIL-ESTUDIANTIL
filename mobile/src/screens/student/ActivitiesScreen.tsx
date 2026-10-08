@@ -73,7 +73,27 @@ export default function ActivitiesScreen({ navigation }: any) {
     return p;
   }, [type, categoryId, areaId, modality, fromDate, toDate, applied]);
 
-  const { data, loading, error, reload } = useAsync(() => activityService.list(params), [params]);
+  // V3 B23: por páginas de 30, con lo más próximo primero.
+  const PAGINA = 30;
+  const pagina = useAsync(() => activityService.page({ ...params, limit: PAGINA }), [params]);
+  const [mas, setMas] = useState<any[]>([]);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  useEffect(() => setMas([]), [params]);
+  const { loading, error } = pagina;
+  const reload = () => { setMas([]); pagina.reload(); };
+  const data = pagina.data ? [...pagina.data.items, ...mas] : null;
+  const total = pagina.data?.total ?? 0;
+  const cargarMas = async () => {
+    setCargandoMas(true);
+    try {
+      const r = await activityService.page({ ...params, limit: PAGINA, offset: data?.length ?? 0 });
+      setMas((prev) => [...prev, ...r.items]);
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setCargandoMas(false);
+    }
+  };
   const [categories, setCategories] = useState<any[]>([]);
   const [areas, setAreas] = useState<any[]>([]);
 
@@ -463,6 +483,11 @@ export default function ActivitiesScreen({ navigation }: any) {
           </FadeIn>
         );
       })}
+      {data && data.length < total && (
+        <View style={{ marginTop: 12 }}>
+          <Button variant="secondary" icon="chevrons-down" title={`Cargar más (${total - data.length} restantes)`} loading={cargandoMas} onPress={cargarMas} />
+        </View>
+      )}
       </>)}
     </Screen>
   );

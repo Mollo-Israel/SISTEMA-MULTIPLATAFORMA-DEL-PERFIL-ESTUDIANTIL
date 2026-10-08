@@ -632,6 +632,66 @@ export class ActivitiesService {
     user: AuthenticatedUser,
     filters: QueryActivitiesDto,
   ): Promise<Array<ActivityWithCounts | ReturnType<typeof vistaEstudiante>>> {
+    return this.listar(user, filters);
+  }
+
+  /**
+   * V3 BATCH 23: una página del listado del estudiante. Lo próximo primero
+   * (fecha futura más cercana), luego lo pasado y lo que no tiene fecha. Los
+   * filtros son los mismos del listado completo, más texto y «las mías».
+   */
+  async findPage(user: AuthenticatedUser, filters: QueryActivitiesDto) {
+    const limit = filters.limit ?? 30;
+    const offset = filters.offset ?? 0;
+    const qb = this.activities.createQueryBuilder('a').select('a.id', 'id');
+    if (user.role === RolNombre.STUDENT) qb.andWhere('a.status <> :borrador', { borrador: ActivityStatus.DRAFT });
+    if (filters.type) qb.andWhere('a.type = :type', { type: filters.type });
+    if (filters.categoryId) qb.andWhere('a.category_id = :cat', { cat: filters.categoryId });
+    if (filters.status) qb.andWhere('a.status = :status', { status: filters.status });
+    if (filters.modality) qb.andWhere('a.modality = :modality', { modality: filters.modality });
+    if (filters.originType) qb.andWhere('a.origin_type = :origin', { origin: filters.originType });
+    if (filters.areaId) {
+      qb.andWhere('a.id IN (SELECT aa.activity_id FROM activity_areas aa WHERE aa.academic_area_id = :area)', { area: filters.areaId });
+    }
+    if (filters.fromDate) qb.andWhere('a.event_date >= :desde', { desde: startOfDay(filters.fromDate) });
+    if (filters.toDate) qb.andWhere('a.event_date <= :hasta', { hasta: endOfDay(filters.toDate) });
+    if (filters.q) {
+      // Los comodines que escriba la persona se buscan como texto.
+      const texto = `%${filters.q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+      qb.andWhere('(a.title ILIKE :texto OR a.description ILIKE :texto OR a.location ILIKE :texto)', { texto });
+    }
+    if (filters.mine) {
+      const perfil = await this.profiles.findOne({ where: { userId: user.userId }, select: { id: true } });
+      const estados = filters.mine === 'interested'
+        ? [RegistrationStatus.INTERESTED]
+        : [RegistrationStatus.REGISTERED, RegistrationStatus.ACCEPTED, RegistrationStatus.CONFIRMED];
+      qb.andWhere(
+        'a.id IN (SELECT r.activity_id FROM activity_registrations r WHERE r.student_profile_id = :perfil AND r.status IN (:...estados))',
+        { perfil: perfil?.id ?? '00000000-0000-4000-8000-000000000000', estados },
+      );
+    }
+    const total = await qb.getCount();
+    const filas: { id: string }[] = await qb
+      .orderBy('CASE WHEN a.event_date >= now() THEN 0 WHEN a.event_date IS NULL THEN 2 ELSE 1 END', 'ASC')
+      .addOrderBy('CASE WHEN a.event_date >= now() THEN a.event_date END', 'ASC')
+      .addOrderBy('a.event_date', 'DESC')
+      .addOrderBy('a.created_at', 'DESC')
+      .offset(offset)
+      .limit(limit)
+      .getRawMany();
+    const ids = filas.map((f) => f.id);
+    const items = ids.length ? await this.listar(user, filters, ids) : [];
+    const orden = new Map(ids.map((id, i) => [id, i]));
+    items.sort((x, y) => (orden.get((x as { id: string }).id) ?? 0) - (orden.get((y as { id: string }).id) ?? 0));
+    return { items, total, limit, offset };
+  }
+
+  /** Lista completa o, con `soloIds`, solo esas actividades (para una página). */
+  private async listar(
+    user: AuthenticatedUser,
+    filters: QueryActivitiesDto,
+    soloIds?: string[],
+  ): Promise<Array<ActivityWithCounts | ReturnType<typeof vistaEstudiante>>> {
     const where: FindOptionsWhere<Activity> = {};
     if (filters.type) where.type = filters.type;
     if (filters.categoryId) where.categoryId = filters.categoryId;
@@ -655,6 +715,11 @@ export class ActivitiesService {
       where.eventDate = LessThanOrEqual(endOfDay(toDate));
     }
 
+    if (soloIds) {
+      // La página ya aplicó los filtros; aquí solo se cargan sus filas.
+      for (const k of Object.keys(where)) delete (where as Record<string, unknown>)[k];
+      where.id = In(soloIds);
+    }
     const activities = await this.activities.find({
       where,
       relations: { academicArea: true, creator: true, category: true, activityAreas: { academicArea: true } },

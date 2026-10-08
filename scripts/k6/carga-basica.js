@@ -2,7 +2,7 @@
  * Carga de Afinia con k6 (V2 §79.7, RNF05; BATCH 16).
  *
  * Cubre lo que §79.7 enumera: login, listados, perfiles, recomendaciones y
- * reportes. Los usuarios (un estudiante y una Dirección) los crea run-k6.mjs
+ * reportes, y desde V3 avisos, trayectoria, necesidades e ítems del currículo. Los usuarios (un estudiante y una Dirección) los crea run-k6.mjs
  * por el camino real. Los umbrales son los de RNF05, en entorno controlado:
  *   - 95 % de las operaciones CRUD sin archivos en <= 3 s;
  *   - reportes habituales en <= 5 s;
@@ -71,11 +71,19 @@ export function estudiante(data) {
     check(http.get(`${BASE}/affinity/me/summary`, params(t, 'crud')), { 'afinidad 200': (r) => r.status === 200 });
   });
   group('Listados', () => {
-    check(http.get(`${BASE}/activities?status=open`, params(t, 'crud')), { 'actividades 200': (r) => r.status === 200 });
+    // V3 B23: como la web y la app, por páginas.
+    check(http.get(`${BASE}/activities?status=open&limit=30`, params(t, 'crud')), { 'actividades 200': (r) => r.status === 200 });
     check(http.get(`${BASE}/projects/my`, params(t, 'crud')), { 'proyectos 200': (r) => r.status === 200 });
   });
   group('Recomendaciones', () => {
     check(http.get(`${BASE}/recommendations/me`, params(t, 'crud')), { 'recomendaciones 200': (r) => r.status === 200 });
+  });
+  // V3 (BATCH 23): lo que la web y la app consultan en cada visita.
+  group('V3', () => {
+    check(http.get(`${BASE}/notifications/me/unread-count`, params(t, 'crud')), { 'avisos 200': (r) => r.status === 200 });
+    check(http.get(`${BASE}/trajectory/me`, params(t, 'crud')), { 'trayectoria 200': (r) => r.status === 200 });
+    check(http.get(`${BASE}/team-needs`, params(t, 'crud')), { 'necesidades 200': (r) => r.status === 200 });
+    check(http.get(`${BASE}/trajectory-summary/items`, params(t, 'crud')), { 'items cv 200': (r) => r.status === 200 });
   });
   // Una de cada diez vueltas vuelve a iniciar sesión: el login también se mide.
   if (Math.random() < 0.1) login(__ENV.EMAIL, __ENV.PASSWORD);
@@ -88,6 +96,7 @@ export function direccion(data) {
     check(http.get(`${BASE}/reports/director/overview`, params(t, 'reporte')), { 'panel 200': (r) => r.status === 200 });
     check(http.get(`${BASE}/reports/director/trends`, params(t, 'reporte')), { 'tendencias 200': (r) => r.status === 200 });
     check(http.get(`${BASE}/reports/director/affinity-map`, params(t, 'reporte')), { 'mapa 200': (r) => r.status === 200 });
+    check(http.get(`${BASE}/reports/director/pending`, params(t, 'reporte')), { 'pendientes 200': (r) => r.status === 200 });
   });
   sleep(2);
 }

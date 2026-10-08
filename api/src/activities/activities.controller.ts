@@ -65,6 +65,10 @@ export class ActivitiesController {
       'Listar actividades. Filtros opcionales por categoría, área, modalidad y fecha (RF8), más tipo y estado.',
   })
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryActivitiesDto) {
+    // V3 BATCH 23: con `limit`, una página; sin él, la lista completa de siempre.
+    if (query.limit !== undefined && user.role === RolNombre.STUDENT) {
+      return this.activitiesService.findPage(user, query);
+    }
     return this.activitiesService.findAll(user, query);
   }
 

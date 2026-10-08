@@ -43,6 +43,7 @@ import {
   activityCvEligible, certificateCvEligible, certificateLevel, projectCvEligible, projectLevel, registrationLevel,
 } from '../../src/trajectory/cv-eligibility.rules';
 import { ManualReviewStatus, ProjectStatus, TrajectoryLevel } from '@perfil/shared';
+import { ACTIVITY_TRANSITIONS, canTransition } from '@perfil/shared';
 describe('Afinidad V3 (§45–§47)', () => {
   it('es la versión 4 del motor (V3.1 §35)', () => assert.equal(AFFINITY_ENGINE_VERSION, 4));
 
@@ -738,5 +739,41 @@ describe('V3 §42 · Niveles de la trayectoria', () => {
     assert.equal(registrationLevel(RegistrationStatus.CONFIRMED), TrajectoryLevel.CORROBORATED);
     assert.equal(registrationLevel(RegistrationStatus.ACCEPTED), TrajectoryLevel.INCOMPLETE);
     assert.equal(registrationLevel(RegistrationStatus.ABSENT), null);
+  });
+});
+
+describe('V3 B23 · Transiciones de estado de una actividad (matriz completa)', () => {
+  const E = ActivityStatus;
+  const todos = Object.values(E) as ActivityStatus[];
+  // Lo que la especificación permite; cualquier otra pareja debe rechazarse.
+  const permitido = new Set([
+    'draft>published', 'draft>open', 'draft>cancelled',
+    'published>draft', 'published>open', 'published>closed', 'published>finished', 'published>cancelled',
+    'open>closed', 'open>finished', 'open>cancelled',
+    'closed>open', 'closed>finished', 'closed>cancelled',
+  ]);
+  it('las 36 parejas: solo pasan las permitidas (y quedarse igual)', () => {
+    for (const a of todos) {
+      for (const b of todos) {
+        const esperado = a === b || permitido.has(`${a}>${b}`);
+        assert.equal(canTransition(a, b), esperado, `${a} → ${b}`);
+      }
+    }
+  });
+  it('los estados finales no salen a ninguna parte', () => {
+    for (const fin of [E.FINISHED, E.CANCELLED]) {
+      assert.deepEqual([...ACTIVITY_TRANSITIONS[fin]], []);
+    }
+  });
+  it('desde un borrador se alcanzan todos los estados', () => {
+    const vistos = new Set<ActivityStatus>([E.DRAFT]);
+    const cola: ActivityStatus[] = [E.DRAFT];
+    while (cola.length) {
+      for (const s of ACTIVITY_TRANSITIONS[cola.shift()!]) if (!vistos.has(s)) { vistos.add(s); cola.push(s); }
+    }
+    assert.equal(vistos.size, todos.length);
+  });
+  it('nunca se vuelve a borrador desde algo abierto, cerrado o final', () => {
+    for (const s of [E.OPEN, E.CLOSED, E.FINISHED, E.CANCELLED]) assert.equal(canTransition(s, E.DRAFT), false, s);
   });
 });

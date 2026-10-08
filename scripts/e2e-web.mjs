@@ -58,7 +58,9 @@ async function servirWeb() {
 }
 
 async function navegador() {
-  for (const channel of ['msedge', 'chrome']) {
+  // V3 B23 · compatibilidad: E2E_BROWSER=msedge|chrome fija el navegador.
+  const canales = process.env.E2E_BROWSER ? [process.env.E2E_BROWSER] : ['msedge', 'chrome'];
+  for (const channel of canales) {
     try { return await chromium.launch({ channel, headless: true }); } catch { /* el siguiente */ }
   }
   throw new Error('No hay Edge ni Chrome instalados para Playwright.');

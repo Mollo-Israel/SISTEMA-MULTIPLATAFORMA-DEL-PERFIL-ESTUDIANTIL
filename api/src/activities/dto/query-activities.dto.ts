@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsEnum, IsISO8601, IsOptional, IsUUID, ValidateIf } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsEnum, IsIn, IsISO8601, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { ActivityModality, ActivityOrigin, ActivityStatus, ActivityType } from '@perfil/shared';
 import { IsNotBeforeField, trim } from '../../common/validation';
 
@@ -63,4 +63,36 @@ export class QueryActivitiesDto {
     message: 'La fecha hasta no puede ser anterior a la fecha desde.',
   })
   toDate?: string;
+
+  /*
+   * V3 BATCH 23 · Paginación. Sin `limit` la respuesta es la lista completa,
+   * como siempre. Con `limit` es una página `{ items, total, limit, offset }`
+   * con lo más próximo primero: una lista sin tope crecía con cada semestre.
+   */
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, description: 'Tamaño de página (activa la paginación)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'El tamaño de página debe ser un número.' })
+  @Min(1, { message: 'El tamaño de página mínimo es 1.' })
+  @Max(100, { message: 'El tamaño de página máximo es 100.' })
+  limit?: number;
+
+  @ApiPropertyOptional({ minimum: 0, description: 'Desde qué posición (con limit)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'La posición debe ser un número.' })
+  @Min(0, { message: 'La posición no puede ser negativa.' })
+  offset?: number;
+
+  @ApiPropertyOptional({ description: 'Texto a buscar en título, descripción o lugar (con limit)' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(100, { message: 'La búsqueda admite hasta 100 caracteres.' })
+  q?: string;
+
+  @ApiPropertyOptional({ enum: ['interested', 'enrolled'], description: 'Solo las que me interesan o en las que estoy inscrito (estudiante, con limit)' })
+  @IsOptional()
+  @IsIn(['interested', 'enrolled'], { message: 'Filtro propio no válido.' })
+  mine?: 'interested' | 'enrolled';
 }

@@ -912,3 +912,70 @@ Formato de la Especificación Maestra V3.1 §73. Un batch no se declara completo
 **Riesgos:** la insignia de avisos se actualiza al entrar a la pestaña y cada minuto; no hay notificaciones push (no las pide la especificación).
 
 **Pendientes:** ejecutar el flujo Maestro en un emulador o dispositivo (B23 / defensa).
+
+---
+
+## BATCH 23 — Hardening / QA
+
+**ESTADO:** completo; la prueba en dispositivo (Maestro) y la prueba con usuarios (SUS) quedan preparadas.
+
+**Objetivo:** demostrar la calidad del sistema con todo lo que §72 enumera (unitarias, integración con PostgreSQL, transiciones de estado, Playwright, Maestro, ZAP, auditoría de dependencias, k6, Sonar, compatibilidad y SUS) y corregir lo que aparezca. Detalle completo en [`docs/V3_QA_HARDENING.md`](V3_QA_HARDENING.md).
+
+**Hallazgos:**
+- **k6 no cumplía el umbral:**
+  - CRUD p95 de 3,94 s, por encima de 3 s.
+  - Causa: `GET /activities` no tenía tope y devolvía 3 832 actividades (6,3 MB) en cada visita, unos 440 ms con un solo usuario.
+- **`npm audit`:** 1 vulnerabilidad crítica en la API (`proxy-addr`) y 1 crítica en la app (`shell-quote`).
+- **ZAP activo:** sin hallazgos.
+
+**Cambios:**
+- **Paginación del listado** (opcional, compatible):
+  - `limit` (1–100) y `offset`.
+  - `q`: búsqueda de texto en el servidor; `%` y `_` se buscan como texto.
+  - `mine=interested|enrolled`.
+  - Orden: lo próximo primero, luego lo pasado y lo que no tiene fecha.
+  - Con `limit` responde `{ items, total, limit, offset }`. Sin `limit` se conserva la lista de siempre.
+- **Web del estudiante:** «Todas», «Interesadas» e «Inscritas» se piden por páginas de 24 con «Ver más» y búsqueda en el servidor; los contadores salen de sus inscripciones.
+- **App:** «Todas» por páginas de 30 con «Cargar más».
+- **k6:** pide páginas, como los clientes, y suma las rutas V3 (avisos, trayectoria, necesidades, ítems del currículo y pendientes de Dirección).
+- **Dependencias** (`npm audit fix` sin `--force`): `proxy-addr` en la raíz; `shell-quote`, `axios`, `form-data` y otras en la app. No queda ninguna crítica.
+  - Las 4 altas restantes de la API vienen de NestJS 10 y exigen NestJS 12, un cambio mayor.
+  - Se intentó forzar versiones parchadas con `overrides`; npm 11 con workspaces no las aplicó de forma estable y se revirtió.
+  - Queda documentado como riesgo residual con su mitigación: límites de `multer`, cuerpo de 256 kb, Swagger fuera de producción.
+- **Transiciones:** prueba unitaria de la matriz completa de estados de una actividad (36 parejas), los estados finales y la alcanzabilidad desde borrador.
+- **Compatibilidad:** `e2e-web` acepta `E2E_BROWSER=msedge|chrome`.
+- **Maestro:** el flujo V3 se actualizó en B22.
+
+**Migraciones:** ninguna. Copia de seguridad previa al escaneo activo de ZAP (`pre-v3-b23.dump`).
+
+**Pruebas ejecutadas:**
+- Unitarias: 99/99, con la matriz de transiciones.
+- `e2e-v3 batch23` (V3.23.1–V3.23.10, 13 comprobaciones): forma de la página, orden, sin borradores, `offset`, `%` literal, «las mías» desde el servidor y solo propias, validaciones de `limit`/`offset`/`mine`, compatibilidad sin `limit`.
+- **k6:**
+
+  | Medida | Antes | Después |
+  |---|---|---|
+  | CRUD p95 | 3,94 s | **1,56 s** |
+  | Login p95 | 2,03 s | 1,57 s |
+  | Reportes p95 | 1,19 s | 0,66 s |
+  | Errores | 0 % | 0 % |
+  | Peticiones en el mismo minuto | 945 | 1901 |
+
+- **ZAP activo** con la sesión de un estudiante: 683 URL, 118 reglas aprobadas, **0 fallos, 0 avisos**.
+- **`e2e-web`** en Edge (regresión) y en Chrome: 38/38 en ambos.
+- **App:** `expo-doctor` 18/18 y paquete Android tras el `audit fix`.
+- **Regresión completa.**
+
+**No ejecutado (sin el entorno necesario):**
+- Maestro: no hay emulador ni dispositivo.
+- SUS: requiere participantes; el protocolo está listo en el documento de QA.
+- Sonar: no hay servidor. La configuración `sonar-project.properties` es de V2.
+- Firefox, Safari e iOS.
+
+**Resultados:** unitarias 99/99; `e2e-v3` 365 (B23 13/13). Regresión completa: **1808 correctas, 0 fallos** (20 suites).
+
+**Riesgos:**
+- El listado completo sin `limit` sigue disponible por compatibilidad y para los responsables, cuyo alcance se resuelve fila por fila.
+- Las 4 altas de NestJS 10 quedan como riesgo residual mitigado.
+
+**Pendientes:** limpieza y documentación (B24).
