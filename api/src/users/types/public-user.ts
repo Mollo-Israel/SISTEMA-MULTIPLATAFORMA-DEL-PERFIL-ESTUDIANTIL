@@ -48,6 +48,10 @@ export interface InvitationView {
   simulated?: boolean;
   error?: string | null;
   at?: Date | null;
+  /** V3.2 §8.6: vencimiento del enlace de activación vigente. */
+  expiresAt?: Date | null;
+  /** El último enlace ya caducó sin usarse: hay que reenviarlo. */
+  expired?: boolean;
 }
 
 export function toPublicUser(user: User): PublicUser {

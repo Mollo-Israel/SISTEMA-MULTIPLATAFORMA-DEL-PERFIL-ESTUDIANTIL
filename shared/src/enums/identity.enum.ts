@@ -37,4 +37,6 @@ export enum ImportBatchStatus {
   APPLIED = 'applied',
   /** Previsualizado y descartado sin aplicar. */
   DISCARDED = 'discarded',
+  /** V3.2 §7.5: se intentó aplicar y no se pudo; queda con su motivo. */
+  FAILED = 'failed',
 }

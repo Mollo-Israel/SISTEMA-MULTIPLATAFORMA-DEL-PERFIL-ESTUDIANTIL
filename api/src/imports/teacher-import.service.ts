@@ -20,7 +20,8 @@ import { AuditEventType, AuditService } from '../audit/audit.service';
 import { ActivationService } from '../identity/activation.service';
 import { institutionalEmailDomains, isInstitutionalEmail } from '../config/identity.config';
 import { NAME_RE } from '../common/validation';
-import { parseCsv } from './csv.parser';
+import { codificacionProblema, columnasProblema, parseCsv } from './csv.parser';
+import { ImportsService } from './imports.service';
 
 /** Columnas del padrón de docentes (V3 §7.1). */
 export const TEACHER_IMPORT_HEADERS = [
@@ -85,11 +86,16 @@ export class TeacherImportService {
     private readonly activation: ActivationService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
+    private readonly imports: ImportsService,
     private readonly dataSource: DataSource,
   ) {}
 
   async preview(adminUserId: string, file: { buffer: Buffer; originalname: string }) {
-    const parsed = parseCsv(file.buffer.toString('utf8'));
+    const contenido = file.buffer.toString('utf8');
+    const codificacion = codificacionProblema(contenido);
+    if (codificacion) throw new BadRequestException({ code: 'IMPORT_ENCODING', message: codificacion });
+    await this.imports.limpiarPrevisualizaciones();
+    const parsed = parseCsv(contenido);
     const faltan = TEACHER_IMPORT_HEADERS.filter((h) => !parsed.headers.includes(h));
     if (faltan.length > 0) {
       throw new BadRequestException(
@@ -99,7 +105,7 @@ export class TeacherImportService {
     }
     if (parsed.rows.length === 0) throw new BadRequestException('El archivo no contiene filas de datos.');
 
-    const evaluadas = await this.evaluar(parsed.rows);
+    const evaluadas = await this.evaluar(parsed.rows, parsed.headers.length);
     const counts = this.contar(evaluadas);
     const batch = await this.batches.save(
       this.batches.create({
@@ -129,13 +135,7 @@ export class TeacherImportService {
         }),
       ),
     );
-    await this.audit.record({
-      actorUserId: adminUserId,
-      eventType: AuditEventType.IMPORT_PREVIEWED,
-      entityType: 'import_batch',
-      entityId: batch.id,
-      metadata: { kind: 'teachers', filename: file.originalname, totalRows: evaluadas.length, counts },
-    });
+    // V3.2 §7.5: una previsualización no se audita; lo que queda es aplicar.
     return {
       batchId: batch.id,
       kind: 'teachers',
@@ -154,7 +154,10 @@ export class TeacherImportService {
     };
   }
 
-  private async evaluar(parsed: { lineNumber: number; values: Record<string, string> }[]): Promise<FilaEvaluada[]> {
+  private async evaluar(
+    parsed: { lineNumber: number; values: Record<string, string>; columns?: number }[],
+    columnasPlantilla: number,
+  ): Promise<FilaEvaluada[]> {
     const dominios = institutionalEmailDomains(this.config);
     const codigos = parsed.map((r) => normalizeUniversityCode(r.values.university_code)).filter(Boolean);
     const correos = parsed.map((r) => r.values.institutional_email?.trim().toLowerCase()).filter(Boolean) as string[];
@@ -180,7 +183,8 @@ export class TeacherImportService {
     const vistosCorreo = new Set<string>();
     const out: FilaEvaluada[] = [];
 
-    for (const { lineNumber, values } of parsed) {
+    for (const fila of parsed) {
+      const { lineNumber, values } = fila;
       const universityCode = normalizeUniversityCode(values.university_code) || null;
       const email = values.institutional_email?.trim().toLowerCase() || null;
       const firstName = values.first_name?.trim() || null;
@@ -196,7 +200,8 @@ export class TeacherImportService {
         existingUserId: null as string | null,
       };
 
-      const invalida = this.validar({ universityCode, email, firstName, lastName, dominios })
+      const invalida = columnasProblema(fila, columnasPlantilla)
+        ?? this.validar({ universityCode, email, firstName, lastName, dominios })
         ?? (typeof semestres === 'string' ? semestres : null);
       if (invalida) {
         out.push({ ...base, status: ImportRowStatus.INVALID, message: invalida });
@@ -288,67 +293,72 @@ export class TeacherImportService {
 
     const creados: User[] = [];
     let actualizados = 0;
-    await this.dataSource.transaction(async (manager) => {
-      const usuarios = manager.getRepository(User);
-      const acceso = manager.getRepository(TeacherSemesterAccess);
-      const reemplazarSemestres = async (teacherId: string, semestres: number[]) => {
-        await acceso.delete({ teacherId });
-        if (semestres.length) {
-          await acceso.save(semestres.map((semester) => acceso.create({ teacherId, semester, grantedById: adminUserId })));
-        }
-      };
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const usuarios = manager.getRepository(User);
+        const acceso = manager.getRepository(TeacherSemesterAccess);
+        const reemplazarSemestres = async (teacherId: string, semestres: number[]) => {
+          await acceso.delete({ teacherId });
+          if (semestres.length) {
+            await acceso.save(semestres.map((semester) => acceso.create({ teacherId, semester, grantedById: adminUserId })));
+          }
+        };
 
-      for (const fila of filas) {
-        const semestres = fila.semesters ?? [];
-        if (fila.status === ImportRowStatus.NEW) {
-          const placeholder = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
-          const docente = await usuarios.save(
-            usuarios.create({
-              firstName: fila.firstName!,
-              lastName: fila.lastName!,
-              email: fila.institutionalEmail!,
-              passwordHash: placeholder,
-              roleId: rolDocente.id,
-              universityCode: fila.universityCode!,
-              semester: null,
-              status: UserStatus.PENDING_ACTIVATION,
-            }),
+        for (const fila of filas) {
+          const semestres = fila.semesters ?? [];
+          if (fila.status === ImportRowStatus.NEW) {
+            const placeholder = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+            const docente = await usuarios.save(
+              usuarios.create({
+                firstName: fila.firstName!,
+                lastName: fila.lastName!,
+                email: fila.institutionalEmail!,
+                passwordHash: placeholder,
+                roleId: rolDocente.id,
+                universityCode: fila.universityCode!,
+                semester: null,
+                status: UserStatus.PENDING_ACTIVATION,
+              }),
+            );
+            await reemplazarSemestres(docente.id, semestres);
+            await manager.getRepository(ImportBatchRow).update({ id: fila.id }, { userId: docente.id });
+            creados.push(docente);
+            continue;
+          }
+          if (!fila.userId) continue;
+          await usuarios.update(
+            { id: fila.userId },
+            { firstName: fila.firstName!, lastName: fila.lastName!, email: fila.institutionalEmail! },
           );
-          await reemplazarSemestres(docente.id, semestres);
-          await manager.getRepository(ImportBatchRow).update({ id: fila.id }, { userId: docente.id });
-          creados.push(docente);
-          continue;
+          await reemplazarSemestres(fila.userId, semestres);
+          await this.audit.record(
+            {
+              actorUserId: adminUserId,
+              eventType: AuditEventType.TEACHER_SCOPE_CHANGED,
+              entityType: 'user',
+              entityId: fila.userId,
+              metadata: { semesters: semestres, via: 'import', batchId },
+            },
+            manager,
+          );
+          actualizados++;
         }
-        if (!fila.userId) continue;
-        await usuarios.update(
-          { id: fila.userId },
-          { firstName: fila.firstName!, lastName: fila.lastName!, email: fila.institutionalEmail! },
-        );
-        await reemplazarSemestres(fila.userId, semestres);
+        await manager.getRepository(ImportBatch).update({ id: batchId }, { status: ImportBatchStatus.APPLIED, appliedAt: new Date() });
         await this.audit.record(
           {
             actorUserId: adminUserId,
-            eventType: AuditEventType.TEACHER_SCOPE_CHANGED,
-            entityType: 'user',
-            entityId: fila.userId,
-            metadata: { semesters: semestres, via: 'import', batchId },
+            eventType: AuditEventType.IMPORT_APPLIED,
+            entityType: 'import_batch',
+            entityId: batchId,
+            metadata: { kind: 'teachers', created: creados.length, updated: actualizados },
           },
           manager,
         );
-        actualizados++;
-      }
-      await manager.getRepository(ImportBatch).update({ id: batchId }, { status: ImportBatchStatus.APPLIED, appliedAt: new Date() });
-      await this.audit.record(
-        {
-          actorUserId: adminUserId,
-          eventType: AuditEventType.IMPORT_APPLIED,
-          entityType: 'import_batch',
-          entityId: batchId,
-          metadata: { kind: 'teachers', created: creados.length, updated: actualizados },
-        },
-        manager,
-      );
-    });
+      });
+    } catch (error) {
+      await this.imports.marcarFallido(batchId, error);
+      throw error;
+    }
 
     // Como en el padrón de estudiantes: el correo sale fuera de la transacción.
     for (const docente of creados) {
@@ -366,6 +376,7 @@ export class TeacherImportService {
       batchId,
       created: creados.length,
       updated: actualizados,
+      ...this.imports.resumen(batch.counts, creados.length, actualizados),
       message:
         `Importación de docentes aplicada: ${creados.length} cuenta(s) nueva(s) y ${actualizados} actualizada(s). `
         + 'Las nuevas recibieron su enlace de activación.',

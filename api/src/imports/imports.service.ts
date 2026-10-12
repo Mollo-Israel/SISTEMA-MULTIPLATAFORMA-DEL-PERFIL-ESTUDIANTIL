@@ -23,7 +23,7 @@ import {
   isInstitutionalEmail,
 } from '../config/identity.config';
 import { NAME_RE } from '../common/validation';
-import { parseCsv } from './csv.parser';
+import { codificacionProblema, columnasProblema, parseCsv } from './csv.parser';
 
 /** Columnas mínimas de la plantilla (§10). */
 const REQUIRED_HEADERS = [
@@ -78,7 +78,12 @@ export class ImportsService {
     file: { buffer: Buffer; originalname: string },
   ): Promise<{ batchId: string; counts: Record<string, number>; totalRows: number; rows: unknown[] }> {
     const content = file.buffer.toString('utf8');
+    const codificacion = codificacionProblema(content);
+    if (codificacion) throw new BadRequestException({ code: 'IMPORT_ENCODING', message: codificacion });
+    await this.limpiarPrevisualizaciones();
     const parsed = parseCsv(content);
+    // Las columnas del archivo tal como llegó (antes del alias current_semester).
+    const columnasPlantilla = parsed.headers.length;
     // V3 §7.1 nombra la columna `current_semester`; se acepta igual que `semester`.
     if (!parsed.headers.includes('semester') && parsed.headers.includes('current_semester')) {
       parsed.headers.push('semester');
@@ -96,7 +101,7 @@ export class ImportsService {
       throw new BadRequestException('El archivo no contiene filas de datos.');
     }
 
-    const evaluated = await this.evaluateRows(parsed.rows);
+    const evaluated = await this.evaluateRows(parsed.rows, columnasPlantilla);
     const counts = this.countByStatus(evaluated);
 
     const batch = await this.batches.save(
@@ -127,13 +132,7 @@ export class ImportsService {
       ),
     );
 
-    await this.audit.record({
-      actorUserId: adminUserId,
-      eventType: AuditEventType.IMPORT_PREVIEWED,
-      entityType: 'import_batch',
-      entityId: batch.id,
-      metadata: { filename: file.originalname, totalRows: evaluated.length, counts },
-    });
+    // V3.2 §7.5: una previsualización no se audita; lo que queda es aplicar.
 
     return {
       batchId: batch.id,
@@ -160,7 +159,8 @@ export class ImportsService {
    * es CONFLICT: resolverlo automáticamente podría fusionar dos personas.
    */
   private async evaluateRows(
-    parsed: { lineNumber: number; values: Record<string, string> }[],
+    parsed: { lineNumber: number; values: Record<string, string>; columns?: number }[],
+    columnasPlantilla: number,
   ): Promise<EvaluatedRow[]> {
     const domains = institutionalEmailDomains(this.config);
 
@@ -191,7 +191,8 @@ export class ImportsService {
 
     const out: EvaluatedRow[] = [];
 
-    for (const { lineNumber, values } of parsed) {
+    for (const fila of parsed) {
+      const { lineNumber, values } = fila;
       const universityCode = normalizeUniversityCode(values.university_code) || null;
       const email = values.institutional_email?.trim().toLowerCase() || null;
       const firstName = values.first_name?.trim() || null;
@@ -210,7 +211,8 @@ export class ImportsService {
       };
 
       // ---- formato ----
-      const invalid = this.validateRow({ universityCode, email, firstName, lastName, semesterRaw, semester, domains });
+      const invalid = columnasProblema(fila, columnasPlantilla)
+        ?? this.validateRow({ universityCode, email, firstName, lastName, semesterRaw, semester, domains });
       if (invalid) {
         out.push({ ...base, status: ImportRowStatus.INVALID, message: invalid });
         continue;
@@ -360,93 +362,98 @@ export class ImportsService {
     const created: User[] = [];
     let updated = 0;
 
-    await this.dataSource.transaction(async (manager) => {
-      const userRepo = manager.getRepository(User);
-      const profileRepo = manager.getRepository(StudentProfile);
-      const rowRepo = manager.getRepository(ImportBatchRow);
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const userRepo = manager.getRepository(User);
+        const profileRepo = manager.getRepository(StudentProfile);
+        const rowRepo = manager.getRepository(ImportBatchRow);
 
-      for (const row of rows) {
-        if (row.status === ImportRowStatus.NEW) {
-          // Contraseña imposible de adivinar y jamás comunicada: la real la
-          // fija el titular al activar. Así la cuenta nunca queda accesible
-          // con un valor por defecto.
-          const placeholder = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+        for (const row of rows) {
+          if (row.status === ImportRowStatus.NEW) {
+            // Contraseña imposible de adivinar y jamás comunicada: la real la
+            // fija el titular al activar. Así la cuenta nunca queda accesible
+            // con un valor por defecto.
+            const placeholder = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
 
-          const user = await userRepo.save(
-            userRepo.create({
+            const user = await userRepo.save(
+              userRepo.create({
+                firstName: row.firstName!,
+                lastName: row.lastName!,
+                email: row.institutionalEmail!,
+                passwordHash: placeholder,
+                roleId: studentRole.id,
+                universityCode: row.universityCode!,
+                semester: row.semester,
+                status: UserStatus.PENDING_ACTIVATION,
+              }),
+            );
+            await profileRepo.save(
+              profileRepo.create({
+                userId: user.id,
+                universityCode: row.universityCode,
+                semester: row.semester,
+              }),
+            );
+            await rowRepo.update({ id: row.id }, { userId: user.id });
+            created.push(user);
+            continue;
+          }
+
+          // UPDATE: solo datos institucionales. §10.2 prohíbe tocar contraseña,
+          // proyectos, afinidades, evidencias, certificados y preferencias.
+          const userId = row.userId;
+          if (!userId) continue;
+
+          await userRepo.update(
+            { id: userId },
+            {
               firstName: row.firstName!,
               lastName: row.lastName!,
               email: row.institutionalEmail!,
-              passwordHash: placeholder,
-              roleId: studentRole.id,
-              universityCode: row.universityCode!,
               semester: row.semester,
-              status: UserStatus.PENDING_ACTIVATION,
-            }),
-          );
-          await profileRepo.save(
-            profileRepo.create({
-              userId: user.id,
-              universityCode: row.universityCode,
-              semester: row.semester,
-            }),
-          );
-          await rowRepo.update({ id: row.id }, { userId: user.id });
-          created.push(user);
-          continue;
-        }
-
-        // UPDATE: solo datos institucionales. §10.2 prohíbe tocar contraseña,
-        // proyectos, afinidades, evidencias, certificados y preferencias.
-        const userId = row.userId;
-        if (!userId) continue;
-
-        await userRepo.update(
-          { id: userId },
-          {
-            firstName: row.firstName!,
-            lastName: row.lastName!,
-            email: row.institutionalEmail!,
-            semester: row.semester,
-          },
-        );
-        const profile = await profileRepo.findOne({ where: { userId } });
-        if (profile) {
-          await profileRepo.update(
-            { id: profile.id },
-            {
-              semester: row.semester,
-              universityCode: profile.universityCode ?? row.universityCode,
             },
           );
-        } else {
-          await profileRepo.save(
-            profileRepo.create({
-              userId,
-              universityCode: row.universityCode,
-              semester: row.semester,
-            }),
-          );
+          const profile = await profileRepo.findOne({ where: { userId } });
+          if (profile) {
+            await profileRepo.update(
+              { id: profile.id },
+              {
+                semester: row.semester,
+                universityCode: profile.universityCode ?? row.universityCode,
+              },
+            );
+          } else {
+            await profileRepo.save(
+              profileRepo.create({
+                userId,
+                universityCode: row.universityCode,
+                semester: row.semester,
+              }),
+            );
+          }
+          updated++;
         }
-        updated++;
-      }
 
-      await manager.getRepository(ImportBatch).update(
-        { id: batchId },
-        { status: ImportBatchStatus.APPLIED, appliedAt: new Date() },
-      );
+        await manager.getRepository(ImportBatch).update(
+          { id: batchId },
+          { status: ImportBatchStatus.APPLIED, appliedAt: new Date() },
+        );
 
-      await this.audit.record(
-        {
-          actorUserId: adminUserId,
-          eventType: AuditEventType.IMPORT_APPLIED,
-          entityType: 'import_batch',
-          entityId: batchId,
-          metadata: { created: created.length, updated },
-        },
-        manager,
-      );
-    });
+        await this.audit.record(
+          {
+            actorUserId: adminUserId,
+            eventType: AuditEventType.IMPORT_APPLIED,
+            entityType: 'import_batch',
+            entityId: batchId,
+            metadata: { created: created.length, updated },
+          },
+          manager,
+        );
+      });
+    } catch (error) {
+      await this.marcarFallido(batchId, error);
+      throw error;
+    }
 
     // Los correos van fuera de la transacción: un SMTP lento o caído no debe
     // deshacer un padrón ya aplicado (RNF09). Quien no reciba el correo puede
@@ -466,10 +473,58 @@ export class ImportsService {
       batchId,
       created: created.length,
       updated,
+      ...this.resumen(batch.counts, created.length, updated),
       message:
         `Importación aplicada: ${created.length} cuenta(s) nueva(s) y ${updated} actualizada(s). `
         + 'Las nuevas recibieron su enlace de activación.',
     };
+  }
+
+  /**
+   * V3.2 §7.3: el resumen completo. Las filas con conflicto o inválidas no
+   * bloquean a las demás: se informan para corregirlas en otro archivo.
+   */
+  resumen(counts: Record<string, number>, insertados: number, actualizados: number) {
+    return {
+      summary: {
+        inserted: insertados,
+        updated: actualizados,
+        unchanged: counts[ImportRowStatus.UNCHANGED] ?? 0,
+        skippedConflict: counts[ImportRowStatus.CONFLICT] ?? 0,
+        invalid: counts[ImportRowStatus.INVALID] ?? 0,
+      },
+    };
+  }
+
+  /** V3.2 §7.5: un lote que no se pudo aplicar queda con su motivo. */
+  async marcarFallido(batchId: string, error: unknown) {
+    // Sin datos personales: los correos que traiga el error del motor se ocultan.
+    const motivo = (error instanceof Error ? error.message : String(error))
+      .replace(/[^\s@'"]+@[^\s@'"]+/g, '[correo]');
+    await this.batches.update(
+      { id: batchId },
+      { status: ImportBatchStatus.FAILED, failureReason: motivo.slice(0, 300) },
+    ).catch(() => undefined);
+  }
+
+  /**
+   * V3.2 §7.5: una previsualización es temporal. Las que nadie aplicó en
+   * `IMPORT_PREVIEW_TTL_HOURS` (24 por omisión) se borran con sus filas, y
+   * también las descartadas: no son historial.
+   */
+  async limpiarPrevisualizaciones(): Promise<number> {
+    const horas = Number(this.config.get<string>('IMPORT_PREVIEW_TTL_HOURS') ?? 24);
+    const limite = new Date(Date.now() - (Number.isFinite(horas) && horas > 0 ? horas : 24) * 3_600_000);
+    const r = await this.batches
+      .createQueryBuilder()
+      .delete()
+      .where('(status = :descartado) OR (status = :previa AND created_at < :limite)', {
+        descartado: ImportBatchStatus.DISCARDED,
+        previa: ImportBatchStatus.PREVIEWED,
+        limite,
+      })
+      .execute();
+    return r.affected ?? 0;
   }
 
   /** Descarta una previsualización sin aplicarla. */
@@ -479,13 +534,18 @@ export class ImportsService {
     if (batch.status === ImportBatchStatus.APPLIED) {
       throw new BadRequestException('Este lote ya se aplicó: no puede descartarse.');
     }
-    await this.batches.update({ id: batchId }, { status: ImportBatchStatus.DISCARDED });
+    // V3.2 §7.5: descartar no deja rastro en el historial: se borra el lote
+    // (sus filas caen en cascada).
+    await this.batches.delete({ id: batchId });
     return { message: 'Previsualización descartada.' };
   }
 
   async listBatches(limit = 20, kind?: 'students' | 'teachers') {
+    await this.limpiarPrevisualizaciones();
+    // V3.2 §7.5: el historial operativo muestra lo aplicado y lo que falló.
+    const estados = In([ImportBatchStatus.APPLIED, ImportBatchStatus.FAILED]);
     const rows = await this.batches.find({
-      where: kind ? { kind } : {},
+      where: kind ? { kind, status: estados } : { status: estados },
       order: { createdAt: 'DESC' },
       take: Math.min(Math.max(limit, 1), 100),
       relations: { importedBy: true },
@@ -500,6 +560,7 @@ export class ImportsService {
       importedBy: b.importedBy ? `${b.importedBy.firstName} ${b.importedBy.lastName}` : null,
       createdAt: b.createdAt,
       appliedAt: b.appliedAt,
+      failureReason: b.failureReason,
     }));
   }
 

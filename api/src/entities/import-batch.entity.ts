@@ -63,6 +63,10 @@ export class ImportBatch {
   @Column({ name: 'applied_at', type: 'timestamptz', nullable: true })
   appliedAt: Date | null;
 
+  /** V3.2 §7.5: por qué no se pudo aplicar (sin datos personales). */
+  @Column({ name: 'failure_reason', type: 'varchar', length: 300, nullable: true })
+  failureReason: string | null;
+
   @OneToMany(() => ImportBatchRow, (row) => row.batch)
   rows: ImportBatchRow[];
 

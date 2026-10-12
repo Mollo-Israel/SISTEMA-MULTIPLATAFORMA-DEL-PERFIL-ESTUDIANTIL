@@ -11,6 +11,7 @@ import { DataSource, In, Not, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import {
+  AccountTokenPurpose,
   RolNombre,
   SEMESTER_ROLES,
   UserStatus,
@@ -211,7 +212,8 @@ export class UsersService {
     const term = search?.trim();
     if (term) {
       qb.andWhere(
-        "(u.firstName ILIKE :s OR u.lastName ILIKE :s OR u.email ILIKE :s OR CONCAT(u.firstName, ' ', u.lastName) ILIKE :s)",
+        "(u.firstName ILIKE :s OR u.lastName ILIKE :s OR u.email ILIKE :s OR u.universityCode ILIKE :s"
+          + " OR CONCAT(u.firstName, ' ', u.lastName) ILIKE :s)",
         { s: `%${term}%` },
       );
     }
@@ -237,11 +239,16 @@ export class UsersService {
       .map((u) => u.id);
     if (pendientes.length > 0) {
       const ultimos = await this.accountMail.latestFor(pendientes);
+      const vencimientos = await this.activationExpiries(pendientes);
       const simulated = this.mail.settings.transport === 'console';
+      const ahora = Date.now();
       for (const user of result) {
         const job = ultimos.get(user.id);
         if (!job) continue;
+        const expiresAt = vencimientos.get(user.id) ?? null;
         user.invitation = {
+          expiresAt,
+          expired: expiresAt ? expiresAt.getTime() <= ahora : false,
           status: job.status === 'pending' || job.status === 'sending' ? 'queued' : job.status,
           deliveryState: deliveryStateOf(job.status),
           sentTo: maskEmail(user.email),
@@ -252,6 +259,21 @@ export class UsersService {
       }
     }
     return result;
+  }
+
+  /**
+   * V3.2 §8.6: vencimiento del último enlace de activación de cada cuenta
+   * (una sola consulta para todo el listado).
+   */
+  private async activationExpiries(userIds: string[]): Promise<Map<string, Date>> {
+    const filas: { user_id: string; expires_at: Date }[] = await this.usersRepository.manager.query(
+      `SELECT DISTINCT ON (user_id) user_id, expires_at
+         FROM account_tokens
+        WHERE purpose = $1 AND user_id = ANY($2::uuid[]) AND used_at IS NULL AND revoked_at IS NULL
+        ORDER BY user_id, created_at DESC`,
+      [AccountTokenPurpose.ACCOUNT_ACTIVATION, userIds],
+    );
+    return new Map(filas.map((f) => [f.user_id, new Date(f.expires_at)]));
   }
 
   async findOne(id: string): Promise<PublicUser> {

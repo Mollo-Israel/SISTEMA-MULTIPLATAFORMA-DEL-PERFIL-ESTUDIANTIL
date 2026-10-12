@@ -590,3 +590,139 @@ export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: s
     </button>
   );
 }
+
+// ===========================================================================
+//  V3.2 §6.1 · Grillas: 10 filas por página, orden y contador
+// ===========================================================================
+
+/** Filas por página que recomienda V3.2 §6.1. */
+export const FILAS_POR_PAGINA = 10;
+
+/**
+ * Pagina una lista ya filtrada. Vuelve a la primera página cuando cambian los
+ * datos o el filtro (`reinicio`), para no quedar en una página que ya no existe.
+ */
+export function usePaginacion<T>(items: T[], porPagina = FILAS_POR_PAGINA, reinicio: unknown[] = []) {
+  const [pagina, setPagina] = useState(1);
+  const paginas = Math.max(1, Math.ceil(items.length / porPagina));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setPagina(1), reinicio);
+  const actual = Math.min(pagina, paginas);
+  const desde = (actual - 1) * porPagina;
+  return {
+    pagina: actual,
+    paginas,
+    total: items.length,
+    desde: items.length === 0 ? 0 : desde + 1,
+    hasta: Math.min(desde + porPagina, items.length),
+    visibles: items.slice(desde, desde + porPagina),
+    ir: (n: number) => setPagina(Math.min(Math.max(1, n), paginas)),
+  };
+}
+
+export type Direccion = 'asc' | 'desc';
+
+/**
+ * Orden por columna. `valores` dice cómo leer cada columna ordenable; un
+ * segundo clic invierte el sentido. El orden es local y estable.
+ */
+export function useOrden<T>(
+  items: T[],
+  valores: Record<string, (t: T) => string | number | null | undefined>,
+  inicial?: { clave: string; dir: Direccion },
+) {
+  const [orden, setOrden] = useState<{ clave: string; dir: Direccion } | null>(inicial ?? null);
+  const ordenados = (() => {
+    if (!orden || !valores[orden.clave]) return items;
+    const leer = valores[orden.clave];
+    const signo = orden.dir === 'asc' ? 1 : -1;
+    return [...items].sort((a, b) => {
+      const x = leer(a);
+      const y = leer(b);
+      if (x === y) return 0;
+      if (x === null || x === undefined || x === '') return 1;
+      if (y === null || y === undefined || y === '') return -1;
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'es')) * signo;
+    });
+  })();
+  const alternar = (clave: string) =>
+    setOrden((o) => (o?.clave === clave ? { clave, dir: o.dir === 'asc' ? 'desc' : 'asc' } : { clave, dir: 'asc' }));
+  return { ordenados, orden, alternar };
+}
+
+/** Encabezado que ordena. Anuncia el sentido a lectores de pantalla. */
+export function ThOrden({
+  clave,
+  orden,
+  alternar,
+  children,
+}: {
+  clave: string;
+  orden: { clave: string; dir: Direccion } | null;
+  alternar: (clave: string) => void;
+  children: ReactNode;
+}) {
+  const activo = orden?.clave === clave;
+  return (
+    <th aria-sort={activo ? (orden!.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className="th-orden" onClick={() => alternar(clave)}>
+        {children}
+        <span aria-hidden className={`th-flecha ${activo ? 'on' : ''}`}>{activo ? (orden!.dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+      </button>
+    </th>
+  );
+}
+
+/** Pie de grilla: contador, anterior/siguiente y páginas (V3.2 §6.1). */
+export function Paginacion({
+  pagina,
+  paginas,
+  total,
+  desde,
+  hasta,
+  ir,
+  noun = 'registros',
+}: {
+  pagina: number;
+  paginas: number;
+  total: number;
+  desde: number;
+  hasta: number;
+  ir: (n: number) => void;
+  noun?: string;
+}) {
+  if (total === 0) return null;
+  // Ventana corta de páginas alrededor de la actual, con la primera y la última.
+  const numeros = [...new Set([1, pagina - 1, pagina, pagina + 1, paginas])]
+    .filter((n) => n >= 1 && n <= paginas)
+    .sort((a, b) => a - b);
+  return (
+    <nav className="paginacion" aria-label="Paginación">
+      <span className="muted small">{desde}–{hasta} de {total} {noun}</span>
+      {paginas > 1 && (
+        <div className="paginacion-botones">
+          <button type="button" className="btn btn-secondary btn-sm" disabled={pagina === 1} onClick={() => ir(pagina - 1)}>
+            Anterior
+          </button>
+          {numeros.map((n, i) => (
+            <span key={n} className="flex" style={{ gap: '0.25rem' }}>
+              {i > 0 && numeros[i - 1] !== n - 1 && <span className="muted" aria-hidden>…</span>}
+              <button
+                type="button"
+                className={`btn btn-sm ${n === pagina ? 'btn-primary' : 'btn-ghost'}`}
+                aria-current={n === pagina ? 'page' : undefined}
+                aria-label={`Página ${n}`}
+                onClick={() => ir(n)}
+              >
+                {n}
+              </button>
+            </span>
+          ))}
+          <button type="button" className="btn btn-secondary btn-sm" disabled={pagina === paginas} onClick={() => ir(pagina + 1)}>
+            Siguiente
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+}

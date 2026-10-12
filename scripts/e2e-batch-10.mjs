@@ -281,11 +281,16 @@ async function alcanceDocente(ctx) {
     'B10.35 Sin alcance, el panel no cuenta ningún estudiante (§68)',
     String(overviewSin.data?.students?.total),
   );
+  // V3.2 B1: se compara con el total real de la carrera, no con un número fijo
+  // que dejaba de valer en cuanto la base crecía.
+  const adminB10 = await loginAdmin();
+  const carrera = await req('GET', '/users?role=STUDENT', { token: adminB10 });
+  const totalCarrera = Array.isArray(carrera.data) ? carrera.data.length : 0;
   check(
     (overview.data?.students?.total ?? 0) > 0
-      && overview.data.students.total < 900,
-    'B10.36 Con alcance, cuenta los suyos y no los 869 de la carrera',
-    String(overview.data?.students?.total),
+      && overview.data.students.total < totalCarrera,
+    'B10.36 Con alcance, cuenta los suyos y no a toda la carrera',
+    `${overview.data?.students?.total} de ${totalCarrera}`,
   );
 }
 

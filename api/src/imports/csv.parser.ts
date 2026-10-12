@@ -9,8 +9,31 @@
 
 export interface ParsedCsv {
   headers: string[];
-  /** Cada fila con su número de línea real en el archivo, para señalar errores. */
-  rows: { lineNumber: number; values: Record<string, string> }[];
+  /**
+   * Cada fila con su número de línea real en el archivo, para señalar errores,
+   * y cuántas columnas traía: V3.2 §7.6 exige detectar la fila a la que le
+   * falta (o le sobra) una columna en lugar de correr los valores.
+   */
+  rows: { lineNumber: number; values: Record<string, string>; columns: number }[];
+}
+
+/**
+ * V3.2 §7.6: una fila con distinta cantidad de columnas que la cabecera no se
+ * interpreta. Si se rellenara por posición, el correo terminaría en el
+ * apellido y la fila parecería válida.
+ */
+export function columnasProblema(row: { columns?: number }, esperadas: number): string | null {
+  if (row.columns === undefined || row.columns === esperadas) return null;
+  return row.columns < esperadas
+    ? `La fila tiene ${row.columns} columna(s) y la plantilla ${esperadas}: falta al menos un dato. No se interpretó para no mezclar campos.`
+    : `La fila tiene ${row.columns} columnas y la plantilla ${esperadas}: sobra un separador (¿una coma dentro de un nombre sin comillas?).`;
+}
+
+/** V3.2 §7.6: un archivo que no es UTF-8 llega con caracteres de reemplazo. */
+export function codificacionProblema(content: string): string | null {
+  return content.includes('\uFFFD')
+    ? 'El archivo no está en UTF-8 y algunas letras (tildes, ñ) se perderían. Guárdelo como «CSV UTF-8» y vuelva a subirlo.'
+    : null;
 }
 
 /** Detecta el separador por la cabecera: gana el que más columnas produzca. */
@@ -93,7 +116,7 @@ export function parseCsv(content: string): ParsedCsv {
     headers.forEach((header, index) => {
       values[header] = (cells[index] ?? '').trim();
     });
-    rows.push({ lineNumber: i + 1, values });
+    rows.push({ lineNumber: i + 1, values, columns: cells.length });
   }
 
   return { headers, rows };

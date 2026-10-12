@@ -24,8 +24,10 @@ import type {
   ImportApplyResult,
   ImportBatchDetail,
   ImportBatchSummary,
+  ImportCounts,
   ImportKind,
   ImportPreview,
+  ImportRowStatus,
   OnboardingRun,
   ProjectChecks,
   ProjectEventItem,
@@ -109,21 +111,46 @@ export const mailService = {
 };
 
 /** Importación de padrón institucional (§10). */
+/**
+ * V3.2 C1: la API devuelve veredictos y estados en minúscula («new»,
+ * «applied»); la interfaz trabaja en mayúscula. Se normaliza aquí, en un solo
+ * lugar, para que ningún conteo ni etiqueta quede sin traducir.
+ */
+function normalizarConteos(counts: Record<string, number> | null | undefined): ImportCounts {
+  const out = { NEW: 0, UPDATE: 0, UNCHANGED: 0, CONFLICT: 0, INVALID: 0 } as ImportCounts;
+  for (const [k, v] of Object.entries(counts ?? {})) {
+    const clave = k.toUpperCase() as ImportRowStatus;
+    if (clave in out) out[clave] = Number(v) || 0;
+  }
+  return out;
+}
+
+function normalizarFilas<T extends { status: string }>(rows: T[] | undefined): T[] {
+  return (rows ?? []).map((r) => ({ ...r, status: r.status.toUpperCase() }));
+}
+
+function normalizarLote<T extends { status: string; counts: Record<string, number> }>(b: T): T {
+  return { ...b, status: b.status.toUpperCase(), counts: normalizarConteos(b.counts) };
+}
+
 export const importsService = {
   preview: (file: File, kind: ImportKind = 'students') => {
     const form = new FormData();
     form.append('file', file);
     return api
       .post<ImportPreview>(`/imports/${kind}/preview`, form)
-      .then((r) => r.data);
+      .then((r) => ({ ...r.data, counts: normalizarConteos(r.data.counts), rows: normalizarFilas(r.data.rows) }));
   },
   apply: (batchId: string, kind: ImportKind = 'students') =>
     api.post<ImportApplyResult>(`/imports/${kind}/${batchId}/apply`).then((r) => r.data),
   discard: (batchId: string, kind: ImportKind = 'students') =>
     api.post(`/imports/${kind}/${batchId}/discard`).then((r) => r.data),
-  list: (kind: ImportKind = 'students') => api.get<ImportBatchSummary[]>(`/imports/${kind}`).then((r) => r.data),
+  list: (kind: ImportKind = 'students') =>
+    api.get<ImportBatchSummary[]>(`/imports/${kind}`).then((r) => r.data.map(normalizarLote)),
   detail: (batchId: string, kind: ImportKind = 'students') =>
-    api.get<ImportBatchDetail>(`/imports/${kind}/${batchId}`).then((r) => r.data),
+    api
+      .get<ImportBatchDetail>(`/imports/${kind}/${batchId}`)
+      .then((r) => ({ ...normalizarLote(r.data), rows: normalizarFilas(r.data.rows) })),
 };
 
 export const profileService = {

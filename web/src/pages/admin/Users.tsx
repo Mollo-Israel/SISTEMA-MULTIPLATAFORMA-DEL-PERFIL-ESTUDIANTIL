@@ -8,8 +8,7 @@ import { apiError } from '../../api/client';
 import { adminService, mailService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
-  SkeletonTable,
+  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
@@ -325,33 +324,27 @@ export default function AdminUsersPage() {
       <Card
         title="Usuarios registrados"
         actions={
-          <form
-            noValidate
-            className="flex"
-            style={{ gap: '0.5rem', flexWrap: 'wrap' }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              setApplied(search);
-            }}
-          >
-            <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nombre o correo…" />
-            <Button type="submit" variant="secondary" size="sm" icon={<FiSearch size={14} />}>
-              Buscar
+          <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+            {/* V3.2 §6.2 y §7.7: filtra al dejar de escribir, sin Enter. */}
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              onDebouncedChange={(v) => setApplied(v.trim())}
+              placeholder="Buscar por nombre, correo o código…"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!search && !applied}
+              onClick={() => {
+                setSearch('');
+                setApplied('');
+              }}
+            >
+              Limpiar
             </Button>
-            {applied && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearch('');
-                  setApplied('');
-                }}
-              >
-                Limpiar
-              </Button>
-            )}
-          </form>
+          </div>
         }
       >
         <AsyncView
@@ -420,9 +413,6 @@ export default function AdminUsersPage() {
 
 /* ------------------------------------------------------------------ */
 
-/** Filas que se dibujan de una vez; el resto, con «Ver más». */
-const PASO_FILAS = 50;
-
 interface AccionesTabla {
   editar: (u: PublicUser) => void;
   docente: (u: PublicUser) => void;
@@ -448,8 +438,15 @@ const TablaUsuarios = memo(function TablaUsuarios({
   acciones: AccionesTabla;
 }) {
   const users = useMemo(() => (rol ? todos.filter((u) => u.role === rol) : todos), [todos, rol]);
-  const [limite, setLimite] = useState(PASO_FILAS);
-  useEffect(() => setLimite(PASO_FILAS), [todos, rol]);
+  // V3.2 §6.1: 10 filas por página, ordenables, con contador.
+  const { ordenados, orden, alternar } = useOrden(users, {
+    nombre: (u) => `${u.lastName} ${u.firstName}`,
+    correo: (u) => u.email,
+    rol: (u) => ROLE_LABEL[u.role] ?? u.role,
+    semestre: (u) => u.semester ?? null,
+    estado: (u) => estadoCuenta(u).label,
+  });
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [todos, rol, orden]);
   return (
     <>
       <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -471,16 +468,16 @@ const TablaUsuarios = memo(function TablaUsuarios({
         <table>
           <thead>
             <tr>
-              <th>Nombre</th>
-              <th>Correo</th>
-              <th>Rol</th>
-              <th>Semestre</th>
-              <th>Estado</th>
-              <th></th>
+              <ThOrden clave="nombre" orden={orden} alternar={alternar}>Nombre</ThOrden>
+              <ThOrden clave="correo" orden={orden} alternar={alternar}>Correo</ThOrden>
+              <ThOrden clave="rol" orden={orden} alternar={alternar}>Rol</ThOrden>
+              <ThOrden clave="semestre" orden={orden} alternar={alternar}>Semestre</ThOrden>
+              <ThOrden clave="estado" orden={orden} alternar={alternar}>Estado</ThOrden>
+              <th><span className="sr-only">Acciones</span></th>
             </tr>
           </thead>
           <tbody>
-            {users.slice(0, limite).map((u) => (
+            {pag.visibles.map((u) => (
               <tr key={u.id}>
                 <td>
                   {u.firstName} {u.lastName}
@@ -492,9 +489,7 @@ const TablaUsuarios = memo(function TablaUsuarios({
                   <SemestreCelda user={u} onTeacher={() => acciones.docente(u)} onStudent={() => acciones.editar(u)} />
                 </td>
                 <td>
-                  <Badge tone={STATUS_TONE[u.status] ?? 'gray'}>
-                    {USER_STATUS_LABEL[u.status] ?? u.status}
-                  </Badge>
+                  <Badge tone={estadoCuenta(u).tone}>{estadoCuenta(u).label}</Badge>
                   {u.status === 'pending_activation' && <InvitacionLinea inv={u.invitation} />}
                 </td>
                 <td>
@@ -528,13 +523,7 @@ const TablaUsuarios = memo(function TablaUsuarios({
           </tbody>
         </table>
       </div>
-      {users.length > limite && (
-        <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
-          <Button variant="secondary" size="sm" onClick={() => setLimite((n) => n + PASO_FILAS)}>
-            Ver más ({users.length - limite} restantes)
-          </Button>
-        </div>
-      )}
+      <Paginacion {...pag} noun="usuarios" />
     </>
   );
 });
@@ -586,6 +575,18 @@ function SemestreCelda({
 }
 
 /** Una línea bajo el estado: en qué quedó la invitación de una cuenta pendiente. */
+/**
+ * V3.2 §8.6: el estado que el administrador necesita leer de un vistazo.
+ * Una cuenta pendiente cuyo último enlace venció es «Caducada»: hay que
+ * reenviar la invitación.
+ */
+function estadoCuenta(u: PublicUser): { label: string; tone: string } {
+  if (u.status === 'pending_activation') {
+    return u.invitation?.expired ? { label: 'Caducada', tone: 'red' } : { label: 'Pendiente', tone: 'amber' };
+  }
+  return { label: USER_STATUS_LABEL[u.status] ?? u.status, tone: STATUS_TONE[u.status] ?? 'gray' };
+}
+
 function InvitacionLinea({ inv }: { inv?: InvitationView }) {
   if (!inv) return <div className="inv-line muted">Sin invitación enviada</div>;
   const cuando = inv.at ? new Date(inv.at).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -610,9 +611,19 @@ function InvitacionLinea({ inv }: { inv?: InvitationView }) {
       </div>
     );
   }
+  // V3.2 §8.6: cuándo se envió, cuándo expira y si ya caducó.
+  const expira = inv.expiresAt ? new Date(inv.expiresAt).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : null;
+  if (inv.expired) {
+    return (
+      <div className="inv-line inv-error">
+        <FiXCircle size={12} /> Invitación caducada{expira ? ` el ${expira}` : ''}: reenvíala
+      </div>
+    );
+  }
   return (
     <div className="inv-line inv-ok">
       <FiSend size={12} /> Invitación enviada {cuando && `· ${cuando}`}
+      {expira && <span className="muted"> · Expira: {expira}</span>}
     </div>
   );
 }

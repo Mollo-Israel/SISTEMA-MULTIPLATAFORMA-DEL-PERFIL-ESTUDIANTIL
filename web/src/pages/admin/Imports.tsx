@@ -7,11 +7,12 @@ import { apiError } from '../../api/client';
 import { importsService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SkeletonTable,
+  AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, Modal, PageHeader, Paginacion, ResultCount,
+  SkeletonTable, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
 import type {
-  ImportBatchDetail, ImportKind, ImportPreview, ImportRow, ImportRowStatus,
+  ImportApplyResult, ImportBatchDetail, ImportBatchSummary, ImportKind, ImportPreview, ImportRow, ImportRowStatus,
 } from '../../services/types';
 
 /** Esquema de cada padrón (V3 §7.1): columnas, ejemplo y explicación. */
@@ -90,6 +91,7 @@ const ESTADO_LOTE: Record<string, { label: string; tone: string }> = {
   PREVIEWED: { label: 'Previsualizado', tone: 'amber' },
   APPLIED: { label: 'Aplicado', tone: 'green' },
   DISCARDED: { label: 'Descartado', tone: 'gray' },
+  FAILED: { label: 'Falló', tone: 'red' },
 };
 
 /**
@@ -131,11 +133,11 @@ export default function AdminImportsPage() {
       setPreview(result);
       setFilename(file.name);
       setFiltro('ALL');
+      // V3.2 §7.5: una previsualización no entra al historial.
       toast.success(
         'Archivo analizado.',
         `${result.totalRows} fila(s) leída(s). Revisa el resultado antes de aplicarlo.`,
       );
-      historial.reload();
     } catch (e) {
       toast.error(apiError(e, 'No se pudo analizar el archivo.'));
     } finally {
@@ -148,10 +150,12 @@ export default function AdminImportsPage() {
     if (!preview) return;
     const nuevas = preview.counts.NEW ?? 0;
     const actualiza = preview.counts.UPDATE ?? 0;
+    const fuera = (preview.counts.CONFLICT ?? 0) + (preview.counts.INVALID ?? 0);
     const ok = await confirm({
       title: 'Aplicar la importación',
       message:
         `Se crearán ${nuevas} cuenta(s) y se actualizarán ${actualiza}. `
+        + (fuera > 0 ? `${fuera} fila(s) con conflicto o error quedan fuera y no bloquean a las demás. ` : '')
         + 'Las cuentas nuevas recibirán su enlace de activación. '
         + 'Nadie se desactiva por no aparecer en el archivo.',
       confirmLabel: 'Aplicar ahora',
@@ -161,12 +165,14 @@ export default function AdminImportsPage() {
     setApplying(true);
     try {
       const res = await importsService.apply(preview.batchId, kind);
-      toast.success('Importación aplicada.', res.message);
+      toast.success('Importación aplicada.', resumenAplicacion(res));
       setPreview(null);
       setFilename('');
       historial.reload();
     } catch (e) {
       toast.error(apiError(e, 'No se pudo aplicar la importación.'));
+      // Un intento fallido queda en el historial con su motivo (V3.2 §7.5).
+      historial.reload();
     } finally {
       setApplying(false);
     }
@@ -186,7 +192,6 @@ export default function AdminImportsPage() {
       setPreview(null);
       setFilename('');
       toast.success('Previsualización descartada.');
-      historial.reload();
     } catch (e) {
       toast.error(apiError(e, 'No se pudo descartar.'));
     }
@@ -360,48 +365,9 @@ export default function AdminImportsPage() {
           data={historial.data}
           skeleton={<SkeletonTable rows={4} columns={6} />}
           isEmpty={(d) => d.length === 0}
-          emptyMessage="Todavía no se ha importado ningún padrón."
+          emptyMessage="Todavía no se ha aplicado ningún padrón. Las previsualizaciones no quedan en el historial."
         >
-          {(lotes) => (
-            <table>
-              <thead>
-                <tr>
-                  <th>Archivo</th>
-                  <th>Estado</th>
-                  <th>Filas</th>
-                  <th>Nuevas / Actualiza</th>
-                  <th>Importado por</th>
-                  <th>Fecha</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {lotes.map((b) => (
-                  <tr key={b.id}>
-                    <td>{b.filename}</td>
-                    <td>
-                      <Badge tone={ESTADO_LOTE[b.status]?.tone ?? 'gray'}>
-                        {ESTADO_LOTE[b.status]?.label ?? b.status}
-                      </Badge>
-                    </td>
-                    <td>{b.totalRows}</td>
-                    <td>
-                      {b.counts?.NEW ?? 0} / {b.counts?.UPDATE ?? 0}
-                    </td>
-                    <td className="muted">{b.importedBy ?? '—'}</td>
-                    <td className="muted">
-                      {new Date(b.appliedAt ?? b.createdAt).toLocaleString('es-BO')}
-                    </td>
-                    <td>
-                      <Button variant="secondary" size="sm" onClick={() => verDetalle(b.id)}>
-                        Ver filas
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          {(lotes) => <TablaLotes lotes={lotes} onVer={verDetalle} />}
         </AsyncView>
       </Card>
 
@@ -421,39 +387,129 @@ export default function AdminImportsPage() {
 
 /* ------------------------------------------------------------------ */
 
-function TablaFilas({ rows }: { rows: ImportRow[] }) {
+/** V3.2 §7.3: qué entró y qué quedó fuera, en una sola línea. */
+function resumenAplicacion(res: ImportApplyResult): string {
+  const s = res.summary;
+  if (!s) return res.message;
+  const partes = [
+    `${s.inserted} nueva(s)`,
+    `${s.updated} actualizada(s)`,
+    `${s.unchanged} sin cambios`,
+    `${s.skippedConflict} con conflicto (omitidas)`,
+    `${s.invalid} inválida(s) (omitidas)`,
+  ];
+  return `${partes.join(' · ')}. Las cuentas nuevas recibieron su enlace de activación.`;
+}
+
+/** Historial: solo lotes aplicados o fallidos, 10 por página y ordenables. */
+function TablaLotes({ lotes, onVer }: { lotes: ImportBatchSummary[]; onVer: (id: string) => void }) {
+  const { ordenados, orden, alternar } = useOrden(
+    lotes,
+    {
+      archivo: (b) => b.filename,
+      estado: (b) => ESTADO_LOTE[b.status]?.label ?? b.status,
+      filas: (b) => b.totalRows,
+      por: (b) => b.importedBy,
+      fecha: (b) => new Date(b.appliedAt ?? b.createdAt).getTime(),
+    },
+    { clave: 'fecha', dir: 'desc' },
+  );
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [lotes, orden]);
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Código</th>
-            <th>Nombre</th>
-            <th>Correo institucional</th>
-            <th>Semestre(s)</th>
-            <th>Veredicto</th>
-            <th>Observación</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.rowNumber}>
-              <td className="muted">{r.rowNumber}</td>
-              <td>{r.universityCode ?? '—'}</td>
-              <td>{[r.firstName, r.lastName].filter(Boolean).join(' ') || '—'}</td>
-              <td className="muted">{r.institutionalEmail ?? '—'}</td>
-              <td>{r.semesters ? (r.semesters.length ? r.semesters.join(', ') : 'Ninguno') : (r.semester ?? '—')}</td>
-              <td>
-                <Badge tone={VERDICTO[r.status]?.tone ?? 'gray'}>
-                  {VERDICTO[r.status]?.label ?? r.status}
-                </Badge>
-              </td>
-              <td className="muted" style={{ maxWidth: 320 }}>{r.message ?? '—'}</td>
+    <>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <ThOrden clave="archivo" orden={orden} alternar={alternar}>Archivo</ThOrden>
+              <ThOrden clave="estado" orden={orden} alternar={alternar}>Estado</ThOrden>
+              <ThOrden clave="filas" orden={orden} alternar={alternar}>Filas</ThOrden>
+              <th>Nuevas / Actualiza</th>
+              <ThOrden clave="por" orden={orden} alternar={alternar}>Importado por</ThOrden>
+              <ThOrden clave="fecha" orden={orden} alternar={alternar}>Fecha</ThOrden>
+              <th><span className="sr-only">Acciones</span></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {pag.visibles.map((b) => (
+              <tr key={b.id}>
+                <td>{b.filename}</td>
+                <td>
+                  <Badge tone={ESTADO_LOTE[b.status]?.tone ?? 'gray'}>
+                    {ESTADO_LOTE[b.status]?.label ?? b.status}
+                  </Badge>
+                  {b.status === 'FAILED' && b.failureReason && (
+                    <div className="muted small" style={{ maxWidth: 260 }}>{b.failureReason}</div>
+                  )}
+                </td>
+                <td>{b.totalRows}</td>
+                <td>
+                  {b.counts?.NEW ?? 0} / {b.counts?.UPDATE ?? 0}
+                </td>
+                <td className="muted">{b.importedBy ?? '—'}</td>
+                <td className="muted">
+                  {new Date(b.appliedAt ?? b.createdAt).toLocaleString('es-BO')}
+                </td>
+                <td>
+                  <Button variant="secondary" size="sm" onClick={() => onVer(b.id)}>
+                    Ver filas
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Paginacion {...pag} noun="lotes" />
+    </>
+  );
+}
+
+function TablaFilas({ rows }: { rows: ImportRow[] }) {
+  // V3.2 §6.1: 10 filas por página, ordenables.
+  const { ordenados, orden, alternar } = useOrden(rows, {
+    fila: (r) => r.rowNumber,
+    codigo: (r) => r.universityCode,
+    nombre: (r) => [r.firstName, r.lastName].filter(Boolean).join(' '),
+    correo: (r) => r.institutionalEmail,
+    veredicto: (r) => VERDICTO[r.status]?.label ?? r.status,
+  });
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [rows, orden]);
+  return (
+    <>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <ThOrden clave="fila" orden={orden} alternar={alternar}>#</ThOrden>
+              <ThOrden clave="codigo" orden={orden} alternar={alternar}>Código</ThOrden>
+              <ThOrden clave="nombre" orden={orden} alternar={alternar}>Nombre</ThOrden>
+              <ThOrden clave="correo" orden={orden} alternar={alternar}>Correo institucional</ThOrden>
+              <th>Semestre(s)</th>
+              <ThOrden clave="veredicto" orden={orden} alternar={alternar}>Veredicto</ThOrden>
+              <th>Observación</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pag.visibles.map((r) => (
+              <tr key={r.rowNumber}>
+                <td className="muted">{r.rowNumber}</td>
+                <td>{r.universityCode ?? '—'}</td>
+                <td>{[r.firstName, r.lastName].filter(Boolean).join(' ') || '—'}</td>
+                <td className="muted">{r.institutionalEmail ?? '—'}</td>
+                <td>{r.semesters ? (r.semesters.length ? r.semesters.join(', ') : 'Ninguno') : (r.semester ?? '—')}</td>
+                <td>
+                  <Badge tone={VERDICTO[r.status]?.tone ?? 'gray'}>
+                    {VERDICTO[r.status]?.label ?? r.status}
+                  </Badge>
+                </td>
+                <td className="muted" style={{ maxWidth: 320 }}>{r.message ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Paginacion {...pag} noun="filas" />
+    </>
   );
 }

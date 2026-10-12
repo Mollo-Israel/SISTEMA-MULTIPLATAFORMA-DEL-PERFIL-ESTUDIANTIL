@@ -31,6 +31,9 @@ export interface InvitationView {
   simulated?: boolean;
   error?: string | null;
   at?: string | null;
+  /** V3.2 §8.6: vencimiento del enlace vigente y si ya caducó. */
+  expiresAt?: string | null;
+  expired?: boolean;
 }
 
 /** Estado del envío de correo, para el panel de administración. */
@@ -65,8 +68,10 @@ export interface TokenCheck {
 /** Respuesta genérica de las solicitudes públicas de correo. */
 export interface MailRequestResult {
   message: string;
-  /** Segundos antes de poder pedir otro: el mismo para todos. */
+  /** V3.2 §8.4: segundos que realmente faltan para poder pedir otro. */
   retryAfterSeconds: number;
+  /** V3.2 §8.3: la cuenta ya está activa y no se envió nada. */
+  status?: 'REQUESTED' | 'ALREADY_ACTIVE';
 }
 
 /** Ciclo de vida de una cuenta (§12). Solo `active` puede operar. */
@@ -122,10 +127,13 @@ export interface ImportPreview {
   rows: ImportRow[];
 }
 
+/** V3.2 §7.5: el historial muestra solo APPLIED y FAILED. */
+export type ImportBatchStatus = 'PREVIEWED' | 'APPLIED' | 'DISCARDED' | 'FAILED';
+
 export interface ImportBatchDetail {
   id: string;
   filename: string;
-  status: 'PREVIEWED' | 'APPLIED' | 'DISCARDED';
+  status: ImportBatchStatus;
   counts: ImportCounts;
   totalRows: number;
   createdAt: string;
@@ -137,18 +145,28 @@ export interface ImportBatchSummary {
   id: string;
   kind?: ImportKind;
   filename: string;
-  status: 'PREVIEWED' | 'APPLIED' | 'DISCARDED';
+  status: ImportBatchStatus;
   totalRows: number;
   counts: ImportCounts;
   importedBy: string | null;
   createdAt: string;
   appliedAt: string | null;
+  /** Motivo, cuando la aplicación falló. */
+  failureReason?: string | null;
 }
 
 export interface ImportApplyResult {
   batchId: string;
   created: number;
   updated: number;
+  /** V3.2 §7.3: lo que entró, lo que no cambió y lo que quedó fuera. */
+  summary?: {
+    inserted: number;
+    updated: number;
+    unchanged: number;
+    skippedConflict: number;
+    invalid: number;
+  };
   message: string;
 }
 

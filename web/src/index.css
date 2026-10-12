@@ -940,7 +940,8 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .notice-error { background: #fdecec; color: #7a1c1c; border: 1px solid #f3b8b8; }
 .notice-ok { background: #e8f6ee; color: #155b38; border: 1px solid #bfe3cd; }
 
-.table-scroll { width: 100%; overflow-x: auto; }
+/* position: relative: lo absoluto de dentro (p. ej. .sr-only) queda dentro del desplazamiento. */
+.table-scroll { width: 100%; overflow-x: auto; position: relative; }
 
 .link-warn {
   display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.5rem;
@@ -1234,3 +1235,13 @@ button.chip { cursor: pointer; font-family: var(--font); }
 
 /* --- V3 §67: error de validación propio, debajo del campo --- */
 [aria-invalid="true"] { border-color: var(--danger, #b42318) !important; box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.12); }
+
+/* --- V3.2 §6.1 · Paginación y orden de grillas --- */
+.paginacion { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.paginacion-botones { display: flex; gap: 0.25rem; flex-wrap: wrap; align-items: center; }
+.th-orden { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem; text-transform: inherit; letter-spacing: inherit; }
+.th-flecha { font-size: 0.65rem; color: var(--gray-300, #c8cdd4); }
+.th-flecha.on { color: var(--bordo); }
+
+/* Texto solo para lectores de pantalla. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
