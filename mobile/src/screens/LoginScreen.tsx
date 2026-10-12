@@ -104,7 +104,7 @@ export default function LoginScreen() {
         await login(correo, form.password);
       } else if (modo === 'recuperar') {
         const r = await activationService.forgotPassword(correo);
-        setEspera(r.retryAfterSeconds ?? 120);
+        setEspera(Math.max(0, r.retryAfterSeconds ?? 0));
         cambiarModo('restablecer', r.message);
       } else if (modo === 'activar') {
         await activationService.activate(entrada);
@@ -130,8 +130,14 @@ export default function LoginScreen() {
       const r = modo === 'restablecer'
         ? await activationService.forgotPassword(correo)
         : await activationService.request(correo);
+      // V3.2 §8.3: si la cuenta ya está activa no se envió nada: a iniciar sesión.
+      if (r.status === 'ALREADY_ACTIVE') {
+        cambiarModo('login', r.message);
+        return;
+      }
       setAviso(r.message);
-      setEspera(r.retryAfterSeconds ?? 120);
+      // V3.2 §8.4: la espera que dice el servidor, no un valor fijo.
+      setEspera(Math.max(0, r.retryAfterSeconds ?? 0));
     } catch (e) {
       setError(apiError(e, 'No se pudo enviar el código.'));
     } finally {

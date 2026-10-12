@@ -36,6 +36,14 @@ const COPY: Record<Mode, {
   },
 };
 
+/**
+ * V3.2 §8.2: con el sistema hosteado, la pantalla muestra solo «Tengo el
+ * código»; quien llega desde el botón del correo trae el token en la URL y
+ * solo elige su contraseña. Pegar el enlace a mano queda para desarrollo (o si
+ * se habilita explícitamente con `VITE_ACTIVATION_PASTE_LINK=true`).
+ */
+const PEGAR_ENLACE = import.meta.env.DEV || import.meta.env.VITE_ACTIVATION_PASTE_LINK === 'true';
+
 /** Acepta el enlace completo o solo el token, por si el correo partió el enlace. */
 function extraerToken(valor: string): string {
   const t = valor.trim();
@@ -236,7 +244,7 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
               </AnimatePresence>
 
               <form onSubmit={submit} noValidate>
-                {!tokenUrl && (
+                {!tokenUrl && PEGAR_ENLACE && (
                   <div className="li-tabs" role="tablist" aria-label="Cómo quieres continuar">
                     <button
                       type="button"

@@ -136,3 +136,64 @@ Formato de cada reporte: §76.
 **Pendientes:** los estados FAILED solo se provocan en las pruebas unitarias; forzarlos de punta a punta exigiría romper la base. La paginación del resto de grillas se hace en los batches de cada módulo.
 
 **Riesgos:** `IMPORT_PREVIEW_TTL_HOURS` borra las previsualizaciones viejas al abrir la pantalla o al subir otro archivo, no con un temporizador. Una previsualización de hace 23 h sigue disponible.
+
+---
+
+## BATCH 2 — Activación de cuentas
+
+**ESTADO:** completo
+
+**Objetivo:** que una cuenta activa no reciba otra activación (§8.3), que la espera entre correos venga del servidor (§8.4), retirar la pestaña «Tengo el enlace» en producción (§8.2) y mostrar a Administración el envío, el vencimiento y el estado (§8.6). Se conserva todo lo de §8.1 y la protección de §8.5.
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **C3:** para una cuenta ACTIVE la API respondía 200 «te enviamos un mensaje». No encolaba nada, pero afirmaba un envío.
+- `retryAfterSeconds` era siempre la configuración (120). Al volver a pedir, la cuenta atrás se reiniciaba aunque el servidor no hubiera enviado nada.
+- La pestaña «Tengo el enlace» aparecía siempre.
+
+**Cambios:**
+- **API:**
+  - Cuenta ACTIVE: `status: 'ALREADY_ACTIVE'` con un mensaje que orienta a iniciar sesión o recuperar. No crea token, no encola correo y no audita una solicitud que no hubo.
+  - `retryAfterSeconds` es lo que realmente falta:
+    - Para una cuenta real manda el mayor entre el token vigente y la última solicitud pública.
+    - La espera se lleva por correo escrito, exista o no la cuenta, así que el número no delata cuentas (§12).
+    - Lo mismo rige en la recuperación de contraseña.
+  - Las respuestas genéricas traen `status: 'REQUESTED'`.
+- **Web:**
+  - Pantalla «Tu cuenta ya está activa» con «Iniciar sesión» y «Olvidé mi contraseña».
+  - La cuenta atrás usa el valor del servidor.
+  - La pestaña para pegar el enlace solo existe en desarrollo, o con `VITE_ACTIVATION_PASTE_LINK=true`. Quien llega desde el botón del correo trae el token en la URL y solo elige la contraseña.
+- **Móvil:** con ALREADY_ACTIVE vuelve a «Iniciar sesión» con el aviso; la espera usa el valor del servidor.
+- El estado Pendiente / Caducada / Activa y «Expira» en Administración (§8.6) se entregaron en el BATCH 1.
+- **Documentación:**
+  - `docs/DEMO_MULTIACTOR.md` (§9): un perfil del navegador equivale a una cuenta; para la demo se usan perfiles, incógnito o navegadores distintos.
+  - `web/.env.example` documenta `VITE_ACTIVATION_PASTE_LINK`.
+
+**Decisión de seguridad (para revisión):** §8.3 pide decir que la cuenta ya está activa. Esto revela que un correo institucional tiene cuenta activa, algo que antes la respuesta genérica ocultaba. Se implementa porque la especificación lo pide de forma explícita. Lo mitigan el límite de peticiones de `/activation` y que solo se aceptan correos institucionales. Las cuentas pendientes, suspendidas o inexistentes siguen indistinguibles.
+
+**Migraciones:** ninguna.
+
+**Archivos modificados:**
+- `api/src/identity/activation.service.ts`
+- `web/src/pages/auth/{RequestTokenPage,SetPasswordPage}.tsx`
+- `mobile/src/screens/LoginScreen.tsx`, `mobile/src/services/index.ts`
+- `web/.env.example`
+- `docs/DEMO_MULTIACTOR.md`
+- `scripts/e2e-v3-2.mjs`
+
+**Pruebas ejecutadas:**
+- `tsc` de API, web y móvil; build de la web.
+- Suite `e2e-v3-2 batch2`: **12/12**. Cubre:
+  - ALREADY_ACTIVE sin envío, sin auditoría y con el login intacto;
+  - una espera que baja entre dos pedidos y no se reinicia;
+  - la misma respuesta y la misma cuenta atrás para un correo inexistente;
+  - el vencimiento a 48 h visible para Administración;
+  - una cuenta suspendida no delatada;
+  - la recuperación con espera real.
+
+**Resultados:** regresión completa con **1859 correctas y 0 fallos** (21 suites).
+
+**Regresiones:** ninguna. QA.13–QA.15 y 1.14, las pruebas previas de anti-enumeración y de ráfaga, siguen pasando.
+
+**Pendientes:** ninguno del batch.
+
+**Riesgos:** la última solicitud por correo se guarda en memoria del proceso. Si la API se reinicia, la espera de un correo inexistente vuelve a 0. La de una cuenta real sigue saliendo de sus tokens.

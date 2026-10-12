@@ -27,15 +27,33 @@ import { maskEmail } from '../mail/mail.service';
  * de alta probando uno por uno. Por eso tampoco depende del tiempo: el correo
  * se encola y la respuesta sale al instante, haya o no algo que enviar.
  *
- * `retryAfterSeconds` es el cooldown configurado, el mismo para todos. Le
- * permite a la pantalla mostrar una cuenta atrás sin revelar nada.
+ * `retryAfterSeconds` es lo que realmente falta para poder pedir otro (V3.2
+ * §8.4): cerrar y volver a abrir la pantalla no reinicia la espera. Se lleva
+ * por correo escrito, exista o no la cuenta, para que el número tampoco delate
+ * nada.
  */
 function respuestaGenerica(segundos: number) {
   return {
+    status: 'REQUESTED' as const,
     message:
       'Si el correo corresponde a una cuenta registrada, te enviamos un mensaje. '
       + 'Revisa tu bandeja de entrada y la carpeta de correo no deseado.',
     retryAfterSeconds: segundos,
+  };
+}
+
+/**
+ * V3.2 §8.3: una cuenta que ya está activa no recibe otra activación. No se
+ * crea token, no se encola correo y no se afirma ningún envío: se orienta a
+ * iniciar sesión o a recuperar la contraseña.
+ */
+function respuestaYaActiva() {
+  return {
+    status: 'ALREADY_ACTIVE' as const,
+    message:
+      'Esta cuenta ya está activa: no hace falta activarla otra vez. Inicia sesión con tu contraseña '
+      + 'o, si no la recuerdas, usa «Olvidé mi contraseña».',
+    retryAfterSeconds: 0,
   };
 }
 
@@ -96,6 +114,35 @@ export class ActivationService {
   }
 
   /**
+   * V3.2 §8.4: última solicitud pública por correo y propósito. Vale igual
+   * para correos que no existen, así la espera que se informa no distingue
+   * cuentas reales de inventadas.
+   */
+  private readonly ultimaSolicitud = new Map<string, number>();
+
+  /**
+   * Segundos que faltan para la próxima solicitud de este correo. Si ya no
+   * falta nada, la solicitud actual abre una ventana nueva. `servidor` es lo
+   * que dicen los tokens de una cuenta real (p. ej. el que emitió el
+   * administrador): manda el mayor de los dos.
+   */
+  private esperaPara(email: string, proposito: string, servidor = 0): number {
+    const ahora = Date.now();
+    const ventana = this.cooldown * 1000;
+    if (this.ultimaSolicitud.size > 5000) {
+      for (const [k, t] of this.ultimaSolicitud) if (ahora - t >= ventana) this.ultimaSolicitud.delete(k);
+    }
+    const clave = `${proposito}:${email.trim().toLowerCase()}`;
+    const previa = this.ultimaSolicitud.get(clave);
+    let restante = previa !== undefined && ahora - previa < ventana ? Math.ceil((ventana - (ahora - previa)) / 1000) : 0;
+    if (restante === 0 && servidor === 0) {
+      this.ultimaSolicitud.set(clave, ahora);
+      restante = this.cooldown;
+    }
+    return Math.max(restante, servidor);
+  }
+
+  /**
    * Comprueba que el correo sea institucional antes de nada.
    *
    * No delata cuentas: decir «ese dominio no es institucional» depende del
@@ -115,11 +162,19 @@ export class ActivationService {
   //  Activación
   // ======================================================================
 
-  /** Solicita (o reenvía) el correo de activación. Respuesta siempre igual. */
+  /**
+   * Solicita (o reenvía) el correo de activación.
+   *
+   * La respuesta es la misma exista o no la cuenta, salvo una excepción que
+   * pide V3.2 §8.3: si la cuenta ya está activa se dice, sin enviar nada.
+   */
   async requestActivation(email: string) {
     this.assertInstitutional(email);
     const user = await this.findByEmail(email);
 
+    if (user && user.status === UserStatus.ACTIVE) return respuestaYaActiva();
+
+    let servidor = 0;
     if (user && user.status === UserStatus.PENDING_ACTIVATION) {
       const puede = await this.accountMail.check(user.id, 'account_activation');
       if (puede.allowed) {
@@ -130,9 +185,11 @@ export class ActivationService {
           entityType: 'user',
           entityId: user.id,
         });
+      } else if (puede.reason === 'cooldown' || puede.reason === 'daily_limit') {
+        servidor = puede.retryAfterSeconds;
       }
     }
-    return respuestaGenerica(this.cooldown);
+    return respuestaGenerica(this.esperaPara(email, 'activation', servidor));
   }
 
   /**
@@ -220,10 +277,12 @@ export class ActivationService {
 
     // Una cuenta sin activar no «recupera»: activa. Se le reenvía la activación
     // para que el usuario no quede en un callejón sin salida.
+    let servidor = 0;
     if (user && user.status === UserStatus.PENDING_ACTIVATION) {
       const puede = await this.accountMail.check(user.id, 'account_activation');
       if (puede.allowed) await this.accountMail.enqueue(user.id, 'account_activation', user.id);
-      return respuestaGenerica(this.cooldown);
+      else if (puede.reason === 'cooldown' || puede.reason === 'daily_limit') servidor = puede.retryAfterSeconds;
+      return respuestaGenerica(this.esperaPara(email, 'reset', servidor));
     }
 
     if (user && user.status === UserStatus.ACTIVE) {
@@ -236,10 +295,12 @@ export class ActivationService {
           entityType: 'user',
           entityId: user.id,
         });
+      } else if (puede.reason === 'cooldown' || puede.reason === 'daily_limit') {
+        servidor = puede.retryAfterSeconds;
       }
     }
 
-    return respuestaGenerica(this.cooldown);
+    return respuestaGenerica(this.esperaPara(email, 'reset', servidor));
   }
 
   /**

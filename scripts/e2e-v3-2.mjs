@@ -10,7 +10,7 @@
  */
 
 import {
-  API, codigoUniversitario, loginAdmin, provisionAndActivate, req,
+  API, PWD, codigoUniversitario, loginAdmin, provisionAndActivate, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -196,7 +196,77 @@ async function batch1(ctx) {
   check(intruso.status === 403, 'V32.1.25 Un estudiante NO ve el historial de importaciones -> 403', `status ${intruso.status}`);
 }
 
-const BATCHES = { batch1 };
+// ===========================================================================
+//  BATCH 2 — Activación (§8.2–§8.6)
+// ===========================================================================
+async function batch2(ctx) {
+  objective('BATCH 2 · Activación: cuenta activa, espera real y vencimiento visible');
+
+  // ----- §8.3 Cuenta ya activa: estado controlado, sin token ni correo
+  const activa = await provisionAndActivate(ctx.admin, {
+    firstName: 'Iris', lastName: 'Vaca', email: correoEst('activa'), role: 'STUDENT', semester: 3,
+  });
+  const pedido = await req('POST', '/activation/request', { body: { email: correoEst('activa') } });
+  check(pedido.status === 200 && pedido.data?.status === 'ALREADY_ACTIVE',
+    'V32.2.1 §8.3 Pedir activación de una cuenta ACTIVE responde ALREADY_ACTIVE', json(pedido.data));
+  check(!/te enviamos/i.test(pedido.data?.message ?? '') && /inicia sesi[oó]n/i.test(pedido.data?.message ?? ''),
+    'V32.2.2 §8.3 No afirma un envío y orienta a iniciar sesión o recuperar', pedido.data?.message);
+  const auditados = await req('GET', `/audit/events?eventType=ACTIVATION_REQUESTED&entityId=${activa.userId}`, { token: ctx.admin });
+  check((auditados.data?.items ?? auditados.data ?? []).length === 0,
+    'V32.2.3 §8.3 No se registra una solicitud de activación (no hubo token ni correo)');
+  const login = await req('POST', '/auth/login', { body: { email: correoEst('activa'), password: PWD } });
+  check(login.status === 200, 'V32.2.4 §8.3 La cuenta activa sigue entrando con su contraseña', `status ${login.status}`);
+
+  // ----- §8.4 La espera viene del servidor: no se reinicia al reabrir la pantalla
+  const pendienteCorreo = correoEst('pendiente');
+  const alta = await req('POST', '/users', {
+    token: ctx.admin,
+    body: {
+      firstName: 'Ruth', lastName: 'Pinto', email: pendienteCorreo, role: 'STUDENT', semester: 2,
+      universityCode: codigoUniversitario(),
+    },
+  });
+  check(alta.status === 201, 'V32.2.5 Alta de una cuenta pendiente', `status ${alta.status} ${json(alta.data)}`);
+  const primera = await req('POST', '/activation/request', { body: { email: pendienteCorreo } });
+  await new Promise((r) => setTimeout(r, 2100));
+  const segunda = await req('POST', '/activation/request', { body: { email: pendienteCorreo } });
+  const e1 = Number(primera.data?.retryAfterSeconds);
+  const e2 = Number(segunda.data?.retryAfterSeconds);
+  check(primera.data?.status === 'REQUESTED' && e1 > 0 && e1 <= 120,
+    'V32.2.6 §8.4 Una cuenta pendiente recibe la respuesta genérica con la espera', json(primera.data));
+  check(e2 > 0 && e2 < e1,
+    'V32.2.7 §8.4 Volver a pedir no reinicia la cuenta atrás: informa lo que realmente queda', `${e1} → ${e2}`);
+  const inventado = `nadie.v32.${TS}@est.univalle.edu`;
+  const i1 = await req('POST', '/activation/request', { body: { email: inventado } });
+  await new Promise((r) => setTimeout(r, 2100));
+  const i2 = await req('POST', '/activation/request', { body: { email: inventado } });
+  check(i1.data?.status === 'REQUESTED' && i1.data?.message === primera.data?.message,
+    'V32.2.8 §12 Un correo inexistente recibe la misma respuesta que uno pendiente', json(i1.data));
+  check(Number(i2.data?.retryAfterSeconds) < Number(i1.data?.retryAfterSeconds),
+    'V32.2.9 §8.4 La espera también corre para correos inexistentes (no delata cuentas)',
+    `${i1.data?.retryAfterSeconds} → ${i2.data?.retryAfterSeconds}`);
+
+  // ----- §8.6 Administración: enviada, expira y estado
+  const lista = await req('GET', `/users?search=${encodeURIComponent(pendienteCorreo)}`, { token: ctx.admin });
+  const u = (lista.data ?? [])[0];
+  const horas = u?.invitation?.expiresAt ? (new Date(u.invitation.expiresAt).getTime() - Date.now()) / 3_600_000 : NaN;
+  check(u?.invitation?.at && horas > 47 && horas <= 48 && u?.invitation?.expired === false,
+    'V32.2.10 §8.6 El administrador ve cuándo se envió y que expira en 48 h', json(u?.invitation));
+
+  // ----- §8.1 Lo que ya funcionaba, sigue
+  const suspendida = await provisionAndActivate(ctx.admin, {
+    firstName: 'Olga', lastName: 'Sosa', email: correoEst('suspendida'), role: 'STUDENT', semester: 1,
+  });
+  await req('PATCH', `/users/${suspendida.userId}/status`, { token: ctx.admin, body: { status: 'suspended' } });
+  const pideSusp = await req('POST', '/activation/request', { body: { email: correoEst('suspendida') } });
+  check(pideSusp.status === 200 && pideSusp.data?.status === 'REQUESTED',
+    'V32.2.11 §8.1 Una cuenta suspendida no se delata ni se reactiva por esta vía', json(pideSusp.data));
+  const reset = await req('POST', '/activation/forgot-password', { body: { email: correoEst('activa') } });
+  check(reset.status === 200 && reset.data?.status === 'REQUESTED' && Number(reset.data?.retryAfterSeconds) > 0,
+    'V32.2.12 §8.4 Recuperar contraseña sigue con respuesta genérica y espera real', json(reset.data));
+}
+
+const BATCHES = { batch1, batch2 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

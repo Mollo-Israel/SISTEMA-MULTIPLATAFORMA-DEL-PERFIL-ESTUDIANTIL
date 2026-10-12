@@ -38,8 +38,10 @@ export const authService = {
 /** Respuesta genérica de las solicitudes de correo: igual exista o no la cuenta. */
 export interface MailRequestResult {
   message: string;
-  /** Segundos antes de poder pedir otro correo: el mismo para todos. */
+  /** V3.2 §8.4: segundos que realmente faltan para poder pedir otro correo. */
   retryAfterSeconds: number;
+  /** V3.2 §8.3: la cuenta ya está activa y no se envió nada. */
+  status?: 'REQUESTED' | 'ALREADY_ACTIVE';
 }
 
 /** Canje por contraseña: con el enlace (`token`) o con correo y código de 6 dígitos. */

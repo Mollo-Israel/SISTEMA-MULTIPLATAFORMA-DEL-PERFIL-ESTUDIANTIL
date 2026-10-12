@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FiAlertCircle, FiArrowRight, FiClock, FiInfo, FiMail, FiRefreshCw, FiSend } from 'react-icons/fi';
+import {
+  FiAlertCircle, FiArrowRight, FiCheckCircle, FiClock, FiInfo, FiKey, FiMail, FiRefreshCw, FiSend,
+} from 'react-icons/fi';
 import { activationService } from '../../services';
 import { apiError } from '../../api/client';
 import { institutionalEmail } from '../../lib/validators';
@@ -55,6 +57,8 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
   const [errorKey, setErrorKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [espera, setEspera] = useState(0);
+  // V3.2 §8.3: la cuenta ya está activa; no se envió nada.
+  const [yaActiva, setYaActiva] = useState<string | null>(null);
 
   useEffect(() => {
     if (espera <= 0) return;
@@ -76,8 +80,14 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
       const res = mode === 'activation'
         ? await activationService.request(value)
         : await activationService.forgotPassword(value);
+      if (res.status === 'ALREADY_ACTIVE') {
+        setYaActiva(res.message);
+        return;
+      }
       setSent(res.message);
-      setEspera(res.retryAfterSeconds ?? 120);
+      // V3.2 §8.4: la espera la dice el servidor (lo que realmente queda), así
+      // que cerrar y volver a abrir la pantalla no la reinicia.
+      setEspera(Math.max(0, res.retryAfterSeconds ?? 0));
     } catch (err) {
       setError(apiError(err, 'No se pudo enviar la solicitud.'));
       setErrorKey((k) => k + 1);
@@ -124,7 +134,25 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
             )}
           </AnimatePresence>
 
-          {sent ? (
+          {yaActiva ? (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="li-ok">
+                <span className="ic"><FiCheckCircle size={18} /></span>
+                <div>
+                  <strong>Tu cuenta ya está activa</strong>
+                  <p>{yaActiva}</p>
+                </div>
+              </div>
+              <Link className="li-btn" to="/login">
+                Iniciar sesión <FiArrowRight />
+              </Link>
+              <div className="li-resend">
+                <Link className="li-link-btn" to="/recuperar">
+                  <FiKey /> Olvidé mi contraseña
+                </Link>
+              </div>
+            </motion.div>
+          ) : sent ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <div className="li-ok">
                 <span className="ic"><FiSend size={18} /></span>
@@ -158,7 +186,7 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
                   <input
                     type="email"
                     value={email}
-                    onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                    onChange={(e) => { setEmail(e.target.value); setError(null); setYaActiva(null); }}
                     placeholder="nombre.apellido@est.univalle.edu"
                     maxLength={160}
                     autoComplete="email"
