@@ -218,6 +218,8 @@ export interface Skill {
   code: string;
   academicAreaId: string | null;
   academicArea?: AcademicArea | null;
+  /** V3.2 §11: áreas secundarias (la principal es academicAreaId). */
+  secondaryAreaIds?: string[];
   isActive: boolean;
 }
 
@@ -234,10 +236,14 @@ export interface AreaTagAnalysis {
   tags: string[];
   generic: string[];
   shared: { tag: string; areas: { id: string; name: string }[] }[];
+  /** V3.2 §10.6: etiquetas que repiten una habilidad del catálogo. */
+  skillDuplicates?: { tag: string; skill: string }[];
 }
 
+/** V3.2 §10.5: qué nivel del sugeridor produjo la sugerencia. */
 export interface SkillClassification {
-  rule: 'canonical' | 'suggested' | 'none';
+  rule: 'exact_skill' | 'area_tag' | 'related_skill' | 'weak' | 'none';
+  confidence: 'high' | 'medium' | 'low' | 'none';
   areaIds: string[];
   areaNames: string[];
   reason: string | null;

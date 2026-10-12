@@ -10,7 +10,7 @@
  */
 
 import {
-  API, PWD, codigoUniversitario, loginAdmin, provisionAndActivate, req,
+  API, PWD, codigoUniversitario, crearProyectoBorrador, loginAdmin, provisionAndActivate, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -266,7 +266,116 @@ async function batch2(ctx) {
     'V32.2.12 §8.4 Recuperar contraseña sigue con respuesta genérica y espera real', json(reset.data));
 }
 
-const BATCHES = { batch1, batch2 };
+// ===========================================================================
+//  BATCH 3 — Taxonomía: sugeridor, áreas secundarias y tags semánticos (§10–§12)
+// ===========================================================================
+async function batch3(ctx) {
+  objective('BATCH 3 · Taxonomía: aws ya no va a Redes, skills multiárea y tags semánticos');
+  const L = String.fromCharCode(...String(TS).slice(-7).split('').map((d) => 65 + Number(d)));
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const porCodigo = (c) => areas.find((a) => a.code === c);
+  const nube = porCodigo('computacion_en_la_nube');
+  const redes = porCodigo('redes');
+  const web = porCodigo('desarrollo_web');
+  const ciber = porCodigo('ciberseguridad');
+  const ia = porCodigo('inteligencia_artificial');
+  const bd = porCodigo('bases_de_datos');
+
+  // ----- §10.1 / §10.3 Catálogo semántico
+  check(!!nube && (nube.tags ?? []).includes('nube'),
+    'V32.3.1 §10.1 Existe el área «Computación en la nube» con vocabulario propio', json(nube));
+  check(!!redes && !(redes.tags ?? []).some((t) => ['infraestructura', 'linux', 'routing', 'tcp-ip'].includes(t)),
+    'V32.3.2 §10.3 Las etiquetas de Redes ya no copian habilidades ni la palabra que confundía al sugeridor', json(redes?.tags));
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const aws = skills.find((s) => s.code === 'aws');
+  const linux = skills.find((s) => s.code === 'administracion_linux');
+  check(aws?.academicAreaId === nube?.id && (aws?.aliases ?? []).includes('Amazon Web Services'),
+    'V32.3.3 §10.2 AWS es una habilidad de Computación en la nube, con su alias', json(aws));
+  check((linux?.aliases ?? []).includes('Linux') && (linux?.secondaryAreaIds ?? []).includes(ciber?.id)
+      && (linux?.secondaryAreaIds ?? []).includes(nube?.id),
+    'V32.3.4 §11.1 Linux: principal Redes, secundarias Ciberseguridad y Nube', json(linux));
+
+  // ----- §10.5 Sugeridor
+  const c = async (name, aliases = '') =>
+    (await req('GET', `/skills/classify?name=${encodeURIComponent(name)}&aliases=${encodeURIComponent(aliases)}`, { token: ctx.admin })).data;
+  const bug = await c(`Servicio ${L}`, 'aws');
+  check(bug?.rule === 'exact_skill' && bug?.areaIds?.includes(nube?.id) && !bug?.areaIds?.includes(redes?.id),
+    'V32.3.5 §10.5 El bug: alias «aws» sugiere Computación en la nube, no Redes', json(bug));
+  const alias = await c('Amazon Web Services');
+  check(alias?.rule === 'exact_skill' && alias?.areaIds?.[0] === nube?.id,
+    'V32.3.6 §10.5 Prioridad 1: el alias exacto de una habilidad existente', json(alias));
+  const etiqueta = await c(`Persistencia ${L}`);
+  check(etiqueta?.rule === 'area_tag' && etiqueta?.areaIds?.includes(bd?.id),
+    'V32.3.7 §10.5 Prioridad 2: la etiqueta exacta del área (palabra completa)', json(etiqueta));
+  const relacionada = await c(`React ${L}`);
+  check(relacionada?.rule === 'related_skill' && relacionada?.areaIds?.includes(web?.id),
+    'V32.3.8 §10.5 Prioridad 3: la relación con una habilidad ya clasificada', json(relacionada));
+  const corta = await c('AS');
+  const subcadena = await c(`Rawsome${L}`);
+  check(corta?.rule === 'none' && subcadena?.rule === 'none',
+    'V32.3.9 §10.5 Sin subcadena bruta: «AS» y una palabra que contiene «aws» no sugieren nada', `${corta?.rule} / ${subcadena?.rule}`);
+
+  // ----- §10.5 / §10.6 Guardar: el administrador decide
+  const enOtra = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: `Kitnet ${L}`, academicAreaId: web.id },
+  });
+  check(enOtra.status === 201, 'V32.3.10 §10.6 Sin sugerencia fuerte se guarda donde el administrador diga', `status ${enOtra.status}`);
+  const duplicado = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: 'Postgres', academicAreaId: bd.id },
+  });
+  check(duplicado.status === 409 && duplicado.data?.fields?.name,
+    'V32.3.11 §10.4 Un nombre que ya es alias de otra habilidad es la misma: no se crea dos veces', json(duplicado.data?.fields));
+
+  // ----- §11 Áreas secundarias
+  const multi = await req('POST', '/skills', {
+    token: ctx.admin,
+    body: { name: `Pyconsola ${L}`, academicAreaId: ia.id, secondaryAreaIds: [web.id, web.id, ia.id] },
+  });
+  check(multi.status === 201 && json(multi.data?.secondaryAreaIds) === json([web.id]),
+    'V32.3.12 §11.2 Se guardan las secundarias sin repetir ni incluir la principal', json(multi.data?.secondaryAreaIds));
+  const listada = ((await req('GET', '/skills', { token: ctx.admin })).data ?? []).find((s) => s.id === multi.data?.id);
+  check(json(listada?.secondaryAreaIds) === json([web.id]), 'V32.3.13 §11 El catálogo devuelve las áreas secundarias', json(listada));
+  const cambio = await req('PATCH', `/skills/${multi.data?.id}`, { token: ctx.admin, body: { secondaryAreaIds: [ciber.id] } });
+  check(cambio.status === 200 && json(cambio.data?.secondaryAreaIds) === json([ciber.id]),
+    'V32.3.14 §11 Editar reemplaza las áreas secundarias', json(cambio.data?.secondaryAreaIds));
+  const inexistente = await req('PATCH', `/skills/${multi.data?.id}`, {
+    token: ctx.admin, body: { secondaryAreaIds: ['00000000-0000-4000-8000-000000000000'] },
+  });
+  check(inexistente.status === 409 && inexistente.data?.fields?.secondaryAreaIds,
+    'V32.3.15 §11 Un área secundaria que no existe se rechaza en su campo', `status ${inexistente.status}`);
+  const deRelacionada = await c(`Pyconsola ${L} Pro`);
+  check(json(deRelacionada?.areaIds) === json([ia.id]),
+    'V32.3.16 §11.5 La sugerencia usa la principal de la relacionada; la secundaria no reparte', json(deRelacionada));
+
+  // ----- §10.6 Etiquetas que repiten una habilidad
+  const analisis = await req('POST', '/academic-areas/tag-analysis', { token: ctx.admin, body: { tags: ['persistencia', 'postgresql'] } });
+  check((analisis.data?.skillDuplicates ?? []).some((d) => d.tag === 'postgresql' && d.skill === 'PostgreSQL'),
+    'V32.3.17 §10.6 Avisa que la etiqueta «postgresql» ya es una habilidad', json(analisis.data?.skillDuplicates));
+
+  // ----- §11.3 En un formulario, la habilidad vale por su área secundaria
+  const est = await provisionAndActivate(ctx.admin, {
+    firstName: 'Lina', lastName: 'Rocha', email: correoEst('taxo'), role: 'STUDENT', semester: 4,
+  });
+  const porSecundaria = await crearProyectoBorrador(est.token, {
+    title: `Servidor seguro ${L}`, description: 'Endurecimiento de un servidor Linux.', areaIds: [ciber.id], skillIds: [linux.id],
+  });
+  check(porSecundaria.status === 201,
+    'V32.3.19 §11.3 Linux se acepta en un proyecto de Ciberseguridad (su área secundaria)', `status ${porSecundaria.status} ${json(porSecundaria.data)}`);
+  const ajenaArea = await crearProyectoBorrador(est.token, {
+    title: `Sitio ${L}`, description: 'Una web.', areaIds: [web.id], skillIds: [linux.id],
+  });
+  check(ajenaArea.status === 400 && ajenaArea.data?.fields?.skillIds,
+    'V32.3.20 §11.3 Pero no en un área que no es ni su principal ni una secundaria', `status ${ajenaArea.status}`);
+
+  // ----- Solo Administración
+  const docente = await provisionAndActivate(ctx.admin, {
+    firstName: 'Teo', lastName: 'Arce', email: correoStaff('taxo'), role: 'TEACHER',
+  });
+  const ajeno = await req('POST', '/skills', { token: docente.token, body: { name: `Ajena ${L}`, academicAreaId: web.id } });
+  check(ajeno.status === 403, 'V32.3.18 Un docente no crea habilidades -> 403', `status ${ajeno.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

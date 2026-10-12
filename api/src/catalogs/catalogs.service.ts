@@ -4,6 +4,7 @@ import { FindOptionsWhere, ILike, In, Not, Repository } from 'typeorm';
 import { GamificationTrigger, LearningResourceStatus, SYSTEM_GAMIFICATION_TRIGGERS } from '@perfil/shared';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
+import { SkillAreaRelation } from '../entities/skill-area-relation.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { Activity } from '../entities/activity.entity';
@@ -44,6 +45,7 @@ export class CatalogsService {
   constructor(
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(Skill) private readonly skills: Repository<Skill>,
+    @InjectRepository(SkillAreaRelation) private readonly skillAreas: Repository<SkillAreaRelation>,
     private readonly audit: AuditService,
     @InjectRepository(GamificationCriterion)
     private readonly criteria: Repository<GamificationCriterion>,
@@ -148,7 +150,8 @@ export class CatalogsService {
 
   /** Riesgos de unas etiquetas antes de guardarlas (V3 §9.4). */
   async analyzeTags(tags: string[], exceptId?: string): Promise<AreaTagAnalysis> {
-    return analyzeAreaTags(tags ?? [], await this.areas.find(), exceptId);
+    const [areas, skills] = await Promise.all([this.areas.find(), this.skills.find({ where: { isActive: true } })]);
+    return analyzeAreaTags(tags ?? [], areas, exceptId, skills);
   }
 
   async createArea(dto: CreateAcademicAreaDto): Promise<AcademicArea> {
@@ -188,8 +191,8 @@ export class CatalogsService {
       area.code = await this.assertCodeFree(this.areas, dto.code, 'área', id);
     }
     if (dto.description !== undefined) area.description = dto.description?.trim() || null;
-    // Las etiquetas pueden cambiarse, no vaciarse: sin ellas el motor no
-    // encuentra el área. El DTO ya exige al menos una si llegan.
+    // Las etiquetas pueden cambiarse, no vaciarse: sin ellas el sugeridor no
+    // puede proponer el área (V3.2 §10.3: no puntúan). El DTO exige al menos una.
     if (Array.isArray(dto.tags)) area.tags = dto.tags;
     if (dto.isActive !== undefined) area.isActive = dto.isActive;
     return this.areas.save(area);
@@ -225,12 +228,46 @@ export class CatalogsService {
   // Habilidades
   // ------------------------------------------------------------------
 
-  findSkills(includeInactive = false): Promise<Skill[]> {
-    return this.skills.find({
+  async findSkills(includeInactive = false): Promise<Skill[]> {
+    const lista = await this.skills.find({
       where: includeInactive ? {} : { isActive: true },
       relations: { academicArea: true },
       order: { name: 'ASC' },
     });
+    return this.withSecondaryAreas(lista);
+  }
+
+  /** V3.2 §11: completa las áreas secundarias de cada habilidad (una consulta). */
+  async withSecondaryAreas(lista: Skill[]): Promise<Skill[]> {
+    if (lista.length === 0) return lista;
+    const relaciones = await this.skillAreas.find({ where: { skillId: In(lista.map((s) => s.id)) } });
+    const porSkill = new Map<string, string[]>();
+    for (const r of relaciones) porSkill.set(r.skillId, [...(porSkill.get(r.skillId) ?? []), r.academicAreaId]);
+    for (const s of lista) s.secondaryAreaIds = porSkill.get(s.id) ?? [];
+    return lista;
+  }
+
+  /**
+   * V3.2 §11: valida y deja las áreas secundarias de una habilidad. Ninguna
+   * repite la principal ni se repite; todas existen.
+   */
+  private async limpiarSecundarias(ids: string[] | undefined, principal: string | null): Promise<string[] | undefined> {
+    if (ids === undefined) return undefined;
+    const unicas = [...new Set(ids)].filter((id) => id !== principal);
+    if (unicas.length === 0) return [];
+    const existen = await this.areas.count({ where: { id: In(unicas) } });
+    if (existen !== unicas.length) {
+      throw conflicto('secondaryAreaIds', 'Alguna de las áreas secundarias no existe en el catálogo.');
+    }
+    return unicas;
+  }
+
+  private async guardarSecundarias(skillId: string, ids: string[] | undefined): Promise<void> {
+    if (ids === undefined) return;
+    await this.skillAreas.delete({ skillId });
+    if (ids.length > 0) {
+      await this.skillAreas.insert(ids.map((academicAreaId) => ({ skillId, academicAreaId, relationType: 'SECONDARY' as const })));
+    }
   }
 
   /** Clasificación sugerida para una tecnología (V2 §23.3), sin guardar nada. */
@@ -240,34 +277,28 @@ export class CatalogsService {
       // La propia habilidad (al editar) no puede sugerirse a sí misma.
       this.skills.find({ where: exceptSkillId ? { isActive: true, id: Not(exceptSkillId) } : { isActive: true } }),
     ]);
-    return classifySkill(name, aliases, areas, catalogo);
+    return classifySkill(name, aliases, areas, await this.withSecondaryAreas(catalogo));
   }
 
   /**
-   * Aplica la validación semántica (V2 §23.3) antes de guardar.
+   * Aplica la validación semántica (V3.2 §10.5, §10.6) antes de guardar.
    *
-   * - Regla canónica y área distinta → 409 sin opción.
-   * - Sugerencia distinta del área elegida → 409 salvo que venga un motivo,
-   *   que se audita.
+   * No hay reglas duras en el código: el catálogo es el conocimiento y el
+   * administrador decide. Una sugerencia de confianza alta o media que no
+   * incluya ninguna de las áreas elegidas (principal o secundarias) pide un
+   * motivo, que se audita. Una sugerencia débil solo orienta.
    */
   private async assertClassification(
     name: string,
     aliases: string[],
-    areaId: string,
+    areaIds: string[],
     overrideReason: string | undefined,
     actorUserId: string | null,
     skillId: string | null,
   ): Promise<void> {
     const c = await this.classify(name, aliases, skillId ?? undefined);
-    if (c.rule === 'none' || c.areaIds.includes(areaId)) return;
-    if (c.rule === 'canonical') {
-      throw new ConflictException({
-        code: 'CLASSIFICATION_BLOCKED',
-        message: c.reason,
-        fields: { academicAreaId: [`${c.reason} No se puede clasificar en otra área.`] },
-        details: { suggestedAreaIds: c.areaIds, suggestedAreaNames: c.areaNames },
-      });
-    }
+    if (c.rule === 'none' || c.confidence === 'low' || c.areaIds.some((id) => areaIds.includes(id))) return;
+    const areaId = areaIds[0];
     if (!overrideReason) {
       throw new ConflictException({
         code: 'CLASSIFICATION_CONFIRMATION_REQUIRED',
@@ -302,18 +333,32 @@ export class CatalogsService {
     return limpios;
   }
 
+  /** V3.2 §10.4: un nombre que ya es alias de otra habilidad es la misma habilidad. */
+  private async assertNameNotAlias(name: string, exceptId?: string): Promise<void> {
+    const norm = normalizeTerm(name);
+    const otras = await this.skills.find(exceptId ? { where: { id: Not(exceptId) } } : {});
+    const duena = otras.find((o) => (o.aliases ?? []).some((a) => normalizeTerm(a) === norm));
+    if (duena) {
+      throw conflicto('name', `«${name}» ya es otro nombre de la habilidad «${duena.name}»: no se crea dos veces.`);
+    }
+  }
+
   async createSkill(dto: CreateSkillDto, actorUserId: string | null = null): Promise<Skill> {
     const exists = await this.skills.findOne({ where: { name: ILike(dto.name) } });
     if (exists) {
       throw conflicto('name', 'La habilidad ya existe en el catálogo.');
     }
+    await this.assertNameNotAlias(dto.name);
     await this.assertAreaExists(dto.academicAreaId, 'academicAreaId');
     const aliases = await this.assertAliasesFree(dto.aliases ?? []);
-    await this.assertClassification(dto.name, aliases, dto.academicAreaId, dto.overrideReason, actorUserId, null);
+    const secundarias = (await this.limpiarSecundarias(dto.secondaryAreaIds, dto.academicAreaId)) ?? [];
+    await this.assertClassification(
+      dto.name, aliases, [dto.academicAreaId, ...secundarias], dto.overrideReason, actorUserId, null,
+    );
     const code = dto.code
       ? await this.assertCodeFree(this.skills, dto.code, 'habilidad')
       : await this.freeCode(this.skills, slugCode(dto.name));
-    return this.skills.save(
+    const creada = await this.skills.save(
       this.skills.create({
         name: dto.name,
         code,
@@ -322,6 +367,9 @@ export class CatalogsService {
         isActive: true,
       }),
     );
+    await this.guardarSecundarias(creada.id, secundarias);
+    creada.secondaryAreaIds = secundarias;
+    return creada;
   }
 
   async updateSkill(id: string, dto: UpdateSkillDto, actorUserId: string | null = null): Promise<Skill> {
@@ -336,6 +384,7 @@ export class CatalogsService {
       if (duplicate) {
         throw conflicto('name', 'Ya existe otra habilidad con ese nombre.');
       }
+      await this.assertNameNotAlias(dto.name, id);
       skill.name = dto.name;
     }
     if (dto.code !== undefined && dto.code !== skill.code) {
@@ -348,14 +397,23 @@ export class CatalogsService {
       await this.assertAreaExists(dto.academicAreaId, 'academicAreaId');
       skill.academicAreaId = dto.academicAreaId;
     }
+    const secundarias = await this.limpiarSecundarias(dto.secondaryAreaIds, skill.academicAreaId);
+    const vigentes = secundarias
+      ?? (await this.skillAreas.find({ where: { skillId: id } }))
+        .map((r) => r.academicAreaId)
+        .filter((a) => a !== skill.academicAreaId);
     // Se revalida si cambió algo de lo que decide la clasificación.
-    if (dto.name !== undefined || dto.aliases !== undefined || dto.academicAreaId !== undefined) {
+    if (dto.name !== undefined || dto.aliases !== undefined || dto.academicAreaId !== undefined || secundarias !== undefined) {
       await this.assertClassification(
-        skill.name, skill.aliases ?? [], skill.academicAreaId as string, dto.overrideReason, actorUserId, skill.id,
+        skill.name, skill.aliases ?? [], [skill.academicAreaId as string, ...vigentes], dto.overrideReason, actorUserId, skill.id,
       );
     }
     if (dto.isActive !== undefined) skill.isActive = dto.isActive;
-    return this.skills.save(skill);
+    const guardada = await this.skills.save(skill);
+    // Si la principal pasó a ser una de las secundarias, deja de serlo.
+    await this.guardarSecundarias(id, secundarias ?? (dto.academicAreaId !== undefined ? vigentes : undefined));
+    guardada.secondaryAreaIds = vigentes;
+    return guardada;
   }
 
   // ------------------------------------------------------------------

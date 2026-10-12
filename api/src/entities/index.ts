@@ -48,3 +48,4 @@ export * from './gamification-extra.entity';
 export * from './activity-review.entity';
 export * from './ai-assistance-run.entity';
 export * from './contact-channel.entity';
+export * from './skill-area-relation.entity';

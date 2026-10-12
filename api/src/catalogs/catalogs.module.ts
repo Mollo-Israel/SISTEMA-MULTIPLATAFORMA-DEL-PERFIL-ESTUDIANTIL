@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
+import { SkillAreaRelation } from '../entities/skill-area-relation.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { Activity } from '../entities/activity.entity';
@@ -16,6 +17,7 @@ import { CatalogsController } from './catalogs.controller';
   imports: [TypeOrmModule.forFeature([
       AcademicArea,
       Skill,
+      SkillAreaRelation,
       GamificationCriterion,
       ActivityCategory,
       Activity,

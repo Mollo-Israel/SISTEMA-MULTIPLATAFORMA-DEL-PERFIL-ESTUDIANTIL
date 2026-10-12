@@ -45,6 +45,17 @@ export class CreateSkillDto {
 
   @ApiProperty({
     required: false,
+    type: [String],
+    description: 'V3.2 §11: áreas secundarias (0..N). La principal es academicAreaId.',
+  })
+  @IsOptional()
+  @IsArray({ message: 'Las áreas secundarias deben ser una lista.' })
+  @ArrayMaxSize(5, { message: 'Como máximo 5 áreas secundarias.' })
+  @IsUUID('4', { each: true, message: 'Cada área secundaria debe ser un área del catálogo.' })
+  secondaryAreaIds?: string[];
+
+  @ApiProperty({
+    required: false,
     description: 'Motivo para guardar en un área distinta de la sugerida (queda auditado, V2 §23.3).',
   })
   @IsOptional()

@@ -217,10 +217,12 @@ async function batch4(ctx) {
     token: ctx.admin, body: { name: `Kestrel ${sufijo}`, academicAreaId: areaA.data.id },
   });
   check(base.status === 201, 'V3.4.8 §9.2 Se registra una habilidad en esa área', `status ${base.status}`);
-  const nueva = `Kestrel ${sufijo} Cloud`;
+  // «Cloud» ya es una etiqueta de Computación en la nube (V3.2 §10.5 la pone
+  // antes que las relacionadas): se usa un sufijo neutro.
+  const nueva = `Kestrel ${sufijo} Toolkit`;
   const sugerida = await req('GET', `/skills/classify?name=${encodeURIComponent(nueva)}`, { token: ctx.admin });
-  check(sugerida.data?.rule === 'suggested' && (sugerida.data?.areaIds ?? []).includes(areaA.data.id)
-    && /habilidades ya clasificadas/.test(sugerida.data?.reason ?? ''),
+  check(sugerida.data?.rule === 'related_skill' && (sugerida.data?.areaIds ?? []).includes(areaA.data.id)
+    && /se relaciona con/.test(sugerida.data?.reason ?? ''),
   'V3.4.9 §9.3 Una tecnología nueva hereda la sugerencia de una ya clasificada (catálogo dinámico)', json(sugerida.data));
 
   const otraArea = await req('POST', '/academic-areas', {
@@ -1720,7 +1722,9 @@ async function batch17(ctx) {
 
   const catalogo = ((await req('GET', '/skills', { token: lider.token })).data ?? []).filter((s) => s.academicAreaId);
   const sk = catalogo[0];
-  const ajena = catalogo.find((s) => s.academicAreaId !== sk.academicAreaId);
+  // V3.2 §11: «de otra área» es que no la tiene ni como principal ni como secundaria.
+  const ajena = catalogo.find((s) => s.academicAreaId !== sk.academicAreaId
+    && !(s.secondaryAreaIds ?? []).includes(sk.academicAreaId));
 
   // ----- Área → solo skills de esa área (§55)
   const mala = await req('POST', '/team-needs', {

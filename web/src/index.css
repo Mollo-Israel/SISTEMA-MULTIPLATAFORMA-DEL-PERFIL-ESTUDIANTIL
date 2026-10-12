@@ -1245,3 +1245,9 @@ button.chip { cursor: pointer; font-family: var(--font); }
 
 /* Texto solo para lectores de pantalla. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* --- V3.2 §6.3, §11 · Selección por burbujas (áreas, habilidades) --- */
+.chip-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.chip-toggle { border: 1px solid var(--gray-300, #c8cdd4); background: var(--white); color: inherit; border-radius: 999px; padding: 0.25rem 0.7rem; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.chip-toggle.on { background: var(--bordo-100); border-color: var(--bordo); color: var(--bordo); font-weight: 600; }
+.chip-toggle:focus-visible { outline: 2px solid var(--bordo); outline-offset: 2px; }

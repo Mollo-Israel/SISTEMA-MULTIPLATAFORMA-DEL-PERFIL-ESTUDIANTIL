@@ -48,6 +48,12 @@ export class Skill {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
+  /**
+   * V3.2 §11: áreas secundarias (no es columna; lo completa el catálogo al
+   * listar). La principal es `academicAreaId`.
+   */
+  secondaryAreaIds?: string[];
+
   @OneToMany(() => StudentSkill, (studentSkill) => studentSkill.skill)
   studentSkills: StudentSkill[];
 

@@ -6,42 +6,48 @@ const AREAS: { name: string; description: string; tags: string[] }[] = [
   {
     name: 'Desarrollo Web',
     description: 'Construcción de aplicaciones y servicios para la web.',
-    tags: ['frontend', 'backend', 'react', 'node', 'api', 'html', 'css'],
+    // V3.2 §10.3: vocabulario del área, no copias de habilidades.
+    tags: ['frontend', 'backend', 'aplicaciones web', 'servicios web', 'interfaces web'],
   },
   {
     name: 'Desarrollo Móvil',
     description: 'Aplicaciones para dispositivos móviles.',
-    tags: ['android', 'ios', 'react-native', 'flutter', 'kotlin'],
+    tags: ['aplicaciones móviles', 'mobile', 'multiplataforma', 'android'],
   },
   {
     name: 'Inteligencia Artificial',
     description: 'Aprendizaje automático y sistemas inteligentes.',
-    tags: ['machine-learning', 'python', 'redes-neuronales', 'datos'],
+    tags: ['aprendizaje automático', 'modelos predictivos', 'visión por computadora', 'procesamiento de lenguaje natural', 'sistemas inteligentes'],
   },
   {
     name: 'Bases de Datos',
     description: 'Modelado, gestión y optimización de datos.',
-    tags: ['sql', 'postgresql', 'mongodb', 'modelado'],
+    tags: ['persistencia', 'modelado de datos', 'almacenamiento', 'relacional', 'no relacional', 'consultas'],
   },
   {
     name: 'Redes',
     description: 'Infraestructura, comunicaciones y conectividad.',
-    tags: ['tcp-ip', 'routing', 'linux', 'infraestructura'],
+    tags: ['networking', 'conectividad', 'telecomunicaciones', 'protocolos', 'enrutamiento', 'infraestructura de red'],
   },
   {
     name: 'Ciberseguridad',
     description: 'Protección de sistemas, datos y comunicaciones.',
-    tags: ['pentesting', 'criptografia', 'vulnerabilidades', 'seguridad'],
+    tags: ['seguridad informática', 'vulnerabilidades', 'protección de datos', 'análisis de riesgos', 'seguridad ofensiva', 'seguridad defensiva'],
   },
   {
     name: 'Ingeniería de Software',
     description: 'Procesos, arquitectura y calidad del software.',
-    tags: ['uml', 'patrones', 'testing', 'git', 'arquitectura'],
+    tags: ['arquitectura de software', 'calidad de software', 'procesos de desarrollo', 'requisitos', 'mantenimiento'],
   },
   {
     name: 'Gestión de Proyectos',
     description: 'Planificación y liderazgo de proyectos tecnológicos.',
-    tags: ['scrum', 'kanban', 'liderazgo', 'planificacion'],
+    tags: ['planificación', 'metodologías ágiles', 'seguimiento', 'coordinación de equipos', 'gestión de riesgos'],
+  },
+  {
+    name: 'Computación en la nube',
+    description: 'Servicios en la nube, contenedores, despliegue y operación de sistemas.',
+    tags: ['nube', 'cloud', 'contenedores', 'despliegue', 'escalabilidad', 'servicios administrados', 'devops'],
   },
 ];
 

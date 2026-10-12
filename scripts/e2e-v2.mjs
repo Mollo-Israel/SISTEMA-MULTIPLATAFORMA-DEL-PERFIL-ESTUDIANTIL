@@ -372,27 +372,30 @@ async function batch4(ctx) {
   const movil = areas.find((a) => a.name === 'Desarrollo Móvil');
   const web = areas.find((a) => a.name === 'Desarrollo Web');
 
+  // V3.2 §10.5 reemplaza las reglas canónicas fijas: el catálogo es el
+  // conocimiento («React Native» ya es una habilidad de Móvil) y el
+  // administrador decide con un motivo auditado.
   const rn = await req('GET', '/skills/classify?name=React%20Native', { token: ctx.admin });
-  check(rn.status === 200 && rn.data?.rule === 'canonical' && rn.data?.areaIds?.includes(movil?.id),
-    'V2.4.1 §23.3 «React Native» tiene regla canónica: Desarrollo Móvil', json(rn.data));
+  check(rn.status === 200 && rn.data?.rule === 'exact_skill' && rn.data?.areaIds?.includes(movil?.id),
+    'V2.4.1 V3.2 §10.5 «React Native» coincide con la habilidad del catálogo: Desarrollo Móvil', json(rn.data));
 
-  const bloqueada = await req('POST', '/skills', {
-    token: ctx.admin, body: { name: `Kit Movil ${letras}`, aliases: ['SwiftUI'], academicAreaId: web.id },
+  const sinMotivoRn = await req('POST', '/skills', {
+    token: ctx.admin, body: { name: `React Native Kit ${letras}`, academicAreaId: web.id },
   });
-  check(bloqueada.status === 409 && bloqueada.data?.code === 'CLASSIFICATION_BLOCKED' && bloqueada.data?.fields?.academicAreaId,
-    'V2.4.2 §23.3 Guardar una tecnología canónica de móvil en Web se bloquea, aunque llegue por un alias', json(bloqueada.data));
+  check(sinMotivoRn.status === 409 && sinMotivoRn.data?.code === 'CLASSIFICATION_CONFIRMATION_REQUIRED' && sinMotivoRn.data?.fields?.academicAreaId,
+    'V2.4.2 V3.2 §10.6 Guardar en Web algo relacionado con una habilidad de Móvil pide confirmar', json(sinMotivoRn.data));
   const conMotivo = await req('POST', '/skills', {
-    token: ctx.admin, body: { name: `Kit Movil ${letras}`, aliases: ['SwiftUI'], academicAreaId: web.id, overrideReason: 'Lo usamos en la web de la carrera.' },
+    token: ctx.admin, body: { name: `React Native Kit ${letras}`, academicAreaId: web.id, overrideReason: 'Lo usamos en la web de la carrera.' },
   });
-  check(conMotivo.status === 409, 'V2.4.3 §23.3 Contra una regla dura no vale ni un motivo', `status ${conMotivo.status}`);
+  check(conMotivo.status === 201, 'V2.4.3 V3.2 §10.6 Sin reglas duras: con un motivo, el administrador decide', `status ${conMotivo.status}`);
 
   const area = (await req('POST', '/academic-areas', {
     token: ctx.admin, body: { name: `Robotica Educativa ${letras}`, tags: [`legokit${letras.toLowerCase()}`] },
   })).data;
   const nombre = `Legokit${letras.toLowerCase()} Studio`;
   const sugerida = await req('GET', `/skills/classify?name=${encodeURIComponent(nombre)}`, { token: ctx.admin });
-  check(sugerida.data?.rule === 'suggested' && sugerida.data?.areaIds?.includes(area.id),
-    'V2.4.4 §23.3 Para una tecnología sin regla, se sugiere el área por sus etiquetas', json(sugerida.data));
+  check(sugerida.data?.rule === 'area_tag' && sugerida.data?.areaIds?.includes(area.id),
+    'V2.4.4 §23.3 Para una tecnología nueva, se sugiere el área por su etiqueta (palabra completa)', json(sugerida.data));
 
   const otra = areas.find((a) => a.name === 'Redes') ?? areas[0];
   const sinMotivo = await req('POST', '/skills', { token: ctx.admin, body: { name: nombre, academicAreaId: otra.id } });

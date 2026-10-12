@@ -108,8 +108,10 @@ export class CatalogsController {
   @Get('skills/classify')
   @Roles(RolNombre.ADMIN)
   @ApiOperation({
-    summary: 'Área sugerida para una tecnología (V2 §23.3).',
-    description: 'Regla canónica, sugerencia por etiquetas o ninguna. No guarda nada.',
+    summary: 'Área sugerida para una tecnología (V3.2 §10.5).',
+    description:
+      'Prioridad: habilidad o alias exacto → etiqueta de área → habilidades relacionadas → '
+      + 'coincidencia débil → ninguna. No guarda nada.',
   })
   classifySkill(@Query('name') name = '', @Query('aliases') aliases = '') {
     return this.catalogsService.classify(
@@ -119,7 +121,7 @@ export class CatalogsController {
   }
 
   @Post('skills')
-  @ApiOperation({ summary: 'Crea una habilidad con alias; valida el área por reglas canónicas (V2 §23.3).' })
+  @ApiOperation({ summary: 'Crea una habilidad con alias y áreas secundarias; valida el área con el sugeridor (V3.2 §10.5).' })
   @Roles(RolNombre.ADMIN)
   createSkill(@Body() dto: CreateSkillDto, @CurrentUser() user: AuthenticatedUser) {
     return this.catalogsService.createSkill(dto, user.userId);

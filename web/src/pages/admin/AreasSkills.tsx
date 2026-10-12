@@ -6,8 +6,7 @@ import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill, SkillClassification } from '../../services/types';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
-  SkeletonTable, Tabs,
+  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, Tabs, FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import AiAssist from '../../components/AiAssist';
@@ -156,14 +155,17 @@ async function confirmarEtiquetas(
   const antes = new Set(previas.map((t) => t.toLowerCase()));
   const genericas = analisis.generic.filter((t) => !antes.has(t));
   const compartidas = analisis.shared.filter((x) => !antes.has(x.tag));
-  if (genericas.length === 0 && compartidas.length === 0) return true;
+  const duplicanSkill = (analisis.skillDuplicates ?? []).filter((x) => !antes.has(x.tag));
+  if (genericas.length === 0 && compartidas.length === 0 && duplicanSkill.length === 0) return true;
   const lineas = [
     ...genericas.map((t) => `«${t}» es demasiado general: casi cualquier tema de la carrera la usa.`),
+    // V3.2 §10.3: una etiqueta describe el área; la tecnología ya es una habilidad.
+    ...duplicanSkill.map((x) => `«${x.tag}» ya es la habilidad «${x.skill}»: como etiqueta no aporta y confunde al sugeridor. Usa vocabulario del área (p. ej. «persistencia», «consultas»).`),
     ...compartidas.map((x) => `«${x.tag}» ya la usa${x.areas.length > 1 ? 'n' : ''}: ${x.areas.map((a) => a.name).slice(0, 4).join(', ')}${x.areas.length > 4 ? '…' : ''}.`),
   ];
   return confirm({
     title: 'Revisa estas etiquetas',
-    message: `${lineas.join(' ')} Las etiquetas ayudan a reconocer el área; si se repiten, las sugerencias pueden confundirla con otra. ¿Guardar de todas formas?`,
+    message: `${lineas.join(' ')} Las etiquetas solo ayudan a clasificar habilidades nuevas: no suman puntaje ni afinidad. ¿Guardar de todas formas?`,
     confirmLabel: 'Guardar de todas formas',
   });
 }
@@ -187,6 +189,13 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
       [a.name, a.code, a.description ?? '', (a.tags ?? []).join(' ')].some((f) => normalize(f).includes(q)),
     );
   }, [data, query]);
+  // V3.2 §6.1: 10 filas por página, ordenables.
+  const { ordenados, orden, alternar } = useOrden(visible, {
+    nombre: (a) => a.name,
+    codigo: (a) => a.code,
+    estado: (a) => (a.isActive ? 'Vigente' : 'De baja'),
+  });
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [visible, orden]);
 
   const crear = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,15 +296,15 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
                 <table>
                   <thead>
                     <tr>
-                      <th>Nombre</th>
-                      <th>Código</th>
+                      <ThOrden clave="nombre" orden={orden} alternar={alternar}>Nombre</ThOrden>
+                      <ThOrden clave="codigo" orden={orden} alternar={alternar}>Código</ThOrden>
                       <th>Etiquetas</th>
-                      <th>Estado</th>
-                      <th></th>
+                      <ThOrden clave="estado" orden={orden} alternar={alternar}>Estado</ThOrden>
+                      <th><span className="sr-only">Acciones</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((a) => (
+                    {pag.visibles.map((a) => (
                       <tr key={a.id} className={a.isActive ? '' : 'is-inactive'}>
                         <td>
                           <strong>{a.name}</strong>
@@ -308,7 +317,7 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
                               {a.tags.map((t) => <span key={t} className="tag-chip">{t}</span>)}
                             </div>
                           ) : (
-                            <span className="link-warn" title="Sin etiquetas, el motor no reconoce el área">
+                            <span className="link-warn" title="Sin etiquetas, el sugeridor no puede proponer esta área">
                               <FiAlertTriangle size={13} /> Sin etiquetas
                             </span>
                           )}
@@ -330,6 +339,7 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
                     ))}
                   </tbody>
                 </table>
+                <Paginacion {...pag} noun="áreas" />
               </div>
             )
           }
@@ -411,9 +421,23 @@ function EditAreaDialog({ area, onClose, onSaved }: { area: AcademicArea; onClos
 //  Habilidades
 // ===========================================================================
 
-const CAMPOS_SKILL = ['name', 'code', 'academicAreaId', 'aliases', 'overrideReason'] as const;
+const CAMPOS_SKILL = ['name', 'code', 'academicAreaId', 'secondaryAreaIds', 'aliases', 'overrideReason'] as const;
 type CampoSkill = (typeof CAMPOS_SKILL)[number];
-const skillVacia: Record<CampoSkill, string> = { name: '', code: '', academicAreaId: '', aliases: '', overrideReason: '' };
+const skillVacia: Record<CampoSkill, string> = {
+  name: '', code: '', academicAreaId: '', secondaryAreaIds: '', aliases: '', overrideReason: '',
+};
+
+/** Las secundarias viajan en el formulario como ids separados por coma. */
+const idsDe = (v: string) => v.split(',').filter(Boolean);
+
+/** V3.2 §10.5: cómo se llama, para el administrador, cada nivel del sugeridor. */
+const NIVEL: Record<SkillClassification['rule'], string> = {
+  exact_skill: 'Ya está en el catálogo',
+  area_tag: 'Etiqueta de un área',
+  related_skill: 'Habilidades relacionadas',
+  weak: 'Sugerencia débil',
+  none: '',
+};
 
 const aliasesDe = (v: string) => v.split(',').map((a) => a.trim()).filter(Boolean);
 
@@ -438,14 +462,16 @@ function cuerpoSkill(f: Record<CampoSkill, string>) {
     name: f.name.trim(),
     code: f.code.trim(),
     academicAreaId: f.academicAreaId,
+    secondaryAreaIds: idsDe(f.secondaryAreaIds).filter((id) => id !== f.academicAreaId),
     aliases: aliasesDe(f.aliases),
     ...(f.overrideReason.trim() ? { overrideReason: f.overrideReason.trim() } : {}),
   };
 }
 
 /**
- * Clasificación sugerida en vivo (V2 §23.3): regla canónica o coincidencia
- * por etiquetas. Se pide al servidor, que es quien decide al guardar.
+ * Clasificación sugerida en vivo (V3.2 §10.5): habilidad o alias exacto,
+ * etiqueta de área, habilidades relacionadas o coincidencia débil. Se pide al
+ * servidor, que es quien decide al guardar.
  */
 function useClasificacion(nombre: string, aliases: string) {
   const [c, setC] = useState<SkillClassification | null>(null);
@@ -487,8 +513,14 @@ function SkillForm({
     onFieldTouched(campo);
   };
   const clasificacion = useClasificacion(value.name, value.aliases);
+  const elegidas = [value.academicAreaId, ...idsDe(value.secondaryAreaIds)].filter(Boolean);
   const fuera = !!clasificacion && clasificacion.rule !== 'none' && !!value.academicAreaId
-    && !clasificacion.areaIds.includes(value.academicAreaId);
+    && !clasificacion.areaIds.some((id) => elegidas.includes(id));
+  // Una sugerencia débil orienta; solo las de confianza alta o media piden motivo.
+  const pideMotivo = fuera && clasificacion?.confidence !== 'low';
+  const secundarias = idsDe(value.secondaryAreaIds);
+  const alternarSecundaria = (id: string) =>
+    set('secondaryAreaIds', (secundarias.includes(id) ? secundarias.filter((x) => x !== id) : [...secundarias, id]).join(','));
   return (
     <>
     <div className="row">
@@ -503,7 +535,7 @@ function SkillForm({
           className="mono"
         />
       </FormField>
-      <FormField label="Área académica" required error={errors.academicAreaId} hint="La que recibe el puntaje en el motor.">
+      <FormField label="Área principal" required error={errors.academicAreaId} hint="Donde vive la habilidad en el catálogo.">
         <select value={value.academicAreaId} onChange={(e) => set('academicAreaId', e.target.value)}>
           <option value="">Elige el área…</option>
           {areas.map((a) => (
@@ -512,7 +544,27 @@ function SkillForm({
         </select>
       </FormField>
     </div>
-    {clasificacion?.rule === 'none' && value.name.trim().length >= 2 && (
+    {/* V3.2 §11: 0..N áreas secundarias, como burbujas. */}
+    <FormField
+      label="Áreas secundarias"
+      error={errors.secondaryAreaIds}
+      hint="Opcional. Otras áreas donde también se usa (p. ej. Linux: Ciberseguridad, Computación en la nube). No reparte puntaje: cada experiencia dice su área."
+    >
+      <div className="chip-picker" role="group" aria-label="Áreas secundarias">
+        {areas.filter((a) => a.isActive && a.id !== value.academicAreaId).map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            className={`chip-toggle ${secundarias.includes(a.id) ? 'on' : ''}`}
+            aria-pressed={secundarias.includes(a.id)}
+            onClick={() => alternarSecundaria(a.id)}
+          >
+            {a.name}
+          </button>
+        ))}
+      </div>
+    </FormField>
+    {(clasificacion?.rule === 'none' || clasificacion?.rule === 'weak') && value.name.trim().length >= 2 && (
       <AiAssist
         task="TAG_SUGGESTION"
         label="Sugerir área con IA"
@@ -530,11 +582,10 @@ function SkillForm({
       <input value={value.aliases} onChange={(e) => set('aliases', e.target.value)} placeholder="ReactJS, React.js" />
     </FormField>
     {clasificacion && clasificacion.rule !== 'none' && (
-      <div className={`notice ${fuera ? (clasificacion.rule === 'canonical' ? 'notice-error' : 'notice-warn') : 'notice-info'}`}>
+      <div className={`notice ${pideMotivo ? 'notice-warn' : 'notice-info'}`}>
         <FiAlertTriangle size={18} />
         <div>
-          <strong>{clasificacion.rule === 'canonical' ? 'Regla del catálogo' : 'Sugerencia'}:</strong> {clasificacion.reason}
-          {fuera && clasificacion.rule === 'canonical' && ' No se podrá guardar en otra área.'}
+          <strong>{NIVEL[clasificacion.rule]}:</strong> {clasificacion.reason}
           {!value.academicAreaId || fuera ? (
             <div style={{ marginTop: '0.35rem' }}>
               {clasificacion.areaIds.map((id, i) => (
@@ -547,7 +598,7 @@ function SkillForm({
         </div>
       </div>
     )}
-    {(fuera && clasificacion?.rule === 'suggested') || errors.overrideReason ? (
+    {pideMotivo || errors.overrideReason ? (
       <FormField label="Motivo para guardarla en esta área" error={errors.overrideReason} hint="Queda registrado en la auditoría.">
         <textarea value={value.overrideReason} onChange={(e) => set('overrideReason', e.target.value)} placeholder="Por qué pertenece al área elegida…" />
       </FormField>
@@ -583,6 +634,14 @@ function SkillsPanel({
   }, [data, query]);
 
   const sinArea = (data ?? []).filter((s) => !s.academicAreaId).length;
+  const nombreArea = useMemo(() => new Map(areas.map((a) => [a.id, a.name])), [areas]);
+  const { ordenados, orden, alternar } = useOrden(visible, {
+    nombre: (s) => s.name,
+    codigo: (s) => s.code,
+    area: (s) => s.academicArea?.name ?? '',
+    estado: (s) => (s.isActive ? 'Vigente' : 'De baja'),
+  });
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [visible, orden]);
 
   const crear = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -685,23 +744,33 @@ function SkillsPanel({
                 <table>
                   <thead>
                     <tr>
-                      <th>Habilidad</th>
-                      <th>Código</th>
-                      <th>Área</th>
-                      <th>Estado</th>
-                      <th></th>
+                      <ThOrden clave="nombre" orden={orden} alternar={alternar}>Habilidad</ThOrden>
+                      <ThOrden clave="codigo" orden={orden} alternar={alternar}>Código</ThOrden>
+                      <ThOrden clave="area" orden={orden} alternar={alternar}>Área</ThOrden>
+                      <ThOrden clave="estado" orden={orden} alternar={alternar}>Estado</ThOrden>
+                      <th><span className="sr-only">Acciones</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((s) => (
+                    {pag.visibles.map((s) => (
                       <tr key={s.id} className={s.isActive ? '' : 'is-inactive'}>
-                        <td><strong>{s.name}</strong></td>
+                        <td>
+                          <strong>{s.name}</strong>
+                          {(s.aliases ?? []).length > 0 && (
+                            <div className="muted small">También: {(s.aliases ?? []).join(', ')}</div>
+                          )}
+                        </td>
                         <td><code className="code-pill">{s.code}</code></td>
                         <td>
                           {s.academicArea?.name ?? (
                             <button type="button" className="link-warn" onClick={() => setEditing(s)}>
                               <FiAlertTriangle size={13} /> Asignar área
                             </button>
+                          )}
+                          {(s.secondaryAreaIds ?? []).length > 0 && (
+                            <div className="muted small">
+                              Secundarias: {(s.secondaryAreaIds ?? []).map((id) => nombreArea.get(id) ?? '—').join(', ')}
+                            </div>
                           )}
                         </td>
                         <td>
@@ -721,6 +790,7 @@ function SkillsPanel({
                     ))}
                   </tbody>
                 </table>
+                <Paginacion {...pag} noun="habilidades" />
               </div>
             )
           }
@@ -758,6 +828,7 @@ function EditSkillDialog({
     name: skill.name,
     code: skill.code,
     academicAreaId: skill.academicAreaId ?? '',
+    secondaryAreaIds: (skill.secondaryAreaIds ?? []).join(','),
     aliases: (skill.aliases ?? []).join(', '),
     overrideReason: '',
   });

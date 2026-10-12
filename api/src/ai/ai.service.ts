@@ -25,6 +25,7 @@ import { AuditEventType, AuditService } from '../audit/audit.service';
 import { ProjectsService } from '../projects/projects.service';
 import { AnalyticsService } from '../reports/analytics.service';
 import { classifySkill } from '../catalogs/skill-classification';
+import { Skill } from '../entities/skill.entity';
 import { AI_ASSISTANCE_PORT, AiAssistancePort, AiUnavailableError } from './ai-assistance.port';
 import { PROMPTS, VALIDATE, inputFingerprint, parseJsonLoose, sanitizeForAi } from './ai-text';
 import { AiSuggestionDto } from './dto/ai-suggestion.dto';
@@ -188,8 +189,11 @@ export class AiService {
       if (user.role !== RolNombre.ADMIN) throw new ForbiddenException('El catálogo de habilidades es de la Administración.');
       const nombre = (dto.text ?? '').trim();
       if (!nombre) throw this.falta('text', 'Escribe el nombre de la habilidad.');
-      const c = classifySkill(nombre, [], await this.areas.find());
-      if (c.rule === 'canonical') {
+      // V3.2 §10.5: si el catálogo ya lo sabe (nombre o alias exacto), no hace
+      // falta preguntar a la IA.
+      const catalogo = await this.areas.manager.getRepository(Skill).find({ where: { isActive: true } });
+      const c = classifySkill(nombre, [], await this.areas.find(), catalogo);
+      if (c.rule === 'exact_skill') {
         return {
           available: this.port.isEnabled(), ok: true, source: 'rule',
           result: { areaId: c.areaIds[0] ?? null, areaName: c.areaNames[0] ?? null, reason: c.reason },

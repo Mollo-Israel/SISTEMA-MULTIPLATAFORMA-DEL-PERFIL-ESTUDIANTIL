@@ -31,7 +31,7 @@ import { checkTeamName, forbiddenTerms, normalizeWord } from '../../src/collabor
 import { checkContactChannel } from '../../src/collaboration/contact-channel.rules';
 import { PROMPTS, VALIDATE, inputFingerprint, parseJsonLoose, sanitizeForAi } from '../../src/ai/ai-text';
 import { helpVideo } from '../../src/help/help-video';
-import { analyzeAreaTags, classifySkill, suggestFromCatalog } from '../../src/catalogs/skill-classification';
+import { analyzeAreaTags, classifySkill } from '../../src/catalogs/skill-classification';
 import { assertClientAllowsRole } from '../../src/auth/auth.service';
 import { PDF_THEMES, PdfWriter } from '../../src/trajectory/pdf-writer';
 import { storageDriverFactory } from '../../src/storage/storage-driver.factory';
@@ -213,16 +213,68 @@ describe('Video de ayuda (§65)', () => {
   });
 });
 
-describe('Clasificación de habilidades (§23.3)', () => {
+describe('Sugeridor de área (V3.2 §10.5)', () => {
   const areas = [
-    { id: 'm', name: 'Desarrollo Móvil', tags: ['desarrollo-movil'] },
-    { id: 'w', name: 'Desarrollo Web', tags: ['desarrollo-web'] },
+    { id: 'm', name: 'Desarrollo Móvil', tags: ['aplicaciones móviles', 'mobile'] },
+    { id: 'w', name: 'Desarrollo Web', tags: ['frontend', 'backend'] },
+    { id: 'r', name: 'Redes', tags: ['networking', 'infraestructura de red'] },
+    { id: 'n', name: 'Computación en la nube', tags: ['nube', 'cloud', 'contenedores'] },
+    { id: 'i', name: 'Inteligencia Artificial', tags: ['aprendizaje automático'] },
   ];
-  it('React Native va a Móvil por regla canónica, también por alias', () => {
-    const c = classifySkill('React Native', [], areas);
-    assert.equal(c.rule, 'canonical');
+  const catalogo = [
+    { name: 'React Native', aliases: [], academicAreaId: 'm' },
+    { name: 'React', aliases: ['ReactJS'], academicAreaId: 'w' },
+    { name: 'AWS', aliases: ['Amazon Web Services'], academicAreaId: 'n' },
+    { name: 'TCP/IP', aliases: [], academicAreaId: 'r' },
+    { name: 'C', aliases: [], academicAreaId: 'r' },
+  ];
+  it('1 · nombre o alias exacto de una habilidad: su área, con confianza alta', () => {
+    const c = classifySkill('RN', ['react native'], areas, catalogo);
+    assert.equal(c.rule, 'exact_skill');
+    assert.equal(c.confidence, 'high');
     assert.deepEqual(c.areaIds, ['m']);
-    assert.deepEqual(classifySkill('RN', ['react native'], areas).areaIds, ['m']);
+  });
+  it('el bug observado: «aws» va a Computación en la nube, nunca a Redes', () => {
+    const c = classifySkill('Amazon S3', ['aws'], areas, catalogo);
+    assert.deepEqual(c.areaIds, ['n']);
+    assert.equal(c.rule, 'exact_skill');
+  });
+  it('2 · etiqueta exacta del área (palabras completas), antes que las relacionadas', () => {
+    const c = classifySkill('Cloud Run', [], areas, catalogo);
+    assert.equal(c.rule, 'area_tag');
+    assert.deepEqual(c.areaIds, ['n']);
+  });
+  it('3 · relación con habilidades ya clasificadas («React Router» ⊃ «React»)', () => {
+    const c = classifySkill('React Router', [], areas, catalogo);
+    assert.equal(c.rule, 'related_skill');
+    assert.deepEqual(c.areaIds, ['w']);
+  });
+  it('3 · gana la relación más específica («React Native Kit» es de Móvil, no de Web)', () => {
+    assert.deepEqual(classifySkill('React Native Kit', [], areas, catalogo).areaIds, ['m']);
+  });
+  it('4 · coincidencia débil por vocabulario: solo orienta', () => {
+    const c = classifySkill('Aprendizaje Federado', [], areas, catalogo);
+    assert.equal(c.rule, 'weak');
+    assert.equal(c.confidence, 'low');
+    assert.deepEqual(c.areaIds, ['i']);
+  });
+  it('5 · sin confianza no sugiere', () => {
+    assert.equal(classifySkill('Elixir', [], areas, catalogo).rule, 'none');
+  });
+  it('sin subcadena bruta y tokens cortos solo exactos («C», «JS», «AS»)', () => {
+    assert.equal(classifySkill('Cassandra', [], areas, catalogo).rule, 'none');
+    assert.equal(classifySkill('AS', [], areas, catalogo).rule, 'none');
+    assert.equal(classifySkill('Objective C', [], areas, catalogo).rule, 'none');
+    assert.equal(classifySkill('C', [], areas, catalogo).rule, 'exact_skill');
+  });
+  it('una etiqueta corta no casa dentro de otra palabra', () => {
+    const conApi = [...areas, { id: 'x', name: 'Integraciones', tags: ['api'] }];
+    assert.equal(classifySkill('Rapidapi', [], conApi, catalogo).rule, 'none');
+    assert.equal(classifySkill('API Gateway', [], conApi, catalogo).rule, 'area_tag');
+  });
+  it('un área secundaria de la habilidad no se sugiere como principal', () => {
+    const conLinux = [...catalogo, { name: 'Linux', aliases: [], academicAreaId: 'r', secondaryAreaIds: ['n'] }];
+    assert.deepEqual(classifySkill('Linux Mint', [], areas, conLinux).areaIds, ['r']);
   });
 });
 
@@ -329,13 +381,13 @@ describe('Taxonomía dinámica (V3 §9.3, §9.4)', () => {
   ];
   it('una tecnología nueva hereda el área de una ya clasificada que contiene', () => {
     const c = classifySkill('React Router', [], areas, catalogo);
-    assert.equal(c.rule, 'suggested');
+    assert.equal(c.rule, 'related_skill');
     assert.deepEqual(c.areaIds, ['web']);
-    assert.match(c.reason ?? '', /habilidades ya clasificadas \(React en Desarrollo Web\)/);
+    assert.match(c.reason ?? '', /«React», de Desarrollo Web/);
   });
   it('también por alias, y por palabra completa (no «C» dentro de cualquier palabra)', () => {
     assert.deepEqual(classifySkill('Postgres 16', [], areas, catalogo).areaIds, ['db']);
-    assert.equal(suggestFromCatalog(['Cassandra'], catalogo).size, 0);
+    assert.equal(classifySkill('Cassandra', [], areas, catalogo).rule, 'none');
   });
   it('sin catálogo ni etiquetas no sugiere nada', () => {
     assert.equal(classifySkill('Elixir', [], areas, catalogo).rule, 'none');
@@ -351,6 +403,10 @@ describe('Taxonomía dinámica (V3 §9.3, §9.4)', () => {
   });
   it('al editar, el área no choca consigo misma', () => {
     assert.equal(analyzeAreaTags(['sql'], areas, 'db').shared.length, 0);
+  });
+  it('V3.2 §10.6: avisa la etiqueta que repite una habilidad del catálogo', () => {
+    const r = analyzeAreaTags(['persistencia', 'postgres'], areas, 'db', catalogo);
+    assert.deepEqual(r.skillDuplicates, [{ tag: 'postgres', skill: 'PostgreSQL' }]);
   });
 });
 

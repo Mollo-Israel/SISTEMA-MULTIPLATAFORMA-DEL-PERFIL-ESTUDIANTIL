@@ -197,3 +197,102 @@ Formato de cada reporte: §76.
 **Pendientes:** ninguno del batch.
 
 **Riesgos:** la última solicitud por correo se guarda en memoria del proceso. Si la API se reinicia, la espera de un correo inexistente vuelve a 0. La de una cuenta real sigue saliendo de sus tokens.
+
+---
+
+## BATCH 3 — Taxonomía: sugeridor, áreas secundarias y etiquetas semánticas
+
+**ESTADO:** completo
+
+**Objetivo:**
+- Corregir el sugeridor de área (§10.5): AWS tiene que ir a Nube, no a Redes; sin subcadenas ni reglas fijas.
+- Que una habilidad tenga una área principal y 0..N secundarias (§11).
+- Que las etiquetas sean vocabulario del área y no copias de habilidades (§10.3).
+- Crear «Computación en la nube» (§10.1).
+- Avisar los riesgos al crear áreas y etiquetas (§10.6).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **C5:** `aws` iba a Redes. La causa son dos fallas juntas:
+  - `SKILL_CANONICAL_RULES` (`aws → infraestructura`) se aplicaba antes que el catálogo.
+  - Redes resolvía a `infraestructura` por su etiqueta homónima.
+- La regla fija además bloqueaba guardar AWS en otra área.
+- Las etiquetas de la semilla repetían habilidades: `sql|postgresql|mongodb`, `react|node|html|css`, `python`, `linux`.
+- No existía el área de nube ni AWS, Docker o Kubernetes en el catálogo.
+
+**Cambios:**
+- **Sugeridor nuevo**, determinista y sin tablas en el código. Usa el catálogo vigente con la prioridad de §10.5:
+  1. nombre o alias **exacto** de una habilidad;
+  2. etiqueta de área, como palabras completas;
+  3. habilidad relacionada (gana la más específica: «React Native Kit» es de Móvil y no de Web);
+  4. coincidencia débil por vocabulario;
+  5. nada.
+- Sin subcadenas brutas: los términos cortos («C», «JS», «AS») solo coinciden completos.
+- Al guardar ya no hay bloqueos duros:
+  - Una sugerencia de confianza alta o media que no incluya ninguna de las áreas elegidas (principal o secundarias) pide un motivo, que se audita.
+  - La sugerencia débil solo orienta.
+  - Administración decide (§10.6).
+- **Áreas secundarias:**
+  - Tabla `skill_area_relations` (`relation_type = 'SECONDARY'`); `academic_area_id` sigue siendo la principal (§11.2).
+  - Alta, edición y listado con `secondaryAreaIds`; no se repiten ni incluyen la principal.
+  - La guardia área→habilidad acepta la principal o una secundaria.
+  - El selector de los formularios muestra «Relacionadas con esta área» (§11.3).
+- **Duplicados:** un nombre que ya es alias de otra habilidad se rechaza (§10.4).
+- **Análisis de etiquetas:** avisa las que repiten una habilidad (`skillDuplicates`).
+- **Datos:**
+  - Las etiquetas de las 8 áreas base pasan a vocabulario semántico, solo si seguían como en la semilla.
+  - Se crea «Computación en la nube» con AWS, Microsoft Azure, Google Cloud, Docker y Kubernetes.
+  - Alias de las habilidades base: Postgres, ReactJS, Node, JS, TS, ML y Linux.
+  - Secundarias de §11.1: Linux en Ciberseguridad y Nube; Python en Web; Docker en Ingeniería de Software.
+  - Semillas actualizadas para instalaciones nuevas.
+- **Web (Áreas y habilidades):**
+  - Burbujas de áreas secundarias.
+  - El nivel del sugeridor con su nombre.
+  - La IA se ofrece cuando no hay sugerencia o es débil.
+  - Las grillas de áreas y habilidades con 10 filas, orden y contador.
+- **IA:** si el catálogo ya conoce la tecnología (nombre o alias exacto) no se consulta a la IA.
+
+**Migraciones:**
+- `1780610000000-V32SkillSecondaryAreas` (tabla).
+- `1780610000001-V32SemanticAreaTags` (datos). El `up` registra en `v32_catalog_seed_log` lo que hizo. El `down` revierte solo eso:
+  - lo creado se borra si nadie lo usa y, si ya se usa, se desactiva;
+  - las etiquetas y alias vuelven a su estado previo.
+- Probadas en orden `run → revert → revert → run`. Respaldo previo: `pre-v32-b3.dump`.
+
+**Archivos modificados:**
+- `api/src/catalogs/{skill-classification,catalogs.service,catalogs.controller,catalogs.module,area-skill.guard}.ts`
+- `api/src/catalogs/dto/{create,update}-skill.dto.ts`
+- `api/src/entities/{skill,skill-area-relation,index}.ts`
+- `api/src/ai/ai.service.ts`
+- `api/src/database/seeds/{academic-areas,skills}.seed.ts`
+- 2 migraciones
+- `web/src/pages/admin/AreasSkills.tsx`, `web/src/components/AreaSkillPicker.tsx`, `web/src/services/types.ts`, `web/src/index.css`
+- Pruebas: `api/test/unit/rules.test.ts`, `scripts/e2e-v3-2.mjs`, `scripts/e2e-v2.mjs`, `scripts/e2e-v3.mjs`
+
+**Pruebas ejecutadas:**
+- Unitarias: **117/117**. Hay 11 nuevas del sugeridor: los cinco niveles, el bug de AWS, tokens cortos, la más específica, la secundaria y el aviso de etiqueta-habilidad.
+- Suite `e2e-v3-2 batch3`: **20/20**. Cubre:
+  - el catálogo semántico;
+  - AWS en Nube;
+  - Linux con dos secundarias;
+  - cada nivel del sugeridor contra la API;
+  - el duplicado por alias;
+  - alta y edición de secundarias, y la secundaria inexistente;
+  - un proyecto de Ciberseguridad que acepta Linux y uno de Web que no;
+  - 403 para un docente.
+
+**Pruebas ajustadas:** V3.2 reemplaza explícitamente las reglas canónicas («No adaptar el modelo al bug»).
+- V2.4.1–V2.4.4 verifican ahora el comportamiento del catálogo.
+- V3.4.9 usa un nombre que no contiene una etiqueta, porque §10.5 pone la etiqueta antes que la relacionada.
+- V3.17.1 elige como «habilidad de otra área» una que no la tenga ni como secundaria.
+
+**Resultados:**
+- Regresión completa: **1878 correctas y 1 fallo**. El fallo fue V3.17.1, un artefacto de la prueba por §11. Corregido, `e2e-v3 batch17` da 31/31.
+- Total final: **1879 correctas, 0 fallos**.
+
+**Regresiones:** ninguna funcional.
+
+**Pendientes:**
+- El motor de afinidad todavía usa las etiquetas para deducir el área de un proyecto sin tecnologías o de un certificado sin área (`inferAreasByTech`, `matchAreasByText`). §12.3 lo prohíbe; se retira en el BATCH 15 (afinidad V5).
+- El contexto área+habilidad de las experiencias se hace en los BATCH 4 (actividades) y 11 (proyectos).
+
+**Riesgos:** las etiquetas nuevas cambian lo que esos dos respaldos por texto encuentran hasta el BATCH 15. Se eligieron sin términos cortos que casen dentro de otras palabras (se quitaron `ios` y `api`).
