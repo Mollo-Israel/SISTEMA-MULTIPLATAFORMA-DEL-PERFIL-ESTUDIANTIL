@@ -1,4 +1,5 @@
 import { validarFormulario } from '../../components/form';
+import { ImagenProtegida } from '../../components/ArchivoProtegido';
 import { useEffect, useMemo, useState } from 'react';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { FiBookOpen, FiExternalLink, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
@@ -250,7 +251,7 @@ export default function DirectorLearningResourcesPage() {
 
           <div className="field">
             <label htmlFor="learning-resources-imagen">Imagen (opcional)</label>
-            {form.imageUrl && <img src={form.imageUrl} alt="" className="activity-image-preview" />}
+            {form.imageUrl && <ImagenProtegida src={form.imageUrl} className="activity-image-preview" />}
             <input
               id="learning-resources-imagen"
               type="file"

@@ -1,103 +1,157 @@
-import { useState } from 'react';
-import { FiSearch } from 'react-icons/fi';
-import { auditService, type AuditEventView } from '../../services';
+import { Fragment, useEffect, useState } from 'react';
+import { FiChevronDown, FiChevronUp, FiX } from 'react-icons/fi';
+import { auditService, type AuditLogPage } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { AsyncView, Badge, Button, Card, PageHeader, SkeletonTable } from '../../components/ui';
+import {
+  AsyncView, Badge, Button, Card, PageHeader, Paginacion, SearchInput, SkeletonTable,
+} from '../../components/ui';
+import { formatearFechaHora } from '../../lib/fechas';
 
-const FECHA = (v: string) =>
-  new Date(v).toLocaleString('es-BO', { dateStyle: 'medium', timeStyle: 'short' });
+const POR_PAGINA = 10;
 
-/** Grupos de eventos más consultados; el filtro libre cubre el resto. */
-const TIPOS: { value: string; label: string }[] = [
-  { value: '', label: 'Todos los eventos' },
-  { value: 'USER_PROVISIONED', label: 'Alta de cuentas' },
-  { value: 'TEACHER_SCOPE_CHANGED', label: 'Cambios de alcance docente' },
-  { value: 'IMPORT_APPLIED', label: 'Importaciones de padrón' },
-  { value: 'ACTIVITY_APPROVED', label: 'Actividades aprobadas' },
-  { value: 'ACTIVITY_REJECTED', label: 'Actividades rechazadas' },
-  { value: 'PARTICIPATION_CONFIRMED', label: 'Participaciones confirmadas' },
-  { value: 'CONSTANCY_ISSUED', label: 'Constancias emitidas' },
-  { value: 'SKILL_CLASSIFICATION_OVERRIDE', label: 'Habilidades fuera del área sugerida' },
-  { value: 'AI_SUGGESTION_ACCEPTED', label: 'Sugerencias de IA aceptadas' },
-  { value: 'TEAM_NAME_MODERATED', label: 'Nombres de equipo moderados' },
-  { value: 'CONFIG_CHANGED', label: 'Cambios de configuración' },
-];
+const TONO: Record<string, string> = { correcto: 'green', rechazado: 'red', cancelado: 'gray', moderado: 'amber' };
+const ROL: Record<string, string> = {
+  ADMIN: 'Administración', CAREER_DIRECTOR: 'Dirección', TEACHER: 'Docente', SCIENTIFIC_SOCIETY: 'Sociedad', STUDENT: 'Estudiante',
+};
 
 /**
- * Auditoría (V2 §77, §69): qué pasó, quién lo hizo y cuándo. Solo lectura y
- * solo para la Administración; el servidor ya quitó del detalle cualquier
- * dato sensible antes de guardarlo.
+ * Auditoría (V3.2 §59, C13): quién hizo qué, en qué módulo, cuándo y con qué
+ * resultado, en palabras. Filtros que funcionan (módulo, acción, actor, fechas
+ * y resultado), 10 por página y el detalle de cada evento al desplegarlo. El
+ * servidor ya quitó del detalle cualquier dato sensible antes de guardarlo.
  */
 export default function AdminAuditPage() {
-  const [tipo, setTipo] = useState('');
-  const [entidad, setEntidad] = useState('');
-  const [aplicado, setAplicado] = useState({ tipo: '', entidad: '' });
-  const state = useAsync(
-    () => auditService.list({ eventType: aplicado.tipo || undefined, entityType: aplicado.entidad || undefined, limit: 200 }),
-    [aplicado.tipo, aplicado.entidad],
+  const catalogo = useAsync(() => auditService.catalog(), []);
+  const [modulo, setModulo] = useState('');
+  const [accion, setAccion] = useState('');
+  const [actor, setActor] = useState('');
+  const [actorBuscado, setActorBuscado] = useState('');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+  const [resultado, setResultado] = useState('');
+  const [pagina, setPagina] = useState(1);
+  const [abierto, setAbierto] = useState<string | null>(null);
+
+  useEffect(() => setPagina(1), [modulo, accion, actorBuscado, desde, hasta, resultado]);
+  useEffect(() => setAccion(''), [modulo]);
+
+  const state = useAsync<AuditLogPage>(
+    () => auditService.log({
+      modulo: modulo || undefined,
+      eventType: accion || undefined,
+      actor: actorBuscado || undefined,
+      desde: desde || undefined,
+      hasta: hasta || undefined,
+      resultado: resultado || undefined,
+      limit: POR_PAGINA,
+      offset: (pagina - 1) * POR_PAGINA,
+    }),
+    [modulo, accion, actorBuscado, desde, hasta, resultado, pagina],
   );
+
+  const acciones = (catalogo.data?.acciones ?? []).filter((a) => !modulo || a.modulo === modulo);
+  const hayFiltros = !!(modulo || accion || actorBuscado || desde || hasta || resultado);
+  const limpiar = () => {
+    setModulo(''); setAccion(''); setActor(''); setActorBuscado(''); setDesde(''); setHasta(''); setResultado('');
+  };
+  const total = state.data?.total ?? 0;
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
 
   return (
     <div>
       <PageHeader
         title="Auditoría"
-        description="Eventos relevantes del sistema, del más reciente al más antiguo. El detalle nunca incluye contraseñas, tokens ni códigos."
+        description="Quién hizo qué, en qué módulo, cuándo y con qué resultado. El detalle nunca incluye contraseñas, tokens ni códigos."
       />
-      <Card
-        title="Eventos"
-        actions={
-          <form
-            noValidate
-            className="flex"
-            style={{ gap: '0.5rem', flexWrap: 'wrap' }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              setAplicado({ tipo, entidad: entidad.trim() });
-            }}
-          >
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} aria-label="Tipo de evento">
-              {TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <input
-              value={entidad}
-              onChange={(e) => setEntidad(e.target.value)}
-              placeholder="Entidad (user, activity…)"
-              aria-label="Tipo de entidad"
-              style={{ maxWidth: 200 }}
-            />
-            <Button type="submit" size="sm" variant="secondary" icon={<FiSearch size={14} />}>Filtrar</Button>
-          </form>
-        }
-      >
+      <Card title="Eventos">
+        <div className="filters audit-filters">
+          <select value={modulo} onChange={(e) => setModulo(e.target.value)} aria-label="Módulo">
+            <option value="">Todos los módulos</option>
+            {(catalogo.data?.modulos ?? []).map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+          <select value={accion} onChange={(e) => setAccion(e.target.value)} aria-label="Acción">
+            <option value="">Todas las acciones</option>
+            {acciones.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+          </select>
+          <SearchInput value={actor} onChange={setActor} onDebouncedChange={(v) => setActorBuscado(v.trim())} placeholder="Actor: nombre, correo o «Sistema»" />
+          <label className="audit-fecha">Desde <input type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} /></label>
+          <label className="audit-fecha">Hasta <input type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} /></label>
+          <select value={resultado} onChange={(e) => setResultado(e.target.value)} aria-label="Resultado">
+            <option value="">Todos los resultados</option>
+            {(catalogo.data?.resultados ?? []).map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+          <Button variant="ghost" size="sm" icon={<FiX size={14} />} disabled={!hayFiltros} onClick={limpiar}>Limpiar</Button>
+        </div>
         <AsyncView
           loading={state.loading}
           error={state.error}
           data={state.data}
-          skeleton={<SkeletonTable rows={8} columns={4} />}
-          isEmpty={(d: AuditEventView[]) => d.length === 0}
-          emptyMessage="No hay eventos con ese filtro."
+          skeleton={<SkeletonTable rows={8} columns={5} />}
+          isEmpty={(d: AuditLogPage) => d.items.length === 0}
+          emptyMessage="No hay eventos con esos filtros."
         >
-          {(filas: AuditEventView[]) => (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr><th>Fecha</th><th>Evento</th><th>Quién</th><th>Sobre</th><th>Detalle</th></tr>
-                </thead>
-                <tbody>
-                  {filas.map((e) => (
-                    <tr key={e.id}>
-                      <td className="muted" style={{ whiteSpace: 'nowrap' }}>{FECHA(e.createdAt)}</td>
-                      <td><Badge tone="gray">{e.eventType}</Badge></td>
-                      <td>{e.actor ?? <span className="muted">Sistema</span>}</td>
-                      <td className="muted">{e.entityType}</td>
-                      <td className="muted small" style={{ maxWidth: 320, wordBreak: 'break-word' }}>
-                        {e.metadata && Object.keys(e.metadata).length > 0 ? JSON.stringify(e.metadata) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {(d: AuditLogPage) => (
+            <>
+              <div className="table-scroll">
+                <table className="tabla-apilable">
+                  <thead>
+                    <tr><th>Actor</th><th>Módulo</th><th>Acción</th><th>Fecha</th><th>Resultado</th><th><span className="sr-only">Detalle</span></th></tr>
+                  </thead>
+                  <tbody>
+                    {d.items.map((e) => (
+                      <Fragment key={e.id}>
+                        <tr>
+                          <td>
+                            <strong>{e.actor}</strong>
+                            {e.actorRol && <div className="muted small">{ROL[e.actorRol] ?? e.actorRol}</div>}
+                          </td>
+                          <td>{e.modulo}</td>
+                          <td>
+                            {e.accion}
+                            {e.sobre && <div className="muted small">Sobre: {e.sobre}</div>}
+                          </td>
+                          <td className="muted" style={{ whiteSpace: 'nowrap' }}>{formatearFechaHora(e.fecha)}</td>
+                          <td><Badge tone={TONO[e.resultadoCodigo] ?? 'gray'}>{e.resultado}</Badge></td>
+                          <td>
+                            {e.detalle.length > 0 && (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                aria-expanded={abierto === e.id}
+                                onClick={() => setAbierto(abierto === e.id ? null : e.id)}
+                              >
+                                {abierto === e.id ? <FiChevronUp /> : <FiChevronDown />} Detalle
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {abierto === e.id && (
+                          <tr className="audit-detalle">
+                            <td colSpan={6}>
+                              <dl className="detail-list">
+                                {e.detalle.map((x, k) => (
+                                  <Fragment key={k}><dt>{x.campo}</dt><dd>{x.valor}</dd></Fragment>
+                                ))}
+                                <dt>Código del evento</dt><dd><code>{e.eventType}</code></dd>
+                              </dl>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Paginacion
+                pagina={pagina}
+                paginas={paginas}
+                total={total}
+                desde={total === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1}
+                hasta={Math.min(pagina * POR_PAGINA, total)}
+                ir={(n) => setPagina(Math.min(Math.max(1, n), paginas))}
+                noun="eventos"
+              />
+            </>
           )}
         </AsyncView>
       </Card>

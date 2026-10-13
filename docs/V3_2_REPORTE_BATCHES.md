@@ -990,3 +990,112 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Pendientes:** ninguno en este batch.
 
 **Riesgos:** los perfiles con proyectos o credenciales sin área explícita pierden los puntos que antes se inferían. Es el comportamiento que pide §12.3.
+
+---
+
+## BATCH 16–19 — Docente, Dirección y Sociedad, Administración, Currículo
+
+Se entregan en un solo commit porque comparten archivos: `navigation.ts`, `index.css` y las suites `e2e-web` y `e2e-v3-2`.
+
+### BATCH 16 — Docente (§25, §56, §62)
+
+**ESTADO:** completo
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **Ya existía:** las funciones del docente, en las pestañas de un único panel: «Actividades de la carrera», estudiantes y proyectos de su alcance, necesidades de equipo y reporte por semestre.
+- **Faltaba:** el menú solo mostraba «Inicio / Panel académico» y «Mis actividades». Las demás funciones parecían retiradas.
+
+**Cambios (web):**
+- El menú lista «Actividades de la carrera», «Mis actividades», «Estudiantes», «Proyectos de estudiantes», «Necesidades de equipo» y «Reporte por semestre».
+- Cada entrada abre su pestaña del mismo panel, sin un segundo panel.
+- La pestaña «Actividades» pasa a llamarse «Actividades de la carrera».
+
+**Pruebas:**
+- **API, `V32.16.1–16.3`:** otro docente ve la actividad en la carrera y no en «Mis actividades»; no la edita cambiando el id (403/404); sigue siendo de quien la creó.
+- **Web, `WEB.12c–12d`:** el menú tiene las entradas y la elegida queda marcada sola.
+
+### BATCH 17 — Dirección y Sociedad (§57, §58)
+
+**ESTADO:** completo
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **Ya existía (BATCH 6):**
+  - las pestañas de Aprobaciones;
+  - las aprobadas, con gestión por Dirección;
+  - la analítica con pestañas;
+  - el bloqueo de edición de una aprobada para su creador (C10, 409).
+- **Faltaba:** Sociedad tenía «Crear actividad» como vista aparte, duplicando «Mis actividades».
+
+**Cambios (web):**
+- Se retira esa entrada del menú.
+- Crear sigue con el botón «Nueva actividad» dentro de «Mis actividades». El enlace directo `?nuevo=1` del Inicio sigue funcionando.
+
+**Pruebas:** `WEB.22b–22c`.
+
+### BATCH 18 — Administración, auditoría y ayuda (§59, §60, §61)
+
+**ESTADO:** completo
+
+**Hallazgos verificados antes de cambiar (§75):**
+- La auditoría mostraba códigos (`USER_PROVISIONED`, `entity=user`) y filtros técnicos.
+- «Correo (configuración técnica)» estaba en el menú del Admin.
+- La Ayuda no cubría todos los temas por rol y enlazaba a rutas viejas o retiradas.
+
+**Cambios:**
+- **API — auditoría:**
+  - `audit-labels.ts` da módulo, acción y resultado en palabras para los 58 tipos de evento. El detalle sale en pares legibles, con los identificadores abreviados.
+  - `GET /audit/log`: filtra por módulo, acción, actor (nombre, correo o «Sistema»), fechas en hora de Bolivia y resultado, de a 10 por página.
+  - `GET /audit/log/catalog`.
+  - Solo Admin.
+  - `GET /audit/events` se mantiene para clientes anteriores.
+- **API — correo:**
+  - `MailDiagnosticsGuard`: en producción, `/api/mail/*` responde 404 salvo con `MAIL_DIAGNOSTICS_ENABLED=true`.
+  - Sigue siendo solo Admin.
+  - Nunca devuelve la contraseña.
+- **Web:**
+  - Pantalla de auditoría con columnas Actor / Módulo / Acción / Fecha / Resultado y detalle desplegable.
+  - La entrada y la ruta del correo solo existen en desarrollo o con `VITE_TECHNICAL_MODE=true`.
+  - La Ayuda agrupa sus preguntas por tema (cuenta, perfil, actividades, proyectos, evidencias, afinidad, currículo, privacidad, gestión).
+  - La Ayuda suma cuatro ilustraciones SVG con texto alternativo (`web/public/ayuda/`) y el video configurado con `HELP_VIDEO_URL`.
+  - Se corrigieron los enlaces viejos.
+- **`.env.example`:** se documentan `MAIL_DIAGNOSTICS_ENABLED` y `VITE_TECHNICAL_MODE`.
+
+**Pruebas:**
+- **API, `V32.18.1–18.11`:** permisos, catálogo en palabras, columnas, filtros por módulo, actor, resultado y fechas, detalle sin secretos, actor «Sistema» y correo solo para Admin.
+- **Web, `WEB.22d–22j`.**
+- **Unitarias:** `admin-surface.test.ts`, 6 pruebas. Cubren el guard en desarrollo y en producción, con y sin el modo técnico, la cobertura de etiquetas y el formato del detalle.
+
+### BATCH 19 — Trayectoria, privacidad, QR y currículo (§42, §54, §55)
+
+**ESTADO:** completo
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **Ya existía y está cubierto:**
+  - currículo selectivo por secciones e ítems, con las reglas de elegibilidad de §54 (`cv-eligibility.rules.ts`), vista previa y PDF de la misma selección;
+  - rechazo de ítems ajenos o no elegibles (`CV_ITEM_NOT_ELIGIBLE`; `V3.18.x`);
+  - perfil compartible opt-in, QR con identificador opaco y rotable, y la solicitud de contacto escanear → solicitar → aceptar (`B8.x`).
+- **Defecto 1:** el certificado institucional del BATCH 8 aparecía como «Constancia interna» en la línea de la actividad del currículo, en el PDF y en la trayectoria. §28.3 exige nombrar al emisor real.
+- **Defecto 2 (web y móvil):** las imágenes de actividades y recursos (`<img src="/api/files/…">`) y los botones «Abrir» o «Ver» de evidencias y certificados no llevaban el token. `/api/files` exige sesión, y la ruta era relativa al origen de la web, así que el navegador recibía 401 y no se veía nada.
+
+**Cambios:**
+- **API:** `respaldoPorActividad` pone en la línea de la actividad «Certificado emitido por <emisor>» o «Constancia interna disponible». Se aplica en ítems elegibles, vista previa, PDF y trayectoria. La constancia de una actividad ya incluida no se repite.
+- **Web:**
+  - `ArchivoProtegido.tsx`. `ImagenProtegida` pide el archivo con la sesión y lo muestra como `blob:`. `BotonArchivo` abre PDF e imágenes y descarga cualquier otro tipo, que nunca se interpreta.
+  - Se aplica en tarjetas y detalle de actividad, Biblioteca, formularios de imagen, evidencias, certificados y revisión de credenciales.
+
+**Pruebas:**
+- **API, `V32.19.1–19.5`:** ítems elegibles, vista previa sin duplicar, trayectoria, PDF y currículo ajeno rechazado.
+- **Web, `WEB.22k`:** la imagen de un recurso se carga con la sesión.
+
+### Resultados (BATCH 16–19)
+
+- **Regresión completa:** **2040 correctas, 0 fallos** (21 suites). La corrida dio 2039/1; el fallo era la prueba nueva `WEB.22k`, mal armada (faltaba el proveedor del recurso). Corregida, `e2e-web` dio 50/50.
+- **Unitarias:** 123/123.
+- **Tipos:** `tsc` sin errores en API, web y móvil.
+
+**Regresiones:** ninguna.
+
+**Migraciones:** ninguna.
+
+**Riesgos:**
+- **Reinicios de la API:** dos veces la API en modo `watch` se reinició en medio de una suite, al instalar dependencias del móvil y al cambiar archivos de pruebas, y dio `fetch failed` en `e2e-v3-2` o `e2e-web`. Al repetir pasaron enteras. No es un defecto del código.

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 190" role="img" aria-labelledby="t d">
+  <title id="t">Recorrido de una actividad</title>
+  <desc id="d">Borrador, en revisión de Dirección, aprobada, publicada y finalizada. Dirección puede observarla y entonces vuelve a borrador para corregirla.</desc>
+  <style>
+    .caja { fill: #eef0f2; stroke: #3f444c; stroke-width: 2; }
+    .ok { fill: #e3f3ea; stroke: #1f7a4d; }
+    .t { fill: #1d2127; font: 600 14px 'Segoe UI', system-ui, sans-serif; }
+    .s { fill: #3f444c; font: 12px 'Segoe UI', system-ui, sans-serif; }
+    .f { stroke: #7b828c; stroke-width: 2; fill: none; }
+    .v { stroke: #b6791f; stroke-width: 2; fill: none; stroke-dasharray: 5 4; }
+  </style>
+  <defs>
+    <marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7b828c"/></marker>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#b6791f"/></marker>
+  </defs>
+  <rect class="caja" x="10" y="30" width="125" height="60" rx="10"/><text class="t" x="72" y="65" text-anchor="middle">Borrador</text>
+  <path class="f" d="M140 60H160" marker-end="url(#p)"/>
+  <rect class="caja" x="165" y="30" width="135" height="60" rx="10"/><text class="t" x="232" y="57" text-anchor="middle">En revisión</text><text class="s" x="232" y="76" text-anchor="middle">la revisa Dirección</text>
+  <path class="f" d="M305 60H325" marker-end="url(#p)"/>
+  <rect class="caja ok" x="330" y="30" width="125" height="60" rx="10"/><text class="t" x="392" y="57" text-anchor="middle">Aprobada</text><text class="s" x="392" y="76" text-anchor="middle">ya no se edita</text>
+  <path class="f" d="M460 60H480" marker-end="url(#p)"/>
+  <rect class="caja ok" x="485" y="30" width="125" height="60" rx="10"/><text class="t" x="547" y="57" text-anchor="middle">Publicada</text><text class="s" x="547" y="76" text-anchor="middle">abierta a inscripción</text>
+  <path class="f" d="M615 60H630" marker-end="url(#p)"/>
+  <rect class="caja" x="635" y="30" width="115" height="60" rx="10"/><text class="t" x="692" y="57" text-anchor="middle">Finalizada</text><text class="s" x="692" y="76" text-anchor="middle">se confirma quién fue</text>
+  <path class="v" d="M232 95V140H72V97" marker-end="url(#a)"/>
+  <text class="s" x="152" y="160" text-anchor="middle">Observada: corriges y la reenvías</text>
+</svg>

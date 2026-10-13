@@ -1,4 +1,5 @@
 import { FieldError, FormAlert, useFormErrors } from './form';
+import { ImagenProtegida } from './ArchivoProtegido';
 import PersonPicker from './PersonPicker';
 import { entradaAIso, formatearFechaHora, isoAEntrada } from '../lib/fechas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1021,7 +1022,7 @@ export default function ActivityManager({
             {/* V3.2 §18.3: una imagen ilustrativa opcional. */}
             <div className={`field ${errores.errors.imageFileId ? 'has-error' : ''}`} data-campo="imageFileId">
               <label htmlFor="activity-manager-imagen">Imagen (opcional)</label>
-              {form.imageUrl && <img src={form.imageUrl} alt="" className="activity-image-preview" />}
+              {form.imageUrl && <ImagenProtegida src={form.imageUrl} className="activity-image-preview" />}
               <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
                   id="activity-manager-imagen"

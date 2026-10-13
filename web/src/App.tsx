@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { RolNombre } from './constants';
-import { HOME_BY_ROLE } from './navigation';
+import { HOME_BY_ROLE, MODO_TECNICO } from './navigation';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Loading } from './components/ui';
@@ -191,7 +191,7 @@ export default function App() {
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/imports" element={<AdminImportsPage />} />
             <Route path="/admin/activities" element={<AdminActivitiesPage />} />
-            <Route path="/admin/mail" element={<AdminMailPage />} />
+            {MODO_TECNICO && <Route path="/admin/mail" element={<AdminMailPage />} />}
             <Route path="/admin/areas" element={<AdminAreasSkillsPage />} />
             <Route path="/admin/skills" element={<Navigate to="/admin/areas?tab=skills" replace />} />
             <Route path="/admin/activity-categories" element={<AdminActivityCategoriesPage />} />

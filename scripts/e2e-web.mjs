@@ -21,7 +21,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { ADMIN_CREDENTIALS, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
+import { ADMIN_CREDENTIALS, API, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = 'http://localhost:5173';
@@ -138,12 +138,24 @@ async function pruebas(browser) {
   check(!enlaces.some((e) => /Reportes del curso|Mensajes/.test(e)), 'WEB.11 §62 §57 Sin «Reportes del curso» ni mensajes');
   await page.click('nav a[href="/teacher"]');
   const pestanasDoc = await page.locator('[role=tab]').allInnerTexts();
-  check(['Resumen', 'Por semestre', 'Estudiantes', 'Proyectos visibles', 'Actividades', 'Necesidades/equipos'].every((t) => pestanasDoc.some((x) => x.includes(t))),
+  check(['Resumen', 'Por semestre', 'Estudiantes', 'Proyectos visibles', 'Actividades de la carrera', 'Necesidades/equipos'].every((t) => pestanasDoc.some((x) => x.includes(t))),
     'WEB.12 V3 §51 El panel tiene Resumen, Por semestre, Estudiantes, Proyectos visibles, Actividades y Necesidades/equipos', pestanasDoc.join(' | '));
   await page.goto(`${WEB}/teacher/team-needs`);
   await page.waitForURL(/\/teacher\?tab=equipos/, { timeout: 8000 }).catch(() => {});
   check(page.url().includes('/teacher?tab=equipos') && await page.getByText('Lo que buscan los equipos').first().isVisible(),
     'WEB.12b V3 §51 La ruta antigua de necesidades abre su pestaña (drill-down sin enlaces rotos)', page.url());
+  // V3.2 §56: cada función del docente tiene su entrada en el menú, sin un segundo panel.
+  const enlacesDoc = await page.locator('nav a.nav-link').allInnerTexts();
+  check(['Actividades de la carrera', 'Mis actividades', 'Estudiantes', 'Proyectos de estudiantes', 'Necesidades de equipo', 'Reporte por semestre']
+    .every((t) => enlacesDoc.some((e) => e.includes(t))) && enlacesDoc.filter((e) => /Panel/.test(e)).length === 1,
+  'WEB.12c V3.2 §56 El menú del docente vuelve a tener Actividades de la carrera, estudiantes, proyectos, necesidades y reporte', enlacesDoc.join(' | '));
+  await page.click('nav a[href="/teacher?tab=actividades"]');
+  await espera(900);
+  const activoCarrera = await page.locator('nav a.nav-link.active').allInnerTexts();
+  check(page.url().includes('tab=actividades')
+    && await page.getByRole('tab', { name: 'Actividades de la carrera', selected: true }).count() === 1
+    && activoCarrera.length === 1 && activoCarrera[0].includes('Actividades de la carrera'),
+  'WEB.12d V3.2 §25 «Actividades de la carrera» abre su pestaña y queda marcada sola en el menú', `${page.url()} · ${activoCarrera.join(' | ')}`);
   check(errores.length === 0, 'WEB.13 Sin errores de JavaScript en la sesión', errores.join(' | '));
   await ctx.close();
 
@@ -330,6 +342,72 @@ async function pruebas(browser) {
     check(anchas.length === 0 && fallos.length === 0, `WEB.22 V3 B21 Las pantallas de ${actor} caben en 375 px y no fallan`, [...anchas, ...fallos].join(', '));
     await tel.close();
   }
+
+  objective('V3.2 §58-§60 · Menús de Sociedad y Administración, y auditoría legible');
+  const esc = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const pe = await esc.newPage();
+  await entrar(pe, otros.sociedad.email);
+  const enlacesSoc = await pe.locator('nav a.nav-link').allInnerTexts();
+  check(enlacesSoc.some((e) => e.includes('Mis actividades')) && !enlacesSoc.some((e) => /Crear actividad/.test(e)),
+    'WEB.22b V3.2 §58 Sociedad ya no tiene una vista «Crear actividad» aparte de Mis actividades', enlacesSoc.join(' | '));
+  await pe.goto(`${WEB}/society/activities`);
+  await pe.getByRole('button', { name: /Nueva actividad/ }).first().waitFor({ timeout: 10000 }).catch(() => {});
+  check(await pe.getByRole('button', { name: /Nueva actividad/ }).count() > 0,
+    'WEB.22c V3.2 §58 Crear sigue disponible como botón dentro de Mis actividades');
+  await esc.close();
+
+  const adm = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const pa = await adm.newPage();
+  const fallosAdm = [];
+  pa.on('pageerror', (e) => fallosAdm.push(e.message));
+  await entrar(pa, otros.admin.email, otros.admin.password);
+  const enlacesAdm = await pa.locator('nav a.nav-link').allInnerTexts();
+  check(!enlacesAdm.some((e) => /Correo/.test(e)),
+    'WEB.22d V3.2 §60 «Correo (configuración técnica)» no está en el menú del producto', enlacesAdm.join(' | '));
+  await pa.goto(`${WEB}/admin/mail`);
+  await espera(900);
+  check(!pa.url().includes('/admin/mail') || await pa.getByText(/SMTP|Servidor de correo/).count() === 0,
+    'WEB.22e V3.2 §60 Ni escribiendo la ruta se llega a la pantalla técnica del correo', pa.url());
+  await pa.goto(`${WEB}/admin/audit`);
+  await pa.waitForSelector('table.tabla-apilable tbody tr', { timeout: 10000 }).catch(() => {});
+  const columnas = await pa.locator('table.tabla-apilable thead th').allInnerTexts();
+  check(['Actor', 'Módulo', 'Acción', 'Fecha', 'Resultado'].every((c) => columnas.some((x) => x.toLowerCase().includes(c.toLowerCase()))),
+    'WEB.22f V3.2 §59 La auditoría muestra Actor, Módulo, Acción, Fecha y Resultado', columnas.join(' | '));
+  const filas = await pa.locator('table.tabla-apilable tbody > tr:not(.audit-detalle)').count();
+  check(filas > 0 && filas <= 10, 'WEB.22g V3.2 §59 De a 10 por página', `filas ${filas}`);
+  const primera = await pa.locator('table.tabla-apilable tbody > tr').first().innerText();
+  check(!/[A-Z]{3,}_[A-Z_]{3,}/.test(primera) && !/\bentity=|\bdelta\b/.test(primera),
+    'WEB.22h V3.2 §59 La fila dice qué pasó en palabras, no con el código técnico', primera.replace(/\s+/g, ' ').slice(0, 160));
+  await pa.selectOption('select[aria-label="Módulo"]', 'cuentas');
+  await espera(1200);
+  const modulos = await pa.locator('table.tabla-apilable tbody > tr:not(.audit-detalle) td:nth-child(2)').allInnerTexts();
+  check(modulos.length > 0 && modulos.every((m) => m.includes('Cuentas y acceso')),
+    'WEB.22i V3.2 §59 El filtro por módulo funciona', [...new Set(modulos)].join(' | '));
+  check(fallosAdm.length === 0, 'WEB.22j Sin errores de JavaScript en la sesión de Administración', fallosAdm.join(' | '));
+  await adm.close();
+
+  objective('V3.2 B19 · Las imágenes protegidas se ven (se piden con la sesión)');
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const form = new FormData();
+  form.append('file', new Blob([png], { type: 'image/png' }), 'tapa.png');
+  const subida = await (await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${otros.director.token}` }, body: form })).json();
+  const areasCat = (await req('GET', '/academic-areas', { token: admin })).data ?? [];
+  const tituloImg = `Recurso con tapa ${TS}`;
+  await req('POST', '/learning-resources', {
+    token: otros.director.token,
+    body: { title: tituloImg, provider: 'Documentación de pruebas', url: `https://docs.example.org/${TS}`, resourceType: 'documentation', academicAreaId: areasCat[0]?.id, imageFileId: subida?.id },
+  });
+  const estImg = await estudianteListo(admin, 'img');
+  const ci = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const pi = await ci.newPage();
+  await entrar(pi, estImg.email);
+  await pi.goto(`${WEB}/student/library`);
+  await pi.getByPlaceholder('Buscar por título, descripción o fuente…').fill(tituloImg);
+  await pi.waitForSelector('img[src^="blob:"]', { timeout: 10000 }).catch(() => {});
+  const imagenes = await pi.evaluate(() => [...document.querySelectorAll('.content img')].map((i) => ({ src: i.getAttribute('src') ?? '', ok: i.complete && i.naturalWidth > 0 })));
+  check(imagenes.some((i) => i.src.startsWith('blob:') && i.ok) && !imagenes.some((i) => i.src.startsWith('/api/files')),
+    'WEB.22k V3.2 §35 La imagen de un recurso se carga con la sesión (antes el navegador recibía 401)', JSON.stringify(imagenes.slice(0, 3)));
+  await ci.close();
 
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();

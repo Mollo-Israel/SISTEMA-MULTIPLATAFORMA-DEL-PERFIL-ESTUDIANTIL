@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 210" role="img" aria-labelledby="t d">
+  <title id="t">De dónde sale la afinidad</title>
+  <desc id="d">Suman a la afinidad de un área las actividades con participación confirmada, los proyectos con respaldo y las credenciales con respaldo, cada una en el área que se indicó. Los intereses declarados no suman: solo orientan las recomendaciones.</desc>
+  <style>
+    .caja { fill: #e3f3ea; stroke: #1f7a4d; stroke-width: 2; }
+    .no { fill: #f7f7f8; stroke: #7b828c; stroke-width: 2; stroke-dasharray: 5 4; }
+    .area { fill: #f3e3e6; stroke: #6b1220; stroke-width: 2; }
+    .t { fill: #1d2127; font: 600 14px 'Segoe UI', system-ui, sans-serif; }
+    .s { fill: #3f444c; font: 12px 'Segoe UI', system-ui, sans-serif; }
+    .f { stroke: #1f7a4d; stroke-width: 2; fill: none; }
+  </style>
+  <defs><marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1f7a4d"/></marker></defs>
+  <rect class="caja" x="10" y="10" width="270" height="44" rx="10"/><text class="t" x="145" y="37" text-anchor="middle">Actividad con participación confirmada</text>
+  <rect class="caja" x="10" y="64" width="270" height="44" rx="10"/><text class="t" x="145" y="91" text-anchor="middle">Proyecto con respaldo</text>
+  <rect class="caja" x="10" y="118" width="270" height="44" rx="10"/><text class="t" x="145" y="145" text-anchor="middle">Credencial con respaldo</text>
+  <path class="f" d="M285 32C370 32 380 86 445 86" marker-end="url(#p)"/>
+  <path class="f" d="M285 86H445" marker-end="url(#p)"/>
+  <path class="f" d="M285 140C370 140 380 86 445 86" marker-end="url(#p)"/>
+  <rect class="area" x="450" y="56" width="260" height="60" rx="12"/>
+  <text class="t" x="580" y="82" text-anchor="middle">Afinidad del área</text>
+  <text class="s" x="580" y="101" text-anchor="middle">en el área que indicaste, no en todas</text>
+  <rect class="no" x="10" y="172" width="270" height="34" rx="10"/><text class="s" x="145" y="194" text-anchor="middle">Intereses declarados: orientan, no suman</text>
+</svg>

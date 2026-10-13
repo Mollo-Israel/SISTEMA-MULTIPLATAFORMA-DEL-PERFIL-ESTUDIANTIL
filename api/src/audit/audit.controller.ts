@@ -14,6 +14,34 @@ import { AuditService } from './audit.service';
 export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
+  @Get('log')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({
+    summary: 'Auditoría legible: actor, módulo, acción, fecha y resultado, con filtros y páginas (V3.2 §59).',
+  })
+  log(
+    @Query('modulo') modulo?: string,
+    @Query('eventType') eventType?: string,
+    @Query('actor') actor?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('resultado') resultado?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.audit.listHuman({
+      modulo, eventType, actor: actor?.slice(0, 80), desde, hasta, resultado,
+      limit: limit ? Number(limit) : undefined, offset: offset ? Number(offset) : undefined,
+    });
+  }
+
+  @Get('log/catalog')
+  @Roles(RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Módulos, acciones y resultados para filtrar la auditoría.' })
+  catalogo() {
+    return this.audit.catalogoHumano();
+  }
+
   @Get('events')
   @Roles(RolNombre.ADMIN)
   @ApiOperation({ summary: 'Eventos de auditoría, filtrables por entidad, actor o tipo.' })

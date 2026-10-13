@@ -1,4 +1,5 @@
 import { validarFormulario } from '../../components/form';
+import { BotonArchivo } from '../../components/ArchivoProtegido';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -188,18 +189,15 @@ export default function StudentEvidencesPage() {
                     </div>
                   </div>
                   <div className="flex" style={{ gap: '0.35rem' }}>
-                    <a
-                      className="btn btn-secondary btn-sm"
-                      href={
-                        e.evidenceType === 'file'
-                          ? uploadService.fileUrl(e.fileUrl ?? '')
-                          : (e.externalUrl ?? '#')
-                      }
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <FiExternalLink /> Abrir
-                    </a>
+                    {e.evidenceType === 'file' ? (
+                      <BotonArchivo src={e.fileUrl ?? ''} nombre="evidencia">
+                        <FiExternalLink /> Abrir
+                      </BotonArchivo>
+                    ) : (
+                      <a className="btn btn-secondary btn-sm" href={e.externalUrl ?? '#'} target="_blank" rel="noreferrer">
+                        <FiExternalLink /> Abrir
+                      </a>
+                    )}
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => removeEvidence(e)}
@@ -302,14 +300,9 @@ export default function StudentEvidencesPage() {
                       <td className="muted">{c.issueDate ?? '—'}</td>
                       <td>
                         {c.fileUrl ? (
-                          <a
-                            className="btn btn-secondary btn-sm"
-                            href={uploadService.fileUrl(c.fileUrl)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
+                          <BotonArchivo src={c.fileUrl} nombre="certificado">
                             <FiFile /> Ver
-                          </a>
+                          </BotonArchivo>
                         ) : c.certificateUrl ? (
                           <a
                             className="btn btn-secondary btn-sm"

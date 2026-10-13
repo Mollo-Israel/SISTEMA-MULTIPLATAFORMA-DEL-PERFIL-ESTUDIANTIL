@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 150" role="img" aria-labelledby="t d">
+  <title id="t">Cómo un proyecto gana respaldo</title>
+  <desc id="d">Registras el proyecto con sus áreas y tecnologías, agregas evidencias como el repositorio o una captura, y el respaldo sube cuando el repositorio corrobora las tecnologías o un docente lo revisa.</desc>
+  <style>
+    .caja { fill: #eef0f2; stroke: #3f444c; stroke-width: 2; }
+    .ok { fill: #e3f3ea; stroke: #1f7a4d; }
+    .t { fill: #1d2127; font: 600 15px 'Segoe UI', system-ui, sans-serif; }
+    .s { fill: #3f444c; font: 12px 'Segoe UI', system-ui, sans-serif; }
+    .f { stroke: #7b828c; stroke-width: 2; fill: none; }
+  </style>
+  <defs><marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7b828c"/></marker></defs>
+  <rect class="caja" x="10" y="25" width="200" height="100" rx="12"/>
+  <text class="t" x="110" y="66" text-anchor="middle">Registras</text>
+  <text class="s" x="110" y="88" text-anchor="middle">áreas y tecnologías,</text>
+  <text class="s" x="110" y="104" text-anchor="middle">cada una en su área</text>
+  <path class="f" d="M215 75H255" marker-end="url(#p)"/>
+  <rect class="caja" x="260" y="25" width="200" height="100" rx="12"/>
+  <text class="t" x="360" y="66" text-anchor="middle">Agregas evidencia</text>
+  <text class="s" x="360" y="88" text-anchor="middle">repositorio, demo,</text>
+  <text class="s" x="360" y="104" text-anchor="middle">capturas o documentos</text>
+  <path class="f" d="M465 75H505" marker-end="url(#p)"/>
+  <rect class="caja ok" x="510" y="25" width="200" height="100" rx="12"/>
+  <text class="t" x="610" y="66" text-anchor="middle">Gana respaldo</text>
+  <text class="s" x="610" y="88" text-anchor="middle">el repositorio lo corrobora</text>
+  <text class="s" x="610" y="104" text-anchor="middle">o lo revisa un docente</text>
+</svg>

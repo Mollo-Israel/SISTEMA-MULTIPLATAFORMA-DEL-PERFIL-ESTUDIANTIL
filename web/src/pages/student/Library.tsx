@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ImagenProtegida } from '../../components/ArchivoProtegido';
 import { FiBookOpen, FiExternalLink, FiHeart, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { libraryService } from '../../services';
@@ -116,7 +117,7 @@ export default function StudentLibraryPage() {
             {(data?.items ?? []).map((r) => (
               <article key={r.id} className="activity-card resource-card">
                 <div className="activity-card-img" aria-hidden>
-                  {r.imageUrl ? <img src={r.imageUrl} alt="" loading="lazy" /> : <FiBookOpen size={28} />}
+                  {r.imageUrl ? <ImagenProtegida src={r.imageUrl} loading="lazy" fallback={<FiBookOpen size={28} />} /> : <FiBookOpen size={28} />}
                 </div>
                 <div className="activity-card-body">
                   <div className="activity-card-head">

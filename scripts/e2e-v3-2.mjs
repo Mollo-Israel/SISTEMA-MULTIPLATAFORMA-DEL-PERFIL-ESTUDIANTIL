@@ -962,6 +962,36 @@ async function batch8(ctx) {
     'V32.8.13 §28.3 Volver a entregar actualiza el código, sin duplicar', `${(mis2.data ?? []).filter((c) => c.activityId === id).length}`);
   const admin = await req('POST', `/constancies/internal/institution-certificates/${id}`, { token: ctx.admin, body: { profileIds: [est.profileId] } });
   check(admin.status === 403, 'V32.8.14 §6.5 Administración no entrega documentos académicos', `status ${admin.status}`);
+
+  // ----- BATCH 19 · §54, §28.3: el currículo y la trayectoria nombran al emisor real
+  objective('BATCH 19 · Currículo selectivo: el certificado institucional va en la línea de su actividad');
+  const linea = (resumen.data?.sections ?? []).find((x) => x.key === 'academic_activities')?.items?.find((i) => i.id === id);
+  check(/Certificado emitido por Universidad del Valle/.test(linea?.detail ?? '') && !/Constancia interna/.test(linea?.detail ?? ''),
+    'V32.19.1 §54 En los ítems elegibles, la actividad dice que tiene certificado y quién lo emite', json(linea));
+  const previa = await req('POST', '/trajectory-summary/preview', {
+    token: est.token, body: { sections: ['academic_activities', 'constancies'], items: { academic_activities: [id] } },
+  });
+  const act = (previa.data?.academicActivities ?? []).find((x) => x.id === id);
+  check(previa.status === 201 && /Certificado emitido por Universidad del Valle/.test(act?.constancyLabel ?? '')
+      && !(previa.data?.constancies ?? []).some((c) => /Seminario certificado/.test(c.description ?? '')),
+    'V32.19.2 §54 La vista previa lo pone en la línea de la actividad y no lo repite como constancia aparte', json({ act, c: previa.data?.constancies }));
+  const tray = await req('GET', '/trajectory/me', { token: est.token });
+  const entradaCert = (tray.data?.entries ?? []).find((e) => e.kind === 'constancy' && /Universidad del Valle/.test(e.detail ?? ''));
+  check(!!entradaCert && !/Constancia interna/.test(entradaCert.detail),
+    'V32.19.3 §42 En la trayectoria figura como certificado del emisor real', json(entradaCert));
+  const pdfRes = await fetch(`${API}/trajectory-summary/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${est.token}` },
+    body: JSON.stringify({ sections: ['academic_activities'], items: { academic_activities: [id] } }),
+  });
+  const pdf = Buffer.from(await pdfRes.arrayBuffer()).toString('latin1');
+  check(pdfRes.status === 201 && pdf.includes('Certificado emitido por Universidad del Valle'),
+    'V32.19.4 §54 El PDF sale de la misma selección, con el emisor real', `status ${pdfRes.status}`);
+  const ajenoCv = await req('POST', '/trajectory-summary/preview', {
+    token: est2.token, body: { sections: ['academic_activities'], items: { academic_activities: [id] } },
+  });
+  check(ajenoCv.status === 400 && ajenoCv.data?.code === 'CV_ITEM_NOT_ELIGIBLE',
+    'V32.19.5 §54 Quien no tiene la participación confirmada no la mete en su currículo con el id', `status ${ajenoCv.status}`);
 }
 
 // ===========================================================================
@@ -1232,7 +1262,83 @@ async function batch15(ctx) {
   check(crudo(s, areaP) === 0, 'V32.15.5 §12.3 Ni etiquetas ni texto aportan afinidad', `P ${crudo(s, areaP)}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch14, batch15 };
+// ===========================================================================
+//  BATCH 16-18 — Docente, Dirección/Sociedad y Administración (§25, §56-§60)
+// ===========================================================================
+async function batch16(ctx) {
+  const SUF16 = String.fromCharCode(...String(TS).slice(-5).split('').map((d) => 97 + Number(d)));
+  objective('BATCH 16-18 · «Mis actividades» vs «Actividades de la carrera», y auditoría legible');
+  const mk = (n, a, rol) => provisionAndActivate(ctx.admin, { firstName: n, lastName: `${a}${SUF16}`, email: correoStaff(`b16${n.toLowerCase()}`), role: rol });
+  const docA = await mk('Olga', 'Saavedra', 'TEACHER');
+  const docB = await mk('Pablo', 'Terceros', 'TEACHER');
+  for (const d of [docA, docB]) await req('PUT', `/users/${d.userId}/semesters`, { token: ctx.admin, body: { semesters: [5] } });
+  const director = await mk('Rita', 'Zeballos', 'CAREER_DIRECTOR');
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const ids = (r) => (r.data ?? []).map((a) => a.id);
+
+  // ----- §25, §56, §62: el docente consulta las de la carrera sin que pasen a ser suyas
+  const act = await req('POST', '/activities', {
+    token: docA.token, body: { title: `Seminario de la carrera ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [5] },
+  });
+  await aprobarActividad(docA.token, director.token, act.data?.id);
+  const carreraB = await req('GET', '/activities', { token: docB.token });
+  const misB = await req('GET', '/activities/managed', { token: docB.token });
+  check(ids(carreraB).includes(act.data?.id) && !ids(misB).includes(act.data?.id),
+    'V32.16.1 §25 Otro docente la ve en «Actividades de la carrera» y no en «Mis actividades»', `carrera ${ids(carreraB).includes(act.data?.id)} / mías ${ids(misB).includes(act.data?.id)}`);
+  const editaB = await req('PATCH', `/activities/${act.data?.id}`, { token: docB.token, body: { title: `Ajena ${TS}` } });
+  check(editaB.status === 403 || editaB.status === 404,
+    'V32.16.2 §62 Verla no la vuelve suya: no la edita cambiando el id', `status ${editaB.status}`);
+  const misA = await req('GET', '/activities/managed', { token: docA.token });
+  check(ids(misA).includes(act.data?.id), 'V32.16.3 §25 Sigue en «Mis actividades» de quien la creó');
+
+  // ----- §59: auditoría para una persona
+  const sinPermiso = await req('GET', '/audit/log', { token: docA.token });
+  const sinCatalogo = await req('GET', '/audit/log/catalog', { token: director.token });
+  check(sinPermiso.status === 403 && sinCatalogo.status === 403,
+    'V32.18.1 §59 Solo Administración consulta la auditoría (docente y Dirección -> 403)', `${sinPermiso.status} / ${sinCatalogo.status}`);
+  const catalogo = await req('GET', '/audit/log/catalog', { token: ctx.admin });
+  check(catalogo.status === 200 && catalogo.data?.modulos?.some((m) => m.label === 'Cuentas y acceso')
+    && catalogo.data?.acciones?.every((a) => a.label && !/^[A-Z_]+$/.test(a.label)),
+  'V32.18.2 §59 Los filtros ofrecen módulos y acciones en palabras, no códigos', json(catalogo.data?.acciones?.slice(0, 3)));
+  const pagina = await req('GET', '/audit/log?limit=10', { token: ctx.admin });
+  const fila = pagina.data?.items?.[0] ?? {};
+  check(pagina.status === 200 && pagina.data?.items?.length === 10 && pagina.data?.total >= 10
+    && ['actor', 'modulo', 'accion', 'fecha', 'resultado'].every((k) => fila[k]),
+  'V32.18.3 §59 Cada evento trae actor, módulo, acción, fecha y resultado, de a 10', json(fila));
+  const porModulo = await req('GET', '/audit/log?modulo=actividades&limit=50', { token: ctx.admin });
+  check(porModulo.data?.items?.length > 0 && porModulo.data.items.every((e) => e.modulo === 'Actividades'),
+    'V32.18.4 §59 El filtro por módulo funciona', json([...new Set((porModulo.data?.items ?? []).map((e) => e.modulo))]));
+  const apellido = `Saavedra${SUF16}`;
+  const porActor = await req('GET', `/audit/log?actor=${encodeURIComponent(apellido)}&limit=50`, { token: ctx.admin });
+  check(porActor.data?.total >= 1 && porActor.data.items.every((e) => e.actor.includes(apellido))
+    && porActor.data.items.some((e) => e.accion === 'Enviada a revisión'),
+  'V32.18.5 §59 El filtro por actor encuentra lo que hizo esa persona', json(porActor.data?.items?.map((e) => e.accion)));
+  const rechazos = await req('GET', '/audit/log?resultado=rechazado&limit=50', { token: ctx.admin });
+  check(rechazos.status === 200 && (rechazos.data?.items ?? []).every((e) => e.resultadoCodigo === 'rechazado'),
+    'V32.18.6 §59 El filtro por resultado funciona', json(rechazos.data?.items?.map((e) => e.accion)));
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+  const deHoy = await req('GET', `/audit/log?desde=${hoy}&hasta=${hoy}&actor=${encodeURIComponent(apellido)}`, { token: ctx.admin });
+  const antiguo = await req('GET', `/audit/log?hasta=2000-01-01&actor=${encodeURIComponent(apellido)}`, { token: ctx.admin });
+  check(deHoy.data?.total >= 1 && antiguo.data?.total === 0,
+    'V32.18.7 §59 El filtro por fechas funciona (hora de Bolivia)', `${deHoy.data?.total} / ${antiguo.data?.total}`);
+  const muchos = await req('GET', '/audit/log?limit=100', { token: ctx.admin });
+  const texto = JSON.stringify((muchos.data?.items ?? []).map((e) => e.detalle));
+  check(!/password|contraseña"|passwordHash|refreshToken|"token"|activationCode/i.test(texto),
+    'V32.18.8 §59 El detalle no expone contraseñas, tokens ni códigos', texto.slice(0, 160));
+  const sistema = await req('GET', '/audit/log?actor=Sistema&limit=20', { token: ctx.admin });
+  check((sistema.data?.items ?? []).every((e) => e.actor === 'Sistema'),
+    'V32.18.9 §59 Los eventos automáticos figuran con actor «Sistema»', json(sistema.data?.items?.map((e) => e.actor)));
+
+  // ----- §60: diagnóstico de correo, solo Administración (en producción, además, 404 sin modo técnico)
+  const correoDoc = await req('GET', '/mail/status', { token: docA.token });
+  check(correoDoc.status === 403, 'V32.18.10 §60 El diagnóstico de correo no está al alcance de otros roles', `status ${correoDoc.status}`);
+  const correoAdm = await req('GET', '/mail/status', { token: ctx.admin });
+  check(!/"pass(word)?"\s*:\s*"[^"*]/i.test(JSON.stringify(correoAdm.data ?? {})),
+    'V32.18.11 §60 Ni en desarrollo devuelve la contraseña SMTP');
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch14, batch15, batch16 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

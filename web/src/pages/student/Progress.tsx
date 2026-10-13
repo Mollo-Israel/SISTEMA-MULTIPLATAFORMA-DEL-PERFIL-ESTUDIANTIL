@@ -409,7 +409,7 @@ const NIVEL: Record<string, string> = { high: 'alto', medium: 'medio', low: 'baj
 
 /** V3 §44: la constancia va en la misma línea de la actividad. */
 const actividadCv = (a: any) =>
-  `Participación confirmada en ${a.title}${a.date ? ` (${FECHA(a.date)})` : ''}${a.constancy ? ' · Constancia interna disponible' : ''}`;
+  `Participación confirmada en ${a.title}${a.date ? ` (${FECHA(a.date)})` : ''}${a.constancyLabel ? ` · ${a.constancyLabel}` : a.constancy ? ' · Constancia interna disponible' : ''}`;
 
 /**
  * La vista previa se dibuja con la misma información que irá al PDF, y con el

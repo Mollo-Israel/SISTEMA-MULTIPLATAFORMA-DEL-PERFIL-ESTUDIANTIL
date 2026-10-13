@@ -17,6 +17,13 @@ export interface NavGroup {
  * mostraba a docentes, dirección y administración, a quienes nunca les tocó.
  */
 
+/**
+ * V3.2 §60: el diagnóstico del correo es configuración de despliegue, no parte
+ * del producto ordinario. Solo aparece en desarrollo o con el modo técnico
+ * explícito (`VITE_TECHNICAL_MODE=true`); la API aplica la misma regla.
+ */
+export const MODO_TECNICO = import.meta.env.DEV || import.meta.env.VITE_TECHNICAL_MODE === 'true';
+
 export const NAV: Record<string, NavGroup[]> = {
   [RolNombre.STUDENT]: [
     {
@@ -54,10 +61,15 @@ export const NAV: Record<string, NavGroup[]> = {
     {
       section: 'Docente',
       items: [
-        // V3 §51: un solo panel con pestañas (Resumen, Por semestre,
-        // Estudiantes, Proyectos visibles, Actividades, Necesidades/equipos).
+        // V3 §51: un solo panel con pestañas. V3.2 §56: cada función tiene su
+        // entrada en el menú (apunta a su pestaña; no hay un segundo panel).
         { to: '/teacher', label: 'Inicio / Panel académico' },
+        { to: '/teacher?tab=actividades', label: 'Actividades de la carrera' },
         { to: '/teacher/my-activities', label: 'Mis actividades' },
+        { to: '/teacher?tab=estudiantes', label: 'Estudiantes' },
+        { to: '/teacher?tab=proyectos', label: 'Proyectos de estudiantes' },
+        { to: '/teacher?tab=equipos', label: 'Necesidades de equipo' },
+        { to: '/teacher?tab=semestre', label: 'Reporte por semestre' },
         { to: '/teacher/recognitions', label: 'Retos y recompensas' },
       ],
     },
@@ -94,7 +106,6 @@ export const NAV: Record<string, NavGroup[]> = {
         // V3 §53.
         { to: '/society', label: 'Inicio' },
         { to: '/society/activities', label: 'Mis actividades' },
-        { to: '/society/activities?nuevo=1', label: 'Crear actividad' },
         { to: '/society/participants', label: 'Participantes' },
         { to: '/society/metrics', label: 'Métricas' },
       ],
@@ -119,7 +130,6 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/gamification', label: 'Gamificación' },
         { to: '/admin/recognitions', label: 'Retos y recompensas' },
         { to: '/admin/audit', label: 'Auditoría' },
-        { to: '/admin/mail', label: 'Correo (configuración técnica)' },
       ],
     },
     {
@@ -136,3 +146,7 @@ export const HOME_BY_ROLE: Record<string, string> = {
   [RolNombre.SCIENTIFIC_SOCIETY]: '/society',
   [RolNombre.ADMIN]: '/admin',
 };
+
+if (MODO_TECNICO) {
+  NAV[RolNombre.ADMIN][0].items.push({ to: '/admin/mail', label: 'Correo (configuración técnica)' });
+}

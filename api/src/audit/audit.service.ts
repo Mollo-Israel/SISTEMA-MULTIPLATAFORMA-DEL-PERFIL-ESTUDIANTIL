@@ -1,4 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  AUDIT_ENTITY_LABEL, AUDIT_EVENT_LABEL, AUDIT_MODULE_LABEL, AUDIT_RESULT_LABEL, auditDetail, eventTypesOf, eventTypesWithResult,
+} from './audit-labels';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { AuditEvent } from '../entities/audit-event.entity';
@@ -174,6 +177,74 @@ export class AuditService {
       metadata: e.metadata,
       createdAt: e.createdAt,
     }));
+  }
+
+  /**
+   * V3.2 §59 (C13): la auditoría para una persona. Actor, módulo, acción,
+   * fecha y resultado, con filtros que funcionan y de a 10 (§6.1). El código
+   * del evento sigue en la respuesta, pero no es lo que se muestra primero.
+   */
+  async listHuman(params: {
+    modulo?: string;
+    eventType?: string;
+    actor?: string;
+    desde?: string;
+    hasta?: string;
+    resultado?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const limit = Math.min(Math.max(params.limit ?? 10, 1), 100);
+    const offset = Math.max(params.offset ?? 0, 0);
+    const qb = this.events.createQueryBuilder('e').leftJoinAndSelect('e.actor', 'a').leftJoinAndSelect('a.role', 'r');
+    const tipos = params.eventType ? [params.eventType] : params.modulo ? eventTypesOf(params.modulo) : null;
+    if (tipos) qb.andWhere('e.eventType IN (:...tipos)', { tipos: tipos.length ? tipos : ['-'] });
+    if (params.resultado) {
+      const conResultado = eventTypesWithResult(params.resultado);
+      qb.andWhere('e.eventType IN (:...res)', { res: conResultado.length ? conResultado : ['-'] });
+    }
+    const texto = params.actor?.trim();
+    if (texto) {
+      if (/^sistema$/i.test(texto)) qb.andWhere('e.actorUserId IS NULL');
+      else qb.andWhere("(a.firstName ILIKE :t OR a.lastName ILIKE :t OR a.email ILIKE :t OR CONCAT(a.firstName, ' ', a.lastName) ILIKE :t)", { t: `%${texto}%` });
+    }
+    const fecha = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    if (fecha(params.desde)) qb.andWhere(`e.createdAt >= (:desde::date AT TIME ZONE 'America/La_Paz')`, { desde: params.desde });
+    if (fecha(params.hasta)) qb.andWhere(`e.createdAt < ((:hasta::date + 1) AT TIME ZONE 'America/La_Paz')`, { hasta: params.hasta });
+    const total = await qb.getCount();
+    const rows = await qb.orderBy('e.createdAt', 'DESC').skip(offset).take(limit).getMany();
+    return {
+      total,
+      limit,
+      offset,
+      items: rows.map((e) => {
+        const etiqueta = AUDIT_EVENT_LABEL[e.eventType];
+        const resultado = etiqueta?.resultado ?? 'correcto';
+        return {
+          id: e.id,
+          fecha: e.createdAt,
+          actor: e.actor ? `${e.actor.firstName} ${e.actor.lastName}` : 'Sistema',
+          actorRol: e.actor?.role?.name ?? null,
+          modulo: etiqueta ? AUDIT_MODULE_LABEL[etiqueta.modulo] : 'Otros',
+          accion: etiqueta?.accion ?? e.eventType,
+          resultado: AUDIT_RESULT_LABEL[resultado],
+          resultadoCodigo: resultado,
+          sobre: e.entityType ? (AUDIT_ENTITY_LABEL[e.entityType] ?? e.entityType) : null,
+          detalle: auditDetail(e.metadata),
+          eventType: e.eventType,
+          entityId: e.entityId,
+        };
+      }),
+    };
+  }
+
+  /** Módulos y acciones disponibles para los filtros de la pantalla. */
+  catalogoHumano() {
+    return {
+      modulos: Object.entries(AUDIT_MODULE_LABEL).map(([value, label]) => ({ value, label })),
+      acciones: Object.entries(AUDIT_EVENT_LABEL).map(([value, v]) => ({ value, label: v.accion, modulo: v.modulo })),
+      resultados: Object.entries(AUDIT_RESULT_LABEL).map(([value, label]) => ({ value, label })),
+    };
   }
 
   /**

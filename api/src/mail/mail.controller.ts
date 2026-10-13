@@ -1,4 +1,7 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import {
+  BadRequestException, Body, CanActivate, Controller, Get, HttpCode, Injectable, NotFoundException, Post, UseGuards,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Transform } from 'class-transformer';
@@ -20,6 +23,24 @@ class MailTestDto {
 }
 
 /**
+ * V3.2 §60: el diagnóstico del correo es configuración de despliegue, no parte
+ * del producto ordinario. Fuera de desarrollo solo existe con el modo técnico
+ * explícito `MAIL_DIAGNOSTICS_ENABLED=true`; si no, responde 404 como cualquier
+ * ruta inexistente (no se anuncia). Se suma al rol: sigue siendo solo Admin.
+ */
+@Injectable()
+export class MailDiagnosticsGuard implements CanActivate {
+  constructor(private readonly config: ConfigService) {}
+
+  canActivate(): boolean {
+    const produccion = (this.config.get<string>('NODE_ENV') ?? 'development') === 'production';
+    const habilitado = this.config.get<string>('MAIL_DIAGNOSTICS_ENABLED') === 'true';
+    if (produccion && !habilitado) throw new NotFoundException();
+    return true;
+  }
+}
+
+/**
  * Diagnóstico del correo, solo para administración.
  *
  * Existe para cerrar el ciclo de configurarlo: se ponen las credenciales en
@@ -30,6 +51,7 @@ class MailTestDto {
 @ApiBearerAuth()
 @Controller('mail')
 @Roles(RolNombre.ADMIN)
+@UseGuards(MailDiagnosticsGuard)
 export class MailController {
   constructor(private readonly mail: MailService) {}
 

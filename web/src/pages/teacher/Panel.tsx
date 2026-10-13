@@ -15,7 +15,7 @@ const PESTANAS = [
   { key: 'semestre', label: 'Por semestre' },
   { key: 'estudiantes', label: 'Estudiantes' },
   { key: 'proyectos', label: 'Proyectos visibles' },
-  { key: 'actividades', label: 'Actividades' },
+  { key: 'actividades', label: 'Actividades de la carrera' },
   { key: 'equipos', label: 'Necesidades/equipos' },
 ] as const;
 type Pestana = (typeof PESTANAS)[number]['key'];

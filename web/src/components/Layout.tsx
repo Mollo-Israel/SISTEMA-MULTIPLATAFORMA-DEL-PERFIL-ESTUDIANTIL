@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  FiPlusCircle,
   FiAward,
   FiBarChart2,
   FiBookOpen,
@@ -69,7 +68,6 @@ const ICONS: Record<string, IconType> = {
   '/admin/users': FiUsers,
   '/director/analytics': FiBarChart2,
   '/society/participants': FiUsers,
-  '/society/activities?nuevo=1': FiPlusCircle,
   '/admin/mail': FiMail,
   '/admin/areas': FiLayers,
   '/admin/skills': FiAward,
@@ -82,6 +80,11 @@ const ICONS: Record<string, IconType> = {
   '/student/progress?tab=resumen': FiFileText,
   '/teacher/team-needs': FiUsers,
   '/teacher/my-activities': FiCalendar,
+  '/teacher?tab=actividades': FiCompass,
+  '/teacher?tab=estudiantes': FiUser,
+  '/teacher?tab=proyectos': FiFolder,
+  '/teacher?tab=equipos': FiUsers,
+  '/teacher?tab=semestre': FiBarChart2,
   '/admin/imports': FiUpload,
   '/admin/activities': FiCalendar,
   '/admin/resources': FiBookOpen,

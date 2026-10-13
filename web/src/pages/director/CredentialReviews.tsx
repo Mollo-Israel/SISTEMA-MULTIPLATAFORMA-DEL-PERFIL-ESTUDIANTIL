@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { BotonArchivo } from '../../components/ArchivoProtegido';
 import { FiAward, FiCheck, FiFile, FiLink, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { manualReviewService, uploadService } from '../../services';
+import { manualReviewService } from '../../services';
 import {
   Badge, Button, Card, Diferido, EmptyState, PageHeader, SkeletonTable, Stagger,
 } from '../../components/ui';
@@ -79,9 +80,9 @@ export default function CredentialReviewsPage() {
                 {it.requestNote && <p className="muted">«{it.requestNote}»</p>}
                 <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap', margin: '0.5rem 0' }}>
                   {it.fileUrl && (
-                    <a className="btn btn-secondary btn-sm" href={uploadService.fileUrl(it.fileUrl)} target="_blank" rel="noreferrer">
+                    <BotonArchivo src={it.fileUrl} nombre="documento-credencial">
                       <FiFile /> Ver documento
-                    </a>
+                    </BotonArchivo>
                   )}
                   {it.certificateUrl && (
                     <a className="btn btn-secondary btn-sm" href={it.certificateUrl} target="_blank" rel="noreferrer noopener">

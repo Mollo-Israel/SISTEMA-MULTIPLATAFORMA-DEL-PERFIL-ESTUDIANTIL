@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { ImagenProtegida } from './ArchivoProtegido';
 import {
   FiAlertCircle, FiCalendar, FiCheckCircle, FiExternalLink, FiLink, FiMapPin, FiMonitor, FiTag, FiUsers, FiVideo,
 } from 'react-icons/fi';
@@ -63,7 +64,7 @@ export function ActivityCard({
   return (
     <article className="activity-card">
       <div className="activity-card-img" aria-hidden>
-        {a.imageUrl ? <img src={a.imageUrl} alt="" loading="lazy" /> : <FiCalendar size={28} />}
+        {a.imageUrl ? <ImagenProtegida src={a.imageUrl} loading="lazy" fallback={<FiCalendar size={28} />} /> : <FiCalendar size={28} />}
       </div>
       <div className="activity-card-body">
         <div className="activity-card-head">
@@ -111,7 +112,7 @@ export function ActivityDetail({ a, onClose, acciones }: { a: Activity; onClose:
   const skills = skillsDe(a);
   return (
     <Modal title={a.title} subtitle={`${lbl(ACTIVITY_TYPE_LABEL, a.type)} · ${lbl(ACTIVITY_STATUS_LABEL, a.status)}`} onClose={onClose} width={720}>
-      {a.imageUrl && <img src={a.imageUrl} alt="" className="activity-detail-img" />}
+      {a.imageUrl && <ImagenProtegida src={a.imageUrl} className="activity-detail-img" />}
       {a.status === 'cancelled' && a.cancellationReason && (
         <div className="form-alert" role="status"><FiAlertCircle size={15} /> <span>Cancelada: {a.cancellationReason}</span></div>
       )}

@@ -213,10 +213,28 @@ export class TrajectorySummaryService {
     return { perfil, proyectos, inscripciones, certs, constancias, tierDe, validacionDe };
   }
 
+  /**
+   * V3 §44, V3.2 §28.3: lo que respalda cada actividad, en la misma línea del
+   * currículo. Un certificado institucional nombra a su emisor real; si hay
+   * los dos, manda el certificado.
+   */
+  private respaldoPorActividad(constancias: InternalConstancy[]): Map<string, string> {
+    const m = new Map<string, string>();
+    for (const c of constancias) {
+      if (!c.activityId) continue;
+      if (c.kind === 'institution_certificate') {
+        m.set(c.activityId, `Certificado emitido por ${c.issuerName ?? 'la institución'}`);
+      } else if (!m.has(c.activityId)) {
+        m.set(c.activityId, 'Constancia interna disponible');
+      }
+    }
+    return m;
+  }
+
   /** V3 §43.2: por sección, los ítems que se pueden marcar y cuántos quedan fuera y por qué. */
   async eligibleItems(studentProfileId: string) {
     const f = await this.fuentes(studentProfileId);
-    const conConstancia = new Set(f.constancias.map((c) => c.activityId).filter((x): x is string => !!x));
+    const conConstancia = this.respaldoPorActividad(f.constancias);
 
     const proyectos = f.proyectos.filter((p) => projectCvEligible(p.project.status, p.project.backingTier));
     const confirmadas = f.inscripciones.filter((r) => activityCvEligible(r.status, r.activity?.originType));
@@ -234,7 +252,7 @@ export class TrajectorySummaryService {
       title: r.activity?.title ?? 'Actividad',
       detail: [
         r.activity?.eventDate ? this.fecha(r.activity.eventDate) : null,
-        conConstancia.has(r.activityId) ? 'Constancia interna disponible' : null,
+        conConstancia.get(r.activityId) ?? null,
       ].filter(Boolean).join(' · ') || null,
     });
 
@@ -417,7 +435,7 @@ export class TrajectorySummaryService {
 
     // V3 §44: una participación confirmada es una experiencia institucional;
     // si además tiene constancia, se dice en la misma línea y no se duplica.
-    const conConstancia = new Set(f.constancias.map((c) => c.activityId).filter((x): x is string => !!x));
+    const conConstancia = this.respaldoPorActividad(f.constancias);
     const confirmadas = f.inscripciones.filter((r) => activityCvEligible(r.status, r.activity?.originType));
     const vistaActividad = (r: ActivityRegistration) => ({
       id: r.activityId,
@@ -425,6 +443,7 @@ export class TrajectorySummaryService {
       type: r.activity?.type ?? null,
       date: r.activity?.eventDate ?? null,
       constancy: conConstancia.has(r.activityId),
+      constancyLabel: conConstancia.get(r.activityId) ?? null,
     });
     const actividadesIncluidas = new Set<string>();
     const tomar = (seccion: TrajectorySection, lista: ActivityRegistration[]) => {
@@ -565,7 +584,9 @@ export class TrajectorySummaryService {
         date: c.createdAt,
         level: TrajectoryLevel.CORROBORATED,
         levelLabel: nivel(TrajectoryLevel.CORROBORATED),
-        detail: c.activity?.title ? `Constancia interna de «${c.activity.title}».` : 'Constancia interna emitida.',
+        detail: c.kind === 'institution_certificate'
+          ? `Certificado emitido por ${c.issuerName ?? 'la institución'}${c.activity?.title ? ` por «${c.activity.title}»` : ''}.`
+          : c.activity?.title ? `Constancia interna de «${c.activity.title}».` : 'Constancia interna emitida.',
         cvEligible: true,
       });
     }
@@ -707,7 +728,8 @@ export class TrajectorySummaryService {
       pdf.section(titulo);
       for (const a of lista) {
         const fecha = a.date ? ` (${this.fecha(a.date)})` : '';
-        pdf.bullet(`Participación confirmada en ${a.title}${fecha}${a.constancy ? ' · Constancia interna disponible' : ''}`);
+        const respaldo = a.constancyLabel ?? (a.constancy ? 'Constancia interna disponible' : null);
+        pdf.bullet(`Participación confirmada en ${a.title}${fecha}${respaldo ? ` · ${respaldo}` : ''}`);
       }
     };
     actividades('Actividades con participación confirmada', datos.activities);

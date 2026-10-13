@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 150" role="img" aria-labelledby="t d">
+  <title id="t">Cómo se activa una cuenta</title>
+  <desc id="d">Tres pasos: la administración da de alta la cuenta, llega un correo con un código y la persona elige su contraseña.</desc>
+  <style>
+    .caja { fill: #f3e3e6; stroke: #6b1220; stroke-width: 2; }
+    .num { fill: #6b1220; }
+    .n { fill: #fff; font: 700 15px 'Segoe UI', system-ui, sans-serif; }
+    .t { fill: #1d2127; font: 600 15px 'Segoe UI', system-ui, sans-serif; }
+    .s { fill: #3f444c; font: 13px 'Segoe UI', system-ui, sans-serif; }
+    .f { stroke: #7b828c; stroke-width: 2; fill: none; }
+  </style>
+  <defs><marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7b828c"/></marker></defs>
+  <rect class="caja" x="10" y="25" width="200" height="100" rx="12"/>
+  <circle class="num" cx="36" cy="25" r="15"/><text class="n" x="36" y="30" text-anchor="middle">1</text>
+  <text class="t" x="110" y="68" text-anchor="middle">Alta de la cuenta</text>
+  <text class="s" x="110" y="92" text-anchor="middle">La hace la administración</text>
+  <path class="f" d="M215 75H255" marker-end="url(#p)"/>
+  <rect class="caja" x="260" y="25" width="200" height="100" rx="12"/>
+  <circle class="num" cx="286" cy="25" r="15"/><text class="n" x="286" y="30" text-anchor="middle">2</text>
+  <text class="t" x="360" y="68" text-anchor="middle">Correo con código</text>
+  <text class="s" x="360" y="92" text-anchor="middle">Solo llega a tu correo</text>
+  <path class="f" d="M465 75H505" marker-end="url(#p)"/>
+  <rect class="caja" x="510" y="25" width="200" height="100" rx="12"/>
+  <circle class="num" cx="536" cy="25" r="15"/><text class="n" x="536" y="30" text-anchor="middle">3</text>
+  <text class="t" x="610" y="68" text-anchor="middle">Eliges tu contraseña</text>
+  <text class="s" x="610" y="92" text-anchor="middle">Nadie más la conoce</text>
+</svg>

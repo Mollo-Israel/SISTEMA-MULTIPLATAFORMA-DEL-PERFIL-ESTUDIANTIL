@@ -1309,9 +1309,43 @@ export interface AuditEventView {
   createdAt: string;
 }
 
+/** V3.2 §59: un evento de auditoría en palabras (actor, módulo, acción, resultado). */
+export interface AuditLogItem {
+  id: string;
+  fecha: string;
+  actor: string;
+  actorRol: string | null;
+  modulo: string;
+  accion: string;
+  resultado: string;
+  resultadoCodigo: string;
+  sobre: string | null;
+  detalle: { campo: string; valor: string }[];
+  eventType: string;
+  entityId: string | null;
+}
+
+export interface AuditLogPage {
+  total: number;
+  limit: number;
+  offset: number;
+  items: AuditLogItem[];
+}
+
+export interface AuditCatalog {
+  modulos: { value: string; label: string }[];
+  acciones: { value: string; label: string; modulo: string }[];
+  resultados: { value: string; label: string }[];
+}
+
 export const auditService = {
   list: (params: { eventType?: string; entityType?: string; limit?: number }) =>
     api.get<AuditEventView[]>('/audit/events', { params }).then((r) => r.data),
+  log: (params: {
+    modulo?: string; eventType?: string; actor?: string; desde?: string; hasta?: string;
+    resultado?: string; limit?: number; offset?: number;
+  }) => api.get<AuditLogPage>('/audit/log', { params }).then((r) => r.data),
+  catalog: () => api.get<AuditCatalog>('/audit/log/catalog').then((r) => r.data),
 };
 
 /** V3 §33: centro de notificaciones del usuario. */
