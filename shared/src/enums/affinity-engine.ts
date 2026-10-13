@@ -37,7 +37,11 @@
  *     integrante confirmó) y credenciales externas CORROBORATED. Las
  *     instantáneas de V2 y V3 se conservan.
  */
-export const AFFINITY_ENGINE_VERSION = 4;
+/**
+ * V3.2 BATCH 15 · versión 5: el área de cada experiencia sale de su contexto
+ * explícito (área + habilidad) y nunca de etiquetas ni de texto (§12.3, §50).
+ */
+export const AFFINITY_ENGINE_VERSION = 5;
 
 /**
  * Familia de señal para el respaldo y la regla de diversidad (§53, §54).

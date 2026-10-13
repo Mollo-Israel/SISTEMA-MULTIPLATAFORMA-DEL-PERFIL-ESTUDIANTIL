@@ -10,7 +10,7 @@
  */
 
 import {
-  API, PWD, aprobarActividad, codigoUniversitario, crearProyectoBorrador, loginAdmin, provisionAndActivate, req,
+  API, PWD, aprobarActividad, asegurarGithubSimulado, codigoUniversitario, crearProyectoBorrador, loginAdmin, provisionAndActivate, repoQueCorrobora, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -1183,7 +1183,56 @@ async function batch14(ctx) {
     'V32.14.4 Compatibilidad: con solo `academicAreaId` sigue funcionando y deduce el contexto', json(c3?.skills));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch14 };
+// ===========================================================================
+//  BATCH 15 — Afinidad V5: área del contexto explícito, sin etiquetas ni texto (§11.5, §12.3, §50)
+// ===========================================================================
+async function batch15(ctx) {
+  objective('BATCH 15 · Afinidad V5: la experiencia suma en el área de su contexto, nunca por etiquetas');
+  await asegurarGithubSimulado();
+  const L = String.fromCharCode(...String(TS + 15).slice(-6).split('').map((d) => 65 + Number(d)));
+  const area = async (n, tag) => (await req('POST', '/academic-areas', { token: ctx.admin, body: { name: `${n} ${L}`, tags: [`${tag}${L.toLowerCase()}`] } })).data;
+  const areaP = await area('Robotica Industrial', 'robind');
+  const areaW = await area('Interfaces Web', 'intweb');
+  const sX = (await req('POST', '/skills', { token: ctx.admin, body: { name: `Kinematix${L}`, academicAreaId: areaP.id, secondaryAreaIds: [areaW.id] } })).data;
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Elio', lastName: 'Lazo', email: correoEst('b15est'), role: 'STUDENT', semester: 6 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const resumen = async () => (await req('GET', '/affinity/me/summary', { token: est.token })).data;
+  const crudo = (s, a) => Number((s?.areas ?? []).find((x) => x.academicAreaId === a.id)?.rawPoints ?? 0);
+
+  let s = await resumen();
+  check(s?.engineVersion === 5, 'V32.15.1 El motor vigente es la versión 5 (contexto explícito)', `versión ${s?.engineVersion}`);
+
+  const proyecto = await req('POST', '/projects', {
+    token: est.token,
+    body: {
+      title: `Panel web del brazo ${TS}`, areaIds: [areaP.id, areaW.id], skillIds: [sX.id],
+      skillContexts: [{ skillId: sX.id, areaId: areaW.id }],
+      repositoryUrl: repoQueCorrobora(sX.name), visibility: 'teachers', status: 'draft',
+    },
+  });
+  await req('POST', `/projects/${proyecto.data?.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${proyecto.data?.id}.png`, description: 'Captura.' } });
+  await req('PUT', `/projects/${proyecto.data?.id}/my-contribution`, { token: est.token, body: { contribution: 'Diseño e implementación.', skillIds: [sX.id] } });
+  const activo = await req('PATCH', `/projects/${proyecto.data?.id}`, { token: est.token, body: { status: 'active' } });
+  s = await resumen();
+  check(activo.data?.backingTier === 'corroborated' && crudo(s, areaW) === 18,
+    'V32.15.2 §11.5 La tecnología corroborada suma en el área de su contexto (Interfaces Web)', `${activo.data?.backingTier} / W ${crudo(s, areaW)}`);
+  check(crudo(s, areaP) === 0,
+    'V32.15.3 §11.5 Y no en su área principal: no se reparte por todas sus áreas posibles', `P ${crudo(s, areaP)}`);
+
+  // ----- §12.3: una credencial sin área no se ubica por el texto de su nombre
+  const cert = await req('POST', '/certificates/external', {
+    token: est.token, body: { certificateName: `Curso de Robotica Industrial ${L}`, issuer: 'Plataforma de cursos' },
+  });
+  await req('POST', '/affinity/recalculate/me', { token: est.token });
+  const desglose = await req('GET', `/affinity/me/areas/${areaP.id}/breakdown`, { token: est.token });
+  const fuentes = JSON.stringify(desglose.data ?? {});
+  check(cert.status === 201 && !fuentes.includes(cert.data?.id ?? 'sin-id'),
+    'V32.15.4 §12.3 Una credencial sin área no se asigna por coincidencia de texto con el nombre del área', fuentes.slice(0, 160));
+  s = await resumen();
+  check(crudo(s, areaP) === 0, 'V32.15.5 §12.3 Ni etiquetas ni texto aportan afinidad', `P ${crudo(s, areaP)}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch14, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

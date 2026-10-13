@@ -471,9 +471,16 @@ export class AffinityEngineService {
     // V4 §35.3: tecnologías del proyecto corroboradas (repositorio o docente).
     const todosLosProyectos = [...owned, ...collaborative].map((p) => p.id);
     const corroboradasPorProyecto = new Map<string, Set<string>>();
+    /** V3.2 §11.5, §50.1: en qué área del proyecto se usó cada tecnología. */
+    const contextoPorProyecto = new Map<string, Map<string, string>>();
     if (todosLosProyectos.length) {
       const filas = await this.projectSkills.find({ where: { projectId: In(todosLosProyectos) } });
       for (const f of filas) {
+        if (f.academicAreaId) {
+          const ctx = contextoPorProyecto.get(f.projectId) ?? new Map<string, string>();
+          ctx.set(f.skillId, f.academicAreaId);
+          contextoPorProyecto.set(f.projectId, ctx);
+        }
         if (f.evidenceStatus === ProjectSkillEvidenceStatus.DECLARED) continue;
         const set = corroboradasPorProyecto.get(f.projectId) ?? new Set<string>();
         set.add(f.skillId);
@@ -507,11 +514,13 @@ export class AffinityEngineService {
       const habilidades = confirmadas.filter((s) => corroboradas.has(s.skillId));
       const tierBase = project.backingTier ?? ProjectBackingTier.DECLARED;
       const puntua = tierBase === ProjectBackingTier.CORROBORATED || tierBase === ProjectBackingTier.REVIEWED;
+      // V3.2 §50.1: el área de cada tecnología es la de su contexto en el
+      // proyecto; solo si no lo tiene (dato anterior) se usa su área principal.
+      const contexto = contextoPorProyecto.get(project.id) ?? new Map<string, string>();
+      const areaDe = (s: { skillId: string; skill?: { academicAreaId: string | null } | null }) =>
+        contexto.get(s.skillId) ?? s.skill?.academicAreaId ?? null;
       const areasPropias = puntua ? [
-
-        ...new Set(
-          habilidades.map((s) => s.skill!.academicAreaId).filter((a): a is string => !!a),
-        ),
+        ...new Set(habilidades.map(areaDe).filter((a): a is string => !!a)),
       ] : [];
       const tier = project.backingTier ?? ProjectBackingTier.DECLARED;
       const code = PROJECT_CODE[tier];
@@ -522,7 +531,7 @@ export class AffinityEngineService {
         areasByProject.set(project.id, areasPropias);
         for (const areaId of areasPropias) {
           const nombres = habilidades
-            .filter((s) => s.skill!.academicAreaId === areaId)
+            .filter((s) => areaDe(s) === areaId)
             .map((s) => s.skill!.name)
             .slice(0, 4)
             .join(', ');
@@ -547,12 +556,14 @@ export class AffinityEngineService {
       // Sin tecnologías propias confirmadas no hay afinidad (§48), pero el
       // respaldo del proyecto sigue contando en su área principal: la
       // trayectoria existe aunque falte decir con qué se hizo.
-      const areasDeConfirmadas = [...new Set(confirmadas.map((s) => s.skill!.academicAreaId).filter((a): a is string => !!a))];
+      const areasDeConfirmadas = [...new Set(confirmadas.map(areaDe).filter((a): a is string => !!a))];
+      // V3.2 §12.3: nunca se deduce el área por etiquetas o texto: o la dicen
+      // las tecnologías confirmadas, o el área explícita del proyecto.
       const fallback = areasDeConfirmadas.length
         ? areasDeConfirmadas
         : project.academicAreaId
           ? [project.academicAreaId]
-          : this.inferAreasByTech(project.technologies, areas);
+          : [];
       const motivoV4 = !puntua
         ? `V4 §35.3: un proyecto ${PROJECT_TIER_LABEL[tier]} no suma afinidad; solo CORROBORATED o REVIEWED. Su respaldo sí cuenta.`
         : confirmadas.length
@@ -564,7 +575,7 @@ export class AffinityEngineService {
           areaId,
           family: AffinitySignalFamily.PROJECT,
           weightCode: code,
-          matchType: project.academicAreaId ? AffinityMatchType.DECLARED : AffinityMatchType.TAG,
+          matchType: AffinityMatchType.DECLARED,
           sourceEntityType: AffinitySourceEntityType.PROJECT,
           sourceId: project.id,
           base: 0,
@@ -634,20 +645,31 @@ export class AffinityEngineService {
       true,
     );
 
+    const areasPorCertificado = new Map<string, string[]>();
+    if (certs.length) {
+      const filas: { certificate_id: string; academic_area_id: string }[] = await this.projects.manager.query(
+        `SELECT "certificate_id", "academic_area_id" FROM "external_certificate_areas" WHERE "certificate_id" = ANY($1::uuid[])`,
+        [certs.map((c) => c.id)],
+      );
+      for (const f of filas) areasPorCertificado.set(f.certificate_id, [...(areasPorCertificado.get(f.certificate_id) ?? []), f.academic_area_id]);
+    }
     certs.forEach((c) => {
       const { tier, duplicado } = certTiers.get(c.id)
         ?? { tier: BackingTier.DECLARED, duplicado: false };
       const code = CERTIFICATE_CODE[tier];
-      const destinos = c.academicAreaId
-        ? [c.academicAreaId]
-        : this.matchAreasByText(`${c.certificateName} ${c.issuer}`, areas);
+      // V3.2 §12.3, §33: las áreas explícitas de la credencial; sin área
+      // declarada no se adivina por el nombre del curso.
+      const destinos = [...new Set([
+        ...(c.academicAreaId ? [c.academicAreaId] : []),
+        ...(areasPorCertificado.get(c.id) ?? []),
+      ])];
 
       destinos.forEach((areaId) =>
         add({
           areaId,
           family: AffinitySignalFamily.EXTERNAL_CERTIFICATE,
           weightCode: code,
-          matchType: c.academicAreaId ? AffinityMatchType.DECLARED : AffinityMatchType.TEXT,
+          matchType: AffinityMatchType.DECLARED,
           sourceEntityType: AffinitySourceEntityType.EXTERNAL_CERTIFICATE,
           sourceId: c.id,
           base: tier === BackingTier.FLAGGED ? 0 : (weightOf.get(code) ?? 0),
@@ -668,10 +690,9 @@ export class AffinityEngineService {
       relations: { activity: true },
     });
     constancies.forEach((c) => {
+      // V3.2 §12.3: el área de la actividad que la emitió; nunca el texto.
       const areaDeActividad = c.activity?.academicAreaId ?? null;
-      const destinos = areaDeActividad
-        ? [areaDeActividad]
-        : this.matchAreasByText(c.description, areas);
+      const destinos = areaDeActividad ? [areaDeActividad] : [];
 
       destinos.forEach((areaId) => {
         // §53.1: si respalda una participacion ya contada, suma respaldo en la
@@ -1509,27 +1530,4 @@ export class AffinityEngineService {
     return bruto;
   }
 
-  private inferAreasByTech(technologies: string[] | null, areas: AreaInfo[]): string[] {
-    if (!technologies || technologies.length === 0) return [];
-    const techs = technologies.map((t) => t.toLowerCase());
-    const matched = new Set<string>();
-    for (const area of areas) {
-      const hit = techs.some((tech) =>
-        area.tags.some((tag) => tech.includes(tag) || tag.includes(tech)),
-      );
-      if (hit) matched.add(area.id);
-    }
-    return [...matched];
-  }
-
-  private matchAreasByText(text: string, areas: AreaInfo[]): string[] {
-    const normalized = text.toLowerCase();
-    const matched = new Set<string>();
-    for (const area of areas) {
-      const hit =
-        normalized.includes(area.name) || area.tags.some((tag) => normalized.includes(tag));
-      if (hit) matched.add(area.id);
-    }
-    return [...matched];
-  }
 }

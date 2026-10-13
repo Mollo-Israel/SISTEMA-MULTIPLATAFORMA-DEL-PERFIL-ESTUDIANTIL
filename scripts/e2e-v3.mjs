@@ -1439,7 +1439,7 @@ async function batch14(ctx) {
   const confirmar = (id, skills) => req('PUT', `/projects/${id}/my-contribution`, { token: est.token, body: { contribution: 'Diseño e implementación.', skillIds: skills.map((x) => x.id) } });
 
   let s = await resumenFull();
-  check(s?.engineVersion === 4, 'V3.14.1 §35 El motor vigente es la versión 4', `versión ${s?.engineVersion}`);
+  check(s?.engineVersion >= 4, 'V3.14.1 §35 El motor vigente es la versión 4 o posterior (V3.2: 5)', `versión ${s?.engineVersion}`);
 
   // ----- Borrador
   const borrador = await proyecto('Borrador de plataforma', [sP], repoQueCorrobora(sP.name));

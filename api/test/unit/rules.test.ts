@@ -45,7 +45,7 @@ import {
 import { ManualReviewStatus, ProjectStatus, TrajectoryLevel } from '@perfil/shared';
 import { ACTIVITY_TRANSITIONS, canTransition } from '@perfil/shared';
 describe('Afinidad V3 (§45–§47)', () => {
-  it('es la versión 4 del motor (V3.1 §35)', () => assert.equal(AFFINITY_ENGINE_VERSION, 4));
+  it('es la versión 5 del motor (V3.2: área por contexto explícito)', () => assert.equal(AFFINITY_ENGINE_VERSION, 5));
 
   it('lo declarado no suma; los topes directos suman 100', () => {
     assert.equal(AFFINITY_CAPS.PREFERENCE + AFFINITY_CAPS.INTEREST + AFFINITY_CAPS.SKILL, 0);
@@ -733,7 +733,7 @@ import { AFFINITY_POINTS_V4, DIMINISHING as DIM_V4 } from '@perfil/shared';
 
 describe('V3 §35 pesos y rendimientos de la Afinidad V4', () => {
   it('solo puntúa lo corroborado', () => {
-    assert.equal(AFFINITY_ENGINE_VERSION, 4);
+    assert.equal(AFFINITY_ENGINE_VERSION, 5); // V3.2: mismos pesos de V4, área por contexto
     assert.equal(AFFINITY_POINTS_V4.ACTIVITY_CONFIRMED, 10);
     assert.equal(AFFINITY_POINTS_V4.PROJECT_SUPPORTED, 0);
     assert.equal(AFFINITY_POINTS_V4.PROJECT_CORROBORATED, 18);

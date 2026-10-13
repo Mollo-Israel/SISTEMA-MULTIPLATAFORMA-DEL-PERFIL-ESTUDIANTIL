@@ -940,3 +940,53 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Pendientes:** la afinidad usa estas áreas y contextos en el BATCH 15.
 
 **Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 15 — Afinidad V5: contexto explícito
+
+**ESTADO:** completo
+
+**Objetivo:**
+- §11.5, §12.3, §50: que la experiencia sume en el área de su contexto explícito, no en todas las áreas posibles de una habilidad.
+- Retirar las inferencias por etiquetas o por texto.
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **Ya existía:**
+  - el motor V4 con familias, topes y multiplicadores de §47;
+  - el desglose explicable;
+  - el recálculo determinista.
+- **Faltaba:**
+  - En proyectos, el área de cada tecnología salía del área principal de la habilidad, no del contexto guardado en el BATCH 11.
+  - Un proyecto sin área explícita se ubicaba por etiquetas (`inferAreasByTech`).
+  - Una credencial sin área se ubicaba por coincidencia de texto con el nombre del área (`matchAreasByText`).
+
+**Cambios:**
+- **Shared:** `AFFINITY_ENGINE_VERSION = 5`.
+- **Motor (`affinity.engine.ts`):**
+  - **Proyectos:** usan el contexto de `project_skills.academic_area_id`. Si no hay contexto, se toma el área principal de la habilidad. A falta de tecnologías, cuentan solo las áreas explícitas del proyecto.
+  - **Credenciales:** usan su área y las de `external_certificate_areas`, con el contexto de cada tecnología.
+  - **Constancias:** usan solo el área de la actividad.
+  - Se eliminaron `inferAreasByTech` y `matchAreasByText`. Lo que no tiene área explícita no se reparte.
+- **Pruebas actualizadas a la regla V3.2:**
+  - `rules.test.ts` (versión 5);
+  - `e2e-v3` V3.14.1 y `e2e-batch-6` B6.5, B6.41 y B6.43: aceptan la versión 4 o posterior.
+
+**Migraciones:** ninguna. El cambio de versión del motor recalcula con la regla nueva.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch15`, 5/5.** Cubre:
+  - versión 5;
+  - una tecnología corroborada suma 18 en el área de su contexto;
+  - la misma tecnología suma 0 en su área principal;
+  - una credencial sin área no se asigna por texto;
+  - ni las etiquetas ni el texto aportan afinidad.
+- **Unitarias:** 117/117.
+
+**Resultados:** **2009 correctas, 0 fallos** (21 suites). `e2e-batch-6` se corrió de nuevo, 53/53, tras actualizar sus tres comprobaciones de versión.
+
+**Regresiones:** ninguna. Los tres fallos de la primera corrida eran comprobaciones fijadas en la versión 4.
+
+**Pendientes:** ninguno en este batch.
+
+**Riesgos:** los perfiles con proyectos o credenciales sin área explícita pierden los puntos que antes se inferían. Es el comportamiento que pide §12.3.

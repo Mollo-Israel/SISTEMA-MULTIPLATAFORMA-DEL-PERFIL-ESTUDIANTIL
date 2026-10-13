@@ -85,7 +85,7 @@ async function declarado(ctx) {
   check(areaDe(s, areaC.id) === null, 'B6.2 Un área de mejora tampoco (§45.1)');
   check(s?.status === 'insufficient_data', 'B6.3 Sin trayectoria respaldada, el estado lo dice', String(s?.status));
   check(s?.maxRawPoints === 100, 'B6.4 La escala es directa sobre 100 (§47)', `max ${s?.maxRawPoints}`);
-  check(s?.engineVersion === 4, 'B6.5 El motor vigente es la versión 4 (V3.1 §35)', `versión ${s?.engineVersion}`);
+  check(s?.engineVersion >= 4, 'B6.5 El motor vigente es la versión 4 o posterior (V3.1 §35; V3.2 la lleva a 5)', `versión ${s?.engineVersion}`);
 }
 
 // ===========================================================================
@@ -293,15 +293,15 @@ async function determinismoYExplicacion(ctx) {
   check((d.contributions ?? []).every((c) => !!c.signalFamily && !!c.reason && c.rawPoints !== undefined
     && c.multiplier !== undefined && c.supportPoints !== undefined),
   'B6.40 Cada contribución lleva familia, motivo, base, multiplicador y respaldo (§51)');
-  check(d.engineVersion === 4, 'B6.41 Y la versión del motor que la produjo (§51)', `versión ${d.engineVersion}`);
+  check(d.engineVersion >= 4, 'B6.41 Y la versión del motor que la produjo (§51)', `versión ${d.engineVersion}`);
 
   const dA = await desglose(est.token, ctx.areaA.id);
   check((dA.notContributing ?? []).some((c) => c.weightCode?.startsWith('interest') && c.points === 0 && /no suma afinidad/.test(c.reason ?? '')),
     'B6.42 El interés declarado figura como «no contribuye» con su motivo (§45.1)', JSON.stringify(dA.notContributing?.slice(0, 2)));
 
   const reglas = (await req('GET', '/affinity/weights', { token: est.token })).data;
-  check(reglas?.engineVersion === 4 && reglas?.maxRawPoints === 100,
-    'B6.43 El motor publica versión 4 y máximo 100', JSON.stringify([reglas?.engineVersion, reglas?.maxRawPoints]));
+  check(reglas?.engineVersion >= 4 && reglas?.maxRawPoints === 100,
+    'B6.43 El motor publica versión 4 o posterior y máximo 100', JSON.stringify([reglas?.engineVersion, reglas?.maxRawPoints]));
   check(reglas?.caps?.ACTIVITY === 25 && reglas?.caps?.PROJECT === 50 && reglas?.caps?.CERTIFICATE === 25 && reglas?.caps?.PREFERENCE === 0,
     'B6.44 Topes por familia 25 / 50 / 25 y 0 para lo declarado (§47)', JSON.stringify(reglas?.caps));
   check(Array.isArray(reglas?.diminishing?.ACTIVITY) && reglas.diminishing.ACTIVITY.join() === '1,0.7,0.5,0.3'
