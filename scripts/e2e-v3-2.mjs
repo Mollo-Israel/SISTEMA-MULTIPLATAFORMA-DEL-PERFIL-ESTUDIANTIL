@@ -688,7 +688,136 @@ async function batch5(ctx) {
   check(tarde.status === 400, 'V32.5.34 §21.4 Cerrada, no acepta inscripciones', `status ${tarde.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
+// ===========================================================================
+//  BATCH 6 — Borradores privados, cancelar envío, aprobada inmutable, avisos (C8, C9, C10, §23–§26, §47)
+// ===========================================================================
+async function batch6(ctx) {
+  objective('BATCH 6 · Revisión y propiedad: borradores privados, cancelar envío y aprobada sin cambios del creador');
+  const mk = (n, a, rol, extra = {}) => provisionAndActivate(ctx.admin, { firstName: n, lastName: a, email: correoStaff(`b6${n.toLowerCase()}`), role: rol, ...extra });
+  const docA = await mk('Abel', 'Torrez', 'TEACHER');
+  const docB = await mk('Beto', 'Ugarte', 'TEACHER');
+  for (const d of [docA, docB]) await req('PUT', `/users/${d.userId}/semesters`, { token: ctx.admin, body: { semesters: [4] } });
+  const director = await mk('Delia', 'Vaca', 'CAREER_DIRECTOR');
+  const socA = await provisionAndActivate(ctx.admin, { firstName: 'Sofi', lastName: 'Arce', email: correoEst('b6socA'), role: 'SCIENTIFIC_SOCIETY', semester: 6 });
+  const socB = await provisionAndActivate(ctx.admin, { firstName: 'Saul', lastName: 'Rojas', email: correoEst('b6socB'), role: 'SCIENTIFIC_SOCIETY', semester: 6 });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Elsa', lastName: 'Mamani', email: correoEst('b6est'), role: 'STUDENT', semester: 4 });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const extra = cats.find((c) => c.appliesTo === 'extracurricular') ?? cats[0];
+  const ids = (r) => (r.data ?? []).map((a) => a.id);
+
+  // ----- §24.1 (C9) El borrador del docente es solo suyo
+  const borrador = await req('POST', '/activities', {
+    token: docA.token, body: { title: `Borrador privado ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [4] },
+  });
+  const bid = borrador.data?.id;
+  check(borrador.status === 201 && borrador.data?.status === 'draft', 'V32.6.1 El docente crea un borrador', `status ${borrador.status}`);
+  const verB = await req('GET', `/activities/${bid}`, { token: docB.token });
+  const listaB = await req('GET', '/activities', { token: docB.token });
+  const gestB = await req('GET', '/activities/managed', { token: docB.token });
+  check(verB.status === 404 && !ids(listaB).includes(bid) && !ids(gestB).includes(bid),
+    'V32.6.2 §24.1 Otro docente del mismo semestre no ve el borrador (ni en listas ni por URL)', `detalle ${verB.status}`);
+  const editaB = await req('PATCH', `/activities/${bid}`, { token: docB.token, body: { title: `Ajeno ${TS}` } });
+  check(editaB.status === 403 || editaB.status === 404, 'V32.6.3 §24.1 Tampoco lo edita cambiando el id en la petición', `status ${editaB.status}`);
+  const verDir = await req('GET', `/activities/${bid}`, { token: director.token });
+  const listaDir = await req('GET', '/activities/managed', { token: director.token });
+  check(verDir.status === 404 && !ids(listaDir).includes(bid),
+    'V32.6.4 §24.1 Dirección no lo ve antes del envío', `detalle ${verDir.status}`);
+  const verAdm = await req('GET', `/activities/${bid}`, { token: ctx.admin });
+  const listaAdm = await req('GET', '/activities/managed', { token: ctx.admin });
+  check(verAdm.status === 404 && !ids(listaAdm).includes(bid),
+    'V32.6.5 §24.1 Administración tampoco, en la vista operativa', `detalle ${verAdm.status}`);
+  const verEst = await req('GET', `/activities/${bid}`, { token: est.token });
+  check(verEst.status === 404, 'V32.6.6 §24.1 Un estudiante nunca ve un borrador', `status ${verEst.status}`);
+  const propio = await req('GET', '/activities/managed', { token: docA.token });
+  check(ids(propio).includes(bid), 'V32.6.7 §25 Está en «Mis actividades» de quien lo creó');
+
+  // ----- §23.1 Enviar y cancelar el envío
+  const enviada = await req('POST', `/activities/${bid}/submit`, { token: docA.token, body: {} });
+  check(enviada.status === 200 && enviada.data?.reviewStatus === 'pending', 'V32.6.8 §23 Se envía a revisión', `status ${enviada.status}`);
+  const pendientes = await req('GET', '/activities/reviews/pending', { token: director.token });
+  const verDir2 = await req('GET', `/activities/${bid}`, { token: director.token });
+  check(ids(pendientes).includes(bid) && verDir2.status === 200, 'V32.6.9 §24.5 Enviada, aparece en la bandeja de Dirección');
+  const avisoDir = (await req('GET', '/notifications/me', { token: director.token })).data ?? [];
+  check(avisoDir.some((n) => n.type === 'ACTIVITY_REVIEW_SUBMITTED' && n.entityId === bid),
+    'V32.6.10 §47 Dirección recibe ACTIVITY_REVIEW_SUBMITTED', json(avisoDir.map((n) => n.type)));
+  const cancelaB = await req('POST', `/activities/${bid}/cancel-submission`, { token: docB.token });
+  check(cancelaB.status === 403, 'V32.6.11 §23.1 Otro docente no retira un envío ajeno', `status ${cancelaB.status}`);
+  const cancela = await req('POST', `/activities/${bid}/cancel-submission`, { token: docA.token });
+  check(cancela.status === 200 && cancela.data?.reviewStatus === null && cancela.data?.status === 'draft',
+    'V32.6.12 §23.1 «Cancelar envío» la devuelve a borrador para corregir', json({ s: cancela.status, r: cancela.data?.reviewStatus }));
+  const pendientes2 = await req('GET', '/activities/reviews/pending', { token: director.token });
+  const verDir3 = await req('GET', `/activities/${bid}`, { token: director.token });
+  check(!ids(pendientes2).includes(bid) && verDir3.status === 404, 'V32.6.13 §23.1 Sale de la bandeja y vuelve a ser privada');
+  const otraVez = await req('POST', `/activities/${bid}/cancel-submission`, { token: docA.token });
+  check(otraVez.status === 409, 'V32.6.14 §23.1 Sin envío pendiente no hay nada que retirar', `status ${otraVez.status}`);
+  const historia = await req('GET', `/activities/${bid}/reviews`, { token: docA.token });
+  check((historia.data ?? []).some((h) => h.action === 'cancelled'), 'V32.6.15 §23.1 La historia registra el retiro', json(historia.data));
+
+  // ----- §23.2 Observada → corrige y reenvía
+  await req('POST', `/activities/${bid}/submit`, { token: docA.token, body: {} });
+  const observa = await req('POST', `/activities/${bid}/review`, { token: director.token, body: { decision: 'observe', comment: 'Falta el objetivo.' } });
+  const avisoObs = (await req('GET', '/notifications/me', { token: docA.token })).data ?? [];
+  check(observa.status === 200 && avisoObs.some((n) => n.type === 'ACTIVITY_REVIEW_OBSERVED' && n.entityId === bid),
+    'V32.6.16 §47 Quien la propuso recibe ACTIVITY_REVIEW_OBSERVED', json(avisoObs.map((n) => n.type)));
+  const corrige = await req('PATCH', `/activities/${bid}`, { token: docA.token, body: { description: 'Objetivo: practicar diseño.' } });
+  check(corrige.status === 200, 'V32.6.17 §23.2 Observada, el creador corrige', `status ${corrige.status}`);
+  await req('POST', `/activities/${bid}/submit`, { token: docA.token, body: {} });
+  const aprueba = await req('POST', `/activities/${bid}/review`, { token: director.token, body: { decision: 'approve' } });
+  const avisoAp = (await req('GET', '/notifications/me', { token: docA.token })).data ?? [];
+  check(aprueba.status === 200 && avisoAp.some((n) => n.type === 'ACTIVITY_REVIEW_APPROVED' && n.entityId === bid),
+    'V32.6.18 §47 Y ACTIVITY_REVIEW_APPROVED al aprobarse', json(avisoAp.map((n) => n.type)));
+
+  // ----- §23.3 (C10) Aprobada: el creador ya no cambia el contenido
+  const cambiaTitulo = await req('PATCH', `/activities/${bid}`, { token: docA.token, body: { title: `Cambiada ${TS}` } });
+  check(cambiaTitulo.status === 409 && cambiaTitulo.data?.code === 'ACTIVITY_APPROVED_LOCKED',
+    'V32.6.19 §23.3 (C10) Aprobada, el creador no cambia campos materiales', `status ${cambiaTitulo.status}`);
+  const publica = await req('PATCH', `/activities/${bid}`, { token: docA.token, body: { status: 'open' } });
+  check(publica.status === 200 && publica.data?.status === 'open', 'V32.6.20 §23.3 Pero sí la publica y sigue gestionándola', `status ${publica.status}`);
+  const ajustaDir = await req('PATCH', `/activities/${bid}`, { token: director.token, body: { title: `Ajustada por Dirección ${TS}` } });
+  check(ajustaDir.status === 200, 'V32.6.21 §23.3 Dirección sí puede ajustarla', `status ${ajustaDir.status}`);
+  const auditAjuste = await req('GET', `/audit/events?entityId=${bid}`, { token: ctx.admin });
+  check((auditAjuste.data?.items ?? auditAjuste.data ?? []).length > 0, 'V32.6.22 §26 Cada cambio queda auditado');
+
+  // ----- §25 Publicada: otro docente la ve en la carrera, pero no la gestiona
+  const listaB2 = await req('GET', '/activities', { token: docB.token });
+  const gestB2 = await req('GET', '/activities/managed', { token: docB.token });
+  const confirmaB = await req('GET', `/activities/${bid}/participants`, { token: docB.token });
+  check(ids(listaB2).includes(bid) && !ids(gestB2).includes(bid) && confirmaB.status === 403,
+    'V32.6.23 §25 «Actividades de la carrera» la muestra; «Mis actividades» y la participación, no', `participantes ${confirmaB.status}`);
+  const verEst2 = await req('GET', `/activities/${bid}`, { token: est.token });
+  check(verEst2.status === 200, 'V32.6.24 §24.6 Publicada, la ve el estudiante', `status ${verEst2.status}`);
+
+  // ----- §24.2 Sociedad: el borrador es de quien lo crea
+  const socDraft = await req('POST', '/activities', {
+    token: socA.token, body: { title: `Reto interno ${TS}`, type: 'extracurricular', categoryId: extra.id },
+  });
+  const verSocB = await req('GET', `/activities/${socDraft.data?.id}`, { token: socB.token });
+  check(socDraft.status === 201 && verSocB.status === 404, 'V32.6.25 §24.2 El borrador de un integrante no lo ve otro', `status ${verSocB.status}`);
+  await req('POST', `/activities/${socDraft.data?.id}/submit`, { token: socA.token, body: {} });
+  await req('POST', `/activities/${socDraft.data?.id}/review`, { token: director.token, body: { decision: 'approve' } });
+  await req('PATCH', `/activities/${socDraft.data?.id}`, { token: socA.token, body: { status: 'open' } });
+  const gestDir = await req('GET', '/activities/managed', { token: director.token });
+  check(ids(gestDir).includes(socDraft.data?.id) && ids(gestDir).includes(bid),
+    'V32.6.26 §26 Dirección da seguimiento a lo aprobado (académico y extracurricular)');
+
+  // ----- §24.3–§24.4 El borrador de Dirección o de Administración no es de nadie más
+  const dirDraft = await req('POST', '/activities', { token: director.token, body: { title: `Idea de Dirección ${TS}`, type: 'academica', categoryId: taller.id } });
+  const verAdmDir = await req('GET', `/activities/${dirDraft.data?.id}`, { token: ctx.admin });
+  const verDocDir = await req('GET', `/activities/${dirDraft.data?.id}`, { token: docA.token });
+  check(verAdmDir.status === 404 && verDocDir.status === 404, 'V32.6.27 §24.3 El borrador de Dirección no aparece a Administración ni a docentes',
+    `${verAdmDir.status} / ${verDocDir.status}`);
+  const docAdm = await provisionAndActivate(ctx.admin, { firstName: 'Ulo', lastName: 'Ticona', email: correoStaff('b6resp'), role: 'TEACHER' });
+  const admDraft = await req('POST', '/activities', {
+    token: ctx.admin, body: { title: `Operativa ${TS}`, type: 'academica', categoryId: taller.id, responsibleUserIds: [docAdm.userId] },
+  });
+  const verDirAdm = await req('GET', `/activities/${admDraft.data?.id}`, { token: director.token });
+  const verResp = await req('GET', `/activities/${admDraft.data?.id}`, { token: docAdm.token });
+  check(verDirAdm.status === 404 && verResp.status === 200,
+    'V32.6.28 §24.4 El borrador de Administración no lo ve Dirección; sí su responsable', `${verDirAdm.status} / ${verResp.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

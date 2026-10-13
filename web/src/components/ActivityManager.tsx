@@ -98,8 +98,14 @@ const publicable = (a: Activity) =>
 
 export default function ActivityManager({
   activityType,
+  filtroOrigen,
+  puedeCrear = true,
 }: {
   activityType: 'academica' | 'extracurricular';
+  /** V3.2 §26: la vista «Externas» de Dirección muestra las externas de cualquier tipo. */
+  filtroOrigen?: 'internal' | 'external';
+  /** Dirección da seguimiento a lo extracurricular aprobado, pero no lo crea (§15). */
+  puedeCrear?: boolean;
 }) {
   const { user } = useAuth();
   /** Docente y Sociedad proponen; Dirección decide. Dirección y Administración publican sin revisión (V3 §12.2). */
@@ -107,7 +113,7 @@ export default function ActivityManager({
   const esAdmin = user?.role === 'ADMIN';
   // Con memoria de la sesión: al volver a la gestión se pinta al instante.
   const [semestresPermitidos, setSemestresPermitidos] = useCachedState<number[]>('semestres', [1, 2, 3, 4, 5, 6, 7, 8]);
-  const [activities, setActivities] = useCachedState<Activity[]>(`actividades-${activityType}`, []);
+  const [activities, setActivities] = useCachedState<Activity[]>(`actividades-${activityType}-${filtroOrigen ?? 'todas'}`, []);
   const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
   const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
   const errores = useFormErrors(CAMPOS);
@@ -116,7 +122,7 @@ export default function ActivityManager({
   const [motivo, setMotivo] = useState('');
   const [motivoError, setMotivoError] = useState<string | null>(null);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
-  const [loading, setLoading] = useState(() => !enMemoria(`actividades-${activityType}`));
+  const [loading, setLoading] = useState(() => !enMemoria(`actividades-${activityType}-${filtroOrigen ?? 'todas'}`));
   /** Solo el fallo de la carga inicial: el resto de errores son avisos flotantes. */
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -150,8 +156,10 @@ export default function ActivityManager({
 
   const load = useCallback(async () => {
     const list = await activityService.managed();
-    setActivities(list.filter((a) => a.type === activityType));
-  }, [activityType]);
+    setActivities(list.filter((a) => (filtroOrigen === 'external'
+      ? a.originType === 'external'
+      : a.type === activityType && (!filtroOrigen || (a.originType ?? 'internal') === filtroOrigen))));
+  }, [activityType, filtroOrigen]);
 
   useEffect(() => {
     Promise.all([
@@ -402,6 +410,20 @@ export default function ActivityManager({
    * Pasar a cancelada o volver a borrador saca la actividad de la vista del
    * estudiante, asi que esos dos casos se confirman antes.
    */
+  /** V3.2 §23.1: retirar el envío para corregir antes de que Dirección decida. */
+  const cancelarEnvio = async (a: Activity) => {
+    try {
+      await activityService.cancelSubmission(a.id);
+      notify('Envío retirado.', 'La actividad volvió a borrador: corrígela y envíala de nuevo.');
+      await load();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  /** V3.2 §23.3 (C10): aprobada, Docente y Sociedad ya no editan su contenido. */
+  const editable = (a: Activity) => !(necesitaRevision && a.requiresReview && a.reviewStatus === 'approved');
+
   const enviarARevision = async (a: Activity) => {
     try {
       await activityService.submit(a.id);
@@ -577,10 +599,14 @@ export default function ActivityManager({
     <div>
       {error && <div className="alert alert-error">{error}</div>}
 
-      {!showForm && (
+      {!showForm && puedeCrear && (
         <Button
           onClick={() => {
-            setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
+            setForm({
+              ...emptyForm,
+              categoryId: usableCategories[0]?.id ?? '',
+              ...(filtroOrigen === 'external' ? { originType: 'external' as const, outcomePolicy: 'external_credential_expected' as OutcomePolicy } : {}),
+            });
             setShowForm(true);
           }}
           icon={<FiPlus size={15} />}
@@ -1232,6 +1258,13 @@ export default function ActivityManager({
                             </Button>
                           </div>
                         )}
+                        {a.reviewStatus === 'pending' && necesitaRevision && (
+                          <div style={{ marginTop: '0.3rem' }}>
+                            <Button size="sm" variant="secondary" icon={<FiX size={13} />} onClick={() => cancelarEnvio(a)}>
+                              Cancelar envío
+                            </Button>
+                          </div>
+                        )}
                       </td>
                       <td>
                         {a.confirmedCount ?? 0} / {a.capacity ?? '∞'}
@@ -1245,14 +1278,16 @@ export default function ActivityManager({
                       </td>
                       <td>
                         <div className="flex" style={{ gap: '0.35rem' }}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => startEdit(a)}
-                            title="Editar actividad"
-                            aria-label={`Editar ${a.title}`}
-                          >
-                            <FiEdit2 />
-                          </button>
+                          {editable(a) && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => startEdit(a)}
+                              title="Editar actividad"
+                              aria-label={`Editar ${a.title}`}
+                            >
+                              <FiEdit2 />
+                            </button>
+                          )}
                           <button
                             className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`}
                             onClick={() => openParticipants(a.id)}

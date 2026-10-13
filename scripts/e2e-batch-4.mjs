@@ -173,9 +173,11 @@ async function gestores(ctx) {
     token: ctx.docenteTambien4.token,
     body: { requirements: 'Traer computadora.' },
   });
+  // V3.2 §25 cambia esta regla: el docente gestiona lo que creó o le
+  // asignaron; lo de un colega del mismo semestre lo consulta, no lo edita.
   check(
-    mismoAlcance.status === 200,
-    'B4.12 Otro docente del mismo semestre sí la gestiona: el alcance es compartido',
+    mismoAlcance.status === 403 || mismoAlcance.status === 404,
+    'B4.12 V3.2 §25 Otro docente del mismo semestre la consulta, pero no la gestiona',
     `status ${mismoAlcance.status} ${msgOf(mismoAlcance)}`,
   );
 

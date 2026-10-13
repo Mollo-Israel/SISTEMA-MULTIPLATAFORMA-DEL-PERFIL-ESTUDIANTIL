@@ -781,6 +781,8 @@ export const activityService = {
   /** V2 §27: enviar a Dirección, decidir, pendientes e historia. */
   submit: (id: string, comment?: string) =>
     api.post<Activity>(`/activities/${id}/submit`, { comment }).then((r) => r.data),
+  /** V3.2 §23.1: retirar el envío antes de la decisión de Dirección. */
+  cancelSubmission: (id: string) => api.post<Activity>(`/activities/${id}/cancel-submission`).then((r) => r.data),
   review: (id: string, decision: 'approve' | 'observe' | 'reject', comment?: string) =>
     api.post<Activity>(`/activities/${id}/review`, { decision, comment }).then((r) => r.data),
   pendingReviews: () => api.get<Activity[]>('/activities/reviews/pending').then((r) => r.data),

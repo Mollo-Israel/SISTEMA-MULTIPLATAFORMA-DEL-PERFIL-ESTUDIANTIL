@@ -123,7 +123,8 @@ export class ActivitiesController {
     if (user.role === RolNombre.STUDENT) {
       return this.activitiesService.findOneForStudent(user, id);
     }
-    return this.activitiesService.findOne(id);
+    // V3.2 §24: un borrador ajeno no existe para quien no puede verlo.
+    return this.activitiesService.findOneForStaff(user, id);
   }
 
   @Patch(':id')
@@ -147,6 +148,14 @@ export class ActivitiesController {
     @Body() dto: SubmitActivityDto,
   ) {
     return this.activitiesService.submitForReview(user, id, dto.comment);
+  }
+
+  @Post(':id/cancel-submission')
+  @Roles(RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY, RolNombre.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Retirar el envío a revisión antes de la decisión de Dirección (V3.2 §23.1).' })
+  cancelSubmission(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.cancelSubmission(user, id);
   }
 
   @Post(':id/review')

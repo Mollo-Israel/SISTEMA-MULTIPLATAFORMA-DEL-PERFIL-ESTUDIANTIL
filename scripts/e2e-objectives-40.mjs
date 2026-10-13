@@ -970,9 +970,11 @@ async function objective3(ctx) {
     managed.status === 200 && managed.data.some((a) => a.id === academicId),
     '3.12 El panel del responsable lista sus actividades',
   );
+  // V3.2 §26 amplía el Objetivo 3: lo extracurricular que Dirección aprobó
+  // aparece en su gestión para darle seguimiento (crearlo sigue siendo de la Sociedad).
   check(
-    !managed.data.some((a) => a.type === 'extracurricular' && a.creatorId !== undefined && a.id === extraId),
-    '3.13 El panel del director no incluye las extracurriculares ajenas',
+    managed.data.some((a) => a.id === extraId && a.type === 'extracurricular' && a.creatorId !== undefined),
+    '3.13 V3.2 §26 El panel del director incluye la extracurricular aprobada, para seguimiento',
   );
 
   const societyOnAcademic = await req('PATCH', `/activities/${academicId}`, {

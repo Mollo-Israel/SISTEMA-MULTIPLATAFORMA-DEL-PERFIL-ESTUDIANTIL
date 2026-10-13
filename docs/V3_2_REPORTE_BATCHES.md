@@ -474,3 +474,74 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Riesgos:**
 - **Actividades antiguas:** las que se publicaron incompletas siguen visibles. Solo se exige completarlas si se edita lo mínimo o se vuelven a publicar.
 - **Ciclo automático:** cierra las actividades antiguas que ya empezaron; es el comportamiento pedido.
+
+---
+
+## BATCH 6 — Revisión, propiedad y permisos de actividades
+
+**ESTADO:** completo
+
+**Objetivo:**
+- Borradores privados (C9, §24).
+- «Cancelar envío» (§23.1).
+- Aprobada sin cambios del creador (C10, §23.3).
+- «Mis actividades» frente a «Actividades de la carrera» (C8, §25).
+- Seguimiento de Dirección con filtro Académica / Extracurricular / Externa (§26).
+- Avisos de revisión (§47).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **C9:**
+  - El borrador de un docente lo veían otros docentes del mismo semestre, Dirección (en el listado y en gestión) y Administración (en gestión).
+  - El detalle por URL no filtraba nada: bastaba con conocer el id.
+- **C10:** con la actividad aprobada, el creador seguía editando el contenido.
+- **`cancel-submission`:** respondía 404.
+- **C8:** `canManage` daba gestión a cualquier docente cuyo semestre se cruzara con el de la actividad, incluidos los borradores ajenos.
+- **Avisos:** la revisión no avisaba a nadie.
+
+**Cambios:**
+- **API:**
+  - **Visibilidad de un borrador (`veBorrador`):** lo ven quien lo creó y sus responsables. Dirección y Administración, solo desde que se envía a revisión. Ningún otro docente, y nunca un estudiante.
+  - **Dónde se aplica:**
+    - en el listado y en «gestionadas»;
+    - en el detalle por URL, que responde 404 aunque se cambie el id;
+    - en la edición y en participantes;
+    - en el resto de rutas que pasan por `canManage`.
+  - **Gestión:** la tienen el creador, los responsables, Administración y Dirección (§26). El docente ya no gestiona lo de un colega por compartir semestre (§25); lo consulta en «Actividades de la carrera».
+  - **Retirar el envío:** `POST /activities/:id/cancel-submission`.
+    - Solo quien la propuso y mientras esté PENDING.
+    - Vuelve a borrador y sale de la bandeja.
+    - Queda en la historia (`cancelled`) y en la auditoría (`ACTIVITY_SUBMISSION_CANCELLED`).
+  - **Aprobada (C10):** el creador recibe 409 `ACTIVITY_APPROVED_LOCKED` si intenta cambiar el contenido. Puede publicarla y gestionar la participación. Dirección la ajusta, con auditoría.
+  - **Avisos:** `ACTIVITY_REVIEW_SUBMITTED` a Dirección; `ACTIVITY_REVIEW_OBSERVED`, `_APPROVED` y `_REJECTED` a quien la propuso.
+- **Web:**
+  - «Cancelar envío» en la fila pendiente.
+  - Sin «Editar» para Docente y Sociedad cuando la actividad está aprobada.
+  - Dirección tiene «Actividades de la carrera» con pestañas Académicas, Extracurriculares (seguimiento, sin crear) y Externas (de cualquier tipo).
+
+**Migraciones:** `1780640000000-V32ReviewCancelSubmission`. Agrega `cancelled` a la restricción de acciones de revisión. El `down` borra esas filas de la historia para poder restaurarla. Probada en orden `run → revert → run`. Respaldo previo: `pre-v32-b6.dump`.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch6`, 28/28,** cruzando los cinco roles:
+  - borrador invisible para otro docente (listas, URL y edición), para Dirección, para Administración y para el estudiante;
+  - «Mis actividades»;
+  - envío, bandeja y aviso; retiro ajeno rechazado y retiro propio; vuelta a privada; nada que retirar; historia;
+  - observada (aviso, corrección, reenvío) y aprobada (aviso);
+  - contenido bloqueado para el creador; publicación y ajuste de Dirección, auditados;
+  - el otro docente consulta pero no gestiona;
+  - el estudiante la ve publicada;
+  - Sociedad: el borrador de un integrante no lo ve otro;
+  - Dirección sigue lo extracurricular aprobado;
+  - los borradores de Dirección y de Administración no los ven los demás, pero sí el responsable.
+- **Pruebas ajustadas por V3.2:**
+  - B4.12: un docente del mismo semestre ya no gestiona la actividad de otro (§25).
+  - 3.13: el panel de Dirección incluye la extracurricular aprobada (§26).
+
+**Resultados:**
+- Regresión completa: **1953 correctas y 2 fallos**. Los dos fallos eran B4.12 y 3.13, los cambios de regla pedidos. Corregidas esas pruebas, `e2e-batch-4` y `e2e-objectives-40` dieron 48/48 y 249/249.
+- Total final: **1955 correctas, 0 fallos**.
+
+**Regresiones:** ninguna funcional.
+
+**Pendientes:** las tarjetas y la lista de participantes: BATCH 7.
+
+**Riesgos:** un docente que antes confirmaba la participación en actividades de colegas por compartir semestre ya no puede hacerlo. Es lo que pide §25: para gestionarlas tiene que ser responsable.

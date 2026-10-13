@@ -691,7 +691,77 @@ export class ActivitiesService {
       entityId: activity.id,
       metadata: { reenvio: !!activity.reviewComment },
     });
+    // V3.2 §47: Dirección se entera de lo que llega a su bandeja.
+    const directores = await this.activities.manager.getRepository(User).find({
+      where: { status: 'active' as never, role: { name: RolNombre.CAREER_DIRECTOR } },
+      relations: { role: true },
+    });
+    for (const d of directores) {
+      await this.avisar(d.id, 'ACTIVITY_REVIEW_SUBMITTED', 'Actividad para revisar',
+        `«${activity.title}» espera tu revisión.`, '/director/approvals', activity.id, `review-submitted:${activity.id}:${activity.submittedAt?.getTime()}`);
+    }
     return this.findOne(id);
+  }
+
+  /** Aviso sin efecto sobre la operación si la notificación falla. */
+  private async avisar(
+    userId: string, kind: string, title: string, body: string, link: string, activityId: string, dedupeKey: string,
+  ): Promise<void> {
+    try {
+      await this.notifications.emit({ userId, kind, title, body, link, entityType: 'activity', entityId: activityId, dedupeKey });
+    } catch {
+      // un aviso no frena la revisión
+    }
+  }
+
+  /**
+   * V3.2 §23.1: «Cancelar envío». Mientras Dirección no decidió, quien la
+   * propuso la retira para corregirla: vuelve a borrador sin revisión.
+   */
+  async cancelSubmission(user: AuthenticatedUser, id: string): Promise<Activity> {
+    const activity = await this.findOne(id);
+    const propia = activity.creatorId === user.userId
+      || activity.responsibleUserId === user.userId
+      || await this.esResponsable(activity.id, user.userId);
+    if (!propia) throw new ForbiddenException('Solo quien la propuso puede retirar el envío.');
+    if (activity.reviewStatus !== ActivityReviewStatus.PENDING) {
+      throw new ConflictException('Solo se retira un envío que Dirección todavía no decidió.');
+    }
+    await this.activities.manager.transaction(async (m) => {
+      await m.getRepository(Activity).update({ id: activity.id }, {
+        reviewStatus: null, submittedAt: null, updatedById: user.userId,
+      });
+      await m.getRepository(ActivityReview).save(m.getRepository(ActivityReview).create({
+        activityId: activity.id, actorUserId: user.userId, action: 'cancelled', comment: null,
+      }));
+      await this.audit.record({
+        actorUserId: user.userId,
+        eventType: AuditEventType.ACTIVITY_SUBMISSION_CANCELLED,
+        entityType: 'activity',
+        entityId: activity.id,
+      }, m);
+    });
+    return this.findOne(id);
+  }
+
+  /**
+   * V3.2 §24: un borrador es privado. Lo ven quien lo creó y sus
+   * responsables; Dirección y Administración solo desde que se envía a
+   * revisión. Ningún otro docente, nunca un estudiante.
+   */
+  private async veBorrador(user: AuthenticatedUser, activity: Activity, responsableDe?: Set<string>): Promise<boolean> {
+    if (activity.status !== ActivityStatus.DRAFT) return true;
+    if (activity.creatorId === user.userId || activity.responsibleUserId === user.userId) return true;
+    if (responsableDe ? responsableDe.has(activity.id) : await this.esResponsable(activity.id, user.userId)) return true;
+    const enviada = activity.requiresReview && activity.reviewStatus !== null && activity.reviewStatus !== undefined;
+    return enviada && (user.role === RolNombre.CAREER_DIRECTOR || user.role === RolNombre.ADMIN);
+  }
+
+  /** Detalle para el personal: un borrador ajeno no existe para quien no puede verlo (§24). */
+  async findOneForStaff(user: AuthenticatedUser, id: string): Promise<Activity> {
+    const activity = await this.findOne(id);
+    if (!(await this.veBorrador(user, activity))) throw new NotFoundException('Actividad no encontrada.');
+    return activity;
   }
 
   /** Dirección aprueba, observa o rechaza (§27.3). Queda en la historia (§88.12). */
@@ -739,6 +809,19 @@ export class ActivitiesService {
       entityId: activity.id,
       metadata: { comentario: comment?.trim() ?? null },
     });
+    // V3.2 §47: quien la propuso se entera de la decisión.
+    const avisos = {
+      approve: ['ACTIVITY_REVIEW_APPROVED', 'Actividad aprobada', `Dirección aprobó «${activity.title}». Ya puedes publicarla.`],
+      observe: ['ACTIVITY_REVIEW_OBSERVED', 'Actividad observada', `Dirección observó «${activity.title}»: corrígela y vuelve a enviarla.`],
+      reject: ['ACTIVITY_REVIEW_REJECTED', 'Actividad rechazada', `Dirección rechazó «${activity.title}».`],
+    } as const;
+    const [tipoAviso, tituloAviso, cuerpoAviso] = avisos[decision];
+    const destinatarios = new Set([activity.creatorId, activity.responsibleUserId].filter((x): x is string => !!x));
+    for (const uid of destinatarios) {
+      await this.avisar(uid, tipoAviso, tituloAviso, cuerpoAviso,
+        activity.type === ActivityType.EXTRACURRICULAR ? '/society/activities' : '/teacher/my-activities', activity.id,
+        `review-${decision}:${activity.id}:${Date.now()}`);
+    }
     return this.findOne(id);
   }
 
@@ -1168,14 +1251,13 @@ export class ActivitiesService {
         if (activity.reviewStatus === ActivityReviewStatus.PENDING) {
           throw new ConflictException('Está en revisión: espera la decisión de Dirección para cambiar su contenido.');
         }
-        if (activity.reviewStatus === ActivityReviewStatus.APPROVED) {
-          if (activity.status !== ActivityStatus.DRAFT) {
-            throw new ConflictException(
-              'Ya fue aprobada y publicada: los cambios de contenido los decide Dirección.',
-            );
-          }
-          // Aprobada pero sin publicar: el cambio pide una nueva revisión.
-          reiniciarRevision = true;
+        // V3.2 §23.3 (C10): aprobada, quien la propuso ya no cambia su
+        // contenido (esté publicada o no). Sigue gestionando la participación.
+        if (activity.reviewStatus === ActivityReviewStatus.APPROVED && user.role !== RolNombre.ADMIN) {
+          throw new ConflictException({
+            message: 'Ya fue aprobada por Dirección: el contenido ya no lo cambia quien la propuso. Pide a Dirección los ajustes.',
+            code: 'ACTIVITY_APPROVED_LOCKED',
+          });
         }
       }
     }
@@ -1821,16 +1903,19 @@ export class ActivitiesService {
    * ahora; comprobar un alcance no se puede hacer sin ir a la base.
    */
   private async canManage(user: AuthenticatedUser, activity: Activity): Promise<boolean> {
+    // V3.2 §24 (C9): un borrador ajeno no se gestiona ni se ve.
+    if (!(await this.veBorrador(user, activity))) return false;
     if (user.role === RolNombre.ADMIN) return true;
     if (activity.creatorId === user.userId) return true;
     if (activity.responsibleUserId === user.userId) return true;
     // V3.2 §16: cualquiera de sus responsables la gestiona.
     if (await this.esResponsable(activity.id, user.userId)) return true;
-
-    if (user.role === RolNombre.TEACHER) {
-      return this.teacherReaches(user, activity);
-    }
-    return OWNER_ROLE_BY_TYPE[activity.type] === user.role;
+    // V3.2 §26: Dirección ajusta y da seguimiento a las de la carrera.
+    if (user.role === RolNombre.CAREER_DIRECTOR) return true;
+    // V3.2 §25: el docente gestiona lo que creó o lo que le asignaron; lo
+    // demás de su semestre lo consulta en «Actividades de la carrera».
+    if (user.role === RolNombre.TEACHER) return false;
+    return activity.status !== ActivityStatus.DRAFT && OWNER_ROLE_BY_TYPE[activity.type] === user.role;
   }
 
   /**
@@ -1904,26 +1989,26 @@ export class ActivitiesService {
     activities: Activity[],
     { incluirPublicadas }: { incluirPublicadas: boolean },
   ): Promise<Activity[]> {
-    const suyos = user.role === RolNombre.TEACHER
-      ? await this.teacherScope.allowedSemesters(user.userId)
-      : [];
-
+    const responsableDe = new Set(
+      (await this.activities.manager.getRepository(ActivityResponsible).find({ where: { userId: user.userId } }))
+        .map((r) => r.activityId),
+    );
+    // V3.2 §25: «Mis actividades» = lo que creó o le asignaron.
+    const propia = (a: Activity) =>
+      a.creatorId === user.userId || a.responsibleUserId === user.userId || responsableDe.has(a.id);
     const gestiona = (a: Activity): boolean => {
-      if (user.role === RolNombre.ADMIN) return true;
-      if (a.creatorId === user.userId) return true;
-      if (a.responsibleUserId === user.userId) return true;
-      if (user.role === RolNombre.TEACHER) {
-        if (a.type !== ActivityType.ACADEMICA) return false;
-        const alcance = a.semesterScope ?? [];
-        return alcance.length > 0 && alcance.some((s) => suyos.includes(s));
-      }
-      return OWNER_ROLE_BY_TYPE[a.type] === user.role;
+      if (propia(a)) return true;
+      if (user.role === RolNombre.ADMIN || user.role === RolNombre.CAREER_DIRECTOR) return true;
+      if (user.role === RolNombre.TEACHER) return false;
+      return a.status !== ActivityStatus.DRAFT && OWNER_ROLE_BY_TYPE[a.type] === user.role;
     };
-
-    return activities.filter((a) =>
-      (a.status === ActivityStatus.DRAFT
-        ? gestiona(a)
-        : incluirPublicadas || gestiona(a)));
+    const visibles: Activity[] = [];
+    for (const a of activities) {
+      // V3.2 §24 (C9): el borrador de otro no aparece en ninguna lista.
+      if (!(await this.veBorrador(user, a, responsableDe))) continue;
+      if (incluirPublicadas ? (a.status !== ActivityStatus.DRAFT || gestiona(a)) : gestiona(a)) visibles.push(a);
+    }
+    return visibles;
   }
 
   private async assertCanManage(

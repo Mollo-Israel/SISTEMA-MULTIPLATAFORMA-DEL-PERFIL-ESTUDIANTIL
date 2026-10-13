@@ -224,4 +224,5 @@ export const PUBLISHABLE_REVIEW_STATUSES: readonly ActivityReviewStatus[] = [
   ActivityReviewStatus.APPROVED,
 ];
 
-export type ActivityReviewAction = 'submitted' | 'approved' | 'observed' | 'rejected';
+/** `cancelled`: V3.2 §23.1, quien propuso retiró el envío antes de la decisión. */
+export type ActivityReviewAction = 'submitted' | 'approved' | 'observed' | 'rejected' | 'cancelled';
