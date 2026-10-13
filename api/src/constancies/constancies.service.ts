@@ -7,8 +7,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import {
+  ActivityOutcomePolicy,
   ActivityReviewStatus,
   ActivityStatus,
   ConstancyStatus,
@@ -27,6 +28,9 @@ import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
+import { AuditEventType, AuditService } from '../audit/audit.service';
+import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
+import { FILES_ROUTE } from '../storage/local-storage.driver';
 
 
 @Injectable()
@@ -41,6 +45,8 @@ export class ConstanciesService {
     private readonly teacherScope: TeacherScopeService,
     @Inject(TRAJECTORY_RECALCULATION)
     private readonly trajectory: TrajectoryRecalculationPort,
+    private readonly audit: AuditService,
+    @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
 
   /**
@@ -164,13 +170,35 @@ export class ConstanciesService {
   }
 
   /** Candidatos a constancia: participaciones confirmadas sin constancia previa. */
-  async findEligible(activityId: string) {
+  /**
+   * ¿Puede esta persona entregar documentos de esta actividad? Dirección, su
+   * creador o uno de sus responsables (V3.2 §16). Cambiar el id en la URL no
+   * alcanza: se comprueba siempre en el servidor.
+   */
+  private async gestiona(user: AuthenticatedUser, activity: Activity): Promise<boolean> {
+    if (user.role === RolNombre.CAREER_DIRECTOR || user.role === RolNombre.ADMIN) return true;
+    if (activity.creatorId === user.userId || activity.responsibleUserId === user.userId) return true;
+    const filas = await this.activities.manager.query(
+      `SELECT 1 FROM "activity_responsibles" WHERE "activity_id" = $1 AND "user_id" = $2`,
+      [activity.id, user.userId],
+    );
+    return filas.length > 0;
+  }
+
+  async findEligible(activityId: string, user?: AuthenticatedUser) {
     const activity = await this.activities.findOne({
       where: { id: activityId },
       relations: { creator: { role: true } },
     });
     if (!activity) {
       throw new NotFoundException('Actividad no encontrada.');
+    }
+    // V3.2: antes cualquier docente listaba los confirmados de cualquier actividad.
+    if (user && !(await this.gestiona(user, activity))) {
+      throw new NotFoundException('Actividad no encontrada.');
+    }
+    if (activity.outcomePolicy === ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE) {
+      return this.confirmadosConDocumento(activity);
     }
     // Si la actividad no esta autorizada, no se ofrecen candidatos: la interfaz
     // recibe el motivo en lugar de una lista que luego seria rechazada.
@@ -194,16 +222,141 @@ export class ConstanciesService {
     }));
   }
 
+  /** Confirmados de una actividad, marcando quién ya recibió su documento. */
+  private async confirmadosConDocumento(activity: Activity) {
+    const confirmed = await this.registrations.find({
+      where: { activityId: activity.id, status: RegistrationStatus.CONFIRMED },
+      relations: { studentProfile: { user: true } },
+      order: { createdAt: 'ASC' },
+    });
+    const existing = await this.constancies.find({ where: { activityId: activity.id } });
+    const conDocumento = new Set(existing.map((c) => c.studentProfileId));
+    return confirmed.map((r) => ({
+      studentProfileId: r.studentProfileId,
+      studentName: r.studentProfile?.user ? `${r.studentProfile.user.firstName} ${r.studentProfile.user.lastName}` : null,
+      semester: r.studentProfile?.semester ?? null,
+      registrationId: r.id,
+      hasConstancy: conDocumento.has(r.studentProfileId),
+    }));
+  }
+
+  /**
+   * V3.2 §28.3: el responsable entrega el certificado que emitió la
+   * institución a los confirmados que decida. Afinia lo registra con su
+   * emisor real —no se atribuye la autoría— y el estudiante no lo vuelve a
+   * subir. Un archivo común (plantilla) o ninguno; el código de verificación
+   * es opcional. Volver a entregar actualiza el archivo o el código.
+   */
+  async deliverInstitutionCertificates(
+    user: AuthenticatedUser,
+    activityId: string,
+    dto: { profileIds: string[]; storedFileId?: string | null; certificateCode?: string | null },
+  ) {
+    const activity = await this.activities.findOne({ where: { id: activityId } });
+    if (!activity || !(await this.gestiona(user, activity))) throw new NotFoundException('Actividad no encontrada.');
+    if (user.role === RolNombre.ADMIN) {
+      throw new ForbiddenException('Administración no entrega documentos académicos: lo hace el responsable o Dirección.');
+    }
+    if (activity.outcomePolicy !== ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE) {
+      throw new BadRequestException('Esta actividad no entrega un certificado institucional.');
+    }
+    if (activity.status === ActivityStatus.DRAFT || activity.status === ActivityStatus.CANCELLED) {
+      throw new BadRequestException('Solo se entrega en una actividad publicada y no cancelada.');
+    }
+    if (!activity.certificateIssuer?.trim()) {
+      throw new BadRequestException({
+        message: 'Indica primero quién emite el certificado.',
+        fields: { certificateIssuer: ['Indica primero quién emite el certificado.'] },
+      });
+    }
+    if (dto.storedFileId) {
+      const archivo = await this.activities.manager.query(
+        `SELECT "uploaded_by_user_id", "mime_type_detected" FROM "stored_files" WHERE "id" = $1`,
+        [dto.storedFileId],
+      );
+      if (!archivo.length || archivo[0].uploaded_by_user_id !== user.userId) {
+        const msg = 'El certificado tiene que ser un archivo que hayas subido tú.';
+        throw new BadRequestException({ message: msg, fields: { storedFileId: [msg] } });
+      }
+    }
+    const ids = [...new Set(dto.profileIds)];
+    if (ids.length === 0) throw new BadRequestException('Elige al menos un participante confirmado.');
+    const confirmadas = await this.registrations.find({
+      where: { activityId, status: RegistrationStatus.CONFIRMED, studentProfileId: In(ids) },
+      relations: { studentProfile: true },
+    });
+    if (confirmadas.length !== ids.length) {
+      throw new BadRequestException('Solo se entrega a participantes con la participación confirmada.');
+    }
+    const entregados: InternalConstancy[] = [];
+    for (const reg of confirmadas) {
+      const previo = await this.constancies.findOne({ where: { studentProfileId: reg.studentProfileId, activityId } });
+      const doc = previo ?? this.constancies.create({
+        studentProfileId: reg.studentProfileId,
+        activityId,
+        activityRegistrationId: reg.id,
+        kind: 'institution_certificate',
+        status: ConstancyStatus.AUTHORIZED,
+        issuedById: user.userId,
+        authorizedById: user.role === RolNombre.CAREER_DIRECTOR ? user.userId : activity.reviewedById ?? null,
+      });
+      doc.kind = 'institution_certificate';
+      doc.description = `Certificado de «${activity.title}»`.slice(0, 300);
+      doc.issuerName = activity.certificateIssuer;
+      if (dto.storedFileId !== undefined) doc.storedFileId = dto.storedFileId ?? null;
+      if (dto.certificateCode !== undefined) doc.certificateCode = dto.certificateCode?.trim() || null;
+      entregados.push(await this.constancies.save(doc));
+      await this.audit.record({
+        actorUserId: user.userId,
+        eventType: AuditEventType.CONSTANCY_ISSUED,
+        entityType: 'internal_constancy',
+        entityId: doc.id,
+        metadata: { kind: 'institution_certificate', activityId, issuer: activity.certificateIssuer },
+      });
+      try {
+        await this.notifications.emit({
+          userId: reg.studentProfile.userId,
+          kind: 'CERTIFICATE_DELIVERED',
+          title: 'Recibiste un certificado',
+          body: `${activity.certificateIssuer} emitió tu certificado de «${activity.title}». Ya está en tu trayectoria.`,
+          link: '/student/evidences',
+          entityType: 'internal_constancy',
+          entityId: doc.id,
+          dedupeKey: `certificate:${doc.id}`,
+        });
+      } catch {
+        // el aviso no frena la entrega
+      }
+      await this.trajectory.requestRecalculation(reg.studentProfileId);
+    }
+    return { delivered: entregados.length, items: entregados };
+  }
+
   async findMine(userId: string): Promise<InternalConstancy[]> {
     const profile = await this.profiles.findOne({ where: { userId } });
     if (!profile) {
       throw new BadRequestException('Aún no has creado tu perfil estudiantil.');
     }
-    return this.constancies.find({
+    const lista = await this.constancies.find({
       where: { studentProfileId: profile.id },
       relations: { activity: true },
       order: { createdAt: 'DESC' },
     });
+    return this.conArchivo(lista);
+  }
+
+  /** V3.2 §28.3: la ruta protegida del certificado entregado, si lo hay. */
+  private async conArchivo(lista: InternalConstancy[]): Promise<InternalConstancy[]> {
+    const ids = lista.map((c) => c.storedFileId).filter((x): x is string => !!x);
+    if (!ids.length) return lista;
+    const filas: { id: string; storage_key: string }[] = await this.constancies.manager.query(
+      `SELECT "id", "storage_key" FROM "stored_files" WHERE "id" = ANY($1::uuid[])`,
+      [ids],
+    );
+    const clave = new Map(filas.map((f) => [f.id, f.storage_key]));
+    return lista.map((c) => Object.assign(c, {
+      fileUrl: c.storedFileId && clave.get(c.storedFileId) ? `${FILES_ROUTE}/${clave.get(c.storedFileId)}` : null,
+    }));
   }
 
   /** Constancias de un estudiante, respetando el alcance por semestre. */

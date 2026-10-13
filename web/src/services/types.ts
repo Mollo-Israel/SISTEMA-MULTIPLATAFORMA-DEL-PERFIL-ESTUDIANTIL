@@ -497,6 +497,8 @@ export interface Activity {
   imageUrl?: string | null;
   /** V3.2 §21.6: motivo de la cancelación. */
   cancellationReason?: string | null;
+  /** V3.2 §28.3: emisor real del certificado institucional. */
+  certificateIssuer?: string | null;
   cancelledAt?: string | null;
   /** V3.2 §20: términos de búsqueda derivados (no se escriben a mano). */
   searchKeywords?: string[];
@@ -1082,6 +1084,11 @@ export interface InternalConstancy {
   description: string;
   status: string;
   createdAt: string;
+  /** V3.2 §28.2–§28.3: constancia de Afinia o certificado de la institución. */
+  kind?: 'internal_constancy' | 'institution_certificate';
+  issuerName?: string | null;
+  certificateCode?: string | null;
+  fileUrl?: string | null;
 }
 
 /** Integrante aceptado de un proyecto (RF14). */

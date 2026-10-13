@@ -345,10 +345,10 @@ export default function StudentEvidencesPage() {
         </AsyncView>
       </Card>
 
-      <Card title="Constancias internas recibidas">
+      <Card title="Constancias y certificados recibidos">
         <p className="muted" style={{ marginBottom: '0.7rem' }}>
-          Las emite la dirección de carrera cuando tu participación en una actividad queda
-          confirmada. No sustituyen a un certificado oficial de la universidad.
+          Las constancias internas las emite Afinia cuando el responsable confirma tu participación.
+          Los certificados de la institución los emite quien figura como emisor; el responsable te los entrega aquí.
         </p>
         <AsyncView
           loading={constancies.loading}
@@ -368,6 +368,11 @@ export default function StudentEvidencesPage() {
                   <div className="grow">
                     <strong>{c.description}</strong>
                     <div className="activity-meta">
+                      {c.kind === 'institution_certificate' && <span>Emitido por {c.issuerName ?? 'la institución'}</span>}
+                      {c.certificateCode && <span>Código: {c.certificateCode}</span>}
+                      {c.fileUrl && (
+                        <a href={c.fileUrl} target="_blank" rel="noreferrer">Ver certificado</a>
+                      )}
                       {c.activity && <span>Actividad: {c.activity.title}</span>}
                       <span>
                         {new Date(c.createdAt).toLocaleDateString('es-BO', {
@@ -378,7 +383,7 @@ export default function StudentEvidencesPage() {
                       </span>
                     </div>
                   </div>
-                  <Badge tone="green">Autorizada</Badge>
+                  <Badge tone="green">{c.kind === 'institution_certificate' ? 'Certificado' : 'Constancia'}</Badge>
                 </div>
               ))}
             </div>

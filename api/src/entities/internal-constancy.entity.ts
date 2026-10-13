@@ -46,6 +46,26 @@ export class InternalConstancy {
   @Column({ type: 'varchar', length: 300 })
   description: string;
 
+  /**
+   * V3.2 §28.2–§28.3: `internal_constancy` la emite Afinia al confirmar;
+   * `institution_certificate` lo emite la institución y lo entrega el
+   * responsable. Afinia no se atribuye su autoría.
+   */
+  @Column({ type: 'varchar', length: 30, default: 'internal_constancy' })
+  kind: 'internal_constancy' | 'institution_certificate';
+
+  /** Emisor real del certificado institucional. */
+  @Column({ name: 'issuer_name', type: 'varchar', length: 200, nullable: true })
+  issuerName: string | null;
+
+  /** El certificado entregado (archivo subido por quien lo entrega). */
+  @Column({ name: 'stored_file_id', type: 'uuid', nullable: true })
+  storedFileId: string | null;
+
+  /** Código de verificación del emisor, si lo tiene. */
+  @Column({ name: 'certificate_code', type: 'varchar', length: 80, nullable: true })
+  certificateCode: string | null;
+
   @Column({ type: 'enum', enum: ConstancyStatus, default: ConstancyStatus.AUTHORIZED })
   status: ConstancyStatus;
 

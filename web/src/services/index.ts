@@ -942,6 +942,9 @@ export const constancyService = {
     api.get<InternalConstancy[]>(`/constancies/internal/activity/${activityId}`).then((r) => r.data),
   create: (data: { profileId: string; activityId: string; description: string }) =>
     api.post<InternalConstancy>('/constancies/internal', data).then((r) => r.data),
+  /** V3.2 §28.3: entregar el certificado institucional a confirmados. */
+  deliverInstitutionCertificates: (activityId: string, data: { profileIds: string[]; storedFileId?: string | null; certificateCode?: string | null }) =>
+    api.post<{ delivered: number }>(`/constancies/internal/institution-certificates/${activityId}`, data).then((r) => r.data),
   mine: () => api.get<InternalConstancy[]>('/constancies/internal/my').then((r) => r.data),
 };
 

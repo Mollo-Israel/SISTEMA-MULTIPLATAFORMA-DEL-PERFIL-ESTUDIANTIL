@@ -259,6 +259,14 @@ export class CreateActivityDto {
   @IsUUID('4', { message: 'La imagen no es válida.' })
   imageFileId?: string | null;
 
+  /** V3.2 §28.3: emisor real del certificado institucional. */
+  @ApiProperty({ required: false, example: 'Universidad del Valle — Facultad de Informática' })
+  @IsOptional()
+  @Transform(cleanLine)
+  @IsString()
+  @MaxLength(200, { message: 'El emisor no puede superar 200 caracteres.' })
+  certificateIssuer?: string;
+
   /** V3.2 §21.6: motivo de la cancelación (obligatorio al cancelar). */
   @ApiProperty({ required: false })
   @IsOptional()

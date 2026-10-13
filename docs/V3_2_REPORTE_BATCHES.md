@@ -611,3 +611,65 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Pendientes:** el favorito de una actividad terminada (§36) llega con la Biblioteca y las recomendaciones (BATCH 9–10).
 
 **Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 8 — Resultados internos y externos
+
+**ESTADO:** completo
+
+**Objetivo:**
+- El certificado emitido por la institución, con su emisor real y sin que Afinia se atribuya la autoría (§28.3).
+- Mantener la constancia interna (§28.2) y la credencial externa esperada con su flujo fijo (§28.4, §29–§34).
+- Verificar que un fallo técnico de lectura dé INCONCLUSIVE (§31).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- `institution_issued_certificate` existía desde el BATCH 5 solo como opción. No había dónde guardar el emisor real ni cómo entregar el certificado.
+- La constancia interna automática y el flujo externo (aceptación → fin → elegibilidad → evidencia → validación) ya funcionaban (V3.1 B8–B9).
+- El OCR sin motor o sin resultado ya deja el recurso en INCONCLUSIVE y no en FAILED (`ocr.port.ts`).
+- **Hallazgo de seguridad:** `GET /constancies/internal/eligible/:activityId` listaba los confirmados de **cualquier** actividad a cualquier docente que conociera el id.
+
+**Cambios:**
+- **Actividad:**
+  - `certificate_issuer` (emisor real).
+  - Publicar con INSTITUTION_ISSUED_CERTIFICATE exige el emisor, con error en su campo.
+- **Entrega:** `POST /constancies/internal/institution-certificates/:activityId`.
+  - **Quién entrega:** Dirección, el creador o un responsable. Administración no entrega documentos académicos (§6.5).
+  - **A quién:** solo a confirmados.
+  - **Archivo y código:** el archivo es opcional y tiene que haberlo subido quien entrega; el código de verificación del emisor también es opcional.
+  - **Registro:**
+    - Afinia lo guarda como `institution_certificate` con `issuer_name`.
+    - Volver a entregar actualiza el archivo o el código, sin duplicar.
+    - La entrega queda auditada (`CONSTANCY_ISSUED`).
+  - **Aviso y trayectoria:** el estudiante recibe `CERTIFICATE_DELIVERED` y se recalcula su trayectoria.
+- **Constancias:** `kind`, `issuer_name`, `stored_file_id` y `certificate_code`. Lo existente queda como `internal_constancy`.
+- **Seguridad:** `eligible` responde 404 a quien no gestiona la actividad.
+- **Archivos:** el certificado lo descargan su titular, quien lo entregó, Dirección y Administración; para cualquier otro, 404. Está protegido de la limpieza de huérfanos.
+- **Trayectoria:** el certificado se muestra como «Emitido por <emisor>», no como algo de Afinia.
+- **Web:**
+  - Campo «Emisor del certificado» en el formulario.
+  - En participación: «Entregar certificado», por persona o a todos los confirmados, con archivo y código opcionales.
+  - El estudiante ve «Constancias y certificados recibidos», con el emisor, el código y «Ver certificado».
+
+**Migraciones:** `1780650000000-V32InstitutionCertificate`. El `down` quita los certificados institucionales, que no existían antes, y las columnas. Probada en orden `run → revert → run`. Respaldo previo: `pre-v32-b8.dump`.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch8`, 14/14.** Cubre:
+  - el emisor obligatorio para publicar y el que queda guardado;
+  - que confirmar no fabrica el certificado;
+  - el `eligible` ajeno con 404 y el propio;
+  - el rechazo a quien no está confirmado y a un docente ajeno;
+  - la entrega con archivo y código;
+  - el estudiante que lo recibe con el emisor real;
+  - la descarga del titular y el 404 a otro estudiante;
+  - el aviso y la trayectoria «Emitido por…»;
+  - la reentrega sin duplicar;
+  - Administración con 403.
+
+**Resultados:** regresión completa con **1977 correctas y 0 fallos** (21 suites). Unitarias: 117/117.
+
+**Regresiones:** ninguna.
+
+**Pendientes:** ninguno del batch. Las credenciales históricas (§33) ya existen y se revisan en el BATCH 14.
+
+**Riesgos:** ninguno conocido.

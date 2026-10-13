@@ -10,7 +10,7 @@
  */
 
 import {
-  API, PWD, codigoUniversitario, crearProyectoBorrador, loginAdmin, provisionAndActivate, req,
+  API, PWD, aprobarActividad, codigoUniversitario, crearProyectoBorrador, loginAdmin, provisionAndActivate, req,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -878,7 +878,93 @@ async function batch7(ctx) {
     'V32.7.8 §64 Cada fila trae nombre y estado, sin datos de más', json(participantes.data?.[0]));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
+// ===========================================================================
+//  BATCH 8 — Resultados: certificado institucional con emisor real (§28.3) y permisos de entrega
+// ===========================================================================
+async function batch8(ctx) {
+  objective('BATCH 8 · Certificado emitido por la institución: emisor real, entrega a confirmados, sin autoría de Afinia');
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Raul', lastName: 'Vidaurre', email: correoStaff('b8doc'), role: 'TEACHER' });
+  const otroDoc = await provisionAndActivate(ctx.admin, { firstName: 'Sergio', lastName: 'Zapata', email: correoStaff('b8otro'), role: 'TEACHER' });
+  for (const d of [docente, otroDoc]) await req('PUT', `/users/${d.userId}/semesters`, { token: ctx.admin, body: { semesters: [5] } });
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Tania', lastName: 'Aguirre', email: correoStaff('b8dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Uma', lastName: 'Barrios', email: correoEst('b8est'), role: 'STUDENT', semester: 5 });
+  const est2 = await provisionAndActivate(ctx.admin, { firstName: 'Vico', lastName: 'Cardozo', email: correoEst('b8est2'), role: 'STUDENT', semester: 5 });
+  for (const e of [est, est2]) e.profileId = (await req('POST', '/profiles/me', { token: e.token, body: {} })).data?.id;
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+
+  const sinEmisor = await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `Diplomado ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [5], outcomePolicy: 'institution_issued_certificate', status: 'open' },
+  });
+  check(sinEmisor.status === 400 && sinEmisor.data?.fields?.certificateIssuer,
+    'V32.8.1 §28.3 Publicar con certificado institucional exige nombrar al emisor real', json(sinEmisor.data?.fields));
+
+  const creada = await req('POST', '/activities', {
+    token: docente.token,
+    body: {
+      title: `Seminario certificado ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [5],
+      outcomePolicy: 'institution_issued_certificate', certificateIssuer: 'Universidad del Valle — Facultad de Informática',
+    },
+  });
+  const id = creada.data?.id;
+  await aprobarActividad(docente.token, director.token, id);
+  for (const e of [est, est2]) await req('POST', `/activities/${id}/register`, { token: e.token });
+  await req('PATCH', `/activities/${id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
+  check(creada.data?.certificateIssuer === 'Universidad del Valle — Facultad de Informática',
+    'V32.8.2 §28.3 La actividad guarda el emisor real del certificado', json(creada.data?.certificateIssuer));
+
+  const misAntes = await req('GET', '/constancies/internal/my', { token: est.token });
+  check((misAntes.data ?? []).every((c) => c.activityId !== id),
+    'V32.8.3 §28.3 Confirmar no fabrica un certificado: lo entrega el responsable', json((misAntes.data ?? []).length));
+
+  const ajeno = await req('GET', `/constancies/internal/eligible/${id}`, { token: otroDoc.token });
+  check(ajeno.status === 404, 'V32.8.4 Otro docente no lista los confirmados de una actividad ajena (aunque conozca el id)', `status ${ajeno.status}`);
+  const elegibles = await req('GET', `/constancies/internal/eligible/${id}`, { token: docente.token });
+  check(elegibles.status === 200 && (elegibles.data ?? []).length === 1 && elegibles.data[0].studentProfileId === est.profileId,
+    'V32.8.5 §28.3 El responsable ve a los confirmados que pueden recibirlo', json(elegibles.data));
+
+  const noConfirmado = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
+    token: docente.token, body: { profileIds: [est2.profileId] },
+  });
+  check(noConfirmado.status === 400, 'V32.8.6 §28.3 No se entrega a quien no tiene la participación confirmada', `status ${noConfirmado.status}`);
+  const ajenoEntrega = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
+    token: otroDoc.token, body: { profileIds: [est.profileId] },
+  });
+  check(ajenoEntrega.status === 404, 'V32.8.7 Otro docente no entrega certificados de una actividad ajena', `status ${ajenoEntrega.status}`);
+
+  const archivo = await subirArchivo(docente.token, PNG_1X1, 'certificado.png', 'image/png');
+  const entrega = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
+    token: docente.token, body: { profileIds: [est.profileId], storedFileId: archivo.data?.id, certificateCode: 'UV-2026-0042' },
+  });
+  check(entrega.status === 201 && entrega.data?.delivered === 1, 'V32.8.8 §28.3 El responsable entrega el certificado al confirmado', `status ${entrega.status} ${json(entrega.data)}`);
+  const mis = await req('GET', '/constancies/internal/my', { token: est.token });
+  const cert = (mis.data ?? []).find((c) => c.activityId === id);
+  check(cert?.kind === 'institution_certificate' && cert?.issuerName === 'Universidad del Valle — Facultad de Informática'
+      && cert?.certificateCode === 'UV-2026-0042' && /\/api\/files\//.test(cert?.fileUrl ?? ''),
+    'V32.8.9 §28.3 El estudiante lo recibe con el emisor real, su código y el archivo', json(cert));
+  const descarga = await fetch(`${API.replace(/\/api$/, '')}${cert?.fileUrl}`, { headers: { Authorization: `Bearer ${est.token}` } });
+  const descargaAjena = await fetch(`${API.replace(/\/api$/, '')}${cert?.fileUrl}`, { headers: { Authorization: `Bearer ${est2.token}` } });
+  check(descarga.status === 200 && descargaAjena.status === 404,
+    'V32.8.10 §28.3 Solo su titular (y quien lo entregó) descarga el certificado', `${descarga.status} / ${descargaAjena.status}`);
+  const aviso = (await req('GET', '/notifications/me', { token: est.token })).data ?? [];
+  check(aviso.some((n) => n.type === 'CERTIFICATE_DELIVERED'), 'V32.8.11 §47 El estudiante recibe el aviso de su certificado');
+  const resumen = await req('GET', '/trajectory-summary/items', { token: est.token });
+  const texto = json(resumen.data);
+  check(resumen.status === 200 && /Emitido por Universidad del Valle/.test(JSON.stringify(resumen.data ?? {})),
+    'V32.8.12 §28.3 La trayectoria lo muestra como emitido por la institución, no por Afinia', texto.slice(0, 120));
+  const otraVez = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
+    token: docente.token, body: { profileIds: [est.profileId], certificateCode: 'UV-2026-0043' },
+  });
+  const mis2 = await req('GET', '/constancies/internal/my', { token: est.token });
+  check(otraVez.status === 201 && (mis2.data ?? []).filter((c) => c.activityId === id).length === 1
+      && (mis2.data ?? []).find((c) => c.activityId === id)?.certificateCode === 'UV-2026-0043',
+    'V32.8.13 §28.3 Volver a entregar actualiza el código, sin duplicar', `${(mis2.data ?? []).filter((c) => c.activityId === id).length}`);
+  const admin = await req('POST', `/constancies/internal/institution-certificates/${id}`, { token: ctx.admin, body: { profileIds: [est.profileId] } });
+  check(admin.status === 403, 'V32.8.14 §6.5 Administración no entrega documentos académicos', `status ${admin.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

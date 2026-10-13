@@ -495,6 +495,9 @@ export class ActivitiesService {
       if (presencial && !activity.location?.trim()) poner('location', 'Indica el aula o el lugar.');
       if (virtual && !activity.meetingUrl) poner('meetingUrl', 'Indica el enlace de la reunión.');
     }
+    if (activity.outcomePolicy === ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE && !activity.certificateIssuer?.trim()) {
+      poner('certificateIssuer', 'Indica quién emite el certificado: Afinia no se atribuye su autoría.');
+    }
     if (areaIds.length === 0) poner('areaIds', 'Selecciona al menos un área.');
     if (skillIds.length === 0) poner('skillIds', 'Selecciona al menos una habilidad vinculada.');
     if (Object.keys(errores).length > 0) {
@@ -964,6 +967,7 @@ export class ActivitiesService {
       tags: dto.tags ?? null,
       externalUrl: dto.externalUrl ?? null,
       meetingUrl: dto.meetingUrl ?? null,
+      certificateIssuer: dto.certificateIssuer?.trim() || null,
       resourceLinks: dto.resourceLinks ?? [],
       imageFileId: dto.imageFileId ?? null,
       updatedById: user.userId,
@@ -1324,6 +1328,7 @@ export class ActivitiesService {
       activity.imageFileId = dto.imageFileId ?? null;
     }
     if (dto.meetingUrl !== undefined) activity.meetingUrl = dto.meetingUrl ?? null;
+    if (dto.certificateIssuer !== undefined) activity.certificateIssuer = dto.certificateIssuer?.trim() || null;
     if (dto.resourceLinks !== undefined) activity.resourceLinks = dto.resourceLinks ?? [];
     if (dto.categoryId !== undefined) {
       await this.assertCategoryUsable(dto.categoryId, dto.type ?? activity.type);
@@ -1380,6 +1385,7 @@ export class ActivitiesService {
       && estadoAnterior === ActivityStatus.DRAFT;
     const cambiaLoMinimo = [
       dto.activityDate, dto.endAt, dto.modality, dto.location, dto.meetingUrl, dto.areaIds, dto.areaId, dto.skillIds,
+      dto.outcomePolicy, dto.certificateIssuer,
     ].some((v) => v !== undefined);
     const visible = [ActivityStatus.PUBLISHED, ActivityStatus.OPEN, ActivityStatus.CLOSED].includes(activity.status);
     if (publica || (visible && cambiaLoMinimo)) {

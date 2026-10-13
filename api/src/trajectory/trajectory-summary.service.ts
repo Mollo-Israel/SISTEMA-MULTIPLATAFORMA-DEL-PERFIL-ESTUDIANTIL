@@ -268,7 +268,14 @@ export class TrajectorySummaryService {
         ),
         seccion(
           TrajectorySection.CONSTANCIES,
-          f.constancias.map((c) => ({ id: c.id, title: c.description, detail: c.activity?.title ?? null })),
+          // V3.2 §28.3: un certificado institucional nombra a su emisor real.
+          f.constancias.map((c) => ({
+            id: c.id,
+            title: c.description,
+            detail: c.kind === 'institution_certificate'
+              ? `Emitido por ${c.issuerName ?? 'la institución'}${c.activity?.title ? ` · ${c.activity.title}` : ''}`
+              : c.activity?.title ?? null,
+          })),
         ),
         seccion(
           TrajectorySection.TECHNOLOGIES,

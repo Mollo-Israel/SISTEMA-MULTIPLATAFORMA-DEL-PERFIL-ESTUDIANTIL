@@ -1,6 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize, ArrayMinSize, IsArray, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { ConstancyStatus } from '@perfil/shared';
 import { cleanText } from '../../common/validation';
 
@@ -28,4 +31,27 @@ export class CreateInternalConstancyDto {
   @IsOptional()
   @IsEnum(ConstancyStatus)
   status?: ConstancyStatus;
+}
+
+/** V3.2 §28.3: entrega del certificado institucional a confirmados. */
+export class DeliverInstitutionCertificateDto {
+  @ApiProperty({ type: [String], description: 'Perfiles de los participantes confirmados que lo reciben.' })
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Elige al menos un participante confirmado.' })
+  @ArrayMaxSize(500)
+  @IsUUID('4', { each: true })
+  profileIds: string[];
+
+  @ApiProperty({ required: false, nullable: true, description: 'Archivo del certificado (subido por quien entrega).' })
+  @IsOptional()
+  @ValidateIf((o: DeliverInstitutionCertificateDto) => o.storedFileId !== null)
+  @IsUUID('4', { message: 'El archivo no es válido.' })
+  storedFileId?: string | null;
+
+  @ApiProperty({ required: false, nullable: true, description: 'Código de verificación del emisor.' })
+  @IsOptional()
+  @ValidateIf((o: DeliverInstitutionCertificateDto) => o.certificateCode !== null)
+  @IsString()
+  @MaxLength(80, { message: 'El código no puede superar 80 caracteres.' })
+  certificateCode?: string | null;
 }

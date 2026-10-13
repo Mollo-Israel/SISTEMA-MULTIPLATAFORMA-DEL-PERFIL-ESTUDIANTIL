@@ -189,6 +189,13 @@ export class Activity {
   @Column({ name: 'image_file_id', type: 'uuid', nullable: true })
   imageFileId: string | null;
 
+  /**
+   * V3.2 §28.3: quién emite el certificado cuando el resultado es
+   * INSTITUTION_ISSUED_CERTIFICATE (Univalle, una facultad…).
+   */
+  @Column({ name: 'certificate_issuer', type: 'varchar', length: 200, nullable: true })
+  certificateIssuer: string | null;
+
   /** V3.2 §21.6: cancelar exige motivo; el estudiante lo ve. */
   @Column({ name: 'cancellation_reason', type: 'varchar', length: 500, nullable: true })
   cancellationReason: string | null;

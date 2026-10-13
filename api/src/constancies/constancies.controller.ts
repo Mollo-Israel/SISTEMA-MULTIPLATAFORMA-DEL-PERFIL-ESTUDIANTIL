@@ -5,7 +5,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ConstanciesService } from './constancies.service';
-import { CreateInternalConstancyDto } from './dto/create-internal-constancy.dto';
+import { CreateInternalConstancyDto, DeliverInstitutionCertificateDto } from './dto/create-internal-constancy.dto';
 
 /**
  * Constancias internas (RF12).
@@ -38,8 +38,22 @@ export class ConstanciesController {
     summary:
       'Participantes confirmados de una actividad, indicando si ya tienen constancia emitida.',
   })
-  eligible(@Param('activityId', ParseUUIDPipe) activityId: string) {
-    return this.constanciesService.findEligible(activityId);
+  eligible(@CurrentUser() user: AuthenticatedUser, @Param('activityId', ParseUUIDPipe) activityId: string) {
+    return this.constanciesService.findEligible(activityId, user);
+  }
+
+  @Post('institution-certificates/:activityId')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY)
+  @ApiOperation({
+    summary: 'Entregar el certificado emitido por la institución a participantes confirmados (V3.2 §28.3).',
+    description: 'Afinia lo registra con su emisor real; no se atribuye la autoría. Archivo y código opcionales.',
+  })
+  deliver(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
+    @Body() dto: DeliverInstitutionCertificateDto,
+  ) {
+    return this.constanciesService.deliverInstitutionCertificates(user, activityId, dto);
   }
 
   @Get('activity/:activityId')

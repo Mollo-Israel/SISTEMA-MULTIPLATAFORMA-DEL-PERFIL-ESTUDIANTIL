@@ -100,6 +100,8 @@ export class OrphanFilesService implements OnModuleInit, OnApplicationShutdown {
             SELECT 1 FROM stored_files d WHERE d.duplicate_of_id = f.id)
           AND NOT EXISTS (
             SELECT 1 FROM activities a WHERE a.image_file_id = f.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM internal_constancies ic WHERE ic.stored_file_id = f.id)
         ORDER BY f.created_at
         LIMIT $2`,
       [String(this.graceHours), this.batchSize],

@@ -5,12 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  FiCalendar, FiCheck, FiEdit2, FiImage, FiLink, FiPlus, FiSave, FiSearch, FiSend, FiTrash2, FiUserX, FiUsers, FiX,
+  FiAward, FiCalendar, FiCheck, FiEdit2, FiImage, FiLink, FiPlus, FiSave, FiSearch, FiSend, FiTrash2, FiUserX, FiUsers, FiX,
 } from 'react-icons/fi';
 import { useAuth } from '../auth/AuthContext';
 import { enMemoria, useCachedState } from '../hooks/viewCache';
 import { apiError } from '../api/client';
-import { activityService, catalogService, uploadService, validationReferenceService } from '../services';
+import { activityService, catalogService, constancyService, uploadService, validationReferenceService } from '../services';
 import type {
   AcademicArea, Activity, ActivityCategoryItem, ActivityPerson, OutcomePolicy, Participant, ResourceLink, Skill,
 } from '../services/types';
@@ -64,6 +64,8 @@ const emptyForm = {
   resourceLinks: [] as ResourceLink[],
   imageFileId: '',
   imageUrl: '',
+  /** V3.2 §28.3: emisor real del certificado institucional. */
+  certificateIssuer: '',
   capacity: '',
   status: 'draft',
   semesterScope: [] as number[],
@@ -91,7 +93,7 @@ const RESULTADOS: { value: OutcomePolicy; label: string; hint: string }[] = [
 const CAMPOS = [
   'title', 'categoryId', 'activityDate', 'endAt', 'location', 'meetingUrl', 'areaIds', 'skillIds', 'skillContexts',
   'provider', 'externalUrl', 'responsibleUserIds', 'responsibleUserId', 'contactUserIds', 'resourceLinks',
-  'imageFileId', 'capacity', 'outcomePolicy', 'semesterScope', 'status',
+  'imageFileId', 'capacity', 'outcomePolicy', 'semesterScope', 'status', 'certificateIssuer',
 ] as const;
 
 const publicable = (a: Activity) =>
@@ -228,6 +230,9 @@ export default function ActivityManager({
       if (!externa && virtual && !form.meetingUrl.trim()) e.meetingUrl = 'Indica el enlace de la reunión.';
       if (externa && !form.provider.trim()) e.provider = 'Indica el proveedor de la oportunidad externa.';
       if (externa && !form.externalUrl.trim()) e.externalUrl = 'Indica el enlace oficial de la oportunidad externa.';
+      if (!externa && form.outcomePolicy === 'institution_issued_certificate' && !form.certificateIssuer.trim()) {
+        e.certificateIssuer = 'Indica quién emite el certificado: Afinia no se atribuye su autoría.';
+      }
       if (form.areaIds.length === 0) e.areaIds = 'Selecciona al menos un área.';
       if (form.skillIds.length === 0) e.skillIds = 'Selecciona al menos una habilidad vinculada.';
     }
@@ -264,6 +269,9 @@ export default function ActivityManager({
       originType: form.originType,
       // V3.2 §29: una externa no tiene selector; su resultado es la credencial.
       ...(externa ? {} : { outcomePolicy: form.outcomePolicy }),
+      ...(!externa && form.outcomePolicy === 'institution_issued_certificate'
+        ? { certificateIssuer: form.certificateIssuer.trim() }
+        : {}),
       ...(externa || form.outcomePolicy === 'external_credential_expected'
         ? {
           provider: form.provider.trim(),
@@ -377,6 +385,7 @@ export default function ActivityManager({
       resourceLinks: a.resourceLinks ?? [],
       imageFileId: a.imageFileId ?? '',
       imageUrl: a.imageUrl ?? '',
+      certificateIssuer: a.certificateIssuer ?? '',
       capacity: a.capacity ? String(a.capacity) : '',
       status: a.status,
       semesterScope: a.semesterScope ?? [],
@@ -466,6 +475,29 @@ export default function ActivityManager({
       await load();
     } catch (e) {
       toast.error(apiError(e));
+    }
+  };
+
+  /** V3.2 §28.3: entrega del certificado que emitió la institución. */
+  const [entrega, setEntrega] = useState<{ ids: string[]; nombre: string } | null>(null);
+  const [codigo, setCodigo] = useState('');
+  const [archivoCert, setArchivoCert] = useState<{ id: string; nombre: string } | null>(null);
+  const [entregando, setEntregando] = useState(false);
+  const entregarCertificado = async () => {
+    if (!entrega || !selected) return;
+    setEntregando(true);
+    try {
+      const r = await constancyService.deliverInstitutionCertificates(selected, {
+        profileIds: entrega.ids,
+        ...(archivoCert ? { storedFileId: archivoCert.id } : {}),
+        ...(codigo.trim() ? { certificateCode: codigo.trim() } : {}),
+      });
+      notify('Certificado entregado.', `${r.delivered} estudiante(s) lo tienen en su trayectoria.`);
+      setEntrega(null);
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setEntregando(false);
     }
   };
 
@@ -1084,6 +1116,19 @@ export default function ActivityManager({
                   {' '}El estudiante nunca sube evidencia de asistencia: la confirma el responsable.
                 </span>
                 <FieldError message={errores.errors.outcomePolicy} />
+                {form.outcomePolicy === 'institution_issued_certificate' && (
+                  <div className={`field ${errores.errors.certificateIssuer ? 'has-error' : ''}`} data-campo="certificateIssuer" style={{ marginTop: '0.5rem' }}>
+                    <label htmlFor="activity-manager-emisor">Emisor del certificado *</label>
+                    <input
+                      id="activity-manager-emisor"
+                      value={form.certificateIssuer}
+                      onChange={(e) => { setForm({ ...form, certificateIssuer: e.target.value }); errores.clear('certificateIssuer'); }}
+                      placeholder="Universidad del Valle — Facultad de Informática"
+                      maxLength={200}
+                    />
+                    <FieldError message={errores.errors.certificateIssuer} />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1407,17 +1452,40 @@ export default function ActivityManager({
                 rows={confirmed}
                 empty={esExterna ? 'Todavía no registras aceptados.' : 'Todavía no hay participación confirmada.'}
                 render={(r) => (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    loading={busyRow === r.id}
-                    onClick={() => decide(selectedActivity.id, r, 'absent')}
-                    icon={<FiUserX size={14} />}
-                  >
-                    Marcar ausente
-                  </Button>
+                  <div className="flex" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
+                    {selectedActivity.outcomePolicy === 'institution_issued_certificate' && r.status === 'confirmed' && (
+                      <Button size="sm" variant="secondary" icon={<FiAward size={14} />}
+                        onClick={() => { setEntrega({ ids: [r.studentProfileId], nombre: r.studentName ?? 'el estudiante' }); setCodigo(''); setArchivoCert(null); }}>
+                        Entregar certificado
+                      </Button>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={busyRow === r.id}
+                      onClick={() => decide(selectedActivity.id, r, 'absent')}
+                      icon={<FiUserX size={14} />}
+                    >
+                      Marcar ausente
+                    </Button>
+                  </div>
                 )}
               />
+              {selectedActivity.outcomePolicy === 'institution_issued_certificate' && confirmed.some((r) => r.status === 'confirmed') && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <Button size="sm" icon={<FiAward size={14} />}
+                    onClick={() => {
+                      setEntrega({ ids: confirmed.filter((r) => r.status === 'confirmed').map((r) => r.studentProfileId), nombre: 'todos los confirmados' });
+                      setCodigo('');
+                      setArchivoCert(null);
+                    }}>
+                    Entregar a todos los confirmados
+                  </Button>
+                  <span className="muted small" style={{ marginLeft: '0.5rem' }}>
+                    Emite: {selectedActivity.certificateIssuer ?? '—'}. Afinia lo registra; no se atribuye la autoría.
+                  </span>
+                </div>
+              )}
 
               {absent.length > 0 && (
                 <ParticipantGroup
@@ -1451,6 +1519,35 @@ export default function ActivityManager({
             Seleccione “Participación” en una actividad para registrar la asistencia.
           </p>
         </div>
+      )}
+      {entrega && (
+        <Modal title="Entregar certificado" subtitle={`A ${entrega.nombre}`} onClose={() => setEntrega(null)} width={520}>
+          <p className="muted">
+            Lo emite <strong>{selectedActivity?.certificateIssuer ?? 'la institución'}</strong>. Afinia lo registra y lo deja en la
+            trayectoria del estudiante, que no tiene que volver a subirlo.
+          </p>
+          <div className="field">
+            <label htmlFor="cert-archivo">Archivo del certificado (opcional)</label>
+            <input id="cert-archivo" type="file" accept="application/pdf,image/png,image/jpeg,image/webp"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                try {
+                  const subido = await uploadService.upload(f);
+                  setArchivoCert({ id: subido.id, nombre: f.name });
+                } catch (err) { toast.error(apiError(err)); }
+              }} />
+            {archivoCert && <span className="field-hint">Adjunto: {archivoCert.nombre}</span>}
+          </div>
+          <div className="field">
+            <label htmlFor="cert-codigo">Código de verificación del emisor (opcional)</label>
+            <input id="cert-codigo" value={codigo} maxLength={80} onChange={(e) => setCodigo(e.target.value)} placeholder="UV-2026-0042" />
+          </div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => setEntrega(null)}>Cancelar</Button>
+            <Button loading={entregando} icon={<FiAward size={14} />} onClick={() => void entregarCertificado()}>Entregar</Button>
+          </div>
+        </Modal>
       )}
       {cancelando && (
         <Modal title="Cancelar la actividad" subtitle={cancelando.title} onClose={() => setCancelando(null)} width={520}>

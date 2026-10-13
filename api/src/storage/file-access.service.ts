@@ -113,6 +113,24 @@ export class FileAccessService {
       }
     }
 
+    // V3.2 §28.3: certificado institucional entregado. Lo descargan su
+    // titular, quien lo entregó, Dirección y Administración.
+    const certificado = await this.records.manager.query(
+      `SELECT c."student_profile_id", c."issued_by", p."user_id"
+         FROM "internal_constancies" c
+         JOIN "stored_files" f ON f."id" = c."stored_file_id"
+         JOIN "student_profiles" p ON p."id" = c."student_profile_id"
+        WHERE f."storage_key" = $1`,
+      [storageKey],
+    );
+    if (certificado.length) {
+      const puede = user.role === RolNombre.ADMIN || user.role === RolNombre.CAREER_DIRECTOR
+        || certificado.some((c: { user_id: string; issued_by: string | null }) => c.user_id === user.userId || c.issued_by === user.userId);
+      if (puede) {
+        return { storageKey, downloadName: 'certificado', ownerProfileId: certificado[0].student_profile_id };
+      }
+    }
+
     // V3.2 §18.3: imagen ilustrativa de una actividad. Publicada, la ve
     // cualquiera con sesión; en borrador, solo quien la gestiona.
     const conImagen = await this.records.manager.query(
