@@ -33,6 +33,7 @@ export const NAV: Record<string, NavGroup[]> = {
       section: 'Comunidad',
       items: [
         { to: '/student/activities', label: 'Actividades' },
+        { to: '/student/library', label: 'Biblioteca' },
         { to: '/student/collaboration', label: 'Colaboración' },
         { to: '/student/collaboration?tab=equipos', label: 'Equipos' },
       ],

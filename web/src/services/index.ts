@@ -6,6 +6,7 @@ import type {
   ProjectMemberItem,
   ActivityCategoryItem,
   ActivityPerson,
+  LibraryPage,
   FreeInterest,
   EligibleParticipant,
   Evidence,
@@ -256,6 +257,10 @@ export interface LearningResource {
   createdBy: string | null;
   resourceSkills?: { id: string; skillId: string; skill?: { id: string; name: string } }[];
   createdAt: string;
+  /** V3.2 §35: áreas (la principal primero) e imagen. */
+  areaIds?: string[];
+  imageFileId?: string | null;
+  imageUrl?: string | null;
 }
 
 export const learningResourceService = {
@@ -1328,4 +1333,14 @@ export const notificationService = {
   unreadCount: () => api.get<{ unread: number }>('/notifications/me/unread-count').then((r) => r.data),
   markRead: (id: string) => api.patch<NotificationItem>(`/notifications/${id}/read`).then((r) => r.data),
   markAllRead: () => api.post<{ marked: number }>('/notifications/me/read-all').then((r) => r.data),
+};
+
+/** V3.2 §35: Biblioteca de recursos con favoritos. */
+export const libraryService = {
+  list: (params: { q?: string; areaId?: string; skillId?: string; type?: string; favorites?: boolean; limit?: number; offset?: number }) =>
+    api.get<LibraryPage>('/library', {
+      params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')),
+    }).then((r) => r.data),
+  favorite: (id: string) => api.put(`/library/${id}/favorite`).then((r) => r.data),
+  unfavorite: (id: string) => api.delete(`/library/${id}/favorite`).then((r) => r.data),
 };

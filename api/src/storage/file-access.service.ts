@@ -113,6 +113,13 @@ export class FileAccessService {
       }
     }
 
+    // V3.2 §35: imagen de un recurso de la Biblioteca: la ve cualquiera con sesión.
+    const deRecurso = await this.records.manager.query(
+      `SELECT 1 FROM "learning_resources" r JOIN "stored_files" f ON f."id" = r."image_file_id" WHERE f."storage_key" = $1 LIMIT 1`,
+      [storageKey],
+    );
+    if (deRecurso.length) return { storageKey, downloadName: 'imagen-recurso', ownerProfileId: '' };
+
     // V3.2 §28.3: certificado institucional entregado. Lo descargan su
     // titular, quien lo entregó, Dirección y Administración.
     const certificado = await this.records.manager.query(

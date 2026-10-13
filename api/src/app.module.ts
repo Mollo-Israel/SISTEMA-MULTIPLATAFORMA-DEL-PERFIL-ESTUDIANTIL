@@ -1,3 +1,4 @@
+import { LibraryModule } from './library/library.module';
 import { BackedSkillsModule } from './backed-skills/backed-skills.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
@@ -38,6 +39,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 
 @Module({
   imports: [
+    LibraryModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../.env'],

@@ -460,6 +460,29 @@ export const REGISTRATION_MODE_LABEL: Record<RegistrationMode, string> = {
   approval: 'Requiere aprobación',
 };
 
+/** V3.2 §35: un recurso de la Biblioteca, tal como lo ve el estudiante. */
+export interface LibraryResource {
+  id: string;
+  title: string;
+  description: string | null;
+  provider: string | null;
+  url: string;
+  resourceType: string;
+  resourceTypeLabel: string;
+  areas: { id: string; name: string }[];
+  skills: { id: string; name: string }[];
+  imageUrl: string | null;
+  isFavorite: boolean;
+}
+
+export interface LibraryPage {
+  items: LibraryResource[];
+  total: number;
+  limit: number;
+  offset: number;
+  facets: { areas: { id: string; name: string; total: number }[]; skills: { id: string; name: string; total: number }[] };
+}
+
 /** V3.2 §28: lo que una actividad genera al terminar. */
 export type OutcomePolicy =
   | 'none'

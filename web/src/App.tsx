@@ -37,6 +37,7 @@ import DirectorApprovalsPage from './pages/director/Approvals';
 import AdminAuditPage from './pages/admin/Audit';
 import HelpPage from './pages/help/Help';
 import NotificationsPage from './pages/Notifications';
+import StudentLibraryPage from './pages/student/Library';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorAnalyticsPage from './pages/director/Analytics';
 import CredentialReviewsPage from './pages/director/CredentialReviews';
@@ -146,6 +147,7 @@ export default function App() {
             <Route path="/student/progress" element={<StudentProgressPage />} />
             <Route path="/student/projects" element={<StudentProjectsPage />} />
             <Route path="/student/activities" element={<StudentActivitiesPage />} />
+            <Route path="/student/library" element={<StudentLibraryPage />} />
             <Route path="/student/evidences" element={<StudentEvidencesPage />} />
             <Route path="/student/affinity" element={<StudentAffinityPage />} />
             <Route path="/student/recommendations" element={<StudentRecommendationsPage />} />

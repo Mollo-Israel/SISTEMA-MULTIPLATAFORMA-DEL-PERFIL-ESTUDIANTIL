@@ -964,7 +964,69 @@ async function batch8(ctx) {
   check(admin.status === 403, 'V32.8.14 §6.5 Administración no entrega documentos académicos', `status ${admin.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
+// ===========================================================================
+//  BATCH 9 — Biblioteca de recursos con favoritos (§35)
+// ===========================================================================
+async function batch9(ctx) {
+  objective('BATCH 9 · Biblioteca: buscar, filtrar por área o habilidad, abrir y guardar; sin afinidad');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Wara', lastName: 'Choque', email: correoStaff('b9dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Xime', lastName: 'Duran', email: correoEst('b9est'), role: 'STUDENT', semester: 4 });
+  est.profileId = (await req('POST', '/profiles/me', { token: est.token, body: {} })).data?.id;
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const bd = areas.find((a) => a.code === 'bases_de_datos');
+  const web = areas.find((a) => a.code === 'desarrollo_web');
+  const pg = skills.find((s) => s.code === 'postgresql');
+  const png = await subirArchivo(director.token, PNG_1X1, 'tapa.png', 'image/png');
+  const titulo = `Manual de PostgreSQL ${TS}`;
+  const recurso = await req('POST', '/learning-resources', {
+    token: director.token,
+    body: {
+      title: titulo, provider: 'Documentación oficial', url: `https://www.postgresql.org/docs/${TS}/`,
+      description: 'Referencia completa.', academicAreaId: bd.id, areaIds: [web.id], resourceType: 'documentation',
+      skillIds: [pg.id], imageFileId: png.data?.id,
+    },
+  });
+  check(recurso.status === 201 && json(recurso.data?.areaIds) === json([bd.id, web.id]) && !!recurso.data?.imageUrl,
+    'V32.9.1 §35 Un recurso guarda varias áreas (la principal primero), sus habilidades y una imagen', json({ s: recurso.status, a: recurso.data?.areaIds }));
+
+  const buscar = await req('GET', `/library?q=${encodeURIComponent(titulo)}`, { token: est.token });
+  const item = (buscar.data?.items ?? [])[0];
+  check(buscar.status === 200 && item?.id === recurso.data?.id && item?.skills?.[0]?.name === 'PostgreSQL'
+      && item?.areas?.length === 2 && item?.resourceTypeLabel && item?.isFavorite === false,
+    'V32.9.2 §35.1 El estudiante lo busca y ve tipo, áreas, habilidades e imagen', json(item));
+  check(!('startAt' in (item ?? {})) && !('eventDate' in (item ?? {})) && !('capacity' in (item ?? {})),
+    'V32.9.3 §35 Un recurso no tiene fechas, inscripción ni cupo');
+  const porArea = await req('GET', `/library?areaId=${web.id}&q=${encodeURIComponent(titulo)}`, { token: est.token });
+  const porSkill = await req('GET', `/library?skillId=${pg.id}&q=${encodeURIComponent(titulo)}`, { token: est.token });
+  const otraArea = await req('GET', `/library?areaId=${areas.find((a) => a.code === 'redes').id}&q=${encodeURIComponent(titulo)}`, { token: est.token });
+  check(porArea.data?.total === 1 && porSkill.data?.total === 1 && otraArea.data?.total === 0,
+    'V32.9.4 §35.1 Se filtra por cualquiera de sus áreas y por habilidad', `${porArea.data?.total}/${porSkill.data?.total}/${otraArea.data?.total}`);
+  check((buscar.data?.facets?.areas ?? []).length <= 30 && (buscar.data?.facets?.areas ?? []).every((a) => a.total > 0),
+    'V32.9.5 §6.3 Los filtros ofrecen solo áreas con recursos, acotadas', `${(buscar.data?.facets?.areas ?? []).length}`);
+
+  const antes = await req('GET', '/affinity/me', { token: est.token });
+  const guarda = await req('PUT', `/library/${recurso.data?.id}/favorite`, { token: est.token });
+  const dosVeces = await req('PUT', `/library/${recurso.data?.id}/favorite`, { token: est.token });
+  const favoritos = await req('GET', '/library?favorites=true', { token: est.token });
+  check(guarda.status === 200 && dosVeces.status === 200 && (favoritos.data?.items ?? []).some((r) => r.id === recurso.data?.id && r.isFavorite),
+    'V32.9.6 §35.1 Guardar como favorito (idempotente) y verlo en «Mis favoritos»', json(favoritos.data?.total));
+  await req('POST', '/affinity/recalculate/me', { token: est.token });
+  const despues = await req('GET', '/affinity/me', { token: est.token });
+  const suma = (r) => JSON.stringify((r.data?.areas ?? r.data ?? []).map?.((a) => [a.areaId ?? a.academicAreaId, a.affinityScore ?? a.score]) ?? r.data);
+  check(suma(antes) === suma(despues), 'V32.9.7 §35.3 Guardar un recurso no aporta afinidad', `${suma(antes).slice(0, 80)} / ${suma(despues).slice(0, 80)}`);
+  const quita = await req('DELETE', `/library/${recurso.data?.id}/favorite`, { token: est.token });
+  const favoritos2 = await req('GET', '/library?favorites=true', { token: est.token });
+  check(quita.status === 200 && !(favoritos2.data?.items ?? []).some((r) => r.id === recurso.data?.id), 'V32.9.8 §35.1 Y quitarlo');
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Yago', lastName: 'Flores', email: correoStaff('b9doc'), role: 'TEACHER' });
+  const docFav = await req('PUT', `/library/${recurso.data?.id}/favorite`, { token: docente.token });
+  check(docFav.status === 403, 'V32.9.9 Solo el estudiante guarda favoritos -> 403', `status ${docFav.status}`);
+  await req('PATCH', `/learning-resources/${recurso.data?.id}`, { token: director.token, body: { status: 'inactive' } });
+  const retirado = await req('GET', `/library?q=${encodeURIComponent(titulo)}`, { token: est.token });
+  check(retirado.data?.total === 0, 'V32.9.10 §61 Un recurso retirado sale de la Biblioteca', `${retirado.data?.total}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

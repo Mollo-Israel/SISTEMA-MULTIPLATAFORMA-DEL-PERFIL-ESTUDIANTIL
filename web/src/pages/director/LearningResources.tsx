@@ -1,8 +1,9 @@
 import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
+import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { FiBookOpen, FiExternalLink, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { catalogService, learningResourceService } from '../../services';
+import { catalogService, learningResourceService, uploadService } from '../../services';
 import type { LearningResource } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill } from '../../services/types';
@@ -35,6 +36,10 @@ const vacio = {
   academicAreaId: '',
   resourceType: 'guide',
   skillIds: [] as string[],
+  /** V3.2 §35: varias áreas (la primera es la principal) e imagen opcional. */
+  areaIds: [] as string[],
+  imageFileId: '',
+  imageUrl: '',
 };
 
 /**
@@ -85,6 +90,10 @@ export default function DirectorLearningResourcesPage() {
     e.preventDefault();
     // V3 §67: error debajo de cada campo, no el globo del navegador.
     if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
+    if (form.areaIds.length === 0) {
+      toast.error('Selecciona al menos un área para el recurso.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -92,9 +101,11 @@ export default function DirectorLearningResourcesPage() {
         provider: form.provider,
         url: form.url,
         description: form.description || undefined,
-        academicAreaId: form.academicAreaId,
+        academicAreaId: form.areaIds[0] ?? form.academicAreaId,
+        areaIds: form.areaIds,
         resourceType: form.resourceType,
         skillIds: form.skillIds,
+        imageFileId: form.imageFileId || (editing ? null : undefined),
       };
       if (editing) {
         await learningResourceService.update(editing.id, payload);
@@ -126,6 +137,9 @@ export default function DirectorLearningResourcesPage() {
       academicAreaId: r.academicAreaId,
       resourceType: r.resourceType,
       skillIds: (r.resourceSkills ?? []).map((s) => s.skillId),
+      areaIds: r.areaIds ?? [r.academicAreaId],
+      imageFileId: r.imageFileId ?? '',
+      imageUrl: r.imageUrl ?? '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -210,20 +224,6 @@ export default function DirectorLearningResourcesPage() {
 
           <div className="grid-2">
             <div className="field">
-              <label htmlFor="learning-resources-area-academica">Área académica</label>
-              <select id="learning-resources-area-academica"
-                value={form.academicAreaId}
-                onChange={(e) =>
-                  setForm({ ...form, academicAreaId: e.target.value, skillIds: [] })}
-                required
-              >
-                <option value="">Seleccione…</option>
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
               <label htmlFor="learning-resources-tipo">Tipo</label>
               <select id="learning-resources-tipo"
                 value={form.resourceType}
@@ -237,32 +237,35 @@ export default function DirectorLearningResourcesPage() {
             </div>
           </div>
 
+          {/* V3.2 §35: áreas y habilidades del recurso, como en las actividades. */}
+          <AreaSkillPicker
+            areas={areas}
+            skills={skills}
+            value={{ areaIds: form.areaIds, skillIds: form.skillIds }}
+            onChange={(v) => setForm({ ...form, areaIds: v.areaIds, academicAreaId: v.areaIds[0] ?? '', skillIds: v.skillIds })}
+            areaLabel="Áreas"
+            skillLabel="Habilidades que trabaja (opcional)"
+            maxAreas={6}
+          />
+
           <div className="field">
-            <span className="field-label" id="learning-resources-habilidades">Habilidades que trabaja</span>
-            <p className="muted" style={{ marginTop: 0, fontSize: '0.78rem' }}>
-              Opcional. Permite recomendarlo a quien declaró esa habilidad, y no solo por área.
-            </p>
-            <div className="chip-row" role="group" aria-labelledby="learning-resources-habilidades">
-              {skillsDelArea.slice(0, 40).map((s) => {
-                const on = form.skillIds.includes(s.id);
-                return (
-                  <button
-                    type="button"
-                    key={s.id}
-                    className={`chip ${on ? 'on' : ''}`}
-                    aria-pressed={on}
-                    onClick={() => setForm({
-                      ...form,
-                      skillIds: on
-                        ? form.skillIds.filter((x) => x !== s.id)
-                        : [...form.skillIds, s.id],
-                    })}
-                  >
-                    {s.name}
-                  </button>
-                );
-              })}
-            </div>
+            <label htmlFor="learning-resources-imagen">Imagen (opcional)</label>
+            {form.imageUrl && <img src={form.imageUrl} alt="" className="activity-image-preview" />}
+            <input
+              id="learning-resources-imagen"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                try {
+                  const subido = await uploadService.upload(f);
+                  setForm((x) => ({ ...x, imageFileId: subido.id, imageUrl: URL.createObjectURL(f) }));
+                } catch (err) {
+                  toast.error(apiError(err));
+                }
+              }}
+            />
           </div>
 
           <div className="flex" style={{ gap: '0.6rem' }}>

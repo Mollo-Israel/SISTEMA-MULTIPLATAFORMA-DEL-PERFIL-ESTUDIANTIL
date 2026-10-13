@@ -11,6 +11,7 @@ import {
   IsUUID,
   IsUrl,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { LearningResourceStatus, LearningResourceType } from '@perfil/shared';
 
@@ -70,6 +71,21 @@ export class CreateLearningResourceDto {
   @ArrayUnique({ message: 'No repita habilidades.' })
   @IsUUID('4', { each: true })
   skillIds?: string[];
+
+  /** V3.2 §35: áreas del recurso (la primera es la principal). */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6, { message: 'Como máximo 6 áreas.' })
+  @IsUUID('4', { each: true, message: 'Área no válida.' })
+  areaIds?: string[];
+
+  /** V3.2 §35: imagen opcional (id de un archivo subido). `null` la quita. */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: { imageFileId?: string | null }) => o.imageFileId !== null)
+  @IsUUID('4', { message: 'La imagen no es válida.' })
+  imageFileId?: string | null;
 }
 
 /**
@@ -133,4 +149,19 @@ export class UpdateLearningResourceDto {
   @ArrayUnique({ message: 'No repita habilidades.' })
   @IsUUID('4', { each: true })
   skillIds?: string[];
+
+  /** V3.2 §35: áreas del recurso (la primera es la principal). */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6, { message: 'Como máximo 6 áreas.' })
+  @IsUUID('4', { each: true, message: 'Área no válida.' })
+  areaIds?: string[];
+
+  /** V3.2 §35: imagen opcional (id de un archivo subido). `null` la quita. */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: { imageFileId?: string | null }) => o.imageFileId !== null)
+  @IsUUID('4', { message: 'La imagen no es válida.' })
+  imageFileId?: string | null;
 }

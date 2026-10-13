@@ -275,7 +275,7 @@ async function pruebas(browser) {
   const p4 = await tel.newPage();
   await entrar(p4, est.email);
   const rutas = [
-    '/student', '/student/profile', '/student/profile?tab=intereses', '/student/activities', '/student/projects',
+    '/student', '/student/profile', '/student/profile?tab=intereses', '/student/activities', '/student/library', '/student/projects',
     '/student/evidences', '/student/affinity', '/student/recommendations', '/student/collaboration',
     '/student/collaboration?tab=equipos', '/student/progress', '/student/progress?tab=resumen', '/student/privacy', '/ayuda',
   ];

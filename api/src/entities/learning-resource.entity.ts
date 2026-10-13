@@ -79,6 +79,10 @@ export class LearningResource {
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy: string | null;
 
+  /** V3.2 §35: imagen opcional del recurso. */
+  @Column({ name: 'image_file_id', type: 'uuid', nullable: true })
+  imageFileId: string | null;
+
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'created_by' })
   creator: User | null;

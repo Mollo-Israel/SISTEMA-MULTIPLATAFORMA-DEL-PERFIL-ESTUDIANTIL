@@ -5,6 +5,8 @@ import { GamificationTrigger, LearningResourceStatus, SYSTEM_GAMIFICATION_TRIGGE
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { SkillAreaRelation } from '../entities/skill-area-relation.entity';
+import { LearningResourceArea } from '../entities/learning-resource-library.entity';
+import { StoredFileRecord } from '../entities/stored-file.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
 import { ActivityCategory } from '../entities/activity-category.entity';
 import { Activity } from '../entities/activity.entity';
@@ -46,6 +48,7 @@ export class CatalogsService {
     @InjectRepository(AcademicArea) private readonly areas: Repository<AcademicArea>,
     @InjectRepository(Skill) private readonly skills: Repository<Skill>,
     @InjectRepository(SkillAreaRelation) private readonly skillAreas: Repository<SkillAreaRelation>,
+    @InjectRepository(LearningResourceArea) private readonly resourceAreas: Repository<LearningResourceArea>,
     private readonly audit: AuditService,
     @InjectRepository(GamificationCriterion)
     private readonly criteria: Repository<GamificationCriterion>,
@@ -529,11 +532,30 @@ export class CatalogsService {
     if (!opciones.includeInactive) where.status = LearningResourceStatus.ACTIVE;
     if (opciones.academicAreaId) where.academicAreaId = opciones.academicAreaId;
 
-    return this.learningResources.find({
+    const lista = await this.learningResources.find({
       where,
       relations: { academicArea: true, resourceSkills: { skill: true } },
       order: { title: 'ASC' },
     });
+    return this.conAreasEImagen(lista);
+  }
+
+  /** V3.2 §35: áreas del recurso (la principal primero) y su imagen. */
+  private async conAreasEImagen(lista: LearningResource[]): Promise<LearningResource[]> {
+    if (lista.length === 0) return lista;
+    const ids = lista.map((r) => r.id);
+    const [areas, imagenes] = await Promise.all([
+      this.resourceAreas.find({ where: { learningResourceId: In(ids) } }),
+      this.learningResources.manager.query(
+        `SELECT r.id, f.storage_key FROM learning_resources r JOIN stored_files f ON f.id = r.image_file_id WHERE r.id = ANY($1::uuid[])`,
+        [ids],
+      ),
+    ]);
+    const clave = new Map((imagenes as { id: string; storage_key: string }[]).map((i) => [i.id, i.storage_key]));
+    return lista.map((r) => Object.assign(r, {
+      areaIds: [r.academicAreaId, ...areas.filter((a) => a.learningResourceId === r.id && a.academicAreaId !== r.academicAreaId).map((a) => a.academicAreaId)],
+      imageUrl: clave.has(r.id) ? `/api/files/${clave.get(r.id)}` : null,
+    }));
   }
 
   async createLearningResource(
@@ -542,6 +564,8 @@ export class CatalogsService {
   ): Promise<LearningResource> {
     await this.assertAreaExists(dto.academicAreaId);
     await this.assertSkillsExist(dto.skillIds);
+    const areas = await this.areasDelRecurso(dto.academicAreaId, dto.areaIds);
+    await this.assertResourceImage(dto.imageFileId, createdBy);
 
     // Un mismo enlace dos veces en el catalogo solo genera recomendaciones
     // duplicadas para la misma persona.
@@ -560,9 +584,11 @@ export class CatalogsService {
         resourceType: dto.resourceType,
         status: LearningResourceStatus.ACTIVE,
         createdBy,
+        imageFileId: dto.imageFileId ?? null,
       }),
     );
     await this.replaceResourceSkills(recurso.id, dto.skillIds);
+    await this.replaceResourceAreas(recurso.id, areas);
     return this.findLearningResourceOrFail(recurso.id);
   }
 
@@ -588,6 +614,10 @@ export class CatalogsService {
       await this.assertAreaExists(dto.academicAreaId);
       recurso.academicAreaId = dto.academicAreaId;
     }
+    if (dto.imageFileId !== undefined) {
+      await this.assertResourceImage(dto.imageFileId, null);
+      recurso.imageFileId = dto.imageFileId ?? null;
+    }
     if (dto.title !== undefined) recurso.title = dto.title;
     if (dto.provider !== undefined) recurso.provider = dto.provider;
     if (dto.description !== undefined) recurso.description = dto.description ?? null;
@@ -599,7 +629,37 @@ export class CatalogsService {
       await this.assertSkillsExist(dto.skillIds);
       await this.replaceResourceSkills(id, dto.skillIds);
     }
+    if (dto.areaIds !== undefined || dto.academicAreaId !== undefined) {
+      const actuales = dto.areaIds ?? (await this.resourceAreas.find({ where: { learningResourceId: id } })).map((x) => x.academicAreaId);
+      await this.replaceResourceAreas(id, await this.areasDelRecurso(recurso.academicAreaId, actuales));
+    }
     return this.findLearningResourceOrFail(id);
+  }
+
+  /** V3.2 §35: la principal primero, sin repetir; todas existen. */
+  private async areasDelRecurso(principal: string, otras: string[] | undefined): Promise<string[]> {
+    const ids = [...new Set([principal, ...(otras ?? [])].filter(Boolean))];
+    for (const a of ids) await this.assertAreaExists(a);
+    return ids;
+  }
+
+  private async replaceResourceAreas(learningResourceId: string, areaIds: string[]): Promise<void> {
+    await this.resourceAreas.delete({ learningResourceId });
+    if (areaIds.length) await this.resourceAreas.insert(areaIds.map((academicAreaId) => ({ learningResourceId, academicAreaId })));
+  }
+
+  /** V3.2 §35: la imagen de un recurso es un PNG, JPG o WEBP subido por quien lo carga. */
+  private async assertResourceImage(imageFileId: string | null | undefined, uploader: string | null): Promise<void> {
+    if (!imageFileId) return;
+    const archivo = await this.learningResources.manager.getRepository(StoredFileRecord).findOne({ where: { id: imageFileId } });
+    const valido = !!archivo && /^image\/(png|jpeg|webp)$/.test(archivo.mimeTypeDetected ?? '')
+      && (uploader === null || archivo.uploadedByUserId === uploader);
+    if (!valido) {
+      throw new BadRequestException({
+        message: 'La imagen tiene que ser un PNG, JPG o WEBP subido por ti.',
+        fields: { imageFileId: ['La imagen tiene que ser un PNG, JPG o WEBP subido por ti.'] },
+      });
+    }
   }
 
   private async findLearningResourceOrFail(id: string): Promise<LearningResource> {
@@ -610,7 +670,7 @@ export class CatalogsService {
     if (!recurso) {
       throw new NotFoundException('Recurso no encontrado.');
     }
-    return recurso;
+    return (await this.conAreasEImagen([recurso]))[0];
   }
 
   /** Reemplaza, no acumula: editar las habilidades es decir cuales son ahora. */

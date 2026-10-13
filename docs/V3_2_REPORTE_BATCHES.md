@@ -673,3 +673,69 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Pendientes:** ninguno del batch. Las credenciales históricas (§33) ya existen y se revisan en el BATCH 14.
 
 **Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 9 — Biblioteca de recursos
+
+**ESTADO:** completo
+
+**Objetivo:** cerrar la ambigüedad de «Recursos» (§35).
+- **Qué es:** material permanente, sin fechas, inscripción, asistencia, certificado ni afinidad.
+- **Qué hace el estudiante:** lo busca, lo filtra por área o habilidad, lo abre y lo guarda como favorito.
+- **Qué hace Dirección:** lo carga con varias áreas, sus habilidades y una imagen.
+
+**Hallazgos verificados antes de cambiar (§75):**
+- El catálogo de recursos existía (§61, Dirección y Administración), pero con una sola área, sin imagen y sin favoritos.
+- El estudiante no tenía dónde verlo, salvo en las recomendaciones.
+- La afinidad no usa recursos (correcto, §35.3).
+
+**Cambios:**
+- **API:**
+  - **Tablas nuevas:** `learning_resource_areas` (varias áreas; la principal sigue en `academic_area_id`), `image_file_id` y `learning_resource_favorites`.
+  - **Biblioteca (`GET /library`):** búsqueda por título, descripción o fuente; filtros por área (cualquiera de las suyas), habilidad, tipo y «favoritos»; paginada.
+  - **Cada recurso devuelve:**
+    - el tipo con su etiqueta;
+    - las áreas y habilidades con nombre;
+    - la imagen;
+    - si es favorito.
+  - **Facetas:** solo áreas y habilidades con recursos vigentes, 30 como máximo (§6.3).
+  - **Favoritos:** `PUT/DELETE /library/:id/favorite`, idempotentes y solo para estudiantes.
+  - **Catálogo:** alta y edición con `areaIds` e imagen (PNG, JPG o WEBP del que la sube).
+  - **Imagen:** la ve cualquiera con sesión y está protegida de la limpieza de huérfanos.
+- **Web:**
+  - **Estudiante:** nueva pantalla «Biblioteca» (menú Comunidad) con:
+    - pestañas «Todos los recursos» y «Mis favoritos»;
+    - búsqueda sin Enter y «Limpiar»;
+    - filtros de área y habilidad acotados;
+    - tarjetas de alto fijo con «Abrir» y «Guardar»;
+    - 12 por página.
+  - **Dirección:** el formulario de recursos usa el selector de áreas y habilidades y admite imagen.
+
+**Migraciones:** `1780660000000-V32ResourceLibrary`. Copió 519 áreas principales a la tabla nueva. Probada en orden `run → revert → run`. Respaldo previo: `pre-v32-b9.dump`.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch9`, 10/10.** Cubre:
+  - el recurso con 2 áreas, habilidad e imagen;
+  - la búsqueda del estudiante, sin fechas ni cupo;
+  - el filtro por cualquier área y por habilidad;
+  - las facetas acotadas;
+  - favorito idempotente y «Mis favoritos»;
+  - la afinidad intacta al guardar;
+  - quitar el favorito;
+  - el docente con 403;
+  - el retirado, que sale de la Biblioteca.
+- **`e2e-web`:** suma `/student/library` a las pantallas que caben en 375 px.
+
+**Resultados:**
+- La primera corrida se interrumpió porque Docker Desktop se detuvo y la base quedó sin servicio.
+- Se reinició Docker y se comprobó que los datos estaban intactos (6668 actividades, última migración aplicada).
+- Al repetir: **1987 correctas y 0 fallos** (21 suites).
+
+**Regresiones:** ninguna.
+
+**Pendientes:**
+- El favorito como señal secundaria del recomendador: BATCH 10.
+- La Biblioteca en el móvil: BATCH 20.
+
+**Riesgos:** ninguno conocido.
