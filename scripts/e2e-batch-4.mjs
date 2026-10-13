@@ -611,7 +611,9 @@ async function preparar() {
     area: areas[0],
     // Un área distinta de la principal, para poder aislar el efecto de una
     // sola señal sin que lo tape lo que el estudiante ya tenga.
-    areaAislada: areas[areas.length - 1],
+    // V3.2 §19: publicar exige al menos una habilidad, así que el área aislada
+    // tiene que tener alguna en el catálogo.
+    areaAislada: areas.filter((a) => skills.some((s) => s.academicAreaId === a.id)).pop() ?? areas[areas.length - 1],
     skills,
     docente4: await staff('doc4', 'Nuria', 'Ballivian', 'TEACHER', [4]),
     docenteTambien4: await staff('doc4b', 'Ramiro', 'Soliz', 'TEACHER', [4]),

@@ -14,13 +14,41 @@ export enum ActivityOrigin {
  */
 export enum ActivityOutcomePolicy {
   NONE = 'none',
+  /** V3.2 §28.1: la participación CONFIRMED queda como trayectoria, sin documento. */
+  PARTICIPATION_ONLY = 'participation_only',
   /** Constancia interna automática al confirmar la participación (§14.1). */
   INTERNAL_CONSTANCY = 'internal_constancy',
+  /**
+   * V3.2 §28.3: la institución (Univalle u otro actor institucional) emite
+   * un certificado. Afinia no se atribuye la autoría: guarda el emisor real.
+   */
+  INSTITUTION_ISSUED_CERTIFICATE = 'institution_issued_certificate',
   /** Un tercero emite una credencial que el estudiante adjunta después (§14.2). */
   EXTERNAL_CREDENTIAL_EXPECTED = 'external_credential_expected',
-  /** Otro recurso que autoriza el responsable. */
+  /**
+   * Histórico (V3): ya no se ofrece (V3.2 §28 enumera cinco opciones). Se
+   * conserva para no romper datos anteriores; no hay actividades con él.
+   */
   OTHER_AUTHORIZED_RESOURCE = 'other_authorized_resource',
 }
+
+/** V3.2 §28: lo que una actividad interna puede ofrecer al terminar, en orden. */
+export const INTERNAL_OUTCOME_POLICIES: readonly ActivityOutcomePolicy[] = [
+  ActivityOutcomePolicy.NONE,
+  ActivityOutcomePolicy.PARTICIPATION_ONLY,
+  ActivityOutcomePolicy.INTERNAL_CONSTANCY,
+  ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE,
+  ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED,
+];
+
+export const OUTCOME_POLICY_LABEL: Record<ActivityOutcomePolicy, string> = {
+  [ActivityOutcomePolicy.NONE]: 'Sin resultado',
+  [ActivityOutcomePolicy.PARTICIPATION_ONLY]: 'Solo participación',
+  [ActivityOutcomePolicy.INTERNAL_CONSTANCY]: 'Constancia interna',
+  [ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE]: 'Certificado emitido por la institución',
+  [ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED]: 'Credencial externa esperada',
+  [ActivityOutcomePolicy.OTHER_AUTHORIZED_RESOURCE]: 'Otro recurso (histórico)',
+};
 
 /**
  * De dónde viene una credencial externa (V3 §15, §16).

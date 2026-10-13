@@ -113,6 +113,29 @@ export class FileAccessService {
       }
     }
 
+    // V3.2 §18.3: imagen ilustrativa de una actividad. Publicada, la ve
+    // cualquiera con sesión; en borrador, solo quien la gestiona.
+    const conImagen = await this.records.manager.query(
+      `SELECT a."status", a."creator_id", a."responsible_user_id", a."id"
+         FROM "activities" a JOIN "stored_files" f ON f."id" = a."image_file_id"
+        WHERE f."storage_key" = $1 LIMIT 1`,
+      [storageKey],
+    );
+    if (conImagen.length) {
+      const a = conImagen[0] as { status: string; creator_id: string; responsible_user_id: string | null; id: string };
+      const gestiona = user.role === RolNombre.ADMIN
+        || user.role === RolNombre.CAREER_DIRECTOR
+        || a.creator_id === user.userId
+        || a.responsible_user_id === user.userId
+        || (await this.records.manager.query(
+          `SELECT 1 FROM "activity_responsibles" WHERE "activity_id" = $1 AND "user_id" = $2`,
+          [a.id, user.userId],
+        )).length > 0;
+      if (a.status !== 'draft' || gestiona) {
+        return { storageKey, downloadName: 'imagen-actividad', ownerProfileId: '' };
+      }
+    }
+
     // Mismo error para "no existe" y "no autorizado": distinguirlos permitiría
     // averiguar qué archivos hay probando claves.
     throw new NotFoundException('Archivo no encontrado.');

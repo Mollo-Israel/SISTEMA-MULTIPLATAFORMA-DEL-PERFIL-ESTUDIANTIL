@@ -18,6 +18,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import {
@@ -74,6 +75,22 @@ export class ActivityGamificationRuleDto {
   description?: string;
 }
 
+/** V3.2 §18.2: un enlace de apoyo (guía, material, sitio, patrocinador). */
+export class ResourceLinkDto {
+  @ApiProperty({ example: 'Guía del taller' })
+  @Transform(cleanLine)
+  @IsString()
+  @IsNotEmpty({ message: 'Ponle un nombre al enlace.' })
+  @MaxLength(80, { message: 'El nombre del enlace no puede superar 80 caracteres.' })
+  label: string;
+
+  @ApiProperty({ example: 'https://univalle.edu/guia.pdf' })
+  @Transform(trim)
+  @IsUrl({ protocols: ['https'], require_protocol: true }, { message: 'Cada enlace debe ser una URL https válida.' })
+  @MaxLength(500, { message: 'El enlace es demasiado largo.' })
+  url: string;
+}
+
 export class CreateActivityDto {
   @ApiProperty({ example: 'Taller de NestJS' })
   @Transform(cleanLine)
@@ -81,6 +98,8 @@ export class CreateActivityDto {
   @IsNotEmpty({ message: 'El título es obligatorio.' })
   @MinLength(3, { message: 'El título debe tener al menos 3 caracteres.' })
   @MaxLength(160, { message: 'El título no puede superar 160 caracteres.' })
+  // V3.2 §6.4: un título hecho solo de símbolos o números no dice nada.
+  @Matches(/\p{L}/u, { message: 'El título no puede contener solo símbolos.' })
   title: string;
 
   @ApiProperty({ required: false })
@@ -193,6 +212,61 @@ export class CreateActivityDto {
   @IsOptional()
   @IsUUID('4', { message: 'El responsable no es válido.' })
   responsibleUserId?: string;
+
+  /**
+   * V3.2 §16–§17: responsables académicos u operativos (1..N). El primero es
+   * el principal. Si no se indican, es quien crea (salvo Administración).
+   */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5, { message: 'Como máximo 5 responsables.' })
+  @ArrayUnique({ message: 'No repitas responsables.' })
+  @IsUUID('4', { each: true, message: 'Responsable no válido.' })
+  responsibleUserIds?: string[];
+
+  /** V3.2 §16: personas de contacto visibles para el estudiante (0..N). */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5, { message: 'Como máximo 5 contactos.' })
+  @ArrayUnique({ message: 'No repitas contactos.' })
+  @IsUUID('4', { each: true, message: 'Contacto no válido.' })
+  contactUserIds?: string[];
+
+  /** V3.2 §18.1–§18.2: enlace de la reunión (virtual o híbrida). `null` lo quita. */
+  @ApiProperty({ required: false, nullable: true, example: 'https://meet.google.com/abc-defg-hij' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() || null : value))
+  @ValidateIf((o: CreateActivityDto) => o.meetingUrl !== null)
+  @IsUrl({ protocols: ['https'], require_protocol: true }, { message: 'El enlace de la reunión debe ser una URL https válida.' })
+  @MaxLength(500, { message: 'El enlace de la reunión es demasiado largo.' })
+  meetingUrl?: string | null;
+
+  /** V3.2 §18.2: enlaces de apoyo (0..N). */
+  @ApiProperty({ required: false, type: () => [ResourceLinkDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10, { message: 'Como máximo 10 enlaces.' })
+  @ValidateNested({ each: true })
+  @Type(() => ResourceLinkDto)
+  resourceLinks?: ResourceLinkDto[];
+
+  /** V3.2 §18.3: imagen ilustrativa (id de un archivo subido). `null` la quita. */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: CreateActivityDto) => o.imageFileId !== null)
+  @IsUUID('4', { message: 'La imagen no es válida.' })
+  imageFileId?: string | null;
+
+  /** V3.2 §21.6: motivo de la cancelación (obligatorio al cancelar). */
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(cleanText)
+  @IsString()
+  @MinLength(10, { message: 'Explica el motivo en al menos 10 caracteres.' })
+  @MaxLength(500, { message: 'El motivo no puede superar 500 caracteres.' })
+  cancellationReason?: string;
 
   @ApiProperty({ required: false, type: [String] })
   @IsOptional()

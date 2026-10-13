@@ -8,7 +8,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-batch-1.mjs
  */
 
-import { asegurarCorreoDePrueba, leerCorreo, codigoUniversitario } from './lib/fixtures.mjs';
+import { asegurarCorreoDePrueba, leerCorreo, codigoUniversitario, ajustarCuerpoActividad } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -41,6 +41,7 @@ const objective = (t) => console.log(`\n${C.head}${C.bold}${t}${C.r}`);
 const section = (t) => console.log(`\n${C.bold}${t}${C.r}`);
 
 async function req(method, path, { token, body, raw } = {}) {
+  body = await ajustarCuerpoActividad(method, path, token, body);
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {

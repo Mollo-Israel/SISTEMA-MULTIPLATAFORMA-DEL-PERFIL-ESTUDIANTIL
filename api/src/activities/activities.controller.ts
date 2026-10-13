@@ -12,7 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { RolNombre } from '@perfil/shared';
+import { ActivityType, RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
@@ -84,6 +84,23 @@ export class ActivitiesController {
   @ApiOperation({ summary: 'Semestres a los que el docente puede dirigir actividades (V2 §28).' })
   myScope(@CurrentUser() user: AuthenticatedUser) {
     return this.activitiesService.myScope(user);
+  }
+
+  @Get('people')
+  @Roles(...MANAGER_ROLES)
+  @ApiOperation({
+    summary: 'Candidatos para responsables o contactos (V3.2 §16–§17).',
+    description: 'Búsqueda acotada a 20 resultados; solo lo que quien pregunta podría asignar.',
+  })
+  people(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('kind') kind = 'responsible',
+    @Query('type') type = 'academica',
+    @Query('q') q = '',
+  ) {
+    const tipo = kind === 'contact' ? 'contact' : 'responsible';
+    const tipoActividad = type === ActivityType.EXTRACURRICULAR ? ActivityType.EXTRACURRICULAR : ActivityType.ACADEMICA;
+    return this.activitiesService.candidatos(user, tipo, tipoActividad, String(q).slice(0, 80));
   }
 
   @Get('reviews/pending')

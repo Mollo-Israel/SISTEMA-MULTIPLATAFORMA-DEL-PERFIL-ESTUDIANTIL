@@ -585,11 +585,19 @@ async function preparar() {
    * puestos de sugerencia con cientos de estudiantes del padrón y quedaba fuera.
    * Lo que se mediría entonces sería el tamaño de la base, no la regla de §62.
    */
-  const crearArea = async (nombre, tags) =>
-    (await req('POST', '/academic-areas', {
+  const crearArea = async (nombre, tags) => {
+    const creada = (await req('POST', '/academic-areas', {
       token: admin,
       body: { name: `${nombre} ${TS}`, description: `Área del escenario ${nombre}.`, tags },
     })).data;
+    // V3.2 §19: publicar exige una habilidad del área (neutra para el estudiante).
+    if (creada?.id) {
+      await req('POST', '/skills', {
+        token: admin, body: { name: `Kit ${nombre} ${String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 65 + Number(d)))}`, academicAreaId: creada.id },
+      });
+    }
+    return creada;
+  };
 
   const areaFuerte = await crearArea('Computacion Grafica', ['shaders', 'render', 'opengl']);
   const areaRespaldada = await crearArea('Redes Industriales', ['modbus', 'scada']);

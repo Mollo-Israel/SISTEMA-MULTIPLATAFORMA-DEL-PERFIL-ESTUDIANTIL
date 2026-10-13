@@ -20,6 +20,7 @@ import {
 } from 'typeorm';
 import {
   ACTIVITY_STATUS_LABEL,
+  ActivityModality,
   ActivityOrigin,
   ActivityOutcomePolicy,
   ConstancyStatus,
@@ -51,6 +52,10 @@ import { UploadsService } from '../storage/uploads.service';
 import { CredentialEligibilityService } from './credential-eligibility.service';
 import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 import { User } from '../entities/user.entity';
+import { ActivityResponsible } from '../entities/activity-responsible.entity';
+import { ActivityContact } from '../entities/activity-contact.entity';
+import { StoredFileRecord } from '../entities/stored-file.entity';
+import { effectiveSemesters } from '../access/teacher-scope.service';
 import { assertSkillsBelongToAreas, resolveSkillContexts, SkillContext } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
 import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
@@ -227,6 +232,13 @@ export class ActivitiesService {
       const msg = 'Una oportunidad externa no emite constancia interna: su resultado es la credencial del proveedor.';
       throw new BadRequestException({ message: msg, fields: { outcomePolicy: [msg] } });
     }
+    // V3.2 §29: una externa no tiene selector: su resultado es siempre la
+    // credencial del proveedor que el estudiante acreditará.
+    if (origen === ActivityOrigin.EXTERNAL) return ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED;
+    if (politica === ActivityOutcomePolicy.OTHER_AUTHORIZED_RESOURCE && dto.outcomePolicy !== undefined) {
+      const msg = 'Esa opción ya no se ofrece: elige una de las cinco de V3.2 §28.';
+      throw new BadRequestException({ message: msg, fields: { outcomePolicy: [msg] } });
+    }
     return politica;
   }
 
@@ -307,6 +319,285 @@ export class ActivitiesService {
     return undefined;
   }
 
+  // =========================================================================
+  //  V3.2 §16–§18 · Responsables, contactos, modalidad e imagen
+  // =========================================================================
+
+  /** Roles que pueden ser responsables según quién asigna y el tipo (§17). */
+  private rolesResponsables(asigna: RolNombre, type: ActivityType): RolNombre[] {
+    if (asigna === RolNombre.CAREER_DIRECTOR) {
+      return [RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY, RolNombre.CAREER_DIRECTOR];
+    }
+    if (asigna === RolNombre.SCIENTIFIC_SOCIETY) return [RolNombre.SCIENTIFIC_SOCIETY];
+    if (asigna === RolNombre.ADMIN) {
+      return type === ActivityType.ACADEMICA
+        ? [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR]
+        : [RolNombre.SCIENTIFIC_SOCIETY, RolNombre.CAREER_DIRECTOR];
+    }
+    return [];
+  }
+
+  /**
+   * Responsables de una actividad (V3.2 §17). El primero es el principal y
+   * queda también en `responsible_user_id`.
+   *
+   * - Docente: él mismo; suma contactos, no responsables.
+   * - Sociedad: él mismo o integrantes activos de Sociedad.
+   * - Dirección: docentes, Sociedad o Dirección (él mismo por omisión).
+   * - Administración: tiene que indicarlo, según el tipo.
+   */
+  private async resolverResponsables(
+    user: AuthenticatedUser,
+    type: ActivityType,
+    dto: { responsibleUserIds?: string[]; responsibleUserId?: string },
+  ): Promise<string[]> {
+    const pedidos = dto.responsibleUserIds ?? (dto.responsibleUserId ? [dto.responsibleUserId] : undefined);
+    const campo = dto.responsibleUserIds !== undefined ? 'responsibleUserIds' : 'responsibleUserId';
+    if (user.role === RolNombre.ADMIN && !pedidos?.length) {
+      const msg = 'Como Administración, indica quién es el responsable académico de esta oportunidad.';
+      throw new BadRequestException({ message: msg, fields: { [campo]: [msg] } });
+    }
+    if (!pedidos?.length) return [user.userId];
+    const unicos = [...new Set(pedidos)];
+    if (user.role === RolNombre.TEACHER) {
+      if (unicos.length === 1 && unicos[0] === user.userId) return unicos;
+      const msg = 'El docente es el responsable de lo que crea. Para sumar a alguien, agrégalo como contacto.';
+      throw new BadRequestException({ message: msg, fields: { [campo]: [msg] } });
+    }
+    const permitidos = this.rolesResponsables(user.role as RolNombre, type);
+    const usuarios = await this.activities.manager.getRepository(User).find({
+      where: { id: In(unicos) },
+      relations: { role: true },
+    });
+    const malo = unicos.find((id) => {
+      if (id === user.userId && user.role !== RolNombre.ADMIN) return false;
+      const u = usuarios.find((x) => x.id === id);
+      return !u || u.status !== 'active' || !permitidos.includes(u.role?.name as RolNombre);
+    });
+    if (malo) {
+      const msg = user.role === RolNombre.SCIENTIFIC_SOCIETY
+        ? 'Los responsables tienen que ser integrantes activos de la Sociedad científica.'
+        : type === ActivityType.ACADEMICA || user.role === RolNombre.CAREER_DIRECTOR
+          ? 'El responsable debe ser un docente, la Sociedad o la Dirección, con la cuenta activa.'
+          : 'El responsable de una oportunidad extracurricular debe ser la Sociedad científica o la Dirección, con la cuenta activa.';
+      const exacto = user.role === RolNombre.ADMIN && type === ActivityType.ACADEMICA
+        ? 'El responsable de una oportunidad académica debe ser un docente o la Dirección, con la cuenta activa.'
+        : msg;
+      throw new BadRequestException({ message: exacto, fields: { [campo]: [exacto] } });
+    }
+    return unicos;
+  }
+
+  /**
+   * Contactos visibles para el estudiante (V3.2 §16). Personal activo de la
+   * carrera; un estudiante solo si lo asigna un docente y está en su alcance.
+   * Ese estudiante es solo un contacto: no gestiona nada.
+   */
+  private async resolverContactos(user: AuthenticatedUser, ids: string[] | undefined): Promise<string[] | undefined> {
+    if (ids === undefined) return undefined;
+    const unicos = [...new Set(ids)];
+    if (unicos.length === 0) return [];
+    const usuarios = await this.activities.manager.getRepository(User).find({
+      where: { id: In(unicos) },
+      relations: { role: true },
+    });
+    const staff = [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.SCIENTIFIC_SOCIETY];
+    const alcance = user.role === RolNombre.TEACHER ? await this.teacherScope.allowedSemesters(user.userId) : [];
+    for (const id of unicos) {
+      const u = usuarios.find((x) => x.id === id);
+      const rol = u?.role?.name as RolNombre | undefined;
+      let valido = !!u && u.status === 'active' && !!rol && staff.includes(rol);
+      if (!valido && u && u.status === 'active' && rol === RolNombre.STUDENT && user.role === RolNombre.TEACHER) {
+        const perfil = await this.profiles.findOne({ where: { userId: u.id } });
+        valido = !!perfil && effectiveSemesters(perfil).some((s) => alcance.includes(s));
+      }
+      if (!valido) {
+        const msg = user.role === RolNombre.TEACHER
+          ? 'Cada contacto debe ser personal activo de la carrera o un estudiante de tus semestres.'
+          : 'Cada contacto debe ser personal activo de la carrera (docente, Sociedad o Dirección).';
+        throw new BadRequestException({ message: msg, fields: { contactUserIds: [msg] } });
+      }
+    }
+    return unicos;
+  }
+
+  private async replaceResponsables(activityId: string, ids: string[], m: EntityManager): Promise<void> {
+    const repo = m.getRepository(ActivityResponsible);
+    await repo.delete({ activityId });
+    if (ids.length) await repo.insert(ids.map((userId) => ({ activityId, userId })));
+  }
+
+  private async replaceContactos(activityId: string, ids: string[], m: EntityManager): Promise<void> {
+    const repo = m.getRepository(ActivityContact);
+    await repo.delete({ activityId });
+    if (ids.length) await repo.insert(ids.map((userId) => ({ activityId, userId })));
+  }
+
+  /** ¿Es uno de los responsables de la actividad? (V3.2 §16) */
+  private async esResponsable(activityId: string, userId: string): Promise<boolean> {
+    return this.activities.manager.getRepository(ActivityResponsible).exists({ where: { activityId, userId } });
+  }
+
+  /**
+   * V3.2 §20: términos de búsqueda derivados de áreas (nombre y etiquetas) y
+   * habilidades (nombre y alias). Se recalculan al guardar; nadie los escribe.
+   */
+  private async derivarPalabrasClave(activityId: string, m: EntityManager): Promise<void> {
+    await m.query(
+      `UPDATE "activities" a SET "search_keywords" = COALESCE((
+         SELECT array_agg(DISTINCT lower(t)) FROM (
+           SELECT ar."name" AS t FROM "activity_areas" aa JOIN "academic_areas" ar ON ar."id" = aa."academic_area_id" WHERE aa."activity_id" = a."id"
+           UNION ALL
+           SELECT unnest(ar."tags") FROM "activity_areas" aa JOIN "academic_areas" ar ON ar."id" = aa."academic_area_id" WHERE aa."activity_id" = a."id"
+           UNION ALL
+           SELECT s."name" FROM "activity_skills" acs JOIN "skills" s ON s."id" = acs."skill_id" WHERE acs."activity_id" = a."id"
+           UNION ALL
+           SELECT unnest(s."aliases") FROM "activity_skills" acs JOIN "skills" s ON s."id" = acs."skill_id" WHERE acs."activity_id" = a."id"
+         ) terminos WHERE t IS NOT NULL AND t <> ''
+       ), '{}')
+       WHERE a."id" = $1`,
+      [activityId],
+    );
+  }
+
+  /** V3.2 §18.1: virtual no muestra aula; presencial no lleva enlace de reunión. */
+  private normalizarModalidad(activity: Activity): void {
+    if (activity.modality === ActivityModality.VIRTUAL) activity.location = null;
+    if (activity.modality === ActivityModality.PRESENCIAL) activity.meetingUrl = null;
+  }
+
+  /** V3.2 §18.3: la imagen es un archivo de imagen que subió quien la pone. */
+  private async assertImagen(user: AuthenticatedUser, imageFileId: string | null | undefined): Promise<void> {
+    if (!imageFileId) return;
+    const archivo = await this.activities.manager.getRepository(StoredFileRecord).findOne({ where: { id: imageFileId } });
+    const esImagen = !!archivo && /^image\/(png|jpeg|webp)$/.test(archivo.mimeTypeDetected ?? '');
+    if (!archivo || !esImagen || (archivo.uploadedByUserId !== user.userId && user.role !== RolNombre.ADMIN)) {
+      const msg = 'La imagen tiene que ser un PNG, JPG o WEBP que hayas subido tú.';
+      throw new BadRequestException({ message: msg, fields: { imageFileId: [msg] } });
+    }
+  }
+
+  /**
+   * V3.2 §18, §19, §21.1: un borrador puede estar incompleto; lo que se
+   * publica o se envía a revisión, no. Errores por campo (§6.4).
+   */
+  private assertCompleta(activity: Activity, areaIds: string[], skillIds: string[]): void {
+    const errores: Record<string, string[]> = {};
+    const poner = (campo: string, msg: string) => { errores[campo] = [msg]; };
+    if (!activity.eventDate) poner('activityDate', 'Indica la fecha y hora de inicio.');
+    if (!activity.endAt) poner('endAt', 'Indica la fecha y hora de fin.');
+    if (activity.eventDate && activity.endAt && activity.endAt.getTime() <= activity.eventDate.getTime()) {
+      poner('endAt', 'La fecha final debe ser posterior a la fecha inicial.');
+    }
+    if (activity.originType !== ActivityOrigin.EXTERNAL) {
+      const presencial = activity.modality === ActivityModality.PRESENCIAL || activity.modality === ActivityModality.HIBRIDA;
+      const virtual = activity.modality === ActivityModality.VIRTUAL || activity.modality === ActivityModality.HIBRIDA;
+      if (presencial && !activity.location?.trim()) poner('location', 'Indica el aula o el lugar.');
+      if (virtual && !activity.meetingUrl) poner('meetingUrl', 'Indica el enlace de la reunión.');
+    }
+    if (areaIds.length === 0) poner('areaIds', 'Selecciona al menos un área.');
+    if (skillIds.length === 0) poner('skillIds', 'Selecciona al menos una habilidad vinculada.');
+    if (Object.keys(errores).length > 0) {
+      throw new BadRequestException({
+        message: 'Completa estos datos antes de publicar o enviar a revisión.',
+        fields: errores,
+      });
+    }
+  }
+
+  /**
+   * V3.2 §21.4–§21.5: cierre y fin automáticos. Lo que ya empezó deja de
+   * aceptar inscripciones (CLOSED); lo que ya terminó queda FINISHED, y si
+   * espera una credencial se avisa a quienes pueden acreditarla. Lo llama el
+   * trabajador de ciclo de vida.
+   */
+  async avanzarCicloDeVida(): Promise<{ cerradas: number; finalizadas: number }> {
+    const finales: { id: string; status: ActivityStatus }[] = await this.activities.query(
+      `SELECT "id", "status" FROM "activities"
+        WHERE "status" IN ('published', 'open', 'closed') AND "end_at" IS NOT NULL AND "end_at" <= now()
+        LIMIT 200`,
+    );
+    for (const f of finales) {
+      const activity = await this.findOne(f.id);
+      activity.status = ActivityStatus.FINISHED;
+      await this.activities.manager.transaction(async (m) => {
+        await m.getRepository(Activity).update({ id: f.id }, { status: ActivityStatus.FINISHED });
+        await this.audit.record({
+          actorUserId: null,
+          eventType: AuditEventType.ACTIVITY_STATUS_CHANGED,
+          entityType: 'activity',
+          entityId: f.id,
+          metadata: { de: f.status, a: ActivityStatus.FINISHED, automatico: 'end_at' },
+        }, m);
+      });
+      if (CredentialEligibilityService.esperaCredencial(activity)) {
+        const habilitadas = await this.registrations.find({
+          where: { activityId: f.id, status: CredentialEligibilityService.estadoQueHabilita(activity) },
+          relations: { studentProfile: true },
+        });
+        await this.eligibility.announce(activity, habilitadas, activity.responsibleUserId ?? activity.creatorId);
+      }
+    }
+    const cerradas: { id: string; status: ActivityStatus }[] = await this.activities.query(
+      `UPDATE "activities" SET "status" = 'closed', "updated_at" = now()
+        WHERE "status" IN ('published', 'open') AND "event_date" IS NOT NULL AND "event_date" <= now()
+          AND ("end_at" IS NULL OR "end_at" > now())
+        RETURNING "id", 'open' AS "status"`,
+    ).then((r: unknown) => (Array.isArray(r) && Array.isArray(r[0]) ? r[0] : (r as { id: string; status: ActivityStatus }[])));
+    for (const c of cerradas) {
+      await this.audit.record({
+        actorUserId: null,
+        eventType: AuditEventType.ACTIVITY_STATUS_CHANGED,
+        entityType: 'activity',
+        entityId: c.id,
+        metadata: { a: ActivityStatus.CLOSED, automatico: 'start_at' },
+      });
+    }
+    return { cerradas: cerradas.length, finalizadas: finales.length };
+  }
+
+  /**
+   * V3.2 §6.3, §17: candidatos para los combobox de responsables y contactos,
+   * con búsqueda y acotados (20). Solo lo que quien pregunta podría asignar.
+   */
+  async candidatos(
+    user: AuthenticatedUser,
+    tipo: 'responsible' | 'contact',
+    type: ActivityType,
+    q?: string,
+  ): Promise<{ id: string; firstName: string; lastName: string; role: string; email: string }[]> {
+    const roles = tipo === 'responsible'
+      ? this.rolesResponsables(user.role as RolNombre, type)
+      : [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.SCIENTIFIC_SOCIETY,
+        ...(user.role === RolNombre.TEACHER ? [RolNombre.STUDENT] : [])];
+    if (roles.length === 0) return [];
+    const qb = this.activities.manager.getRepository(User).createQueryBuilder('u')
+      .innerJoinAndSelect('u.role', 'r')
+      .where('u.status = :activo', { activo: 'active' })
+      .andWhere('r.name IN (:...roles)', { roles })
+      .orderBy('u.lastName', 'ASC')
+      .addOrderBy('u.firstName', 'ASC')
+      .take(20);
+    const texto = q?.trim();
+    if (texto) {
+      qb.andWhere(
+        "(u.firstName ILIKE :t OR u.lastName ILIKE :t OR u.email ILIKE :t OR CONCAT(u.firstName, ' ', u.lastName) ILIKE :t)",
+        { t: `%${texto.replace(/[%_\\]/g, (c) => `\\${c}`)}%` },
+      );
+    }
+    if (user.role === RolNombre.TEACHER && roles.includes(RolNombre.STUDENT)) {
+      // Estudiantes solo de sus semestres (actuales o de arrastre).
+      const suyos = await this.teacherScope.allowedSemesters(user.userId);
+      qb.leftJoin(StudentProfile, 'p', 'p.user_id = u.id')
+        .andWhere(
+          '(r.name <> :est OR p.semester IN (:...s) OR p.academic_scope_semesters && ARRAY[:...s]::smallint[])',
+          { est: RolNombre.STUDENT, s: suyos.length ? suyos : [0] },
+        );
+    }
+    const filas = await qb.getMany();
+    return filas.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, role: u.role?.name ?? '', email: u.email }));
+  }
+
   /** Reemplaza las áreas de una oportunidad; la primera es la principal. */
   private async replaceAreas(activityId: string, areaIds: string[], m: EntityManager = this.activities.manager): Promise<void> {
     const repo = m.getRepository(ActivityArea);
@@ -349,37 +640,6 @@ export class ActivitiesService {
   }
 
   /**
-   * Responsable (V3 §6.5, §12.2). Quien crea responde por lo suyo; cuando crea
-   * Administración —autoridad técnica, no emisor académico— debe nombrar a un
-   * responsable real del rol que gestiona ese tipo de oportunidad.
-   */
-  private async resolverResponsable(
-    user: AuthenticatedUser,
-    type: ActivityType,
-    responsibleUserId: string | undefined,
-  ): Promise<string> {
-    if (user.role !== RolNombre.ADMIN) return user.userId;
-    if (!responsibleUserId) {
-      const msg = 'Como Administración, indica quién es el responsable académico de esta oportunidad.';
-      throw new BadRequestException({ message: msg, fields: { responsibleUserId: [msg] } });
-    }
-    const responsable = await this.activities.manager.getRepository(User).findOne({
-      where: { id: responsibleUserId },
-      relations: { role: true },
-    });
-    const permitidos = type === ActivityType.ACADEMICA
-      ? [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR]
-      : [RolNombre.SCIENTIFIC_SOCIETY, RolNombre.CAREER_DIRECTOR];
-    if (!responsable || responsable.status !== 'active' || !permitidos.includes(responsable.role?.name as RolNombre)) {
-      const msg = type === ActivityType.ACADEMICA
-        ? 'El responsable de una oportunidad académica debe ser un docente o la Dirección, con la cuenta activa.'
-        : 'El responsable de una oportunidad extracurricular debe ser la Sociedad científica o la Dirección, con la cuenta activa.';
-      throw new BadRequestException({ message: msg, fields: { responsibleUserId: [msg] } });
-    }
-    return responsable.id;
-  }
-
-  /**
    * Campos que cambian QUÉ es la actividad. Lo que Dirección aprobó no puede
    * cambiar después sin que lo vuelva a ver. Fechas, lugar o cupo son
    * operación, no contenido.
@@ -397,6 +657,12 @@ export class ActivitiesService {
   async submitForReview(user: AuthenticatedUser, id: string, comment?: string): Promise<Activity> {
     const activity = await this.findOne(id);
     await this.assertCanManage(user, activity);
+    // V3.2 §21.1: lo que va a Dirección tiene que estar completo.
+    this.assertCompleta(
+      activity,
+      (activity.activityAreas ?? []).map((a) => a.academicAreaId),
+      (activity.activitySkills ?? []).map((s) => s.skillId),
+    );
     if (!activity.requiresReview) {
       throw new BadRequestException('Esta actividad no necesita revisión: la gestiona Dirección.');
     }
@@ -568,7 +834,10 @@ export class ActivitiesService {
     await this.assertCategoryUsable(dto.categoryId, dto.type);
     const origen = dto.originType ?? ActivityOrigin.INTERNAL;
     this.assertExterna(origen, dto.provider, dto.externalUrl);
-    const responsable = await this.resolverResponsable(user, dto.type, dto.responsibleUserId);
+    const responsables = await this.resolverResponsables(user, dto.type, dto);
+    const responsable = responsables[0];
+    const contactos = (await this.resolverContactos(user, dto.contactUserIds)) ?? [];
+    await this.assertImagen(user, dto.imageFileId);
 
     // §22: un docente solo alcanza a sus semestres habilitados, y eso
     // incluye lo que declara al crear. Sin esto bastaria con publicar una
@@ -611,6 +880,10 @@ export class ActivitiesService {
       capacity: dto.capacity ?? null,
       tags: dto.tags ?? null,
       externalUrl: dto.externalUrl ?? null,
+      meetingUrl: dto.meetingUrl ?? null,
+      resourceLinks: dto.resourceLinks ?? [],
+      imageFileId: dto.imageFileId ?? null,
+      updatedById: user.userId,
       // V3 §13.1: nunca se pide al estudiante evidencia de asistencia.
       evidenceRequired: false,
       status: estadoInicial,
@@ -624,12 +897,20 @@ export class ActivitiesService {
       activity.expectedIssuerDomains = [];
       activity.expectedKeywords = [];
     }
+    this.normalizarModalidad(activity);
+    // V3.2 §21.1–§22: guardar un borrador no publica; publicar exige lo mínimo.
+    if (estadoInicial === ActivityStatus.PUBLISHED || estadoInicial === ActivityStatus.OPEN) {
+      this.assertCompleta(activity, areas, contextos.map((c) => c.skillId));
+    }
     // V3.2 C6: la actividad, sus áreas, habilidades y reglas se escriben juntas
     // o no se escribe nada.
     const saved = await this.activities.manager.transaction(async (m) => {
       const fila = await m.getRepository(Activity).save(activity);
       await this.replaceAreas(fila.id, areas, m);
       if (contextos.length) await this.replaceSkills(fila.id, contextos, m);
+      await this.replaceResponsables(fila.id, responsables, m);
+      await this.replaceContactos(fila.id, contactos, m);
+      await this.derivarPalabrasClave(fila.id, m);
       if (dto.gamificationRules?.length) await this.replaceRules(fila.id, user.userId, dto.gamificationRules, m);
       await this.audit.record({
         actorUserId: user.userId,
@@ -642,6 +923,8 @@ export class ActivitiesService {
           status: fila.status,
           semesterScope,
           responsibleUserId: responsable,
+          responsibleUserIds: responsables,
+          contactUserIds: contactos,
           viaAdmin: user.role === RolNombre.ADMIN,
         },
       }, m);
@@ -796,7 +1079,44 @@ export class ActivitiesService {
     // Sus reglas de puntos viajan con ella: son parte de lo que se revisa.
     (activity as Activity & { gamificationRules?: ActivityGamificationRule[] }).gamificationRules =
       await this.rules.find({ where: { activityId: activity.id } });
+    await this.adjuntarPersonas([activity]);
     return activity;
+  }
+
+  /**
+   * V3.2 §16: responsables y contactos, con lo justo para mostrarlos (nombre,
+   * rol y, de los contactos, el correo para escribirles). Una consulta por
+   * tipo para todo el lote.
+   */
+  async adjuntarPersonas(lista: Activity[]): Promise<void> {
+    if (lista.length === 0) return;
+    const ids = lista.map((a) => a.id);
+    const resumen = (u: User) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, role: u.role?.name ?? null });
+    const [resp, cont] = await Promise.all([
+      this.activities.manager.getRepository(ActivityResponsible).find({
+        where: { activityId: In(ids) }, relations: { user: { role: true } }, order: { createdAt: 'ASC' },
+      }),
+      this.activities.manager.getRepository(ActivityContact).find({
+        where: { activityId: In(ids) }, relations: { user: { role: true } }, order: { createdAt: 'ASC' },
+      }),
+    ]);
+    const imagenes = lista.map((a) => a.imageFileId).filter((x): x is string => !!x);
+    const archivos = imagenes.length
+      ? await this.activities.manager.getRepository(StoredFileRecord).find({ where: { id: In(imagenes) }, select: { id: true, storageKey: true } })
+      : [];
+    const claveDe = new Map(archivos.map((f) => [f.id, f.storageKey]));
+    for (const a of lista) {
+      const extra = a as Activity & { responsibles?: unknown[]; contacts?: unknown[]; imageUrl?: string | null };
+      const propios = resp.filter((r) => r.activityId === a.id && r.user);
+      // El principal primero, aunque se haya agregado después.
+      propios.sort((x, y) => Number(y.userId === a.responsibleUserId) - Number(x.userId === a.responsibleUserId));
+      extra.responsibles = propios.map((r) => resumen(r.user));
+      extra.contacts = cont.filter((c) => c.activityId === a.id && c.user)
+        .map((c) => ({ ...resumen(c.user), email: c.user.email }));
+      // Pasa por /api/files, que autoriza: la imagen de un borrador no se sirve a cualquiera.
+      const clave = a.imageFileId ? claveDe.get(a.imageFileId) : null;
+      extra.imageUrl = clave ? `${FILES_ROUTE}/${clave}` : null;
+    }
   }
 
   /** Detalle para el estudiante, con su propio estado de inscripcion. */
@@ -900,12 +1220,23 @@ export class ActivitiesService {
       activity.expectedIssuerDomains = [];
       activity.expectedKeywords = [];
     }
-    if (dto.responsibleUserId !== undefined) {
-      if (user.role !== RolNombre.ADMIN) {
-        throw new ForbiddenException('Solo Administración reasigna el responsable de una oportunidad.');
+    // V3.2 §17: reasignan responsables Administración, Dirección y Sociedad
+    // (en lo suyo); el docente no: suma contactos.
+    let responsablesNuevos: string[] | undefined;
+    if (dto.responsibleUserId !== undefined || dto.responsibleUserIds !== undefined) {
+      if (user.role === RolNombre.TEACHER || user.role === RolNombre.STUDENT) {
+        throw new ForbiddenException('Los responsables los reasignan Dirección o Administración.');
       }
-      activity.responsibleUserId = await this.resolverResponsable(user, activity.type, dto.responsibleUserId);
+      responsablesNuevos = await this.resolverResponsables(user, activity.type, dto);
+      activity.responsibleUserId = responsablesNuevos[0];
     }
+    const contactosNuevos = await this.resolverContactos(user, dto.contactUserIds);
+    if (dto.imageFileId !== undefined) {
+      await this.assertImagen(user, dto.imageFileId);
+      activity.imageFileId = dto.imageFileId ?? null;
+    }
+    if (dto.meetingUrl !== undefined) activity.meetingUrl = dto.meetingUrl ?? null;
+    if (dto.resourceLinks !== undefined) activity.resourceLinks = dto.resourceLinks ?? [];
     if (dto.categoryId !== undefined) {
       await this.assertCategoryUsable(dto.categoryId, dto.type ?? activity.type);
       activity.categoryId = dto.categoryId;
@@ -945,11 +1276,37 @@ export class ActivitiesService {
       await this.assertStatusTransition(activity, dto.status);
       activity.status = dto.status;
     }
+    // V3.2 §21.6: cancelar exige motivo, que el estudiante verá.
+    if (dto.status === ActivityStatus.CANCELLED && estadoAnterior !== ActivityStatus.CANCELLED) {
+      if (!dto.cancellationReason) {
+        const msg = 'Indica el motivo de la cancelación: el estudiante lo verá.';
+        throw new BadRequestException({ message: msg, fields: { cancellationReason: [msg] } });
+      }
+      activity.cancellationReason = dto.cancellationReason;
+      activity.cancelledAt = new Date();
+    }
+    this.normalizarModalidad(activity);
+    activity.updatedById = user.userId;
+    // V3.2 §21.1: lo que se publica (o sigue publicado y cambia) tiene que estar completo.
+    const publica = (dto.status === ActivityStatus.PUBLISHED || dto.status === ActivityStatus.OPEN)
+      && estadoAnterior === ActivityStatus.DRAFT;
+    const cambiaLoMinimo = [
+      dto.activityDate, dto.endAt, dto.modality, dto.location, dto.meetingUrl, dto.areaIds, dto.areaId, dto.skillIds,
+    ].some((v) => v !== undefined);
+    const visible = [ActivityStatus.PUBLISHED, ActivityStatus.OPEN, ActivityStatus.CLOSED].includes(activity.status);
+    if (publica || (visible && cambiaLoMinimo)) {
+      const areasFinales = areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
+      const skillsFinales = contextos?.map((c) => c.skillId) ?? (activity.activitySkills ?? []).map((s) => s.skillId);
+      this.assertCompleta(activity, areasFinales, skillsFinales);
+    }
 
     await this.activities.manager.transaction(async (m) => {
       await m.getRepository(Activity).save(this.soloFila(activity));
       if (areasNuevas !== undefined) await this.replaceAreas(activity.id, areasNuevas, m);
       if (contextos !== undefined) await this.replaceSkills(activity.id, contextos, m);
+      if (responsablesNuevos !== undefined) await this.replaceResponsables(activity.id, responsablesNuevos, m);
+      if (contactosNuevos !== undefined) await this.replaceContactos(activity.id, contactosNuevos, m);
+      if (areasNuevas !== undefined || contextos !== undefined) await this.derivarPalabrasClave(activity.id, m);
       if (dto.gamificationRules !== undefined) {
         await this.replaceRules(activity.id, user.userId, dto.gamificationRules ?? [], m);
       }
@@ -959,7 +1316,11 @@ export class ActivitiesService {
           eventType: AuditEventType.ACTIVITY_STATUS_CHANGED,
           entityType: 'activity',
           entityId: activity.id,
-          metadata: { de: estadoAnterior, a: dto.status },
+          metadata: {
+            de: estadoAnterior,
+            a: dto.status,
+            ...(dto.status === ActivityStatus.CANCELLED ? { motivo: activity.cancellationReason } : {}),
+          },
         }, m);
       }
     });
@@ -1463,6 +1824,8 @@ export class ActivitiesService {
     if (user.role === RolNombre.ADMIN) return true;
     if (activity.creatorId === user.userId) return true;
     if (activity.responsibleUserId === user.userId) return true;
+    // V3.2 §16: cualquiera de sus responsables la gestiona.
+    if (await this.esResponsable(activity.id, user.userId)) return true;
 
     if (user.role === RolNombre.TEACHER) {
       return this.teacherReaches(user, activity);
@@ -1617,8 +1980,10 @@ export class ActivitiesService {
   /** El fin no puede ser anterior al inicio (§22). */
   private assertDateWindow(inicio?: string | null, fin?: string | null): void {
     if (!inicio || !fin) return;
-    if (new Date(fin).getTime() < new Date(inicio).getTime()) {
-      throw new BadRequestException('La fecha de fin no puede ser anterior a la de inicio.');
+    // V3.2 §38: end_at > start_at, con el error en su campo (§6.4).
+    if (new Date(fin).getTime() <= new Date(inicio).getTime()) {
+      const msg = 'La fecha final debe ser posterior a la fecha inicial.';
+      throw new BadRequestException({ message: msg, fields: { endAt: [msg] } });
     }
   }
 

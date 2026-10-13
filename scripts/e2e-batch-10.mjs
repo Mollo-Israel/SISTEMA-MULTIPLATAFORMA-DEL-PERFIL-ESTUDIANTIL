@@ -347,6 +347,10 @@ async function preparar() {
     },
   })).data;
   if (!area?.id) throw new Error('No se pudo crear el área del escenario.');
+  // V3.2 §19: publicar exige una habilidad del área.
+  await req('POST', '/skills', {
+    token: admin, body: { name: `Kit Vision ${String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 65 + Number(d)))}`, academicAreaId: area.id },
+  });
 
   const categorias = (await req('GET', '/activity-categories', { token: admin })).data ?? [];
   const taller = categorias.find((c) => c.code === 'taller_academico');

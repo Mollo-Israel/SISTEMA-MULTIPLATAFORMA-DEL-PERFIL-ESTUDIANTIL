@@ -5,6 +5,7 @@ import type {
   ProjectFeedbackItem,
   ProjectMemberItem,
   ActivityCategoryItem,
+  ActivityPerson,
   FreeInterest,
   EligibleParticipant,
   Evidence,
@@ -787,6 +788,9 @@ export const activityService = {
     api.get<{ id: string; action: string; comment: string | null; at: string; by: string | null }[]>(
       `/activities/${id}/reviews`,
     ).then((r) => r.data),
+  /** V3.2 §16–§17: candidatos para responsables o contactos, con búsqueda. */
+  people: (kind: 'responsible' | 'contact', type: string, q: string) =>
+    api.get<ActivityPerson[]>('/activities/people', { params: { kind, type, q } }).then((r) => r.data),
   /** Semestres habilitados del docente (V2 §28). */
   myScope: () => api.get<{ semesters: number[] }>('/activities/my-scope').then((r) => r.data),
   myRegistrations: () =>

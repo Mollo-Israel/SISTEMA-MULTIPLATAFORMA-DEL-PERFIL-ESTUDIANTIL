@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
-import { leerCorreo, provisionAndActivate, crearProyectoActivo } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, crearProyectoActivo, ajustarCuerpoActividad } from './lib/fixtures.mjs';
 
 /**
  * Integrantes aceptados, sin la fila del responsable. Desde la V2 (§34, §48)
@@ -47,6 +47,7 @@ const objective = (t) =>
   console.log(`\n${C.b}${C.m}${'='.repeat(78)}\n ${t}\n${'='.repeat(78)}${C.r}`);
 
 async function req(method, path, { token, body, raw } = {}) {
+  body = await ajustarCuerpoActividad(method, path, token, body);
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   let payload;
   if (raw) {

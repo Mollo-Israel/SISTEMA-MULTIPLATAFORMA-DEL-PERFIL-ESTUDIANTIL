@@ -296,6 +296,9 @@ async function batch10(ctx) {
   const aTecMej = await nuevaArea('Domotica', 'hogarintel');
   const sInt = await nuevaSkill('Biopython', aTecInt);
   const sMej = await nuevaSkill('Zigbee', aTecMej);
+  // V3.2 §19: publicar exige una habilidad del área; estas no puntúan para el estudiante.
+  await nuevaSkill('Rosnodo', aInteres);
+  await nuevaSkill('Radarsat', aMejora);
 
   await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: aInteres.id, priority: 1 }] } });
   await req('PATCH', '/profiles/me', { token: est.token, body: { improvementAreaIds: [aMejora.id] } });

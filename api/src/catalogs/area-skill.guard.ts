@@ -31,7 +31,11 @@ export async function assertSkillsBelongToAreas(
     where: { id: In(habilidades) },
     select: { id: true, name: true, academicAreaId: true },
   });
-  if (filas.length !== habilidades.length) throw new NotFoundException('Una o más habilidades no existen en el catálogo.');
+  if (filas.length !== habilidades.length) {
+    // Un id del cuerpo que no existe es un error de validación, en su campo.
+    const mensaje = 'Alguna de las habilidades indicadas no existe en el catálogo.';
+    throw new BadRequestException({ message: mensaje, fields: { [campo]: [mensaje] } });
+  }
   const secundarias = await manager.getRepository(SkillAreaRelation).find({
     where: { skillId: In(habilidades), academicAreaId: In(areas) },
   });

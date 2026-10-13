@@ -354,3 +354,123 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Pendientes:** la afinidad todavía no usa el contexto; se cambia en el BATCH 15 (afinidad V5).
 
 **Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 5 — Formulario de actividad, responsables, modalidad, estados y resultado
+
+**ESTADO:** completo
+
+**Objetivo:** cumplir §16–§22, §28, §29 y §38:
+- separar creador, responsables y contactos;
+- campos mínimos con modalidad condicional;
+- enlaces de apoyo e imagen;
+- acciones explícitas (Guardar borrador / Publicar / Enviar a revisión);
+- cierre y fin automáticos;
+- cancelación con motivo;
+- sin etiquetas manuales;
+- las cinco opciones de resultado y ningún selector en las externas;
+- hora correcta al editar (C11).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **C11:**
+  - La API conserva el instante.
+  - El formulario web cargaba `eventDate.slice(0,16)` (UTC) en un `datetime-local` y cada guardado sumaba 4 h.
+  - No existía la fecha de fin en la web.
+- **Responsables:**
+  - Había un único `responsible_user_id`.
+  - Solo Administración podía reasignarlo; Dirección no.
+- **Ciclo de vida:**
+  - Nada cerraba ni finalizaba las actividades por fecha.
+  - Se publicaban actividades sin fechas, sin aula ni enlace y sin habilidades.
+- **Formulario:**
+  - Etiquetas manuales y un «Enlace externo» genérico.
+  - Un selector de estado en el formulario, con el que guardar podía publicar.
+  - Selector de resultado también en las externas.
+
+**Cambios:**
+- **API:**
+  - **Responsables y contactos (§16–§17):**
+    - `activity_responsibles` (1..N; el primero es el principal y queda en `responsible_user_id`) y `activity_contacts` (0..N).
+    - Docente: responsable él mismo.
+    - Sociedad: integrantes activos de Sociedad.
+    - Dirección: docentes, Sociedad o Dirección.
+    - Administración: tiene que nombrarlo.
+    - Contactos: personal activo; un estudiante solo si lo asigna un docente y está en sus semestres. Ese estudiante no gestiona nada.
+    - Cualquier responsable gestiona la actividad.
+    - `GET /activities/people` busca candidatos (20, con búsqueda, acotados a lo que quien pregunta podría asignar).
+  - **Campos (§18):**
+    - `meeting_url`, `resource_links[]` (https), `image_file_id` (imagen propia PNG, JPG o WEBP, servida por `/api/files` con autorización y protegida de la limpieza de huérfanos), `cancellation_reason`, `cancelled_at` y `updated_by`.
+    - Virtual borra el aula; presencial, el enlace.
+  - **Completa para publicar (§18, §19, §21.1):** el borrador puede quedar incompleto. Publicar o enviar a revisión exige, con un error por campo:
+    - inicio;
+    - fin posterior al inicio;
+    - aula y/o enlace según la modalidad;
+    - al menos un área y una habilidad.
+  - **Título:** un título solo de símbolos se rechaza en su campo.
+  - **Cancelar (§21.6):** exige motivo; el estudiante lo ve y la auditoría lo guarda.
+  - **Ciclo automático (§21.4–§21.5):**
+    - `ActivityLifecycleWorker` (`ACTIVITY_LIFECYCLE_INTERVAL_MS`, 60 s).
+    - Lo que empezó pasa a CLOSED; lo que terminó, a FINISHED, con aviso de elegibilidad si espera credencial.
+    - Cada cambio queda auditado como automático.
+  - **Búsqueda (§20):** `search_keywords` se derivan de áreas (nombre y etiquetas) y habilidades (nombre y alias). `tags` sigue aceptándose por compatibilidad, pero ya no se pide.
+  - **Resultado (§28–§29):**
+    - Se agregan `participation_only` e `institution_issued_certificate`.
+    - `other_authorized_resource` ya no se acepta en escrituras nuevas.
+    - Una externa siempre queda en `external_credential_expected`.
+  - **Guardia área→habilidad:** una habilidad inexistente es 400 en su campo, no 404.
+- **Web (`ActivityManager`):**
+  - **Fechas:**
+    - Inicio y fin en hora de Bolivia (`lib/fechas.ts`, `VITE_APP_TIMEZONE`).
+    - La conversión es exacta aunque el navegador esté en otra zona (C11).
+  - **Formulario:**
+    - Aula y enlace según la modalidad.
+    - Responsables y contactos con combobox de búsqueda (`PersonPicker`).
+    - Enlaces de apoyo e imagen con vista previa.
+    - Resultado solo en las internas, con las cinco opciones y su explicación.
+  - **Acciones:** botones explícitos según el rol; editar algo publicado es «Guardar cambios».
+  - **Cancelar:** pide el motivo en un modal.
+  - **Errores:** cada uno queda debajo de su campo.
+  - **Etiquetas:** desaparecen las etiquetas manuales y su sugerencia por IA.
+
+**Migraciones:** `1780630000000-V32ActivityFields`.
+- **Datos existentes:** se rellenaron 5920 responsables desde `responsible_user_id` y las palabras clave de 3946 actividades.
+- **`down`:** recrea el enum sin los dos valores nuevos. Los pasa a `internal_constancy` o `none`, y eso pierde ese dato.
+- **Verificación:** probada en orden `run → revert → run`. Respaldo previo: `pre-v32-b5.dump`.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch5`, 34/34.** Cubre:
+  - título solo de símbolos;
+  - fin anterior al inicio;
+  - borrador incompleto, y publicar incompleto con 5 campos señalados;
+  - virtual, híbrida y presencial;
+  - enlaces https;
+  - palabras de búsqueda derivadas;
+  - creador, responsables y principal; el responsable que gestiona; el docente que no nombra a otros;
+  - contacto estudiante dentro y fuera del alcance, sin gestión;
+  - buscador acotado;
+  - las cinco opciones de resultado y la externa sin selector;
+  - imagen propia visible y ajena rechazada;
+  - cancelación con y sin motivo, auditada y visible al estudiante;
+  - instante conservado (C11);
+  - cierre y fin automáticos, y la inscripción rechazada después.
+- **Fixtures:** `completarActividad` completa en las pruebas anteriores lo que una actividad mínima no traía (fechas, aula o enlace, área, habilidad neutra), sin pisar lo que la prueba envía. Las suites con su propio `req` usan `ajustarCuerpoActividad`.
+- **Pruebas ajustadas por V3.2:**
+  - V3.6.13: Dirección ahora reasigna responsables (§17).
+  - B4.44, V2.10 y V3.15: escenarios con áreas sin habilidades; §19 exige una.
+  - 18.28: un motivo de compañero puede nombrar una habilidad del catálogo.
+
+**Resultados:**
+- Regresión completa: **1926 correctas y 1 fallo**. El fallo fue 18.28, corregido en la prueba; al repetir, `e2e-objective-7` dio 89/89.
+- Total final: **1927 correctas, 0 fallos**.
+
+**Regresiones:** ninguna funcional.
+
+**Pendientes:**
+- Las tarjetas del estudiante con imagen, fin, enlaces y motivo: BATCH 7.
+- El flujo del certificado institucional: BATCH 8.
+- Las acciones de revisión: BATCH 6.
+
+**Riesgos:**
+- **Actividades antiguas:** las que se publicaron incompletas siguen visibles. Solo se exige completarlas si se edita lo mínimo o se vuelven a publicar.
+- **Ciclo automático:** cierra las actividades antiguas que ya empezaron; es el comportamiento pedido.

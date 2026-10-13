@@ -18,7 +18,7 @@
 //  Las cuentas que crea llevan sufijo de tiempo, por lo que puede repetirse.
 // =============================================================================
 
-import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo, crearProyectoBorrador, repoQueCorrobora } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo, crearProyectoBorrador, repoQueCorrobora, ajustarCuerpoActividad } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -44,6 +44,7 @@ const objective = (t) =>
   console.log(`\n${C.b}${C.m}${'='.repeat(78)}\n ${t}\n${'='.repeat(78)}${C.r}`);
 
 async function req(method, path, { token, body } = {}) {
+  body = await ajustarCuerpoActividad(method, path, token, body);
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   let payload;
   if (body !== undefined) {

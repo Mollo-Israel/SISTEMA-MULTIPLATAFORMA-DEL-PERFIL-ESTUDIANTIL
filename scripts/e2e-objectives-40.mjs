@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
-import { aprobarActividad, codigoUniversitario, leerCorreo, provisionAndActivate } from './lib/fixtures.mjs';
+import { aprobarActividad, codigoUniversitario, leerCorreo, provisionAndActivate, ajustarCuerpoActividad } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -64,6 +64,7 @@ const section = (t) => console.log(`\n[1m${t}[0m`);
 const objective = (t) => console.log(`\n[1m[35m${'═'.repeat(78)}\n ${t}\n${'═'.repeat(78)}[0m`);
 
 async function req(method, path, { token, body, raw } = {}) {
+  body = await ajustarCuerpoActividad(method, path, token, body);
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   let payload;
   if (raw) {

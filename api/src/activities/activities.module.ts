@@ -18,6 +18,9 @@ import { GamificationCriterion } from '../entities/gamification-criterion.entity
 import { AccessModule } from '../access/access.module';
 import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { ActivitiesService } from './activities.service';
+import { ActivityLifecycleWorker } from './activity-lifecycle.worker';
+import { ActivityResponsible } from '../entities/activity-responsible.entity';
+import { ActivityContact } from '../entities/activity-contact.entity';
 import { ActivitiesController } from './activities.controller';
 
 @Module({
@@ -37,13 +40,15 @@ import { ActivitiesController } from './activities.controller';
       GamificationCriterion,
       ExternalCertificate,
       ExternalOpportunityValidationReference,
+      ActivityResponsible,
+      ActivityContact,
     ]),
     TrajectoryModule,
     AccessModule,
     StorageModule,
   ],
   controllers: [ActivitiesController],
-  providers: [ActivitiesService, CredentialEligibilityService],
+  providers: [ActivitiesService, CredentialEligibilityService, ActivityLifecycleWorker],
   exports: [ActivitiesService, CredentialEligibilityService],
 })
 export class ActivitiesModule {}

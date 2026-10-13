@@ -170,8 +170,43 @@ export class Activity {
   @Column({ type: 'enum', enum: ActivityStatus, default: ActivityStatus.DRAFT })
   status: ActivityStatus;
 
+  /**
+   * Etiquetas escritas a mano (histórico). V3.2 §20: ya no se piden; la
+   * búsqueda usa `searchKeywords`, que se derivan de áreas y habilidades.
+   */
   @Column({ type: 'text', array: true, nullable: true })
   tags: string[] | null;
+
+  /** V3.2 §18.2: enlace de la reunión (virtual o híbrida). */
+  @Column({ name: 'meeting_url', type: 'varchar', length: 500, nullable: true })
+  meetingUrl: string | null;
+
+  /** V3.2 §18.2: 0..N enlaces de apoyo (guía, material, sitio, patrocinador). */
+  @Column({ name: 'resource_links', type: 'jsonb', default: () => "'[]'" })
+  resourceLinks: { label: string; url: string }[];
+
+  /** V3.2 §18.3: imagen ilustrativa opcional (archivo subido por quien la gestiona). */
+  @Column({ name: 'image_file_id', type: 'uuid', nullable: true })
+  imageFileId: string | null;
+
+  /** V3.2 §21.6: cancelar exige motivo; el estudiante lo ve. */
+  @Column({ name: 'cancellation_reason', type: 'varchar', length: 500, nullable: true })
+  cancellationReason: string | null;
+
+  @Column({ name: 'cancelled_at', type: 'timestamptz', nullable: true })
+  cancelledAt: Date | null;
+
+  /** V3.2 §9: quién hizo el último cambio. */
+  @Column({ name: 'updated_by', type: 'uuid', nullable: true })
+  updatedById: string | null;
+
+  /**
+   * V3.2 §20: términos de búsqueda derivados de las áreas (nombre y
+   * etiquetas) y de las habilidades (nombre y alias). Metadata de búsqueda:
+   * no alimenta ningún motor ni es evidencia.
+   */
+  @Column({ name: 'search_keywords', type: 'text', array: true, default: () => "'{}'" })
+  searchKeywords: string[];
 
   /**
    * Revisión de Dirección (V2 §27.2). `null` con `requiresReview` = todavía

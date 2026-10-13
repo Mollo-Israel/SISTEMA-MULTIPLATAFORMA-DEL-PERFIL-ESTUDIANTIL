@@ -377,7 +377,11 @@ async function batch6(ctx) {
   check(adminOk.status === 201 && adminOk.data?.reviewStatus === 'not_required' && adminOk.data?.responsibleUserId === docente.userId,
     'V3.6.12 §12.2 Administración publica sin revisión y conserva al responsable real', json({ r: adminOk.data?.reviewStatus, resp: adminOk.data?.responsibleUserId === docente.userId }));
   const reasignaDocente = await req('PATCH', `/activities/${multi.data.id}`, { token: director.token, body: { responsibleUserId: docente.userId } });
-  check(reasignaDocente.status === 403, 'V3.6.13 Solo Administración reasigna el responsable', `status ${reasignaDocente.status}`);
+  // V3.2 §17 amplía V3: Dirección asigna docentes, Sociedad o a sí misma; el docente no reasigna.
+  const propiaDocente = await req('POST', '/activities', { token: docente.token, body: { ...base, title: `Propia del docente ${TS}`, areaIds: [areaA.id] } });
+  const docenteReasigna = await req('PATCH', `/activities/${propiaDocente.data?.id}`, { token: docente.token, body: { responsibleUserId: director.userId } });
+  check(reasignaDocente.status === 200 && reasignaDocente.data?.responsibleUserId === docente.userId && docenteReasigna.status === 403,
+    'V3.6.13 V3.2 §17 Dirección reasigna el responsable; el docente no', `${reasignaDocente.status} / ${docenteReasigna.status}`);
 
   // ----- Listados
   const soloExternas = await req('GET', '/activities?originType=external', { token: director.token });
@@ -1548,6 +1552,9 @@ async function batch15(ctx) {
   const aInt = await area('Computacion Afectiva', 'afectiv');
   const aMej = await area('Cartografia Digital', 'cartog');
   const sInt = (await req('POST', '/skills', { token: ctx.admin, body: { name: `Emotiv${sufijo}`, academicAreaId: aInt.id } })).data;
+  // V3.2 §19: publicar exige una habilidad; estas son neutras para el estudiante.
+  const nInt = (await req('POST', '/skills', { token: ctx.admin, body: { name: `Neutra Afectiva ${sufijo}`, academicAreaId: aInt.id } })).data;
+  const nMej = (await req('POST', '/skills', { token: ctx.admin, body: { name: `Neutra Cartografia ${sufijo}`, academicAreaId: aMej.id } })).data;
 
   await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: aInt.id, priority: 1 }] } });
   await req('PATCH', '/profiles/me', { token: est.token, body: { improvementAreaIds: [aMej.id] } });
@@ -1560,10 +1567,10 @@ async function batch15(ctx) {
     body: { title: `${titulo} ${TS}`, description: 'Escenario de recomendaciones V3.', type: 'academica', categoryId: taller.id, areaId: a.id, status: 'open', ...extra },
   })).data;
   const t1 = await crear('Taller de emociones uno', aInt, { skillIds: [sInt.id] });
-  const t2 = await crear('Taller de emociones dos', aInt);
-  const t3 = await crear('Taller de emociones tres', aInt);
-  const m1 = await crear('Taller de mapas', aMej);
-  const m2 = await crear('Taller de mapas avanzado', aMej);
+  const t2 = await crear('Taller de emociones dos', aInt, { skillIds: [nInt.id] });
+  const t3 = await crear('Taller de emociones tres', aInt, { skillIds: [nInt.id] });
+  const m1 = await crear('Taller de mapas', aMej, { skillIds: [nMej.id] });
+  const m2 = await crear('Taller de mapas avanzado', aMej, { skillIds: [nMej.id] });
 
   const leer = async () => {
     return ((await req('GET', '/recommendations/me', { token: est.token })).data?.groups ?? []).flatMap((g) => g.items);

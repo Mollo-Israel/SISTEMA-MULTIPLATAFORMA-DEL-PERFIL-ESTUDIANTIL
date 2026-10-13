@@ -460,8 +460,46 @@ export const REGISTRATION_MODE_LABEL: Record<RegistrationMode, string> = {
   approval: 'Requiere aprobación',
 };
 
+/** V3.2 §28: lo que una actividad genera al terminar. */
+export type OutcomePolicy =
+  | 'none'
+  | 'participation_only'
+  | 'internal_constancy'
+  | 'institution_issued_certificate'
+  | 'external_credential_expected'
+  | 'other_authorized_resource';
+
+/** V3.2 §16: una persona de la actividad (responsable o contacto). */
+export interface ActivityPerson {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role?: string | null;
+  /** Solo de los contactos: para que el estudiante les escriba. */
+  email?: string;
+}
+
+/** V3.2 §18.2: enlace de apoyo. */
+export interface ResourceLink {
+  label: string;
+  url: string;
+}
+
 export interface Activity {
   id: string;
+  /** V3.2 §16: responsables (el primero es el principal) y contactos. */
+  responsibles?: ActivityPerson[];
+  contacts?: ActivityPerson[];
+  /** V3.2 §18.1–§18.3. */
+  meetingUrl?: string | null;
+  resourceLinks?: ResourceLink[];
+  imageFileId?: string | null;
+  imageUrl?: string | null;
+  /** V3.2 §21.6: motivo de la cancelación. */
+  cancellationReason?: string | null;
+  cancelledAt?: string | null;
+  /** V3.2 §20: términos de búsqueda derivados (no se escriben a mano). */
+  searchKeywords?: string[];
   title: string;
   description: string | null;
   type: string;
@@ -495,7 +533,7 @@ export interface Activity {
   /** V3 §12: interna (de la carrera) o externa (de un proveedor). */
   originType?: 'internal' | 'external';
   /** V3 §14: qué genera al terminar. */
-  outcomePolicy?: 'none' | 'internal_constancy' | 'external_credential_expected' | 'other_authorized_resource';
+  outcomePolicy?: OutcomePolicy;
   provider?: string | null;
   credentialExpected?: boolean;
   expectedIssuerDomains?: string[];

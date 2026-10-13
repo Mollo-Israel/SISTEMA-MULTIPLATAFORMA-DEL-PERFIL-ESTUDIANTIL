@@ -474,7 +474,221 @@ async function batch4(ctx) {
   }
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4 };
+// ===========================================================================
+//  BATCH 5 — Formulario, responsables, modalidad, estados y resultado (§16–§22, §28, §29, §38)
+// ===========================================================================
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+async function subirArchivo(token, bytes, nombre, tipo) {
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type: tipo }), nombre);
+  const res = await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  let data = null;
+  try { data = await res.json(); } catch { /* sin cuerpo */ }
+  return { status: res.status, data };
+}
+
+async function batch5(ctx) {
+  objective('BATCH 5 · Formulario completo, responsables y contactos, modalidad, cancelación y ciclo de vida');
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const web = areas.find((a) => a.code === 'desarrollo_web');
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const react = skills.find((s) => s.code === 'react');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Mara', lastName: 'Quispe', email: correoStaff('b5dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ivo', lastName: 'Mendez', email: correoStaff('b5doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [3] } });
+  const sociedad = await provisionAndActivate(ctx.admin, { firstName: 'Sara', lastName: 'Rios', email: correoEst('b5soc'), role: 'SCIENTIFIC_SOCIETY', semester: 5 });
+  const enAlcance = await provisionAndActivate(ctx.admin, { firstName: 'Luz', lastName: 'Paz', email: correoEst('b5in'), role: 'STUDENT', semester: 3 });
+  const fuera = await provisionAndActivate(ctx.admin, { firstName: 'Ana', lastName: 'Vera', email: correoEst('b5out'), role: 'STUDENT', semester: 7 });
+  await req('POST', '/profiles/me', { token: enAlcance.token, body: {} });
+  await req('POST', '/profiles/me', { token: fuera.token, body: {} });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const en = (h) => new Date(Date.now() + h * 3_600_000).toISOString();
+  const completa = {
+    type: 'academica', categoryId: taller.id, semesterScope: [3], areaIds: [web.id], skillIds: [react.id],
+    activityDate: en(48), endAt: en(50), modality: 'presencial', location: 'Aula 12',
+  };
+
+  // ----- §6.4 Validaciones por campo
+  const simbolos = await req('POST', '/activities', { token: director.token, body: { ...completa, title: '### !!! ###' } });
+  check(simbolos.status === 400 && simbolos.data?.fields?.title,
+    'V32.5.1 §6.4 Un título solo de símbolos se rechaza en su campo', json(simbolos.data?.fields));
+  const alReves = await req('POST', '/activities', { token: director.token, body: { ...completa, title: `Fechas ${TS}`, endAt: en(47) } });
+  check(alReves.status === 400 && /posterior/.test(json(alReves.data?.fields?.endAt)),
+    'V32.5.2 §38 La fecha final debe ser posterior a la inicial (error en endAt)', json(alReves.data?.fields));
+
+  // ----- §21.1 Borrador incompleto sí; publicar incompleto no
+  const borrador = await req('POST', '/activities', {
+    token: director.token,
+    body: { __sinCompletar: true, title: `Idea suelta ${TS}`, type: 'academica', categoryId: taller.id },
+  });
+  check(borrador.status === 201 && borrador.data?.status === 'draft', 'V32.5.3 §21.1 Un borrador puede quedar incompleto', `status ${borrador.status}`);
+  const publicar = await req('PATCH', `/activities/${borrador.data?.id}`, { token: director.token, body: { status: 'open' } });
+  const faltan = Object.keys(publicar.data?.fields ?? {}).sort();
+  check(publicar.status === 400 && ['activityDate', 'areaIds', 'endAt', 'location', 'skillIds'].every((c) => faltan.includes(c)),
+    'V32.5.4 §18–§19 Publicarlo incompleto se rechaza, campo por campo', json(faltan));
+
+  // ----- §18.1 Modalidad
+  const virtualSin = await req('POST', '/activities', {
+    token: director.token, body: { ...completa, __sinCompletar: true, title: `Virtual ${TS}`, modality: 'virtual', location: 'Aula 9', status: 'open' },
+  });
+  check(virtualSin.status === 400 && virtualSin.data?.fields?.meetingUrl,
+    'V32.5.5 §18.1 Virtual exige el enlace de la reunión', json(virtualSin.data?.fields));
+  const virtual = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...completa, title: `Virtual ${TS}`, modality: 'virtual', location: 'Aula 9', meetingUrl: 'https://meet.google.com/abc-defg-hij', status: 'open' },
+  });
+  check(virtual.status === 201 && virtual.data?.location === null && virtual.data?.meetingUrl,
+    'V32.5.6 §18.1 Virtual guarda el enlace y oculta el aula', json({ l: virtual.data?.location, m: virtual.data?.meetingUrl }));
+  const hibridaSin = await req('POST', '/activities', {
+    token: director.token, body: { ...completa, __sinCompletar: true, title: `Hibrida ${TS}`, modality: 'hibrida', status: 'open' },
+  });
+  check(hibridaSin.status === 400 && hibridaSin.data?.fields?.meetingUrl && !hibridaSin.data?.fields?.location,
+    'V32.5.7 §18.1 Híbrida pide aula y enlace', json(hibridaSin.data?.fields));
+  const presencial = await req('POST', '/activities', {
+    token: director.token, body: { ...completa, title: `Presencial ${TS}`, meetingUrl: 'https://meet.google.com/x', status: 'open' },
+  });
+  check(presencial.status === 201 && presencial.data?.meetingUrl === null,
+    'V32.5.8 §18.1 Presencial no guarda enlace de reunión', json(presencial.data?.meetingUrl));
+
+  // ----- §18.2 Enlaces de apoyo
+  const enlaces = await req('PATCH', `/activities/${presencial.data?.id}`, {
+    token: director.token,
+    body: { resourceLinks: [{ label: 'Guía', url: 'https://univalle.edu/guia.pdf' }, { label: 'Sitio', url: 'https://evento.univalle.edu' }] },
+  });
+  check(enlaces.status === 200 && (enlaces.data?.resourceLinks ?? []).length === 2,
+    'V32.5.9 §18.2 Se guardan varios enlaces de apoyo', json(enlaces.data?.resourceLinks));
+  const http = await req('PATCH', `/activities/${presencial.data?.id}`, {
+    token: director.token, body: { resourceLinks: [{ label: 'Inseguro', url: 'http://sitio.com' }] },
+  });
+  check(http.status === 400, 'V32.5.10 §18.2 Un enlace que no es https se rechaza', `status ${http.status}`);
+
+  // ----- §20 Palabras de búsqueda derivadas
+  const kw = presencial.data?.searchKeywords ?? [];
+  check(kw.includes('desarrollo web') && kw.includes('react') && kw.includes('reactjs'),
+    'V32.5.11 §20 Las palabras de búsqueda salen de áreas, habilidades y alias (sin escribirlas)', json(kw));
+
+  // ----- §16–§17 Responsables y contactos
+  const conResp = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...completa, title: `Con responsables ${TS}`, responsibleUserIds: [docente.userId, director.userId], status: 'open' },
+  });
+  check(conResp.status === 201 && conResp.data?.responsibleUserId === docente.userId
+      && json((conResp.data?.responsibles ?? []).map((p) => p.id)) === json([docente.userId, director.userId])
+      && conResp.data?.creatorId === director.userId,
+    'V32.5.12 §16 Creador, responsables (1..N) y principal quedan separados', json(conResp.data?.responsibles));
+  const gestiona = await req('PATCH', `/activities/${conResp.data?.id}`, { token: docente.token, body: { location: 'Aula 13' } });
+  check(gestiona.status === 200, 'V32.5.13 §16 Un responsable gestiona la actividad aunque no la creó', `status ${gestiona.status}`);
+  const docOtros = await req('POST', '/activities', {
+    token: docente.token, body: { ...completa, title: `Del docente ${TS}`, responsibleUserIds: [director.userId] },
+  });
+  check(docOtros.status === 400 && docOtros.data?.fields?.responsibleUserIds,
+    'V32.5.14 §17 El docente es el responsable de lo suyo: no nombra a otros', json(docOtros.data?.fields));
+  const conContacto = await req('POST', '/activities', {
+    token: docente.token, body: { ...completa, title: `Con contacto ${TS}`, contactUserIds: [enAlcance.userId] },
+  });
+  check(conContacto.status === 201 && (conContacto.data?.contacts ?? [])[0]?.id === enAlcance.userId,
+    'V32.5.15 §16 El docente suma como contacto a un estudiante de su alcance', json(conContacto.data?.contacts));
+  const contactoFuera = await req('POST', '/activities', {
+    token: docente.token, body: { ...completa, title: `Contacto fuera ${TS}`, contactUserIds: [fuera.userId] },
+  });
+  check(contactoFuera.status === 400 && contactoFuera.data?.fields?.contactUserIds,
+    'V32.5.16 §16 Un estudiante fuera de su alcance no puede ser contacto', json(contactoFuera.data?.fields));
+  const contactoDir = await req('POST', '/activities', {
+    token: director.token, body: { ...completa, title: `Contacto dir ${TS}`, contactUserIds: [enAlcance.userId] },
+  });
+  check(contactoDir.status === 400, 'V32.5.17 §16 Solo un docente asigna a un estudiante como contacto', `status ${contactoDir.status}`);
+  const estudianteEdita = await req('PATCH', `/activities/${conContacto.data?.id}`, { token: enAlcance.token, body: { title: `Tomada ${TS}` } });
+  check(estudianteEdita.status === 403, 'V32.5.18 §16 El estudiante contacto no gestiona nada -> 403', `status ${estudianteEdita.status}`);
+  const candidatos = await req('GET', `/activities/people?kind=contact&type=academica&q=${encodeURIComponent(correoEst('b5out'))}`, { token: docente.token });
+  const candidatosIn = await req('GET', `/activities/people?kind=contact&type=academica&q=${encodeURIComponent(correoEst('b5in'))}`, { token: docente.token });
+  check(!(candidatos.data ?? []).some((p) => p.id === fuera.userId) && (candidatosIn.data ?? []).some((p) => p.id === enAlcance.userId),
+    'V32.5.19 §6.3 El buscador de contactos solo ofrece estudiantes del alcance del docente', json(candidatos.data?.length));
+  const socResp = await req('GET', '/activities/people?kind=responsible&type=extracurricular', { token: sociedad.token });
+  check((socResp.data ?? []).every((p) => p.role === 'SCIENTIFIC_SOCIETY'),
+    'V32.5.20 §17 La Sociedad solo puede nombrar responsables de la Sociedad', json((socResp.data ?? []).map((p) => p.role)));
+  const pideEst = await req('GET', '/activities/people', { token: enAlcance.token });
+  check(pideEst.status === 403, 'V32.5.21 Un estudiante no consulta candidatos -> 403', `status ${pideEst.status}`);
+
+  // ----- §28–§29 Resultado
+  const participacion = await req('POST', '/activities', { token: director.token, body: { ...completa, title: `Solo participación ${TS}`, outcomePolicy: 'participation_only' } });
+  const certificado = await req('POST', '/activities', { token: director.token, body: { ...completa, title: `Certificado ${TS}`, outcomePolicy: 'institution_issued_certificate' } });
+  check(participacion.data?.outcomePolicy === 'participation_only' && certificado.data?.outcomePolicy === 'institution_issued_certificate',
+    'V32.5.22 §28 Se ofrecen PARTICIPATION_ONLY e INSTITUTION_ISSUED_CERTIFICATE', json([participacion.data?.outcomePolicy, certificado.data?.outcomePolicy]));
+  const vieja = await req('POST', '/activities', { token: director.token, body: { ...completa, title: `Vieja ${TS}`, outcomePolicy: 'other_authorized_resource' } });
+  check(vieja.status === 400 && vieja.data?.fields?.outcomePolicy, 'V32.5.23 §28 La opción histórica ya no se ofrece', `status ${vieja.status}`);
+  const externa = await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      ...completa, title: `Curso externo ${TS}`, originType: 'external', outcomePolicy: 'none',
+      provider: 'Cisco Networking Academy', externalUrl: 'https://www.netacad.com/courses/ccna',
+    },
+  });
+  check(externa.status === 201 && externa.data?.outcomePolicy === 'external_credential_expected',
+    'V32.5.24 §29 Una externa no elige resultado: siempre espera la credencial del proveedor', json(externa.data?.outcomePolicy));
+
+  // ----- §18.3 Imagen
+  const png = await subirArchivo(director.token, PNG_1X1, 'portada.png', 'image/png');
+  const conImagen = await req('PATCH', `/activities/${presencial.data?.id}`, { token: director.token, body: { imageFileId: png.data?.id } });
+  check(conImagen.status === 200 && /\/api\/files\//.test(conImagen.data?.imageUrl ?? ''),
+    'V32.5.25 §18.3 Una imagen subida queda como ilustración de la actividad', json(conImagen.data?.imageUrl));
+  const vista = await fetch(`${API.replace(/\/api$/, '')}${conImagen.data?.imageUrl}`, { headers: { Authorization: `Bearer ${enAlcance.token}` } });
+  check(vista.status === 200, 'V32.5.26 §18.3 Publicada, un estudiante puede ver su imagen', `status ${vista.status}`);
+  const ajena = await subirArchivo(docente.token, PNG_1X1, 'ajena.png', 'image/png');
+  const conAjena = await req('PATCH', `/activities/${presencial.data?.id}`, { token: director.token, body: { imageFileId: ajena.data?.id } });
+  check(conAjena.status === 400 && conAjena.data?.fields?.imageFileId, 'V32.5.27 §18.3 No se usa como imagen un archivo de otra persona', `status ${conAjena.status}`);
+
+  // ----- §21.6 Cancelar con motivo
+  const sinMotivo = await fetch(`${API}/activities/${virtual.data?.id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${director.token}` },
+    body: JSON.stringify({ status: 'cancelled' }),
+  });
+  const sinMotivoData = await sinMotivo.json().catch(() => null);
+  check(sinMotivo.status === 400 && sinMotivoData?.fields?.cancellationReason,
+    'V32.5.28 §21.6 Cancelar sin motivo se rechaza', `status ${sinMotivo.status}`);
+  const cancelada = await req('PATCH', `/activities/${virtual.data?.id}`, {
+    token: director.token, body: { status: 'cancelled', cancellationReason: 'El expositor no puede asistir; se reprogramará.' },
+  });
+  const vistaEst = await req('GET', `/activities/${virtual.data?.id}`, { token: enAlcance.token });
+  check(cancelada.status === 200 && vistaEst.data?.cancellationReason === 'El expositor no puede asistir; se reprogramará.',
+    'V32.5.29 §21.6 / §37 El estudiante ve el motivo de la cancelación', json(vistaEst.data?.cancellationReason));
+  const auditCancel = await req('GET', `/audit/events?eventType=ACTIVITY_STATUS_CHANGED&entityId=${virtual.data?.id}`, { token: ctx.admin });
+  check((auditCancel.data?.items ?? auditCancel.data ?? []).some((e) => e.metadata?.motivo),
+    'V32.5.30 §21.6 La cancelación queda auditada con su motivo');
+
+  // ----- §38 La API conserva el instante exacto
+  const instante = '2026-11-20T20:45:00.000Z';
+  const conHora = await req('POST', '/activities', { token: director.token, body: { ...completa, title: `Hora ${TS}`, activityDate: instante, endAt: '2026-11-20T22:45:00.000Z' } });
+  const releida = await req('PATCH', `/activities/${conHora.data?.id}`, { token: director.token, body: { location: 'Aula 20' } });
+  check(new Date(releida.data?.eventDate).toISOString() === instante,
+    'V32.5.31 §38 (C11) Editar no corre la hora: se conserva el instante', json(releida.data?.eventDate));
+
+  // ----- §21.4–§21.5 Cierre y fin automáticos
+  const empezada = await req('POST', '/activities', {
+    token: director.token, body: { ...completa, title: `Empezada ${TS}`, activityDate: en(-1), endAt: en(5), status: 'open' },
+  });
+  const terminando = await req('POST', '/activities', {
+    token: director.token, body: { ...completa, title: `Terminando ${TS}`, activityDate: en(-2), endAt: new Date(Date.now() + 3000).toISOString(), status: 'open' },
+  });
+  let e1 = null;
+  let e2 = null;
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    e1 = (await req('GET', `/activities/${empezada.data?.id}`, { token: director.token })).data?.status;
+    e2 = (await req('GET', `/activities/${terminando.data?.id}`, { token: director.token })).data?.status;
+    if (e1 === 'closed' && e2 === 'finished') break;
+  }
+  check(e1 === 'closed', 'V32.5.32 §21.4 Lo que ya empezó cierra sus inscripciones solo (CLOSED)', `estado ${e1}`);
+  check(e2 === 'finished', 'V32.5.33 §21.5 Lo que ya terminó queda FINISHED solo', `estado ${e2}`);
+  const tarde = await req('POST', `/activities/${empezada.data?.id}/register`, { token: enAlcance.token });
+  check(tarde.status === 400, 'V32.5.34 §21.4 Cerrada, no acepta inscripciones', `status ${tarde.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

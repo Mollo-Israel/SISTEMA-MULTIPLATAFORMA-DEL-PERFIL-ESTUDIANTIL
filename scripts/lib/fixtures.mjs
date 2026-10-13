@@ -26,6 +26,11 @@ export const ADMIN_CREDENTIALS = {
 };
 
 export async function req(method, path, { token, body, raw } = {}) {
+  // V3.2 §18–§21: publicar exige una actividad completa. Las suites anteriores
+  // crean actividades mínimas porque prueban otra cosa; aquí se completan los
+  // datos que falten (nunca se pisa lo que la prueba envía). Una prueba que
+  // necesite una actividad incompleta lo pide con `__sinCompletar: true`.
+  if (body && typeof body === 'object' && !raw) body = await ajustarCuerpoActividad(method, path, token, body);
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
@@ -41,6 +46,97 @@ export async function req(method, path, { token, body, raw } = {}) {
     /* respuesta sin cuerpo */
   }
   return { status: res.status, data };
+}
+
+/**
+ * V3.2 §18–§21.6: completa lo mínimo de una actividad nueva y el motivo de
+ * una cancelación. Lo usan también las suites que tienen su propio `req`.
+ */
+export async function ajustarCuerpoActividad(method, path, token, body) {
+  if (!body || typeof body !== 'object') return body;
+  if (method === 'POST' && path === '/activities') return completarActividad(token, body);
+  if (method === 'PATCH' && /^\/activities\/[0-9a-f-]{36}$/.test(path)
+    && body.status === 'cancelled' && body.cancellationReason === undefined) {
+    return { ...body, cancellationReason: 'Cancelada por la prueba automática.' };
+  }
+  return body;
+}
+
+let catalogoCache = null;
+let adminDePrueba = null;
+
+/** Una habilidad neutra para un área de prueba que no tiene ninguna. */
+async function habilidadNeutra(areaId) {
+  adminDePrueba ??= await loginAdmin();
+  const letras = String.fromCharCode(...areaId.replace(/[^0-9]/g, '').slice(0, 8).split('').map((d) => 65 + Number(d)));
+  const creada = await req('POST', '/skills', {
+    token: adminDePrueba,
+    body: { name: `Base Neutra ${letras} ${String.fromCharCode(...String(Date.now()).slice(-5).split('').map((d) => 65 + Number(d)))}`, academicAreaId: areaId },
+  });
+  catalogoCache = null;
+  return creada.status === 201 ? creada.data : null;
+}
+
+/** Áreas y habilidades del catálogo, una sola vez por proceso. */
+async function catalogoDePrueba(token) {
+  if (catalogoCache) return catalogoCache;
+  const [areas, skills] = await Promise.all([
+    req('GET', '/academic-areas', { token }),
+    req('GET', '/skills', { token }),
+  ]);
+  if (areas.status !== 200 || skills.status !== 200) return { areas: [], skills: [] };
+  catalogoCache = { areas: areas.data ?? [], skills: skills.data ?? [] };
+  return catalogoCache;
+}
+
+/** Completa lo mínimo para publicar (V3.2 §18): fechas, lugar o enlace, área y habilidad. */
+export async function completarActividad(token, original) {
+  const { __sinCompletar, ...body } = original;
+  if (__sinCompletar) return body;
+  const out = { ...body };
+  const enUnaSemana = Date.now() + 14 * 24 * 3_600_000;
+  if (out.activityDate === undefined) out.activityDate = new Date(enUnaSemana).toISOString();
+  if (out.endAt === undefined && out.activityDate) {
+    const inicio = new Date(out.activityDate).getTime();
+    // Si la prueba la fecha en el pasado, se mantiene «en curso» hasta mañana.
+    out.endAt = new Date(Math.max(inicio + 2 * 3_600_000, Date.now() + 24 * 3_600_000)).toISOString();
+  }
+  const externa = out.originType === 'external';
+  const modalidad = out.modality ?? 'presencial';
+  if (!externa && (modalidad === 'presencial' || modalidad === 'hibrida') && out.location === undefined) {
+    out.location = 'Aula de pruebas';
+  }
+  if (!externa && (modalidad === 'virtual' || modalidad === 'hibrida') && out.meetingUrl === undefined) {
+    out.meetingUrl = 'https://meet.afinia-pruebas.org/sala';
+  }
+  const areasPedidas = out.areaIds ?? (out.areaId ? [out.areaId] : undefined);
+  if (areasPedidas === undefined || out.skillIds === undefined) {
+    const { areas, skills } = await catalogoDePrueba(token);
+    let areaIds = areasPedidas;
+    if (areaIds === undefined) {
+      const base = areas.find((a) => a.code === 'ingenieria_de_software') ?? areas[0];
+      areaIds = base ? [base.id] : [];
+      if (out.areaId === undefined) out.areaIds = areaIds;
+    }
+    if (out.skillIds === undefined) {
+      const buscar = (lista) => lista.find((s) => s.isActive !== false
+        && (areaIds.includes(s.academicAreaId) || (s.secondaryAreaIds ?? []).some((a) => areaIds.includes(a))));
+      let propia = buscar(skills);
+      if (!propia) {
+        // Un área recién creada por la prueba: se vuelve a leer el catálogo.
+        catalogoCache = null;
+        propia = buscar((await catalogoDePrueba(token)).skills);
+      }
+      if (!propia && areaIds.length > 0) {
+        // Área creada por la prueba y todavía sin habilidades: se le da una
+        // neutra (§19 exige al menos una para publicar). No coincide con
+        // intereses ni declaraciones de nadie.
+        propia = await habilidadNeutra(areaIds[0]);
+      }
+      if (propia) out.skillIds = [propia.id];
+    }
+  }
+  return out;
 }
 
 // ===========================================================================

@@ -18,7 +18,7 @@
 //  Las cuentas que crea llevan sufijo de tiempo, por lo que puede repetirse.
 // =============================================================================
 
-import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo } from './lib/fixtures.mjs';
+import { leerCorreo, provisionAndActivate, aprobarActividad, crearProyectoActivo, ajustarCuerpoActividad } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -58,6 +58,7 @@ const objective = (t) =>
   console.log(`\n${C.b}${C.m}${'='.repeat(78)}\n ${t}\n${'='.repeat(78)}${C.r}`);
 
 async function req(method, path, { token, body } = {}) {
+  body = await ajustarCuerpoActividad(method, path, token, body);
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   let payload;
   if (body !== undefined) {
@@ -510,7 +511,9 @@ async function rf18Exclusiones(ctx) {
   check(!JSON.stringify(mates).includes('@'), '18.27 Ninguna tarjeta de companero incluye correo');
 
   const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
-  const nombres = new Set(areas.map((a) => a.name));
+  const catalogoSkills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  // Áreas y habilidades del catálogo: son lo único que un motivo puede nombrar.
+  const nombres = new Set([...areas.map((a) => a.name), ...catalogoSkills.map((s) => s.name)]);
   // §62 anade prioridades -habilidades faltantes, respaldo relacionado,
   // disponibilidad- y con ellas plantillas nuevas. Lo que NO puede aparecer
   // sigue siendo lo mismo: el nivel o el puntaje del companero.
@@ -522,6 +525,8 @@ async function rf18Exclusiones(ctx) {
     const complementaria = /^Puede aportar en (.+), donde quieres fortalecerte$/.exec(label);
     if (complementaria) return nombres.has(complementaria[1]);
     if (/^Declara .+, que tú todavía no declaras$/.test(label)) return true;
+    const experiencia = /^Tiene experiencia respaldada en (.+), que tú todavía no$/.exec(label);
+    if (experiencia) return nombres.has(experiencia[1]);
     return /^Declaró que (busca sumarse a algo|escucha propuestas)$/.test(label);
   };
   check(

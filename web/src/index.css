@@ -1254,3 +1254,15 @@ button.chip { cursor: pointer; font-family: var(--font); }
 
 /* V3.2 §11.4: habilidad elegida en otra de las áreas seleccionadas. */
 .chip.chip-otra { border-style: dashed; opacity: 0.75; }
+
+/* --- V3.2 §6.3, §16–§18 · Personas, enlaces e imagen de una actividad --- */
+.person-picker { position: relative; }
+.person-options { position: absolute; z-index: 30; left: 0; right: 0; margin: 0.2rem 0 0; padding: 0.25rem; list-style: none; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius); box-shadow: var(--shadow); max-height: 260px; overflow-y: auto; }
+.person-options li { padding: 0.4rem 0.55rem; border-radius: 6px; cursor: pointer; }
+.person-options li[role='option']:hover { background: var(--bordo-100); }
+.chip-x { border: none; background: none; color: inherit; cursor: pointer; padding: 0 0 0 0.25rem; display: inline-flex; align-items: center; }
+.links-editor { display: grid; gap: 0.4rem; }
+.links-editor .link-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 0.4rem; align-items: start; }
+@media (max-width: 560px) { .links-editor .link-row { grid-template-columns: 1fr; } }
+.activity-image-preview { max-width: 240px; max-height: 140px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--gray-200); display: block; margin-bottom: 0.35rem; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
