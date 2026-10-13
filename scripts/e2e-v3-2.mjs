@@ -765,8 +765,8 @@ async function batch6(ctx) {
   await req('POST', `/activities/${bid}/submit`, { token: docA.token, body: {} });
   const aprueba = await req('POST', `/activities/${bid}/review`, { token: director.token, body: { decision: 'approve' } });
   const avisoAp = (await req('GET', '/notifications/me', { token: docA.token })).data ?? [];
-  check(aprueba.status === 200 && avisoAp.some((n) => n.type === 'ACTIVITY_REVIEW_APPROVED' && n.entityId === bid),
-    'V32.6.18 §47 Y ACTIVITY_REVIEW_APPROVED al aprobarse', json(avisoAp.map((n) => n.type)));
+  check(aprueba.status === 200 && avisoAp.some((n) => n.type === 'ACTIVITY_APPROVED' && n.entityId === bid),
+    'V32.6.18 §47 Y ACTIVITY_APPROVED al aprobarse', json(avisoAp.map((n) => n.type)));
 
   // ----- §23.3 (C10) Aprobada: el creador ya no cambia el contenido
   const cambiaTitulo = await req('PATCH', `/activities/${bid}`, { token: docA.token, body: { title: `Cambiada ${TS}` } });
@@ -1139,7 +1139,51 @@ async function batch11(ctx) {
     'V32.11.5 §11.4 Si se quita el área del contexto, vuelve a su área principal', `status ${sinWeb.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
+// ===========================================================================
+//  BATCH 14 — Credenciales externas: varias áreas y contexto área + habilidad (§33, §50.1)
+// ===========================================================================
+async function batch14(ctx) {
+  objective('BATCH 14 · Credencial externa histórica con áreas y contexto por tecnología');
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const ia = areas.find((a) => a.code === 'inteligencia_artificial');
+  const web = areas.find((a) => a.code === 'desarrollo_web');
+  const redes = areas.find((a) => a.code === 'redes');
+  const python = skills.find((s) => s.code === 'python');
+  const react = skills.find((s) => s.code === 'react');
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Dina', lastName: 'Kantuta', email: correoEst('b14est'), role: 'STUDENT', semester: 7 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const leer = async (id) => ((await req('GET', '/certificates/external/my', { token: est.token })).data ?? []).find((c) => c.id === id);
+  const contexto = (c, id) => (c?.skills ?? []).find((s) => s.skillId === id)?.academicAreaId;
+
+  const creada = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: {
+      certificateName: `Full stack con IA ${TS}`, issuer: 'Plataforma de cursos', issueDate: '2025-06-01',
+      areaIds: [ia.id, web.id], skillIds: [python.id, react.id], skillContexts: [{ skillId: python.id, areaId: web.id }],
+    },
+  });
+  const c1 = await leer(creada.data?.id);
+  check(creada.status === 201 && c1?.academicAreaId === ia.id,
+    'V32.14.1 §33 La credencial histórica guarda varias áreas (la primera es la principal)', `status ${creada.status} ${json(creada.data?.fields ?? creada.data?.message)}`);
+  check(contexto(c1, python.id) === web.id && contexto(c1, react.id) === web.id,
+    'V32.14.2 §50.1 Cada tecnología guarda el área en que se acredita', json(c1?.skills));
+  const ajena = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: { certificateName: `Redes y React ${TS}`, issuer: 'Academia de redes', areaIds: [redes.id], skillIds: [react.id] },
+  });
+  check(ajena.status === 400 && ajena.data?.fields?.skillIds,
+    'V32.14.3 §33 Con áreas declaradas, una tecnología de otra área se rechaza en su campo', json(ajena.data?.fields));
+  const legado = await req('POST', '/certificates/external', {
+    token: est.token,
+    body: { certificateName: `Solo area ${TS}`, issuer: 'Academia de datos', academicAreaId: ia.id, skillIds: [python.id] },
+  });
+  const c3 = await leer(legado.data?.id);
+  check(legado.status === 201 && contexto(c3, python.id) === ia.id,
+    'V32.14.4 Compatibilidad: con solo `academicAreaId` sigue funcionando y deduce el contexto', json(c3?.skills));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch14 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

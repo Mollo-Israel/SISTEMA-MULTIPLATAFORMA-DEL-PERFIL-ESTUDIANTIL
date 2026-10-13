@@ -860,3 +860,83 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Resultados:** cubierto por la regresión del BATCH 11 (2000 correctas, 0 fallos); las pruebas citadas pasan.
 
 **Riesgos:** ninguno.
+
+---
+
+## BATCH 13 — Equipos y notificaciones
+
+**ESTADO:** completo
+
+**Objetivo:** que los eventos de §47 existan con su nombre; verificar equipos (§45–§46) y deduplicación.
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **Ya existían:**
+  - centro de avisos con deduplicación, leído/no leído y recordatorios (V3.1 B16);
+  - `ACTIVITY_STARTING`, `ACTIVITY_REGISTRATION_ACCEPTED`, `PARTICIPATION_CONFIRMED`;
+  - `EXTERNAL_EVIDENCE_AVAILABLE`, `PROJECT_CONTRIBUTION_CHANGED`, `TEACHER_FEEDBACK_RECEIVED`;
+  - `CONTACT_REQUEST`, `TEAM_APPLICATION`, `TEAM_APPLICATION_ACCEPTED/REJECTED`.
+- **Revisión de actividades:** los avisos `ACTIVITY_REVIEW_SUBMITTED` y `ACTIVITY_REVIEW_OBSERVED` se agregaron en el BATCH 6.
+- **Nombres que no coincidían con la especificación:**
+  - `PROJECT_MEMBER_CONFIRMATION_REQUIRED` en lugar de `PROJECT_CONFIRMATION_REQUIRED`;
+  - `ACTIVITY_REVIEW_APPROVED` en lugar de `ACTIVITY_APPROVED`.
+- **Equipos y necesidades** (necesidad → semestres → áreas → habilidades → cupos → postulación → equipo): ya estaban (V3.1 B17; pruebas V3.17.x).
+
+**Cambios:**
+- Se emiten `PROJECT_CONFIRMATION_REQUIRED` y `ACTIVITY_APPROVED`.
+- Una migración renombra el tipo de los avisos ya enviados; su contenido no cambia.
+- La web no dependía del tipo (muestra título y cuerpo).
+
+**Migraciones:** `1780680000000-V32NotificationNames` (`UPDATE` reversible). Probada en orden `run → revert → run`. Respaldo previo: `pre-v32-b13.dump`.
+
+**Pruebas:** V3.16.14 y V32.6.18 verifican los nombres nuevos; `e2e-v3 batch16` dio 17/17 y `e2e-v3-2 batch6` 28/28.
+
+**Resultados:** regresión completa compartida con el BATCH 14 (aplicados juntos, cada uno con sus pruebas): **2004 correctas, 0 fallos**.
+
+**Regresiones:** ninguna.
+
+**Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 14 — Credenciales externas
+
+**ESTADO:** completo
+
+**Objetivo:**
+- Verificar §30–§34: inscripción externa, validación, OCR → INCONCLUSIVE, revisión manual histórica y respaldo.
+- Agregar las áreas de la credencial y el contexto área + habilidad (§33, §50.1).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **Ya existía (V3.1 B8–B9; pruebas V3.8.x–V3.9.x):**
+  - el flujo aceptado → terminado → elegible → evidencia;
+  - la validación en orden (fuente oficial, URL o ID, QR opcional, PDF nativo, OCR, comparación, IA opcional, resultado determinista);
+  - el fallo técnico como INCONCLUSIVE (`ocr.port.ts`);
+  - la revisión manual excepcional con quién, cuándo, motivo y decisión;
+  - el respaldo DECLARED / SUPPORTED / CORROBORATED / FLAGGED.
+- **Faltaba:** la credencial tenía una sola área, y sus tecnologías no estaban ligadas a ella.
+
+**Cambios:**
+- **API:**
+  - `external_certificate_areas` (varias áreas; la principal sigue en `academic_area_id`).
+  - `external_certificate_skills.academic_area_id` (contexto).
+  - `areaIds` y `skillContexts` en el DTO.
+  - Si llegan `areaIds`, las tecnologías tienen que pertenecer a esas áreas (400 en su campo).
+  - Con solo `academicAreaId` (clientes anteriores) sigue funcionando y deduce el contexto.
+- **Web:** el formulario de credencial usa el selector de áreas y habilidades (varias áreas, tecnologías por área, contexto) en lugar de un área suelta y una búsqueda sin área.
+
+**Migraciones:** `1780690000000-V32CertificateContext`. Copia la principal a la tabla nueva y rellena el contexto con esta prioridad: principal → secundaria → área de la credencial. Probada en orden `run → revert → run`.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch14`, 4/4.** Cubre:
+  - varias áreas con su principal;
+  - el contexto por tecnología;
+  - la tecnología de un área ajena, con 400;
+  - la compatibilidad con `academicAreaId`.
+
+**Resultados:** **2004 correctas, 0 fallos** (21 suites).
+
+**Regresiones:** ninguna.
+
+**Pendientes:** la afinidad usa estas áreas y contextos en el BATCH 15.
+
+**Riesgos:** ninguno conocido.

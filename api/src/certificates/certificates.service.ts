@@ -11,7 +11,8 @@ import { ILike, In, Repository } from 'typeorm';
 import { ExternalCredentialSource, ValidationResourceType } from '@perfil/shared';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { CredentialEligibilityService } from '../activities/credential-eligibility.service';
-import { ExternalCertificate, ExternalCertificateSkill } from '../entities/external-certificate.entity';
+import { ExternalCertificate, ExternalCertificateArea, ExternalCertificateSkill } from '../entities/external-certificate.entity';
+import { assertSkillsBelongToAreas, resolveSkillContexts } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
@@ -35,6 +36,8 @@ export class CertificatesService {
     @InjectRepository(Skill) private readonly skillsRepo: Repository<Skill>,
     @InjectRepository(ExternalCertificateSkill)
     private readonly certificateSkills: Repository<ExternalCertificateSkill>,
+    @InjectRepository(ExternalCertificateArea)
+    private readonly areasCert: Repository<ExternalCertificateArea>,
     private readonly uploads: UploadsService,
     private readonly validation: ValidationService,
     @Inject(TRAJECTORY_RECALCULATION)
@@ -59,6 +62,11 @@ export class CertificatesService {
     }
     await this.assertAreaExists(dto.academicAreaId);
     await this.assertSkillsExist(dto.skillIds);
+    const areasCert = await this.areasDeCredencial(dto.academicAreaId ?? null, dto.areaIds);
+    if (dto.areaIds !== undefined) {
+      await assertSkillsBelongToAreas(this.certificates.manager, dto.skillIds, areasCert);
+    }
+    const contextos = await resolveSkillContexts(this.certificates.manager, dto.skillIds ?? [], areasCert, dto.skillContexts);
 
     // V3 §15/§16: el origen lo decide el servidor. Con oportunidad, solo si
     // de verdad es elegible para este estudiante: no basta con conocer un id.
@@ -88,7 +96,7 @@ export class CertificatesService {
       issueDate: dto.issueDate ?? null,
       credentialId: dto.credentialId ?? null,
       description: dto.description ?? null,
-      academicAreaId: dto.academicAreaId ?? null,
+      academicAreaId: areasCert[0] ?? null,
       storedFileId: archivo?.id ?? null,
       fileUrl: archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null,
       fileName: archivo?.originalFilename ?? null,
@@ -98,7 +106,8 @@ export class CertificatesService {
       source: dto.activityId ? ExternalCredentialSource.OPPORTUNITY : ExternalCredentialSource.HISTORICAL_EXTERNAL,
     });
     const saved = await this.certificates.save(certificate);
-    if (dto.skillIds?.length) await this.replaceSkills(saved.id, dto.skillIds);
+    await this.replaceAreas(saved.id, areasCert);
+    if (dto.skillIds?.length) await this.replaceSkills(saved.id, dto.skillIds, contextos);
 
     await this.audit.record({
       actorUserId: userId,
@@ -149,9 +158,19 @@ export class CertificatesService {
       certificate.academicAreaId = dto.academicAreaId ?? null;
     }
     if (dto.credentialId !== undefined) certificate.credentialId = dto.credentialId ?? null;
-    if (dto.skillIds !== undefined) {
-      await this.assertSkillsExist(dto.skillIds);
-      await this.replaceSkills(certificate.id, dto.skillIds ?? []);
+    if (dto.areaIds !== undefined) {
+      const areasCert = await this.areasDeCredencial(dto.academicAreaId ?? certificate.academicAreaId, dto.areaIds);
+      certificate.academicAreaId = areasCert[0] ?? null;
+      await this.replaceAreas(certificate.id, areasCert);
+    }
+    if (dto.skillIds !== undefined || dto.areaIds !== undefined || dto.skillContexts !== undefined) {
+      const skillIds = dto.skillIds ?? (await this.certificateSkills.find({ where: { certificateId: certificate.id } })).map((x) => x.skillId);
+      await this.assertSkillsExist(skillIds);
+      const areasFinales = (await this.areasCert.find({ where: { certificateId: certificate.id } })).map((x) => x.academicAreaId);
+      const areas = areasFinales.length ? areasFinales : [certificate.academicAreaId].filter((x): x is string => !!x);
+      if (dto.areaIds !== undefined) await assertSkillsBelongToAreas(this.certificates.manager, skillIds, areas);
+      const contextos = await resolveSkillContexts(this.certificates.manager, skillIds, areas, dto.skillContexts);
+      await this.replaceSkills(certificate.id, skillIds, contextos);
     }
 
     let reemplazado: string | null = null;
@@ -213,11 +232,30 @@ export class CertificatesService {
     }
   }
 
-  private async replaceSkills(certificateId: string, skillIds: string[]): Promise<void> {
+  private async replaceSkills(
+    certificateId: string,
+    skillIds: string[],
+    contextos: { skillId: string; areaId: string | null }[] = [],
+  ): Promise<void> {
     await this.certificateSkills.delete({ certificateId });
+    const areaDe = new Map(contextos.map((c) => [c.skillId, c.areaId]));
     if (skillIds.length) {
-      await this.certificateSkills.save(skillIds.map((skillId) => this.certificateSkills.create({ certificateId, skillId })));
+      await this.certificateSkills.save(skillIds.map((skillId) =>
+        this.certificateSkills.create({ certificateId, skillId, academicAreaId: areaDe.get(skillId) ?? null })));
     }
+  }
+
+  /** V3.2 §33: la principal primero, sin repetir; todas existen. */
+  private async areasDeCredencial(principal: string | null, otras?: string[]): Promise<string[]> {
+    const ids = [...new Set([...(otras?.length ? otras : []), ...(principal && !otras?.length ? [principal] : [])])];
+    if (otras?.length && principal && !ids.includes(principal)) ids.unshift(principal);
+    for (const a of ids) await this.assertAreaExists(a);
+    return ids;
+  }
+
+  private async replaceAreas(certificateId: string, areaIds: string[]): Promise<void> {
+    await this.areasCert.delete({ certificateId });
+    if (areaIds.length) await this.areasCert.insert(areaIds.map((academicAreaId) => ({ certificateId, academicAreaId })));
   }
 
   private async assertAreaExists(areaId?: string | null): Promise<void> {

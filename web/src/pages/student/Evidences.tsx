@@ -1,4 +1,5 @@
 import { validarFormulario } from '../../components/form';
+import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { useEffect, useRef, useState } from 'react';
 import {
   FiUpload, FiLink, FiFile, FiTrash2, FiExternalLink, FiAward, FiSearch,
@@ -504,15 +505,12 @@ function CertificateForm({
   // V2 §41: tecnologías que el certificado acredita, del catálogo.
   const [catalogo, setCatalogo] = useState<Skill[]>([]);
   const [skillIds, setSkillIds] = useState<string[]>([]);
-  const [busqueda, setBusqueda] = useState('');
+  /** V3.2 §33, §50.1: áreas de la credencial y área de cada tecnología. */
+  const [areaIds, setAreaIds] = useState<string[]>([]);
+  const [contextos, setContextos] = useState<Record<string, string>>({});
   useEffect(() => {
     catalogService.skills().then((s) => setCatalogo(s.filter((x) => x.isActive !== false))).catch(() => {});
   }, []);
-  const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const sugeridas = busqueda.trim().length < 2 ? [] : catalogo
-    .filter((s) => !skillIds.includes(s.id))
-    .filter((s) => [s.name, ...(s.aliases ?? [])].some((n) => norm(n).includes(norm(busqueda.trim()))))
-    .slice(0, 12);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -523,11 +521,14 @@ function CertificateForm({
         issuer: form.issuer,
         issueDate: form.issueDate || undefined,
         description: form.description || undefined,
-        academicAreaId: form.academicAreaId || undefined,
+        ...(areaIds.length ? { areaIds } : {}),
         certificateUrl: form.certificateUrl || undefined,
         credentialId: form.credentialId || undefined,
         storedFileId: file?.id,
         skillIds: skillIds.length ? skillIds : undefined,
+        skillContexts: skillIds
+          .filter((id) => contextos[id] && areaIds.includes(contextos[id]))
+          .map((id) => ({ skillId: id, areaId: contextos[id] })),
         activityId: activityId || undefined,
       });
       setForm({
@@ -541,7 +542,8 @@ function CertificateForm({
       });
       setFile(null);
       setSkillIds([]);
-      setBusqueda('');
+      setAreaIds([]);
+      setContextos({});
       setActivityId('');
       certificateService.eligibleOpportunities().then(setOportunidades).catch(() => {});
       onSaved();
@@ -603,20 +605,6 @@ function CertificateForm({
               onChange={(e) => setForm({ ...form, issueDate: e.target.value })}
             />
           </div>
-          <div className="field">
-            <label htmlFor="evidences-area-academica-2">Área académica</label>
-            <select id="evidences-area-academica-2"
-              value={form.academicAreaId}
-              onChange={(e) => setForm({ ...form, academicAreaId: e.target.value })}
-            >
-              <option value="">Sin área</option>
-              {areas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
         <div className="field">
           <label htmlFor="evidences-descripcion-2">Descripción</label>
@@ -651,47 +639,20 @@ function CertificateForm({
             />
           </div>
         </div>
-        <div className="field">
-          <label htmlFor="cert-skills">Tecnologías que acredita (opcional)</label>
-          {skillIds.length > 0 && (
-            <div className="chip-row" style={{ marginBottom: '0.4rem' }}>
-              {skillIds.map((id) => (
-                <button
-                  type="button"
-                  key={id}
-                  className="chip on"
-                  aria-label={`Quitar ${catalogo.find((s) => s.id === id)?.name ?? 'tecnología'}`}
-                  onClick={() => setSkillIds(skillIds.filter((x) => x !== id))}
-                >
-                  {catalogo.find((s) => s.id === id)?.name ?? id} ×
-                </button>
-              ))}
-            </div>
-          )}
-          <input
-            id="cert-skills"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Escribe para buscar: React, Docker, SQL…"
-          />
-          {sugeridas.length > 0 && (
-            <div className="chip-row" style={{ marginTop: '0.4rem' }}>
-              {sugeridas.map((s) => (
-                <button
-                  type="button"
-                  key={s.id}
-                  className="chip"
-                  onClick={() => { setSkillIds([...skillIds, s.id].slice(0, 15)); setBusqueda(''); }}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          )}
-          <span className="field-hint">
-            Cuentan como tecnologías respaldadas solo si el certificado queda con respaldo.
-          </span>
-        </div>
+        {/* V3.2 §33: áreas de la credencial y, en cada una, las tecnologías que acredita. */}
+        <AreaSkillPicker
+          areas={areas}
+          skills={catalogo}
+          value={{ areaIds, skillIds, contexts: contextos }}
+          onChange={(v) => { setAreaIds(v.areaIds); setSkillIds(v.skillIds); setContextos(v.contexts ?? {}); }}
+          areaLabel="Áreas de la credencial"
+          skillLabel="Tecnologías que acredita (opcional)"
+          maxAreas={6}
+          maxSkills={15}
+        />
+        <p className="field-hint" style={{ marginTop: '-0.3rem' }}>
+          Cuentan como tecnologías respaldadas solo si la credencial queda con respaldo.
+        </p>
         <FilePicker
           file={file}
           onPicked={setFile}

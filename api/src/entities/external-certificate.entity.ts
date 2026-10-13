@@ -141,4 +141,18 @@ export class ExternalCertificateSkill {
   @ManyToOne(() => Skill, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'skill_id' })
   skill: Skill;
+
+  /** V3.2 §50.1: área de la credencial en la que se acredita esta tecnología. */
+  @Column({ name: 'academic_area_id', type: 'uuid', nullable: true })
+  academicAreaId: string | null;
+}
+
+/** V3.2 §33: áreas de una credencial externa; `academic_area_id` es la principal. */
+@Entity('external_certificate_areas')
+export class ExternalCertificateArea {
+  @PrimaryColumn({ name: 'certificate_id', type: 'uuid' })
+  certificateId: string;
+
+  @PrimaryColumn({ name: 'academic_area_id', type: 'uuid' })
+  academicAreaId: string;
 }

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
@@ -13,9 +13,11 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { cleanLine, cleanText, IsNotFutureDate, trim } from '../../common/validation';
 
+import { SkillContextDto } from '../../activities/dto/create-activity.dto';
 export class CreateExternalCertificateDto {
   @ApiProperty({ example: 'Certified JavaScript Developer' })
   @Transform(cleanLine)
@@ -112,4 +114,25 @@ export class CreateExternalCertificateDto {
   @ArrayUnique({ message: 'No repitas tecnologías.' })
   @IsUUID('4', { each: true, message: 'Elige tecnologías del catálogo.' })
   skillIds?: string[];
+
+  /**
+   * V3.2 §33: áreas de la credencial (la primera es la principal). Cuando se
+   * envían, las tecnologías tienen que pertenecer a ellas.
+   */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6, { message: 'Como máximo 6 áreas.' })
+  @ArrayUnique({ message: 'No repitas áreas.' })
+  @IsUUID('4', { each: true, message: 'Área no válida.' })
+  areaIds?: string[];
+
+  /** V3.2 §11.4: área en la que se acredita cada tecnología. */
+  @ApiProperty({ required: false, type: () => [SkillContextDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(15)
+  @ValidateNested({ each: true })
+  @Type(() => SkillContextDto)
+  skillContexts?: SkillContextDto[];
 }
