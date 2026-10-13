@@ -1140,3 +1140,31 @@ Se entregan en un solo commit porque comparten archivos: `navigation.ts`, `index
 No hay suite automática de UI móvil; no se afirma ese resultado.
 
 **Riesgos:** si el access token vence mientras una pantalla está abierta, la imagen muestra su reemplazo hasta la próxima carga, porque `Image` no pasa por la renovación del cliente.
+
+---
+
+## BATCH 21 — QA final
+
+**ESTADO:** completo, con lo no ejecutado declarado.
+
+**Hallazgos (§75):**
+- Las áreas de §BATCH 21 ya tenían pruebas en las suites, salvo dos:
+  - el respaldo del OCR sin motor solo estaba cubierto de punta a punta (B3.32);
+  - el del correo, solo de forma indirecta.
+- Se agregaron pruebas unitarias directas para ambos.
+
+**Cambios:**
+- `api/test/unit/fallbacks.test.ts`, 7 pruebas:
+  - el OCR desactivado, con un PDF o sin el paquete responde «no disponible» sin lanzar;
+  - la extracción sigue con fuente «none»;
+  - el correo «auto» sin servidor se simula;
+  - SMTP pedido sin servidor explica el problema;
+  - un valor desconocido cae en «auto».
+- `docs/V3_2_QA.md`: matriz de cada área exigida y de los criterios de §73 con la prueba que lo respalda, y la lista de lo **no ejecutado**: usabilidad con personas, teléfono físico, OCR y SMTP reales, ZAP y modo producción.
+
+**Resultados:**
+- unitarias 130/130;
+- regresión completa 2040/0;
+- `e2e-web` 50/50.
+
+**Riesgos:** ver §5 y §6 de `docs/V3_2_QA.md`.
