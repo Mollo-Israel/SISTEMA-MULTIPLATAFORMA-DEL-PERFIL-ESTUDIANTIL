@@ -1168,3 +1168,59 @@ No hay suite automática de UI móvil; no se afirma ese resultado.
 - `e2e-web` 50/50.
 
 **Riesgos:** ver §5 y §6 de `docs/V3_2_QA.md`.
+
+---
+
+## BATCH 22 — Limpieza y documentación
+
+**ESTADO:** completo.
+
+**Retiros verificados (§BATCH 22):**
+
+| Pedido | Resultado |
+|---|---|
+| Vistas redundantes | «Crear actividad» de Sociedad retirada (B17). No hay páginas huérfanas: las del docente y la Dirección viven como pestañas, y las rutas viejas redirigen a su pestaña (`APestana`). |
+| Menú técnico del correo | Retirado del producto (B18). |
+| Texto viejo sobre etiquetas | La ayuda del campo «Etiquetas», el mensaje de validación (web y API), el comentario del DTO y el ejemplo de Swagger decían que «el motor reconoce el área» por sus etiquetas. Ahora: metadata para sugerir, que no suma (§10). El ejemplo `aws, docker, kubernetes`, que eran habilidades, pasa a vocabulario del área. |
+| Supuestos de área única | Retirados en el motor (B15) y en formularios (B4, B11, B14). |
+| Recomendación vieja | B10. |
+| Interfaz genérica de evidencias | Ya retirada en la V3 (B24, «sin bandeja genérica»). Verificado. |
+
+**Documentación actualizada:**
+- `README.md`: V3.2, motor V5, roles, variables nuevas, `npm run test:v32` y el índice de documentos.
+- `package.json`: `test:v32`, incluido en `test:all`.
+- `.env.example` (raíz y web): verificado. Todas las variables que leen la API (68) y la web (4) están documentadas.
+- **Swagger:** los endpoints nuevos tienen `@ApiOperation` (`/audit/log`, `/audit/log/catalog`, `/library`, entrega de certificados), y se corrigió el ejemplo de etiquetas.
+- `docs/MATRIZ_TRAZABILIDAD_V3_2.md`: secciones → batch → API → pantallas → pruebas, más las decisiones de §74.
+- `docs/DIAGRAMAS_V3_2.md`: revisión, ciclo de la actividad, afinidad V5, archivos protegidos, auditoría y correo (Mermaid).
+- `docs/CAMBIOS_DOCUMENTO_GRADO_V3_2.md`: qué cambiar en los capítulos II y III.
+  - **El `.docx` no se tocó:** su SHA-256 `bf5c0fb8…` coincide con el respaldo de la V3.
+
+**Pruebas:**
+- `tsc` sin errores (API y web);
+- unitarias 130/130;
+- `e2e-v3-2 batch3` (taxonomía) 20/20.
+
+Ninguna prueba depende de los textos cambiados.
+
+**Riesgos:** ninguno nuevo.
+
+---
+
+## Cierre V3.2 — resumen
+
+- **Batches:** 0 a 22, en commits propios sobre `feat/afinia-v3-2`. Se agruparon solo los que comparten archivos: 11–12, 13–14 (regresión compartida) y 16–19. `main` no se tocó ni se fusionó nada.
+- **Migraciones V3.2:** 11, todas con `up` y `down`, probadas `run → revert → run`, sin `synchronize` y con `pg_dump` previo.
+- **Última regresión completa:** 21 suites, **2040 comprobaciones, 0 fallos**; unitarias **130/130**.
+- **No ejecutado:**
+  - usabilidad con personas;
+  - teléfono físico;
+  - OCR y SMTP reales;
+  - ZAP y k6 en el cierre;
+  - API en modo producción.
+
+  Detalle en `docs/V3_2_QA.md`.
+- **Pendiente de la persona responsable:**
+  - aplicar `CAMBIOS_DOCUMENTO_GRADO_V3_2.md` al `.docx`, con copia previa;
+  - el recorrido móvil en Expo Go;
+  - decidir la fusión a `main` y el push.

@@ -26,10 +26,10 @@ import {
 /**
  * Alta de un área académica.
  *
- * Obligatorios: el nombre y al menos una etiqueta. Las etiquetas son las
- * palabras con las que el motor reconoce el área en proyectos, actividades y
- * recursos («sql», «react», «redes»): un área sin etiquetas existe en el
- * catálogo pero el motor no la encuentra. La descripción es opcional.
+ * Obligatorios: el nombre y al menos una etiqueta. V3.2 §10: las etiquetas son
+ * metadata que describe el área y ayuda a sugerirla al clasificar habilidades
+ * nuevas; no suman puntaje ni afinidad (la afinidad sale del contexto
+ * explícito de cada experiencia, §11.5). La descripción es opcional.
  */
 export class CreateAcademicAreaDto {
   @ApiProperty({ example: 'Computación en la Nube' })
@@ -59,11 +59,15 @@ export class CreateAcademicAreaDto {
   @MaxLength(255, { message: 'La descripción no puede superar 255 caracteres.' })
   description?: string;
 
-  @ApiProperty({ type: [String], example: ['aws', 'docker', 'kubernetes'] })
+  @ApiProperty({
+    type: [String],
+    example: ['infraestructura', 'despliegue', 'escalabilidad'],
+    description: 'Metadata para clasificar y sugerir; no suma afinidad (V3.2 §10).',
+  })
   @Transform(lowerTags)
   @IsArray({ message: 'Añada al menos una etiqueta.' })
   @ArrayMinSize(1, {
-    message: 'Añada al menos una etiqueta: son las palabras con las que el motor reconoce el área.',
+    message: 'Añada al menos una etiqueta: son las palabras que describen el área y ayudan a sugerirla.',
   })
   @ArrayMaxSize(20, { message: 'Máximo 20 etiquetas.' })
   @ArrayUnique({ message: 'No se permiten etiquetas duplicadas.' })

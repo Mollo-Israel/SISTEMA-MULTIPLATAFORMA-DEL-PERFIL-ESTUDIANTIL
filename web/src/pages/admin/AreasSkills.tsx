@@ -114,9 +114,9 @@ function AreaForm({
         label="Etiquetas"
         required
         error={errors.tags}
-        hint="Separadas por coma. Son las palabras con las que el motor reconoce el área en proyectos, actividades y cursos."
+        hint="Separadas por coma. Describen el área y ayudan a sugerirla al crear habilidades nuevas; no suman puntaje ni afinidad (V3.2 §10)."
       >
-        <input value={value.tags} onChange={(e) => set('tags', e.target.value)} placeholder="aws, docker, kubernetes" />
+        <input value={value.tags} onChange={(e) => set('tags', e.target.value)} placeholder="infraestructura, despliegue, escalabilidad" />
       </FormField>
       {parseTags(value.tags).length > 0 && (
         <div className="tag-preview">

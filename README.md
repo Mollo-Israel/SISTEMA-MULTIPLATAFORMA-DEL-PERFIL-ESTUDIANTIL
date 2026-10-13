@@ -1,14 +1,15 @@
 # Afinia — Sistema Multiplataforma para la Construcción del Perfil Estudiantil Dinámico
 
 Ingeniería en Sistemas Informáticos – Universidad Privada del Valle. Implementa la
-*Especificación Maestra Final V3.1* (`AFINIA_ESPECIFICACION_MAESTRA_FINAL_V3_1_2026-10-06.md`),
+*Especificación Maestra Final V3.1* (`AFINIA_ESPECIFICACION_MAESTRA_FINAL_V3_1_2026-10-06.md`)
+con los ajustes del *Cierre Final V3.2* (`AFINIA_CIERRE_FINAL_V3_2_AJUSTES_CLAUDE_CODE_2026-10-12.md`),
 sobre la base de la V2.
 
 Plataforma **complementaria** —no reemplaza al SIU, a Teams, las notas ni los
 certificados oficiales— que construye el perfil de cada estudiante a partir de
 lo que **hizo y está respaldado**: actividades con participación confirmada,
 proyectos activos y corroborados y credenciales externas corroboradas. De ahí
-salen su **afinidad** por área (motor V4), su **respaldo**, una **trayectoria**
+salen su **afinidad** por área (motor V5: cada experiencia suma en el área de su contexto explícito; las etiquetas de área no puntúan), su **respaldo**, una **trayectoria**
 con el nivel de cada cosa y un **currículo** que solo afirma lo verificable.
 Las **recomendaciones** se guían por lo que quiere explorar o mejorar, no por lo
 que ya sabe.
@@ -42,11 +43,11 @@ que ya sabe.
 
 | Rol | Qué hace |
 |-----|---------|
-| **Estudiante** (web y móvil) | Completa la bienvenida; consulta «Para ti» y se inscribe en actividades; registra proyectos en borrador y los activa al cumplir lo mínimo; adjunta credenciales externas; recibe **avisos**; postula a **necesidades de equipo** de su semestre; ve su **trayectoria** con niveles y arma un **currículo** eligiendo secciones e ítems |
-| **Docente** (web) | Propone actividades académicas, confirma participación y usa un único **Panel académico** con pestañas (resumen, por semestre, estudiantes, proyectos visibles, actividades, necesidades) **de sus semestres habilitados**; su retroalimentación eleva un proyecto a «revisado» |
+| **Estudiante** (web y móvil) | Completa la bienvenida; consulta «Para ti» y se inscribe en actividades; consulta la **Biblioteca** de recursos y guarda favoritos; registra proyectos en borrador y los activa al cumplir lo mínimo; adjunta credenciales externas; recibe **avisos**; postula a **necesidades de equipo** de su semestre; ve su **trayectoria** con niveles y arma un **currículo** eligiendo secciones e ítems |
+| **Docente** (web) | Propone actividades académicas («Mis actividades»), consulta las **Actividades de la carrera**, confirma participación y usa un único **Panel académico** cuyas pestañas (resumen, por semestre, estudiantes, proyectos, necesidades) también están en el menú, siempre **de sus semestres habilitados**; su retroalimentación eleva un proyecto a «revisado» |
 | **Dirección de carrera** (web) | **Inicio** con lo pendiente; aprueba, observa o rechaza actividades; constancias; revisión manual excepcional de credenciales; **Analítica** (Panorama, Afinidad, Participación, Demanda, Evolución) |
-| **Sociedad científica** (web) | Propone actividades extracurriculares (las aprueba Dirección), ve **Participantes** y **Métricas** filtrables con comparación entre periodos |
-| **Administración** (web) | **Inicio** operativo; provisiona cuentas e importa el padrón; roles, estados y alcance docente; catálogos, recursos, gamificación y auditoría |
+| **Sociedad científica** (web) | Propone actividades extracurriculares desde «Mis actividades» (las aprueba Dirección), ve **Participantes** y **Métricas** filtrables con comparación entre periodos |
+| **Administración** (web) | **Inicio** operativo; provisiona cuentas e importa el padrón; roles, estados y alcance docente; catálogos, recursos, gamificación y una **auditoría legible** (actor, módulo, acción, fecha, resultado). La configuración del correo es de despliegue: su pantalla solo existe en desarrollo o con el modo técnico |
 
 **No hay registro público**: la institución provisiona cada cuenta y su titular
 la activa desde el correo. **La app móvil es del Estudiante**: la API no emite
@@ -116,6 +117,10 @@ Todas están documentadas en `.env.example`. Las de la V2 y la V3:
 | `REPOSITORY_CHECK_ENABLED`, `GITHUB_API_BASE_URL`, `GITHUB_CACHE_TTL_SECONDS` | Corroboración de repositorios (V3 §24), con caché y ETag |
 | `NOTIFICATION_REMINDERS_ENABLED`, `NOTIFICATION_REMINDERS_INTERVAL_MINUTES` | Recordatorios de actividades (V3 §33.1) |
 | `ANALYTICS_MIN_GROUP_SIZE` | Tamaño mínimo de grupo para publicar un agregado (§65) |
+| `ACTIVITY_LIFECYCLE_INTERVAL_MS` | Ciclo automático de actividades (en curso / finalizada) (V3.2 §21) |
+| `MAIL_DIAGNOSTICS_ENABLED` / `VITE_TECHNICAL_MODE` | Diagnóstico del correo fuera de desarrollo (V3.2 §60); por omisión, oculto |
+| `VITE_APP_TIMEZONE` | Zona horaria de fechas y horas en la web (America/La_Paz, V3.2 §38) |
+| `VITE_ACTIVATION_PASTE_LINK` | Pestaña para pegar el enlace de activación en producción (V3.2 §8.2) |
 
 ## Pruebas
 
@@ -123,12 +128,13 @@ Las suites hablan HTTP con la API en marcha y una base real.
 
 ```bash
 npm run api:dev          # en una terminal
-npm run test:all         # en otra: unitarias + 18 suites de API (incluida V3) + IA simulada + navegador
+npm run test:all         # en otra: unitarias + 19 suites de API (incluidas V3 y V3.2) + IA simulada + navegador
 ```
 
 | Script | Qué prueba |
 |--------|-----------|
-| `npm run test:unit` | Reglas puras (afinidad V4, recomendaciones 40/30/15/10/5, respaldo, credenciales, currículo, transiciones de estado…) |
+| `npm run test:unit` | Reglas puras (afinidad, recomendaciones 40/30/15/10/5, respaldo, credenciales, currículo, transiciones de estado, guard del correo, auditoría, respaldos de OCR y correo…) |
+| `npm run test:v32` | Los batches del cierre V3.2 (`node scripts/e2e-v3-2.mjs batch15` corre uno) |
 | `npm run test:v3` | Los batches de la V3 (`node scripts/e2e-v3.mjs batch17` corre uno) |
 | `npm run test:v2` | Los batches de la V2 (`node scripts/e2e-v2.mjs batch5` corre uno) |
 | `npm run test:ai` | Asistente de IA contra un proveedor `openai_compatible` simulado |
@@ -137,9 +143,10 @@ npm run test:all         # en otra: unitarias + 18 suites de API (incluida V3) +
 | `npm run test:load` | Carga con k6 en Docker (V3 RNF09) |
 | `npm run test:security` | OWASP ZAP en Docker: **escaneo activo**, solo contra una base de desarrollo respaldada |
 
-Última corrida completa: 20 suites sin fallos, más 99 unitarias; k6 dentro de
-los umbrales y ZAP sin fallos. Detalle en [`docs/V3_REPORTE_BATCHES.md`](docs/V3_REPORTE_BATCHES.md)
-y [`docs/V3_QA_HARDENING.md`](docs/V3_QA_HARDENING.md).
+Última corrida completa (cierre V3.2, 13/10/2026): 21 suites, **2040 comprobaciones
+sin fallos**, y 130 unitarias. Qué se ejecutó y qué no, en
+[`docs/V3_2_QA.md`](docs/V3_2_QA.md); k6 y ZAP corresponden a la V3
+([`docs/V3_QA_HARDENING.md`](docs/V3_QA_HARDENING.md)) y no se repitieron en este cierre.
 
 ## Flujo principal
 
@@ -150,13 +157,19 @@ y [`docs/V3_QA_HARDENING.md`](docs/V3_QA_HARDENING.md).
 5. El estudiante ve «Para ti» (40/30/15/10/5, sin afinidad), se inscribe y recibe recordatorios; el responsable confirma su participación (y, si está habilitada, se emite la constancia).
 6. Registra un proyecto en borrador y lo activa con repositorio, evidencia e integrantes confirmados; GitHub corrobora tecnologías y la retroalimentación docente lo eleva a revisado.
 7. Adjunta credenciales externas, que se validan por niveles (URL oficial, QR, Open Badge).
-8. El motor de afinidad V4 recalcula solo con lo corroborado, con desglose y respaldo aparte.
+8. El motor de afinidad V5 recalcula solo con lo corroborado, en el área del contexto explícito de cada experiencia, con desglose y respaldo aparte.
 9. Publica o postula a necesidades de equipo de su semestre; el responsable acepta o rechaza con motivo.
 10. Consulta su trayectoria con niveles y arma un currículo eligiendo ítems elegibles; descarga el PDF.
 11. Docente, Dirección, Sociedad y Administración consultan su Inicio y paneles descriptivos, con umbral de privacidad.
 
 ## Documentación
 
+- [`docs/V3_2_REPORTE_BATCHES.md`](docs/V3_2_REPORTE_BATCHES.md) — el cierre V3.2 batch por batch: hallazgos, cambios, migraciones, pruebas y riesgos.
+- [`docs/V3_2_QA.md`](docs/V3_2_QA.md) — QA final del cierre: qué se ejecutó, con qué resultado, y qué no se ejecutó.
+- [`docs/MATRIZ_TRAZABILIDAD_V3_2.md`](docs/MATRIZ_TRAZABILIDAD_V3_2.md) — secciones del cierre → batch → API → pantallas → pruebas.
+- [`docs/DIAGRAMAS_V3_2.md`](docs/DIAGRAMAS_V3_2.md) — lo que cambió en la V3.2: ciclo de la actividad, afinidad por contexto, archivos protegidos, auditoría.
+- [`docs/CAMBIOS_DOCUMENTO_GRADO_V3_2.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V3_2.md) — qué ajustar en los capítulos II y III del documento de grado para la V3.2.
+- [`docs/DEMO_MULTIACTOR.md`](docs/DEMO_MULTIACTOR.md) — cómo hacer la demo con varios actores a la vez.
 - [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md) — el sistema explicado con diagramas.
 - [`docs/AFINIA_FLUJO_COMPLETO_Y_MOTORES.md`](docs/AFINIA_FLUJO_COMPLETO_Y_MOTORES.md) — el flujo completo y, en detalle, cómo están construidos el motor de afinidad V3 y el asistente de IA.
 - [`docs/MATRIZ_TRAZABILIDAD_V3.md`](docs/MATRIZ_TRAZABILIDAD_V3.md) — RF01–RF30 y RNF01–RNF10 → módulo → rutas → pantallas → pruebas.

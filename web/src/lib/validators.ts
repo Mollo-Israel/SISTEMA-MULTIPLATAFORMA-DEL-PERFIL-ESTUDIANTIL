@@ -41,7 +41,7 @@ export const SKILL_NAME_RE = new RegExp(
   `^\\.?[${LETRA}0-9]+(?:[ ./&'()-]+[${LETRA}0-9]+)*\\)?(?:\\+\\+|#)?$`,
 );
 
-/** Etiqueta del motor: minúsculas, números y los signos de una tecnología. */
+/** Etiqueta de un área (metadata para sugerir, V3.2 §10): minúsculas, números y signos simples. */
 export const TAG_RE = /^[a-z0-9áéíóúüñ][a-z0-9áéíóúüñ .+#-]{0,39}$/;
 
 /** Código interno: minúsculas, números y guion bajo, empezando por letra. */
@@ -114,7 +114,7 @@ export function tagList({ min = 1, max = 20 } = {}): Validator {
     const tags = parseTags(v ?? '');
     if (tags.length < min) {
       return min === 1
-        ? 'Añade al menos una etiqueta: son las palabras con las que el motor reconoce el área.'
+        ? 'Añade al menos una etiqueta: son las palabras que describen el área y ayudan a sugerirla.'
         : `Añade al menos ${min} etiquetas.`;
     }
     if (tags.length > max) return `Máximo ${max} etiquetas.`;
