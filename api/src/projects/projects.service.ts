@@ -26,7 +26,7 @@ import { ProjectFeedback } from '../entities/project-feedback.entity';
 import { ProjectArea, ProjectSkill } from '../entities/project-area.entity';
 import { ProjectInvitation } from '../entities/project-invitation.entity';
 import { Team, TeamMember } from '../entities/collaboration.entity';
-import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
+import { assertSkillsBelongToAreas, resolveSkillContexts } from '../catalogs/area-skill.guard';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { Readiness, projectReadiness } from './project-readiness.rules';
 import { skillEvidenceFromSignal } from './project-backing.rules';
@@ -121,13 +121,25 @@ export class ProjectsService {
    * (V3 §24.4): solo salen las quitadas y entran las nuevas, y luego se
    * cruzan con la última comprobación del repositorio.
    */
-  private async replaceSkills(projectId: string, skillIds: string[]): Promise<void> {
+  private async replaceSkills(
+    projectId: string,
+    skillIds: string[],
+    contextos: { skillId: string; areaId: string | null }[] = [],
+  ): Promise<void> {
     const actuales = await this.projectSkills.find({ where: { projectId } });
     const quitar = actuales.filter((a) => !skillIds.includes(a.skillId)).map((a) => a.skillId);
     if (quitar.length) await this.projectSkills.delete({ projectId, skillId: In(quitar) });
+    const areaDe = new Map(contextos.map((c) => [c.skillId, c.areaId]));
     const nuevas = skillIds.filter((id) => !actuales.some((a) => a.skillId === id));
     if (nuevas.length) {
-      await this.projectSkills.save(nuevas.map((skillId) => this.projectSkills.create({ projectId, skillId })));
+      await this.projectSkills.save(nuevas.map((skillId) =>
+        this.projectSkills.create({ projectId, skillId, academicAreaId: areaDe.get(skillId) ?? null })));
+    }
+    // V3.2 §11.4: las que se quedan conservan su respaldo, pero actualizan su contexto.
+    for (const a of actuales.filter((x) => skillIds.includes(x.skillId) && areaDe.has(x.skillId))) {
+      if (a.academicAreaId !== areaDe.get(a.skillId)) {
+        await this.projectSkills.update({ projectId, skillId: a.skillId }, { academicAreaId: areaDe.get(a.skillId) ?? null });
+      }
     }
     await this.syncSkillEvidence(projectId);
   }
@@ -240,6 +252,8 @@ export class ProjectsService {
     if (dto.skillIds?.length) {
       await assertSkillsBelongToAreas(this.projects.manager, dto.skillIds, areaIds);
     }
+    // V3.2 §11.4: en qué área se usó cada tecnología.
+    const contextos = await resolveSkillContexts(this.projects.manager, dto.skillIds ?? [], areaIds, dto.skillContexts);
     if (dto.teamId) await this.assertTeamOfUser(profile.id, dto.teamId);
     const skillsCatalogo = dto.skillIds?.length
       ? await this.skills.find({ where: { id: In(dto.skillIds) } })
@@ -270,7 +284,7 @@ export class ProjectsService {
     this.sincronizarEnlacePublico(project);
     const saved = await this.projects.save(project);
     await this.replaceAreas(saved.id, areaIds);
-    await this.replaceSkills(saved.id, dto.skillIds ?? []);
+    await this.replaceSkills(saved.id, dto.skillIds ?? [], contextos);
 
     // V2 §34, §48: el responsable también es integrante, para confirmar las
     // tecnologías que usó. Su fila no cuenta como integrante aceptado (§36).
@@ -338,10 +352,17 @@ export class ProjectsService {
     }
     const areasFinales = areaIds
       ?? (await this.projectAreas.find({ where: { projectId: id } })).map((x) => x.academicAreaId);
-    if (dto.skillIds !== undefined || areaIds !== undefined) {
-      const skillsFinales = dto.skillIds
-        ?? (await this.projectSkills.find({ where: { projectId: id } })).map((x) => x.skillId);
+    let contextos: { skillId: string; areaId: string | null }[] | undefined;
+    let skillsFinales: string[] | undefined;
+    if (dto.skillIds !== undefined || areaIds !== undefined || dto.skillContexts !== undefined) {
+      const previas = await this.projectSkills.find({ where: { projectId: id } });
+      skillsFinales = dto.skillIds ?? previas.map((x) => x.skillId);
       await assertSkillsBelongToAreas(this.projects.manager, skillsFinales, areasFinales);
+      // V3.2 §11.4: sin contexto nuevo se conserva el anterior si sigue valiendo.
+      const conservados = previas
+        .filter((x) => x.academicAreaId && areasFinales.includes(x.academicAreaId))
+        .map((x) => ({ skillId: x.skillId, areaId: x.academicAreaId as string }));
+      contextos = await resolveSkillContexts(this.projects.manager, skillsFinales, areasFinales, dto.skillContexts ?? conservados);
     }
     if (dto.teamId !== undefined) {
       if (dto.teamId) await this.assertTeamOfUser(project.createdByProfileId, dto.teamId);
@@ -376,8 +397,11 @@ export class ProjectsService {
 
     await this.projects.save(project);
     if (areaIds !== undefined) await this.replaceAreas(project.id, areaIds);
+    if (dto.skillIds === undefined && contextos !== undefined && skillsFinales !== undefined) {
+      await this.replaceSkills(project.id, skillsFinales, contextos);
+    }
     if (dto.skillIds !== undefined) {
-      await this.replaceSkills(project.id, dto.skillIds);
+      await this.replaceSkills(project.id, dto.skillIds, contextos);
       const nombres = (await this.skills.find({ where: { id: In(dto.skillIds.length ? dto.skillIds : ['00000000-0000-4000-8000-000000000000']) } })).map((s) => s.name);
       if (nombres.length) await this.projects.update(project.id, { technologies: nombres });
     }

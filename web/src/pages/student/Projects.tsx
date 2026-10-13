@@ -67,6 +67,8 @@ const emptyForm = {
   description: '',
   areaIds: [] as string[],
   skillIds: [] as string[],
+  /** V3.2 §11.4: área en la que se usó cada tecnología. */
+  skillContexts: {} as Record<string, string>,
   repositoryUrl: '',
   demoUrl: '',
   visibility: 'profile' as ProjectVisibility,
@@ -176,6 +178,9 @@ export default function StudentProjectsPage() {
         description: form.description || undefined,
         areaIds: form.areaIds,
         skillIds: form.skillIds,
+        skillContexts: form.skillIds
+          .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
+          .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
         repositoryUrl: form.repositoryUrl || undefined,
         demoUrl: form.demoUrl || undefined,
         visibility: form.visibility,
@@ -289,8 +294,8 @@ export default function StudentProjectsPage() {
           <AreaSkillPicker
             areas={areas}
             skills={skills}
-            value={{ areaIds: form.areaIds, skillIds: form.skillIds }}
-            onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds })}
+            value={{ areaIds: form.areaIds, skillIds: form.skillIds, contexts: form.skillContexts }}
+            onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds, skillContexts: v.contexts ?? {} })}
             areaLabel="Áreas del proyecto"
             skillLabel="Tecnologías que usa"
             maxAreas={6}

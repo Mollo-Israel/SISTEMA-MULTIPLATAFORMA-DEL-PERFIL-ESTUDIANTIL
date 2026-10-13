@@ -787,3 +787,76 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Pendientes:** ninguno del batch.
 
 **Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 11 — Proyectos: contexto área + habilidad
+
+**ESTADO:** completo
+
+**Objetivo:** que cada tecnología de un proyecto guarde el área en que se usó (§11.4, §40). Es «el dato real del motor».
+
+**Hallazgos verificados antes de cambiar (§75):**
+- Los proyectos ya tenían varias áreas y tecnologías validadas contra ellas; la guardia ya acepta las secundarias desde el BATCH 3.
+- Faltaba el contexto: Python en un proyecto de IA y Web no decía en cuál se usó.
+- La validación por campo de los proyectos ya existía (V3.1 B21).
+
+**Cambios:**
+- `project_skills.academic_area_id` y `skillContexts` en el DTO, con la misma regla que en las actividades (`resolveSkillContexts`):
+  - el contexto indicado se valida contra las áreas elegidas;
+  - el que no se indica se deduce;
+  - el contexto previo se conserva al editar otra cosa;
+  - si se quita su área, vuelve a la principal.
+- Al cambiar el contexto, la tecnología conserva su respaldo (`evidence_status`).
+- **Web:** el formulario de proyecto envía `skillContexts` desde el selector de áreas y habilidades.
+
+**Migraciones:** `1780670000000-V32ProjectSkillContext`.
+- **Datos:** 1633 de 1769 tecnologías quedaron con contexto; el resto son de proyectos sin área.
+- **Verificación:** probada en orden `run → revert → run`. Respaldo previo: `pre-v32-b11.dump`.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch11`, 5/5.** Cubre:
+  - el contexto indicado y el deducido;
+  - el contexto en un área ajena, con 400 en su campo;
+  - que se conserve al editar;
+  - la vuelta a la principal.
+- **Ajuste en `e2e-qa`:** QA.45 elegía «las dos primeras áreas sin dígitos». Las áreas de prueba de letras que crea el BATCH 10 se ordenan antes y no tienen preguntas propias. Ahora toma las áreas base por su código.
+
+**Resultados:**
+- Regresión completa: **1998 correctas y 2 fallos**. Los fallos fueron QA.45 y QA.45b, el artefacto de datos de prueba descrito arriba. Corregidas, `e2e-qa` dio 74/74.
+- Total final: **2000 correctas, 0 fallos**.
+
+**Regresiones:** ninguna funcional.
+
+**Pendientes:** la afinidad usará este contexto en el BATCH 15.
+
+**Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 12 — GitHub, demo y respaldo de proyecto
+
+**ESTADO:** completo (verificación, sin cambios de código)
+
+**Objetivo:** confirmar que lo que pide V3.2 en §41–§44 se cumple con lo existente y que no hay rastreador.
+
+**Verificación contra la especificación** (pruebas de `e2e-v3`, que pasan en cada regresión de este cierre):
+
+| V3.2 | Comportamiento | Pruebas |
+|---|---|---|
+| §41 Repositorio, metadata, lenguajes, árbol limitado, manifiestos | Raíz y manifiestos controlados; último push y README | V3.11.1, V3.11.8 |
+| §41.2 Manifiestos → candidatos | `react`, `@nestjs/core`, `pg`, docker-compose, `fastapi`, `psycopg2-binary` | V3.11.2–V3.11.5, V3.11.9 |
+| §41.3 Skill no detectada = DECLARED, sin penalizar | Redis sin rastro queda DECLARADA, no falsa ni restada | V3.11.6, V3.13.2 |
+| §41 Caché, cuota y reintentos | ETag e If-None-Match, 304 sin gastar cuota, cuota agotada = «sin comprobar», reintento de fallos pasajeros | V3.11.10–V3.11.15 |
+| §42 Demo sin rastreador | Accesible, HTTPS, título y metadata; no se deduce backend ni base de datos | V3.11.16, V3.11.17 |
+| §43 Capturas como contexto | La evidencia de funcionamiento es contexto, no certifica el stack | V3.10.13, V3.10.14, V3.13.5 |
+| §44 Respaldo DECLARED / SUPPORTED / CORROBORATED / REVIEWED | Repositorio + señal técnica + señal independiente = CORROBORATED; sin independiente, SUPPORTED; sin repositorio, DECLARED | V3.13.4–V3.13.8 |
+| §45 Cada integrante confirma lo suyo | Sin votación por mayoría; corrección; no se activa hasta que todos confirman | V3.12.7–V3.12.15 |
+
+**Cambios:** ninguno. Lo nuevo del contexto área+habilidad quedó en el BATCH 11.
+
+**Migraciones:** ninguna.
+
+**Resultados:** cubierto por la regresión del BATCH 11 (2000 correctas, 0 fallos); las pruebas citadas pasan.
+
+**Riesgos:** ninguno.

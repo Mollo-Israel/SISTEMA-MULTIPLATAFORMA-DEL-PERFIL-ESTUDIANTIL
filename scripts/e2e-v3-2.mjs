@@ -1097,7 +1097,49 @@ async function batch10(ctx) {
   check(inscribir.status === 400, 'V32.10.8 §36 Pero no inscribirse', `status ${inscribir.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
+// ===========================================================================
+//  BATCH 11 — Proyectos: contexto área + habilidad (§11.4, §40)
+// ===========================================================================
+async function batch11(ctx) {
+  objective('BATCH 11 · Proyecto: cada tecnología guarda el área en que se usó');
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const ia = areas.find((a) => a.code === 'inteligencia_artificial');
+  const web = areas.find((a) => a.code === 'desarrollo_web');
+  const redes = areas.find((a) => a.code === 'redes');
+  const python = skills.find((s) => s.code === 'python');
+  const react = skills.find((s) => s.code === 'react');
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: 'Jauregui', email: correoEst('b11est'), role: 'STUDENT', semester: 6 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const contexto = (p, id) => (p?.projectSkills ?? []).find((s) => s.skillId === id)?.academicAreaId;
+  const leer = async (id) => (await req('GET', `/projects/${id}`, { token: est.token })).data;
+
+  const creado = await crearProyectoBorrador(est.token, {
+    title: `Recomendador web ${TS}`, description: 'Un modelo servido en una web.', areaIds: [ia.id, web.id], skillIds: [python.id, react.id],
+    skillContexts: [{ skillId: python.id, areaId: web.id }],
+  });
+  const p1 = await leer(creado.data?.id);
+  check(creado.status === 201 && contexto(p1, python.id) === web.id && contexto(p1, react.id) === web.id,
+    'V32.11.1 §11.4 Python se registra como usado en Desarrollo Web (indicado) y React en su área', json(p1?.projectSkills?.map((s) => [s.skillId === python.id ? 'py' : 'react', s.academicAreaId])));
+  const sinIndicar = await crearProyectoBorrador(est.token, {
+    title: `Clasificador ${TS}`, description: 'Modelo de clasificación.', areaIds: [ia.id, web.id], skillIds: [python.id],
+  });
+  check(contexto(await leer(sinIndicar.data?.id), python.id) === ia.id,
+    'V32.11.2 §11.4 Sin indicarlo, se deduce su área principal (IA)', '');
+  const malo = await crearProyectoBorrador(est.token, {
+    title: `Mal contexto ${TS}`, description: 'x', areaIds: [web.id, redes.id], skillIds: [react.id], skillContexts: [{ skillId: react.id, areaId: redes.id }],
+  });
+  check(malo.status === 400 && malo.data?.fields?.skillContexts,
+    'V32.11.3 §11.4 Un contexto en un área ajena a la tecnología se rechaza en su campo', json(malo.data?.fields));
+  const cambio = await req('PATCH', `/projects/${creado.data?.id}`, { token: est.token, body: { title: `Recomendador web v2 ${TS}` } });
+  check(cambio.status === 200 && contexto(await leer(creado.data?.id), python.id) === web.id,
+    'V32.11.4 §11.4 Editar otra cosa conserva el contexto', `status ${cambio.status}`);
+  const sinWeb = await req('PATCH', `/projects/${creado.data?.id}`, { token: est.token, body: { areaIds: [ia.id], skillIds: [python.id] } });
+  check(sinWeb.status === 200 && contexto(await leer(creado.data?.id), python.id) === ia.id,
+    'V32.11.5 §11.4 Si se quita el área del contexto, vuelve a su área principal', `status ${sinWeb.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

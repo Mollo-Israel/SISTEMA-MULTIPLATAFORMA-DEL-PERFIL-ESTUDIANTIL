@@ -47,6 +47,10 @@ export class ProjectSkill {
   @JoinColumn({ name: 'skill_id' })
   skill: Skill;
 
+  /** V3.2 §11.4: área del proyecto en la que se usó esta tecnología. */
+  @Column({ name: 'academic_area_id', type: 'uuid', nullable: true })
+  academicAreaId: string | null;
+
   /** V3 §24.4: cómo se corroboró. Sin rastro, DECLARED (§29). */
   @Column({
     name: 'evidence_status', type: 'enum', enum: ProjectSkillEvidenceStatus,

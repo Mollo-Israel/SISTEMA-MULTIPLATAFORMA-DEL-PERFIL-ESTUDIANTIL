@@ -255,8 +255,13 @@ async function bienvenida(ctx) {
   const generico = await req('GET', '/onboarding/questionnaire', { token: est.token });
   const areas = (await req('GET', '/academic-areas', { token: est.token })).data ?? [];
   // Áreas del catálogo real: las que dejaron suites antiguas llevan dígitos en el nombre.
+  // Las áreas base por su código: otras suites crean áreas de prueba que
+  // pueden ordenarse antes y no tienen preguntas propias.
+  const base = ['desarrollo_web', 'inteligencia_artificial'];
   const conTags = areas.filter((a) => a.isActive !== false && (a.tags ?? []).length && !/\d/.test(a.name));
-  const elegidas = conTags.slice(0, 2);
+  const elegidas = base.map((c) => areas.find((a) => a.code === c)).filter(Boolean).length === 2
+    ? base.map((c) => areas.find((a) => a.code === c))
+    : conTags.slice(0, 2);
 
   const perfil = await req('POST', '/profiles/me', {
     token: est.token,

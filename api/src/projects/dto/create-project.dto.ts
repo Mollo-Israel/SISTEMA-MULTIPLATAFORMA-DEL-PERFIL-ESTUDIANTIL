@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
@@ -13,10 +13,12 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { ProjectStatus, ProjectVisibility } from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
+import { SkillContextDto } from '../../activities/dto/create-activity.dto';
 export class CreateProjectDto {
   @ApiProperty({ example: 'Plataforma de tutorías' })
   @Transform(cleanLine)
@@ -55,6 +57,18 @@ export class CreateProjectDto {
   @ArrayUnique({ message: 'No repitas tecnologías.' })
   @IsUUID('4', { each: true, message: 'Elige tecnologías del catálogo.' })
   skillIds?: string[];
+
+  /**
+   * V3.2 §11.4: área en la que se usó cada tecnología cuando pertenece a
+   * varias de las elegidas. Lo que no se indica se deduce.
+   */
+  @ApiProperty({ required: false, type: () => [SkillContextDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => SkillContextDto)
+  skillContexts?: SkillContextDto[];
 
   /**
    * V3 §31: «usar uno de mis equipos». Con `teamId`, invita a sus
