@@ -1026,7 +1026,78 @@ async function batch9(ctx) {
   check(retirado.data?.total === 0, 'V32.9.10 §61 Un recurso retirado sale de la Biblioteca', `${retirado.data?.total}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
+// ===========================================================================
+//  BATCH 10 — Recomendaciones: favorito de recurso como señal secundaria, «Me interesa» (§35.2, §36)
+// ===========================================================================
+async function batch10(ctx) {
+  objective('BATCH 10 · Favoritos con peso bajo, «Me interesa» sin modelo y guardar algo que ya pasó');
+  const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 65 + Number(d)));
+  const area = async (n) => (await req('POST', '/academic-areas', { token: ctx.admin, body: { name: `${n} ${L}`, tags: [`${n.toLowerCase().slice(0, 6)}${L.toLowerCase()}`] } })).data;
+  const aInteres = await area('Fotonica');
+  const aSoloFav = await area('Acustica');
+  const sk = async (n, a) => (await req('POST', '/skills', { token: ctx.admin, body: { name: `${n} ${L}`, academicAreaId: a.id } })).data;
+  const sInt = await sk('Laser Kit', aInteres);
+  const sFav = await sk('Sonar Kit', aSoloFav);
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Zoe', lastName: 'Gutierrez', email: correoStaff('b10dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Ariel', lastName: 'Huanca', email: correoEst('b10est'), role: 'STUDENT', semester: 3 });
+  est.profileId = (await req('POST', '/profiles/me', { token: est.token, body: {} })).data?.id;
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: aInteres.id, priority: 1 }] } });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const crear = (titulo, a, s, extra = {}) => req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${TS}`, type: 'academica', categoryId: taller.id, areaIds: [a.id], skillIds: [s.id], status: 'open', ...extra },
+  });
+  const actInteres = (await crear('Taller de fotonica', aInteres, sInt)).data;
+  const actSoloFav = (await crear('Taller de acustica', aSoloFav, sFav)).data;
+  const recurso = async (titulo, a) => (await req('POST', '/learning-resources', {
+    token: director.token,
+    body: { title: `${titulo} ${TS}`, provider: 'Catálogo', url: `https://recursos.univalle.edu/${titulo.replace(/\s/g, '-')}-${TS}`, academicAreaId: a.id, resourceType: 'guide' },
+  })).data;
+  const rInt = await recurso('Guia de fotonica', aInteres);
+  const rFav = await recurso('Guia de acustica', aSoloFav);
+
+  const items = async () => ((await req('GET', '/recommendations/me', { token: est.token })).data?.groups ?? []).flatMap((g) => g.items);
+  const de = (lista, id) => lista.find((i) => i.targetId === id);
+  const codigos = (i) => (i?.reasons ?? []).map((r) => r.code);
+  let lista = await items();
+  check(!!de(lista, actInteres.id) && !codigos(de(lista, actInteres.id)).includes('resource_favorite_area'),
+    'V32.10.1 Sin favoritos, la actividad del área de interés se recomienda sin esa señal', json(codigos(de(lista, actInteres.id))));
+  const puntosAntes = de(lista, actInteres.id)?.score ?? 0;
+
+  await req('PUT', `/library/${rInt.id}/favorite`, { token: est.token });
+  await req('PUT', `/library/${rFav.id}/favorite`, { token: est.token });
+  lista = await items();
+  const conFav = de(lista, actInteres.id);
+  const razon = (conFav?.reasons ?? []).find((r) => r.code === 'resource_favorite_area');
+  check(!!razon && razon.points <= 5 && /Biblioteca/.test(razon.label),
+    'V32.10.2 §35.2 Un recurso guardado del área suma como señal secundaria (≤ 5 puntos, con su motivo)', json(conFav?.reasons));
+  check((conFav?.score ?? 0) - puntosAntes <= 5.001, 'V32.10.3 §35.2 Pesa poco: a lo sumo el 5 % de feedback', `${puntosAntes} → ${conFav?.score}`);
+  check(!de(lista, actSoloFav.id), 'V32.10.4 §35.2 Por sí solo, un favorito no crea una recomendación', json(de(lista, actSoloFav.id)?.reasons));
+
+  // ----- §36 «Me interesa»: no alimenta el modelo ni la afinidad
+  const otroEst = await provisionAndActivate(ctx.admin, { firstName: 'Bruno', lastName: 'Ibarra', email: correoEst('b10est2'), role: 'STUDENT', semester: 3 });
+  await req('POST', '/profiles/me', { token: otroEst.token, body: {} });
+  const recOtroAntes = ((await req('GET', '/recommendations/me', { token: otroEst.token })).data?.groups ?? []).flatMap((g) => g.items);
+  const afAntes = await req('GET', '/affinity/me', { token: otroEst.token });
+  await req('POST', `/activities/${actSoloFav.id}/register-interest`, { token: otroEst.token });
+  await req('POST', '/affinity/recalculate/me', { token: otroEst.token });
+  const recOtroDespues = ((await req('GET', '/recommendations/me', { token: otroEst.token })).data?.groups ?? []).flatMap((g) => g.items);
+  const afDespues = await req('GET', '/affinity/me', { token: otroEst.token });
+  check(JSON.stringify(afAntes.data) === JSON.stringify(afDespues.data) || JSON.stringify(afDespues.data ?? {}).indexOf(aSoloFav.id) === -1,
+    'V32.10.5 §36 «Me interesa» no aporta afinidad');
+  check(!recOtroDespues.some((i) => (i.reasons ?? []).some((r) => r.label?.includes(aSoloFav.name))) && recOtroAntes.length === recOtroDespues.length,
+    'V32.10.6 §36 «Me interesa» no se usa como señal del recomendador', `${recOtroAntes.length} → ${recOtroDespues.length}`);
+
+  // ----- §36 Guardar algo que ya pasó, sin inscripción
+  const pasada = (await crear('Taller pasado', aInteres, sInt, { activityDate: new Date(Date.now() - 3 * 3_600_000).toISOString(), endAt: new Date(Date.now() - 3_600_000).toISOString() })).data;
+  const guardar = await req('POST', `/activities/${pasada.id}/register-interest`, { token: est.token });
+  const inscribir = await req('POST', `/activities/${pasada.id}/register`, { token: est.token });
+  check(guardar.status === 201 || guardar.status === 200, 'V32.10.7 §36 Una actividad que ya terminó se puede guardar', `status ${guardar.status} ${json(guardar.data)}`);
+  check(inscribir.status === 400, 'V32.10.8 §36 Pero no inscribirse', `status ${inscribir.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

@@ -739,3 +739,51 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 - La Biblioteca en el móvil: BATCH 20.
 
 **Riesgos:** ninguno conocido.
+
+---
+
+## BATCH 10 — Recomendaciones y «Me interesa»
+
+**ESTADO:** completo
+
+**Objetivo:**
+- El favorito de un recurso cuenta como señal secundaria, de peso bajo (§35.2, §49).
+- «Me interesa» no alimenta el modelo ni la afinidad (§36).
+- Una actividad que ya pasó se puede guardar, pero no inscribirse (§36).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- El recomendador ya excluía la afinidad como factor principal y no usaba INTERESTED.
+- La afinidad daba 0 a INTERESTED y los recordatorios solo salen para eventos futuros. Todo eso era correcto.
+- **Faltaba:**
+  - el favorito de recurso como señal;
+  - poder guardar algo que ya cerró o terminó, que se rechazaba con el motivo de inscripción.
+- El texto que compara intereses libres usaba las etiquetas manuales.
+
+**Cambios:**
+- **Recomendador:**
+  - Si el estudiante guardó recursos de un área, las recomendaciones de esa área suman «Guardaste recursos de <área> en tu Biblioteca» (`RESOURCE_FAVORITE_AREA`). Usa el mismo 5 % de feedback y no se suma a «Guardaste una recomendación parecida»: nunca pasa de 5.
+  - Por sí sola no crea una recomendación: antes se exige otra señal.
+  - El texto de comparación incluye `search_keywords` (§20).
+- **Actividades:** `register-interest` funciona en actividades cerradas o terminadas; `register` sigue rechazado.
+- **Web:** en una actividad que ya pasó, el botón dice «Guardar» y desaparece «Solicitar inscripción».
+
+**Migraciones:** ninguna.
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch10`, 8/8.** Cubre:
+  - sin favoritos no hay señal;
+  - con favorito, la señal de 5 puntos o menos con su motivo;
+  - el puntaje sube 5 o menos;
+  - el favorito solo no recomienda;
+  - «Me interesa» sin afinidad ni efecto en el recomendador;
+  - guardar una actividad pasada sí, inscribirse no.
+
+**Resultados:**
+- Regresión completa: **1959 correctas y 1 fallo**. El fallo estuvo en `e2e-batch-1` (401 y un correo que no llegó a tiempo durante una pausa de enfriamiento): fue transitorio y al repetirla sola dio 59/59.
+- Total final: **1995 correctas, 0 fallos**.
+
+**Regresiones:** ninguna.
+
+**Pendientes:** ninguno del batch.
+
+**Riesgos:** ninguno conocido.

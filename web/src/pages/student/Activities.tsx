@@ -39,6 +39,10 @@ const formatDate = (value: string | null) =>
     ? new Date(value).toLocaleDateString('es-BO', { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
 
+/** V3.2 §36: ya empezó, cerró o terminó: no se ofrece inscribirse. */
+const yaPaso = (a: Activity) =>
+  a.status === 'closed' || a.status === 'finished' || (!!a.eventDate && new Date(a.eventDate).getTime() < Date.now());
+
 export default function StudentActivitiesPage() {
   const [query, setQuery] = useState('');
   /** Lo que se busca en el servidor: espera a que se deje de escribir. */
@@ -294,9 +298,12 @@ export default function StudentActivitiesPage() {
                             onClick={() => markInterest(a)}
                             icon={<FiHeart size={14} />}
                           >
-                            {a.myRegistration?.status === 'interested' ? 'Te interesa' : 'Me interesa'}
+                            {/* V3.2 §36: en algo que ya pasó, «Me interesa» es solo guardarla. */}
+                            {a.myRegistration?.status === 'interested'
+                              ? (yaPaso(a) ? 'Guardada' : 'Te interesa')
+                              : (yaPaso(a) ? 'Guardar' : 'Me interesa')}
                           </Button>
-                          {a.myRegistration?.status === 'registered' ? (
+                          {yaPaso(a) || a.status === 'cancelled' ? null : a.myRegistration?.status === 'registered' ? (
                             <Button
                               variant="secondary"
                               size="sm"

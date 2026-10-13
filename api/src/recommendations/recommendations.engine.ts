@@ -104,6 +104,8 @@ interface Contexto {
   /** V3 §34: lo que guardó y lo que descartó, por «área|tipo». */
   savedSimilar: Set<string>;
   dismissedSimilar: Map<string, number>;
+  /** V3.2 §35.2: áreas de los recursos que guardó como favoritos. */
+  favoriteResourceAreas: Set<string>;
   now: Date;
 }
 
@@ -256,6 +258,7 @@ export class RecommendationsEngine {
       ),
       savedSimilar,
       dismissedSimilar,
+      favoriteResourceAreas: await this.areasDeFavoritos(profileId),
       now: generatedAt,
     };
 
@@ -393,6 +396,13 @@ export class RecommendationsEngine {
       acumulador(RULES.ranking.feedback)(
         RecommendationReasonCode.SIMILAR_SAVED, 'Guardaste una recomendación parecida', 1,
       );
+    } else if (areaId && name && ctx.favoriteResourceAreas.has(areaId)) {
+      // V3.2 §35.2: un favorito explícito en la Biblioteca es una preferencia
+      // secundaria. Comparte el 5 % de feedback y nunca crea una
+      // recomendación por sí solo (arriba ya se exigió otra señal).
+      acumulador(RULES.ranking.feedback)(
+        RecommendationReasonCode.RESOURCE_FAVORITE_AREA, `Guardaste recursos de ${name} en tu Biblioteca`, 1,
+      );
     }
 
     // El contexto (fecha, semestre, modalidad, disponibilidad) ya filtró lo
@@ -491,7 +501,8 @@ export class RecommendationsEngine {
     const elements: Produced[] = [];
     for (const a of available) {
       const haystack = normalize(
-        [a.title, a.description, (a.tags ?? []).join(' '), a.category?.name].join(' '),
+        // V3.2 §20: las palabras derivadas de áreas y habilidades, no etiquetas a mano.
+        [a.title, a.description, (a.tags ?? []).join(' '), (a.searchKeywords ?? []).join(' '), a.category?.name].join(' '),
       );
       const contexto = this.activityContext(ctx, a);
       const type = typeForCategory(a.category?.code);
@@ -1105,5 +1116,19 @@ export class RecommendationsEngine {
 
   private formatDate(date: Date): string {
     return date.toLocaleDateString('es-BO', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  /** V3.2 §35.2: áreas de los recursos que el estudiante guardó como favoritos. */
+  private async areasDeFavoritos(profileId: string): Promise<Set<string>> {
+    const filas: { aid: string }[] = await this.profiles.manager.query(
+      `SELECT DISTINCT x.aid FROM learning_resource_favorites f
+         JOIN (
+           SELECT a.learning_resource_id AS rid, a.academic_area_id AS aid FROM learning_resource_areas a
+           UNION SELECT r.id, r.academic_area_id FROM learning_resources r
+         ) x ON x.rid = f.learning_resource_id
+        WHERE f.student_profile_id = $1`,
+      [profileId],
+    );
+    return new Set(filas.map((f) => f.aid));
   }
 }

@@ -96,6 +96,11 @@ export enum RecommendationReasonCode {
   CONTEXT_MATCH = 'context_match',
   /** V3 §34: guardó algo parecido (feedback positivo, 5 %). */
   SIMILAR_SAVED = 'similar_saved',
+  /**
+   * V3.2 §35.2: guardó recursos de esa área en su Biblioteca. Señal secundaria
+   * y explícita (comparte el 5 % de feedback); por sí sola no recomienda nada.
+   */
+  RESOURCE_FAVORITE_AREA = 'resource_favorite_area',
   /** V3 §34.1: descartó algo parecido; baja la prioridad, no toca su perfil. */
   DISMISSED_SIMILAR = 'dismissed_similar',
 }

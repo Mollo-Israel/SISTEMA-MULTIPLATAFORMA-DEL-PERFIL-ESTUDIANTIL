@@ -1739,7 +1739,12 @@ export class ActivitiesService {
   ): Promise<ActivityRegistration> {
     const activity = await this.findOne(activityId);
 
-    const blocked = this.registrationBlockReason(activity);
+    // V3.2 §36: «Me interesa» es un favorito o recordatorio personal. Se puede
+    // guardar aunque la actividad ya cerró o terminó; inscribirse, no.
+    const soloGuardar = target === RegistrationStatus.INTERESTED
+      && (activity.status === ActivityStatus.CLOSED || activity.status === ActivityStatus.FINISHED
+        || (activity.eventDate !== null && activity.eventDate.getTime() < Date.now()));
+    const blocked = soloGuardar ? null : this.registrationBlockReason(activity);
     if (blocked) {
       throw new BadRequestException(blocked);
     }
