@@ -53,7 +53,22 @@ export default function AreaSkillPicker({
   skillError?: string;
 }) {
   const [buscar, setBuscar] = useState('');
+  const [buscarArea, setBuscarArea] = useState('');
   const activas = useMemo(() => areas.filter((a) => a.isActive !== false), [areas]);
+  // V3.2 §6.3: con más de 10 áreas no se despliegan todas: las elegidas y,
+  // de las demás, las que coinciden con la búsqueda (hasta 12).
+  const MAX_AREAS_VISIBLES = 12;
+  const muchas = activas.length > 10;
+  const areasVisibles = useMemo(() => {
+    if (!muchas) return activas;
+    const q = norm(buscarArea.trim());
+    const elegidas = activas.filter((a) => value.areaIds.includes(a.id));
+    const resto = activas
+      .filter((a) => !value.areaIds.includes(a.id))
+      .filter((a) => !q || norm(a.name).includes(q) || (a.tags ?? []).some((t) => norm(t).includes(q)));
+    return [...elegidas, ...resto.slice(0, MAX_AREAS_VISIBLES)];
+  }, [activas, muchas, buscarArea, value.areaIds]);
+  const ocultas = muchas ? activas.length - areasVisibles.length : 0;
 
   const grupos = useMemo(() => {
     const q = norm(buscar.trim());
@@ -144,8 +159,18 @@ export default function AreaSkillPicker({
     <div className="area-skill-picker">
       <div className="field">
         <span className="field-label">{areaLabel}</span>
+        {muchas && (
+          <input
+            type="search"
+            value={buscarArea}
+            onChange={(e) => setBuscarArea(e.target.value)}
+            placeholder="Buscar área…"
+            aria-label="Buscar área"
+            style={{ marginBottom: '0.45rem' }}
+          />
+        )}
         <div className="chip-row" role="group" aria-label={areaLabel}>
-          {activas.map((a) => {
+          {areasVisibles.map((a) => {
             const on = value.areaIds.includes(a.id);
             return (
               <button
@@ -160,6 +185,13 @@ export default function AreaSkillPicker({
             );
           })}
         </div>
+        {ocultas > 0 && (
+          <span className="muted small">
+            {buscarArea.trim()
+              ? `${ocultas} área(s) más no coinciden o no se muestran: afina la búsqueda.`
+              : `Hay ${ocultas} área(s) más: escribe para buscarlas.`}
+          </span>
+        )}
         {areaError && <span className="field-error">{areaError}</span>}
       </div>
 

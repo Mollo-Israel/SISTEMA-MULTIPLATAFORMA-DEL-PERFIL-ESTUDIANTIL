@@ -249,6 +249,8 @@ table { border-radius: 10px; overflow: hidden; }
   grid-template-columns: minmax(0, 1fr);
 }
 .modal {
+  /* position: relative para que la «X» quede en el modal y no en la esquina de la pantalla. */
+  position: relative;
   background: var(--white); border-radius: 16px; width: 100%; max-width: 520px;
   padding: 1.3rem 1.4rem; box-shadow: 0 24px 60px rgba(0,0,0,0.28);
   max-height: 90vh; overflow-y: auto;
@@ -1266,3 +1268,28 @@ button.chip { cursor: pointer; font-family: var(--font); }
 @media (max-width: 560px) { .links-editor .link-row { grid-template-columns: 1fr; } }
 .activity-image-preview { max-width: 240px; max-height: 140px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--gray-200); display: block; margin-bottom: 0.35rem; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; }
+
+/* --- V3.2 §37 · Tarjetas de actividad de alto fijo y detalle --- */
+.activity-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 1rem; }
+.activity-card { display: flex; flex-direction: column; height: 100%; min-height: 400px; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.activity-card-img { height: 110px; flex-shrink: 0; background: var(--bordo-100); color: var(--bordo); display: grid; place-items: center; }
+.activity-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.activity-card-body { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.9rem 1rem 1rem; flex: 1; min-height: 0; }
+.activity-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+.activity-card-head h3 { margin: 0; font-size: 1rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.activity-card-desc { margin: 0; color: var(--gray-700); font-size: 0.88rem; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.activity-card .activity-meta { font-size: 0.8rem; }
+.activity-card-actions { margin-top: auto; display: flex; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.5rem; }
+.activity-detail-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: var(--radius); margin-bottom: 0.8rem; }
+.detail-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.35rem 1rem; margin: 0.8rem 0; }
+.detail-list dt { font-weight: 600; color: var(--gray-700); font-size: 0.85rem; }
+.detail-list dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .detail-list { grid-template-columns: minmax(0, 1fr); } .detail-list dd { margin-bottom: 0.4rem; } }
+.links-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.3rem; }
+
+/* V3.2 §64 (C17): la lista de participantes se apila en pantallas angostas. */
+@media (max-width: 640px) {
+  .tabla-apilable thead { display: none; }
+  .tabla-apilable tr { display: grid; gap: 0.35rem; padding: 0.6rem 0; border-bottom: 1px solid var(--gray-200); }
+  .tabla-apilable td { display: block; width: auto !important; padding: 0; border: none; }
+}

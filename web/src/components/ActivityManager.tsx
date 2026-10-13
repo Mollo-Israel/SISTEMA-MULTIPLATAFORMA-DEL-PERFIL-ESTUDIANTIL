@@ -16,7 +16,8 @@ import type {
 } from '../services/types';
 import AreaSkillPicker from './AreaSkillPicker';
 import {
-  Badge, Button, Card, Diferido, EmptyState, Modal, ResultCount, SearchInput, SkeletonTable, Stagger,
+  Badge, Button, Card, Diferido, EmptyState, FILAS_POR_PAGINA, Modal, Paginacion, ResultCount, SearchInput,
+  SkeletonTable, Stagger, usePaginacion,
 } from './ui';
 import { useConfirm, useToast } from './feedback';
 import { ACTIVITY_REVIEW_LABEL, ACTIVITY_TRANSITIONS } from '../services/types';
@@ -141,10 +142,6 @@ export default function ActivityManager({
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  // Las filas se pintan de a poco (cientos a la vez trababan la pantalla).
-  const PASO = 50;
-  const [limite, setLimite] = useState(PASO);
-  useEffect(() => setLimite(PASO), [query, statusFilter]);
   const [partQuery, setPartQuery] = useState('');
 
   // Del catálogo administrable: las que aplican a este tipo o a ambos (RF4).
@@ -185,6 +182,9 @@ export default function ActivityManager({
         .some((field) => normalize(field).includes(q));
     });
   }, [activities, query, statusFilter]);
+
+  // V3.2 §6.1: 10 por página.
+  const pagGestion = usePaginacion(visible, FILAS_POR_PAGINA, [query, statusFilter, activities.length]);
 
   const resetForm = () => {
     setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
@@ -1192,7 +1192,7 @@ export default function ActivityManager({
                 </tr>
               </thead>
               <tbody>
-                {visible.slice(0, limite).map((a) => {
+                {pagGestion.visibles.map((a) => {
                   const pend = (a.registrationCount ?? 0) - (a.confirmedCount ?? 0);
                   return (
                     <tr key={a.id} className={selected === a.id ? 'row-picked' : undefined}>
@@ -1302,13 +1302,7 @@ export default function ActivityManager({
               </tbody>
             </table>
           </div>
-          {visible.length > limite && (
-            <div style={{ textAlign: 'center', marginTop: '0.8rem' }}>
-              <Button variant="secondary" size="sm" onClick={() => setLimite((n) => n + PASO)}>
-                Ver más ({visible.length - limite} restantes)
-              </Button>
-            </div>
-          )}
+          <Paginacion {...pagGestion} noun="actividades" />
         </Card>
       )}
 
@@ -1497,17 +1491,20 @@ function ParticipantGroup({
   empty: string;
   render: (r: Participant) => React.ReactNode;
 }) {
+  // V3.2 §64 (C17): 10 por página, con contador, y apilada en el teléfono.
+  const pag = usePaginacion(rows, FILAS_POR_PAGINA, [rows.length]);
   if (rows.length === 0 && !empty) return null;
   return (
     <div className="mt">
-      <h3>{title}</h3>
+      <h3>{title} <span className="muted small">({rows.length})</span></h3>
       {rows.length === 0 ? (
         <p className="muted">{empty}</p>
       ) : (
-        <div className="scroll-x">
-          <table>
+        <>
+        <div className="table-scroll">
+          <table className="tabla-apilable">
             <tbody>
-              {rows.map((r) => (
+              {pag.visibles.map((r) => (
                 <tr key={r.id}>
                   <td>
                     <strong>{r.studentName ?? 'Estudiante'}</strong>
@@ -1526,6 +1523,8 @@ function ParticipantGroup({
             </tbody>
           </table>
         </div>
+        <Paginacion {...pag} noun="participantes" />
+        </>
       )}
     </div>
   );

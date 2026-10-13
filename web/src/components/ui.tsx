@@ -1,6 +1,6 @@
 import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { PrimeraVisita } from './primeraVisita';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { FiInbox, FiSearch, FiX } from 'react-icons/fi';
 
@@ -239,10 +239,17 @@ export function Modal({
   const panel = useRef<HTMLDivElement | null>(null);
   const cerrar = useRef(onClose);
   cerrar.current = onClose;
+  // V3.2 §6.5: sin animación si la persona la pidió así.
+  const quieto = useReducedMotion();
 
   useEffect(() => {
     const previo = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
+    const relleno = document.body.style.paddingRight;
+    // V3.2 §6.5: al ocultar la barra de desplazamiento la página se corría
+    // hacia un lado y el modal «parpadeaba». Se compensa su ancho.
+    const barra = window.innerWidth - document.documentElement.clientWidth;
+    if (barra > 0) document.body.style.paddingRight = `${barra}px`;
     document.body.style.overflow = 'hidden';
     const enfocables = () =>
       Array.from(
@@ -276,6 +283,7 @@ export function Modal({
     return () => {
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = overflow;
+      document.body.style.paddingRight = relleno;
       previo?.focus?.();
     };
   }, []);
@@ -283,9 +291,9 @@ export function Modal({
   return createPortal(
     <motion.div
       className="modal-backdrop"
-      initial={{ opacity: 0 }}
+      initial={quieto ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.18 }}
+      transition={{ duration: quieto ? 0 : 0.15 }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) cerrar.current(); }}
       role="presentation"
     >
@@ -297,9 +305,9 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        initial={{ opacity: 0, y: 8 }}
+        initial={quieto ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
+        transition={{ duration: quieto ? 0 : 0.15, ease: 'easeOut' }}
       >
         <div className="modal-head">
           <div>

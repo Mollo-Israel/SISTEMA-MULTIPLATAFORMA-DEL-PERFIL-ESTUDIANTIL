@@ -817,7 +817,68 @@ async function batch6(ctx) {
     'V32.6.28 §24.4 El borrador de Administración no lo ve Dirección; sí su responsable', `${verDirAdm.status} / ${verResp.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
+// ===========================================================================
+//  BATCH 7 — Tarjetas y detalle de actividad, participantes (C16, C17, §37, §64)
+// ===========================================================================
+async function batch7(ctx) {
+  objective('BATCH 7 · Tarjeta y detalle: imagen, fechas, áreas, habilidades, personas y enlaces');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Nora', lastName: 'Saavedra', email: correoStaff('b7dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Omar', lastName: 'Taboada', email: correoStaff('b7doc'), role: 'TEACHER' });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Pia', lastName: 'Ustariz', email: correoEst('b7est'), role: 'STUDENT', semester: 2 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const area = (c) => areas.find((a) => a.code === c);
+  const skill = (c) => skills.find((s) => s.code === c);
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const png = await subirArchivo(director.token, PNG_1X1, 'portada.png', 'image/png');
+  const titulo = `Taller tarjeta ${TS}`;
+  const creada = await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      title: titulo, type: 'academica', categoryId: taller.id, semesterScope: [2],
+      description: 'Descripción larga. '.repeat(40),
+      areaIds: [area('desarrollo_web').id, area('bases_de_datos').id, area('redes').id, area('ingenieria_de_software').id],
+      skillIds: [skill('react').id, skill('postgresql').id, skill('tcp_ip').id, skill('git').id],
+      activityDate: new Date(Date.now() + 72 * 3_600_000).toISOString(), endAt: new Date(Date.now() + 75 * 3_600_000).toISOString(),
+      modality: 'hibrida', location: 'Aula 5', meetingUrl: 'https://meet.google.com/xyz-abcd-efg',
+      resourceLinks: [{ label: 'Guía', url: 'https://univalle.edu/guia.pdf' }],
+      imageFileId: png.data?.id, capacity: 30,
+      responsibleUserIds: [director.userId, docente.userId], status: 'open',
+    },
+  });
+  check(creada.status === 201, 'V32.7.1 Se publica una actividad con todo lo que muestra la tarjeta', `status ${creada.status} ${json(creada.data?.fields)}`);
+  const pagina = await req('GET', `/activities?limit=50&q=${encodeURIComponent(titulo)}`, { token: est.token });
+  const tarjeta = (pagina.data?.items ?? pagina.data ?? []).find((a) => a.id === creada.data?.id);
+  check(!!tarjeta?.imageUrl && tarjeta?.endAt && tarjeta?.meetingUrl && (tarjeta?.resourceLinks ?? []).length === 1,
+    'V32.7.2 §37 El listado trae imagen, fin, enlace de reunión y el primer enlace útil', json({ i: !!tarjeta?.imageUrl, e: tarjeta?.endAt }));
+  check((tarjeta?.activityAreas ?? []).length === 4 && (tarjeta?.activitySkills ?? []).every((s) => s.skill?.name),
+    'V32.7.3 §37 Y las áreas y habilidades con su nombre, para resumirlas («+2»)', json((tarjeta?.activitySkills ?? []).map((s) => s.skill?.name)));
+  check(json((tarjeta?.responsibles ?? []).map((p) => p.id)) === json([director.userId, docente.userId]) && !('email' in (tarjeta?.responsibles?.[0] ?? {})),
+    'V32.7.4 §37 El detalle nombra a los responsables (sin exponer su correo)', json(tarjeta?.responsibles));
+  check(tarjeta && !('reviewComment' in tarjeta) && !('creator' in tarjeta && tarjeta.creator?.email),
+    'V32.7.5 V2 §80 El estudiante sigue recibiendo la vista mínima', json(Object.keys(tarjeta ?? {}).length));
+  const gestion = await req('GET', '/activities/managed', { token: docente.token });
+  check((gestion.data ?? []).some((a) => a.id === creada.data?.id && (a.responsibles ?? []).length === 2),
+    'V32.7.6 §16 El responsable la tiene en «Mis actividades», con sus responsables', `${(gestion.data ?? []).length}`);
+
+  objective('BATCH 7 · Participantes: la lista que ve el responsable');
+  for (let i = 0; i < 12; i++) {
+    const alumno = await provisionAndActivate(ctx.admin, {
+      firstName: 'Alumno', lastName: `Prueba ${String.fromCharCode(65 + i)}`, email: correoEst(`b7p${i}`), role: 'STUDENT', semester: 2,
+    });
+    await req('POST', '/profiles/me', { token: alumno.token, body: {} });
+    await req('POST', `/activities/${creada.data?.id}/register`, { token: alumno.token });
+  }
+  const participantes = await req('GET', `/activities/${creada.data?.id}/participants`, { token: docente.token });
+  check(participantes.status === 200 && (participantes.data ?? []).length === 12,
+    'V32.7.7 §64 El responsable ve a los 12 inscritos (la web los pagina de a 10)', `${(participantes.data ?? []).length}`);
+  check((participantes.data ?? []).every((p) => p.studentName && p.status && !('email' in p)),
+    'V32.7.8 §64 Cada fila trae nombre y estado, sin datos de más', json(participantes.data?.[0]));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

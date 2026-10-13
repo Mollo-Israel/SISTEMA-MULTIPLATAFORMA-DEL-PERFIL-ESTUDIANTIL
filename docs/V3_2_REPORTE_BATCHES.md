@@ -545,3 +545,69 @@ Además, con una prueba directa contra la base se encontró un efecto que el 500
 **Pendientes:** las tarjetas y la lista de participantes: BATCH 7.
 
 **Riesgos:** un docente que antes confirmaba la participación en actividades de colegas por compartir semestre ya no puede hacerlo. Es lo que pide §25: para gestionarlas tiene que ser responsable.
+
+---
+
+## BATCH 7 — Tarjetas y detalle de actividad, participantes y UX
+
+**ESTADO:** completo
+
+**Objetivo:**
+- Tarjetas de alto fijo con la descripción truncada y el detalle completo (C16, §37).
+- Participantes paginados y legibles en el teléfono (C17, §64).
+- Grillas de 10 filas (§6.1).
+- Combobox grandes acotados y con búsqueda (§6.3).
+- Modales sin parpadeo (§6.5).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- La tarjeta del estudiante mostraba la descripción completa y deformaba la grilla.
+- La tarjeta no traía imagen, fin, habilidades ni enlaces.
+- El listado no cargaba habilidades ni personas.
+- Los participantes salían en una tabla sin paginar y de ancho fijo.
+- La grilla de gestión usaba «Ver más».
+- Al verificar en pantalla (capturas con Playwright a 1280 y 375 px) aparecieron tres cosas más:
+  - El selector de áreas desplegaba más de 2000 burbujas en la base de desarrollo.
+  - La «X» de **todos** los modales quedaba en la esquina de la pantalla, porque `.modal` no era posicionado.
+  - Al abrir un modal, ocultar la barra de desplazamiento corría la página hacia un lado (el «parpadeo»).
+
+**Cambios:**
+- **API:** el listado y «Mis actividades» traen las habilidades (con su nombre), los responsables, los contactos y la imagen. La vista del estudiante sigue siendo la mínima: sin correo de los responsables y sin datos de revisión.
+- **Web:**
+  - **`ActivityCard` (alto fijo):** imagen, título, tipo, estado, inicio–fin en hora de Bolivia, modalidad, aula, áreas y habilidades resumidas («Bases de Datos, Redes +2»), cupo, enlace de reunión y primer enlace útil. La descripción se trunca a 3 líneas; si fue cancelada, muestra el motivo.
+  - **`ActivityDetail`:** muestra todo lo de la tarjeta y además:
+    - la descripción completa;
+    - responsables y contactos (con correo);
+    - el proveedor;
+    - el enlace oficial y los recursos;
+    - el resultado al terminar.
+  - **Participantes:** 10 por página, con contador por grupo, apilados en pantallas angostas. La grilla de gestión también va de a 10.
+  - **Selector de áreas:** con más de 10 áreas muestra las elegidas y hasta 12 más, con búsqueda y el número de las que no se muestran.
+  - **Modal:** se compensa el ancho de la barra de desplazamiento, se respeta `prefers-reduced-motion` y la «X» queda dentro del modal.
+
+**Migraciones:** ninguna.
+
+**Archivos modificados:**
+- `api/src/activities/activities.service.ts`
+- `web/src/components/{ActivityCard (nuevo),ActivityManager,AreaSkillPicker,ui}.tsx`
+- `web/src/pages/student/Activities.tsx`, `web/src/index.css`
+- `scripts/e2e-v3-2.mjs`
+
+**Pruebas:**
+- **Suite `e2e-v3-2 batch7`, 8/8.** Cubre:
+  - la tarjeta con imagen, fin, reunión y primer enlace;
+  - 4 áreas y 4 habilidades con nombre;
+  - responsables sin correo y vista mínima del estudiante;
+  - «Mis actividades» del responsable;
+  - 12 inscritos visibles para el responsable, sin datos de más.
+- **Verificación visual:** capturas del estudiante (1280 y 375 px), del detalle y del formulario de Dirección, antes y después de corregir.
+- **`e2e-web`:** 38/38 después del cambio en el selector de áreas, que también usan Proyectos y Colaboración.
+
+**Resultados:**
+- Regresión completa: **1963 correctas y 0 fallos** (21 suites).
+- Tras los ajustes visuales, `e2e-web` dio 38/38.
+
+**Regresiones:** ninguna.
+
+**Pendientes:** el favorito de una actividad terminada (§36) llega con la Biblioteca y las recomendaciones (BATCH 9–10).
+
+**Riesgos:** ninguno conocido.

@@ -1116,7 +1116,11 @@ export class ActivitiesService {
     }
     const activities = await this.activities.find({
       where,
-      relations: { academicArea: true, creator: true, category: true, activityAreas: { academicArea: true } },
+      // V3.2 §37: la tarjeta resume áreas y habilidades.
+      relations: {
+        academicArea: true, creator: true, category: true,
+        activityAreas: { academicArea: true }, activitySkills: { skill: true },
+      },
       order: { eventDate: 'DESC', createdAt: 'DESC' },
     });
 
@@ -1126,6 +1130,8 @@ export class ActivitiesService {
       ? activities.filter((a) => a.status !== ActivityStatus.DRAFT)
       : await this.filtrarGestionables(user, activities, { incluirPublicadas: true });
 
+    // V3.2 §37: imagen, responsables y contactos para la tarjeta y su detalle.
+    await this.adjuntarPersonas(visible);
     const conConteos = await this.attachCounts(visible);
     return user.role === RolNombre.STUDENT
       ? (await this.attachMyRegistration(user.userId, conConteos)).map(vistaEstudiante)
@@ -1138,9 +1144,9 @@ export class ActivitiesService {
       relations: { academicArea: true, creator: true, category: true, activityAreas: { academicArea: true } },
       order: { createdAt: 'DESC' },
     });
-    return this.attachCounts(
-      await this.filtrarGestionables(user, activities, { incluirPublicadas: false }),
-    );
+    const propias = await this.filtrarGestionables(user, activities, { incluirPublicadas: false });
+    await this.adjuntarPersonas(propias);
+    return this.attachCounts(propias);
   }
 
   async findOne(id: string): Promise<Activity> {
