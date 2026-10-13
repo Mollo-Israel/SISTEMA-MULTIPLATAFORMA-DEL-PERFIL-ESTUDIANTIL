@@ -15,6 +15,11 @@ function destino(link: string | null): [string, Record<string, unknown>?] | null
   if (link.startsWith('/student/collaboration')) return ['Perfil', { screen: 'Colaboracion' }];
   if (link.startsWith('/student/evidences')) return ['Perfil', { screen: 'Evidencias' }];
   if (link.startsWith('/student/progress')) return ['Perfil', { screen: 'Trayectoria' }];
+  // V3.2 B20: el resto de pantallas que existen en la app.
+  if (link.startsWith('/student/library')) return ['Actividades', { screen: 'Biblioteca' }];
+  if (link.startsWith('/student/affinity')) return ['Afinidad'];
+  if (link.startsWith('/student/profile')) return ['Perfil', { screen: 'MiPerfil' }];
+  if (link === '/student' || link.startsWith('/student?')) return ['Inicio'];
   return null;
 }
 

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { fechaHora, rango } from '../../fechas';
+import { ImagenProtegida } from '../../components/ImagenProtegida';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import { activityService, catalogService } from '../../services';
@@ -27,6 +29,24 @@ import { MisInscripciones, ParaTi } from './ActivityTabs';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const MODALIDAD: Record<string, string> = { presencial: 'Presencial', virtual: 'Virtual', hibrida: 'Híbrida' };
+
+/** V3.2 §28: lo que la actividad genera al terminar, como en la web. */
+const RESULTADO: Record<string, string> = {
+  participation_only: 'La participación confirmada queda en tu trayectoria',
+  internal_constancy: 'Constancia interna al confirmar tu participación',
+  institution_issued_certificate: 'Certificado emitido por la institución',
+  external_credential_expected: 'Credencial del proveedor, que acreditarás al terminar',
+  other_authorized_resource: 'Otro recurso autorizado',
+};
+
+/** V3.2 §13: todas las áreas de la actividad y sus habilidades. */
+const areasDe = (a: any): string[] => {
+  const todas = (a.activityAreas ?? []).map((x: any) => x.academicArea?.name).filter(Boolean);
+  return todas.length ? todas : a.academicArea?.name ? [a.academicArea.name] : [];
+};
+const skillsDe = (a: any): string[] => (a.activitySkills ?? []).map((s: any) => s.skill?.name).filter(Boolean);
 
 const TYPE_FILTERS = [
   { value: '', label: 'Todas' },
@@ -206,6 +226,8 @@ export default function ActivitiesScreen({ navigation }: any) {
         ))}
       </View>
 
+      <Button variant="secondary" icon="book-open" title="Biblioteca de recursos" small onPress={() => navigation.navigate('Biblioteca')} />
+
       {pestana === 'parati' && <ParaTi onMas={() => navigation.navigate('MasSugerencias')} />}
       {(pestana === 'interesadas' || pestana === 'inscritas' || pestana === 'historial') && <MisInscripciones grupo={pestana} />}
 
@@ -334,6 +356,7 @@ export default function ActivitiesScreen({ navigation }: any) {
           <FadeIn key={a.id} index={index}>
           <Card>
             <Pressable onPress={() => open(a.id)}>
+              {a.imageUrl ? <ImagenProtegida src={a.imageUrl} style={styles.imagen} /> : null}
               <View style={styles.badges}>
                 <Badge color={a.type === 'academica' ? colors.bordo : colors.amber}>
                   {lbl(ACTIVITY_TYPE_LABEL, a.type)}
@@ -343,15 +366,10 @@ export default function ActivitiesScreen({ navigation }: any) {
               </View>
               <Text style={styles.title}>{a.title}</Text>
               <Muted>
-                {a.modality}
-                {a.academicArea ? ` · ${a.academicArea.name}` : ''}
-                {a.eventDate
-                  ? ` · ${new Date(a.eventDate).toLocaleDateString('es-BO', {
-                      day: '2-digit',
-                      month: 'short',
-                    })}`
-                  : ''}
+                {MODALIDAD[a.modality] ?? a.modality}
+                {areasDe(a).length ? ` · ${areasDe(a).join(', ')}` : ''}
               </Muted>
+              {a.eventDate ? <Muted>{rango(a.eventDate, a.endAt)}</Muted> : null}
               <View style={styles.toggleRow}>
                 <Text style={styles.toggle}>
                   {isOpen ? 'Ocultar detalle' : 'Ver detalle'}
@@ -368,26 +386,38 @@ export default function ActivitiesScreen({ navigation }: any) {
 
             {isOpen && d && (
               <View style={styles.detail}>
+                {d.status === 'cancelled' && d.cancellationReason ? (
+                  <View style={styles.blocked}>
+                    <Text style={styles.blockedText}>Cancelada: {d.cancellationReason}</Text>
+                  </View>
+                ) : null}
                 {d.description ? <Text style={styles.desc}>{d.description}</Text> : null}
 
                 <View style={styles.metaBlock}>
-                  {d.eventDate && (
-                    <Text style={styles.meta}>
-                      Fecha:{' '}
-                      {new Date(d.eventDate).toLocaleString('es-BO', {
-                        day: '2-digit',
-                        month: 'long',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  )}
+                  {d.eventDate ? <Text style={styles.meta}>Inicio: {fechaHora(d.eventDate)}</Text> : null}
+                  {d.endAt ? <Text style={styles.meta}>Fin: {fechaHora(d.endAt)}</Text> : null}
+                  <Text style={styles.meta}>Modalidad: {MODALIDAD[d.modality] ?? d.modality}</Text>
                   {d.location ? <Text style={styles.meta}>Lugar: {d.location}</Text> : null}
+                  {areasDe(d).length ? <Text style={styles.meta}>Áreas: {areasDe(d).join(', ')}</Text> : null}
+                  {skillsDe(d).length ? <Text style={styles.meta}>Habilidades: {skillsDe(d).join(', ')}</Text> : null}
+                  {(d.responsibles ?? []).length ? (
+                    <Text style={styles.meta}>
+                      Responsables: {(d.responsibles ?? []).map((p: any) => `${p.firstName} ${p.lastName}`).join(', ')}
+                    </Text>
+                  ) : null}
+                  {(d.contacts ?? []).map((p: any) => (
+                    <Text key={p.id} style={styles.meta}>
+                      Contacto: {p.firstName} {p.lastName}{p.email ? ` · ${p.email}` : ''}
+                    </Text>
+                  ))}
+                  {d.outcomePolicy && RESULTADO[d.outcomePolicy] ? (
+                    <Text style={styles.meta}>Al terminar: {RESULTADO[d.outcomePolicy]}</Text>
+                  ) : null}
                   <Text style={styles.meta}>
                     Confirmados: {d.confirmedCount ?? 0}
                     {d.capacity ? ` de ${d.capacity} (quedan ${d.seatsLeft})` : ' · cupo ilimitado'}
                   </Text>
-                  {d.creator && (
+                  {d.creator && !(d.responsibles ?? []).length && (
                     <Text style={styles.meta}>
                       Responsable: {d.creator.firstName} {d.creator.lastName}
                     </Text>
@@ -396,6 +426,27 @@ export default function ActivitiesScreen({ navigation }: any) {
                     <Text style={styles.meta}>Etiquetas: {d.tags.join(', ')}</Text>
                   ) : null}
                 </View>
+
+                {d.meetingUrl ? (
+                  <Button
+                    title="Abrir la reunión"
+                    icon="video"
+                    variant="secondary"
+                    onPress={() => Linking.openURL(d.meetingUrl)}
+                  />
+                ) : null}
+
+                {(d.resourceLinks ?? []).length ? (
+                  <View style={styles.metaBlock}>
+                    <Text style={styles.filterLabel}>Enlaces y recursos</Text>
+                    {(d.resourceLinks ?? []).map((l: any) => (
+                      <Pressable key={l.url} onPress={() => Linking.openURL(l.url)} accessibilityRole="link" style={styles.enlace}>
+                        <Icon name="link" size={13} color={colors.bordo} />
+                        <Text style={styles.enlaceTexto}>{l.label || l.url}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
 
                 {d.externalUrl ? (
                   <Button
@@ -527,4 +578,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   blockedText: { fontSize: 12.5, color: colors.gray700 },
+  imagen: { width: '100%', height: 120, borderRadius: 10, marginBottom: 10, backgroundColor: colors.bordoBg },
+  enlace: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  enlaceTexto: { color: colors.bordo, fontSize: 13, fontWeight: '600' },
 });

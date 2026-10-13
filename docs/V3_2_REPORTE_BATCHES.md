@@ -1099,3 +1099,44 @@ Se entregan en un solo commit porque comparten archivos: `navigation.ts`, `index
 
 **Riesgos:**
 - **Reinicios de la API:** dos veces la API en modo `watch` se reinició en medio de una suite, al instalar dependencias del móvil y al cambiar archivos de pruebas, y dio `fetch failed` en `e2e-v3-2` o `e2e-web`. Al repetir pasaron enteras. No es un defecto del código.
+
+---
+
+## BATCH 20 — Móvil
+
+**ESTADO:** completo en código y compilación. **No se probó en un teléfono físico** en esta sesión (ver Pendientes).
+
+**Hallazgos verificados antes de cambiar (§75):**
+- **Ya existía:**
+  - pestañas Para ti / Todas / Interesadas / Inscritas / Historial;
+  - avisos con contador;
+  - proyectos, perfil, trayectoria y evidencias.
+- **Faltaba:**
+  - la Biblioteca de recursos (§35);
+  - en el detalle de actividad: hora de fin, enlace de reunión, enlaces y recursos, imagen, varias áreas y habilidades, responsables y contactos, «al terminar» y motivo de cancelación (§16–§19, §28);
+  - fechas en la zona de la institución (§38).
+- **Defecto:** los botones «Abrir» y «Ver» de evidencias y certificados abrían `/api/files/…` en el navegador del teléfono sin token, y recibían 401.
+
+**Cambios (`mobile/`):**
+- **`LibraryScreen`:** búsqueda, filtro por área, «Mis favoritos», Guardar o Quitar y páginas de 20. Se entra desde Actividades → «Biblioteca de recursos».
+- **`fechas.ts`:** fechas y horas en America/La_Paz, con el fin abreviado si cae el mismo día.
+- **`ImagenProtegida`:** la imagen se pide con el token en la cabecera.
+- **`archivos.ts`:**
+  - Descarga con el token a la caché de la app (`expo-file-system`) y abre con el visor del sistema (`expo-sharing`).
+  - Dependencias nuevas, instaladas con `npx expo install` en versiones del SDK 54.
+- **Tarjeta y detalle de actividad:** se agregaron los datos que faltaban.
+- **Avisos:** los enlaces a Biblioteca, Afinidad, Perfil e Inicio llevan a su pantalla.
+
+**Pruebas ejecutadas:**
+- `npx tsc --noEmit`: sin errores.
+- `npx expo-doctor`: 18/18.
+- `npx expo export --platform android`: el bundle Hermes se generó sin errores.
+
+**Pendientes:** el recorrido manual en Expo Go (Android/iOS):
+- Biblioteca;
+- detalle de actividad con imagen y enlaces;
+- abrir un PDF de evidencia.
+
+No hay suite automática de UI móvil; no se afirma ese resultado.
+
+**Riesgos:** si el access token vence mientras una pantalla está abierta, la imagen muestra su reemplazo hasta la próxima carga, porque `Image` no pasa por la renovación del cliente.

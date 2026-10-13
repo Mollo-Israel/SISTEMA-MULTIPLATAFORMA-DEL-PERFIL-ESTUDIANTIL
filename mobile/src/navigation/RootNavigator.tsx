@@ -1,4 +1,5 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import LibraryScreen from '../screens/student/LibraryScreen';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -112,6 +113,8 @@ function ActividadesStack() {
       <Stack.Screen name="MisActividades" component={MyActivitiesScreen} options={{ title: 'Mis actividades' }} />
       {/* V3 §34.2: lo que no es una actividad (recursos, áreas, compañeros). */}
       <Stack.Screen name="MasSugerencias" component={RecommendationsScreen} options={{ title: 'Más sugerencias' }} />
+      {/* V3.2 §35: la Biblioteca de recursos, como en la web. */}
+      <Stack.Screen name="Biblioteca" component={LibraryScreen} options={{ title: 'Biblioteca' }} />
     </Stack.Navigator>
   );
 }

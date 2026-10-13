@@ -153,6 +153,38 @@ export const activityService = {
     api.post(`/activities/${id}/cancel-registration`).then((r) => r.data),
 };
 
+/** V3.2 §35: un recurso de la Biblioteca, tal como lo ve el estudiante. */
+export interface LibraryResource {
+  id: string;
+  title: string;
+  description: string | null;
+  provider: string | null;
+  url: string;
+  resourceType: string;
+  resourceTypeLabel: string;
+  areas: { id: string; name: string }[];
+  skills: { id: string; name: string }[];
+  imageUrl: string | null;
+  isFavorite: boolean;
+}
+
+export interface LibraryPage {
+  items: LibraryResource[];
+  total: number;
+  limit: number;
+  offset: number;
+  facets: { areas: { id: string; name: string; total: number }[]; skills: { id: string; name: string; total: number }[] };
+}
+
+export const libraryService = {
+  list: (params: { q?: string; areaId?: string; skillId?: string; favorites?: boolean; limit?: number; offset?: number }) =>
+    api.get<LibraryPage>('/library', {
+      params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')),
+    }).then((r) => r.data),
+  favorite: (id: string) => api.put(`/library/${id}/favorite`).then((r) => r.data),
+  unfavorite: (id: string) => api.delete(`/library/${id}/favorite`).then((r) => r.data),
+};
+
 export const projectService = {
   /** Portafolio del estudiante: propios y aquellos donde es integrante aceptado. */
   mine: () => api.get<any[]>('/projects/my').then((r) => r.data),

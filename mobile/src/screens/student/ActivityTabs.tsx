@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { rango } from '../../fechas';
 import { StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import { activityService, recommendationService, type RecommendationItem } from '../../services';
@@ -78,9 +79,7 @@ export function MisInscripciones({ grupo }: { grupo: keyof typeof GRUPOS }) {
           <Text style={styles.titulo}>{r.activity?.title ?? 'Actividad'}</Text>
           <View style={styles.fila}>
             <Badge color={registrationColor(r.status)}>{lbl(REGISTRATION_STATUS_LABEL, r.status)}</Badge>
-            {r.activity?.eventDate && (
-              <Muted>{new Date(r.activity.eventDate).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })}</Muted>
-            )}
+            {r.activity?.eventDate && <Muted>{rango(r.activity.eventDate, r.activity.endAt)}</Muted>}
           </View>
         </View>
       ))}

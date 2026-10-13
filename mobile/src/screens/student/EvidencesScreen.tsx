@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { abrirArchivo } from '../../archivos';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiError } from '../../api/client';
@@ -222,11 +223,9 @@ export default function EvidencesScreen() {
                       icon="external-link"
                       variant="secondary"
                       onPress={() =>
-                        Linking.openURL(
-                          e.evidenceType === 'file'
-                            ? uploadService.fileUrl(e.fileUrl)
-                            : e.externalUrl,
-                        )
+                        e.evidenceType === 'file'
+                          ? abrirArchivo(e.fileUrl, 'evidencia').catch((x) => toast.error(x.message))
+                          : Linking.openURL(e.externalUrl)
                       }
                     />
                   </View>
@@ -296,9 +295,9 @@ export default function EvidencesScreen() {
                         icon="external-link"
                         variant="secondary"
                         onPress={() =>
-                          Linking.openURL(
-                            c.fileUrl ? uploadService.fileUrl(c.fileUrl) : c.certificateUrl,
-                          )
+                          c.fileUrl
+                            ? abrirArchivo(c.fileUrl, 'certificado').catch((x) => toast.error(x.message))
+                            : Linking.openURL(c.certificateUrl)
                         }
                       />
                     </View>

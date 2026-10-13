@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { abrirArchivo } from '../../archivos';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import {
@@ -741,9 +742,9 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
               </View>
               <Pressable
                 onPress={() =>
-                  Linking.openURL(
-                    ev.evidenceType === 'file' ? uploadService.fileUrl(ev.fileUrl) : ev.externalUrl,
-                  )
+                  ev.evidenceType === 'file'
+                    ? abrirArchivo(ev.fileUrl, 'evidencia').catch((x) => toast.error(x.message))
+                    : Linking.openURL(ev.externalUrl)
                 }
                 hitSlop={8}
               >
