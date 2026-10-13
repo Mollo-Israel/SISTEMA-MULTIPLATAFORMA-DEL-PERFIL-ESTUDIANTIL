@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Activity } from './activity.entity';
 import { Skill } from './skill.entity';
+import { AcademicArea } from './academic-area.entity';
 
 /**
  * Habilidad que una actividad trabaja (especificacion §22, §73.3).
@@ -47,6 +48,18 @@ export class ActivitySkill {
   @ManyToOne(() => Skill, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'skill_id' })
   skill: Skill;
+
+  /**
+   * V3.2 §11.4: en cuál de las áreas de la actividad se trabajó esta
+   * habilidad. La afinidad usa este contexto explícito (§11.5).
+   */
+  @Index()
+  @Column({ name: 'academic_area_id', type: 'uuid', nullable: true })
+  academicAreaId: string | null;
+
+  @ManyToOne(() => AcademicArea, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'academic_area_id' })
+  academicArea: AcademicArea | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

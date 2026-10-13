@@ -10,6 +10,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between,
+  DeepPartial,
+  EntityManager,
   FindOptionsWhere,
   In,
   LessThanOrEqual,
@@ -49,7 +51,7 @@ import { UploadsService } from '../storage/uploads.service';
 import { CredentialEligibilityService } from './credential-eligibility.service';
 import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 import { User } from '../entities/user.entity';
-import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
+import { assertSkillsBelongToAreas, resolveSkillContexts, SkillContext } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
 import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
@@ -306,11 +308,30 @@ export class ActivitiesService {
   }
 
   /** Reemplaza las áreas de una oportunidad; la primera es la principal. */
-  private async replaceAreas(activityId: string, areaIds: string[]): Promise<void> {
-    await this.activityAreas.delete({ activityId });
+  private async replaceAreas(activityId: string, areaIds: string[], m: EntityManager = this.activities.manager): Promise<void> {
+    const repo = m.getRepository(ActivityArea);
+    await repo.delete({ activityId });
     if (areaIds.length > 0) {
-      await this.activityAreas.save(areaIds.map((academicAreaId) => this.activityAreas.create({ activityId, academicAreaId })));
+      await repo.insert(areaIds.map((academicAreaId) => ({ activityId, academicAreaId })));
     }
+  }
+
+  /**
+   * V3.2 C6: al guardar la actividad, las relaciones que trajo `findOne`
+   * (áreas, habilidades, categoría…) no deben viajar con ella. Si viajan,
+   * TypeORM intenta «sincronizar» la lista vieja con lo recién reemplazado y
+   * termina escribiendo `activity_id = NULL`. Se guarda solo la fila.
+   *
+   * Las relaciones se quitan **antes** de `create`: si llegan, `create` toma el
+   * id de la relación cargada (la vieja) y pisa `academicAreaId` o
+   * `categoryId` recién cambiados.
+   */
+  private soloFila(activity: Activity): Activity {
+    const plano = { ...activity } as Record<string, unknown>;
+    for (const rel of ['activityAreas', 'activitySkills', 'academicArea', 'creator', 'category', 'responsible', 'gamificationRules']) {
+      delete plano[rel];
+    }
+    return this.activities.create(plano as DeepPartial<Activity>);
   }
 
   /**
@@ -365,7 +386,7 @@ export class ActivitiesService {
    */
   private cambiaContenido(dto: UpdateActivityDto): boolean {
     return [
-      dto.title, dto.description, dto.type, dto.categoryId, dto.areaId, dto.areaIds, dto.skillIds,
+      dto.title, dto.description, dto.type, dto.categoryId, dto.areaId, dto.areaIds, dto.skillIds, dto.skillContexts,
       dto.originType, dto.provider, dto.credentialExpected, dto.expectedIssuerDomains, dto.expectedKeywords,
       dto.outcomePolicy,
       dto.semesterScope, dto.internalConstancyEnabled, dto.gamificationRules, dto.evidenceRequired,
@@ -489,7 +510,13 @@ export class ActivitiesService {
   }
 
   /** Reglas de puntos de la actividad (§31.2): hechos permitidos y rango. */
-  private async replaceRules(activityId: string, userId: string, reglas: ActivityGamificationRuleDto[]) {
+  private async replaceRules(
+    activityId: string,
+    userId: string,
+    reglas: ActivityGamificationRuleDto[],
+    m: EntityManager = this.activities.manager,
+  ) {
+    const rulesRepo = m.getRepository(ActivityGamificationRule);
     const max = Number(this.config.get<string>('GAMIFICATION_ACTIVITY_MAX_POINTS') ?? 50) || 50;
     for (const r of reglas) {
       if (r.trigger !== GamificationTrigger.PARTICIPACION_CONFIRMADA) {
@@ -506,10 +533,10 @@ export class ActivitiesService {
       }
     }
     const unicos = new Map(reglas.map((r) => [r.trigger, r]));
-    await this.rules.delete({ activityId });
+    await rulesRepo.delete({ activityId });
     for (const r of unicos.values()) {
       const criterio = await this.criteria.findOne({ where: { code: r.trigger } });
-      await this.rules.save(this.rules.create({
+      await rulesRepo.save(rulesRepo.create({
         activityId,
         trigger: r.trigger,
         points: r.points,
@@ -536,6 +563,8 @@ export class ActivitiesService {
     // V3 §4: las habilidades pertenecen a las áreas elegidas (y las áreas existen).
     await assertSkillsBelongToAreas(this.activities.manager, dto.skillIds, areas, 'skillIds');
     for (const areaId of areas) await this.assertAreaExists(areaId);
+    // V3.2 §11.4: en qué área se trabaja cada habilidad.
+    const contextos = await resolveSkillContexts(this.activities.manager, dto.skillIds ?? [], areas, dto.skillContexts);
     await this.assertCategoryUsable(dto.categoryId, dto.type);
     const origen = dto.originType ?? ActivityOrigin.INTERNAL;
     this.assertExterna(origen, dto.provider, dto.externalUrl);
@@ -595,29 +624,28 @@ export class ActivitiesService {
       activity.expectedIssuerDomains = [];
       activity.expectedKeywords = [];
     }
-    const saved = await this.activities.save(activity);
-
-    await this.replaceAreas(saved.id, areas);
-    if (dto.skillIds?.length) {
-      await this.replaceSkills(saved.id, dto.skillIds);
-    }
-    if (dto.gamificationRules?.length) {
-      await this.replaceRules(saved.id, user.userId, dto.gamificationRules);
-    }
-
-    await this.audit.record({
-      actorUserId: user.userId,
-      eventType: AuditEventType.ACTIVITY_CREATED,
-      entityType: 'activity',
-      entityId: saved.id,
-      metadata: {
-        type: dto.type,
-        origin: origen,
-        status: saved.status,
-        semesterScope,
-        responsibleUserId: responsable,
-        viaAdmin: user.role === RolNombre.ADMIN,
-      },
+    // V3.2 C6: la actividad, sus áreas, habilidades y reglas se escriben juntas
+    // o no se escribe nada.
+    const saved = await this.activities.manager.transaction(async (m) => {
+      const fila = await m.getRepository(Activity).save(activity);
+      await this.replaceAreas(fila.id, areas, m);
+      if (contextos.length) await this.replaceSkills(fila.id, contextos, m);
+      if (dto.gamificationRules?.length) await this.replaceRules(fila.id, user.userId, dto.gamificationRules, m);
+      await this.audit.record({
+        actorUserId: user.userId,
+        eventType: AuditEventType.ACTIVITY_CREATED,
+        entityType: 'activity',
+        entityId: fila.id,
+        metadata: {
+          type: dto.type,
+          origin: origen,
+          status: fila.status,
+          semesterScope,
+          responsibleUserId: responsable,
+          viaAdmin: user.role === RolNombre.ADMIN,
+        },
+      }, m);
+      return fila;
     });
 
     return this.findOne(saved.id);
@@ -838,15 +866,24 @@ export class ActivitiesService {
       activity.type = dto.type;
     }
     const areasNuevas = this.areasPedidas(dto);
-    if (areasNuevas !== undefined || dto.skillIds !== undefined) {
+    // V3.2 C6/C7: primero se valida todo; después, en una transacción, se
+    // escriben la actividad, sus áreas y sus habilidades con su contexto.
+    let contextos: SkillContext[] | undefined;
+    if (areasNuevas !== undefined || dto.skillIds !== undefined || dto.skillContexts !== undefined) {
       const areasFinales = areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
       const skillsFinales = dto.skillIds ?? (activity.activitySkills ?? []).map((s) => s.skillId);
-      await assertSkillsBelongToAreas(this.activities.manager, skillsFinales, areasFinales, 'skillIds');
       if (areasNuevas !== undefined) {
         for (const areaId of areasNuevas) await this.assertAreaExists(areaId);
-        activity.academicAreaId = areasNuevas[0] ?? null;
-        await this.replaceAreas(activity.id, areasNuevas);
       }
+      await assertSkillsBelongToAreas(this.activities.manager, skillsFinales, areasFinales, 'skillIds');
+      // Sin contexto nuevo, se conserva el que ya tenían si sigue siendo válido.
+      const previos = (activity.activitySkills ?? [])
+        .filter((s) => s.academicAreaId && areasFinales.includes(s.academicAreaId))
+        .map((s) => ({ skillId: s.skillId, areaId: s.academicAreaId as string }));
+      contextos = await resolveSkillContexts(
+        this.activities.manager, skillsFinales, areasFinales, dto.skillContexts ?? previos,
+      );
+      if (areasNuevas !== undefined) activity.academicAreaId = areasNuevas[0] ?? null;
     }
     if (dto.originType !== undefined) activity.originType = dto.originType;
     if (dto.provider !== undefined) activity.provider = dto.provider?.trim() || null;
@@ -909,23 +946,25 @@ export class ActivitiesService {
       activity.status = dto.status;
     }
 
-    await this.activities.save(activity);
-
-    if (dto.skillIds !== undefined) {
-      await this.replaceSkills(activity.id, dto.skillIds ?? []);
-    }
-    if (dto.gamificationRules !== undefined) {
-      await this.replaceRules(activity.id, user.userId, dto.gamificationRules ?? []);
-    }
+    await this.activities.manager.transaction(async (m) => {
+      await m.getRepository(Activity).save(this.soloFila(activity));
+      if (areasNuevas !== undefined) await this.replaceAreas(activity.id, areasNuevas, m);
+      if (contextos !== undefined) await this.replaceSkills(activity.id, contextos, m);
+      if (dto.gamificationRules !== undefined) {
+        await this.replaceRules(activity.id, user.userId, dto.gamificationRules ?? [], m);
+      }
+      if (dto.status !== undefined && dto.status !== estadoAnterior) {
+        await this.audit.record({
+          actorUserId: user.userId,
+          eventType: AuditEventType.ACTIVITY_STATUS_CHANGED,
+          entityType: 'activity',
+          entityId: activity.id,
+          metadata: { de: estadoAnterior, a: dto.status },
+        }, m);
+      }
+    });
 
     if (dto.status !== undefined && dto.status !== estadoAnterior) {
-      await this.audit.record({
-        actorUserId: user.userId,
-        eventType: AuditEventType.ACTIVITY_STATUS_CHANGED,
-        entityType: 'activity',
-        entityId: activity.id,
-        metadata: { de: estadoAnterior, a: dto.status },
-      });
       // §15: al darla por finalizada, quienes fueron aceptados (o
       // confirmados, si es interna con credencial de un tercero) ya pueden
       // adjuntar su credencial.
@@ -1583,20 +1622,22 @@ export class ActivitiesService {
     }
   }
 
-  /** Reemplaza las habilidades declaradas de una actividad (§73.3). */
-  private async replaceSkills(activityId: string, skillIds: string[]): Promise<void> {
-    const unicas = [...new Set(skillIds)];
+  /**
+   * Reemplaza las habilidades declaradas de una actividad (§73.3), cada una
+   * con el área en que se trabaja (V3.2 §11.4).
+   */
+  private async replaceSkills(activityId: string, contextos: SkillContext[], m: EntityManager = this.activities.manager): Promise<void> {
+    const unicas = [...new Map(contextos.map((c) => [c.skillId, c])).values()];
     if (unicas.length > 0) {
-      const existen = await this.skills.count({ where: { id: In(unicas) } });
+      const existen = await m.getRepository(Skill).count({ where: { id: In(unicas.map((c) => c.skillId)) } });
       if (existen !== unicas.length) {
         throw new BadRequestException('Alguna de las habilidades indicadas no existe.');
       }
     }
-    await this.activitySkills.delete({ activityId });
+    const repo = m.getRepository(ActivitySkill);
+    await repo.delete({ activityId });
     if (unicas.length > 0) {
-      await this.activitySkills.save(
-        unicas.map((skillId) => this.activitySkills.create({ activityId, skillId })),
-      );
+      await repo.insert(unicas.map((c) => ({ activityId, skillId: c.skillId, academicAreaId: c.areaId })));
     }
   }
 

@@ -375,7 +375,106 @@ async function batch3(ctx) {
   check(ajeno.status === 403, 'V32.3.18 Un docente no crea habilidades -> 403', `status ${ajeno.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3 };
+// ===========================================================================
+//  BATCH 4 — Actividad multiárea transaccional y contexto área+skill (C6, C7, §11.4)
+// ===========================================================================
+async function batch4(ctx) {
+  objective('BATCH 4 · Actividad multiárea: edición transaccional y contexto área + habilidad');
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const area = (c) => areas.find((a) => a.code === c);
+  const ia = area('inteligencia_artificial');
+  const web = area('desarrollo_web');
+  const redes = area('redes');
+  const bd = area('bases_de_datos');
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const skill = (c) => skills.find((s) => s.code === c);
+  const python = skill('python');
+  const react = skill('react');
+  const sql = skill('sql');
+  const tcp = skill('tcp_ip');
+  const director = await provisionAndActivate(ctx.admin, {
+    firstName: 'Rene', lastName: 'Salinas', email: correoStaff('b4dir'), role: 'CAREER_DIRECTOR',
+  });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const base = { type: 'academica', categoryId: taller.id, semesterScope: [1, 2] };
+  const contextoDe = (a, skillId) => (a?.activitySkills ?? []).find((s) => s.skillId === skillId)?.academicAreaId;
+
+  // ----- C6 / C7 Editar con varias áreas ya no rompe, y todo se guarda
+  const creada = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...base, title: `Taller multiárea ${TS}`, areaIds: [web.id], skillIds: [react.id] },
+  });
+  check(creada.status === 201, 'V32.4.1 Se crea una actividad con un área y una habilidad', `status ${creada.status} ${json(creada.data)}`);
+  const id = creada.data?.id;
+  const editada = await req('PATCH', `/activities/${id}`, {
+    token: director.token,
+    body: { title: `Taller multiárea editado ${TS}`, areaIds: [ia.id, web.id, bd.id], skillIds: [python.id, react.id, sql.id] },
+  });
+  check(editada.status === 200, 'V32.4.2 C6 Editar con 3 áreas ya no devuelve 500', `status ${editada.status} ${json(editada.data)}`);
+  check((editada.data?.activityAreas ?? []).length === 3 && editada.data?.academicAreaId === ia.id,
+    'V32.4.3 C6 Las 3 áreas quedan guardadas y la primera es la principal', json(editada.data?.activityAreas?.map((a) => a.academicAreaId)));
+  const leida = (await req('GET', `/activities/${id}`, { token: director.token })).data;
+  check((leida?.activitySkills ?? []).length === 3 && leida?.title === `Taller multiárea editado ${TS}`,
+    'V32.4.4 C7 Las 3 habilidades persisten al editar (y el resto de cambios también)', json(leida?.activitySkills?.map((s) => s.skillId)));
+  const huerfana = await req('PATCH', `/activities/${id}`, { token: director.token, body: { areaIds: [web.id, ia.id] } });
+  check(huerfana.status === 400 && huerfana.data?.fields?.skillIds,
+    'V32.4.5a §4 Quitar un área que todavía tiene habilidades elegidas se rechaza en su campo', json(huerfana.data?.fields));
+  const otraVez = await req('PATCH', `/activities/${id}`, {
+    token: director.token, body: { areaIds: [web.id, ia.id], skillIds: [python.id, react.id] },
+  });
+  check(otraVez.status === 200 && (otraVez.data?.activityAreas ?? []).length === 2 && otraVez.data?.academicAreaId === web.id
+      && (otraVez.data?.activitySkills ?? []).length === 2,
+    'V32.4.5 C6 Quitar un área (con sus habilidades) vuelve a funcionar', json({ s: otraVez.status, sk: otraVez.data?.activitySkills?.length }));
+
+  // ----- Atomicidad: si algo falla, no queda nada a medias
+  const antes = (await req('GET', `/activities/${id}`, { token: director.token })).data;
+  const fallida = await req('PATCH', `/activities/${id}`, {
+    token: director.token, body: { title: `No debe quedar ${TS}`, areaIds: [redes.id], skillIds: [python.id] },
+  });
+  const despues = (await req('GET', `/activities/${id}`, { token: director.token })).data;
+  check(fallida.status === 400 && despues?.title === antes?.title
+      && json((despues?.activityAreas ?? []).map((a) => a.academicAreaId).sort()) === json((antes?.activityAreas ?? []).map((a) => a.academicAreaId).sort()),
+    'V32.4.6 Una edición inválida no cambia nada: ni el título ni las áreas', json({ s: fallida.status, t: despues?.title }));
+
+  // ----- §11.4 Contexto área + habilidad
+  check(contextoDe(otraVez.data, python.id) === ia.id,
+    'V32.4.7 §11.4 Sin indicar contexto, Python se trabaja en su área principal (IA)', json(otraVez.data?.activitySkills));
+  const enWeb = await req('PATCH', `/activities/${id}`, {
+    token: director.token, body: { skillContexts: [{ skillId: python.id, areaId: web.id }] },
+  });
+  check(enWeb.status === 200 && contextoDe(enWeb.data, python.id) === web.id,
+    'V32.4.8 §11.4 Se puede indicar que Python se trabaja en Desarrollo Web (su secundaria)', json(enWeb.data?.activitySkills));
+  const sigue = await req('PATCH', `/activities/${id}`, { token: director.token, body: { title: `Taller con contexto ${TS}` } });
+  check(contextoDe(sigue.data, python.id) === web.id,
+    'V32.4.9 §11.4 El contexto se conserva al editar otra cosa', json(sigue.data?.activitySkills));
+  const malo = await req('PATCH', `/activities/${id}`, {
+    token: director.token, body: { areaIds: [web.id, ia.id, redes.id], skillContexts: [{ skillId: python.id, areaId: redes.id }] },
+  });
+  check(malo.status === 400 && malo.data?.fields?.skillContexts,
+    'V32.4.10 §11.4 Un contexto en un área a la que la habilidad no pertenece → 400 en su campo', json(malo.data?.fields));
+  const sinWeb = await req('PATCH', `/activities/${id}`, { token: director.token, body: { areaIds: [ia.id], skillIds: [python.id] } });
+  check(sinWeb.status === 200 && contextoDe(sinWeb.data, python.id) === ia.id,
+    'V32.4.11 §11.4 Si se quita el área del contexto, la habilidad vuelve a su área principal', json(sinWeb.data?.activitySkills));
+  const nueva = await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      ...base, title: `Taller de redes ${TS}`, areaIds: [redes.id, ia.id], skillIds: [tcp.id, python.id],
+      skillContexts: [{ skillId: python.id, areaId: ia.id }],
+    },
+  });
+  check(nueva.status === 201 && contextoDe(nueva.data, tcp.id) === redes.id && contextoDe(nueva.data, python.id) === ia.id,
+    'V32.4.12 §11.4 Al crear, cada habilidad guarda el área en que se trabaja', json(nueva.data?.activitySkills));
+  const otraCategoria = cats.find((c) => c.id !== taller.id && c.isActive !== false && [null, undefined, 'academica'].includes(c.appliesTo));
+  if (otraCategoria) {
+    const recategorizada = await req('PATCH', `/activities/${nueva.data?.id}`, { token: director.token, body: { categoryId: otraCategoria.id } });
+    const releida = (await req('GET', `/activities/${nueva.data?.id}`, { token: director.token })).data;
+    check(recategorizada.status === 200 && releida?.categoryId === otraCategoria.id,
+      'V32.4.13 Cambiar la categoría persiste (la relación cargada ya no pisa el cambio)', json({ s: recategorizada.status, c: releida?.categoryId }));
+  }
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4 };
 
 async function main() {
   console.log(`${C.bold}Afinia V3.2 — verificación del cierre final contra la API${C.r}`);

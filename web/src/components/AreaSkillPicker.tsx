@@ -7,6 +7,12 @@ const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 export interface AreaSkillValue {
   areaIds: string[];
   skillIds: string[];
+  /**
+   * V3.2 §11.4: área en la que se usa cada habilidad (skillId → areaId).
+   * Importa cuando una habilidad pertenece a varias de las áreas elegidas
+   * (Python: IA y Desarrollo Web); si falta, vale su área principal.
+   */
+  contexts?: Record<string, string>;
 }
 
 /**
@@ -19,6 +25,9 @@ export interface AreaSkillValue {
  *
  * V3.2 §11.3: bajo cada área van sus habilidades y, aparte, las que la tienen
  * como secundaria («Relacionadas con esta área»).
+ *
+ * V3.2 §11.4: si una habilidad aparece en dos áreas elegidas, queda marcada
+ * en una sola —la de su contexto— y pulsarla en la otra la cambia de área.
  */
 export default function AreaSkillPicker({
   areas,
@@ -77,24 +86,56 @@ export default function AreaSkillPicker({
     }
   };
 
-  const alternarSkill = (id: string) => {
-    if (value.skillIds.includes(id)) onChange({ ...value, skillIds: value.skillIds.filter((x) => x !== id) });
-    else if (value.skillIds.length < maxSkills) onChange({ ...value, skillIds: [...value.skillIds, id] });
+  /** Áreas elegidas a las que pertenece la habilidad (principal o secundaria). */
+  const areasDe = (s: Skill) =>
+    value.areaIds.filter((a) => s.academicAreaId === a || (s.secondaryAreaIds ?? []).includes(a));
+
+  /** Área de contexto: la indicada si sigue valiendo; si no, la principal o la primera secundaria. */
+  const contextoDe = (s: Skill): string | null => {
+    const posibles = areasDe(s);
+    const pedido = value.contexts?.[s.id];
+    if (pedido && posibles.includes(pedido)) return pedido;
+    if (s.academicAreaId && posibles.includes(s.academicAreaId)) return s.academicAreaId;
+    return posibles[0] ?? null;
+  };
+
+  const alternarSkill = (s: Skill, areaId: string) => {
+    const id = s.id;
+    const elegida = value.skillIds.includes(id);
+    const contextos = { ...(value.contexts ?? {}) };
+    if (elegida && contextoDe(s) !== areaId) {
+      // Ya estaba elegida en otra área: se cambia su contexto, no se quita.
+      contextos[id] = areaId;
+      onChange({ ...value, contexts: contextos });
+      return;
+    }
+    if (elegida) {
+      delete contextos[id];
+      onChange({ ...value, skillIds: value.skillIds.filter((x) => x !== id), contexts: contextos });
+    } else if (value.skillIds.length < maxSkills) {
+      contextos[id] = areaId;
+      onChange({ ...value, skillIds: [...value.skillIds, id], contexts: contextos });
+    }
   };
 
   const totalVisibles = grupos.reduce((n, g) => n + g.skills.length + g.relacionadas.length, 0);
 
-  const chip = (s: Skill) => {
-    const on = value.skillIds.includes(s.id);
+  const chip = (s: Skill, areaId: string) => {
+    const elegida = value.skillIds.includes(s.id);
+    const on = elegida && contextoDe(s) === areaId;
+    const enOtra = elegida && !on;
+    const otra = enOtra ? activas.find((a) => a.id === contextoDe(s))?.name : null;
     return (
       <button
         type="button"
         key={s.id}
-        className={`chip ${on ? 'on' : ''}`}
+        className={`chip ${on ? 'on' : ''} ${enOtra ? 'chip-otra' : ''}`}
         aria-pressed={on}
-        onClick={() => alternarSkill(s.id)}
+        title={enOtra ? `Elegida en «${otra}». Pulsa para usarla en esta área.` : undefined}
+        onClick={() => alternarSkill(s, areaId)}
       >
         {s.name}
+        {enOtra && <span className="sr-only"> (elegida en {otra})</span>}
       </button>
     );
   };
@@ -149,11 +190,11 @@ export default function AreaSkillPicker({
                   </p>
                 ) : (
                   <>
-                    {delArea.length > 0 && <div className="chip-row">{delArea.map(chip)}</div>}
+                    {delArea.length > 0 && <div className="chip-row">{delArea.map((s) => chip(s, area.id))}</div>}
                     {relacionadas.length > 0 && (
                       <>
                         <div className="muted small" style={{ margin: '0.35rem 0 0.2rem' }}>Relacionadas con esta área</div>
-                        <div className="chip-row">{relacionadas.map(chip)}</div>
+                        <div className="chip-row">{relacionadas.map((s) => chip(s, area.id))}</div>
                       </>
                     )}
                   </>

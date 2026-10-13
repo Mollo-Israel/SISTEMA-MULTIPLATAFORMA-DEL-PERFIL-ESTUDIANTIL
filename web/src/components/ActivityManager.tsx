@@ -36,6 +36,8 @@ const emptyForm = {
   modality: 'presencial',
   areaIds: [] as string[],
   skillIds: [] as string[],
+  /** V3.2 §11.4: área en la que se trabaja cada habilidad. */
+  skillContexts: {} as Record<string, string>,
   originType: 'internal' as 'internal' | 'external',
   provider: '',
   outcomePolicy: 'none' as 'none' | 'internal_constancy' | 'external_credential_expected' | 'other_authorized_resource',
@@ -171,6 +173,9 @@ export default function ActivityManager({
       modality: form.modality,
       areaIds: form.areaIds,
       skillIds: form.skillIds,
+      skillContexts: form.skillIds
+        .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
+        .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
       originType: form.originType,
       outcomePolicy: form.outcomePolicy,
       ...(form.originType === 'external' || form.outcomePolicy === 'external_credential_expected'
@@ -246,6 +251,9 @@ export default function ActivityManager({
         ? (a.activityAreas ?? []).map((x) => x.academicAreaId)
         : a.academicAreaId ? [a.academicAreaId] : [],
       skillIds: (a.activitySkills ?? []).map((x) => x.skillId),
+      skillContexts: Object.fromEntries(
+        (a.activitySkills ?? []).filter((x) => x.academicAreaId).map((x) => [x.skillId, x.academicAreaId as string]),
+      ),
       originType: a.originType ?? 'internal',
       provider: a.provider ?? '',
       outcomePolicy: a.outcomePolicy ?? (a.internalConstancyEnabled ? 'internal_constancy' : 'none'),
@@ -553,8 +561,8 @@ export default function ActivityManager({
             <AreaSkillPicker
               areas={areas}
               skills={skills}
-              value={{ areaIds: form.areaIds, skillIds: form.skillIds }}
-              onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds })}
+              value={{ areaIds: form.areaIds, skillIds: form.skillIds, contexts: form.skillContexts }}
+              onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds, skillContexts: v.contexts ?? {} })}
               areaLabel="Áreas que trabaja"
               skillLabel="Habilidades que trabaja"
               maxAreas={6}

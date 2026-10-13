@@ -296,3 +296,61 @@ Formato de cada reporte: §76.
 - El contexto área+habilidad de las experiencias se hace en los BATCH 4 (actividades) y 11 (proyectos).
 
 **Riesgos:** las etiquetas nuevas cambian lo que esos dos respaldos por texto encuentran hasta el BATCH 15. Se eligieron sin términos cortos que casen dentro de otras palabras (se quitaron `ios` y `api`).
+
+---
+
+## BATCH 4 — Actividad multiárea transaccional y contexto área + habilidad
+
+**ESTADO:** completo
+
+**Objetivo:**
+- Corregir el 500 al editar una actividad con varias áreas (C6).
+- Que las habilidades persistan al editar (C7).
+- Que todo se escriba en una transacción (§19).
+- Guardar en qué área se trabaja cada habilidad (§11.4).
+
+**Hallazgos verificados antes de cambiar (§75):** `update` cargaba la actividad con sus relaciones (`activityAreas`, `activitySkills`, `academicArea`, `category`), reemplazaba las áreas y después guardaba la entidad con la lista vieja. Eso tenía tres efectos:
+- TypeORM intentaba «sincronizar» esa lista y escribía `activity_id = NULL`: el 500 de C6.
+- Las habilidades se perdían.
+- No había transacción: quedaban áreas a medias.
+
+Además, con una prueba directa contra la base se encontró un efecto que el 500 tapaba. `repository.create({...actividad})` toma el id de la relación cargada y **pisa** `academicAreaId` y `categoryId` recién cambiados. El área principal y la categoría nunca cambiaban al editar.
+
+**Cambios:**
+- **API:**
+  - `create` y `update` escriben la actividad, sus áreas, sus habilidades, sus reglas y la auditoría en **una transacción**.
+  - Se guarda solo la fila, sin relaciones; se quitan **antes** de `create` (`soloFila`).
+  - Primero se valida todo; si algo falla, no se escribe nada.
+- **Contexto (§11.4):**
+  - `activity_skills.academic_area_id` y `skillContexts` en el DTO (`{ skillId, areaId }`).
+  - Se valida que el área esté entre las elegidas y que la habilidad pertenezca a ella (principal o secundaria). Si no se indica, se deduce: la principal si está elegida, si no la primera secundaria.
+  - Al editar otra cosa el contexto se conserva. Si se quita su área, vuelve a la principal.
+  - `resolveSkillContexts` queda en `area-skill.guard.ts` para reutilizarla en proyectos (BATCH 11).
+- **Web:**
+  - `AreaSkillPicker` guarda el contexto. Si una habilidad aparece en dos áreas elegidas, queda marcada en una y punteada en la otra; pulsarla en la otra cambia su área.
+  - `ActivityManager` envía y recupera `skillContexts`.
+
+**Migraciones:** `1780620000000-V32ActivitySkillContext`. Agrega la columna con su FK (`ON DELETE SET NULL`) y rellena lo existente con esta prioridad: principal elegida → secundaria elegida → área principal de la actividad. 579 de 581 filas quedaron con contexto; las 2 restantes son de actividades sin área. Probada en orden `run → revert → run`. Respaldo previo: `pre-v32-b4.dump`.
+
+**Archivos modificados:**
+- `api/src/activities/activities.service.ts`, `api/src/activities/dto/create-activity.dto.ts`
+- `api/src/catalogs/area-skill.guard.ts`, `api/src/entities/activity-skill.entity.ts`
+- La migración
+- `web/src/components/{AreaSkillPicker,ActivityManager}.tsx`, `web/src/services/types.ts`, `web/src/index.css`
+- `scripts/e2e-v3-2.mjs`
+
+**Pruebas ejecutadas:** suite `e2e-v3-2 batch4`, **14/14**. Cubre:
+- editar con 3 áreas (antes 500) y conservar 3 habilidades;
+- quitar un área con sus habilidades, y el rechazo por campo si aún tiene habilidades;
+- una edición inválida que no cambia nada (ni el título ni las áreas);
+- el contexto deducido, el explícito en una secundaria, el que se conserva y el inválido (400 por campo);
+- la vuelta a la principal y el contexto al crear;
+- el cambio de categoría, que ahora persiste.
+
+**Resultados:** regresión completa con **1893 correctas y 0 fallos** (21 suites).
+
+**Regresiones:** ninguna.
+
+**Pendientes:** la afinidad todavía no usa el contexto; se cambia en el BATCH 15 (afinidad V5).
+
+**Riesgos:** ninguno conocido.

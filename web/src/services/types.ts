@@ -483,7 +483,13 @@ export interface Activity {
   registrationMode: RegistrationMode;
   requirements: string | null;
   /** Habilidades que la actividad trabaja (§73.3). */
-  activitySkills?: { id: string; skillId: string; skill?: Skill | null }[];
+  activitySkills?: {
+    id: string;
+    skillId: string;
+    skill?: Skill | null;
+    /** V3.2 §11.4: área en la que se trabaja la habilidad. */
+    academicAreaId?: string | null;
+  }[];
   /** V3 §12.1: todas sus áreas; `academicAreaId` es la principal. */
   activityAreas?: { activityId: string; academicAreaId: string; academicArea?: AcademicArea | null }[];
   /** V3 §12: interna (de la carrera) o externa (de un proveedor). */

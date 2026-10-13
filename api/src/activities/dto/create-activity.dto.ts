@@ -38,6 +38,17 @@ const minusculas = ({ value }: { value: unknown }) =>
     ? [...new Set(value.map((v) => (typeof v === 'string' ? v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '') : v)).filter(Boolean))]
     : value;
 
+/** V3.2 §11.4: habilidad y área en la que se trabaja. */
+export class SkillContextDto {
+  @ApiProperty()
+  @IsUUID('4', { message: 'Habilidad no válida.' })
+  skillId: string;
+
+  @ApiProperty()
+  @IsUUID('4', { message: 'Área no válida.' })
+  areaId: string;
+}
+
 /** Regla de puntos de la actividad (V2 §31.2): un hecho permitido y sus puntos. */
 export class ActivityGamificationRuleDto {
   @ApiProperty({ enum: [GamificationTrigger.PARTICIPACION_CONFIRMADA] })
@@ -248,6 +259,20 @@ export class CreateActivityDto {
   @ArrayUnique({ message: 'No repita habilidades.' })
   @IsUUID('4', { each: true })
   skillIds?: string[];
+
+  @ApiProperty({
+    required: false,
+    type: () => [SkillContextDto],
+    description:
+      'V3.2 §11.4: área en la que se trabaja cada habilidad, cuando pertenece a varias de las elegidas. '
+      + 'Lo que no se indica se deduce (su área principal si está elegida).',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => SkillContextDto)
+  skillContexts?: SkillContextDto[];
 
   @ApiProperty({ enum: RegistrationMode, required: false, default: RegistrationMode.OPEN })
   @IsOptional()
