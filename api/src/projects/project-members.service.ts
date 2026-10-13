@@ -366,7 +366,8 @@ export class ProjectMembersService {
     // V3 §30: el proyecto no se activa hasta que confirme; se le avisa.
     await this.avisar({
       userId,
-      kind: 'PROJECT_MEMBER_CONFIRMATION_REQUIRED',
+      // V3.2 §47: el nombre de la especificación.
+      kind: 'PROJECT_CONFIRMATION_REQUIRED',
       title: 'Confirma tu contribución',
       body: `Entraste a «${invitation.project.title}». Confirma qué hiciste y qué tecnologías usaste.`,
       link: '/student/projects',

@@ -814,7 +814,8 @@ export class ActivitiesService {
     });
     // V3.2 §47: quien la propuso se entera de la decisión.
     const avisos = {
-      approve: ['ACTIVITY_REVIEW_APPROVED', 'Actividad aprobada', `Dirección aprobó «${activity.title}». Ya puedes publicarla.`],
+      // V3.2 §47: el nombre de la especificación.
+      approve: ['ACTIVITY_APPROVED', 'Actividad aprobada', `Dirección aprobó «${activity.title}». Ya puedes publicarla.`],
       observe: ['ACTIVITY_REVIEW_OBSERVED', 'Actividad observada', `Dirección observó «${activity.title}»: corrígela y vuelve a enviarla.`],
       reject: ['ACTIVITY_REVIEW_REJECTED', 'Actividad rechazada', `Dirección rechazó «${activity.title}».`],
     } as const;

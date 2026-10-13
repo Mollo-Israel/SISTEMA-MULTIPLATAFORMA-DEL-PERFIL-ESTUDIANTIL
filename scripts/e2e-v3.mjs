@@ -1694,7 +1694,7 @@ async function batch16(ctx) {
   const inv = await req('POST', `/projects/${proy.data.id}/invitations`, { token: est.token, body: { invitedProfileId: otro.profileId, proposedRole: 'Backend' } });
   check((await deTipo(otro.token, 'PROJECT_INVITATION')).length === 1, 'V3.16.13 Invitación a proyecto');
   await req('PATCH', `/projects/invitations/${inv.data.id}`, { token: otro.token, body: { decision: 'accept' } });
-  check((await deTipo(otro.token, 'PROJECT_MEMBER_CONFIRMATION_REQUIRED')).length === 1, 'V3.16.14 §33 PROJECT_MEMBER_CONFIRMATION_REQUIRED al aceptar');
+  check((await deTipo(otro.token, 'PROJECT_CONFIRMATION_REQUIRED')).length === 1, 'V3.16.14 §33 / V3.2 §47 PROJECT_CONFIRMATION_REQUIRED al aceptar');
   const detallados = (await req('GET', `/projects/${proy.data.id}/members/detailed`, { token: est.token })).data ?? [];
   const suyo = detallados.find((m) => m.userId === otro.userId);
   await req('PATCH', `/projects/${proy.data.id}/members/${suyo.id}/contribution`, { token: est.token, body: { contribution: 'API y pruebas.' } });
