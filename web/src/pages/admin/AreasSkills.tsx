@@ -114,7 +114,7 @@ function AreaForm({
         label="Etiquetas"
         required
         error={errors.tags}
-        hint="Separadas por coma. Describen el área y ayudan a sugerirla al crear habilidades nuevas; no suman puntaje ni afinidad (V3.2 §10)."
+        hint="Separadas por coma. Describen el área y ayudan a sugerirla al crear habilidades nuevas; no suman puntaje ni afinidad."
       >
         <input value={value.tags} onChange={(e) => set('tags', e.target.value)} placeholder="infraestructura, despliegue, escalabilidad" />
       </FormField>

@@ -291,6 +291,30 @@ export function IsCatalogName(validationOptions?: ValidationOptions) {
   );
 }
 
+/**
+ * V4.1 A41-004 · Aula o lugar de una actividad presencial o híbrida.
+ *
+ * Acepta «Aula 201», «Laboratorio B-12», «Auditorio Principal» o «Torre
+ * Académica, piso 4» (con acentos y ñ). Rechaza lo que no nombra un lugar:
+ * solo números («123123»), solo signos («!@#$», «____») o solo espacios. Un
+ * texto vacío no se valida aquí: si el lugar es obligatorio lo decide la
+ * modalidad, en el servicio.
+ */
+export const PLACE_MSG = 'Escribe un aula o lugar reconocible, por ejemplo «Aula 201» o «Laboratorio B-12».';
+export function IsPlaceName(validationOptions?: ValidationOptions) {
+  return regla(
+    'isPlaceName',
+    (v) => {
+      const t = v.trim();
+      if (t === '') return null;
+      if (!/\p{L}/u.test(t)) return PLACE_MSG;
+      if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:;#°º'"()\/&-]*$/u.test(t)) return PLACE_MSG;
+      return null;
+    },
+    validationOptions,
+  );
+}
+
 /** Nombre de habilidad o tecnología. */
 export function IsSkillName(validationOptions?: ValidationOptions) {
   return regla(

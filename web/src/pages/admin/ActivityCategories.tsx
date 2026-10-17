@@ -4,8 +4,8 @@ import { apiError } from '../../api/client';
 import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
-  SkeletonTable,
+  AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, Modal, PageHeader, Paginacion, ResultCount, SearchInput,
+  SkeletonTable, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
@@ -132,6 +132,14 @@ export default function AdminActivityCategoriesPage() {
       [c.name, c.code, c.description ?? ''].some((f) => suggestCode(f).replace(/_/g, ' ').includes(q)),
     );
   }, [data, query]);
+  // V4.1 A41-003: orden por columna y 10 filas por página, como en Usuarios.
+  const { ordenados, orden, alternar } = useOrden(visible, {
+    nombre: (c) => c.name,
+    codigo: (c) => c.code,
+    aplica: (c) => (c.appliesTo ? lbl(ACTIVITY_TYPE_LABEL, c.appliesTo) : 'Ambos tipos'),
+    estado: (c) => (c.isActive ? 0 : 1),
+  }, { clave: 'nombre', dir: 'asc' });
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [query, orden]);
 
   const crear = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,19 +240,20 @@ export default function AdminActivityCategoriesPage() {
                 action={<Button variant="secondary" size="sm" onClick={() => setQuery('')}>Limpiar búsqueda</Button>}
               />
             ) : (
+              <>
               <div className="table-scroll">
                 <table>
                   <thead>
                     <tr>
-                      <th>Nombre</th>
-                      <th>Código</th>
-                      <th>Aplica a</th>
-                      <th>Estado</th>
-                      <th></th>
+                      <ThOrden clave="nombre" orden={orden} alternar={alternar}>Nombre</ThOrden>
+                      <ThOrden clave="codigo" orden={orden} alternar={alternar}>Código</ThOrden>
+                      <ThOrden clave="aplica" orden={orden} alternar={alternar}>Aplica a</ThOrden>
+                      <ThOrden clave="estado" orden={orden} alternar={alternar}>Estado</ThOrden>
+                      <th><span className="sr-only">Acciones</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((c) => (
+                    {pag.visibles.map((c) => (
                       <tr key={c.id} className={c.isActive ? '' : 'is-inactive'}>
                         <td>
                           <strong>{c.name}</strong>
@@ -270,6 +279,8 @@ export default function AdminActivityCategoriesPage() {
                   </tbody>
                 </table>
               </div>
+              <Paginacion {...pag} noun="categorías" />
+              </>
             )
           }
         </AsyncView>

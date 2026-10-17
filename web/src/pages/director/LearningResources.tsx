@@ -9,8 +9,8 @@ import type { LearningResource } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill } from '../../services/types';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
-  SkeletonTable,
+  AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, PageHeader, Paginacion, ResultCount, SearchInput,
+  SkeletonTable, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
 
@@ -81,6 +81,15 @@ export default function DirectorLearningResourcesPage() {
       ),
     );
   }, [state.data, query]);
+
+  // V4.1 A41-003: orden por columna y 10 filas por página.
+  const { ordenados, orden, alternar } = useOrden(visible, {
+    recurso: (r) => r.title,
+    area: (r) => r.academicArea?.name ?? '',
+    tipo: (r) => TIPO_LABEL[r.resourceType] ?? r.resourceType,
+    estado: (r) => (r.status === 'active' ? 0 : 1),
+  }, { clave: 'recurso', dir: 'asc' });
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [query, verRetirados, orden]);
 
   const skillsDelArea = useMemo(
     () => skills.filter((s) => !form.academicAreaId || s.academicAreaId === form.academicAreaId),
@@ -321,19 +330,20 @@ export default function DirectorLearningResourcesPage() {
                 }
               />
             ) : (
+              <>
               <div className="scroll-x">
                 <table>
                   <thead>
                     <tr>
-                      <th>Recurso</th>
-                      <th>Área</th>
-                      <th>Tipo</th>
-                      <th>Estado</th>
-                      <th />
+                      <ThOrden clave="recurso" orden={orden} alternar={alternar}>Recurso</ThOrden>
+                      <ThOrden clave="area" orden={orden} alternar={alternar}>Área</ThOrden>
+                      <ThOrden clave="tipo" orden={orden} alternar={alternar}>Tipo</ThOrden>
+                      <ThOrden clave="estado" orden={orden} alternar={alternar}>Estado</ThOrden>
+                      <th><span className="sr-only">Acciones</span></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((r) => (
+                    {pag.visibles.map((r) => (
                       <tr key={r.id}>
                         <td>
                           <div className="flex" style={{ gap: '0.4rem' }}>
@@ -375,6 +385,8 @@ export default function DirectorLearningResourcesPage() {
                   </tbody>
                 </table>
               </div>
+              <Paginacion {...pag} noun="recursos" />
+              </>
             )
           }
         </AsyncView>

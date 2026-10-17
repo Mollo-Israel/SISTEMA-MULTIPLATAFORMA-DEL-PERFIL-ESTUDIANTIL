@@ -110,10 +110,13 @@ export default function App() {
           <Route path="/proyecto/:token" element={<PublicProjectPage />} />
 
           {/* Activación y recuperación: públicas por necesidad (§12, §13). */}
-          <Route path="/activar" element={<SetPasswordPage mode="activate" />} />
-          <Route path="/activar/solicitar" element={<RequestTokenPage mode="activation" />} />
-          <Route path="/recuperar" element={<RequestTokenPage mode="reset" />} />
-          <Route path="/restablecer" element={<SetPasswordPage mode="reset" />} />
+          <Route path="/activar" element={<SetPasswordPage key="activate" mode="activate" />} />
+          {/* V4.1 A41-001: `key` distinta para que al pasar de una a otra React
+              no reutilice la instancia con el estado de la anterior (p. ej.
+              «Tu cuenta ya está activa» seguía visible en /recuperar). */}
+          <Route path="/activar/solicitar" element={<RequestTokenPage key="activation" mode="activation" />} />
+          <Route path="/recuperar" element={<RequestTokenPage key="reset" mode="reset" />} />
+          <Route path="/restablecer" element={<SetPasswordPage key="reset" mode="reset" />} />
 
           {/* La bienvenida va a pantalla completa, fuera del menú: hasta
               terminarla, el estudiante no ve el resto del sistema. */}

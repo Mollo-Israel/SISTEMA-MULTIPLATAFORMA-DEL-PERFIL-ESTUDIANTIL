@@ -2,6 +2,7 @@ import { FieldError, FormAlert, useFormErrors } from './form';
 import { ImagenProtegida } from './ArchivoProtegido';
 import PersonPicker from './PersonPicker';
 import { entradaAIso, formatearFechaHora, isoAEntrada } from '../lib/fechas';
+import { placeName } from '../lib/validators';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -18,7 +19,7 @@ import type {
 import AreaSkillPicker from './AreaSkillPicker';
 import {
   Badge, Button, Card, Diferido, EmptyState, FILAS_POR_PAGINA, Modal, Paginacion, ResultCount, SearchInput,
-  SkeletonTable, Stagger, usePaginacion,
+  SkeletonTable, Stagger, ThOrden, useOrden, usePaginacion,
 } from './ui';
 import { useConfirm, useToast } from './feedback';
 import { ACTIVITY_REVIEW_LABEL, ACTIVITY_TRANSITIONS } from '../services/types';
@@ -186,8 +187,17 @@ export default function ActivityManager({
     });
   }, [activities, query, statusFilter]);
 
-  // V3.2 §6.1: 10 por página.
-  const pagGestion = usePaginacion(visible, FILAS_POR_PAGINA, [query, statusFilter, activities.length]);
+  // V3.2 §6.1: 10 por página. V4.1 A41-003: orden por columna.
+  const { ordenados: gestionOrdenada, orden: ordenGestion, alternar: alternarGestion } = useOrden(visible, {
+    titulo: (a) => a.title,
+    categoria: (a) => a.category?.name ?? '',
+    fecha: (a) => (a.eventDate ? new Date(a.eventDate).getTime() : null),
+    estado: (a) => a.status,
+    revision: (a) => a.reviewStatus ?? 'unsubmitted',
+    confirmados: (a) => a.confirmedCount ?? 0,
+    pendientes: (a) => (a.registrationCount ?? 0) - (a.confirmedCount ?? 0),
+  });
+  const pagGestion = usePaginacion(gestionOrdenada, FILAS_POR_PAGINA, [query, statusFilter, activities.length, ordenGestion]);
 
   const resetForm = () => {
     setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
@@ -223,6 +233,12 @@ export default function ActivityManager({
     });
     if (form.meetingUrl && !/^https:\/\/\S+\.\S+/.test(form.meetingUrl.trim())) {
       e.meetingUrl = 'El enlace de la reunión debe ser una URL https.';
+    }
+    // V4.1 A41-004: el formato del aula vale siempre que se escriba (también en
+    // borrador); que sea obligatoria lo decide la modalidad al publicar.
+    if (!externa && presencial && form.location.trim()) {
+      const lugar = placeName(form.location);
+      if (lugar) e.location = lugar;
     }
     if (completa) {
       if (!ini) e.activityDate = 'Indica la fecha y hora de inicio.';
@@ -1227,14 +1243,14 @@ export default function ActivityManager({
             <table>
               <thead>
                 <tr>
-                  <th>Título</th>
-                  <th>Categoría</th>
-                  <th>Fecha</th>
-                  <th>Estado</th>
-                  <th>Revisión</th>
-                  <th>Confirmados</th>
-                  <th>Pendientes</th>
-                  <th></th>
+                  <ThOrden clave="titulo" orden={ordenGestion} alternar={alternarGestion}>Título</ThOrden>
+                  <ThOrden clave="categoria" orden={ordenGestion} alternar={alternarGestion}>Categoría</ThOrden>
+                  <ThOrden clave="fecha" orden={ordenGestion} alternar={alternarGestion}>Fecha</ThOrden>
+                  <ThOrden clave="estado" orden={ordenGestion} alternar={alternarGestion}>Estado</ThOrden>
+                  <ThOrden clave="revision" orden={ordenGestion} alternar={alternarGestion}>Revisión</ThOrden>
+                  <ThOrden clave="confirmados" orden={ordenGestion} alternar={alternarGestion}>Confirmados</ThOrden>
+                  <ThOrden clave="pendientes" orden={ordenGestion} alternar={alternarGestion}>Pendientes</ThOrden>
+                  <th><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>

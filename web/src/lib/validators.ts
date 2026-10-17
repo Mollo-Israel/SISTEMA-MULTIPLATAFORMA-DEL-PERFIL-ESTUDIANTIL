@@ -141,6 +141,19 @@ export const code: Validator = (v) => {
   return null;
 };
 
+/**
+ * V4.1 A41-004 · Aula o lugar: la misma regla que la API. «Aula 201» o
+ * «Laboratorio B-12» sí; solo números, solo signos o solo espacios no.
+ */
+export const PLACE_MSG = 'Escribe un aula o lugar reconocible, por ejemplo «Aula 201» o «Laboratorio B-12».';
+export const placeName: Validator = (v) => {
+  const t = (v ?? '').trim();
+  if (!t) return null;
+  if (!/\p{L}/u.test(t)) return PLACE_MSG;
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:;#°º'"()\/&-]*$/u.test(t)) return PLACE_MSG;
+  return null;
+};
+
 export function integerRange(min: number, max: number, que = 'El valor'): Validator {
   return (v) => {
     const t = String(v ?? '').trim();

@@ -30,7 +30,7 @@ import {
   GamificationTrigger,
   RegistrationMode,
 } from '@perfil/shared';
-import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
+import { cleanLine, cleanText, IsPlaceName, trim, trimUniqueArray } from '../../common/validation';
 
 /** Dominio de un emisor: `netacad.com`, `credly.com` (sin esquema ni ruta). */
 const DOMINIO_RE = /^(?=.{3,120}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
@@ -135,6 +135,7 @@ export class CreateActivityDto {
   @Transform(cleanLine)
   @IsString()
   @MaxLength(200, { message: 'La ubicación no puede superar 200 caracteres.' })
+  @IsPlaceName()
   location?: string;
 
   @ApiProperty({ required: false, example: 30, minimum: 1, maximum: 1000 })

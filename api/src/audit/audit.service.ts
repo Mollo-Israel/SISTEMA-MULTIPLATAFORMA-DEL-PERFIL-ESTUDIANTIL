@@ -209,8 +209,8 @@ export class AuditService {
       else qb.andWhere("(a.firstName ILIKE :t OR a.lastName ILIKE :t OR a.email ILIKE :t OR CONCAT(a.firstName, ' ', a.lastName) ILIKE :t)", { t: `%${texto}%` });
     }
     const fecha = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
-    if (fecha(params.desde)) qb.andWhere(`e.createdAt >= (:desde::date AT TIME ZONE 'America/La_Paz')`, { desde: params.desde });
-    if (fecha(params.hasta)) qb.andWhere(`e.createdAt < ((:hasta::date + 1) AT TIME ZONE 'America/La_Paz')`, { hasta: params.hasta });
+    if (fecha(params.desde)) qb.andWhere(`e.createdAt >= ((:desde::date)::timestamp AT TIME ZONE 'America/La_Paz')`, { desde: params.desde });
+    if (fecha(params.hasta)) qb.andWhere(`e.createdAt < ((:hasta::date + 1)::timestamp AT TIME ZONE 'America/La_Paz')`, { hasta: params.hasta });
     const total = await qb.getCount();
     const rows = await qb.orderBy('e.createdAt', 'DESC').skip(offset).take(limit).getMany();
     return {

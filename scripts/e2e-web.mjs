@@ -409,6 +409,85 @@ async function pruebas(browser) {
     'WEB.22k V3.2 §35 La imagen de un recurso se carga con la sesión (antes el navegador recibía 401)', JSON.stringify(imagenes.slice(0, 3)));
   await ci.close();
 
+  // =========================================================================
+  //  V4.1-1 · Activación → recuperar, textos internos, grillas y aula (A41-001…004)
+  // =========================================================================
+  objective('V4.1-1 · Recuperar desde «cuenta ya activa», grillas de 10 con orden y aula válida');
+  const c41 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p41 = await c41.newPage();
+  const fallos41 = [];
+  p41.on('pageerror', (e) => fallos41.push(e.message));
+  await p41.goto(`${WEB}/activar/solicitar`);
+  await p41.fill('input[type=email]', ADMIN_CREDENTIALS.email);
+  await p41.getByRole('button', { name: 'Enviarme el correo' }).click();
+  await p41.getByText('Tu cuenta ya está activa').first().waitFor({ timeout: 8000 }).catch(() => {});
+  const vioActiva = await p41.getByText('Tu cuenta ya está activa').count() > 0;
+  await p41.getByRole('link', { name: /Olvidé mi contraseña/ }).click();
+  await p41.waitForURL(/\/recuperar$/, { timeout: 8000 }).catch(() => {});
+  await espera(400);
+  check(vioActiva && p41.url().endsWith('/recuperar')
+      && await p41.getByText('Tu cuenta ya está activa').count() === 0
+      && await p41.getByText('Recuperar el acceso').first().isVisible()
+      && await p41.locator('input[type=email]').inputValue() === '',
+  'WEB.41.1 B01 A41-001 «Olvidé mi contraseña» desde una cuenta activa abre /recuperar limpio', p41.url());
+
+  await entrar(p41, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  // Perfil de navegador nuevo: el tutorial de bienvenida se cierra como haría la persona.
+  await p41.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p41.goto(`${WEB}/admin/areas`);
+  await espera(900);
+  check(!/V3\.2|V4\.1|§\s?\d/.test(await p41.locator('.content').innerText()),
+    'WEB.41.2 A41-002 Áreas y habilidades no muestra nombres internos de versión ni secciones');
+
+  const grilla = async (ruta, filasSel) => {
+    await p41.goto(`${WEB}${ruta}`);
+    await p41.waitForSelector('nav.paginacion', { timeout: 10000 }).catch(() => {});
+    const filas = await p41.locator(filasSel).count();
+    const pie = await p41.locator('nav.paginacion span').first().innerText().catch(() => '');
+    const ths = await p41.locator('th[aria-sort]').count();
+    return { filas, pie, ths };
+  };
+  const cat = await grilla('/admin/activity-categories', 'table tbody tr');
+  check(cat.filas > 0 && cat.filas <= 10 && /^1–\d+ de \d+ categorías/.test(cat.pie) && cat.ths >= 4,
+    'WEB.41.3 B02 A41-003 Categorías: 10 por página, total y columnas ordenables', JSON.stringify(cat));
+  const primeraAntes = await p41.locator('table tbody tr td strong').first().innerText();
+  await p41.locator('th[aria-sort] button', { hasText: 'Nombre' }).click();
+  await espera(300);
+  const primeraDesc = await p41.locator('table tbody tr td strong').first().innerText();
+  const sortNombre = await p41.locator('th[aria-sort]', { hasText: 'Nombre' }).getAttribute('aria-sort');
+  check(sortNombre === 'descending' && primeraDesc !== primeraAntes,
+    'WEB.41.4 B02 Ordenar por nombre invierte el orden', `${primeraAntes} → ${primeraDesc} (${sortNombre})`);
+  await p41.getByRole('button', { name: 'Página 2' }).click();
+  await espera(300);
+  const pie2 = await p41.locator('nav.paginacion span').first().innerText();
+  check(/^11–\d+ de \d+/.test(pie2), 'WEB.41.5 B02 La página 2 empieza en el registro 11', pie2);
+  await p41.getByPlaceholder('Buscar categoría o código…').fill('taller');
+  await espera(500);
+  const pieFiltro = await p41.locator('nav.paginacion span').first().innerText().catch(() => '');
+  check(/^1–/.test(pieFiltro), 'WEB.41.6 B02 Al filtrar vuelve a la página 1', pieFiltro);
+
+  const rec = await grilla('/admin/resources', 'table tbody tr');
+  check(rec.filas > 0 && rec.filas <= 10 && / de \d+ recursos/.test(rec.pie) && rec.ths >= 4,
+    'WEB.41.7 A41-003 Recursos: 10 por página, total y columnas ordenables', JSON.stringify(rec));
+  const act = await grilla('/admin/activities', 'table tbody tr');
+  check(act.ths >= 7, 'WEB.41.8 A41-003 Actividades: las columnas de la gestión se pueden ordenar', JSON.stringify(act));
+
+  await p41.goto(`${WEB}/admin/activities?nuevo=1`);
+  await p41.getByRole('button', { name: /Nueva actividad/ }).first().click().catch(() => {});
+  const lugar = p41.locator('[data-campo="location"] input');
+  await lugar.waitFor({ timeout: 8000 }).catch(() => {});
+  if (await lugar.count()) {
+    await lugar.fill('123123');
+    await p41.getByRole('button', { name: /Guardar borrador|Guardar/ }).first().click().catch(() => {});
+    await espera(500);
+    const err = await p41.locator('[data-campo="location"] .field-error').innerText().catch(() => '');
+    check(/aula o lugar reconocible/i.test(err), 'WEB.41.9 B04 A41-004 «123123» como aula muestra el error debajo del campo', err);
+  } else {
+    check(false, 'WEB.41.9 B04 A41-004 «123123» como aula muestra el error debajo del campo', 'no apareció el campo de aula');
+  }
+  check(fallos41.length === 0, 'WEB.41.10 Sin errores de JavaScript en V4.1-1', fallos41.join(' | '));
+  await c41.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');
