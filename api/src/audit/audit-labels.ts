@@ -57,6 +57,7 @@ export const AUDIT_EVENT_LABEL: Record<string, { modulo: AuditModule; accion: st
   INSTITUTIONAL_DATA_CHANGED: { modulo: 'perfil', accion: 'Cambio de datos institucionales' },
   VISIBILITY_CHANGED: { modulo: 'perfil', accion: 'Cambio de visibilidad' },
   ACTIVITY_CREATED: { modulo: 'actividades', accion: 'Actividad creada' },
+  ACTIVITY_DUPLICATED: { modulo: 'actividades', accion: 'Actividad duplicada' },
   ACTIVITY_STATUS_CHANGED: { modulo: 'actividades', accion: 'Cambio de estado de la actividad' },
   ACTIVITY_SUBMITTED: { modulo: 'actividades', accion: 'Enviada a revisión' },
   ACTIVITY_SUBMISSION_CANCELLED: { modulo: 'actividades', accion: 'Envío a revisión retirado', resultado: 'cancelado' },

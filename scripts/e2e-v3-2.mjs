@@ -582,8 +582,9 @@ async function batch5(ctx) {
       && json((conResp.data?.responsibles ?? []).map((p) => p.id)) === json([docente.userId, director.userId])
       && conResp.data?.creatorId === director.userId,
     'V32.5.12 §16 Creador, responsables (1..N) y principal quedan separados', json(conResp.data?.responsibles));
-  const gestiona = await req('PATCH', `/activities/${conResp.data?.id}`, { token: docente.token, body: { location: 'Aula 13' } });
-  check(gestiona.status === 200, 'V32.5.13 §16 Un responsable gestiona la actividad aunque no la creó', `status ${gestiona.status}`);
+  // V4.1 A41-009 (§4.4): el responsable asignado por Dirección opera (estados), pero no cambia el contenido.
+  const gestiona = await req('PATCH', `/activities/${conResp.data?.id}`, { token: docente.token, body: { status: 'closed' } });
+  check(gestiona.status === 200, 'V32.5.13 §16 Un responsable gestiona la actividad aunque no la creó (opera su estado; V4.1)', `status ${gestiona.status}`);
   const docOtros = await req('POST', '/activities', {
     token: docente.token, body: { ...completa, title: `Del docente ${TS}`, responsibleUserIds: [director.userId] },
   });
@@ -669,11 +670,17 @@ async function batch5(ctx) {
     'V32.5.31 §38 (C11) Editar no corre la hora: se conserva el instante', json(releida.data?.eventDate));
 
   // ----- §21.4–§21.5 Cierre y fin automáticos
+  // V4.1 A41-010 (§4.6): una actividad NUEVA no se publica con un inicio pasado;
+  // se publica en el futuro y luego se ajusta la fecha (edición de lo publicado).
   const empezada = await req('POST', '/activities', {
-    token: director.token, body: { ...completa, title: `Empezada ${TS}`, activityDate: en(-1), endAt: en(5), status: 'open' },
+    token: director.token, body: { ...completa, title: `Empezada ${TS}`, status: 'open' },
   });
+  await req('PATCH', `/activities/${empezada.data?.id}`, { token: director.token, body: { activityDate: en(-1), endAt: en(5) } });
   const terminando = await req('POST', '/activities', {
-    token: director.token, body: { ...completa, title: `Terminando ${TS}`, activityDate: en(-2), endAt: new Date(Date.now() + 3000).toISOString(), status: 'open' },
+    token: director.token, body: { ...completa, title: `Terminando ${TS}`, status: 'open' },
+  });
+  await req('PATCH', `/activities/${terminando.data?.id}`, {
+    token: director.token, body: { activityDate: en(-2), endAt: new Date(Date.now() + 3000).toISOString() },
   });
   let e1 = null;
   let e2 = null;
@@ -814,8 +821,9 @@ async function batch6(ctx) {
   });
   const verDirAdm = await req('GET', `/activities/${admDraft.data?.id}`, { token: director.token });
   const verResp = await req('GET', `/activities/${admDraft.data?.id}`, { token: docAdm.token });
-  check(verDirAdm.status === 404 && verResp.status === 200,
-    'V32.6.28 §24.4 El borrador de Administración no lo ve Dirección; sí su responsable', `${verDirAdm.status} / ${verResp.status}`);
+  // V4.1 A41-008 (§4.3, 23.3): el borrador de una autoridad es solo de quien lo crea.
+  check(verDirAdm.status === 404 && verResp.status === 404,
+    'V32.6.28 §24.4 El borrador de Administración no lo ve Dirección ni su responsable hasta publicarse (V4.1)', `${verDirAdm.status} / ${verResp.status}`);
 }
 
 // ===========================================================================

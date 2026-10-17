@@ -531,6 +531,123 @@ export class ActivitiesService {
     if (ids.length) await repo.insert(ids.map((storedFileId, position) => ({ activityId, storedFileId, position })));
   }
 
+  /** V4.1 A41-008/009 (§4.2–§4.4): ¿la creó una autoridad (Dirección o Administración)? */
+  private async creadaPorAutoridad(activity: Activity): Promise<boolean> {
+    let rol: RolNombre | undefined = activity.creator?.role?.name;
+    if (!rol && activity.creatorId) {
+      const creador = await this.activities.manager.getRepository(User).findOne({
+        where: { id: activity.creatorId }, relations: { role: true },
+      });
+      rol = creador?.role?.name;
+    }
+    return rol === RolNombre.CAREER_DIRECTOR || rol === RolNombre.ADMIN;
+  }
+
+  /**
+   * V4.1 A41-009 (§4.4, §20): quien fue asignado responsable por una
+   * autoridad opera la actividad (abrir o cerrar inscripciones, finalizar,
+   * gestionar participantes y asistencia) pero no cambia su contenido, no la
+   * cancela ni la devuelve a borrador. El contenido lo ajusta quien la creó o
+   * Dirección.
+   */
+  private async assertSoloOperacion(user: AuthenticatedUser, activity: Activity, dto: UpdateActivityDto): Promise<void> {
+    if (activity.creatorId === user.userId) return;
+    if (user.role === RolNombre.ADMIN || user.role === RolNombre.CAREER_DIRECTOR) return;
+    if (!(await this.creadaPorAutoridad(activity))) return;
+    const tocados = Object.entries(dto).filter(([, v]) => v !== undefined).map(([k]) => k);
+    const materiales = tocados.filter((k) => k !== 'status');
+    const estadoNoOperativo = dto.status === ActivityStatus.CANCELLED || dto.status === ActivityStatus.DRAFT;
+    if (materiales.length > 0 || estadoNoOperativo) {
+      throw new ForbiddenException({
+        message: 'Como responsable asignado gestionas la operación (inscripciones, asistencia, abrir o cerrar). '
+          + 'El contenido, la cancelación o volver a borrador los decide quien la creó o Dirección.',
+        code: 'ACTIVITY_RESPONSIBLE_OPERATION_ONLY',
+      });
+    }
+  }
+
+  /** V4.1 A41-010 (§4.6, 23.5): una actividad nueva no se publica con un inicio que ya pasó. */
+  private assertInicioFuturo(activity: Activity): void {
+    if (activity.eventDate && activity.eventDate.getTime() <= Date.now()) {
+      const msg = 'La fecha de inicio ya pasó: elige una fecha futura para publicarla.';
+      throw new BadRequestException({ message: msg, code: 'ACTIVITY_START_IN_PAST', fields: { activityDate: [msg] } });
+    }
+  }
+
+  /**
+   * V4.1 A41-009 (§4.5, B13): si los responsables de una actividad creada por
+   * una autoridad son solo docentes, sus semestres tienen que estar cubiertos
+   * por la unión de los alcances de esos docentes. La unión no amplía el
+   * alcance de ninguno: cada docente sigue operando solo a sus estudiantes.
+   * Con un responsable de Dirección o de la Sociedad no hay límite (cubren
+   * toda la carrera). Se valida al publicar, no al guardar el borrador.
+   */
+  private async assertCobertura(user: AuthenticatedUser, activity: Activity, responsables: string[]): Promise<void> {
+    if (user.role !== RolNombre.ADMIN && user.role !== RolNombre.CAREER_DIRECTOR) return;
+    if (activity.type !== ActivityType.ACADEMICA || responsables.length === 0) return;
+    const usuarios = await this.activities.manager.getRepository(User).find({
+      where: { id: In(responsables) }, relations: { role: true },
+    });
+    if (usuarios.length === 0 || usuarios.some((u) => u.role?.name !== RolNombre.TEACHER)) return;
+    const union = new Set<number>();
+    for (const u of usuarios) for (const s of await this.teacherScope.allowedSemesters(u.id)) union.add(s);
+    const cubiertos = [...union].sort((a, b) => a - b);
+    const alcance = activity.semesterScope ?? [];
+    const fuera = alcance.length === 0 ? null : alcance.filter((s) => !union.has(s));
+    if (alcance.length === 0 || (fuera && fuera.length > 0)) {
+      const lista = cubiertos.length ? cubiertos.map((s) => `${s}.º`).join(', ') : 'ninguno';
+      const msg = alcance.length === 0
+        ? `Los docentes responsables cubren los semestres ${lista}: elige esos semestres o suma un responsable que cubra toda la carrera.`
+        : `Los semestres ${fuera!.map((s) => `${s}.º`).join(', ')} no los cubre ningún docente responsable (cubren ${lista}).`;
+      throw new BadRequestException({ message: msg, code: 'ACTIVITY_SCOPE_NOT_COVERED', fields: { semesterScope: [msg] } });
+    }
+  }
+
+  /**
+   * V4.1 A41-010 (§4.6, B16): repetir una actividad es duplicarla. La copia es
+   * un borrador nuevo de quien duplica, sin fechas, inscripciones, asistencia
+   * ni constancias de la original. Las imágenes no se copian (son archivos de
+   * quien las subió).
+   */
+  async duplicate(user: AuthenticatedUser, id: string): Promise<Activity> {
+    const origen = await this.findOne(id);
+    await this.assertCanManage(user, origen);
+    const contextos = (origen.activitySkills ?? []).map((s) => ({ skillId: s.skillId, areaId: s.academicAreaId ?? undefined }));
+    const copia = await this.create(user, {
+      title: `${origen.title} (copia)`.slice(0, 200),
+      description: origen.description ?? undefined,
+      type: origen.type,
+      categoryId: origen.categoryId,
+      modality: origen.modality,
+      areaIds: (origen.activityAreas ?? []).map((a) => a.academicAreaId),
+      skillIds: contextos.map((c) => c.skillId),
+      skillContexts: contextos.filter((c) => c.areaId) as { skillId: string; areaId: string }[],
+      originType: origen.originType,
+      provider: origen.provider ?? undefined,
+      externalUrl: origen.externalUrl ?? undefined,
+      expectedIssuerDomains: origen.expectedIssuerDomains ?? [],
+      expectedKeywords: origen.expectedKeywords ?? [],
+      location: origen.location ?? undefined,
+      meetingUrl: origen.meetingUrl ?? undefined,
+      resourceLinks: origen.resourceLinks ?? [],
+      capacity: origen.capacity ?? undefined,
+      semesterScope: origen.semesterScope ?? undefined,
+      registrationMode: origen.registrationMode,
+      requirements: origen.requirements ?? undefined,
+      outcomePolicy: origen.outcomePolicy ?? undefined,
+      certificateIssuer: origen.certificateIssuer ?? undefined,
+      status: ActivityStatus.DRAFT,
+    } as unknown as CreateActivityDto);
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.ACTIVITY_DUPLICATED,
+      entityType: 'activity',
+      entityId: copia.id,
+      metadata: { duplicatedFrom: origen.id },
+    });
+    return copia;
+  }
+
   /**
    * V3.2 §18, §19, §21.1: un borrador puede estar incompleto; lo que se
    * publica o se envía a revisión, no. Errores por campo (§6.4).
@@ -626,7 +743,7 @@ export class ActivitiesService {
     tipo: 'responsible' | 'contact',
     type: ActivityType,
     q?: string,
-  ): Promise<{ id: string; firstName: string; lastName: string; role: string; email: string }[]> {
+  ): Promise<{ id: string; firstName: string; lastName: string; role: string; email: string; semesters?: number[] }[]> {
     const roles = tipo === 'responsible'
       ? this.rolesResponsables(user.role as RolNombre, type)
       : [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.SCIENTIFIC_SOCIETY,
@@ -656,7 +773,16 @@ export class ActivitiesService {
         );
     }
     const filas = await qb.getMany();
-    return filas.map((u) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, role: u.role?.name ?? '', email: u.email }));
+    // V4.1 A41-009 (§4.5): los semestres de cada docente, para mostrar qué cubre
+    // la combinación de responsables antes de publicar.
+    const semestres = new Map<string, number[]>();
+    for (const u of filas) {
+      if (u.role?.name === RolNombre.TEACHER) semestres.set(u.id, await this.teacherScope.allowedSemesters(u.id));
+    }
+    return filas.map((u) => ({
+      id: u.id, firstName: u.firstName, lastName: u.lastName, role: u.role?.name ?? '', email: u.email,
+      ...(semestres.has(u.id) ? { semesters: semestres.get(u.id) } : {}),
+    }));
   }
 
   /** Reemplaza las áreas de una oportunidad; la primera es la principal. */
@@ -812,8 +938,13 @@ export class ActivitiesService {
    */
   private async veBorrador(user: AuthenticatedUser, activity: Activity, responsableDe?: Set<string>): Promise<boolean> {
     if (activity.status !== ActivityStatus.DRAFT) return true;
-    if (activity.creatorId === user.userId || activity.responsibleUserId === user.userId) return true;
-    if (responsableDe ? responsableDe.has(activity.id) : await this.esResponsable(activity.id, user.userId)) return true;
+    if (activity.creatorId === user.userId) return true;
+    const esResponsable = activity.responsibleUserId === user.userId
+      || (responsableDe ? responsableDe.has(activity.id) : await this.esResponsable(activity.id, user.userId));
+    // V4.1 A41-008 (§4.3, 23.3): el borrador de una autoridad (Dirección o
+    // Administración) es solo de quien lo crea; el docente asignado lo ve
+    // cuando se publica. El de la Sociedad sí lo ven sus responsables.
+    if (esResponsable) return !(await this.creadaPorAutoridad(activity));
     const enviada = activity.requiresReview && activity.reviewStatus !== null && activity.reviewStatus !== undefined;
     return enviada && (user.role === RolNombre.CAREER_DIRECTOR || user.role === RolNombre.ADMIN);
   }
@@ -894,7 +1025,7 @@ export class ActivitiesService {
     }
     const lista = await this.activities.find({
       where: { reviewStatus: ActivityReviewStatus.PENDING },
-      relations: { academicArea: true, creator: true, category: true, activitySkills: { skill: true }, activityAreas: { academicArea: true } },
+      relations: { academicArea: true, creator: { role: true }, category: true, activitySkills: { skill: true }, activityAreas: { academicArea: true } },
       order: { submittedAt: 'ASC' },
     });
     const reglas = lista.length
@@ -1047,6 +1178,8 @@ export class ActivitiesService {
     // V3.2 §21.1–§22: guardar un borrador no publica; publicar exige lo mínimo.
     if (estadoInicial === ActivityStatus.PUBLISHED || estadoInicial === ActivityStatus.OPEN) {
       this.assertCompleta(activity, areas, contextos.map((c) => c.skillId), responsables.length);
+      this.assertInicioFuturo(activity);
+      await this.assertCobertura(user, activity, responsables);
     }
     // V3.2 C6: la actividad, sus áreas, habilidades y reglas se escriben juntas
     // o no se escribe nada.
@@ -1182,7 +1315,7 @@ export class ActivitiesService {
       where,
       // V3.2 §37: la tarjeta resume áreas y habilidades.
       relations: {
-        academicArea: true, creator: true, category: true,
+        academicArea: true, creator: { role: true }, category: true,
         activityAreas: { academicArea: true }, activitySkills: { skill: true },
       },
       order: { eventDate: 'DESC', createdAt: 'DESC' },
@@ -1208,7 +1341,7 @@ export class ActivitiesService {
       // V4.1 A41-005: el formulario de edición se hidrata desde esta fila;
       // sin las habilidades abría vacío y guardar podía borrarlas.
       relations: {
-        academicArea: true, creator: true, category: true, activityAreas: { academicArea: true }, activitySkills: { skill: true },
+        academicArea: true, creator: { role: true }, category: true, activityAreas: { academicArea: true }, activitySkills: { skill: true },
       },
       order: { createdAt: 'DESC' },
     });
@@ -1222,7 +1355,7 @@ export class ActivitiesService {
       where: { id },
       relations: {
         academicArea: true,
-        creator: true,
+        creator: { role: true },
         category: true,
         // §73.3: quien mira la actividad debe poder ver que trabaja, no
         // solo en que area cae.
@@ -1330,6 +1463,7 @@ export class ActivitiesService {
   async update(user: AuthenticatedUser, id: string, dto: UpdateActivityDto): Promise<Activity> {
     const activity = await this.findOne(id);
     await this.assertCanManage(user, activity);
+    await this.assertSoloOperacion(user, activity, dto);
 
     // V2 §27: lo que Dirección revisa no cambia a sus espaldas.
     const esDireccion = user.role === RolNombre.CAREER_DIRECTOR;
@@ -1478,6 +1612,12 @@ export class ActivitiesService {
       const responsablesFinales = responsablesNuevos?.length
         ?? await this.activities.manager.getRepository(ActivityResponsible).count({ where: { activityId: activity.id } });
       this.assertCompleta(activity, areasFinales, skillsFinales, responsablesFinales);
+      if (publica) {
+        this.assertInicioFuturo(activity);
+        const ids = responsablesNuevos
+          ?? (await this.activities.manager.getRepository(ActivityResponsible).find({ where: { activityId: activity.id } })).map((r) => r.userId);
+        await this.assertCobertura(user, activity, ids);
+      }
     }
 
     await this.activities.manager.transaction(async (m) => {
@@ -1957,6 +2097,23 @@ export class ActivitiesService {
       );
     }
 
+    // V4.1 A41-010 (§4.6, B14/B15): reabrir inscripciones dice por qué no se puede.
+    if (activity.status === ActivityStatus.CLOSED && next === ActivityStatus.OPEN) {
+      if (activity.eventDate && activity.eventDate.getTime() <= Date.now()) {
+        const msg = 'La actividad ya empezó: para reabrir inscripciones cambia antes la fecha de inicio a una futura.';
+        throw new BadRequestException({ message: msg, code: 'ACTIVITY_REOPEN_STARTED', fields: { status: [msg] } });
+      }
+      if (activity.capacity) {
+        const ocupados = await this.registrations.count({
+          where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
+        });
+        if (ocupados >= activity.capacity) {
+          const msg = 'El cupo está completo: amplía el cupo o libera lugares antes de reabrir inscripciones.';
+          throw new BadRequestException({ message: msg, code: 'ACTIVITY_REOPEN_FULL', fields: { status: [msg] } });
+        }
+      }
+    }
+
     if (next === ActivityStatus.DRAFT) {
       const confirmed = await this.registrations.count({
         where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
@@ -2102,7 +2259,11 @@ export class ActivitiesService {
       a.creatorId === user.userId || a.responsibleUserId === user.userId || responsableDe.has(a.id);
     const gestiona = (a: Activity): boolean => {
       if (propia(a)) return true;
-      if (user.role === RolNombre.ADMIN || user.role === RolNombre.CAREER_DIRECTOR) return true;
+      // V4.1 A41-008 (§4.3): lo que otro envió a revisión está en la bandeja de
+      // Dirección, no en su gestión, hasta que se aprueba; no es «suyo».
+      if (user.role === RolNombre.ADMIN || user.role === RolNombre.CAREER_DIRECTOR) {
+        return !a.requiresReview || a.reviewStatus === ActivityReviewStatus.APPROVED;
+      }
       if (user.role === RolNombre.TEACHER) return false;
       return a.status !== ActivityStatus.DRAFT && OWNER_ROLE_BY_TYPE[a.type] === user.role;
     };

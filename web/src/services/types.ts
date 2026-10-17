@@ -500,6 +500,8 @@ export interface ActivityPerson {
   role?: string | null;
   /** Solo de los contactos: para que el estudiante les escriba. */
   email?: string;
+  /** V4.1 A41-009: semestres habilitados de un docente (en los candidatos). */
+  semesters?: number[];
 }
 
 /** V3.2 §18.2: enlace de apoyo. */

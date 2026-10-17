@@ -33,7 +33,9 @@ export default function TeacherActivitiesPage() {
   const filtered = useMemo(() => {
     const q = normalize(query.trim());
     let list = data ?? [];
-    if (type) list = list.filter((a) => a.type === type);
+    // V4.1 A41-012 (§4.1): origen × carácter.
+    if (type === 'externas') list = list.filter((a) => a.originType === 'external');
+    else if (type) list = list.filter((a) => a.type === type && (a.originType ?? 'internal') === 'internal');
     if (categoryId) list = list.filter((a) => a.category?.id === categoryId);
     if (q) {
       list = list.filter((a) =>
@@ -63,9 +65,10 @@ export default function TeacherActivitiesPage() {
           <div className="field">
             <label htmlFor="activities-tipo">Tipo</label>
             <select id="activities-tipo" value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="">Todos</option>
-              <option value="academica">Académica</option>
-              <option value="extracurricular">Extracurricular</option>
+              <option value="">Todas</option>
+              <option value="academica">Académicas internas</option>
+              <option value="extracurricular">Extracurriculares internas</option>
+              <option value="externas">Oportunidades externas</option>
             </select>
           </div>
           <div className="field">

@@ -47,7 +47,8 @@ export default function StudentActivitiesPage() {
   const [query, setQuery] = useState('');
   /** Lo que se busca en el servidor: espera a que se deje de escribir. */
   const [buscado, setBuscado] = useState('');
-  const [type, setType] = useState<'todas' | 'academica' | 'extracurricular'>('todas');
+  // V4.1 A41-012 (§4.1): dos ejes (origen × carácter) en tres pestañas amigables.
+  const [type, setType] = useState<'todas' | 'academica' | 'extracurricular' | 'externas'>('todas');
   const [busy, setBusy] = useState<string | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
@@ -79,7 +80,9 @@ export default function StudentActivitiesPage() {
     setLoading(true);
     try {
       const r = await activityService.page({
-        limit: PASO, offset, q: buscado.trim() || undefined, type: type === 'todas' ? undefined : type, mine,
+        limit: PASO, offset, q: buscado.trim() || undefined, mine,
+        ...(type === 'externas' ? { originType: 'external' as const }
+          : type === 'todas' ? {} : { type, originType: 'internal' as const }),
       });
       setItems((prev) => (offset === 0 ? r.items : [...prev, ...r.items]));
       setTotal(r.total);
@@ -216,8 +219,9 @@ export default function StudentActivitiesPage() {
         <div className="chip-row">
           {([
             { key: 'todas', label: 'Todas' },
-            { key: 'academica', label: 'Académicas' },
-            { key: 'extracurricular', label: 'Extracurriculares' },
+            { key: 'academica', label: 'Académicas internas' },
+            { key: 'extracurricular', label: 'Extracurriculares internas' },
+            { key: 'externas', label: 'Oportunidades externas' },
           ] as const).map((opt) => (
             <button
               key={opt.key}

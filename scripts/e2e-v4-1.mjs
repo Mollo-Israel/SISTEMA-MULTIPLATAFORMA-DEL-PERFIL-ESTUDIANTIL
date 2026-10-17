@@ -214,7 +214,129 @@ async function batch2(ctx) {
   check(verEst2.status === 200, 'V41.2.20 B08 Publicada, cualquiera con sesión ve todas sus imágenes', `status ${verEst2.status}`);
 }
 
-const BATCHES = { batch1, batch2 };
+// ===========================================================================
+//  BATCH V4.1-3 — Estados, revisión, propiedad, alcance y tipos (A41-008…010, 012, 013)
+// ===========================================================================
+async function batch3(ctx) {
+  objective('BATCH V4.1-3 · Borradores privados, bandeja de Dirección, operación del responsable, fechas y duplicar');
+  const mk = (n, a, rol) => provisionAndActivate(ctx.admin, { firstName: n, lastName: `${a}${L}`, email: correoStaff(`b3${n.toLowerCase()}`), role: rol });
+  const director = await mk('Dora', 'Bandeja', 'CAREER_DIRECTOR');
+  const docA = await mk('Carlos', 'Alcance', 'TEACHER');
+  const docB = await mk('Berta', 'Alcance', 'TEACHER');
+  await req('PUT', `/users/${docA.userId}/semesters`, { token: ctx.admin, body: { semesters: [1, 2, 3, 4] } });
+  await req('PUT', `/users/${docB.userId}/semesters`, { token: ctx.admin, body: { semesters: [5, 6] } });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Eva', lastName: `Cupo${L}`, email: `v41.b3est.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 3 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const base = { type: 'academica', categoryId: taller.id, semesterScope: [3], activityDate: en(72), endAt: en(74), modality: 'presencial', location: 'Aula 201' };
+  const ids = (r) => (r.data ?? []).map((a) => a.id);
+
+  // ----- 23.3 / B10 / B11: borrador de Admin con un docente responsable
+  const draftAdmin = await req('POST', '/activities', { token: ctx.admin, body: { ...base, title: `Admin con docente ${L}`, responsibleUserIds: [docA.userId] } });
+  const docVe = await req('GET', '/activities/managed', { token: docA.token });
+  const docDet = await req('GET', `/activities/${draftAdmin.data?.id}`, { token: docA.token });
+  const docPublica = await req('PATCH', `/activities/${draftAdmin.data?.id}`, { token: docA.token, body: { status: 'open' } });
+  check(draftAdmin.status === 201 && !ids(docVe).includes(draftAdmin.data?.id) && docDet.status === 404
+      && [403, 404].includes(docPublica.status),
+  'V41.3.1 23.3 A41-008 El docente asignado no ve ni puede publicar el borrador de Administración', `${docDet.status} / ${docPublica.status}`);
+  const publicada = await req('PATCH', `/activities/${draftAdmin.data?.id}`, { token: ctx.admin, body: { status: 'open' } });
+  const docVe2 = await req('GET', '/activities/managed', { token: docA.token });
+  check(publicada.status === 200 && ids(docVe2).includes(draftAdmin.data?.id),
+    'V41.3.2 B11 Publicada, el docente responsable la recibe en su gestión', `status ${publicada.status}`);
+  const docTitulo = await req('PATCH', `/activities/${draftAdmin.data?.id}`, { token: docA.token, body: { title: `Cambiada ${L}` } });
+  check(docTitulo.status === 403 && docTitulo.data?.code === 'ACTIVITY_RESPONSIBLE_OPERATION_ONLY',
+    'V41.3.3 B11 A41-009 El responsable asignado no cambia el contenido material', `status ${docTitulo.status} ${docTitulo.data?.code}`);
+  const docCierra = await req('PATCH', `/activities/${draftAdmin.data?.id}`, { token: docA.token, body: { status: 'closed' } });
+  const docReabre = await req('PATCH', `/activities/${draftAdmin.data?.id}`, { token: docA.token, body: { status: 'open' } });
+  check(docCierra.status === 200 && docReabre.status === 200, 'V41.3.4 B11 Pero sí opera: cierra y reabre inscripciones', `${docCierra.status} / ${docReabre.status}`);
+  const docCancela = await req('PATCH', `/activities/${draftAdmin.data?.id}`, { token: docA.token, body: { status: 'cancelled', cancellationReason: 'Se suspende por un cambio de sala.' } });
+  const docEnvia = await req('POST', `/activities/${draftAdmin.data?.id}/submit`, { token: docA.token, body: {} });
+  check(docCancela.status === 403 && docEnvia.status >= 400,
+    'V41.3.5 B11 No la cancela ni la reenvía a revisión (la creó una autoridad)', `${docCancela.status} / ${docEnvia.status}`);
+
+  // ----- 23.4 / B12: propuesta del docente y bandeja de Dirección
+  const propuesta = await req('POST', '/activities', { token: docA.token, body: { ...base, title: `Propuesta docente ${L}` } });
+  const dirGestion = await req('GET', '/activities/managed', { token: director.token });
+  const dirPend = await req('GET', '/activities/reviews/pending', { token: director.token });
+  const dirDet = await req('GET', `/activities/${propuesta.data?.id}`, { token: director.token });
+  check(!ids(dirGestion).includes(propuesta.data?.id) && !ids(dirPend).includes(propuesta.data?.id) && dirDet.status === 404,
+    'V41.3.6 B12 El borrador del docente no lo ve Dirección (ni gestión, ni bandeja, ni por URL)', `detalle ${dirDet.status}`);
+  await req('POST', `/activities/${propuesta.data?.id}/submit`, { token: docA.token, body: {} });
+  const dirGestion2 = await req('GET', '/activities/managed', { token: director.token });
+  const dirPend2 = await req('GET', '/activities/reviews/pending', { token: director.token });
+  const dirDet2 = await req('GET', `/activities/${propuesta.data?.id}`, { token: director.token });
+  check(ids(dirPend2).includes(propuesta.data?.id) && !ids(dirGestion2).includes(propuesta.data?.id) && dirDet2.status === 200,
+    'V41.3.7 B12 A41-008 Enviada, está en la bandeja de Dirección y no en su gestión («no es suya»)', `pend ${ids(dirPend2).includes(propuesta.data?.id)} · gestión ${ids(dirGestion2).includes(propuesta.data?.id)}`);
+  await req('POST', `/activities/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'approve' } });
+  const dirGestion3 = await req('GET', '/activities/managed', { token: director.token });
+  const tras = await req('GET', `/activities/${propuesta.data?.id}`, { token: director.token });
+  const creadorEdita = await req('PATCH', `/activities/${propuesta.data?.id}`, { token: docA.token, body: { title: `Otro título ${L}` } });
+  check(ids(dirGestion3).includes(propuesta.data?.id) && tras.data?.creatorId === docA.userId && creadorEdita.status === 409,
+    'V41.3.8 23.4 Aprobada: Dirección la gestiona, el autor sigue siendo el docente y él ya no edita el contenido', `creator=${tras.data?.creatorId === docA.userId} · edita ${creadorEdita.status}`);
+
+  // ----- B13: semestres cubiertos por la unión de alcances de los docentes responsables
+  const candidatos = await req('GET', `/activities/people?kind=responsible&type=academica&q=${encodeURIComponent(`Alcance${L}`)}`, { token: director.token });
+  const cA = (candidatos.data ?? []).find((p) => p.id === docA.userId);
+  check(JSON.stringify(cA?.semesters) === JSON.stringify([1, 2, 3, 4]), 'V41.3.9 B13 Los candidatos docentes traen sus semestres', json(cA));
+  const cubre = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Cubre ${L}`, semesterScope: [3, 5], responsibleUserIds: [docA.userId, docB.userId], status: 'open' } });
+  check(cubre.status === 201, 'V41.3.10 B13 Semestres 3.º y 5.º con docentes que los cubren: se publica', `status ${cubre.status} ${json(cubre.data?.fields)}`);
+  const noCubre = await req('POST', '/activities', { token: director.token, body: { ...base, title: `No cubre ${L}`, semesterScope: [3, 7], responsibleUserIds: [docA.userId, docB.userId], status: 'open' } });
+  check(noCubre.status === 400 && noCubre.data?.code === 'ACTIVITY_SCOPE_NOT_COVERED' && /7\.º/.test(JSON.stringify(noCubre.data?.fields?.semesterScope)),
+    'V41.3.11 B13 Un semestre que ningún docente cubre (7.º) se rechaza nombrándolo', json(noCubre.data?.fields));
+  const toda = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Toda la carrera ${L}`, semesterScope: [], responsibleUserIds: [docA.userId], status: 'open' } });
+  check(toda.status === 400 && !!toda.data?.fields?.semesterScope, 'V41.3.12 B13 «Toda la carrera» con un docente que no la cubre se rechaza', `status ${toda.status}`);
+  const conDir = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Con Dirección ${L}`, semesterScope: [], responsibleUserIds: [docA.userId, director.userId], status: 'open' } });
+  check(conDir.status === 201, 'V41.3.13 B13 Con Dirección entre los responsables, toda la carrera es válida', `status ${conDir.status} ${json(conDir.data?.fields)}`);
+  const borradorNoCubre = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Borrador no cubre ${L}`, semesterScope: [8], responsibleUserIds: [docA.userId] } });
+  check(borradorNoCubre.status === 201, 'V41.3.14 B13 Como borrador se guarda; se valida al publicar', `status ${borradorNoCubre.status}`);
+
+  // ----- 23.5 / A41-010: inicio en el pasado
+  const ayer = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Ayer ${L}`, activityDate: en(-24), endAt: en(-22), status: 'open' } });
+  check(ayer.status === 400 && ayer.data?.code === 'ACTIVITY_START_IN_PAST' && !!ayer.data?.fields?.activityDate,
+    'V41.3.15 23.5 Publicar una actividad nueva con inicio ayer se rechaza en el campo de fecha', `status ${ayer.status}`);
+  const borradorAyer = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Borrador ayer ${L}`, activityDate: en(-24), endAt: en(-22) } });
+  const publicarAyer = await req('PATCH', `/activities/${borradorAyer.data?.id}`, { token: director.token, body: { status: 'open' } });
+  check(borradorAyer.status === 201 && publicarAyer.status === 400 && publicarAyer.data?.code === 'ACTIVITY_START_IN_PAST',
+    'V41.3.16 23.5 El borrador con fecha pasada se guarda, pero no se publica sin corregirla', `${borradorAyer.status} / ${publicarAyer.status}`);
+  const sinFecha = await req('POST', '/activities', { token: director.token, body: { title: `Sin fecha ${L}`, type: 'academica', categoryId: taller.id, __sinCompletar: true } });
+  check(sinFecha.status === 201, 'V41.3.17 23.5 Un borrador sin fecha se guarda', `status ${sinFecha.status}`);
+
+  // ----- B14 / B15: reabrir un CLOSED dice la causa
+  const empezo = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Empezó ${L}`, status: 'open' } });
+  await req('PATCH', `/activities/${empezo.data?.id}`, { token: director.token, body: { activityDate: en(-2), endAt: en(5) } });
+  await req('PATCH', `/activities/${empezo.data?.id}`, { token: director.token, body: { status: 'closed' } });
+  const reabreEmpezo = await req('PATCH', `/activities/${empezo.data?.id}`, { token: director.token, body: { status: 'open' } });
+  check(reabreEmpezo.status === 400 && reabreEmpezo.data?.code === 'ACTIVITY_REOPEN_STARTED',
+    'V41.3.18 B14 Reabrir una actividad que ya empezó se niega y pide corregir la fecha', `status ${reabreEmpezo.status} ${reabreEmpezo.data?.code}`);
+  const lleno = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Cupo lleno ${L}`, capacity: 1, status: 'open' } });
+  await req('POST', `/activities/${lleno.data?.id}/register`, { token: est.token });
+  // El cupo lo ocupa la participación confirmada o aceptada (OCCUPYING_STATUSES).
+  const perfilEst = (await req('GET', '/profiles/me', { token: est.token })).data;
+  await req('PATCH', `/activities/${lleno.data?.id}/confirm-participation`, { token: director.token, body: { studentProfileId: perfilEst?.id, status: 'confirmed' } });
+  await req('PATCH', `/activities/${lleno.data?.id}`, { token: director.token, body: { status: 'closed' } });
+  const reabreLleno = await req('PATCH', `/activities/${lleno.data?.id}`, { token: director.token, body: { status: 'open' } });
+  check(reabreLleno.status === 400 && reabreLleno.data?.code === 'ACTIVITY_REOPEN_FULL',
+    'V41.3.19 B15 Reabrir con el cupo completo se niega y pide ampliarlo', `status ${reabreLleno.status} ${reabreLleno.data?.code}`);
+  await req('PATCH', `/activities/${lleno.data?.id}`, { token: director.token, body: { capacity: 5 } });
+  const reabreAmpliado = await req('PATCH', `/activities/${lleno.data?.id}`, { token: director.token, body: { status: 'open' } });
+  check(reabreAmpliado.status === 200, 'V41.3.20 B15 Ampliado el cupo, se reabre', `status ${reabreAmpliado.status}`);
+
+  // ----- B16: duplicar una FINISHED
+  await req('PATCH', `/activities/${lleno.data?.id}`, { token: director.token, body: { status: 'finished' } });
+  const dup = await req('POST', `/activities/${lleno.data?.id}/duplicate`, { token: director.token });
+  const partDup = await req('GET', `/activities/${dup.data?.id}/participants`, { token: director.token });
+  const filasDup = Array.isArray(partDup.data) ? partDup.data : partDup.data?.items ?? [];
+  const original = await req('GET', `/activities/${lleno.data?.id}`, { token: director.token });
+  check(dup.status === 201 && dup.data?.id !== lleno.data?.id && dup.data?.status === 'draft' && !dup.data?.eventDate
+      && /\(copia\)$/.test(dup.data?.title ?? '') && filasDup.length === 0 && original.data?.status === 'finished',
+  'V41.3.21 B16 Duplicar una finalizada crea un borrador nuevo sin fechas ni participantes; la original no cambia',
+  json({ s: dup.status, st: dup.data?.status, f: dup.data?.eventDate, p: filasDup.length }));
+  check((dup.data?.activityAreas ?? []).length === (original.data?.activityAreas ?? []).length,
+    'V41.3.22 B16 La copia conserva áreas y habilidades', `${(dup.data?.activityAreas ?? []).length}`);
+}
+
+const BATCHES = { batch1, batch2, batch3 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

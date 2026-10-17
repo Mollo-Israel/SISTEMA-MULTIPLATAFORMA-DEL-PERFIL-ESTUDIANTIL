@@ -204,3 +204,103 @@ Cambios en `activities.service.ts`:
 **Riesgos:** los borradores de Admin pueden quedar sin responsable hasta publicarse; el aviso aparece al intentar publicar.
 
 **Commit propuesto:** `feat(v4.1-batch-2): edición con habilidades guardadas, charla sin habilidad, responsable al publicar y hasta 5 imágenes con carrusel`
+
+
+---
+
+## BATCH V4.1-3 — Estados, revisión, propiedad, alcance y tipos
+
+| | |
+|---|---|
+| **Rama real** | `feature/afinia-v4-1-cierre` |
+| **Commit base** | `5d30626` |
+| **Estado Git antes** | Limpio en archivos rastreados (los scripts de demo del usuario, sin seguimiento). |
+
+**Gaps verificados:**
+
+| ID | Antes | Después |
+|---|---|---|
+| A41-008 | DEFECT_CONFIRMED (sondas: el docente asignado veía el borrador de Admin; lo PENDING aparecía en la gestión del Director) | Corregido |
+| A41-009 | PARTIAL | Corregido: el responsable asignado solo opera y la unión de alcances se valida al publicar |
+| A41-010 | DEFECT_CONFIRMED (sonda: publicar con inicio ayer → 201) | Corregido; además, causa al reabrir y «Duplicar» |
+| A41-012 | PARTIAL | Tres pestañas por origen × carácter |
+| A41-013 | PARTIAL | Opción redundante oculta en las internas |
+
+**Preservado:**
+- Dirección ve lo enviado en su bandeja y aprueba, observa o rechaza;
+- el bloqueo de contenido de lo aprobado para el creador (409);
+- `created_by` no cambia al aprobar;
+- el borrador de la Sociedad sigue visible para sus responsables (§20);
+- el ciclo automático (CLOSED / FINISHED);
+- la cancelación con motivo.
+
+**Archivos modificados:**
+
+| Archivo | Cambio |
+|---|---|
+| `api/src/activities/activities.service.ts` | Ver detalle abajo |
+| `api/src/activities/activities.controller.ts` | `POST /activities/:id/duplicate` |
+| `api/src/audit/audit.service.ts`, `audit-labels.ts` | Evento `ACTIVITY_DUPLICATED`, con etiqueta |
+| `api/src/storage/file-access.service.ts` | Permiso de imágenes: ver «Fallo → causa → corrección», punto 1 |
+| `web/src/pages/student/Activities.tsx` | Pestañas «Académicas internas», «Extracurriculares internas» y «Oportunidades externas» |
+| `web/src/pages/teacher/Activities.tsx` | Las mismas tres opciones en «Actividades de la carrera» |
+| `web/src/components/ActivityManager.tsx` | Botón «Duplicar»; sin «Credencial externa esperada» en internas (salvo una actividad antigua que ya la tiene); aviso de los semestres que cubren los docentes responsables, con validación local |
+| `web/src/services/index.ts`, `types.ts` | `duplicate`, `originType` en el listado y `semesters` de los candidatos |
+| `scripts/e2e-v4-1.mjs` | V41.3.1 a V41.3.22 |
+| `scripts/e2e-web.mjs` | WEB.43.1 a WEB.43.4 |
+| `scripts/e2e-v3-2.mjs` | Tres pruebas de V3.2 actualizadas a las reglas V4.1 (ver «Fallo → causa → corrección», punto 2) |
+
+Cambios en `activities.service.ts`:
+- `veBorrador`: el borrador de una autoridad es solo de quien lo crea (A41-008, 23.3);
+- `filtrarGestionables`: lo ajeno en revisión queda en la bandeja y no en la gestión del Director (A41-008);
+- `assertSoloOperacion`: el responsable asignado por una autoridad solo cambia el estado operativo; no edita contenido, no cancela ni vuelve a borrador (A41-009, §4.4);
+- `assertCobertura`: con solo docentes como responsables, los semestres tienen que estar dentro de la unión de sus alcances; con Dirección o Sociedad no hay límite (A41-009, §4.5, B13);
+- `assertInicioFuturo`: una actividad nueva no se publica con un inicio pasado (A41-010, 23.5);
+- reabrir un CLOSED dice la causa, `ACTIVITY_REOPEN_STARTED` o `ACTIVITY_REOPEN_FULL` (B14, B15);
+- `duplicate` (B16);
+- los candidatos docentes traen sus semestres.
+
+**Migraciones:** ninguna.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch3` → **22/22**:
+  - 23.3 / B10 / B11: borrador de Admin invisible para el docente asignado; publicado, lo opera, pero no edita, cancela ni reenvía;
+  - B12 / 23.4: el borrador del docente no lo ve Dirección; enviado, está en la bandeja y no en su gestión; aprobado, la gestiona, el autor no cambia y no edita;
+  - B13: candidatos con semestres; cobertura válida, semestre sin cubrir nombrado, toda la carrera rechazada con solo docentes y aceptada con Dirección; el borrador se guarda igual;
+  - 23.5: inicio pasado rechazado; el borrador se guarda pero no se publica; borrador sin fecha;
+  - B14 / B15: causa al reabrir y reapertura tras ampliar el cupo;
+  - B16: duplicar una finalizada.
+- `node scripts/e2e-web.mjs` → **69/69**, incluidos WEB.43.1–43.4: pestañas visibles, cada una con su filtro de origen, «Duplicar» y sin la opción redundante.
+- Unitarias: **130/130**.
+- **Regresión completa (22 suites):** 2072 correctas, 7 fallos, analizados abajo. Corregidos y repetidas las suites afectadas (`e2e-v3-2` batch5 34/34 y batch6 28/28, `e2e-v4-1` 55/55, `e2e-batch-1` 59/59): **2113 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+1. **V41.2.20 → FAIL, defecto del BATCH 2** (permiso de imágenes).
+   - *Causa:* la consulta usaba `LIMIT 1`. Un mismo archivo puede ilustrar varias actividades; si tocaba primero un borrador, se negaba la imagen aunque otra actividad publicada la usara.
+   - *Corrección:* se autoriza si **alguna** actividad que la contiene es visible para quien pide.
+   - *Regresión:* `e2e-v4-1` 55/55.
+2. **V32.5.13, V32.5.32, V32.5.33 y V32.6.28 → FAIL.** Pruebas de V3.2 que esperaban lo que el V4.1 cambia:
+   - V32.5.13: el responsable asignado editaba el aula, y ahora solo opera (A41-009);
+   - V32.5.32 y 33: publicaban actividades nuevas ya empezadas (A41-010); ahora se publican en el futuro y luego se ajusta la fecha;
+   - V32.6.28: el responsable veía el borrador de Admin (A41-008).
+   - *Corrección:* las pruebas verifican la regla V4.1.
+   - *Regresión:* PASS.
+3. **`e2e-batch-1` B2.2b → FAIL intermitente**, ya conocido: un 401 y el correo que no llega a tiempo, por la pausa entre reenvíos. No está relacionado con este batch. Repetida la suite: 59/59.
+4. **Pruebas nuevas mal armadas:**
+   - V41.3.5: el motivo de cancelación «Prueba» era demasiado corto y no llegaba al guard;
+   - V41.3.19: el cupo solo lo ocupa lo confirmado (`OCCUPYING_STATUSES`), así que la prueba ahora confirma;
+   - WEB.43.3: contaba antes de que cargara la grilla.
+   - Corregidas: PASS.
+
+**Efecto:**
+- **Backend:** reglas de visibilidad, operación y publicación.
+- **Frontend:** pestañas, «Duplicar», resultado y cobertura.
+- **Móvil:** sin cambios. Las actividades externas siguen visibles en «Todas».
+
+**Seguridad y permisos:** todo se valida en la API, que responde 403 o 404 con cada actor; la interfaz solo acompaña.
+
+**Pendientes:** la finalización anticipada con motivo (§4.6). Hoy se puede pasar a FINISHED sin motivo; queda para cuando se defina si el motivo es obligatorio.
+
+**Riesgos:** cambia lo que ve un docente responsable de borradores ajenos y lo que puede editar, porque ahora solo opera.
+
+**Commit propuesto:** `feat(v4.1-batch-3): borradores privados, bandeja de Dirección, responsable que solo opera, cobertura de semestres, fecha futura al publicar, duplicar y pestañas por origen`

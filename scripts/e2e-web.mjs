@@ -568,7 +568,37 @@ async function pruebas(browser) {
   check(t1 === 'Imagen 1 de 3' && t2 === 'Imagen 2 de 3' && t3 === 'Imagen 3 de 3' && visible === 1,
     'WEB.42.4 B08 A41-006 El detalle tiene carrusel con botones y teclado, y carga la imagen con la sesión', `${t1} → ${t2} → ${t3} · img=${visible}`);
   check(fallos42.length === 0, 'WEB.42.5 Sin errores de JavaScript en V4.1-2', fallos42.join(' | '));
+
+  // ===== V4.1-3 · Pestañas por origen × carácter (A41-012), resultado sin opción redundante (A41-013), duplicar (A41-010)
+  objective('V4.1-3 · Tres pestañas de actividades, resultado interno sin «credencial esperada» y Duplicar');
+  await p43.keyboard.press('Escape');
+  await p43.goto(`${WEB}/student/activities?tab=todas`);
+  await espera(800);
+  const chips43 = await p43.locator('.chip-row button.chip').allInnerTexts();
+  check(['Académicas internas', 'Extracurriculares internas', 'Oportunidades externas'].every((t) => chips43.some((c) => c.includes(t))),
+    'WEB.43.1 A41-012 El estudiante ve Académicas internas, Extracurriculares internas y Oportunidades externas', chips43.join(' | '));
+  const pedidoExternas = p43.waitForRequest((r) => r.url().includes('/activities?') && r.url().includes('originType=external'), { timeout: 8000 }).catch(() => null);
+  await p43.locator('.chip-row button.chip', { hasText: 'Oportunidades externas' }).click();
+  const reqExt = await pedidoExternas;
+  const pedidoAcad = p43.waitForRequest((r) => r.url().includes('originType=internal') && r.url().includes('type=academica'), { timeout: 8000 }).catch(() => null);
+  await p43.locator('.chip-row button.chip', { hasText: 'Académicas internas' }).click();
+  const reqAcad = await pedidoAcad;
+  check(!!reqExt && !!reqAcad, 'WEB.43.2 A41-012 Cada pestaña filtra por origen y carácter (internas ≠ externas)', `${!!reqExt} / ${!!reqAcad}`);
   await c43.close();
+
+  const c44 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p44 = await c44.newPage();
+  await entrar(p44, otros.director.email);
+  await p44.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p44.goto(`${WEB}/director/activities`);
+  await p44.locator('button[aria-label^="Duplicar "]').first().waitFor({ timeout: 10000 }).catch(() => {});
+  check(await p44.locator('button[aria-label^="Duplicar "]').count() > 0, 'WEB.43.3 A41-010 La gestión ofrece «Duplicar» en cada actividad');
+  await p44.getByRole('button', { name: /Nueva actividad/ }).first().click();
+  await p44.locator('#op-resultado').waitFor({ timeout: 8000 }).catch(() => {});
+  const opciones = await p44.locator('#op-resultado option').allInnerTexts();
+  check(opciones.length > 0 && !opciones.some((o) => /Credencial externa esperada/.test(o)),
+    'WEB.43.4 A41-013 Una actividad interna ya no ofrece «Credencial externa esperada»', opciones.join(' | '));
+  await c44.close();
 
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();

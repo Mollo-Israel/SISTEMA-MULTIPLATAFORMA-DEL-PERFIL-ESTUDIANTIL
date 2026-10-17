@@ -762,13 +762,15 @@ export const analyticsService = {
 
 export const activityService = {
   /** V3 B23: una página del listado, con lo más próximo primero. */
-  page: (params: { limit: number; offset?: number; q?: string; type?: string; mine?: 'interested' | 'enrolled' }) =>
+  page: (params: { limit: number; offset?: number; q?: string; type?: string; originType?: 'internal' | 'external'; mine?: 'interested' | 'enrolled' }) =>
     api.get<{ items: Activity[]; total: number; limit: number; offset: number }>('/activities', {
       params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')),
     }).then((r) => r.data),
   list: (params?: Record<string, string>) =>
     api.get<Activity[]>('/activities', { params }).then((r) => r.data),
   get: (id: string) => api.get<Activity>(`/activities/${id}`).then((r) => r.data),
+  /** V4.1 A41-010: copia como borrador nuevo, sin fechas ni participantes. */
+  duplicate: (id: string) => api.post<Activity>(`/activities/${id}/duplicate`).then((r) => r.data),
   create: (data: Partial<Activity> & { areaId?: string; activityDate?: string }) =>
     api.post<Activity>('/activities', data).then((r) => r.data),
   update: (id: string, data: Record<string, unknown>) =>

@@ -138,6 +138,15 @@ export class ActivitiesController {
     return this.activitiesService.update(user, id, dto);
   }
 
+  @Post(':id/duplicate')
+  @Roles(...MANAGER_ROLES)
+  @ApiOperation({
+    summary: 'Duplicar una actividad como borrador nuevo, sin fechas ni participantes (V4.1 §4.6).',
+  })
+  duplicate(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.duplicate(user, id);
+  }
+
   @Post(':id/submit')
   @Roles(RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY, RolNombre.ADMIN)
   @HttpCode(200)

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  FiAward, FiCalendar, FiCheck, FiEdit2, FiImage, FiLink, FiPlus, FiSave, FiSearch, FiSend, FiTrash2, FiUserX, FiUsers, FiX,
+  FiAward, FiCalendar, FiCheck, FiCopy, FiEdit2, FiImage, FiLink, FiPlus, FiSave, FiSearch, FiSend, FiTrash2, FiUserX, FiUsers, FiX,
 } from 'react-icons/fi';
 import { useAuth } from '../auth/AuthContext';
 import { enMemoria, useCachedState } from '../hooks/viewCache';
@@ -119,6 +119,8 @@ export default function ActivityManager({
   /** Docente y Sociedad proponen; Dirección decide. Dirección y Administración publican sin revisión (V3 §12.2). */
   const necesitaRevision = user?.role !== 'CAREER_DIRECTOR' && user?.role !== 'ADMIN';
   const esAdmin = user?.role === 'ADMIN';
+  // V4.1 A41-009: Dirección o Administración (autoridad que asigna responsables).
+  const esAutoridad = user?.role === 'ADMIN' || user?.role === 'CAREER_DIRECTOR';
   // Con memoria de la sesión: al volver a la gestión se pinta al instante.
   const [semestresPermitidos, setSemestresPermitidos] = useCachedState<number[]>('semestres', [1, 2, 3, 4, 5, 6, 7, 8]);
   const [activities, setActivities] = useCachedState<Activity[]>(`actividades-${activityType}-${filtroOrigen ?? 'todas'}`, []);
@@ -254,6 +256,9 @@ export default function ActivityManager({
         e.certificateIssuer = 'Indica quién emite el certificado: Afinia no se atribuye su autoría.';
       }
       if (form.areaIds.length === 0) e.areaIds = 'Selecciona al menos un área.';
+      if (cobertura && (form.semesterScope.length === 0 || form.semesterScope.some((n) => !cobertura.includes(n)))) {
+        e.semesterScope = 'Elige semestres que cubran los docentes responsables, o suma un responsable que cubra toda la carrera.';
+      }
       // V4.1 V41-01: una charla general puede no tener una habilidad concreta.
       // V4.1 A41-007: el borrador puede guardarse sin responsable; se pide al publicar.
       if (esAdmin && form.responsables.length === 0) e.responsibleUserIds = 'Indica quién responde por esta oportunidad antes de publicar.';
@@ -391,6 +396,27 @@ export default function ActivityManager({
       const elegida = x.imagenes.find((i) => i.fileId === fileId);
       return elegida ? { ...x, imagenes: [elegida, ...x.imagenes.filter((i) => i.fileId !== fileId)] } : x;
     });
+
+  /**
+   * V4.1 A41-009 (§4.5): si todos los responsables son docentes, los semestres
+   * que pueden atender son la unión de sus alcances. `null` si no aplica.
+   */
+  const cobertura = useMemo(() => {
+    if (!esAutoridad || activityType !== 'academica' || form.responsables.length === 0) return null;
+    if (!form.responsables.every((p) => p.role === 'TEACHER' && Array.isArray(p.semesters))) return null;
+    return [...new Set(form.responsables.flatMap((p) => p.semesters ?? []))].sort((x, y) => x - y);
+  }, [esAutoridad, activityType, form.responsables]);
+
+  const duplicar = async (a: Activity) => {
+    try {
+      const copia = await activityService.duplicate(a.id);
+      toast.success('Copia creada como borrador.', 'Revisa las fechas y publícala cuando esté lista.');
+      await load();
+      startEdit(copia);
+    } catch (err) {
+      toast.error(apiError(err));
+    }
+  };
 
   const startEdit = (a: Activity) => {
     setEditing(a);
@@ -1153,6 +1179,13 @@ export default function ActivityManager({
                     ? 'Solo aparecen tus semestres habilitados. Sin marcar ninguno, va a todos ellos.'
                     : 'Sin marcar ninguno, va a toda la carrera.'}
                 </small>
+                {cobertura && (
+                  <p className="field-hint" data-testid="cobertura">
+                    Los docentes responsables cubren: {cobertura.length ? cobertura.map((n) => `${n}.º`).join(', ') : 'ningún semestre'}.
+                    {' '}Para publicar, elige solo esos semestres o suma un responsable que cubra toda la carrera.
+                  </p>
+                )}
+                <FieldError message={errores.errors.semesterScope} />
               </div>
             )}
 
@@ -1170,7 +1203,11 @@ export default function ActivityManager({
                   value={form.outcomePolicy}
                   onChange={(e) => setForm({ ...form, outcomePolicy: e.target.value as OutcomePolicy })}
                 >
-                  {RESULTADOS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {/* V4.1 A41-013 (§4.1): «Credencial externa esperada» es el flujo de una oportunidad
+                      externa; en una interna solo se muestra si una actividad antigua ya la tiene. */}
+                  {RESULTADOS
+                    .filter((o) => o.value !== 'external_credential_expected' || form.outcomePolicy === 'external_credential_expected')
+                    .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <span className="field-hint">
                   {RESULTADOS.find((o) => o.value === form.outcomePolicy)?.hint}
@@ -1394,6 +1431,15 @@ export default function ActivityManager({
                               <FiEdit2 />
                             </button>
                           )}
+                          {/* V4.1 A41-010: repetir una actividad (también una finalizada) es duplicarla. */}
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => duplicar(a)}
+                            title="Duplicar como borrador nuevo"
+                            aria-label={`Duplicar ${a.title}`}
+                          >
+                            <FiCopy />
+                          </button>
                           <button
                             className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`}
                             onClick={() => openParticipants(a.id)}
