@@ -527,7 +527,8 @@ async function noAislado(ctx) {
       && pesos.find((r) => r.code === 'improvement_area')?.weight === 30
       && pesos.find((r) => r.code === 'skill_match')?.weight === 15
       && pesos.find((r) => r.code === 'orientation_confirmed')?.weight === 10
-      && pesos.find((r) => r.code === 'similar_saved')?.weight === 5
+      // V4.1 A41-015: el 5 % es «Me interesa» en actividades, no «Guardar».
+      && pesos.find((r) => r.code === 'activity_interested')?.weight === 5
       && !pesos.some((r) => r.code === 'affinity_area'),
     'B7.53 V3 §34 Y es exactamente 40 / 30 / 15 / 10 / 5, sin afinidad',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),

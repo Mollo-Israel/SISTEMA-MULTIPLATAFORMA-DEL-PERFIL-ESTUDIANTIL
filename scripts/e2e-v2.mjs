@@ -330,7 +330,7 @@ async function batch10(ctx) {
 
   check(puntos(de(actInteres), 'preferred_area') === 40, 'V2.10.1 V3 §34 Interés explícito de prioridad 1: 40 puntos', JSON.stringify(de(actInteres)?.reasons));
   check(puntos(de(actMejora), 'improvement_area') === 30, 'V2.10.2 V3 §34 Área de mejora: 30 puntos', JSON.stringify(de(actMejora)?.reasons));
-  check(puntos(de(actTecInt), 'skill_match') > 0 && /te interesa/.test(de(actTecInt)?.reasons?.[0]?.label ?? ''),
+  check(puntos(de(actTecInt), 'skill_match') > 0 && /Coincide con tus intereses/.test(de(actTecInt)?.reasons?.[0]?.label ?? ''),
     'V2.10.3 §53 Tecnología de interés que la actividad trabaja: suma interés, con su motivo', JSON.stringify(de(actTecInt)?.reasons));
   check(puntos(de(actTecMej), 'improve_skill_match') > 0, 'V2.10.4 §53 Tecnología a mejorar: suma en «mejora»', JSON.stringify(de(actTecMej)?.reasons));
   check(!de(otroSemestre), 'V2.10.5 §54 Filtro duro: una actividad de otro semestre no se recomienda');

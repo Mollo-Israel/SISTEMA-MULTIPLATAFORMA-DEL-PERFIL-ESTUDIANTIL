@@ -195,8 +195,11 @@ export default function StudentRecommendationsPage() {
             un número de orden: dice cuánto encaja la recomendación con el
             perfil. Mostrarlo sin el «de 100» lo dejaría tan mudo como antes.
           */}
-          <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}>
-            Encaje con tu perfil: {Math.round(item.score)} de 100
+          {/* V4.1 A41-015 (§8, A.9): el número dice su fórmula; no es certeza, dominio ni probabilidad. */}
+          <div className="muted" style={{ fontSize: '0.78rem', marginTop: '0.2rem' }}
+            title="40 % intereses · 30 % lo que quieres mejorar · 15 % tecnologías · 10 % orientación · 5 % «Me interesa»">
+            Coincidencia con lo que declaraste: {Math.round(item.score)} de 100
+            {' '}<span className="small">(40 % intereses · 30 % mejora · 15 % tecnologías · 10 % orientación · 5 % «Me interesa»)</span>
           </div>
         </button>
 

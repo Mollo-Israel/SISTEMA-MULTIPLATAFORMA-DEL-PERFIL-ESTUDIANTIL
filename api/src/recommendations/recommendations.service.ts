@@ -221,10 +221,10 @@ export class RecommendationsService {
           detail: 'Áreas que te sugirió el cuestionario y que tú decidiste sumar.',
         },
         {
-          code: 'similar_saved',
-          label: 'Feedback de tus recomendaciones',
+          code: 'activity_interested',
+          label: '«Me interesa» en actividades',
           weight: RULES.ranking.feedback,
-          detail: 'Guardaste algo parecido (misma área y tipo).',
+          detail: 'Áreas y tecnologías de actividades en las que marcaste «Me interesa». Guardar algo o marcarlo como favorito no cuenta.',
         },
       ],
       /** V3 §34 · Filtros duros antes de puntuar. */

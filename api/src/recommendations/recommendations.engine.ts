@@ -101,11 +101,13 @@ interface Contexto {
   improveSkills: { id: string; name: string }[];
   /** Áreas confirmadas desde la orientación académica (V2 §54). */
   orientationAreas: Set<string>;
-  /** V3 §34: lo que guardó y lo que descartó, por «área|tipo». */
-  savedSimilar: Set<string>;
+  /** V3 §34: lo que descartó, por «área|tipo» (baja la prioridad de lo parecido). */
   dismissedSimilar: Map<string, number>;
-  /** V3.2 §35.2: áreas de los recursos que guardó como favoritos. */
-  favoriteResourceAreas: Set<string>;
+  /**
+   * V4.1 A41-015 (§8, A.9): áreas y tecnologías de las actividades en las que
+   * marcó «Me interesa» (con la actividad de origen, para no contarse a sí misma).
+   */
+  interestedActivities: { activityId: string; areaIds: string[]; skillIds: string[] }[];
   now: Date;
 }
 
@@ -172,12 +174,13 @@ export class RecommendationsEngine {
       }),
     ]);
     const improvementIds = new Set(profile.improvementAreaIds ?? []);
-    const savedSimilar = new Set<string>();
+    // V4.1 A41-015 (A.9): «Guardar» una recomendación es acceso rápido; no
+    // modifica el modelo. Solo lo descartado sigue bajando lo parecido.
     const dismissedSimilar = new Map<string, number>();
     for (const d of decididas) {
+      if (d.status !== RecommendationStatus.DISMISSED) continue;
       const clave = `${d.academicAreaId ?? '-'}|${d.type}`;
-      if (d.status === RecommendationStatus.SAVED) savedSimilar.add(clave);
-      else dismissedSimilar.set(clave, (dismissedSimilar.get(clave) ?? 0) + 1);
+      dismissedSimilar.set(clave, (dismissedSimilar.get(clave) ?? 0) + 1);
     }
 
     const sufficient =
@@ -256,9 +259,8 @@ export class RecommendationsEngine {
       orientationAreas: new Set(
         preferredRows.filter((p) => p.source === InterestSource.ONBOARDING).map((p) => p.academicAreaId),
       ),
-      savedSimilar,
       dismissedSimilar,
-      favoriteResourceAreas: await this.areasDeFavoritos(profileId),
+      interestedActivities: await this.actividadesConInteres(profileId),
       now: generatedAt,
     };
 
@@ -310,6 +312,7 @@ export class RecommendationsEngine {
     contexto: { factor: number; label: string | null },
     elementSkillIds: string[] = [],
     type: RecommendationType | null = null,
+    elementId: string | null = null,
   ): { score: number; reasons: RecommendationReason[] } {
     const reasons: RecommendationReason[] = [];
     const name = areaId ? ctx.areaName.get(areaId) : undefined;
@@ -340,20 +343,20 @@ export class RecommendationsEngine {
       if (priority) {
         interes(
           RecommendationReasonCode.PREFERRED_AREA,
-          `Marcaste ${name} como área de interés (prioridad ${priority})`,
+          `Coincide con tus intereses: ${name} (prioridad ${priority})`,
           RULES.interestByPriority[Math.min(Math.max(priority, 1), 5) - 1],
         );
       }
     }
     const libre = ctx.freeInterestNames.find((n) => matchesDeclaredTerm(haystack, n, 4));
     if (libre) {
-      interes(RecommendationReasonCode.FREE_INTEREST_MATCH, `Coincide con tu interés «${libre}»`, RULES.freeInterestFactor);
+      interes(RecommendationReasonCode.FREE_INTEREST_MATCH, `Coincide con tus intereses: «${libre}»`, RULES.freeInterestFactor);
     }
 
     // --------------------------------------------- 30 % áreas de mejora
     if (areaId && name && ctx.improvementIds.has(areaId)) {
       acumulador(RULES.ranking.improvementArea)(
-        RecommendationReasonCode.IMPROVEMENT_AREA, `Marcaste ${name} como área a fortalecer`, 1,
+        RecommendationReasonCode.IMPROVEMENT_AREA, `Coincide con lo que quieres mejorar: ${name}`, 1,
       );
     }
 
@@ -364,7 +367,7 @@ export class RecommendationsEngine {
     if (techInteres) {
       tecnologia(
         RecommendationReasonCode.SKILL_MATCH,
-        `Trabaja ${techInteres.name}, una tecnología que te interesa`,
+        `Coincide con tus intereses: trabaja ${techInteres.name}`,
         suyas.has(techInteres.id) ? 1 : RULES.skillMatchFactor,
       );
     }
@@ -373,7 +376,7 @@ export class RecommendationsEngine {
     if (techMejora) {
       tecnologia(
         RecommendationReasonCode.IMPROVE_SKILL_MATCH,
-        `Trabaja ${techMejora.name}, una tecnología que quieres mejorar`,
+        `Coincide con lo que quieres mejorar: trabaja ${techMejora.name}`,
         suyas.has(techMejora.id) ? 1 : RULES.skillMatchFactor,
       );
     }
@@ -390,18 +393,18 @@ export class RecommendationsEngine {
     // Sin una señal de lo que el estudiante quiere, no hay recomendación.
     if (reasons.length === 0) return { score: 0, reasons: [] };
 
-    // ------------------------------- 5 % feedback de recomendaciones
-    const clave = `${areaId ?? '-'}|${type ?? ''}`;
-    if (type && ctx.savedSimilar.has(clave)) {
+    // ------------------------------- 5 % «Me interesa» en actividades
+    // V4.1 A41-015 (§8, A.9): señal explícita y secundaria. Nunca crea una
+    // recomendación por sí sola (arriba ya se exigió una señal declarada) y no
+    // cuenta la propia actividad. «Guardar» y favoritos no suman.
+    const otras = ctx.interestedActivities.filter((x) => x.activityId !== elementId);
+    const porArea = areaId && name ? otras.some((x) => x.areaIds.includes(areaId)) : false;
+    const porSkill = otras.find((x) => x.skillIds.some((sid) => suyas.has(sid)));
+    if (porArea || porSkill) {
       acumulador(RULES.ranking.feedback)(
-        RecommendationReasonCode.SIMILAR_SAVED, 'Guardaste una recomendación parecida', 1,
-      );
-    } else if (areaId && name && ctx.favoriteResourceAreas.has(areaId)) {
-      // V3.2 §35.2: un favorito explícito en la Biblioteca es una preferencia
-      // secundaria. Comparte el 5 % de feedback y nunca crea una
-      // recomendación por sí solo (arriba ya se exigió otra señal).
-      acumulador(RULES.ranking.feedback)(
-        RecommendationReasonCode.RESOURCE_FAVORITE_AREA, `Guardaste recursos de ${name} en tu Biblioteca`, 1,
+        RecommendationReasonCode.ACTIVITY_INTERESTED,
+        porArea ? `Marcaste «Me interesa» en actividades de ${name}` : 'Marcaste «Me interesa» en actividades con esta tecnología',
+        1,
       );
     }
 
@@ -412,6 +415,7 @@ export class RecommendationsEngine {
     }
 
     // ------------------------ §34.1 «No me interesa» baja lo parecido
+    const clave = `${areaId ?? '-'}|${type ?? ''}`;
     const descartadas = type ? (ctx.dismissedSimilar.get(clave) ?? 0) : 0;
     if (descartadas > 0) {
       const antes = total();
@@ -514,7 +518,7 @@ export class RecommendationsEngine {
       ])];
       let mejor = { score: 0, reasons: [] as RecommendationReason[], areaId: a.academicAreaId as string | null };
       for (const areaId of areasDeActividad.length ? areasDeActividad : [null]) {
-        const r = this.scoreElement(ctx, areaId, haystack, contexto, (a.activitySkills ?? []).map((s) => s.skillId), type);
+        const r = this.scoreElement(ctx, areaId, haystack, contexto, (a.activitySkills ?? []).map((s) => s.skillId), type, a.id);
         if (r.score > mejor.score) mejor = { ...r, areaId };
       }
       const { score, reasons } = mejor;
@@ -1118,17 +1122,23 @@ export class RecommendationsEngine {
     return date.toLocaleDateString('es-BO', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
-  /** V3.2 §35.2: áreas de los recursos que el estudiante guardó como favoritos. */
-  private async areasDeFavoritos(profileId: string): Promise<Set<string>> {
-    const filas: { aid: string }[] = await this.profiles.manager.query(
-      `SELECT DISTINCT x.aid FROM learning_resource_favorites f
-         JOIN (
-           SELECT a.learning_resource_id AS rid, a.academic_area_id AS aid FROM learning_resource_areas a
-           UNION SELECT r.id, r.academic_area_id FROM learning_resources r
-         ) x ON x.rid = f.learning_resource_id
-        WHERE f.student_profile_id = $1`,
+  /**
+   * V4.1 A41-015 (§8, A.9): actividades en las que el estudiante marcó «Me
+   * interesa» (estado actual), con las áreas y tecnologías que realmente
+   * tienen clasificadas. Quitar el interés quita la señal: no queda rastro.
+   */
+  private async actividadesConInteres(profileId: string): Promise<{ activityId: string; areaIds: string[]; skillIds: string[] }[]> {
+    const filas: { id: string; areas: string[] | null; skills: string[] | null }[] = await this.profiles.manager.query(
+      `SELECT r.activity_id AS id,
+              ARRAY(SELECT DISTINCT x FROM (
+                SELECT a.academic_area_id AS x FROM activity_areas a WHERE a.activity_id = r.activity_id
+                UNION SELECT ac.academic_area_id FROM activities ac WHERE ac.id = r.activity_id AND ac.academic_area_id IS NOT NULL
+              ) t) AS areas,
+              ARRAY(SELECT s.skill_id FROM activity_skills s WHERE s.activity_id = r.activity_id) AS skills
+         FROM activity_registrations r
+        WHERE r.student_profile_id = $1 AND r.status = 'interested'`,
       [profileId],
     );
-    return new Set(filas.map((f) => f.aid));
+    return filas.map((f) => ({ activityId: f.id, areaIds: f.areas ?? [], skillIds: f.skills ?? [] }));
   }
 }

@@ -523,7 +523,73 @@ async function batch5(ctx) {
     'V41.5.18 B22 Guardar un recurso como favorito no lo vuelve «para ti» (no es señal del recomendador)');
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
+// ===========================================================================
+//  BATCH V4.1-6 — Recomendaciones y preferencias declarativas (A41-015, §8, A.9)
+// ===========================================================================
+async function batch6(ctx) {
+  objective('BATCH V4.1-6 · «Me interesa» como señal explícita y reversible; Guardar y favoritos sin efecto; motivos claros');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Delfina', lastName: `Recom${L}`, email: correoStaff('b6dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Iris', lastName: `Recom${L}`, email: `v41.b6est.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 3 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const area = async (n, tag) => (await req('POST', '/academic-areas', { token: ctx.admin, body: { name: `${n} ${L}`, tags: [`${tag}${L}`] } })).data;
+  const aInteres = await area('Fotonica Aplicada', 'fotonica');
+  const aMejora = await area('Acustica Digital', 'acustica');
+  const crear = async (titulo, a, extra = {}) => (await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${L}`, type: 'academica', categoryId: taller.id, areaIds: [a.id], skillIds: [], semesterScope: [3], status: 'open', ...extra },
+  })).data;
+  const t1 = await crear('Taller de fotonica I', aInteres);
+  const t2 = await crear('Taller de fotonica II', aInteres);
+  const m1 = await crear('Laboratorio de acustica', aMejora);
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: aInteres.id, priority: 1 }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { improvementAreaIds: [aMejora.id] } });
+  const leer = async () => ((await req('GET', '/recommendations/me', { token: est.token })).data?.groups ?? []).flatMap((g) => g.items);
+  const de = (lista, id) => lista.find((i) => i.targetId === id);
+  const pts = (i, code) => (i?.reasons ?? []).filter((r) => r.code === code).reduce((a, r) => a + r.points, 0);
+
+  let lista = await leer();
+  const r1 = de(lista, t2.id);
+  const rm = de(lista, m1.id);
+  check((r1?.reasons ?? []).some((r) => /^Coincide con tus intereses: /.test(r.label))
+      && (rm?.reasons ?? []).some((r) => /^Coincide con lo que quieres mejorar: /.test(r.label)),
+  'V41.6.1 B25 A41-015 Los motivos distinguen «Coincide con tus intereses» y «Coincide con lo que quieres mejorar»', json([r1?.reasons, rm?.reasons]));
+  const base = Number(r1?.score ?? 0);
+
+  // B24: «Me interesa» suma una sola vez, se puede quitar y no cambia lo declarado.
+  const interesesAntes = JSON.stringify((await req('GET', '/profiles/me', { token: est.token })).data?.improvementAreaIds ?? []);
+  await req('POST', `/activities/${t1.id}/register-interest`, { token: est.token });
+  await req('POST', `/activities/${t1.id}/register-interest`, { token: est.token });
+  lista = await leer();
+  const r2 = de(lista, t2.id);
+  check(pts(r2, 'activity_interested') === 5 && Math.abs(Number(r2?.score) - base - 5) < 0.001,
+    'V41.6.2 B24 «Me interesa» en otra actividad del área suma el 5 %, una sola vez aunque se repita', json(r2?.reasons));
+  check(!pts(de(lista, t1.id), 'activity_interested'), 'V41.6.3 La actividad marcada no se recomienda a sí misma por esa señal', json(de(lista, t1.id)?.reasons));
+  await req('POST', `/activities/${t1.id}/cancel-registration`, { token: est.token });
+  lista = await leer();
+  check(!pts(de(lista, t2.id), 'activity_interested') && Math.abs(Number(de(lista, t2.id)?.score) - base) < 0.001,
+    'V41.6.4 B24 Quitar «Me interesa» quita la señal (reversible)', json(de(lista, t2.id)?.reasons));
+  const interesesDespues = JSON.stringify((await req('GET', '/profiles/me', { token: est.token })).data?.improvementAreaIds ?? []);
+  check(interesesAntes === interesesDespues, 'V41.6.5 B24 «Me interesa» no reescribe lo declarado en el perfil');
+
+  // Guardar una recomendación no modifica el modelo.
+  await req('PATCH', `/recommendations/me/${de(lista, t1.id)?.id}`, { token: est.token, body: { status: 'saved' } });
+  lista = await leer();
+  check(Math.abs(Number(de(lista, t2.id)?.score) - base) < 0.001 && !pts(de(lista, t2.id), 'similar_saved'),
+    'V41.6.6 A.9 «Guardar» una recomendación no cambia el puntaje de lo parecido', json(de(lista, t2.id)?.reasons));
+
+  // Pesos publicados y sin «100 %» por una sola coincidencia.
+  const reglas = await req('GET', '/recommendations/rules', { token: est.token });
+  const pesos = reglas.data?.ranking ?? reglas.data?.weights ?? [];
+  check(pesos.some((p) => p.code === 'activity_interested' && p.weight === 5) && !pesos.some((p) => p.code === 'similar_saved'),
+    'V41.6.7 El reparto publicado nombra «Me interesa» y ya no «Guardar»', json(pesos.map((p) => [p.code, p.weight])));
+  check(lista.every((i) => Number(i.score) < 100 || (i.reasons ?? []).length > 1),
+    'V41.6.8 §8 Nadie llega a 100 por una sola coincidencia', json(lista.filter((i) => Number(i.score) >= 100).map((i) => i.reasons)));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

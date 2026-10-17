@@ -505,3 +505,50 @@ Detalle de la API:
 **Riesgos:** ninguno nuevo.
 
 **Commit propuesto:** `feat(v4.1-batch-5): recursos con contenido válido, propuesta docente con revisión de Dirección y «Para ti» en la Biblioteca`
+
+---
+
+## BATCH V4.1-6 — Recomendaciones: «Me interesa» en lugar de «Guardar»
+
+**Hallazgos:** A41-015 (B24, B25; §8, A.9).
+
+**Archivos modificados:**
+- **`shared/src/enums/recommendation.enum.ts`:** nuevo motivo `ACTIVITY_INTERESTED = 'activity_interested'`.
+- **`api/src/recommendations/recommendations.engine.ts`:**
+  - el 5 % que antes daban «Guardar una recomendación parecida» y los recursos favoritos ahora sale de «Me interesa» en **otras** actividades (mismas áreas o tecnologías);
+  - la señal es explícita, secundaria y reversible: no crea una recomendación sola, no cuenta la propia actividad y desaparece al quitar «Me interesa»;
+  - «Guardar» queda como acceso rápido: no cambia el puntaje. Lo descartado sigue bajando lo parecido;
+  - los motivos dicen «Coincide con tus intereses: …» o «Coincide con lo que quieres mejorar: …».
+- **`recommendation.rules.ts` y `recommendations.service.ts`:** el reparto publicado nombra `activity_interested` (40 / 30 / 15 / 10 / 5).
+- **Web:**
+  - `Activities.tsx`: el botón de una actividad pasada es siempre «Me interesa» / «Te interesa»;
+  - `Recommendations.tsx`: muestra «Coincidencia con lo que declaraste: N de 100» con el reparto, en lugar de un porcentaje que parecía certeza.
+
+**Migraciones:** ninguna (usa `activity_registrations` con estado `interested`, que ya existía).
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch6` → **8/8**:
+  - B25: los motivos distinguen intereses y mejora;
+  - B24: «Me interesa» en otra actividad del área suma el 5 %, una sola vez; la actividad marcada no se recomienda a sí misma por esa señal; quitarlo quita la señal; no reescribe lo declarado en el perfil;
+  - A.9: «Guardar» no cambia el puntaje de lo parecido;
+  - el reparto publicado nombra «Me interesa»;
+  - §8: nadie llega a 100 por una sola coincidencia.
+- Unitarias: **130/130**.
+- **Regresión completa (22 suites):** 2163 correctas, 1 fallo (V2.10.3). Tras corregirlo, `e2e-v2` 162/162. **2164 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+- **V2.10.3 → FAIL.** La prueba buscaba el texto antiguo «te interesa» en el motivo. *Causa:* el contrato pide «Coincide con tus intereses». *Corrección:* la prueba busca el texto nuevo; el puntaje no cambió. *Regresión:* PASS.
+- También se actualizaron a la regla V4.1: B7.53 (`e2e-batch-7`), V3.15.12 (`e2e-v3`), V32.10.2, V32.10.3 y V32.10.6 (`e2e-v3-2`). Esas pruebas esperaban que «Guardar» o un favorito sumaran puntaje.
+
+**Efecto:**
+- **Backend:** motor de recomendaciones.
+- **Frontend:** Actividades y Recomendaciones.
+- **Móvil:** consume los mismos motivos desde la API; el texto nuevo llega sin cambios de código.
+
+**Seguridad y permisos:** sin cambios; la señal solo usa las marcas del propio estudiante.
+
+**Pendientes:** ninguno.
+
+**Riesgos:** quien había guardado recomendaciones pierde ese 5 % de empuje. Es el comportamiento que pide el contrato.
+
+**Commit propuesto:** `feat(v4.1-batch-6): «Me interesa» como señal reversible, «Guardar» sin efecto en el puntaje y motivos por intereses o mejora`

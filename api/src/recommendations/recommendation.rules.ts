@@ -34,7 +34,10 @@ export const RULES = {
     skills: 15,
     /** V3 §34 · 10 % orientación confirmada. */
     orientation: 10,
-    /** V3 §34 · 5 % feedback de recomendaciones (guardó algo parecido). */
+    /**
+     * V3 §34 · 5 %. V4.1 A41-015 (§8, A.9): lo ocupa «Me interesa» en
+     * actividades (ACTIVITY_INTERESTED). «Guardar» y favoritos no suman.
+     */
     feedback: 5,
   },
 

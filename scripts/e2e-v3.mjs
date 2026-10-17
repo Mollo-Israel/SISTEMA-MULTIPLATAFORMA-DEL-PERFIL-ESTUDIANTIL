@@ -1620,7 +1620,8 @@ async function batch15(ctx) {
   // ----- Feedback positivo (5 %)
   await req('PATCH', `/recommendations/me/${de(m1).id}`, { token: est.token, body: { status: 'saved' } });
   items = await leer();
-  check(pts(de(m2), 'similar_saved') === 5, 'V3.15.12 §34 Guardar algo parecido suma el 5 % de feedback', JSON.stringify(de(m2)?.reasons));
+  // V4.1 A41-015 (A.9): «Guardar» una recomendación no modifica el modelo.
+  check(!pts(de(m2), 'similar_saved'), 'V3.15.12 §34 Guardar algo parecido ya no suma (V4.1: no es señal del recomendador)', JSON.stringify(de(m2)?.reasons));
 }
 
 // ===========================================================================

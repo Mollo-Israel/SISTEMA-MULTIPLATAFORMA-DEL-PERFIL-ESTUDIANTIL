@@ -302,10 +302,11 @@ export default function StudentActivitiesPage() {
                             onClick={() => markInterest(a)}
                             icon={<FiHeart size={14} />}
                           >
-                            {/* V3.2 §36: en algo que ya pasó, «Me interesa» es solo guardarla. */}
+                            {/* V4.1 A41-015 (A.9): «Me interesa» es la señal explícita, también en algo que ya pasó;
+                                «Guardar» (en «Para ti») es solo acceso rápido y no cambia recomendaciones. */}
                             {a.myRegistration?.status === 'interested'
-                              ? (yaPaso(a) ? 'Guardada' : 'Te interesa')
-                              : (yaPaso(a) ? 'Guardar' : 'Me interesa')}
+                              ? 'Te interesa'
+                              : 'Me interesa'}
                           </Button>
                           {yaPaso(a) || a.status === 'cancelled' ? null : a.myRegistration?.status === 'registered' ? (
                             <Button

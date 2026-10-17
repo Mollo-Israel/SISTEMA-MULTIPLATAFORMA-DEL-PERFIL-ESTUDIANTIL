@@ -62,6 +62,12 @@ export enum RecommendationReasonCode {
   IMPROVE_SKILL_MATCH = 'improve_skill_match',
   /** El área salió de su orientación académica y él la confirmó (V2 §54). */
   ORIENTATION_CONFIRMED = 'orientation_confirmed',
+  /**
+   * V4.1 A41-015 (§8, A.9): marcó «Me interesa» en actividades de esa área o
+   * con esa tecnología. Señal explícita, idempotente y reversible (se deriva
+   * del estado actual de sus inscripciones). «Guardar» y los favoritos no lo son.
+   */
+  ACTIVITY_INTERESTED = 'activity_interested',
   /** Companero con afinidad en las mismas areas. */
   SHARED_AFFINITY = 'shared_affinity',
   /** Companero fuerte justo donde el estudiante tiene poca trayectoria. */

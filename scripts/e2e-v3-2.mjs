@@ -1108,10 +1108,10 @@ async function batch10(ctx) {
   await req('PUT', `/library/${rFav.id}/favorite`, { token: est.token });
   lista = await items();
   const conFav = de(lista, actInteres.id);
-  const razon = (conFav?.reasons ?? []).find((r) => r.code === 'resource_favorite_area');
-  check(!!razon && razon.points <= 5 && /Biblioteca/.test(razon.label),
-    'V32.10.2 §35.2 Un recurso guardado del área suma como señal secundaria (≤ 5 puntos, con su motivo)', json(conFav?.reasons));
-  check((conFav?.score ?? 0) - puntosAntes <= 5.001, 'V32.10.3 §35.2 Pesa poco: a lo sumo el 5 % de feedback', `${puntosAntes} → ${conFav?.score}`);
+  // V4.1 A41-015 (§7, A.9): un favorito de la Biblioteca no es señal del recomendador.
+  check(!(conFav?.reasons ?? []).some((r) => r.code === 'resource_favorite_area'),
+    'V32.10.2 Un recurso guardado como favorito ya no suma al recomendador (V4.1)', json(conFav?.reasons));
+  check(Math.abs((conFav?.score ?? 0) - puntosAntes) < 0.001, 'V32.10.3 El puntaje no cambia por guardar favoritos (V4.1)', `${puntosAntes} → ${conFav?.score}`);
   check(!de(lista, actSoloFav.id), 'V32.10.4 §35.2 Por sí solo, un favorito no crea una recomendación', json(de(lista, actSoloFav.id)?.reasons));
 
   // ----- §36 «Me interesa»: no alimenta el modelo ni la afinidad
@@ -1126,7 +1126,7 @@ async function batch10(ctx) {
   check(JSON.stringify(afAntes.data) === JSON.stringify(afDespues.data) || JSON.stringify(afDespues.data ?? {}).indexOf(aSoloFav.id) === -1,
     'V32.10.5 §36 «Me interesa» no aporta afinidad');
   check(!recOtroDespues.some((i) => (i.reasons ?? []).some((r) => r.label?.includes(aSoloFav.name))) && recOtroAntes.length === recOtroDespues.length,
-    'V32.10.6 §36 «Me interesa» no se usa como señal del recomendador', `${recOtroAntes.length} → ${recOtroDespues.length}`);
+    'V32.10.6 §36 «Me interesa» no crea recomendaciones por sí solo (V4.1: solo suma a lo que ya coincide con lo declarado)', `${recOtroAntes.length} → ${recOtroDespues.length}`);
 
   // ----- §36 Guardar algo que ya pasó, sin inscripción
   // V4.1 A41-010: una actividad nueva no se publica ya pasada; se publica y luego termina.
