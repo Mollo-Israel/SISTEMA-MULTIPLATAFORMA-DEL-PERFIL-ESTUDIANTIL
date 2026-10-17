@@ -749,7 +749,180 @@ async function batch7(ctx) {
     'V41.7.20 A41-027 El estudiante ve su saldo, igual a la suma de su historial', json(billetera.data?.balance));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
+// ===========================================================================
+//  BATCH V4.1-8 — Credenciales externas: validation_status aparte del respaldo (A41-018)
+// ===========================================================================
+/** PDF mínimo con texto nativo legible. */
+function pdfConTexto(lineas) {
+  const contenido = `BT\n/F1 14 Tf\n72 720 Td\n${lineas.map((l, i) => `${i === 0 ? '' : '0 -24 Td\n'}(${l.replace(/([()\\])/g, '\\$1')}) Tj\n`).join('')}ET\n`;
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(contenido, 'latin1')} >>\nstream\n${contenido}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objetos.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = Buffer.byteLength(out, 'latin1');
+  out += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  out += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
+async function batch8(ctx) {
+  objective('BATCH V4.1-8 · Estado de validación aparte del respaldo, revisión con prueba externa y proveedores sin promesas');
+  const { createServer } = await import('node:http');
+  const BASE = 'http://verificador.afinia-pruebas.org:3997';
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Elsa', lastName: `Credencial${L}`, email: correoStaff('b8dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Lucia', lastName: `Verifica${L}`, email: `v41.b8est.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 6 });
+  const nombre = `Lucia Verifica${L}`;
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+
+  const server = createServer((rq, rs) => {
+    const html = (cuerpo) => { rs.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); rs.end(`<html><body>${cuerpo}</body></html>`); };
+    if (rq.url === '/v41/ok') return html(`Credential NA-2026-CD8 issued to ${nombre} for CCNA Introduction to Networks by Cisco Networking Academy`);
+    if (rq.url === '/v41/otra') return html('Credential NA-2026-CD8 issued to Persona Distinta for CCNA Introduction to Networks');
+    if (rq.url === '/v41/curso') return html('CCNA Introduction to Networks. Inscríbete en el curso de Cisco Networking Academy.');
+    if (rq.url === '/v41/spa') return html('<div id="root"></div><script>/* requiere JavaScript */</script>');
+    if (rq.url === '/v41/caido') { rs.writeHead(503); return rs.end(); }
+    rs.writeHead(404); rs.end();
+  });
+  await new Promise((r) => server.listen(3997, '127.0.0.1', r));
+  try {
+    const veredicto = async (id) => {
+      for (let i = 0; i < 40; i++) {
+        await req('POST', '/validation/run?limit=50', { token: ctx.admin });
+        const v = await req('GET', `/validation/external_certificate/${id}`, { token: est.token });
+        if (v.data && !['pending', 'processing'].includes(v.data.status)) return v.data;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      return null;
+    };
+    const credencial = async (body) => {
+      const r = await req('POST', '/certificates/external', { token: est.token, body: { issueDate: '2025-06-01', ...body } });
+      if (r.status !== 201) throw new Error(`no se creó la credencial: ${json(r.data)}`);
+      return { id: r.data.id, v: await veredicto(r.data.id) };
+    };
+    const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+    const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
+    const externa = async (titulo) => {
+      const a = (await req('POST', '/activities', {
+        token: director.token,
+        body: {
+          title: `${titulo} ${L}`, type: 'academica', categoryId: cat.id, status: 'open',
+          originType: 'external', provider: 'Cisco Networking Academy', externalUrl: `${BASE}/v41/curso`,
+          outcomePolicy: 'external_credential_expected', expectedIssuerDomains: ['afinia-pruebas.org'],
+          expectedKeywords: ['Introduction to Networks'], activityDate: en(24), endAt: en(48),
+        },
+      })).data;
+      await req('PUT', `/activities/${a.id}/validation-reference`, {
+        token: director.token, body: { expectedCourseName: 'CCNA Introduction to Networks', credentialIdPattern: 'NA-####-@@#' },
+      });
+      await req('POST', `/activities/${a.id}/register`, { token: est.token });
+      await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'accepted' } });
+      await req('PATCH', `/activities/${a.id}`, { token: director.token, body: { status: 'finished' } });
+      return a;
+    };
+    const estado = (v) => v?.validationStatus?.status;
+
+    // ----- Fuente oficial individual que coincide: AUTO_VERIFIED
+    const ok = await credencial({
+      activityId: (await externa('CCNA verificada')).id, certificateName: `CCNA Introduction to Networks A ${L}`,
+      issuer: 'Cisco Networking Academy', certificateUrl: `${BASE}/v41/ok`, credentialId: 'NA-2026-CD8',
+    });
+    check(estado(ok.v) === 'AUTO_VERIFIED' && ok.v?.backingTier === 'corroborated' && !!ok.v?.validationStatus?.label,
+      'V41.8.1 §6.2 Fuente oficial individual con titular y código: AUTO_VERIFIED, con respaldo CORROBORATED (dos ejes)', json({ s: ok.v?.validationStatus, t: ok.v?.backingTier }));
+
+    // ----- B29: el enlace lleva al curso general
+    const generico = await credencial({
+      activityId: (await externa('CCNA curso general')).id, certificateName: `CCNA Introduction to Networks B ${L}`,
+      issuer: 'Cisco Networking Academy', certificateUrl: `${BASE}/v41/curso`, credentialId: 'NA-2026-CD8',
+    });
+    check(estado(generico.v) !== 'AUTO_VERIFIED' && estado(generico.v) === 'MANUAL_REVIEW_REQUIRED' && generico.v?.backingTier !== 'corroborated',
+      'V41.8.2 B29 Un QR/URL que abre el curso general no es AUTO_VERIFIED: queda para revisión', json({ s: estado(generico.v), t: generico.v?.backingTier }));
+
+    // ----- B30 / 23.9: la página oficial nombra a otra persona
+    const otra = await credencial({
+      activityId: (await externa('CCNA de otra persona')).id, certificateName: `CCNA Introduction to Networks C ${L}`,
+      issuer: 'Cisco Networking Academy', certificateUrl: `${BASE}/v41/otra`, credentialId: 'NA-2026-CD8',
+    });
+    check(estado(otra.v) === 'REJECTED' && otra.v?.backingTier === 'flagged'
+      && (otra.v?.credentialCheck?.contradictions ?? []).includes('official_holder_mismatch'),
+      'V41.8.3 B30 23.9 Documento propio y verificador oficial con otro titular: REJECTED y FLAGGED, con su motivo', json({ s: estado(otra.v), c: otra.v?.credentialCheck?.contradictions }));
+    const sigue = ((await req('GET', '/certificates/external/my', { token: est.token })).data ?? []).some((c) => c.id === otra.id);
+    check(sigue, 'V41.8.4 La credencial rechazada no se borra: queda registrada y señalada');
+
+    // ----- B31: proveedor caído, página que necesita JavaScript
+    const caido = await credencial({ certificateName: `Curso sin respuesta ${L}`, issuer: 'Academia Sin Catalogo', certificateUrl: `${BASE}/v41/caido` });
+    const spa = await credencial({ certificateName: `Curso con JavaScript ${L}`, issuer: 'Academia Sin Catalogo', certificateUrl: `${BASE}/v41/spa` });
+    check(estado(caido.v) === 'INCONCLUSIVE' && !['flagged', 'corroborated'].includes(caido.v?.backingTier)
+      && estado(spa.v) === 'MANUAL_REVIEW_REQUIRED' && spa.v?.backingTier !== 'corroborated',
+      'V41.8.5 B31 Proveedor caído: INCONCLUSIVE (no falso); página ilegible: revisión, nunca CORROBORATED', json([estado(caido.v), caido.v?.backingTier, estado(spa.v)]));
+
+    // ----- §6.3: proveedores reconocidos, declarados sin verificador integrado
+    const huawei = await credencial({ certificateName: `HCIA Datacom ${L}`, issuer: 'Huawei ICT Academy' });
+    check(huawei.v?.providerSupport?.integrated === false && /Huawei/.test(huawei.v?.providerSupport?.provider ?? '')
+      && estado(huawei.v) !== 'AUTO_VERIFIED',
+      'V41.8.6 §6.3 Huawei/Cisco/Credly no se dan por integrados: se dice y no se verifica solo', json(huawei.v?.providerSupport));
+
+    // ----- SSRF: el enlace a la red interna no se consulta
+    const interna = await credencial({ certificateName: `Curso interno ${L}`, issuer: 'Academia X', certificateUrl: 'http://127.0.0.1:5432/' });
+    check(interna.v?.linkCheck?.status === 'blocked' && estado(interna.v) !== 'AUTO_VERIFIED',
+      'V41.8.7 §6.3 SSRF: una URL a la red interna se bloquea y nunca verifica', json({ l: interna.v?.linkCheck?.status, s: estado(interna.v) }));
+
+    // ----- B32: revisión manual con método y prueba externa
+    const historica = async (n) => {
+      const pdf = pdfConTexto([`Diploma ${nombre}`, `Taller de Electronica ${n}`, 'Club Andino de Electronica']);
+      const form = new FormData();
+      form.append('file', new Blob([Buffer.concat([pdf, Buffer.from(`%${TS}-${n}`)])], { type: 'application/pdf' }), `hist-${n}.pdf`);
+      const sub = await (await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${est.token}` }, body: form })).json();
+      const c = await credencial({ certificateName: `Taller de Electronica ${n} ${L}`, issuer: 'Club Andino de Electronica', storedFileId: sub?.id, certificateUrl: `${BASE}/v41/spa?${n}` });
+      await req('POST', `/certificates/external/${c.id}/manual-review`, { token: est.token, body: { note: 'El club confirma por correo.' } });
+      return c;
+    };
+    const decidir = (quien, id, body) => req('POST', `/validation/manual-reviews/${id}`, { token: quien, body });
+    const h1 = await historica('uno');
+    const soloDoc = await decidir(director.token, h1.id, { decision: 'corroborated', reason: 'El documento se ve auténtico y tiene logo.', method: 'document_only' });
+    const sinPrueba = await decidir(director.token, h1.id, { decision: 'corroborated', reason: 'Llamé al club y confirmaron el nombre.', method: 'issuer_confirmation' });
+    const mismaUrl = await decidir(director.token, h1.id, { decision: 'corroborated', reason: 'Abrí el enlace y figura el nombre.', method: 'issuer_official_lookup', proof: `${BASE}/v41/spa?uno` });
+    check(soloDoc.status === 400 && soloDoc.data?.code === 'MANUAL_REVIEW_PROOF_REQUIRED' && !!soloDoc.data?.fields?.method
+      && sinPrueba.status === 400 && !!sinPrueba.data?.fields?.proof && mismaUrl.status === 400 && !!mismaUrl.data?.fields?.proof,
+      'V41.8.8 B32 23.9 «Parece genuino» sin fuente externa no verifica; la prueba es obligatoria e independiente del propio enlace',
+      json([soloDoc.status, sinPrueba.status, mismaUrl.status]));
+    const inconclusa = await decidir(director.token, h1.id, { decision: 'inconclusive', reason: 'Revisé el documento; no pude contactar al club.', method: 'document_only' });
+    const tras1 = await veredicto(h1.id);
+    check(inconclusa.status === 200 && estado(tras1) === 'INCONCLUSIVE' && tras1?.backingTier !== 'corroborated'
+      && tras1?.manualReview?.method === 'document_only',
+      'V41.8.9 B32 La revisión sin fuente externa queda registrada como INCONCLUSIVE, sin CORROBORATED', json({ s: estado(tras1), t: tras1?.backingTier }));
+
+    const h2 = await historica('dos');
+    const verificada = await decidir(director.token, h2.id, {
+      decision: 'corroborated', reason: 'El club confirmó por correo el nombre y la fecha.', method: 'issuer_confirmation',
+      proof: 'Correo de certificados@club-electronica.example del 12/10/2026 con el acta.',
+    });
+    check(verificada.status === 200 && verificada.data?.validationStatus?.status === 'MANUALLY_VERIFIED' && verificada.data?.backingTier === 'corroborated',
+      'V41.8.10 §6.2 Con prueba externa independiente: MANUALLY_VERIFIED y CORROBORATED', json(verificada.data?.validationStatus));
+
+    const h3 = await historica('tres');
+    const docente = await provisionAndActivate(ctx.admin, { firstName: 'Tito', lastName: `Credencial${L}`, email: correoStaff('b8doc'), role: 'TEACHER' });
+    const docDecide = await decidir(docente.token, h3.id, { decision: 'rejected', reason: 'No corresponde a la persona registrada.' });
+    const adminRechaza = await decidir(ctx.admin, h3.id, {
+      decision: 'rejected', reason: 'El club informó que ese diploma corresponde a otra persona.', method: 'issuer_confirmation', proof: 'Respuesta del club del 13/10.',
+    });
+    check(docDecide.status === 403 && adminRechaza.status === 200 && adminRechaza.data?.validationStatus?.status === 'REJECTED' && adminRechaza.data?.backingTier === 'flagged',
+      'V41.8.11 §6.2 Rechazo con contradicción documentada: REJECTED y FLAGGED. Administración puede como excepción; el docente no', json([docDecide.status, adminRechaza.data?.validationStatus]));
+    const aud = await req('GET', `/audit/events?eventType=EXTERNAL_CREDENTIAL_MANUAL_REVIEWED&entityId=${h3.id}`, { token: ctx.admin });
+    const fila = (aud.data?.items ?? aud.data ?? [])[0];
+    check(JSON.stringify(fila ?? {}).includes('ADMIN') && JSON.stringify(fila ?? {}).includes('issuer_confirmation'),
+      'V41.8.12 A.8 La auditoría guarda decisión, método, prueba y el rol de quien decidió', json(fila?.metadata ?? fila));
+  } finally {
+    server.close();
+  }
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

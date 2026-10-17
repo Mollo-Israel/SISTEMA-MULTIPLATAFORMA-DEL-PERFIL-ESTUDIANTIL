@@ -655,3 +655,83 @@ Detalle de la API:
 - Los puntos ya otorgados no se retiraron.
 
 **Commit propuesto:** `feat(v4.1-batch-7): puntos por criterios configurados, extras de temporada, propuestas docentes con decisión de Dirección y sin retos ni recompensas`
+
+---
+
+## BATCH V4.1-8 — Credenciales externas: estado de validación aparte del respaldo
+
+**Hallazgos:** A41-018 (§6.1–§6.4, A.8; B29, B30, B31, B32, 23.9).
+
+**Archivos modificados:**
+- **`shared/src/enums/validation.enum.ts`:**
+  - `CredentialValidationStatus` (PENDING · AUTO_VERIFIED · MANUAL_REVIEW_REQUIRED · MANUALLY_VERIFIED · INCONCLUSIVE · REJECTED) con sus etiquetas en español;
+  - `ManualReviewMethod` y `INDEPENDENT_REVIEW_METHODS`;
+  - `ManualReviewStatus` gana `inconclusive` y `rejected`.
+- **`credential-check.rules.ts`** (reglas puras):
+  - `pageRecipientName` lee el titular solo si la página lo declara con una etiqueta («issued to», «otorgado a»…). Un titular oculto no cuenta como otro titular;
+  - `decideCredentialCheck` devuelve MISMATCH si la fuente oficial nombra a otra persona (B30);
+  - `deriveCredentialValidationStatus` calcula el estado de validación a partir de lo ya registrado: indisponibilidad no es falsedad, y una revisión que solo miró el documento no verifica;
+  - `PROVIDER_ADAPTERS` y `providerSupportFor` declaran Credly/IBM, Cisco y Huawei **no integrados**, con el motivo.
+- **`validation.service.ts`:**
+  - `VALIDATOR_VERSION = 3`;
+  - nueva contradicción `official_holder_mismatch`;
+  - la revisión manual tiene tres decisiones:
+    - verificada: exige un método con prueba externa independiente y la prueba, que no puede ser la URL del propio certificado;
+    - inconclusa: el respaldo no sube de SUPPORTED;
+    - rechazada: queda FLAGGED.
+  - La auditoría guarda decisión, motivo, método, prueba, rol de quien decide, respaldo y estado de validación.
+- **`validation.controller.ts`:**
+  - el veredicto incluye `validationStatus` (estado y etiqueta), `providerSupport`, y el método y la prueba de la revisión;
+  - Administración puede revisar como soporte excepcional auditado.
+- **`manual-review.dto.ts`:** `decision`, `method` y `proof`; la antigua `not_corroborated` se registra como inconclusa.
+- **Entidad `ValidationRecord`:** `manualReviewMethod` y `manualReviewProof`.
+- **Web:**
+  - «Revisión de credenciales»: método, prueba externa y tres botones; «Verificada» queda deshabilitado si solo se revisó el documento;
+  - entrada para Administración;
+  - Evidencias del estudiante muestra el estado de validación aparte de «Respaldo: …», la nota del proveedor y el motivo de un rechazo.
+
+**Migraciones:**
+- `V41CredentialValidation`: aditiva. Agrega los dos valores al enum y las dos columnas.
+- `down` quita las columnas. PostgreSQL no permite quitar valores de un enum, así que se conservan (sin filas, no cambian nada).
+- `pg_dump` previo en `pre-v41-b8.dump`. Probada `run → revert → run`.
+- Las 38 corroboraciones manuales anteriores (datos de prueba) no se tocaron.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch8` → **12/12**, contra un verificador oficial simulado:
+  - fuente oficial con titular y código: AUTO_VERIFIED y CORROBORATED;
+  - B29: el enlace abre el curso general, así que no es AUTO_VERIFIED;
+  - B30 y 23.9: otro titular da REJECTED y FLAGGED, y la credencial no se borra;
+  - B31: proveedor caído da INCONCLUSIVE; una página que necesita JavaScript queda para revisión;
+  - §6.3: Huawei no se da por integrado;
+  - SSRF: una URL a la red interna se bloquea;
+  - B32: «parece genuino» sin prueba da 400, sin prueba 400, y la misma URL del certificado 400; la revisión inconclusa se registra;
+  - verificada con prueba externa: MANUALLY_VERIFIED;
+  - rechazo documentado por Administración: REJECTED y FLAGGED; el docente recibe 403;
+  - la auditoría guarda método, prueba y rol.
+- `node scripts/e2e-web.mjs` → **85/85**, incluidos WEB.47.1–47.3.
+- Unitarias: **139/139** (+9: titular nombrado, estado de validación y proveedores).
+- **Regresión completa (22 suites):** **2198 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+- **Prueba unitaria «compara la página oficial» → FAIL.** *Causa:* `comparePage` ahora devuelve `otherHolder`. *Corrección:* la prueba espera el campo nuevo. *Regresión:* PASS.
+- **Pruebas antiguas actualizadas a la regla V4.1:**
+  - V3.9.3: la página oficial de otra persona ahora contradice (B30), ya no queda «sin prueba»;
+  - V3.9.24: Administración entra como excepción;
+  - V3.9.28 y la corroboración de `e2e-v3` en la línea 1513: verificar exige método y prueba externa (B32).
+
+**Efecto:**
+- **Backend:** validación de credenciales.
+- **Frontend:** revisión de credenciales y Evidencias.
+- **Móvil:** recibe `validationStatus` en el veredicto; mostrarlo queda para el BATCH 12.
+
+**Seguridad y permisos:**
+- el docente y el estudiante no revisan (403);
+- Administración sí, y queda auditado con su rol;
+- la protección SSRF (red interna, IP privadas) no cambió y se volvió a probar;
+- no se registran secretos.
+
+**Pendientes (BLOCKED):** los verificadores reales de Credly/IBM, Cisco NetAcad y Huawei. No se pudo comprobar con un caso legítimo su acceso, licencia, ausencia de CAPTCHA ni que muestren al titular. Quedan declarados «sin verificador integrado» y las credenciales pasan por el verificador genérico o la revisión manual. No se automatiza ningún CAPTCHA.
+
+**Riesgos:** los registros validados con la versión 2 conservan su veredicto hasta que Administración los reprocese (`POST /validation/reprocess-outdated`). Hasta entonces no se puede pedir para ellos la revisión excepcional.
+
+**Commit propuesto:** `feat(v4.1-batch-8): estado de validación de credenciales aparte del respaldo, revisión con prueba externa y proveedores declarados sin integrar`

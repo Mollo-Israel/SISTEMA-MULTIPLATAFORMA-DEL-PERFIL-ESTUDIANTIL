@@ -50,7 +50,7 @@ export interface CredentialCheckResult {
   officialDomains: string[] | null;
   qr: QrPresence;
   /** Qué encontró en la página oficial. */
-  page: { credentialId: boolean; holder: boolean; course: boolean; issuer: boolean } | null;
+  page: { credentialId: boolean; holder: boolean; course: boolean; issuer: boolean; otherHolder?: boolean } | null;
   openBadge: {
     format: string; recipientMatch: boolean | null; revoked: boolean;
     hosted: boolean; proofPresent: boolean; proofVerified: boolean;
@@ -163,6 +163,14 @@ export class ValidationRecord {
   /** Cómo lo comprobó quien revisó. Obligatorio al decidir. */
   @Column({ name: 'manual_review_reason', type: 'varchar', length: 500, nullable: true })
   manualReviewReason: string | null;
+
+  /** V4.1 A41-018: método de la revisión (`ManualReviewMethod`). */
+  @Column({ name: 'manual_review_method', type: 'varchar', length: 40, nullable: true })
+  manualReviewMethod: string | null;
+
+  /** V4.1 A41-018: prueba externa independiente (URL o referencia), si la hubo. */
+  @Column({ name: 'manual_review_proof', type: 'varchar', length: 500, nullable: true })
+  manualReviewProof: string | null;
 
   /** Version del validador que produjo el veredicto, para poder reprocesar. */
   @Column({ name: 'validator_version', type: 'smallint', default: 1 })

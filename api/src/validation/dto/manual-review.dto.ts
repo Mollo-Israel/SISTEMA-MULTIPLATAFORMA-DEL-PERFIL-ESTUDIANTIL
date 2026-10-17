@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { ManualReviewStatus } from '@perfil/shared';
+import { ManualReviewMethod, ManualReviewStatus } from '@perfil/shared';
 import { cleanText } from '../../common/validation';
 
 /** El estudiante pide la revisión excepcional (V3 §16). */
@@ -14,13 +14,40 @@ export class RequestManualReviewDto {
   note?: string;
 }
 
-/** Dirección decide la revisión excepcional (V3 §16, §19). */
+export const MANUAL_DECISIONS = [
+  ManualReviewStatus.CORROBORATED,
+  ManualReviewStatus.INCONCLUSIVE,
+  ManualReviewStatus.REJECTED,
+  // Anterior a V4.1: se registra como «inconclusa».
+  ManualReviewStatus.NOT_CORROBORATED,
+] as const;
+export type ManualDecision = (typeof MANUAL_DECISIONS)[number];
+
+/**
+ * Dirección decide la revisión excepcional (V3 §16, §19; V4.1 A41-018).
+ *
+ * Verificar exige un método con prueba externa independiente del propio
+ * archivo (B32); si solo se miró el documento, la decisión es «inconclusa».
+ */
 export class DecideManualReviewDto {
-  @ApiProperty({ enum: [ManualReviewStatus.CORROBORATED, ManualReviewStatus.NOT_CORROBORATED] })
-  @IsIn([ManualReviewStatus.CORROBORATED, ManualReviewStatus.NOT_CORROBORATED], {
-    message: 'La decisión es corroborar o no corroborar.',
+  @ApiProperty({ enum: MANUAL_DECISIONS })
+  @IsIn(MANUAL_DECISIONS as unknown as string[], {
+    message: 'La decisión es verificada con prueba externa, inconclusa o rechazada.',
   })
-  decision: ManualReviewStatus.CORROBORATED | ManualReviewStatus.NOT_CORROBORATED;
+  decision: ManualDecision;
+
+  @ApiProperty({ enum: ManualReviewMethod, required: false })
+  @IsOptional()
+  @IsIn(Object.values(ManualReviewMethod), { message: 'Indica cómo se comprobó.' })
+  method?: ManualReviewMethod;
+
+  /** URL o referencia de la prueba externa (correo del emisor, registro oficial…). */
+  @ApiProperty({ required: false, example: 'https://verify.emisor.org/cert/AB-123' })
+  @IsOptional()
+  @Transform(cleanText)
+  @IsString()
+  @MaxLength(500, { message: 'La prueba no puede superar 500 caracteres.' })
+  proof?: string;
 
   /** Obligatorio: cómo se comprobó. Queda en la auditoría. */
   @ApiProperty({ example: 'Consulté al emisor por correo y confirmó el código y el nombre.' })

@@ -759,6 +759,33 @@ async function pruebas(browser) {
   check(fallos50.length === 0, 'WEB.46.5 Sin errores de JavaScript en V4.1-7', fallos50.join(' | '));
   await c52.close();
 
+  // ===== V4.1-8 · Credenciales: la revisión exige prueba externa (A41-018, B32)
+  objective('V4.1-8 · Revisión de credenciales con método y prueba externa; Administración como excepción');
+  const fallos53 = [];
+  const c53 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p53 = await c53.newPage();
+  p53.on('pageerror', (e) => fallos53.push(e.message));
+  await entrar(p53, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  await p53.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  const navAdmin = await p53.locator('nav a.nav-link').allInnerTexts();
+  await p53.goto(`${WEB}/admin/credential-reviews`);
+  await p53.getByRole('heading', { name: 'Revisión de credenciales' }).first().waitFor({ timeout: 8000 }).catch(() => {});
+  const textoRevision = await p53.locator('.content').first().innerText().catch(() => '');
+  check(navAdmin.some((e) => e.includes('Revisión de credenciales')) && /prueba externa independiente/.test(textoRevision),
+    'WEB.47.1 A41-018 Administración tiene la revisión como excepción y la página exige prueba externa independiente', navAdmin.join(' | '));
+  const revisar = p53.getByRole('button', { name: 'Revisar' }).first();
+  if (await revisar.count()) {
+    await revisar.click();
+    await p53.locator('select[id^="metodo-"]').first().selectOption('document_only');
+    await p53.locator('textarea[id^="motivo-"]').first().fill('El documento parece auténtico y tiene el logo del emisor.');
+    const bloqueado = await p53.getByRole('button', { name: 'Verificada con prueba externa' }).first().isDisabled();
+    check(bloqueado, 'WEB.47.2 B32 «Solo revisé el documento» no permite marcarla como verificada');
+  } else {
+    check(true, 'WEB.47.2 B32 (sin pendientes: la regla se cubre en e2e-v4-1 batch8)');
+  }
+  check(fallos53.length === 0, 'WEB.47.3 Sin errores de JavaScript en V4.1-8', fallos53.join(' | '));
+  await c53.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

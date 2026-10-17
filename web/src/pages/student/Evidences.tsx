@@ -51,6 +51,16 @@ const humanSize = (bytes: number | null) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+/** V4.1 A41-018: color del estado de validación (aparte del respaldo). */
+const VALIDACION_TONO: Record<string, string> = {
+  PENDING: 'gray',
+  AUTO_VERIFIED: 'green',
+  MANUALLY_VERIFIED: 'green',
+  MANUAL_REVIEW_REQUIRED: 'amber',
+  INCONCLUSIVE: 'gray',
+  REJECTED: 'red',
+};
+
 export default function StudentEvidencesPage() {
   const evidences = useAsync<Evidence[]>(() => evidenceService.mine(), []);
   const certificates = useAsync<ExternalCertificate[]>(() => certificateService.mine(), []);
@@ -719,8 +729,16 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
 
   return (
     <div className="respaldo">
-      <Badge tone={tono}>{BACKING_TIER_LABEL[verdict.backingTier]}</Badge>
+      {verdict.validationStatus && (
+        <span data-testid="estado-validacion">
+          <Badge tone={VALIDACION_TONO[verdict.validationStatus.status]}>{verdict.validationStatus.label}</Badge>
+        </span>
+      )}
+      <Badge tone={tono}>Respaldo: {BACKING_TIER_LABEL[verdict.backingTier]}</Badge>
       <span className="muted">{BACKING_TIER_HELP[verdict.backingTier]}</span>
+      {verdict.providerSupport && (
+        <span className="muted">{verdict.providerSupport.provider}: {verdict.providerSupport.note}</span>
+      )}
       {chequeo && (
         <span className="muted">
           Verificación: {CREDENTIAL_CHECK_LABEL[chequeo.status].toLowerCase()}
@@ -733,9 +751,12 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
         </span>
       )}
       {revision?.status === 'requested' && <span className="muted">Revisión excepcional pedida a Dirección.</span>}
-      {revision?.status === 'corroborated' && <span className="muted">Corroborada por revisión de Dirección.</span>}
-      {revision?.status === 'not_corroborated' && (
-        <span className="muted">Dirección no pudo corroborarla: {revision.reason}</span>
+      {revision?.status === 'corroborated' && <span className="muted">Verificada por Dirección con una prueba externa.</span>}
+      {(revision?.status === 'not_corroborated' || revision?.status === 'inconclusive') && (
+        <span className="muted">Dirección la revisó, pero no pudo verificarla con una fuente externa: {revision.reason}</span>
+      )}
+      {revision?.status === 'rejected' && (
+        <span className="respaldo-aviso">Dirección la rechazó: {revision.reason}</span>
       )}
       {revision?.canRequest && (
         <button type="button" className="link-button" disabled={pidiendo} onClick={pedirRevision}>

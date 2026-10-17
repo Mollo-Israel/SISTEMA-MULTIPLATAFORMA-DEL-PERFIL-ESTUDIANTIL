@@ -2,8 +2,11 @@ import { createHash } from 'node:crypto';
 import {
   BackingTier,
   CredentialCheckStatus,
+  CredentialValidationStatus,
   IdentityMatchStatus,
   LinkCheckStatus,
+  ManualReviewStatus,
+  ValidationStatus,
 } from '@perfil/shared';
 
 /**
@@ -160,17 +163,39 @@ export interface PageComparison {
   holder: boolean;
   course: boolean;
   issuer: boolean;
+  /**
+   * V4.1 A41-018 (B30, 23.9): la página nombra explícitamente a otro titular
+   * («issued to …», «otorgado a …»). Solo se marca con un nombre leído: un
+   * titular oculto no es otro titular.
+   */
+  otherHolder?: boolean;
+}
+
+/**
+ * Nombre que la página declara como titular, si lo dice con una etiqueta
+ * reconocible. `null` si no hay etiqueta: nunca se adivina un nombre suelto.
+ */
+export function pageRecipientName(text: string): string | null {
+  const m = text.match(
+    // Sin la bandera «i»: con ella \p{Lu} también aceptaría minúsculas y el
+    // nombre se comería las palabras siguientes («… for CCNA»).
+    /(?:[Ii]ssued to|[Aa]warded to|[Ee]arned by|[Pp]resented to|[Gg]ranted to|[Oo]torgad[oa] a|[Ee]mitid[oa] a|[Ee]xpedid[oa] a|[Cc]onferid[oa] a)\s*:?\s+(\p{Lu}[\p{L}'’-]+(?:\s+(?:de\s+(?:la\s+)?|del\s+)?\p{Lu}[\p{L}'’-]+){1,4})/u,
+  );
+  return m ? m[1].trim() : null;
 }
 
 export function comparePage(
   text: string,
   ctx: { holderName: string; credentialId: string | null; course: string | null; issuer: string | null },
 ): PageComparison {
+  const holder = holderFound(text, ctx.holderName);
+  const nombrado = pageRecipientName(text);
   return {
     credentialId: credentialIdFound(text, ctx.credentialId),
-    holder: holderFound(text, ctx.holderName),
+    holder,
     course: phraseFound(text, ctx.course),
     issuer: phraseFound(text, ctx.issuer, 0.5),
+    otherHolder: !holder && !!nombrado && !holderFound(nombrado, ctx.holderName),
   };
 }
 
@@ -375,12 +400,16 @@ export function decideCredentialCheck(i: CredentialCheckInput): CredentialCheckS
   const p = i.page;
   const identifica = !!p && p.holder && (p.credentialId || p.course);
   if (i.official === true && identifica) return CredentialCheckStatus.VERIFIED_MATCH;
+  // V4.1 B30 / 23.9: la fuente oficial individual nombra a otra persona.
+  if (i.official === true && p?.otherHolder) return CredentialCheckStatus.MISMATCH;
   return CredentialCheckStatus.REACHABLE_NO_STRUCTURED_PROOF;
 }
 
 /** Contradicciones que marcan una credencial como FLAGGED (§19). */
 export type CredentialContradiction =
   | 'holder_mismatch'
+  /** V4.1 B30: la fuente oficial individual nombra a otro titular. */
+  | 'official_holder_mismatch'
   | 'credential_id_mismatch'
   | 'credential_id_pattern'
   | 'course_mismatch'
@@ -421,3 +450,94 @@ export const MANUAL_REVIEW_CHECKS: readonly CredentialCheckStatus[] = [
   CredentialCheckStatus.UNREACHABLE,
   CredentialCheckStatus.REACHABLE_NO_STRUCTURED_PROOF,
 ];
+
+// ===========================================================================
+//  V4.1 A41-018 · Estado de validación (eje aparte del respaldo)
+// ===========================================================================
+
+export interface ValidationStatusInput {
+  /** Estado del trabajo del worker. */
+  job: ValidationStatus;
+  check: CredentialCheckStatus | null;
+  contradictions: readonly string[];
+  openBadge: { revoked: boolean; recipientMatch: boolean | null } | null;
+  manualReview: ManualReviewStatus | null;
+  backing: BackingTier;
+}
+
+/**
+ * Estado de validación (§6.2, A.8), derivado de lo ya registrado.
+ *
+ * - AUTO_VERIFIED: la fuente oficial identifica la credencial y al titular, sin contradicciones.
+ * - REJECTED: contradicción fuerte de una fuente oficial (otro titular, revocada) o decisión humana documentada.
+ * - INCONCLUSIVE: no se pudo comprobar (proveedor caído, verificador apagado) o una revisión sin fuente externa.
+ * - MANUAL_REVIEW_REQUIRED: no hay verificador que concluya, o algo no cuadra sin ser una prueba de falsedad.
+ *
+ * Indisponibilidad no es falsedad, y una revisión que solo miró el documento no verifica (B31, B32).
+ */
+export function deriveCredentialValidationStatus(i: ValidationStatusInput): CredentialValidationStatus {
+  switch (i.manualReview) {
+    case ManualReviewStatus.CORROBORATED:
+      return i.backing === BackingTier.FLAGGED
+        ? CredentialValidationStatus.MANUAL_REVIEW_REQUIRED
+        : CredentialValidationStatus.MANUALLY_VERIFIED;
+    case ManualReviewStatus.REJECTED:
+      return CredentialValidationStatus.REJECTED;
+    case ManualReviewStatus.INCONCLUSIVE:
+    case ManualReviewStatus.NOT_CORROBORATED:
+      return CredentialValidationStatus.INCONCLUSIVE;
+    case ManualReviewStatus.REQUESTED:
+      return CredentialValidationStatus.MANUAL_REVIEW_REQUIRED;
+    default:
+      break;
+  }
+  if (i.job === ValidationStatus.PENDING || i.job === ValidationStatus.PROCESSING) return CredentialValidationStatus.PENDING;
+  if (i.job === ValidationStatus.FAILED) return CredentialValidationStatus.INCONCLUSIVE;
+  if (!i.check) return CredentialValidationStatus.MANUAL_REVIEW_REQUIRED;
+  const contradiccionOficial = !!i.openBadge?.revoked || i.openBadge?.recipientMatch === false
+    || i.contradictions.includes('official_holder_mismatch');
+  if (i.check === CredentialCheckStatus.MISMATCH && contradiccionOficial) return CredentialValidationStatus.REJECTED;
+  if (i.check === CredentialCheckStatus.VERIFIED_MATCH && i.contradictions.length === 0) return CredentialValidationStatus.AUTO_VERIFIED;
+  if (i.check === CredentialCheckStatus.UNREACHABLE || i.check === CredentialCheckStatus.INCONCLUSIVE) {
+    return CredentialValidationStatus.INCONCLUSIVE;
+  }
+  return CredentialValidationStatus.MANUAL_REVIEW_REQUIRED;
+}
+
+/**
+ * V4.1 A41-018 (§6.3): verificadores de proveedor. Ninguno está integrado:
+ * su acceso real (API, licencia, CAPTCHA, titular visible) no se pudo
+ * comprobar con un caso legítimo. Se dice en lugar de prometerlo; mientras
+ * tanto se usa el verificador genérico, que nunca corrobora sin una fuente
+ * individual auténtica.
+ */
+export const PROVIDER_ADAPTERS: Record<string, { name: string; domains: readonly string[]; note: string }> = {
+  credly: {
+    name: 'Credly / IBM',
+    domains: ['credly.com', 'youracclaim.com'],
+    note: 'Sin verificador integrado: la metadata pública de una insignia no siempre expone al titular y la API empresarial exige credenciales.',
+  },
+  cisco: {
+    name: 'Cisco Networking Academy',
+    domains: ['netacad.com', 'cisco.com'],
+    note: 'Sin verificador integrado: no se comprobó una respuesta individual estable y accesible.',
+  },
+  huawei: {
+    name: 'Huawei',
+    domains: ['huawei.com'],
+    note: 'Sin verificador integrado: el canal oficial requiere interacción humana; no se automatiza.',
+  },
+};
+
+/** Proveedor reconocido por emisor o dominio de la URL, con su estado de integración. */
+export function providerSupportFor(issuer: string | null, url: string | null): { provider: string; integrated: false; note: string } | null {
+  const palabras = new Set(normalizar(issuer ?? '').split(/[^a-z0-9]+/).filter(Boolean));
+  let host: string | null = null;
+  try { host = url ? new URL(url).hostname : null; } catch { host = null; }
+  for (const [clave, p] of Object.entries(PROVIDER_ADAPTERS)) {
+    const porEmisor = palabras.has(clave) || (clave === 'credly' && palabras.has('ibm')) || (clave === 'cisco' && palabras.has('netacad'));
+    const porHost = !!host && p.domains.some((d) => hostMatches(host!, d));
+    if (porEmisor || porHost) return { provider: p.name, integrated: false, note: p.note };
+  }
+  return null;
+}

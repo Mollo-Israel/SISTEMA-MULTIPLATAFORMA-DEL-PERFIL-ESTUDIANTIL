@@ -832,9 +832,11 @@ async function batch9(ctx) {
       activityId: op2.id, certificateName: `CCNA Introduction to Networks 2 ${TS}`, issuer: 'Cisco Networking Academy',
       certificateUrl: `${BASE_VERIFICADOR}/cert/otra`, credentialId: 'NA-2026-AB7',
     });
-    check(ajena.v?.credentialCheck?.status === 'reachable_no_structured_proof' && ajena.v?.backingTier !== 'corroborated',
-      'V3.9.3 §19 La página oficial de otra persona no corrobora (el código lo escribe quien registra)',
-      json({ c: ajena.v?.credentialCheck?.status, t: ajena.v?.backingTier }));
+    // V4.1 B30 / 23.9: la página oficial individual que nombra a otra persona ya no es «sin prueba»: contradice.
+    check(ajena.v?.credentialCheck?.status === 'mismatch' && ajena.v?.backingTier === 'flagged'
+      && (ajena.v?.credentialCheck?.contradictions ?? []).includes('official_holder_mismatch') && ajena.v?.validationStatus?.status === 'REJECTED',
+      'V3.9.3 §19 V4.1 B30 La página oficial de otra persona no corrobora: contradice (FLAGGED, REJECTED)',
+      json({ c: ajena.v?.credentialCheck?.status, t: ajena.v?.backingTier, v: ajena.v?.validationStatus }));
 
     const spa = sonda.v;
     check(spa?.credentialCheck?.status === 'reachable_no_structured_proof' && spa?.credentialCheck?.official === null
@@ -948,8 +950,9 @@ async function batch9(ctx) {
     const deDocente = await req('GET', '/validation/manual-reviews', { token: docente.token });
     const deEst = await req('GET', '/validation/manual-reviews', { token: est.token });
     const deAdmin = await req('GET', '/validation/manual-reviews', { token: ctx.admin });
-    check(deDocente.status === 403 && deEst.status === 403 && deAdmin.status === 403,
-      'V3.9.24 §6.5 Solo Dirección revisa: ni docente, ni estudiante, ni administración técnica', json([deDocente.status, deEst.status, deAdmin.status]));
+    // V4.1 A41-018: Administración entra como soporte excepcional auditado.
+    check(deDocente.status === 403 && deEst.status === 403 && deAdmin.status === 200,
+      'V3.9.24 §6.5 V4.1 Revisan Dirección y, como excepción auditada, Administración; ni docente ni estudiante', json([deDocente.status, deEst.status, deAdmin.status]));
     const pendientes = await req('GET', '/validation/manual-reviews', { token: director.token });
     const fila = (pendientes.data ?? []).find((x) => x.certificateId === historica.id);
     check(!!fila && fila.studentName === est.nombre && fila.requestNote?.includes('robotica'),
@@ -959,7 +962,11 @@ async function batch9(ctx) {
     const corta = await req('POST', `/validation/manual-reviews/${historica.id}`, { token: director.token, body: { decision: 'corroborated', reason: 'ok' } });
     check(corta.status === 400, 'V3.9.27 §16 Decidir exige explicar cómo se comprobó', `status ${corta.status}`);
     const decide = await req('POST', `/validation/manual-reviews/${historica.id}`, {
-      token: director.token, body: { decision: 'corroborated', reason: 'Llamé al club y confirmaron la participación y el nombre.' },
+      token: director.token,
+      body: {
+        decision: 'corroborated', reason: 'Llamé al club y confirmaron la participación y el nombre.',
+        method: 'issuer_confirmation', proof: 'Correo de robotica@club.example del 10/10 con el acta de participantes.',
+      },
     });
     check(decide.status === 200 && decide.data?.backingTier === 'corroborated',
       'V3.9.28 §16 La revisión excepcional es la única vía para corroborar una histórica sin verificador', json(decide.data));
@@ -1510,7 +1517,7 @@ async function batch14(ctx) {
   s = await resumenFull();
   check(crudo(s, areaC) === 0, 'V3.14.7 §35.4 Una credencial sin corroborar no suma afinidad', `crudo ${crudo(s, areaC)}`);
   await req('POST', `/certificates/external/${cert.data.id}/manual-review`, { token: est.token, body: { note: 'El club confirma por correo.' } });
-  await req('POST', `/validation/manual-reviews/${cert.data.id}`, { token: director.token, body: { decision: 'corroborated', reason: 'Confirmé con el club la participación y el nombre.' } });
+  await req('POST', `/validation/manual-reviews/${cert.data.id}`, { token: director.token, body: { decision: 'corroborated', reason: 'Confirmé con el club la participación y el nombre.', method: 'issuer_confirmation', proof: 'Correo del club con el acta de participantes.' } });
   s = await resumenFull();
   check(crudo(s, areaC) === 15, 'V3.14.8 §35.4 CORROBORATED: 15', `crudo ${crudo(s, areaC)}`);
 

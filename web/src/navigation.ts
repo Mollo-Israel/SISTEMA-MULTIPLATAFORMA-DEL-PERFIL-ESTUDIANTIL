@@ -131,6 +131,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/resources', label: 'Recursos' },
         { to: '/admin/gamification', label: 'Gamificación' },
         { to: '/admin/points', label: 'Puntos de estudiantes' },
+        { to: '/admin/credential-reviews', label: 'Revisión de credenciales' },
         { to: '/admin/audit', label: 'Auditoría' },
       ],
     },

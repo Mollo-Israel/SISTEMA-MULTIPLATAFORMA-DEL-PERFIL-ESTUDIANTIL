@@ -10,20 +10,31 @@ import { useToast } from '../../components/feedback';
 import type { ManualReviewItem } from '../../services/types';
 import { CREDENTIAL_CHECK_LABEL } from '../../services/types';
 
+const METODOS: { value: string; label: string; independiente: boolean }[] = [
+  { value: 'issuer_official_lookup', label: 'Consulté la página o el registro individual del emisor', independiente: true },
+  { value: 'issuer_confirmation', label: 'El emisor lo confirmó por un canal propio (correo, nota oficial)', independiente: true },
+  { value: 'institutional_registry', label: 'Lo respalda un registro institucional (acta, sistema académico)', independiente: true },
+  { value: 'document_only', label: 'Solo revisé el documento aportado', independiente: false },
+];
+
 /**
  * Revisión manual excepcional de credenciales históricas (V3 §16, §19).
  *
  * Solo para credenciales obtenidas antes o fuera de Afinia cuyo emisor no
- * ofrece un verificador digital que el sistema pueda consultar. Es la única
- * vía para que una así llegue a «Corroborado», y por eso exige un motivo y
- * queda auditada.
+ * ofrece un verificador digital que el sistema pueda consultar. V4.1 A41-018
+ * (B32): verificarla exige una prueba externa independiente del archivo; si
+ * solo se miró el documento, queda inconclusa. Todo queda auditado.
  */
 export default function CredentialReviewsPage() {
   const [items, setItems] = useState<ManualReviewItem[] | null>(null);
   const [error, setError] = useState('');
   const [abierto, setAbierto] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [metodo, setMetodo] = useState('');
+  const [prueba, setPrueba] = useState('');
   const [busy, setBusy] = useState(false);
+  const independiente = METODOS.find((m) => m.value === metodo)?.independiente ?? false;
+  const limpiar = () => { setAbierto(null); setMotivo(''); setMetodo(''); setPrueba(''); };
   const toast = useToast();
 
   const cargar = () => manualReviewService.pending()
@@ -31,18 +42,16 @@ export default function CredentialReviewsPage() {
     .catch((e) => setError(apiError(e)));
   useEffect(() => { cargar(); }, []);
 
-  const decidir = async (item: ManualReviewItem, decision: 'corroborated' | 'not_corroborated') => {
+  const decidir = async (item: ManualReviewItem, decision: 'corroborated' | 'inconclusive' | 'rejected') => {
     setBusy(true);
     try {
-      await manualReviewService.decide(item.certificateId, { decision, reason: motivo.trim() });
-      toast.success(
-        decision === 'corroborated' ? 'Credencial corroborada.' : 'Revisión registrada.',
-        decision === 'corroborated'
-          ? `${item.studentName} · ya cuenta como corroborada`
-          : `${item.studentName} · conserva su nivel actual`,
-      );
-      setAbierto(null);
-      setMotivo('');
+      await manualReviewService.decide(item.certificateId, {
+        decision, reason: motivo.trim(), method: metodo || undefined, proof: prueba.trim() || undefined,
+      });
+      const titulo = { corroborated: 'Credencial verificada con prueba externa.', inconclusive: 'Revisión registrada: inconclusa.', rejected: 'Credencial rechazada.' }[decision];
+      const detalle = { corroborated: 'ya cuenta como corroborada', inconclusive: 'no se afirma como verificada', rejected: 'queda señalada con tu motivo' }[decision];
+      toast.success(titulo, `${item.studentName} · ${detalle}`);
+      limpiar();
       await cargar();
     } catch (e) {
       toast.error(apiError(e));
@@ -55,7 +64,7 @@ export default function CredentialReviewsPage() {
     <div className="page">
       <PageHeader
         title="Revisión de credenciales"
-        description="Credenciales históricas cuyo emisor no ofrece un verificador digital. Revísalas solo si puedes comprobarlas por otra vía: tu decisión es la única que puede corroborarlas y queda registrada."
+        description="Credenciales históricas cuyo emisor no ofrece un verificador digital. Verificarla exige una prueba externa independiente del archivo; si solo puedes mirar el documento, márcala como inconclusa. Todo queda registrado."
       />
       {error && <p className="form-error">{error}</p>}
       {items === null ? (
@@ -93,7 +102,27 @@ export default function CredentialReviewsPage() {
                 {abierto === it.certificateId ? (
                   <div>
                     <div className="field">
-                      <label htmlFor={`motivo-${it.certificateId}`}>Cómo lo comprobaste</label>
+                      <label htmlFor={`metodo-${it.certificateId}`}>Cómo lo comprobaste</label>
+                      <select id={`metodo-${it.certificateId}`} value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+                        <option value="">Elige el método…</option>
+                        {METODOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </select>
+                    </div>
+                    {independiente && (
+                      <div className="field">
+                        <label htmlFor={`prueba-${it.certificateId}`}>Prueba externa</label>
+                        <input
+                          id={`prueba-${it.certificateId}`}
+                          value={prueba}
+                          maxLength={500}
+                          onChange={(e) => setPrueba(e.target.value)}
+                          placeholder="Enlace oficial individual o referencia (p. ej., correo de certificados@emisor.org del 12/10)"
+                        />
+                        <span className="field-hint">Independiente del propio archivo: la URL que trae el certificado no cuenta.</span>
+                      </div>
+                    )}
+                    <div className="field">
+                      <label htmlFor={`motivo-${it.certificateId}`}>Detalle de la revisión</label>
                       <textarea
                         id={`motivo-${it.certificateId}`}
                         value={motivo}
@@ -108,29 +137,38 @@ export default function CredentialReviewsPage() {
                       <Button
                         size="sm"
                         loading={busy}
-                        disabled={motivo.trim().length < 20}
+                        disabled={motivo.trim().length < 20 || !independiente || prueba.trim().length < 10}
                         onClick={() => decidir(it, 'corroborated')}
                         icon={<FiCheck size={14} />}
                       >
-                        Corroborar
+                        Verificada con prueba externa
                       </Button>
                       <Button
                         size="sm"
                         variant="secondary"
                         loading={busy}
                         disabled={motivo.trim().length < 20}
-                        onClick={() => decidir(it, 'not_corroborated')}
+                        onClick={() => decidir(it, 'inconclusive')}
                         icon={<FiX size={14} />}
                       >
-                        No puedo corroborarla
+                        Inconclusa: no pude verificarla
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => { setAbierto(null); setMotivo(''); }}>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        loading={busy}
+                        disabled={motivo.trim().length < 20}
+                        onClick={() => decidir(it, 'rejected')}
+                      >
+                        Rechazar (contradicción documentada)
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={limpiar}>
                         Cancelar
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <Button size="sm" variant="secondary" onClick={() => { setAbierto(it.certificateId); setMotivo(''); }}>
+                  <Button size="sm" variant="secondary" onClick={() => { limpiar(); setAbierto(it.certificateId); }}>
                     Revisar
                   </Button>
                 )}

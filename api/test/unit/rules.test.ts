@@ -615,7 +615,75 @@ describe('V3 §18.3 Open Badges', () => {
     const c = comparePage('Credential AB-77 issued to Ana María Pérez for CCNA Introduction to Networks', {
       holderName: 'Ana María Pérez', credentialId: 'AB-77', course: 'CCNA Introduction to Networks', issuer: 'Cisco',
     });
-    assert.deepEqual(c, { credentialId: true, holder: true, course: true, issuer: false });
+    assert.deepEqual(c, { credentialId: true, holder: true, course: true, issuer: false, otherHolder: false });
+  });
+});
+
+// ---------------------------------------------------------------------------
+//  V4.1 BATCH 8 · Credenciales: estado de validación aparte del respaldo (A41-018)
+// ---------------------------------------------------------------------------
+import { CredentialValidationStatus as CVS, ValidationStatus as VS } from '@perfil/shared';
+import { deriveCredentialValidationStatus, pageRecipientName, providerSupportFor } from '../../src/validation/credential-check.rules';
+
+describe('V4.1 A41-018 titular nombrado por la fuente oficial (B30, 23.9)', () => {
+  const ctx = { holderName: 'Ana María Pérez', credentialId: 'AB-77', course: 'CCNA Introduction to Networks', issuer: 'Cisco' };
+  it('lee el nombre tras «issued to» u «otorgado a» sin comerse las palabras siguientes', () => {
+    assert.equal(pageRecipientName('Credential AB-77 issued to Persona Distinta for CCNA'), 'Persona Distinta');
+    assert.equal(pageRecipientName('Certificado otorgado a Juan de la Cruz por el curso'), 'Juan de la Cruz');
+    assert.equal(pageRecipientName('Curso CCNA sin titular visible'), null);
+  });
+  it('otro titular explícito sí; titular oculto no es otro titular', () => {
+    assert.equal(comparePage('Credential AB-77 issued to Persona Distinta for CCNA Introduction to Networks', ctx).otherHolder, true);
+    assert.equal(comparePage('Credential AB-77 for CCNA Introduction to Networks', ctx).otherHolder, false);
+  });
+  it('fuente oficial que nombra a otro: MISMATCH; dominio no oficial: no concluye eso', () => {
+    const page = { credentialId: true, holder: false, course: true, issuer: true, otherHolder: true };
+    const link = { status: LinkCheckStatus.AVAILABLE };
+    assert.equal(decideCredentialCheck({ link, official: true, page, openBadge: null }), CredentialCheckStatus.MISMATCH);
+    assert.equal(decideCredentialCheck({ link, official: null, page, openBadge: null }), CredentialCheckStatus.REACHABLE_NO_STRUCTURED_PROOF);
+  });
+});
+
+describe('V4.1 A41-018 estado de validación (§6.2, A.8)', () => {
+  const base = {
+    job: VS.COMPLETED, check: CredentialCheckStatus.NO_VERIFIER, contradictions: [] as string[],
+    openBadge: null, manualReview: null, backing: BackingTier.SUPPORTED,
+  };
+  it('fuente oficial que coincide: AUTO_VERIFIED; curso genérico o sin verificador: revisión (B29)', () => {
+    assert.equal(deriveCredentialValidationStatus({ ...base, check: CredentialCheckStatus.VERIFIED_MATCH, backing: BackingTier.CORROBORATED }), CVS.AUTO_VERIFIED);
+    assert.equal(deriveCredentialValidationStatus({ ...base, check: CredentialCheckStatus.REACHABLE_NO_STRUCTURED_PROOF }), CVS.MANUAL_REVIEW_REQUIRED);
+    assert.equal(deriveCredentialValidationStatus(base), CVS.MANUAL_REVIEW_REQUIRED);
+  });
+  it('proveedor caído o verificador apagado: INCONCLUSIVE, nunca REJECTED (B31)', () => {
+    assert.equal(deriveCredentialValidationStatus({ ...base, check: CredentialCheckStatus.UNREACHABLE }), CVS.INCONCLUSIVE);
+    assert.equal(deriveCredentialValidationStatus({ ...base, check: CredentialCheckStatus.INCONCLUSIVE }), CVS.INCONCLUSIVE);
+  });
+  it('REJECTED solo con contradicción oficial documentada (B30)', () => {
+    const mm = { ...base, check: CredentialCheckStatus.MISMATCH, backing: BackingTier.FLAGGED };
+    assert.equal(deriveCredentialValidationStatus({ ...mm, contradictions: ['verification_mismatch', 'official_holder_mismatch'] }), CVS.REJECTED);
+    assert.equal(deriveCredentialValidationStatus({ ...mm, openBadge: { revoked: false, recipientMatch: false } }), CVS.REJECTED);
+    // Dominio no oficial o red interna bloqueada: algo no cuadra, pero no prueba falsedad.
+    assert.equal(deriveCredentialValidationStatus({ ...mm, contradictions: ['verification_mismatch'] }), CVS.MANUAL_REVIEW_REQUIRED);
+  });
+  it('revisión manual: verificada, inconclusa (B32) o rechazada; la antigua «no corroborada» es inconclusa', () => {
+    assert.equal(deriveCredentialValidationStatus({ ...base, manualReview: ManualReviewStatus.CORROBORATED, backing: BackingTier.CORROBORATED }), CVS.MANUALLY_VERIFIED);
+    assert.equal(deriveCredentialValidationStatus({ ...base, manualReview: ManualReviewStatus.INCONCLUSIVE }), CVS.INCONCLUSIVE);
+    assert.equal(deriveCredentialValidationStatus({ ...base, manualReview: ManualReviewStatus.NOT_CORROBORATED }), CVS.INCONCLUSIVE);
+    assert.equal(deriveCredentialValidationStatus({ ...base, manualReview: ManualReviewStatus.REJECTED, backing: BackingTier.FLAGGED }), CVS.REJECTED);
+    assert.equal(deriveCredentialValidationStatus({ ...base, manualReview: ManualReviewStatus.REQUESTED }), CVS.MANUAL_REVIEW_REQUIRED);
+  });
+  it('en cola: PENDING; error técnico: INCONCLUSIVE', () => {
+    assert.equal(deriveCredentialValidationStatus({ ...base, job: VS.PENDING, check: null }), CVS.PENDING);
+    assert.equal(deriveCredentialValidationStatus({ ...base, job: VS.FAILED, check: null }), CVS.INCONCLUSIVE);
+  });
+});
+
+describe('V4.1 §6.3 verificadores de proveedor: sin promesas', () => {
+  it('Credly, Cisco y Huawei se reconocen y se declaran no integrados', () => {
+    assert.equal(providerSupportFor('IBM', 'https://www.credly.com/badges/abc')?.integrated, false);
+    assert.equal(providerSupportFor('Cisco Networking Academy', null)?.provider, 'Cisco Networking Academy');
+    assert.equal(providerSupportFor('Huawei ICT Academy', null)?.integrated, false);
+    assert.equal(providerSupportFor('Academia Lumen', 'https://evilcredly.com/x'), null);
   });
 });
 

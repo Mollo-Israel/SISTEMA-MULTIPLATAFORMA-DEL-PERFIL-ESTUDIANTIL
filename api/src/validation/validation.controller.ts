@@ -23,6 +23,7 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { ValidationService } from './validation.service';
 import { ValidationWorker } from './validation.worker';
 import { DecideManualReviewDto } from './dto/manual-review.dto';
+import { providerSupportFor } from './credential-check.rules';
 
 /**
  * Consulta del Motor de Validación (§26, §76).
@@ -82,7 +83,8 @@ export class ValidationController {
   }
 
   @Get('manual-reviews')
-  @Roles(RolNombre.CAREER_DIRECTOR)
+  // V4.1 A41-018: Administración, como soporte excepcional auditado.
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   @ApiOperation({
     summary: 'Credenciales históricas esperando revisión manual excepcional (V3 §16).',
   })
@@ -91,7 +93,7 @@ export class ValidationController {
   }
 
   @Post('manual-reviews/:certificateId')
-  @Roles(RolNombre.CAREER_DIRECTOR)
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   @HttpCode(200)
   @ApiOperation({
     summary: 'Dirección decide la revisión excepcional: es la única vía para corroborar una histórica sin verificador.',
@@ -101,11 +103,17 @@ export class ValidationController {
     @Param('certificateId', ParseUUIDPipe) certificateId: string,
     @Body() dto: DecideManualReviewDto,
   ) {
-    const r = await this.validation.decideManualReview(user.userId, certificateId, dto.decision, dto.reason);
+    const r = await this.validation.decideManualReview(
+      { userId: user.userId, role: user.role }, certificateId, dto.decision, dto.reason, dto.method ?? null, dto.proof ?? null,
+    );
     return {
       certificateId,
       backingTier: r.backingTier,
-      manualReview: { status: r.manualReviewStatus, reason: r.manualReviewReason, reviewedAt: r.manualReviewedAt },
+      validationStatus: this.validation.validationStatusView(r),
+      manualReview: {
+        status: r.manualReviewStatus, reason: r.manualReviewReason, reviewedAt: r.manualReviewedAt,
+        method: r.manualReviewMethod, proof: r.manualReviewProof,
+      },
     };
   }
 
@@ -143,11 +151,16 @@ export class ValidationController {
       errorCode: record.errorCode,
       finishedAt: record.finishedAt,
       credentialCheck: record.credentialCheck,
+      // V4.1 A41-018: eje de validación aparte del respaldo, y el estado real de los verificadores de proveedor.
+      validationStatus: cert ? this.validation.validationStatusView(record) : null,
+      providerSupport: cert ? providerSupportFor(cert.issuer, record.credentialCheck?.url ?? cert.certificateUrl) : null,
       manualReview: cert
         ? {
           status: record.manualReviewStatus,
           reason: record.manualReviewReason,
           reviewedAt: record.manualReviewedAt,
+          method: record.manualReviewMethod,
+          proof: record.manualReviewProof,
           canRequest: this.validation.canRequestManualReview(record, cert),
         }
         : null,

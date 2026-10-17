@@ -99,9 +99,60 @@ export enum QrPresence {
  */
 export enum ManualReviewStatus {
   REQUESTED = 'requested',
+  /** V4.1 A41-018: verificada por una persona con prueba externa independiente. */
   CORROBORATED = 'corroborated',
+  /** Anterior a V4.1; se lee como «inconclusa». */
   NOT_CORROBORATED = 'not_corroborated',
+  /** V4.1 A41-018 (B32): revisada, pero sin fuente externa que verifique emisor o titular. */
+  INCONCLUSIVE = 'inconclusive',
+  /** V4.1 A41-018: contradicción fuerte documentada (p. ej., credencial de otra persona). */
+  REJECTED = 'rejected',
 }
+
+/**
+ * V4.1 A41-018 (§6.2, A.8): cómo se comprobó en una revisión manual. Solo las
+ * tres primeras son una prueba externa independiente del propio archivo.
+ */
+export enum ManualReviewMethod {
+  /** Se consultó la página o registro individual del emisor. */
+  ISSUER_OFFICIAL_LOOKUP = 'issuer_official_lookup',
+  /** El emisor confirmó por un canal propio (correo, nota oficial). */
+  ISSUER_CONFIRMATION = 'issuer_confirmation',
+  /** Registro institucional que lo respalda (acta, libro, sistema académico). */
+  INSTITUTIONAL_REGISTRY = 'institutional_registry',
+  /** Solo se miró el documento aportado: no verifica (B32). */
+  DOCUMENT_ONLY = 'document_only',
+}
+
+export const INDEPENDENT_REVIEW_METHODS: readonly ManualReviewMethod[] = [
+  ManualReviewMethod.ISSUER_OFFICIAL_LOOKUP,
+  ManualReviewMethod.ISSUER_CONFIRMATION,
+  ManualReviewMethod.INSTITUTIONAL_REGISTRY,
+];
+
+/**
+ * V4.1 A41-018 (§6.2, A.8): estado de validación de una credencial externa.
+ *
+ * Es un eje distinto del respaldo (`BackingTier`) y del trabajo del worker
+ * (`ValidationStatus`). Se deriva de lo ya registrado; no reemplaza nada.
+ */
+export enum CredentialValidationStatus {
+  PENDING = 'PENDING',
+  AUTO_VERIFIED = 'AUTO_VERIFIED',
+  MANUAL_REVIEW_REQUIRED = 'MANUAL_REVIEW_REQUIRED',
+  MANUALLY_VERIFIED = 'MANUALLY_VERIFIED',
+  INCONCLUSIVE = 'INCONCLUSIVE',
+  REJECTED = 'REJECTED',
+}
+
+export const CREDENTIAL_VALIDATION_LABEL: Record<CredentialValidationStatus, string> = {
+  [CredentialValidationStatus.PENDING]: 'En comprobación',
+  [CredentialValidationStatus.AUTO_VERIFIED]: 'Verificada por la fuente oficial',
+  [CredentialValidationStatus.MANUAL_REVIEW_REQUIRED]: 'Necesita revisión',
+  [CredentialValidationStatus.MANUALLY_VERIFIED]: 'Verificada por Dirección con prueba externa',
+  [CredentialValidationStatus.INCONCLUSIVE]: 'Inconclusa: no se pudo verificar',
+  [CredentialValidationStatus.REJECTED]: 'Rechazada: la fuente oficial la contradice',
+};
 
 /**
  * Coincidencia entre el nombre del titular y el que aparece en el documento

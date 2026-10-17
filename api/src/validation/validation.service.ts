@@ -14,6 +14,10 @@ import {
   ExternalCredentialSource,
   IdentityMatchStatus,
   LinkCheckStatus,
+  CREDENTIAL_VALIDATION_LABEL,
+  CredentialValidationStatus,
+  INDEPENDENT_REVIEW_METHODS,
+  ManualReviewMethod,
   ManualReviewStatus,
   ValidationResourceType,
   ValidationStatus,
@@ -27,6 +31,7 @@ import {
   MANUAL_REVIEW_CHECKS,
   decideCredentialBacking,
   phraseFound,
+  deriveCredentialValidationStatus,
 } from './credential-check.rules';
 import { MIN_USEFUL_TEXT } from './pdf-text';
 import { ValidationRecord } from '../entities/validation-record.entity';
@@ -50,8 +55,9 @@ import {
  *
  * 2 — V3 §18–§20: validación escalonada de credenciales, FLAGGED y
  *     CORROBORATED solo con señal verificable fuerte.
+ * 3 — V4.1 A41-018: la fuente oficial que nombra a otro titular contradice (B30).
  */
-export const VALIDATOR_VERSION = 2;
+export const VALIDATOR_VERSION = 3;
 
 /** Tope de reintentos antes de darlo por fallido (§76). */
 const MAX_ATTEMPTS = 3;
@@ -123,6 +129,8 @@ export class ValidationService {
         existente.manualReviewerId = null;
         existente.manualReviewedAt = null;
         existente.manualReviewReason = null;
+        existente.manualReviewMethod = null;
+        existente.manualReviewProof = null;
       }
       return this.records.save(existente);
     }
@@ -409,6 +417,10 @@ export class ValidationService {
 
     const legible = texto.length >= MIN_USEFUL_TEXT;
     const contradicciones = this.contradicciones(ctx, cred, extracted, texto, identity, check.status);
+    // V4.1 B30: la página oficial individual nombra a otra persona.
+    if (check.status === CredentialCheckStatus.MISMATCH && check.official === true && check.page?.otherHolder) {
+      contradicciones.push('official_holder_mismatch');
+    }
     const metadataCoherente = legible && identity !== IdentityMatchStatus.MISMATCH && this.metadataEncaja(extracted!, ctx);
     const contextoOportunidad = !!cred.opportunity && legible && identity !== IdentityMatchStatus.MISMATCH
       && this.encajaConOportunidad(texto, cred.opportunity);
@@ -425,6 +437,11 @@ export class ValidationService {
     // contradiga; si aparece una contradicción, manda la contradicción.
     if (record.manualReviewStatus === ManualReviewStatus.CORROBORATED && tier !== BackingTier.FLAGGED) {
       tier = BackingTier.CORROBORATED;
+    }
+    // V4.1 A41-018: una revisión inconclusa no sube de SUPPORTED; un rechazo documentado queda señalado.
+    if (record.manualReviewStatus === ManualReviewStatus.REJECTED) tier = BackingTier.FLAGGED;
+    if (record.manualReviewStatus === ManualReviewStatus.INCONCLUSIVE && tier === BackingTier.CORROBORATED) {
+      tier = BackingTier.SUPPORTED;
     }
 
     // §18.2: un proveedor caído o un verificador apagado no permiten concluir,
@@ -572,6 +589,23 @@ export class ValidationService {
     return guardado;
   }
 
+  /** V4.1 A41-018: estado de validación de una credencial (eje aparte del respaldo). */
+  validationStatusOf(record: ValidationRecord): CredentialValidationStatus {
+    return deriveCredentialValidationStatus({
+      job: record.status,
+      check: record.credentialCheck?.status ?? null,
+      contradictions: record.credentialCheck?.contradictions ?? [],
+      openBadge: record.credentialCheck?.openBadge ?? null,
+      manualReview: record.manualReviewStatus,
+      backing: record.backingTier,
+    });
+  }
+
+  validationStatusView(record: ValidationRecord) {
+    const status = this.validationStatusOf(record);
+    return { status, label: CREDENTIAL_VALIDATION_LABEL[status] };
+  }
+
   /** Pendientes de revisión, para Dirección. */
   async pendingManualReviews() {
     const filas = await this.records
@@ -595,11 +629,23 @@ export class ValidationService {
     return filas;
   }
 
+  /**
+   * V4.1 A41-018 (§6.2, A.8, B32). Tres decisiones posibles:
+   * - verificada: método con prueba externa independiente + la prueba
+   *   (URL distinta de la del propio certificado, o referencia concreta);
+   * - inconclusa: hubo revisión, pero sin fuente que verifique emisor o
+   *   titular; el respaldo no sube de SUPPORTED;
+   * - rechazada: contradicción fuerte documentada; queda FLAGGED.
+   * Dirección decide; Administración puede hacerlo como soporte excepcional
+   * (queda auditado con su rol).
+   */
   async decideManualReview(
-    reviewerUserId: string,
+    reviewer: { userId: string; role: string },
     certificateId: string,
-    decision: ManualReviewStatus.CORROBORATED | ManualReviewStatus.NOT_CORROBORATED,
+    decisionPedida: ManualReviewStatus,
     reason: string,
+    method?: ManualReviewMethod | null,
+    proof?: string | null,
   ): Promise<ValidationRecord> {
     const record = await this.findForOrFail(ValidationResourceType.EXTERNAL_CERTIFICATE, certificateId);
     if (record.manualReviewStatus !== ManualReviewStatus.REQUESTED) {
@@ -611,29 +657,65 @@ export class ValidationService {
     });
     if (!cert) throw new NotFoundException('Credencial no encontrada.');
 
+    const decision = decisionPedida === ManualReviewStatus.NOT_CORROBORATED ? ManualReviewStatus.INCONCLUSIVE : decisionPedida;
+    const prueba = proof?.trim() || null;
+    if (decision === ManualReviewStatus.CORROBORATED) {
+      const fields: Record<string, string[]> = {};
+      if (!method || !INDEPENDENT_REVIEW_METHODS.includes(method)) {
+        fields.method = ['Para verificarla hace falta una prueba externa: consulta al emisor, su confirmación o un registro institucional. Si solo revisaste el documento, márcala como inconclusa.'];
+      }
+      const mismaUrl = !!prueba && !!cert.certificateUrl
+        && prueba.replace(/\/+$/, '').toLowerCase() === cert.certificateUrl.replace(/\/+$/, '').toLowerCase();
+      if (!prueba || prueba.length < 10) fields.proof = ['Indica la prueba externa: enlace oficial individual o referencia concreta (al menos 10 caracteres).'];
+      else if (mismaUrl) fields.proof = ['La prueba debe ser independiente del propio certificado: su misma URL no cuenta.'];
+      if (Object.keys(fields).length) {
+        throw new BadRequestException({
+          code: 'MANUAL_REVIEW_PROOF_REQUIRED',
+          message: 'Una verificación manual necesita una prueba externa independiente del archivo.',
+          fields,
+        });
+      }
+    }
+
     record.manualReviewStatus = decision;
-    record.manualReviewerId = reviewerUserId;
+    record.manualReviewerId = reviewer.userId;
     record.manualReviewedAt = new Date();
     record.manualReviewReason = reason.trim().slice(0, 500);
+    record.manualReviewMethod = method ?? null;
+    record.manualReviewProof = prueba ? prueba.slice(0, 500) : null;
     if (decision === ManualReviewStatus.CORROBORATED) record.backingTier = BackingTier.CORROBORATED;
+    if (decision === ManualReviewStatus.REJECTED) record.backingTier = BackingTier.FLAGGED;
+    if (decision === ManualReviewStatus.INCONCLUSIVE && record.backingTier === BackingTier.CORROBORATED) {
+      record.backingTier = BackingTier.SUPPORTED;
+    }
     const guardado = await this.records.save(record);
 
     await this.audit.record({
-      actorUserId: reviewerUserId,
+      actorUserId: reviewer.userId,
       eventType: AuditEventType.EXTERNAL_CREDENTIAL_MANUAL_REVIEWED,
       entityType: ValidationResourceType.EXTERNAL_CERTIFICATE,
       entityId: certificateId,
-      metadata: { decision, reason: record.manualReviewReason, backingTier: guardado.backingTier },
+      metadata: {
+        decision,
+        reason: record.manualReviewReason,
+        method: record.manualReviewMethod,
+        proof: record.manualReviewProof,
+        reviewerRole: reviewer.role,
+        backingTier: guardado.backingTier,
+        validationStatus: this.validationStatusOf(guardado),
+      },
     });
     await this.trajectory.requestRecalculation(cert.studentProfileId);
     try {
       await this.notifications.emit({
         userId: cert.studentProfile.userId,
         kind: 'EXTERNAL_CREDENTIAL_MANUAL_REVIEWED',
-        title: decision === ManualReviewStatus.CORROBORATED ? 'Credencial corroborada' : 'Revisión de credencial',
+        title: decision === ManualReviewStatus.CORROBORATED ? 'Credencial verificada' : 'Revisión de credencial',
         body: decision === ManualReviewStatus.CORROBORATED
-          ? `Dirección corroboró «${cert.certificateName}».`
-          : `Dirección no pudo corroborar «${cert.certificateName}». Conserva su nivel actual.`,
+          ? `Dirección verificó «${cert.certificateName}» con una prueba externa.`
+          : decision === ManualReviewStatus.REJECTED
+            ? `Dirección rechazó «${cert.certificateName}»: ${record.manualReviewReason}`
+            : `Dirección revisó «${cert.certificateName}», pero no pudo verificarla con una fuente externa. Queda inconclusa.`,
         link: '/student/evidences',
         dedupeKey: `credential-manual-review:${certificateId}:${decision}`,
       });

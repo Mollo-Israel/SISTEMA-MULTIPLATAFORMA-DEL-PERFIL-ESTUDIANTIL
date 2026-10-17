@@ -209,6 +209,8 @@ export default function App() {
             <Route path="/admin/points" element={<StudentPointsPage />} />
             <Route path="/admin/recognitions" element={<Navigate to="/admin/points" replace />} />
             <Route path="/admin/resources" element={<DirectorLearningResourcesPage />} />
+            {/* V4.1 A41-018: revisión de credenciales como soporte excepcional auditado. */}
+            <Route path="/admin/credential-reviews" element={<CredentialReviewsPage />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />
           </Route>
 

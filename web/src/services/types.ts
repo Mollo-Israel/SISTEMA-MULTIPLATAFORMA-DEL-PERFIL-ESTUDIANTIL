@@ -948,6 +948,7 @@ export const CREDENTIAL_CHECK_LABEL: Record<CredentialCheckStatus, string> = {
 };
 
 export const CREDENTIAL_CONTRADICTION_LABEL: Record<string, string> = {
+  official_holder_mismatch: 'la página oficial del emisor nombra a otra persona como titular',
   holder_mismatch: 'el nombre del documento no es el tuyo',
   credential_id_mismatch: 'el código declarado no es el que figura en el documento',
   credential_id_pattern: 'el código no tiene el formato que usa este proveedor',
@@ -967,11 +968,17 @@ export interface CredentialCheck {
 }
 
 export interface ManualReviewState {
-  status: 'requested' | 'corroborated' | 'not_corroborated' | null;
+  status: 'requested' | 'corroborated' | 'not_corroborated' | 'inconclusive' | 'rejected' | null;
   reason: string | null;
   reviewedAt: string | null;
+  method?: string | null;
+  proof?: string | null;
   canRequest: boolean;
 }
+
+/** V4.1 A41-018: estado de validación, eje aparte del respaldo. */
+export type CredentialValidationStatus =
+  | 'PENDING' | 'AUTO_VERIFIED' | 'MANUAL_REVIEW_REQUIRED' | 'MANUALLY_VERIFIED' | 'INCONCLUSIVE' | 'REJECTED';
 
 /** Credencial esperando la revisión excepcional de Dirección. */
 export interface ManualReviewItem {
@@ -1020,6 +1027,10 @@ export const LINK_CHECK_LABEL: Record<LinkCheckStatus, string> = {
 
 /** Veredicto del Motor de Validación (§26). */
 export interface ValidationVerdict {
+  /** V4.1 A41-018: estado de validación (aparte del respaldo). */
+  validationStatus?: { status: CredentialValidationStatus; label: string } | null;
+  /** V4.1 §6.3: verificador de proveedor reconocido y si está integrado (hoy, ninguno). */
+  providerSupport?: { provider: string; integrated: false; note: string } | null;
   resourceType: string;
   resourceId: string;
   status: ValidationStatus;

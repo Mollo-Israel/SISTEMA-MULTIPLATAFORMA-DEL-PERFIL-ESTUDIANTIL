@@ -941,7 +941,7 @@ export const certificateService = {
 /** V3 §16/§19: revisión manual excepcional (Dirección). */
 export const manualReviewService = {
   pending: () => api.get<ManualReviewItem[]>('/validation/manual-reviews').then((r) => r.data),
-  decide: (certificateId: string, body: { decision: 'corroborated' | 'not_corroborated'; reason: string }) =>
+  decide: (certificateId: string, body: { decision: 'corroborated' | 'inconclusive' | 'rejected'; reason: string; method?: string; proof?: string }) =>
     api.post(`/validation/manual-reviews/${certificateId}`, body).then((r) => r.data),
 };
 
