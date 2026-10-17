@@ -24,13 +24,14 @@ export class LibraryController {
     @Query('skillId') skillId?: string,
     @Query('type') type?: string,
     @Query('favorites') favorites?: string,
+    @Query('forMe') forMe?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     const uuid = (v?: string) => (v && /^[0-9a-f-]{36}$/i.test(v) ? v : undefined);
     return this.library.listar(user, {
       q: q?.slice(0, 100), areaId: uuid(areaId), skillId: uuid(skillId), type,
-      favorites: favorites === 'true' || favorites === '1', limit: Number(limit), offset: Number(offset),
+      favorites: favorites === 'true' || favorites === '1', forMe: forMe === 'true' || forMe === '1', limit: Number(limit), offset: Number(offset),
     });
   }
 

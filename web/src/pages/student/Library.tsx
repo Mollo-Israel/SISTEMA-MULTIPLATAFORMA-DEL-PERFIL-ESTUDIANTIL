@@ -22,7 +22,8 @@ const POR_PAGINA = 12;
  */
 export default function StudentLibraryPage() {
   const toast = useToast();
-  const [tab, setTab] = useState<'todos' | 'favoritos'>('todos');
+  // V4.1 A41-014 (§7): «Todos», «Para ti» y «Mis favoritos».
+  const [tab, setTab] = useState<'todos' | 'parati' | 'favoritos'>('todos');
   const [query, setQuery] = useState('');
   const [buscado, setBuscado] = useState('');
   const [areaId, setAreaId] = useState('');
@@ -41,6 +42,7 @@ export default function StudentLibraryPage() {
         areaId: areaId || undefined,
         skillId: skillId || undefined,
         favorites: tab === 'favoritos' || undefined,
+        forMe: tab === 'parati' || undefined,
         limit: POR_PAGINA,
         offset: (pagina - 1) * POR_PAGINA,
       }));
@@ -82,9 +84,9 @@ export default function StudentLibraryPage() {
         description="Libros, documentación, guías, videos y herramientas que recomienda la carrera. Guarda los que te sirvan: consultarlos no cambia tu perfil ni tu afinidad."
       />
       <Tabs
-        items={[{ key: 'todos', label: 'Todos los recursos' }, { key: 'favoritos', label: 'Mis favoritos' }]}
+        items={[{ key: 'todos', label: 'Todos los recursos' }, { key: 'parati', label: 'Para ti' }, { key: 'favoritos', label: 'Mis favoritos' }]}
         value={tab}
-        onChange={(k) => setTab(k as 'todos' | 'favoritos')}
+        onChange={(k) => setTab(k as 'todos' | 'parati' | 'favoritos')}
       />
       <div className="filters">
         <SearchInput value={query} onChange={setQuery} onDebouncedChange={(v) => setBuscado(v.trim())} placeholder="Buscar por título, descripción o fuente…" />
@@ -108,6 +110,8 @@ export default function StudentLibraryPage() {
           icon={hayFiltros ? <FiSearch size={22} /> : <FiBookOpen size={22} />}
           message={tab === 'favoritos' && !hayFiltros
             ? 'Todavía no guardaste ningún recurso. Usa el corazón para tenerlos a mano.'
+            : tab === 'parati' && !hayFiltros
+              ? 'Todavía no hay recursos que coincidan con tus intereses o con lo que quieres mejorar. Puedes completarlos en Mi perfil.'
             : hayFiltros ? 'Ningún recurso coincide con los filtros.' : 'Todavía no hay recursos en la biblioteca.'}
           action={hayFiltros ? <Button variant="secondary" size="sm" onClick={limpiar}>Quitar filtros</Button> : undefined}
         />
@@ -126,6 +130,11 @@ export default function StudentLibraryPage() {
                   </div>
                   {r.provider && <span className="muted small">Fuente: {r.provider}</span>}
                   {r.description && <p className="activity-card-desc">{r.description}</p>}
+                  {tab === 'parati' && (r.reasons ?? []).length > 0 && (
+                    <ul className="reasons" aria-label="Por qué te lo sugerimos">
+                      {(r.reasons ?? []).slice(0, 3).map((m) => <li key={m}>{m}</li>)}
+                    </ul>
+                  )}
                   <div className="activity-meta">
                     {r.areas.length > 0 && <span title={r.areas.map((a) => a.name).join(', ')}>Áreas: {resumen(r.areas.map((a) => a.name))}</span>}
                     {r.skills.length > 0 && <span title={r.skills.map((s) => s.name).join(', ')}>Habilidades: {resumen(r.skills.map((s) => s.name))}</span>}

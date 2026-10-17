@@ -1,7 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { TeacherScopeService } from '../access/teacher-scope.service';
+import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, ILike, In, Not, Repository } from 'typeorm';
-import { GamificationTrigger, LearningResourceStatus, SYSTEM_GAMIFICATION_TRIGGERS } from '@perfil/shared';
+import { GamificationTrigger, LearningResourceStatus, RolNombre, SYSTEM_GAMIFICATION_TRIGGERS } from '@perfil/shared';
 import { AcademicArea } from '../entities/academic-area.entity';
 import { Skill } from '../entities/skill.entity';
 import { SkillAreaRelation } from '../entities/skill-area-relation.entity';
@@ -50,6 +52,7 @@ export class CatalogsService {
     @InjectRepository(SkillAreaRelation) private readonly skillAreas: Repository<SkillAreaRelation>,
     @InjectRepository(LearningResourceArea) private readonly resourceAreas: Repository<LearningResourceArea>,
     private readonly audit: AuditService,
+    private readonly teacherScope: TeacherScopeService,
     @InjectRepository(GamificationCriterion)
     private readonly criteria: Repository<GamificationCriterion>,
     @InjectRepository(ActivityCategory)
@@ -527,6 +530,7 @@ export class CatalogsService {
   async findLearningResources(opciones: {
     includeInactive?: boolean;
     academicAreaId?: string;
+    viewer?: AuthenticatedUser;
   } = {}): Promise<LearningResource[]> {
     const where: Record<string, unknown> = {};
     if (!opciones.includeInactive) where.status = LearningResourceStatus.ACTIVE;
@@ -537,7 +541,70 @@ export class CatalogsService {
       relations: { academicArea: true, resourceSkills: { skill: true } },
       order: { title: 'ASC' },
     });
+    // V4.1 A41-014: lo que espera revisión lo ven Dirección, Administración y
+    // quien lo propuso; el resto, solo lo publicado.
+    const rol = opciones.viewer?.role;
+    const autoridad = rol === RolNombre.ADMIN || rol === RolNombre.CAREER_DIRECTOR;
+    const visibles = lista.filter((r) => r.reviewStatus === 'not_required' || r.reviewStatus === 'approved'
+      || autoridad || (opciones.viewer && r.createdBy === opciones.viewer.userId));
+    return this.conAreasEImagen(visibles);
+  }
+
+  /** V4.1 A41-014 (§9.4): bandeja de Dirección para recursos propuestos. */
+  async pendingLearningResources(): Promise<LearningResource[]> {
+    const lista = await this.learningResources.find({
+      where: { reviewStatus: 'pending' },
+      relations: { academicArea: true, resourceSkills: { skill: true } },
+      order: { createdAt: 'ASC' } as never,
+    });
     return this.conAreasEImagen(lista);
+  }
+
+  async reviewLearningResource(
+    user: AuthenticatedUser,
+    id: string,
+    decision: 'approve' | 'observe' | 'reject',
+    comment?: string,
+  ): Promise<LearningResource> {
+    const recurso = await this.learningResources.findOne({ where: { id } });
+    if (!recurso) throw new NotFoundException('Recurso no encontrado.');
+    if (recurso.reviewStatus !== 'pending') {
+      throw new ConflictException('Solo se revisa un recurso propuesto que está pendiente.');
+    }
+    if (decision !== 'approve' && !comment?.trim()) {
+      const m = 'Explica qué hay que corregir o por qué se rechaza.';
+      throw new BadRequestException({ message: m, fields: { comment: [m] } });
+    }
+    recurso.reviewStatus = decision === 'approve' ? 'approved' : decision === 'observe' ? 'observed' : 'rejected';
+    recurso.reviewComment = comment?.trim() || null;
+    recurso.reviewedBy = user.userId;
+    recurso.reviewedAt = new Date();
+    await this.learningResources.save(recurso);
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.RESOURCE_REVIEWED,
+      entityType: 'learning_resource',
+      entityId: recurso.id,
+      metadata: { decision, comment: recurso.reviewComment },
+    });
+    return this.findLearningResourceOrFail(recurso.id);
+  }
+
+  /**
+   * V4.1 A41-014: semestres de un recurso. Un docente solo dentro de los suyos
+   * (vacío = todos los suyos); Dirección y Administración, cualquiera.
+   */
+  private async semestresDelRecurso(user: AuthenticatedUser | undefined, pedidos: number[] | undefined): Promise<number[]> {
+    const unicos = [...new Set(pedidos ?? [])].sort((a, b) => a - b);
+    if (!user || user.role !== RolNombre.TEACHER) return unicos;
+    const suyos = await this.teacherScope.allowedSemesters(user.userId);
+    if (unicos.length === 0) return suyos;
+    const fuera = unicos.filter((s) => !suyos.includes(s));
+    if (fuera.length) {
+      const m = `Solo puedes proponer recursos para tus semestres (${suyos.map((s) => `${s}.º`).join(', ') || 'ninguno habilitado'}).`;
+      throw new BadRequestException({ message: m, fields: { semesterScope: [m] } });
+    }
+    return unicos;
   }
 
   /** V3.2 §35: áreas del recurso (la principal primero) y su imagen. */
@@ -561,7 +628,10 @@ export class CatalogsService {
   async createLearningResource(
     dto: CreateLearningResourceDto,
     createdBy: string,
+    user?: AuthenticatedUser,
   ): Promise<LearningResource> {
+    const esDocente = user?.role === RolNombre.TEACHER;
+    const semestres = await this.semestresDelRecurso(user, dto.semesterScope);
     await this.assertAreaExists(dto.academicAreaId);
     await this.assertSkillsExist(dto.skillIds);
     const areas = await this.areasDelRecurso(dto.academicAreaId, dto.areaIds);
@@ -585,20 +655,43 @@ export class CatalogsService {
         status: LearningResourceStatus.ACTIVE,
         createdBy,
         imageFileId: dto.imageFileId ?? null,
+        // V4.1 A41-014 (§7): la propuesta de un docente espera a Dirección.
+        reviewStatus: esDocente ? 'pending' : 'not_required',
+        semesterScope: semestres,
       }),
     );
     await this.replaceResourceSkills(recurso.id, dto.skillIds);
     await this.replaceResourceAreas(recurso.id, areas);
+    if (esDocente) {
+      await this.audit.record({
+        actorUserId: createdBy,
+        eventType: AuditEventType.RESOURCE_PROPOSED,
+        entityType: 'learning_resource',
+        entityId: recurso.id,
+        metadata: { semesterScope: semestres },
+      });
+    }
     return this.findLearningResourceOrFail(recurso.id);
   }
 
   async updateLearningResource(
     id: string,
     dto: UpdateLearningResourceDto,
+    user?: AuthenticatedUser,
   ): Promise<LearningResource> {
     const recurso = await this.learningResources.findOne({ where: { id } });
     if (!recurso) {
       throw new NotFoundException('Recurso no encontrado.');
+    }
+    // V4.1 A41-014: un docente edita solo su propuesta mientras está pendiente u
+    // observada; corregir una observada la vuelve a enviar a Dirección.
+    if (user && user.role === RolNombre.TEACHER) {
+      if (recurso.createdBy !== user.userId) throw new NotFoundException('Recurso no encontrado.');
+      if (recurso.reviewStatus !== 'pending' && recurso.reviewStatus !== 'observed') {
+        throw new ConflictException('Ya fue revisado por Dirección: los ajustes los hace Dirección.');
+      }
+      if (dto.status !== undefined) throw new ForbiddenException('Retirar o reponer recursos lo decide Dirección.');
+      recurso.reviewStatus = 'pending';
     }
 
     if (dto.url !== undefined && dto.url !== recurso.url) {

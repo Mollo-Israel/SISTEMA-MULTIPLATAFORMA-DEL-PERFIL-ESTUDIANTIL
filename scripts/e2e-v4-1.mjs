@@ -439,7 +439,91 @@ async function batch4(ctx) {
   check(autoconfirma.status === 403, 'V41.4.16 Un estudiante nunca confirma su propia asistencia', `status ${autoconfirma.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4 };
+// ===========================================================================
+//  BATCH V4.1-5 — Recursos y Biblioteca (A41-014, §7)
+// ===========================================================================
+async function batch5(ctx) {
+  objective('BATCH V4.1-5 · Validación de recursos, propuesta del docente con revisión de Dirección y «Para ti»');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dina', lastName: `Recurso${L}`, email: correoStaff('b5dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Cata', lastName: `Recurso${L}`, email: correoStaff('b5doc'), role: 'TEACHER' });
+  const otroDoc = await provisionAndActivate(ctx.admin, { firstName: 'Otto', lastName: `Recurso${L}`, email: correoStaff('b5doc2'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [3] } });
+  const est = async (k, sem) => {
+    const e = await provisionAndActivate(ctx.admin, { firstName: 'Ana', lastName: `${k}${L}`, email: `v41.b5${k.toLowerCase()}.${TS}@est.univalle.edu`, role: 'STUDENT', semester: sem });
+    await req('POST', '/profiles/me', { token: e.token, body: {} });
+    return e;
+  };
+  const e3 = await est('Tres', 3);
+  const e5 = await est('Cinco', 5);
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const skills = (await req('GET', '/skills', { token: ctx.admin })).data ?? [];
+  const bd = areas.find((a) => a.code === 'bases_de_datos');
+  const redes = areas.find((a) => /redes/i.test(a.code));
+  const web = areas.find((a) => a.code === 'desarrollo_web');
+  const pg = skills.find((x) => x.code === 'postgresql');
+  const base = (k) => ({ title: `Guía ${k} ${L}`, provider: 'Documentación oficial', url: `https://docs.example.org/v41b5/${TS}/${k}`, resourceType: 'documentation', academicAreaId: bd.id });
+  const enBiblioteca = async (token, titulo) => ((await req('GET', `/library?q=${encodeURIComponent(titulo)}`, { token })).data?.items ?? []).some((r) => r.title === titulo);
+
+  // ----- B20: contenido significativo en crear y editar
+  const malo = await req('POST', '/learning-resources', { token: director.token, body: { ...base('mala'), title: '123456', provider: '!!!!', url: 'no-es-url' } });
+  const campos = Object.keys(malo.data?.fields ?? {});
+  check(malo.status === 400 && ['title', 'provider', 'url'].every((c) => campos.includes(c)),
+    'V41.5.1 B20 A41-014 «123456» como título, «!!!!» como quién publica y una URL inválida se rechazan, cada uno en su campo', json(malo.data?.fields));
+  const valido = await req('POST', '/learning-resources', { token: director.token, body: base('valida') });
+  const editaMal = await req('PATCH', `/learning-resources/${valido.data?.id}`, { token: director.token, body: { title: '9999' } });
+  check(valido.status === 201 && editaMal.status === 400 && !!editaMal.data?.fields?.title,
+    'V41.5.2 B20 La misma regla al editar', `${valido.status} / ${editaMal.status}`);
+  const dup = await req('POST', '/learning-resources', { token: director.token, body: { ...base('dup'), url: base('valida').url } });
+  check(dup.status === 409, 'V41.5.3 B21 Una URL que ya está en el catálogo se sigue rechazando', `status ${dup.status}`);
+
+  // ----- Propuesta del docente y revisión de Dirección
+  const fuera = await req('POST', '/learning-resources', { token: docente.token, body: { ...base('fuera'), semesterScope: [7] } });
+  check(fuera.status === 400 && !!fuera.data?.fields?.semesterScope, 'V41.5.4 El docente solo propone para sus semestres', `status ${fuera.status}`);
+  const propuesta = await req('POST', '/learning-resources', { token: docente.token, body: { ...base('propuesta'), semesterScope: [3] } });
+  check(propuesta.status === 201 && propuesta.data?.reviewStatus === 'pending' && json(propuesta.data?.semesterScope) === json([3]),
+    'V41.5.5 A41-014 El docente propone un recurso y queda pendiente de Dirección', json({ s: propuesta.status, r: propuesta.data?.reviewStatus }));
+  check(!(await enBiblioteca(e3.token, base('propuesta').title)), 'V41.5.6 Pendiente, no aparece en la Biblioteca');
+  const ajeno = await req('PATCH', `/learning-resources/${propuesta.data?.id}`, { token: otroDoc.token, body: { description: 'Cambio ajeno.' } });
+  check(ajeno.status === 404, 'V41.5.7 Otro docente no edita la propuesta ajena', `status ${ajeno.status}`);
+  const pendientes = await req('GET', '/learning-resources/reviews/pending', { token: director.token });
+  const docVePend = await req('GET', '/learning-resources/reviews/pending', { token: docente.token });
+  check((pendientes.data ?? []).some((r) => r.id === propuesta.data?.id) && docVePend.status === 403,
+    'V41.5.8 §9.4 Está en la bandeja de Dirección (y el docente no ve la bandeja)', `${docVePend.status}`);
+  const observarSin = await req('POST', `/learning-resources/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'observe' } });
+  check(observarSin.status === 400 && !!observarSin.data?.fields?.comment, 'V41.5.9 Observar exige explicar qué corregir', `status ${observarSin.status}`);
+  await req('POST', `/learning-resources/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'observe', comment: 'Agrega una descripción para estudiantes.' } });
+  const corrige = await req('PATCH', `/learning-resources/${propuesta.data?.id}`, { token: docente.token, body: { description: 'Guía práctica de consultas.' } });
+  check(corrige.status === 200 && corrige.data?.reviewStatus === 'pending', 'V41.5.10 Corregida, vuelve a la bandeja', json(corrige.data?.reviewStatus));
+  const aprueba = await req('POST', `/learning-resources/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'approve' } });
+  check(aprueba.status === 200 && aprueba.data?.reviewStatus === 'approved', 'V41.5.11 Dirección la aprueba', `status ${aprueba.status}`);
+  check(await enBiblioteca(e3.token, base('propuesta').title) && !(await enBiblioteca(e5.token, base('propuesta').title)),
+    'V41.5.12 Aprobada, la ve el estudiante de su semestre (3.º) y no el de otro (5.º)');
+  const editaAprobada = await req('PATCH', `/learning-resources/${propuesta.data?.id}`, { token: docente.token, body: { description: 'Otro cambio.' } });
+  check(editaAprobada.status === 409, 'V41.5.13 Aprobada, el docente ya no la cambia: los ajustes los hace Dirección', `status ${editaAprobada.status}`);
+  const docRetira = await req('PATCH', `/learning-resources/${valido.data?.id}`, { token: docente.token, body: { status: 'inactive' } });
+  check(docRetira.status === 404 || docRetira.status === 403, 'V41.5.14 El docente no retira recursos del catálogo', `status ${docRetira.status}`);
+
+  // ----- B23: «Para ti» por intereses y metas declaradas
+  const enRedes = await req('POST', '/learning-resources', { token: director.token, body: { ...base('redes'), academicAreaId: redes.id } });
+  const enWeb = await req('POST', '/learning-resources', { token: director.token, body: { ...base('web'), academicAreaId: web.id } });
+  const conPg = await req('POST', '/learning-resources', { token: director.token, body: { ...base('postgres'), academicAreaId: web.id, skillIds: [pg.id] } });
+  await req('PUT', '/profiles/me/interests', { token: e5.token, body: { items: [{ academicAreaId: redes.id, priority: 1 }] } });
+  await req('PATCH', '/profiles/me', { token: e5.token, body: { improvementAreaIds: [bd.id] } });
+  await req('PUT', '/profiles/me/skill-interests', { token: e5.token, body: { items: [{ skillId: pg.id, kind: 'improve' }] } });
+  const paraTi = await req('GET', `/library?forMe=true&limit=48&q=${encodeURIComponent(L)}`, { token: e5.token });
+  const item = (id) => (paraTi.data?.items ?? []).find((r) => r.id === id);
+  check(!!item(enRedes.data?.id) && item(enRedes.data?.id)?.reasons?.some((m) => /intereses: .*Redes/i.test(m)),
+    'V41.5.15 B23 «Para ti» trae un recurso del área que le interesa, con el motivo', json(item(enRedes.data?.id)?.reasons));
+  check(item(conPg.data?.id)?.reasons?.some((m) => /quieres mejorar: PostgreSQL/.test(m)),
+    'V41.5.16 B23 Y uno de una tecnología que quiere mejorar, diciéndolo así', json(item(conPg.data?.id)?.reasons));
+  check(!item(enWeb.data?.id), 'V41.5.17 B23 Un recurso sin relación con lo declarado no aparece en «Para ti»', json(paraTi.data?.items?.map((r) => r.title)));
+  await req('PUT', `/library/${enWeb.data?.id}/favorite`, { token: e5.token });
+  const paraTi2 = await req('GET', `/library?forMe=true&limit=48&q=${encodeURIComponent(L)}`, { token: e5.token });
+  check(!(paraTi2.data?.items ?? []).some((r) => r.id === enWeb.data?.id),
+    'V41.5.18 B22 Guardar un recurso como favorito no lo vuelve «para ti» (no es señal del recomendador)');
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

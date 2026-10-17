@@ -100,6 +100,8 @@ export const AUDIT_EVENT_LABEL: Record<string, { modulo: AuditModule; accion: st
   AI_SUGGESTION_CREATED: { modulo: 'ia', accion: 'Sugerencia de IA generada' },
   AI_SUGGESTION_ACCEPTED: { modulo: 'ia', accion: 'Sugerencia de IA aceptada' },
   CONFIG_CHANGED: { modulo: 'configuracion', accion: 'Cambio de configuración' },
+  RESOURCE_PROPOSED: { modulo: 'catalogo', accion: 'Recurso propuesto por un docente' },
+  RESOURCE_REVIEWED: { modulo: 'catalogo', accion: 'Revisión de un recurso propuesto' },
   CURRICULUM_EXPORTED: { modulo: 'curriculo', accion: 'Currículo exportado' },
 };
 

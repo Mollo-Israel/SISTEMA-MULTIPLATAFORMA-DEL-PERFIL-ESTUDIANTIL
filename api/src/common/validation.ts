@@ -315,6 +315,22 @@ export function IsPlaceName(validationOptions?: ValidationOptions) {
   );
 }
 
+/**
+ * V4.1 A41-014 (A.4) · Texto que dice algo: título de un recurso, quién lo
+ * publica. Rechaza solo números («123456»), solo signos («!!!!») o espacios;
+ * exige al menos dos letras (con acentos y ñ).
+ */
+export function IsMeaningfulText(que: string, validationOptions?: ValidationOptions) {
+  return regla(
+    'isMeaningfulText',
+    (v) => {
+      const letras = (v.match(/\p{L}/gu) ?? []).length;
+      return letras >= 2 ? null : `${que} tiene que tener palabras, no solo números o signos.`;
+    },
+    validationOptions,
+  );
+}
+
 /** Nombre de habilidad o tecnología. */
 export function IsSkillName(validationOptions?: ValidationOptions) {
   return regla(

@@ -261,9 +261,17 @@ export interface LearningResource {
   areaIds?: string[];
   imageFileId?: string | null;
   imageUrl?: string | null;
+  /** V4.1 A41-014: revisión de Dirección (lo que propone un docente) y semestres. */
+  reviewStatus?: 'not_required' | 'pending' | 'observed' | 'approved' | 'rejected';
+  reviewComment?: string | null;
+  semesterScope?: number[];
 }
 
 export const learningResourceService = {
+  /** V4.1 A41-014 (§9.4): bandeja de Dirección. */
+  pending: () => api.get<LearningResource[]>('/learning-resources/reviews/pending').then((r) => r.data),
+  review: (id: string, decision: 'approve' | 'observe' | 'reject', comment?: string) =>
+    api.post<LearningResource>(`/learning-resources/${id}/review`, { decision, comment }).then((r) => r.data),
   list: (params?: { includeInactive?: boolean; academicAreaId?: string }) =>
     api
       .get<LearningResource[]>('/learning-resources', {
@@ -1378,7 +1386,7 @@ export const notificationService = {
 
 /** V3.2 §35: Biblioteca de recursos con favoritos. */
 export const libraryService = {
-  list: (params: { q?: string; areaId?: string; skillId?: string; type?: string; favorites?: boolean; limit?: number; offset?: number }) =>
+  list: (params: { q?: string; areaId?: string; skillId?: string; type?: string; favorites?: boolean; forMe?: boolean; limit?: number; offset?: number }) =>
     api.get<LibraryPage>('/library', {
       params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')),
     }).then((r) => r.data),

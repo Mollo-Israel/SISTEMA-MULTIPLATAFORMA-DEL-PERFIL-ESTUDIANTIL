@@ -14,6 +14,8 @@ export interface LibraryQuery {
   skillId?: string;
   type?: string;
   favorites?: boolean;
+  /** V4.1 A41-014 (§7): «Para ti», por intereses y metas declaradas. */
+  forMe?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -45,7 +47,21 @@ export class LibraryService {
     const limit = Math.min(Math.max(Number(filtros.limit) || 12, 1), 48);
     const offset = Math.max(Number(filtros.offset) || 0, 0);
     const qb = this.recursos.createQueryBuilder('r')
-      .where('r.status = :activo', { activo: LearningResourceStatus.ACTIVE });
+      .where('r.status = :activo', { activo: LearningResourceStatus.ACTIVE })
+      // V4.1 A41-014: lo propuesto por un docente llega cuando Dirección lo aprueba.
+      .andWhere("r.review_status IN ('not_required', 'approved')");
+    const perfil = perfilId ? await this.perfiles.findOne({ where: { id: perfilId } }) : null;
+    if (perfil?.semester) {
+      // Dirigido a toda la carrera o a su semestre.
+      qb.andWhere("(r.semester_scope = '{}' OR :sem = ANY(r.semester_scope))", { sem: perfil.semester });
+    }
+    let motivos: Map<string, string[]> | null = null;
+    if (filtros.forMe) {
+      const pref = await this.preferencias(perfilId, perfil?.improvementAreaIds ?? []);
+      motivos = pref.motivos;
+      const ids = pref.ids.length ? pref.ids : ['00000000-0000-4000-8000-000000000000'];
+      qb.andWhere('r.id IN (:...paraTi)', { paraTi: ids });
+    }
     const texto = filtros.q?.trim();
     if (texto) {
       const t = `%${texto.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
@@ -71,7 +87,58 @@ export class LibraryService {
     }
     const total = await qb.getCount();
     const filas = await qb.orderBy('r.title', 'ASC').skip(offset).take(limit).getMany();
-    return { items: await this.vista(filas, perfilId), total, limit, offset, facets: await this.facetas() };
+    const items = await this.vista(filas, perfilId);
+    if (motivos) for (const it of items) Object.assign(it, { reasons: motivos.get(it.id) ?? [] });
+    return { items, total, limit, offset, facets: await this.facetas() };
+  }
+
+  /**
+   * V4.1 A41-014 (§7, §8, B23): recursos que coinciden con lo que el
+   * estudiante declaró que le interesa o quiere mejorar (áreas y habilidades),
+   * con el motivo en palabras. No usa favoritos, clics ni afinidad.
+   */
+  private async preferencias(perfilId: string | null, mejoraAreas: string[]): Promise<{ ids: string[]; motivos: Map<string, string[]> }> {
+    const motivos = new Map<string, string[]>();
+    if (!perfilId) return { ids: [], motivos };
+    const m = this.recursos.manager;
+    const interesAreas = (await m.query(
+      `SELECT i.academic_area_id AS id, a.name FROM student_interests i JOIN academic_areas a ON a.id = i.academic_area_id WHERE i.student_profile_id = $1`,
+      [perfilId],
+    )) as { id: string; name: string }[];
+    const mejora = mejoraAreas.length
+      ? (await m.query(`SELECT id, name FROM academic_areas WHERE id = ANY($1::uuid[])`, [mejoraAreas])) as { id: string; name: string }[]
+      : [];
+    const skills = (await m.query(
+      `SELECT si.skill_id AS id, s.name, si.kind FROM student_skill_interests si JOIN skills s ON s.id = si.skill_id WHERE si.student_profile_id = $1`,
+      [perfilId],
+    )) as { id: string; name: string; kind: string }[];
+    const agregar = (id: string, motivo: string) => {
+      const lista = motivos.get(id) ?? [];
+      if (!lista.includes(motivo)) lista.push(motivo);
+      motivos.set(id, lista);
+    };
+    const porArea = async (areas: { id: string; name: string }[], texto: string) => {
+      if (!areas.length) return;
+      const filas = (await m.query(
+        `SELECT r.id, r.academic_area_id AS area FROM learning_resources r WHERE r.academic_area_id = ANY($1::uuid[])
+         UNION SELECT la.learning_resource_id AS id, la.academic_area_id AS area FROM learning_resource_areas la WHERE la.academic_area_id = ANY($1::uuid[])`,
+        [areas.map((a) => a.id)],
+      )) as { id: string; area: string }[];
+      for (const f of filas) agregar(f.id, `${texto} ${areas.find((a) => a.id === f.area)?.name ?? ''}`.trim());
+    };
+    await porArea(interesAreas, 'Coincide con tus intereses:');
+    await porArea(mejora, 'Coincide con lo que quieres mejorar:');
+    for (const kind of ['interest', 'improve']) {
+      const propias = skills.filter((s) => s.kind === kind);
+      if (!propias.length) continue;
+      const filas = (await m.query(
+        `SELECT learning_resource_id AS id, skill_id AS skill FROM learning_resource_skills WHERE skill_id = ANY($1::uuid[])`,
+        [propias.map((s) => s.id)],
+      )) as { id: string; skill: string }[];
+      const texto = kind === 'interest' ? 'Coincide con tus intereses:' : 'Coincide con lo que quieres mejorar:';
+      for (const f of filas) agregar(f.id, `${texto} ${propias.find((s) => s.id === f.skill)?.name ?? ''}`.trim());
+    }
+    return { ids: [...motivos.keys()], motivos };
   }
 
   /**

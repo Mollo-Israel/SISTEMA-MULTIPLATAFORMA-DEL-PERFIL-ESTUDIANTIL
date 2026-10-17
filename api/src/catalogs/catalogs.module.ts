@@ -1,3 +1,4 @@
+import { AccessModule } from '../access/access.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicArea } from '../entities/academic-area.entity';
@@ -15,7 +16,8 @@ import { CatalogsService } from './catalogs.service';
 import { CatalogsController } from './catalogs.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([
+  imports: [
+    AccessModule,TypeOrmModule.forFeature([
       AcademicArea,
       Skill,
       SkillAreaRelation,

@@ -13,6 +13,8 @@ import {
   SkeletonTable, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
+import { useAuth } from '../../auth/AuthContext';
+import { activityService } from '../../services';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -28,6 +30,14 @@ const TIPOS: { value: string; label: string; ayuda: string }[] = [
 ];
 
 const TIPO_LABEL = Object.fromEntries(TIPOS.map((t) => [t.value, t.label]));
+
+/** V4.1 A41-014: estado de la revisión de una propuesta docente. */
+const REVISION_LABEL: Record<string, string> = {
+  pending: 'En revisión', observed: 'Observado', approved: 'Aprobado', rejected: 'Rechazado',
+};
+const REVISION_TONO: Record<string, string> = {
+  pending: 'amber', observed: 'amber', approved: 'green', rejected: 'red',
+};
 
 const vacio = {
   title: '',
@@ -52,6 +62,16 @@ const vacio = {
  * el catálogo se quedaría con lo que trajo la migración.
  */
 export default function DirectorLearningResourcesPage() {
+  const { user } = useAuth();
+  // V4.1 A41-014 (§7): el docente propone para sus semestres y Dirección revisa.
+  const esDocente = user?.role === 'TEACHER';
+  const [semestresDocente, setSemestresDocente] = useState<number[]>([]);
+  const [semestres, setSemestres] = useState<number[]>([]);
+  const pendientes = useAsync(() => (esDocente ? Promise.resolve([]) : learningResourceService.pending()), [esDocente]);
+  const [comentarios, setComentarios] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (esDocente) activityService.myScope().then((r) => setSemestresDocente(r.semesters)).catch(() => {});
+  }, [esDocente]);
   const [verRetirados, setVerRetirados] = useState(false);
   const state = useAsync(
     () => learningResourceService.list({ includeInactive: verRetirados }),
@@ -116,6 +136,7 @@ export default function DirectorLearningResourcesPage() {
         resourceType: form.resourceType,
         skillIds: form.skillIds,
         imageFileId: form.imageFileId || (editing ? null : undefined),
+        ...(esDocente && !editing ? { semesterScope: semestres } : {}),
       };
       if (editing) {
         await learningResourceService.update(editing.id, payload);
@@ -123,8 +144,8 @@ export default function DirectorLearningResourcesPage() {
       } else {
         await learningResourceService.create(payload);
         toast.success(
-          'Recurso incorporado al catálogo.',
-          'Desde ahora puede recomendarse a los estudiantes del área.',
+          esDocente ? 'Propuesta enviada a Dirección.' : 'Recurso incorporado al catálogo.',
+          esDocente ? 'Aparecerá en la Biblioteca cuando Dirección la apruebe.' : 'Desde ahora puede recomendarse a los estudiantes del área.',
         );
       }
       setForm(vacio);
@@ -176,16 +197,65 @@ export default function DirectorLearningResourcesPage() {
     }
   };
 
+  /** V4.1 A41-014 (§9.4): decisión de Dirección sobre una propuesta. */
+  const revisar = async (id: string, decision: 'approve' | 'observe' | 'reject') => {
+    const comentario = (comentarios[id] ?? '').trim();
+    if (decision !== 'approve' && !comentario) {
+      toast.error('Escribe un comentario: explica qué corregir o por qué se rechaza.');
+      return;
+    }
+    try {
+      await learningResourceService.review(id, decision, comentario || undefined);
+      toast.success(decision === 'approve' ? 'Recurso aprobado: ya está en la Biblioteca.' : decision === 'observe' ? 'Observado: vuelve al docente.' : 'Rechazado.');
+      pendientes.reload();
+      state.reload();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
   const tipoActual = TIPOS.find((t) => t.value === form.resourceType);
 
   return (
     <div>
       <PageHeader
-        title="Catálogo de recursos y cursos"
-        description="Material que el motor puede recomendar. Solo se recomienda lo que está aquí: nunca enlaces recogidos automáticamente de Internet."
+        title={esDocente ? 'Proponer recursos' : 'Catálogo de recursos y cursos'}
+        description={esDocente
+          ? 'Propón material para tus semestres. Dirección lo revisa antes de que llegue a la Biblioteca.'
+          : 'Material que el motor puede recomendar. Solo se recomienda lo que está aquí: nunca enlaces recogidos automáticamente de Internet.'}
       />
 
-      <Card title={editing ? `Editar “${editing.title}”` : 'Incorporar un recurso'}>
+      {!esDocente && (pendientes.data ?? []).length > 0 && (
+        <Card title={`Pendientes de revisión (${(pendientes.data ?? []).length})`}>
+          <ul className="review-list">
+            {(pendientes.data ?? []).map((r) => (
+              <li key={r.id} data-testid="recurso-pendiente">
+                <div>
+                  <strong>{r.title}</strong> <span className="muted small">· {r.provider} · {r.academicArea?.name ?? ''}</span>
+                  <div className="muted small">
+                    {r.semesterScope?.length ? `Para ${r.semesterScope.map((n) => `${n}.º`).join(', ')}` : 'Toda la carrera'}
+                    {' · '}<a href={r.url} target="_blank" rel="noreferrer noopener">Abrir enlace</a>
+                  </div>
+                </div>
+                <input
+                  aria-label={`Comentario para «${r.title}»`}
+                  placeholder="Comentario (obligatorio para observar o rechazar)"
+                  value={comentarios[r.id] ?? ''}
+                  onChange={(e) => setComentarios({ ...comentarios, [r.id]: e.target.value })}
+                  maxLength={500}
+                />
+                <div className="flex" style={{ gap: '0.35rem' }}>
+                  <Button size="sm" onClick={() => void revisar(r.id, 'approve')}>Aprobar</Button>
+                  <Button size="sm" variant="secondary" onClick={() => void revisar(r.id, 'observe')}>Observar</Button>
+                  <Button size="sm" variant="danger" onClick={() => void revisar(r.id, 'reject')}>Rechazar</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <Card title={editing ? `Editar “${editing.title}”` : esDocente ? 'Proponer un recurso' : 'Incorporar un recurso'}>
         <form noValidate onSubmit={submit}>
           <div className="grid-2">
             <div className="field">
@@ -196,6 +266,8 @@ export default function DirectorLearningResourcesPage() {
                 placeholder="Curso de fundamentos de redes"
                 maxLength={200}
                 required
+                pattern=".*[A-Za-zÀ-ÖØ-öø-ÿ].*[A-Za-zÀ-ÖØ-öø-ÿ].*"
+                title="El título tiene que tener palabras, no solo números o signos."
               />
             </div>
             <div className="field">
@@ -206,9 +278,29 @@ export default function DirectorLearningResourcesPage() {
                 placeholder="Cisco Networking Academy"
                 maxLength={160}
                 required
+                pattern=".*[A-Za-zÀ-ÖØ-öø-ÿ].*[A-Za-zÀ-ÖØ-öø-ÿ].*"
+                title="Quién publica tiene que tener palabras, no solo números o signos."
               />
             </div>
           </div>
+
+          {esDocente && !editing && (
+            <div className="field">
+              <span className="field-label" id="lr-semestres">Semestres a los que va dirigido</span>
+              <div role="group" aria-labelledby="lr-semestres" className="chip-row">
+                {semestresDocente.map((n) => {
+                  const on = semestres.includes(n);
+                  return (
+                    <button type="button" key={n} className={`chip ${on ? 'on' : ''}`} aria-pressed={on}
+                      onClick={() => setSemestres(on ? semestres.filter((x) => x !== n) : [...semestres, n].sort((x, y) => x - y))}>
+                      {n}º
+                    </button>
+                  );
+                })}
+              </div>
+              <small className="muted">Sin marcar ninguno, va a todos tus semestres.</small>
+            </div>
+          )}
 
           <div className="field">
             <label htmlFor="learning-resources-enlace">Enlace</label>
@@ -280,7 +372,7 @@ export default function DirectorLearningResourcesPage() {
 
           <div className="flex" style={{ gap: '0.6rem' }}>
             <Button type="submit" loading={saving} icon={editing ? <FiSave size={15} /> : <FiPlus size={15} />}>
-              {editing ? 'Guardar cambios' : 'Incorporar al catálogo'}
+              {editing ? 'Guardar cambios' : esDocente ? 'Enviar propuesta' : 'Incorporar al catálogo'}
             </Button>
             {editing && (
               <Button
@@ -297,7 +389,7 @@ export default function DirectorLearningResourcesPage() {
       </Card>
 
       <Card
-        title="Recursos del catálogo"
+        title={esDocente ? 'Mis propuestas y el catálogo' : 'Recursos del catálogo'}
         actions={
           <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
             <label className="flex" style={{ gap: '0.4rem', fontSize: '0.82rem' }}>
@@ -365,12 +457,20 @@ export default function DirectorLearningResourcesPage() {
                           <Badge tone={r.status === 'active' ? 'green' : 'gray'}>
                             {r.status === 'active' ? 'Vigente' : 'Retirado'}
                           </Badge>
+                          {r.reviewStatus && r.reviewStatus !== 'not_required' && (
+                            <div><Badge tone={REVISION_TONO[r.reviewStatus]}>{REVISION_LABEL[r.reviewStatus]}</Badge></div>
+                          )}
+                          {r.reviewComment && r.reviewStatus !== 'approved' && <div className="muted small">«{r.reviewComment}»</div>}
                         </td>
                         <td>
                           <div className="flex" style={{ gap: '0.4rem' }}>
-                            <Button size="sm" variant="secondary" onClick={() => editar(r)}>
-                              Editar
-                            </Button>
+                            {/* V4.1 A41-014: el docente edita solo su propuesta pendiente u observada; retirar es de Dirección. */}
+                            {(!esDocente || (r.createdBy === user?.id && (r.reviewStatus === 'pending' || r.reviewStatus === 'observed'))) && (
+                              <Button size="sm" variant="secondary" onClick={() => editar(r)}>
+                                Editar
+                              </Button>
+                            )}
+                            {!esDocente && (
                             <Button
                               size="sm"
                               variant={r.status === 'active' ? 'danger' : 'secondary'}
@@ -378,6 +478,7 @@ export default function DirectorLearningResourcesPage() {
                             >
                               {r.status === 'active' ? 'Retirar' : 'Reponer'}
                             </Button>
+                            )}
                           </div>
                         </td>
                       </tr>

@@ -1134,6 +1134,11 @@ body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 .help-topic summary { cursor: pointer; font-weight: 600; display: flex; gap: 0.4rem; align-items: center; }
 .help-topic p { margin: 0.4rem 0 0.3rem; }
 .help-steps { padding-left: 1.2rem; margin: 0; }
+/* V4.1 A41-014: bandeja de recursos propuestos y motivos de «Para ti». */
+.review-list { list-style: none; margin: 0; padding: 0; }
+.review-list li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 0.6rem; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--gray-200); }
+@media (max-width: 720px) { .review-list li { grid-template-columns: minmax(0, 1fr); } }
+.reasons { margin: 0.2rem 0 0.4rem; padding-left: 1rem; font-size: 0.82rem; color: var(--gray-700); }
 /* V3.2 §61: preguntas agrupadas por tema, con ilustración opcional. */
 .help-tema + .help-tema { margin-top: 1.1rem; }
 .help-tema h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500); margin: 0 0 0.2rem; }

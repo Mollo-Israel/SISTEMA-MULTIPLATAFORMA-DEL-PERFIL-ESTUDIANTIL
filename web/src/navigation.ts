@@ -70,6 +70,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/teacher?tab=proyectos', label: 'Proyectos de estudiantes' },
         { to: '/teacher?tab=equipos', label: 'Necesidades de equipo' },
         { to: '/teacher?tab=semestre', label: 'Reporte por semestre' },
+        { to: '/teacher/resources', label: 'Proponer recursos' },
         { to: '/teacher/recognitions', label: 'Retos y recompensas' },
       ],
     },

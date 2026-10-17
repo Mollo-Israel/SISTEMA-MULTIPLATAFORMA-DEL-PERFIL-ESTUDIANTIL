@@ -413,3 +413,95 @@ Cambios en `activities.service.ts`:
 - quedan 8121 actas abiertas hasta que cada responsable las cierre.
 
 **Commit propuesto:** `feat(v4.1-batch-4): acta de asistencia independiente de FINISHED, cerrar asistencia y corrección excepcional con reconciliación`
+
+
+---
+
+## BATCH V4.1-5 — Recursos y Biblioteca
+
+| | |
+|---|---|
+| **Rama real** | `feature/afinia-v4-1-cierre` |
+| **Commit base** | `7dbca20` |
+| **Estado Git antes** | Limpio en archivos rastreados (los scripts de demo del usuario, sin seguimiento). |
+
+**Gaps verificados:**
+
+| ID | Antes | Después |
+|---|---|---|
+| A41-014, título «123456» / quién publica «!!!!» | DEFECT_CONFIRMED (sonda: aceptados; solo se rechazaba la URL) | Corregido, en la API y en la web |
+| A41-014, propuesta del docente | MISSING (sonda: 403) | Implementada, con revisión de Dirección |
+| A41-014, «Para ti» en la Biblioteca | MISSING | Implementado |
+| B21, URL duplicada | PRESERVE_PASS | Conservado |
+
+**Preservado:**
+- búsqueda en vivo, facetas, favoritos, retirar y reponer, la URL única;
+- Dirección y Administración siguen creando directo;
+- recursos sin responsables (no son actividades);
+- consultar o guardar un recurso no da afinidad.
+
+**Archivos modificados:**
+
+| Archivo | Cambio |
+|---|---|
+| `api/src/database/migrations/1780720000000-V41ResourceReview.ts` (nueva) | `review_status`, `semester_scope`, `review_comment`, `reviewed_by` y `reviewed_at` en `learning_resources` |
+| `api/src/entities/learning-resource.entity.ts` | Esos campos |
+| `api/src/common/validation.ts` | `IsMeaningfulText`: al menos dos letras Unicode (A.4) |
+| `api/src/catalogs/dto/learning-resource.dto.ts` | Validación significativa de título y quién publica al crear y al editar; `semesterScope`; `ReviewLearningResourceDto` |
+| `api/src/catalogs/catalogs.service.ts`, `catalogs.controller.ts`, `catalogs.module.ts` | Ver detalle abajo |
+| `api/src/library/library.service.ts`, `library.controller.ts` | Ver detalle abajo |
+| `api/src/audit/*` | `RESOURCE_PROPOSED` y `RESOURCE_REVIEWED`, con etiqueta |
+| `web/src/pages/student/Library.tsx` | Pestañas «Todos los recursos», «Para ti» y «Mis favoritos»; motivos en cada tarjeta de «Para ti» |
+| `web/src/pages/director/LearningResources.tsx` | Modo docente («Proponer recursos», sus semestres, «Enviar propuesta», solo edita su propuesta pendiente u observada); bandeja «Pendientes de revisión» con Aprobar, Observar y Rechazar para Dirección; estado de revisión en la grilla; error inline de título y quién publica |
+| `web/src/App.tsx`, `navigation.ts`, `components/Layout.tsx` | Ruta y menú «Proponer recursos» del docente |
+| `web/src/services/*`, `web/src/index.css` | `pending`, `review`, `forMe`, `reasons` y estilos |
+| `scripts/e2e-v4-1.mjs` | V41.5.1 a V41.5.18 |
+| `scripts/e2e-web.mjs` | WEB.45.1 a WEB.45.5 |
+| `scripts/e2e-batch-7.mjs`, `scripts/e2e-v2.mjs` | B7.2 y V2.14.7 actualizados a la regla V4.1 |
+
+Detalle de la API:
+- **`catalogs.service.ts` y `catalogs.controller.ts`:**
+  - el docente crea con `review_status = pending`, solo para sus semestres;
+  - edita solo su propuesta pendiente u observada (corregir una observada la reenvía);
+  - no retira ni edita lo ya revisado;
+  - Dirección y Administración tienen `GET /learning-resources/reviews/pending` y `POST /learning-resources/:id/review` (observar o rechazar exige comentario);
+  - el listado del catálogo oculta a los demás lo pendiente.
+- **`library.service.ts` y `library.controller.ts`:**
+  - la Biblioteca solo muestra `not_required` o `approved`, para toda la carrera o el semestre del estudiante;
+  - `forMe=true` es «Para ti»: cruza áreas y tecnologías de interés y de mejora declaradas y explica cada coincidencia («Coincide con tus intereses: …», «Coincide con lo que quieres mejorar: …»). No usa favoritos, clics ni afinidad.
+
+**Migraciones:**
+- `V41ResourceReview`: aditiva; los 634 recursos existentes quedan `not_required`, así que no cambia nada de lo publicado.
+- `pg_dump` previo en `pre-v41-b5.dump`. Probada `run → revert → run`.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch5` → **18/18**:
+  - B20: tres errores, cada uno en su campo, y la misma regla al editar;
+  - B21: URL duplicada;
+  - propuesta: solo para sus semestres, pendiente e invisible en la Biblioteca, sin edición ajena;
+  - bandeja: el docente no la ve; observar exige comentario; corregida vuelve a la bandeja; aprobada, la ve el estudiante de su semestre y no el de otro; aprobada, el docente ya no la cambia ni retira recursos;
+  - B23: «Para ti» por área de interés y por tecnología a mejorar, con motivo; nada sin relación;
+  - B22: un favorito no vuelve un recurso «para ti».
+- `node scripts/e2e-web.mjs` → **77/77**, incluidos WEB.45.1–45.5.
+- Unitarias: **130/130**.
+- **Regresión completa (22 suites):** 2154 correctas, 2 fallos (B7.2, V2.14.7). Actualizados: `e2e-batch-7` 57/57 y `e2e-v2 batch14` 7/7. **2156 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+- **B7.2 y V2.14.7 → FAIL.** Las pruebas exigían que un docente **no** pudiera crear recursos. *Causa:* el contrato V4.1 (§7) le permite proponerlos. *Corrección:* las pruebas verifican que la propuesta queda pendiente y no se publica sola. *Regresión:* PASS.
+
+**Efecto:**
+- **Backend:** revisión y «Para ti».
+- **Frontend:** Biblioteca y página de recursos.
+- **Móvil:** la Biblioteca móvil sigue mostrando lo publicado (la API ya filtra lo pendiente); «Para ti» en el móvil queda para el BATCH 12, en el informe de impacto móvil.
+
+**Seguridad y permisos:**
+- el docente no ve la bandeja (403), no edita lo ajeno (404) ni lo revisado (409), y no retira;
+- todo se valida en la API.
+
+**Pendientes:**
+- El favorito de recurso todavía figura en el recomendador de actividades. Se retira en el V4.1-6, junto con «Guardar».
+- La gamificación ligada a recursos (hito externo verificable) queda para el V4.1-7. Mientras tanto, los recursos no dan puntos.
+
+**Riesgos:** ninguno nuevo.
+
+**Commit propuesto:** `feat(v4.1-batch-5): recursos con contenido válido, propuesta docente con revisión de Dirección y «Para ti» en la Biblioteca`

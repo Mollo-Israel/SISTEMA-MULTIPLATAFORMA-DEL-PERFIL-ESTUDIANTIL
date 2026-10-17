@@ -74,6 +74,7 @@ const ICONS: Record<string, IconType> = {
   '/admin/activity-categories': FiTag,
   '/admin/gamification': FiStar,
   '/teacher/recognitions': FiGift,
+  '/teacher/resources': FiBookOpen,
   '/director/recognitions': FiGift,
   '/admin/recognitions': FiGift,
   '/student/collaboration?tab=equipos': FiUsers,

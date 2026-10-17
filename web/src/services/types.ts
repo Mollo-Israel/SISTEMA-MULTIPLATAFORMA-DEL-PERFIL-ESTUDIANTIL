@@ -473,6 +473,8 @@ export interface LibraryResource {
   skills: { id: string; name: string }[];
   imageUrl: string | null;
   isFavorite: boolean;
+  /** V4.1 A41-014: en «Para ti», por qué se sugiere (intereses o metas declaradas). */
+  reasons?: string[];
 }
 
 export interface LibraryPage {

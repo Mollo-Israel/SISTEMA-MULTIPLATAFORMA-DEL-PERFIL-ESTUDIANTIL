@@ -79,6 +79,27 @@ export class LearningResource {
   @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy: string | null;
 
+  /**
+   * V4.1 A41-014 (§7): lo que crean Dirección o Administración no necesita
+   * revisión; lo que propone un docente pasa por Dirección. Solo
+   * `not_required` y `approved` llegan a la Biblioteca.
+   */
+  @Column({ name: 'review_status', type: 'varchar', length: 16, default: 'not_required' })
+  reviewStatus: 'not_required' | 'pending' | 'observed' | 'approved' | 'rejected';
+
+  /** Semestres a los que va dirigido; vacío = toda la carrera. */
+  @Column({ name: 'semester_scope', type: 'smallint', array: true, default: () => "'{}'" })
+  semesterScope: number[];
+
+  @Column({ name: 'review_comment', type: 'varchar', length: 500, nullable: true })
+  reviewComment: string | null;
+
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  reviewedBy: string | null;
+
+  @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
+  reviewedAt: Date | null;
+
   /** V3.2 §35: imagen opcional del recurso. */
   @Column({ name: 'image_file_id', type: 'uuid', nullable: true })
   imageFileId: string | null;

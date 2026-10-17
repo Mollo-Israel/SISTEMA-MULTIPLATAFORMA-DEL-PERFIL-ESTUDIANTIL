@@ -660,6 +660,61 @@ async function pruebas(browser) {
   check(fallos45.length === 0, 'WEB.44.3 Sin errores de JavaScript en V4.1-4', fallos45.join(' | '));
   await c46.close();
 
+  // ===== V4.1-5 · Recursos: validación inline, propuesta docente, bandeja y «Para ti» (A41-014)
+  objective('V4.1-5 · El docente propone recursos, Dirección los revisa y el estudiante tiene «Para ti»');
+  const tituloProp = `Guía propuesta ${TS}`;
+  await req('POST', '/learning-resources', {
+    token: docActa.token,
+    body: { title: tituloProp, provider: 'Docente de la carrera', url: `https://docs.example.org/prop/${TS}`, resourceType: 'guide', academicAreaId: aBd.id, semesterScope: [3] },
+  });
+  const c47 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p47 = await c47.newPage();
+  const fallos47 = [];
+  p47.on('pageerror', (e) => fallos47.push(e.message));
+  await entrar(p47, docActa.email);
+  await p47.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  const enlacesDocente = await p47.locator('nav a.nav-link').allInnerTexts();
+  await p47.goto(`${WEB}/teacher/resources`);
+  await p47.getByRole('heading', { name: 'Proponer recursos' }).first().waitFor({ timeout: 8000 }).catch(() => {});
+  const chipsSem = await p47.locator('[aria-labelledby="lr-semestres"] button.chip').allInnerTexts();
+  check(enlacesDocente.some((e) => e.includes('Proponer recursos')) && chipsSem.join() === '3º',
+    'WEB.45.1 A41-014 El docente tiene «Proponer recursos» y solo ofrece sus semestres', `${chipsSem.join()} · ${enlacesDocente.join(' | ')}`);
+  await p47.locator('#learning-resources-titulo').fill('123456');
+  await p47.locator('#learning-resources-quien-lo-publica').fill('!!!!');
+  await p47.getByRole('button', { name: /Guardar cambios|Incorporar al catálogo|Enviar propuesta/ }).last().click();
+  await espera(400);
+  const errTitulo = await p47.locator('#learning-resources-titulo-error').innerText().catch(() => '');
+  const errProv = await p47.locator('#learning-resources-quien-lo-publica-error').innerText().catch(() => '');
+  check(/palabras/.test(errTitulo) && /palabras/.test(errProv), 'WEB.45.2 B20 Título y quién publica sin palabras muestran el error debajo de cada campo', `${errTitulo} | ${errProv}`);
+  await c47.close();
+
+  const c48 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p48 = await c48.newPage();
+  p48.on('pageerror', (e) => fallos47.push(e.message));
+  await entrar(p48, otros.director.email);
+  await p48.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p48.goto(`${WEB}/director/resources`);
+  const filaProp = p48.locator('[data-testid="recurso-pendiente"]', { hasText: tituloProp });
+  await filaProp.waitFor({ timeout: 10000 }).catch(() => {});
+  const veProp = await filaProp.count() > 0;
+  if (veProp) await filaProp.getByRole('button', { name: 'Aprobar' }).click();
+  await espera(1200);
+  const enBiblio = ((await req('GET', `/library?q=${encodeURIComponent(tituloProp)}`, { token: estActa.token })).data?.items ?? []).length;
+  check(veProp && enBiblio === 1, 'WEB.45.3 §9.4 Dirección ve la propuesta en su bandeja y, al aprobarla, llega a la Biblioteca', `${veProp} · ${enBiblio}`);
+  await c48.close();
+
+  const c49 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p49 = await c49.newPage();
+  p49.on('pageerror', (e) => fallos47.push(e.message));
+  await entrar(p49, estActa.email);
+  await p49.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p49.goto(`${WEB}/student/library`);
+  const pedidoParaTi = p49.waitForRequest((r) => r.url().includes('/library?') && r.url().includes('forMe=true'), { timeout: 8000 }).catch(() => null);
+  await p49.getByRole('tab', { name: 'Para ti' }).click();
+  check(!!(await pedidoParaTi), 'WEB.45.4 B23 A41-014 La Biblioteca tiene «Para ti» (Todos / Para ti / Mis favoritos)');
+  check(fallos47.length === 0, 'WEB.45.5 Sin errores de JavaScript en V4.1-5', fallos47.join(' | '));
+  await c49.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

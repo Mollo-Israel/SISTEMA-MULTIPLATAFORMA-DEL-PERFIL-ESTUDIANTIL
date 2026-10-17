@@ -166,6 +166,8 @@ export default function App() {
             <Route path="/teacher/reports" element={<APestana to="/teacher" tab="semestre" />} />
             <Route path="/teacher/team-needs" element={<APestana to="/teacher" tab="equipos" />} />
             <Route path="/teacher/recognitions" element={<RecognitionsPage />} />
+            {/* V4.1 A41-014: el docente propone recursos para sus semestres. */}
+            <Route path="/teacher/resources" element={<DirectorLearningResourcesPage />} />
           </Route>
 
           <Route element={<RoleGate roles={[D]}><Outlet /></RoleGate>}>

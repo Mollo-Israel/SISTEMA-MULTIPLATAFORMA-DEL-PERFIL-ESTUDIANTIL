@@ -979,9 +979,12 @@ async function batch14(ctx) {
     academicAreaId: area?.id, resourceType: 'guide',
   };
   const recurso = await req('POST', '/learning-resources', { token: ctx.admin, body: cuerpo });
-  const recursoDocente = await req('POST', '/learning-resources', { token: docente.token, body: { ...cuerpo, title: `${cuerpo.title} docente` } });
-  check(recurso.status === 201 && recursoDocente.status === 403,
-    'V2.14.7 §77 La Administración gestiona recursos; un docente no', `${recurso.status}/${recursoDocente.status} ${json(recurso.data)}`);
+  // V4.1 A41-014 (§7): un docente propone (con otro enlace) y queda pendiente de Dirección.
+  const recursoDocente = await req('POST', '/learning-resources', {
+    token: docente.token, body: { ...cuerpo, title: `${cuerpo.title} docente`, url: `${cuerpo.url}-docente` },
+  });
+  check(recurso.status === 201 && recursoDocente.status === 201 && recursoDocente.data?.reviewStatus === 'pending',
+    'V2.14.7 §77 La Administración gestiona recursos; un docente solo propone (pendiente; V4.1)', `${recurso.status}/${recursoDocente.status} ${recursoDocente.data?.reviewStatus}`);
 }
 
 // ===========================================================================

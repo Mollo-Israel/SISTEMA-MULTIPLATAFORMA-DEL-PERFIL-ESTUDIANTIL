@@ -90,10 +90,11 @@ async function catalogo(ctx) {
       resourceType: 'guide',
     },
   });
+  // V4.1 A41-014 (§7): el docente propone; queda pendiente y no se publica hasta que Dirección lo aprueba.
   check(
-    porDocente.status === 403,
-    'B7.2 Un docente tampoco: el catálogo lo cura la dirección -> 403',
-    `status ${porDocente.status}`,
+    porDocente.status === 201 && porDocente.data?.reviewStatus === 'pending',
+    'B7.2 Un docente propone, pero el catálogo lo cura la dirección (queda pendiente; V4.1)',
+    `status ${porDocente.status} ${porDocente.data?.reviewStatus}`,
   );
 
   section('§61 · Nada de URLs arbitrarias');

@@ -19,6 +19,7 @@ import {
 } from './dto/activity-category.dto';
 import {
   CreateLearningResourceDto,
+  ReviewLearningResourceDto,
   UpdateLearningResourceDto,
 } from './dto/learning-resource.dto';
 
@@ -162,21 +163,43 @@ export class CatalogsController {
     return this.catalogsService.findLearningResources({
       includeInactive: administra && includeInactive === 'true',
       academicAreaId,
+      viewer: user,
     });
   }
 
-  @Post('learning-resources')
+  @Get('learning-resources/reviews/pending')
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
-  @ApiOperation({ summary: 'Incorporar un recurso al catálogo controlado (§61).' })
+  @ApiOperation({ summary: 'Recursos propuestos por docentes que esperan la revisión de Dirección (V4.1 §7, §9.4).' })
+  pendingLearningResources() {
+    return this.catalogsService.pendingLearningResources();
+  }
+
+  @Post('learning-resources/:id/review')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Aprobar, observar o rechazar un recurso propuesto (V4.1 §7).' })
+  reviewLearningResource(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewLearningResourceDto,
+  ) {
+    return this.catalogsService.reviewLearningResource(user, id, dto.decision, dto.comment);
+  }
+
+  @Post('learning-resources')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN, RolNombre.TEACHER)
+  @ApiOperation({
+    summary: 'Incorporar un recurso al catálogo (§61). Un docente lo propone para sus semestres y lo revisa Dirección (V4.1 §7).',
+  })
   createLearningResource(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateLearningResourceDto,
   ) {
-    return this.catalogsService.createLearningResource(dto, user.userId);
+    return this.catalogsService.createLearningResource(dto, user.userId, user);
   }
 
   @Patch('learning-resources/:id')
-  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN, RolNombre.TEACHER)
   @ApiOperation({
     summary: 'Editar un recurso o retirarlo del catálogo.',
     description:
@@ -184,10 +207,11 @@ export class CatalogsController {
       + 'históricamente, porque una recomendación anterior debe poder explicar a qué apuntaba.',
   })
   updateLearningResource(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLearningResourceDto,
   ) {
-    return this.catalogsService.updateLearningResource(id, dto);
+    return this.catalogsService.updateLearningResource(id, dto, user);
   }
 
   // ---------------- Criterios de gamificacion ----------------

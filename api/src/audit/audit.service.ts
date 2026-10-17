@@ -68,6 +68,8 @@ export const AuditEventType = {
   VISIBILITY_CHANGED: 'VISIBILITY_CHANGED',
   // Configuracion
   CONFIG_CHANGED: 'CONFIG_CHANGED',
+  RESOURCE_PROPOSED: 'RESOURCE_PROPOSED',
+  RESOURCE_REVIEWED: 'RESOURCE_REVIEWED',
   /** V2 §23.3: el administrador guardó una habilidad fuera del área sugerida. */
   SKILL_CLASSIFICATION_OVERRIDE: 'SKILL_CLASSIFICATION_OVERRIDE',
   /** V2 §43, §69: asistente de IA (sin el contenido). */

@@ -12,8 +12,13 @@ import {
   IsUrl,
   MaxLength,
   ValidateIf,
+  IsIn,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 import { LearningResourceStatus, LearningResourceType } from '@perfil/shared';
+import { IsMeaningfulText } from '../../common/validation';
 
 const limpiar = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : value;
@@ -31,6 +36,7 @@ export class CreateLearningResourceDto {
   @IsString()
   @IsNotEmpty({ message: 'El título es obligatorio.' })
   @MaxLength(200, { message: 'El título no puede superar 200 caracteres.' })
+  @IsMeaningfulText('El título')
   title: string;
 
   @ApiProperty({ example: 'Cisco Networking Academy' })
@@ -38,6 +44,7 @@ export class CreateLearningResourceDto {
   @IsString()
   @IsNotEmpty({ message: 'Indique quién publica el recurso.' })
   @MaxLength(160, { message: 'El proveedor no puede superar 160 caracteres.' })
+  @IsMeaningfulText('Quién publica')
   provider: string;
 
   @ApiProperty({ example: 'https://www.netacad.com/courses/networking' })
@@ -86,6 +93,16 @@ export class CreateLearningResourceDto {
   @ValidateIf((o: { imageFileId?: string | null }) => o.imageFileId !== null)
   @IsUUID('4', { message: 'La imagen no es válida.' })
   imageFileId?: string | null;
+
+  /** V4.1 A41-014: semestres a los que va dirigido (vacío = toda la carrera; un docente, los suyos). */
+  @ApiProperty({ required: false, type: [Number] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsInt({ each: true, message: 'Semestre no válido.' })
+  @Min(1, { each: true })
+  @Max(10, { each: true })
+  semesterScope?: number[];
 }
 
 /**
@@ -101,6 +118,7 @@ export class UpdateLearningResourceDto {
   @IsString()
   @IsNotEmpty({ message: 'El título no puede quedar vacío.' })
   @MaxLength(200)
+  @IsMeaningfulText('El título')
   title?: string;
 
   @ApiProperty({ required: false })
@@ -109,6 +127,7 @@ export class UpdateLearningResourceDto {
   @IsString()
   @IsNotEmpty({ message: 'El proveedor no puede quedar vacío.' })
   @MaxLength(160)
+  @IsMeaningfulText('Quién publica')
   provider?: string;
 
   @ApiProperty({ required: false })
@@ -164,4 +183,18 @@ export class UpdateLearningResourceDto {
   @ValidateIf((o: { imageFileId?: string | null }) => o.imageFileId !== null)
   @IsUUID('4', { message: 'La imagen no es válida.' })
   imageFileId?: string | null;
+}
+
+/** V4.1 A41-014 (§7, §9.4): decisión de Dirección sobre la propuesta de un docente. */
+export class ReviewLearningResourceDto {
+  @ApiProperty({ enum: ['approve', 'observe', 'reject'] })
+  @IsIn(['approve', 'observe', 'reject'], { message: 'Decisión no válida.' })
+  decision: 'approve' | 'observe' | 'reject';
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Transform(limpiar)
+  @IsString()
+  @MaxLength(500)
+  comment?: string;
 }
