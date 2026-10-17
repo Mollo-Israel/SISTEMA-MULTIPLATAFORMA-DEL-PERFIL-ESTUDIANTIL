@@ -66,6 +66,8 @@ export const AUDIT_EVENT_LABEL: Record<string, { modulo: AuditModule; accion: st
   ACTIVITY_REJECTED: { modulo: 'actividades', accion: 'Actividad rechazada', resultado: 'rechazado' },
   ACTIVITY_REGISTERED: { modulo: 'actividades', accion: 'Inscripción' },
   PARTICIPATION_CONFIRMED: { modulo: 'actividades', accion: 'Participación confirmada' },
+  PARTICIPATION_CORRECTED: { modulo: 'actividades', accion: 'Corrección excepcional de participación' },
+  ATTENDANCE_CLOSED: { modulo: 'actividades', accion: 'Asistencia cerrada' },
   CONSTANCY_ISSUED: { modulo: 'actividades', accion: 'Constancia o certificado entregado' },
   VALIDATION_REFERENCE_UPDATED: { modulo: 'actividades', accion: 'Referencia de validación actualizada' },
   EXTERNAL_OPPORTUNITY_ACCEPTED: { modulo: 'credenciales', accion: 'Aceptado en oportunidad externa' },

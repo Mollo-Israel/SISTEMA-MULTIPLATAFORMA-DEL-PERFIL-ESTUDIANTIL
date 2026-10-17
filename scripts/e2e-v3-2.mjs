@@ -1129,7 +1129,12 @@ async function batch10(ctx) {
     'V32.10.6 §36 «Me interesa» no se usa como señal del recomendador', `${recOtroAntes.length} → ${recOtroDespues.length}`);
 
   // ----- §36 Guardar algo que ya pasó, sin inscripción
-  const pasada = (await crear('Taller pasado', aInteres, sInt, { activityDate: new Date(Date.now() - 3 * 3_600_000).toISOString(), endAt: new Date(Date.now() - 3_600_000).toISOString() })).data;
+  // V4.1 A41-010: una actividad nueva no se publica ya pasada; se publica y luego termina.
+  const pasada = (await crear('Taller pasado', aInteres, sInt)).data;
+  await req('PATCH', `/activities/${pasada.id}`, {
+    token: director.token, body: { activityDate: new Date(Date.now() - 3 * 3_600_000).toISOString(), endAt: new Date(Date.now() - 3_600_000).toISOString() },
+  });
+  await req('PATCH', `/activities/${pasada.id}`, { token: director.token, body: { status: 'finished' } });
   const guardar = await req('POST', `/activities/${pasada.id}/register-interest`, { token: est.token });
   const inscribir = await req('POST', `/activities/${pasada.id}/register`, { token: est.token });
   check(guardar.status === 201 || guardar.status === 200, 'V32.10.7 §36 Una actividad que ya terminó se puede guardar', `status ${guardar.status} ${json(guardar.data)}`);

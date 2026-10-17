@@ -457,11 +457,16 @@ async function batch7(ctx) {
   });
   check(manual.data?.id === tras[0]?.id, 'V3.7.9 §38 Pedirla otra vez no la duplica', json({ s: manual.status }));
 
-  await confirmar('absent');
+  // V4.1 A41-011 (§5, B18): con constancia emitida, la participación está consolidada;
+  // el responsable ya no la retira libremente: la corrige Dirección con un motivo.
+  const corregirComo = (status, reason) => req('POST', `/activities/${conConstancia.data.id}/participation-correction`, {
+    token: director.token, body: { studentProfileId: profileId, status, reason },
+  });
+  await corregirComo('absent', 'La lista de asistencia muestra que no asistió.');
   const corregida = await mias();
   check(corregida.length === 1 && corregida[0].status === 'rejected',
     'V3.7.10 §14.1 Si la confirmación se corrige a ausente, la constancia queda rechazada (no se borra)', json(corregida.map((c) => c.status)));
-  await confirmar('confirmed');
+  await corregirComo('confirmed', 'Se encontró su firma en la segunda hoja de la lista.');
   const otraVez = await mias();
   check(otraVez.length === 1 && otraVez[0].status === 'authorized', 'V3.7.11 Y vuelve a valer si se confirma de nuevo', json(otraVez.map((c) => c.status)));
 

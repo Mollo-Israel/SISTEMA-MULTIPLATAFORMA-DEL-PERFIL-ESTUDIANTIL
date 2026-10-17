@@ -304,3 +304,112 @@ Cambios en `activities.service.ts`:
 **Riesgos:** cambia lo que ve un docente responsable de borradores ajenos y lo que puede editar, porque ahora solo opera.
 
 **Commit propuesto:** `feat(v4.1-batch-3): borradores privados, bandeja de Dirección, responsable que solo opera, cobertura de semestres, fecha futura al publicar, duplicar y pestañas por origen`
+
+
+---
+
+## BATCH V4.1-4 — Asistencia y derivados
+
+| | |
+|---|---|
+| **Rama real** | `feature/afinia-v4-1-cierre` |
+| **Commit base** | `99c61a9` |
+| **Estado Git antes** | Limpio en archivos rastreados (los scripts de demo del usuario, sin seguimiento). |
+
+**Decisión aplicada** (el usuario pidió seguir con criterio propio): el acta se cierra **solo a mano** («Cerrar asistencia»). No hay plazo ni cierre automático: el contrato (§5) prohíbe inventar un cierre universal de N horas.
+
+**Gaps verificados:**
+
+| ID | Antes | Después |
+|---|---|---|
+| A41-011, confirmar pendientes tras FINISHED | PRESERVE_PASS (sonda) | Conservado |
+| A41-011, pasar un CONFIRMED a ABSENT libremente | DEFECT_CONFIRMED (sonda: 200) | Bloqueado |
+| A41-011, «Cerrar asistencia» | MISSING | Implementado |
+| A41-011, corrección excepcional con reconciliación | MISSING | Implementada |
+
+**Preservado:**
+- el estudiante nunca se autoconfirma;
+- Administración no confirma participación;
+- el cupo y la constancia automática al confirmar;
+- recalcular trayectoria y afinidad al confirmar o deshacer;
+- durante el evento y sin constancia, el responsable puede corregir un error propio.
+
+**Archivos modificados:**
+
+| Archivo | Cambio |
+|---|---|
+| `api/src/database/migrations/1780710000000-V41AttendanceSettlement.ts` (nueva) | `attendance_status` (`open` / `locked`), `attendance_closed_at` y `attendance_closed_by` |
+| `api/src/database/migrations/1780710000001-V41PointsReversal.ts` (nueva) | Admite puntos negativos solo en filas de reverso (`dedupe_key` que empieza con `reverso:`) |
+| `api/src/entities/activity.entity.ts` | Campos del acta |
+| `api/src/activities/activities.service.ts` | Ver detalle abajo |
+| `api/src/activities/activities.controller.ts` | `POST /activities/:id/attendance/close` y `POST /activities/:id/participation-correction` |
+| `api/src/activities/dto/confirm-participation.dto.ts` | `CorrectParticipationDto` (motivo entre 10 y 400 caracteres) |
+| `api/src/audit/audit.service.ts`, `audit-labels.ts` | `PARTICIPATION_CORRECTED` y `ATTENDANCE_CLOSED`, con etiqueta |
+| `web/src/components/ActivityManager.tsx` | En Participantes: aviso del acta, «Cerrar asistencia» tras terminar, «Marcar ausente» solo si no está consolidada, «Corregir» con motivo para Dirección y Administración, acciones ordinarias deshabilitadas con el acta cerrada |
+| `web/src/services/types.ts`, `index.ts` | Campos del acta, `closeAttendance` y `correctParticipation` |
+| `scripts/e2e-v4-1.mjs` | V41.4.1 a V41.4.16 |
+| `scripts/e2e-web.mjs` | WEB.44.1 a WEB.44.3 |
+| `scripts/e2e-v3.mjs`, `scripts/e2e-v3-2.mjs` | V3.7.10–11 y V32.10.7 actualizados a las reglas V4.1 |
+
+Cambios en `activities.service.ts`:
+- **Guards en `confirmParticipation`:**
+  - con el acta cerrada, 409 `ATTENDANCE_LOCKED`;
+  - en una actividad cancelada no se otorga asistencia (`ACTIVITY_CANCELLED`);
+  - un CONFIRMED consolidado (actividad FINISHED o constancia emitida) no pasa a otro estado (`PARTICIPATION_CONSOLIDATED`).
+- **`closeAttendance`:** solo con la actividad FINISHED y por el responsable; Administración no, porque es operación del responsable.
+- **`correctParticipation`:** Dirección o Administración, con motivo. Vale aunque el acta esté cerrada. Reconcilia:
+  - la constancia (queda rechazada; no se borra);
+  - la trayectoria y la afinidad (recálculo);
+  - los puntos: un **reverso** o una **restitución** auditables en `gamification_events`, sin borrar nada;
+  - además, queda en la auditoría con antes, después y motivo, y avisa al estudiante.
+
+**Migraciones:**
+- `V41AttendanceSettlement`: aditiva; las 8121 actividades existentes quedan `open`, así que nadie pierde la regularización.
+- `V41PointsReversal`: amplía la regla de puntos. `down` restaura la anterior como `NOT VALID` para no destruir reversos que ya existan.
+- `pg_dump` previo en `pre-v41-b4.dump`. Ambas probadas `run → revert → run`.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch4` → **16/16**:
+  - corrección propia sin constancia;
+  - con constancia, bloqueada (B18);
+  - no se cierra antes de terminar;
+  - B17: tras FINISHED se confirma un pendiente;
+  - B18: tras FINISHED no se pasa a ausente;
+  - B19: cierre por el responsable (Admin no), bloqueo posterior e historial preservado;
+  - corrección: solo Dirección o Admin y con motivo; vale con el acta cerrada; la constancia deja de estar vigente; reverso de puntos auditable; auditoría con antes, después y motivo; restitución única al volver a confirmar;
+  - actividad cancelada sin asistencia;
+  - un estudiante no se autoconfirma.
+- `node scripts/e2e-web.mjs` → **72/72**:
+  - WEB.44.1: el docente ve «Cerrar asistencia», no ve «Marcar ausente» en lo consolidado y cierra el acta;
+  - WEB.44.2: Dirección corrige con motivo;
+  - WEB.44.3: sin errores de JavaScript.
+- Unitarias: **130/130**.
+- **Regresión completa (22 suites):** 2131 correctas, 2 fallos. Actualizadas esas pruebas (`e2e-v3 batch7` 13/13, `e2e-v3-2 batch10` 8/8): **2133 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+1. **V41.4.10 → FAIL (500).**
+   - *Causa:* la base solo admitía puntos entre 0 y 1000 (`chk_gamification_event_points`), así que el reverso negativo fallaba. Además, la corrección quedaba a medias: la inscripción y la constancia cambiaban sin reverso ni auditoría.
+   - *Corrección:*
+     - migración `V41PointsReversal`;
+     - el movimiento de puntos se registra **antes** de tocar la inscripción, de modo que si falla no queda nada a medias.
+   - *Regresión:* 16/16.
+2. **V3.7.10 → FAIL.** La prueba de V3 retiraba con el responsable una participación con constancia, y ahora eso está consolidado (B18). *Corrección:* la prueba usa la corrección excepcional de Dirección y verifica lo mismo: la constancia queda rechazada sin borrarse y vuelve a valer al reconfirmar. *Regresión:* PASS.
+3. **V32.10.7 → FAIL.** La prueba creaba una actividad nueva ya terminada, lo que contradice A41-010. *Corrección:* la publica en el futuro y luego la termina. *Regresión:* PASS.
+
+**Efecto:**
+- **Backend:** acta, guards y corrección.
+- **Frontend:** panel de Participantes.
+- **Móvil:** sin cambios; el estudiante no gestiona asistencia.
+
+**Seguridad y permisos:**
+- la corrección solo la hacen Dirección y Administración, con motivo auditado;
+- el cierre lo hace el responsable;
+- todo se valida en la API.
+
+**Pendientes:** la afinidad y la trayectoria se recalculan con el mecanismo existente (`requestRecalculation`). No hay snapshots aparte que reconciliar.
+
+**Riesgos:**
+- un docente que solía «desconfirmar» tarde ahora tiene que pedírselo a Dirección;
+- quedan 8121 actas abiertas hasta que cada responsable las cierre.
+
+**Commit propuesto:** `feat(v4.1-batch-4): acta de asistencia independiente de FINISHED, cerrar asistencia y corrección excepcional con reconciliación`

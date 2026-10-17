@@ -600,6 +600,66 @@ async function pruebas(browser) {
     'WEB.43.4 A41-013 Una actividad interna ya no ofrece «Credencial externa esperada»', opciones.join(' | '));
   await c44.close();
 
+  // ===== V4.1-4 · Acta de asistencia: regularización, «Cerrar asistencia» y corrección (A41-011)
+  objective('V4.1-4 · El docente cierra el acta tras terminar; Dirección corrige con motivo');
+  const docActa = await provisionAndActivate(admin, { firstName: 'Web', lastName: 'Acta', email: `web.acta.${TS}@univalle.edu`, role: 'TEACHER' });
+  await req('PUT', `/users/${docActa.userId}/semesters`, { token: admin, body: { semesters: [3] } });
+  const estActa = await estudianteListo(admin, 'acta');
+  const perfilActa = (await req('GET', '/profiles/me', { token: estActa.token })).data;
+  const actaAct = await req('POST', '/activities', {
+    token: otros.director.token,
+    body: {
+      title: `Charla con acta ${TS}`, type: 'academica', categoryId: (cats41.find((c) => c.code === 'taller_academico') ?? cats41[0]).id,
+      semesterScope: [3], modality: 'presencial', location: 'Aula 201', activityDate: inicio, endAt: fin, status: 'open',
+      areaIds: [aBd.id], skillIds: [], responsibleUserIds: [docActa.userId],
+    },
+  });
+  await req('POST', `/activities/${actaAct.data?.id}/register`, { token: estActa.token });
+  await req('PATCH', `/activities/${actaAct.data?.id}/confirm-participation`, { token: docActa.token, body: { studentProfileId: perfilActa?.id, status: 'confirmed' } });
+  await req('PATCH', `/activities/${actaAct.data?.id}`, { token: otros.director.token, body: { status: 'finished' } });
+
+  const c45 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p45 = await c45.newPage();
+  const fallos45 = [];
+  p45.on('pageerror', (e) => fallos45.push(e.message));
+  await entrar(p45, docActa.email);
+  await p45.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p45.goto(`${WEB}/teacher/my-activities?actividad=${actaAct.data?.id}`);
+  const botonCerrar = p45.locator('.inline-note').getByRole('button', { name: 'Cerrar asistencia' });
+  await botonCerrar.waitFor({ timeout: 10000 }).catch(() => {});
+  const veCerrar = await botonCerrar.count() > 0;
+  const sinAusente = await p45.getByRole('button', { name: 'Marcar ausente' }).count() === 0;
+  if (veCerrar) {
+    await botonCerrar.click();
+    await p45.getByRole('dialog').getByRole('button', { name: 'Cerrar asistencia' }).click().catch(() => {});
+  }
+  await p45.locator('[data-testid="acta-cerrada"]').waitFor({ timeout: 8000 }).catch(() => {});
+  check(veCerrar && sinAusente && await p45.locator('[data-testid="acta-cerrada"]').count() > 0,
+    'WEB.44.1 B17 B19 A41-011 Terminada la actividad, el docente ve «Cerrar asistencia», no puede marcar ausente lo consolidado y cierra el acta',
+    JSON.stringify({ veCerrar, sinAusente }));
+  await c45.close();
+
+  const c46 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p46 = await c46.newPage();
+  p46.on('pageerror', (e) => fallos45.push(e.message));
+  await entrar(p46, otros.director.email);
+  await p46.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p46.goto(`${WEB}/director/activities?actividad=${actaAct.data?.id}`);
+  const corregirBtn = p46.getByRole('button', { name: 'Corregir' });
+  await corregirBtn.first().waitFor({ timeout: 10000 }).catch(() => {});
+  let corrigio = false;
+  if (await corregirBtn.count()) {
+    await corregirBtn.first().click();
+    await p46.locator('#corr-motivo').fill('La lista firmada muestra que no asistió.');
+    await p46.getByRole('button', { name: 'Aplicar corrección' }).click();
+    await espera(1500);
+    const filas = (await req('GET', `/activities/${actaAct.data?.id}/participants`, { token: otros.director.token })).data ?? [];
+    corrigio = (Array.isArray(filas) ? filas : filas.items ?? []).some((r) => r.status === 'absent');
+  }
+  check(corrigio, 'WEB.44.2 B18 A41-011 Dirección corrige la participación consolidada con un motivo');
+  check(fallos45.length === 0, 'WEB.44.3 Sin errores de JavaScript en V4.1-4', fallos45.join(' | '));
+  await c46.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

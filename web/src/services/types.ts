@@ -527,6 +527,9 @@ export interface Activity {
   /** V3.2 §28.3: emisor real del certificado institucional. */
   certificateIssuer?: string | null;
   cancelledAt?: string | null;
+  /** V4.1 A41-011 (§5): acta de asistencia; `open` también tras FINISHED. */
+  attendanceStatus?: 'open' | 'locked';
+  attendanceClosedAt?: string | null;
   /** V3.2 §20: términos de búsqueda derivados (no se escriben a mano). */
   searchKeywords?: string[];
   title: string;

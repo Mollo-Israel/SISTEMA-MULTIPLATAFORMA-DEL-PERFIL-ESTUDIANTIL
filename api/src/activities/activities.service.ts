@@ -56,6 +56,7 @@ import { ActivityResponsible } from '../entities/activity-responsible.entity';
 import { ActivityContact } from '../entities/activity-contact.entity';
 import { StoredFileRecord } from '../entities/stored-file.entity';
 import { ActivityImage } from '../entities/activity-image.entity';
+import { GamificationEvent, StudentPoints } from '../entities/gamification.entity';
 import { effectiveSemesters } from '../access/teacher-scope.service';
 import { assertSkillsBelongToAreas, resolveSkillContexts, SkillContext } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
@@ -1761,6 +1762,24 @@ export class ActivitiesService {
       throw new BadRequestException({ code: 'ACCEPTANCE_ONLY_EXTERNAL', message: m, fields: { status: [m] } });
     }
 
+    // V4.1 A41-011 (§5): el acta cerrada no se edita por esta vía; una actividad
+    // cancelada no otorga asistencia; y una participación ya consolidada (la
+    // actividad terminó o hay constancia emitida) no se retira libremente.
+    if (activity.attendanceStatus === 'locked') {
+      const m = 'La asistencia ya está cerrada. Si hay un error, la corrige Dirección con un motivo.';
+      throw new ConflictException({ code: 'ATTENDANCE_LOCKED', message: m });
+    }
+    if (activity.status === ActivityStatus.CANCELLED && OCCUPYING_STATUSES.includes(status)) {
+      const m = 'La actividad está cancelada: no se registra asistencia.';
+      throw new ConflictException({ code: 'ACTIVITY_CANCELLED', message: m });
+    }
+    if (registration.status === RegistrationStatus.CONFIRMED && status !== RegistrationStatus.CONFIRMED
+      && await this.participacionConsolidada(activity, registration)) {
+      const m = 'Esta participación ya está consolidada (la actividad terminó o tiene constancia). '
+        + 'Si hay un error, la corrige Dirección con un motivo.';
+      throw new ConflictException({ code: 'PARTICIPATION_CONSOLIDATED', message: m });
+    }
+
     // El cupo se controla al aprobar: solo los confirmados (o aceptados) ocupan lugar.
     if (OCCUPYING_STATUSES.includes(status) && !OCCUPYING_STATUSES.includes(registration.status)) {
       await this.assertConfirmCapacity(activity);
@@ -1823,6 +1842,164 @@ export class ActivitiesService {
     }
 
     return saved;
+  }
+
+  /** V4.1 A41-011: terminó el evento o ya hay una constancia autorizada. */
+  private async participacionConsolidada(activity: Activity, registration: ActivityRegistration): Promise<boolean> {
+    if (activity.status === ActivityStatus.FINISHED) return true;
+    const constancia = await this.constancies.findOne({
+      where: { studentProfileId: registration.studentProfileId, activityId: activity.id, status: ConstancyStatus.AUTHORIZED },
+    });
+    return !!constancia;
+  }
+
+  /**
+   * V4.1 A41-011 (§5, B19): «Cerrar asistencia». Solo cuando el evento ya
+   * terminó; después, el responsable no edita filas. El cierre no es automático.
+   */
+  async closeAttendance(user: AuthenticatedUser, activityId: string): Promise<Activity> {
+    const activity = await this.findOne(activityId);
+    if (user.role === RolNombre.ADMIN) {
+      throw new ForbiddenException('La asistencia la cierra el responsable de la actividad.');
+    }
+    await this.assertCanManage(user, activity, 'Solo el responsable de la actividad cierra su asistencia.');
+    if (activity.status !== ActivityStatus.FINISHED) {
+      throw new ConflictException({
+        code: 'ATTENDANCE_NOT_FINISHED',
+        message: 'La asistencia se cierra cuando la actividad terminó. Antes, puedes seguir registrándola.',
+      });
+    }
+    if (activity.attendanceStatus === 'locked') return activity;
+    activity.attendanceStatus = 'locked';
+    activity.attendanceClosedAt = new Date();
+    activity.attendanceClosedById = user.userId;
+    await this.activities.save(this.soloFila(activity));
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.ATTENDANCE_CLOSED,
+      entityType: 'activity',
+      entityId: activity.id,
+      metadata: { activityId: activity.id },
+    });
+    return this.findOne(activity.id);
+  }
+
+  /**
+   * V4.1 A41-011 (§5, B18, 23.5): corrección excepcional de una participación,
+   * solo Dirección o Administración, con motivo. Vale con el acta cerrada o la
+   * participación consolidada, y reconcilia lo que dependía de ella: la
+   * constancia, la trayectoria y la afinidad (recálculo) y los puntos (un
+   * reverso o una restitución auditables en el historial; nada se borra).
+   */
+  async correctParticipation(
+    user: AuthenticatedUser,
+    activityId: string,
+    studentProfileId: string,
+    status: RegistrationStatus,
+    reason: string,
+  ): Promise<ActivityRegistration> {
+    if (user.role !== RolNombre.ADMIN && user.role !== RolNombre.CAREER_DIRECTOR) {
+      throw new ForbiddenException('Una corrección excepcional la hacen Dirección o Administración.');
+    }
+    const motivo = (reason ?? '').trim();
+    if (motivo.length < 10) {
+      const m = 'Explica el motivo de la corrección (al menos 10 caracteres): queda en la auditoría.';
+      throw new BadRequestException({ message: m, fields: { reason: [m] } });
+    }
+    const permitidos = [RegistrationStatus.CONFIRMED, RegistrationStatus.ABSENT, RegistrationStatus.REGISTERED];
+    if (!permitidos.includes(status)) {
+      const m = 'La corrección deja la participación como confirmada, ausente o inscrita.';
+      throw new BadRequestException({ message: m, fields: { status: [m] } });
+    }
+    const activity = await this.findOne(activityId);
+    if (activity.originType === ActivityOrigin.EXTERNAL) {
+      throw new BadRequestException('En una oportunidad externa no se confirma asistencia.');
+    }
+    if (activity.status === ActivityStatus.CANCELLED && status === RegistrationStatus.CONFIRMED) {
+      throw new ConflictException({ code: 'ACTIVITY_CANCELLED', message: 'La actividad está cancelada: no se registra asistencia.' });
+    }
+    const registration = await this.registrations.findOne({ where: { activityId, studentProfileId } });
+    if (!registration) throw new NotFoundException('El estudiante no está inscrito en esta actividad.');
+    const anterior = registration.status;
+    if (anterior === status) return registration;
+    if (status === RegistrationStatus.CONFIRMED && !OCCUPYING_STATUSES.includes(anterior)) {
+      await this.assertConfirmCapacity(activity);
+    }
+    // Primero el movimiento de puntos: si fallara, no queda una corrección a medias.
+    await this.ajustarPuntosParticipacion(registration, status === RegistrationStatus.CONFIRMED, motivo);
+    registration.status = status;
+    registration.confirmedById = user.userId;
+    const saved = await this.registrations.save(registration);
+
+    await this.sincronizarConstancia(activity, saved, user.userId);
+    if (status === RegistrationStatus.CONFIRMED || anterior === RegistrationStatus.CONFIRMED) {
+      await this.trajectory.requestRecalculation(studentProfileId);
+    }
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.PARTICIPATION_CORRECTED,
+      entityType: 'activity_registration',
+      entityId: saved.id,
+      metadata: { activityId, studentProfileId, de: anterior, a: status, motivo, actaCerrada: activity.attendanceStatus === 'locked' },
+    });
+    const perfil = await this.profiles.findOne({ where: { id: studentProfileId } });
+    if (perfil) {
+      try {
+        await this.notifications.emit({
+          userId: perfil.userId,
+          kind: 'PARTICIPATION_CONFIRMED',
+          title: 'Se corrigió tu participación',
+          body: `Dirección corrigió tu participación en «${activity.title}». Motivo: ${motivo}`,
+          link: '/student/activities',
+          entityType: 'activity_registration',
+          entityId: saved.id,
+          dedupeKey: `participation-correction:${saved.id}:${Date.now()}`,
+        });
+      } catch {
+        // sin efecto sobre la operación
+      }
+    }
+    return saved;
+  }
+
+  /**
+   * Puntos de una participación corregida: si deja de estar confirmada y su
+   * saldo neto es positivo, se agrega un reverso; si vuelve a confirmarse y
+   * ya había sido revertida, una restitución. Cada movimiento queda en el
+   * historial (`gamification_events`) con su motivo; nada se borra.
+   */
+  private async ajustarPuntosParticipacion(reg: ActivityRegistration, confirmada: boolean, motivo: string): Promise<void> {
+    const repo = this.activities.manager.getRepository(GamificationEvent);
+    const eventos = await repo.find({ where: { sourceEntityType: 'activity_registration', sourceEntityId: reg.id } });
+    const original = eventos.find((e) => e.dedupeKey === `participacion:${reg.id}`);
+    if (!original) return;
+    const neto = eventos.reduce((s, e) => s + e.points, 0);
+    let ajuste = 0;
+    let clave = '';
+    if (!confirmada && neto > 0) { ajuste = -neto; clave = `reverso:participacion:${reg.id}:${Date.now()}`; }
+    if (confirmada && neto <= 0) { ajuste = original.points; clave = `restitucion:participacion:${reg.id}:${Date.now()}`; }
+    if (ajuste === 0) return;
+    await this.activities.manager.transaction(async (m) => {
+      await m.getRepository(GamificationEvent).insert({
+        studentProfileId: reg.studentProfileId,
+        trigger: original.trigger,
+        dedupeKey: clave.slice(0, 120),
+        points: ajuste,
+        reason: `${ajuste < 0 ? 'Reverso' : 'Restitución'} por corrección de participación: ${motivo}`.slice(0, 300),
+        sourceEntityType: 'activity_registration',
+        sourceEntityId: reg.id,
+      });
+      const fila = await m.getRepository(GamificationEvent)
+        .createQueryBuilder('e')
+        .select('COALESCE(SUM(e.points), 0)', 'total')
+        .addSelect('COUNT(*)', 'cantidad')
+        .where('e.student_profile_id = :p', { p: reg.studentProfileId })
+        .getRawOne<{ total: string; cantidad: string }>();
+      await m.getRepository(StudentPoints).upsert(
+        { studentProfileId: reg.studentProfileId, totalPoints: Number(fila?.total ?? 0), eventsCount: Number(fila?.cantidad ?? 0) },
+        ['studentProfileId'],
+      );
+    });
   }
 
   async getParticipants(user: AuthenticatedUser, activityId: string) {

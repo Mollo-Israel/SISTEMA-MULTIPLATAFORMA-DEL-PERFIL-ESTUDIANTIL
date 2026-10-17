@@ -551,6 +551,11 @@ export default function ActivityManager({
 
   /** V3.2 §28.3: entrega del certificado que emitió la institución. */
   const [entrega, setEntrega] = useState<{ ids: string[]; nombre: string } | null>(null);
+  /** V4.1 A41-011: corrección excepcional en curso. */
+  const [correccion, setCorreccion] = useState<{ row: Participant; status: 'confirmed' | 'absent' } | null>(null);
+  const [motivoCorr, setMotivoCorr] = useState('');
+  const [errorCorr, setErrorCorr] = useState<string | null>(null);
+  const [corrigiendo, setCorrigiendo] = useState(false);
   const [codigo, setCodigo] = useState('');
   const [archivoCert, setArchivoCert] = useState<{ id: string; nombre: string } | null>(null);
   const [entregando, setEntregando] = useState(false);
@@ -651,6 +656,42 @@ export default function ActivityManager({
     }
   };
 
+  /** V4.1 A41-011 (§5, B19): cerrar el acta; después no se editan filas por la vía ordinaria. */
+  const cerrarAsistencia = async () => {
+    if (!selected) return;
+    const ok = await confirm({
+      title: 'Cerrar asistencia',
+      message: 'Después de cerrarla ya no se registra asistencia por la vía ordinaria. Un error lo corrige Dirección con un motivo.',
+      confirmLabel: 'Cerrar asistencia',
+    });
+    if (!ok) return;
+    try {
+      await activityService.closeAttendance(selected);
+      await load();
+      notify('Asistencia cerrada.', 'El registro queda como está; el historial se conserva.');
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
+  /** V4.1 A41-011 (§5, B18): corrección excepcional con motivo. */
+  const corregir = async () => {
+    if (!selected || !correccion) return;
+    if (motivoCorr.trim().length < 10) { setErrorCorr('Explica el motivo (al menos 10 caracteres): queda en la auditoría.'); return; }
+    setCorrigiendo(true);
+    try {
+      await activityService.correctParticipation(selected, correccion.row.studentProfileId, correccion.status, motivoCorr.trim());
+      setParticipants(await activityService.participants(selected));
+      await load();
+      setCorreccion(null);
+      notify('Corrección aplicada.', 'Se ajustaron la constancia, la trayectoria y los puntos.');
+    } catch (e) {
+      setErrorCorr(apiError(e));
+    } finally {
+      setCorrigiendo(false);
+    }
+  };
+
   /*
    * V3 §53: enlaces directos. «Crear actividad» llega con ?nuevo=1 y
    * «Participantes» con ?actividad=<id>. Se atienden una sola vez, cuando ya
@@ -695,6 +736,9 @@ export default function ActivityManager({
   const okStatus: 'confirmed' | 'accepted' = esExterna ? 'accepted' : 'confirmed';
   const okLabel = esExterna ? 'Registrar aceptación' : 'Confirmar participación';
   const full = !!(selectedActivity?.capacity && allConfirmed.length >= selectedActivity.capacity);
+  // V4.1 A41-011: acta cerrada y participación consolidada (la actividad ya terminó).
+  const actaCerrada = selectedActivity?.attendanceStatus === 'locked';
+  const consolidada = selectedActivity?.status === 'finished' || actaCerrada;
   const tipo = activityType === 'academica' ? 'académica' : 'extracurricular';
 
 
@@ -1487,6 +1531,21 @@ export default function ActivityManager({
             {selectedActivity.capacity ?? 'cupo ilimitado'}
             {full && ' · el cupo está lleno'}
           </p>
+          {/* V4.1 A41-011 (§5): terminar el evento no cierra el acta; se regulariza y se cierra a mano. */}
+          {!esExterna && actaCerrada && (
+            <div className="inline-note" role="status" data-testid="acta-cerrada">
+              <FiCheck size={13} /> Asistencia cerrada{selectedActivity.attendanceClosedAt ? ` el ${formatearFechaHora(selectedActivity.attendanceClosedAt)}` : ''}.
+              {' '}{esAutoridad ? 'Puedes hacer una corrección excepcional con motivo.' : 'Si hay un error, lo corrige Dirección con un motivo.'}
+            </div>
+          )}
+          {!esExterna && !actaCerrada && selectedActivity.status === 'finished' && !esAdmin && (
+            <div className="inline-note" role="status">
+              La actividad terminó: puedes registrar la asistencia pendiente y, cuando termines,
+              <Button size="sm" variant="secondary" icon={<FiCheck size={13} />} onClick={() => void cerrarAsistencia()} style={{ marginLeft: '0.4rem' }}>
+                Cerrar asistencia
+              </Button>
+            </div>
+          )}
 
           {partLoading ? (
             <SkeletonTable rows={3} columns={3} />
@@ -1515,7 +1574,7 @@ export default function ActivityManager({
                   <div className="flex" style={{ gap: '0.35rem' }}>
                     <Button
                       size="sm"
-                      disabled={full}
+                      disabled={full || actaCerrada}
                       loading={busyRow === r.id}
                       title={full ? 'El cupo está lleno' : 'Registrar asistencia'}
                       onClick={() => decide(selectedActivity.id, r, okStatus)}
@@ -1526,6 +1585,7 @@ export default function ActivityManager({
                     <Button
                       variant="secondary"
                       size="sm"
+                      disabled={actaCerrada}
                       loading={busyRow === r.id}
                       onClick={() => decide(selectedActivity.id, r, 'absent')}
                       icon={<FiUserX size={14} />}
@@ -1544,7 +1604,7 @@ export default function ActivityManager({
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={full}
+                    disabled={full || actaCerrada}
                     loading={busyRow === r.id}
                     onClick={() => decide(selectedActivity.id, r, okStatus)}
                     icon={<FiCheck size={14} />}
@@ -1566,15 +1626,24 @@ export default function ActivityManager({
                         Entregar certificado
                       </Button>
                     )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      loading={busyRow === r.id}
-                      onClick={() => decide(selectedActivity.id, r, 'absent')}
-                      icon={<FiUserX size={14} />}
-                    >
-                      Marcar ausente
-                    </Button>
+                    {!consolidada && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={busyRow === r.id}
+                        onClick={() => decide(selectedActivity.id, r, 'absent')}
+                        icon={<FiUserX size={14} />}
+                      >
+                        Marcar ausente
+                      </Button>
+                    )}
+                    {consolidada && esAutoridad && !esExterna && (
+                      <Button variant="ghost" size="sm" icon={<FiEdit2 size={13} />}
+                        onClick={() => { setCorreccion({ row: r, status: 'absent' }); setMotivoCorr(''); setErrorCorr(null); }}>
+                        Corregir
+                      </Button>
+                    )}
+                    {consolidada && !esAutoridad && <span className="muted small">Consolidada: la corrige Dirección</span>}
                   </div>
                 )}
               />
@@ -1603,7 +1672,7 @@ export default function ActivityManager({
                     <Button
                       variant="secondary"
                       size="sm"
-                      disabled={full}
+                      disabled={full || actaCerrada}
                       loading={busyRow === r.id}
                       onClick={() => decide(selectedActivity.id, r, okStatus)}
                       icon={<FiCheck size={14} />}
@@ -1653,6 +1722,33 @@ export default function ActivityManager({
           <div className="form-actions">
             <Button variant="secondary" onClick={() => setEntrega(null)}>Cancelar</Button>
             <Button loading={entregando} icon={<FiAward size={14} />} onClick={() => void entregarCertificado()}>Entregar</Button>
+          </div>
+        </Modal>
+      )}
+      {correccion && selectedActivity && (
+        <Modal title="Corrección excepcional" subtitle={correccion.row.studentName ?? 'Participación'} onClose={() => setCorreccion(null)} width={520}>
+          <p className="muted">
+            Cambia una participación ya consolidada. Se ajustan la constancia, la trayectoria, la afinidad y los puntos;
+            nada se borra: queda en la auditoría con tu motivo, y el estudiante lo verá.
+          </p>
+          <div className="field">
+            <label htmlFor="corr-estado">Dejarla como</label>
+            <select id="corr-estado" value={correccion.status}
+              onChange={(e) => setCorreccion({ ...correccion, status: e.target.value as 'confirmed' | 'absent' })}>
+              <option value="absent">Ausente</option>
+              <option value="confirmed">Confirmada</option>
+            </select>
+          </div>
+          <div className={`field ${errorCorr ? 'has-error' : ''}`}>
+            <label htmlFor="corr-motivo">Motivo</label>
+            <textarea id="corr-motivo" value={motivoCorr} maxLength={400}
+              onChange={(e) => { setMotivoCorr(e.target.value); setErrorCorr(null); }}
+              placeholder="Por ejemplo: la lista firmada muestra que no asistió." />
+            <FieldError message={errorCorr} />
+          </div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => setCorreccion(null)}>Volver</Button>
+            <Button loading={corrigiendo} onClick={() => void corregir()}>Aplicar corrección</Button>
           </div>
         </Modal>
       )}

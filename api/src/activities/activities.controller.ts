@@ -20,7 +20,7 @@ import { ActivitiesService } from './activities.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivitiesDto } from './dto/query-activities.dto';
-import { ConfirmParticipationDto } from './dto/confirm-participation.dto';
+import { ConfirmParticipationDto, CorrectParticipationDto } from './dto/confirm-participation.dto';
 import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 
 /**
@@ -235,6 +235,26 @@ export class ActivitiesController {
       dto.studentProfileId,
       dto.status,
     );
+  }
+
+  @Post(':id/attendance/close')
+  @Roles(...MANAGER_ROLES)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Cerrar el acta de asistencia de una actividad terminada (V4.1 §5).' })
+  closeAttendance(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.closeAttendance(user, id);
+  }
+
+  @Post(':id/participation-correction')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Corrección excepcional de una participación, con motivo y reconciliación (V4.1 §5).' })
+  correctParticipation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CorrectParticipationDto,
+  ) {
+    return this.activitiesService.correctParticipation(user, id, dto.studentProfileId, dto.status, dto.reason);
   }
 
   @Get(':id/participants')

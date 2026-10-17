@@ -203,6 +203,20 @@ export class Activity {
   @Column({ name: 'cancelled_at', type: 'timestamptz', nullable: true })
   cancelledAt: Date | null;
 
+  /**
+   * V4.1 A41-011 (§5): acta de asistencia. `open` incluso después de FINISHED
+   * (regularización: se registran pendientes); `locked` cuando el responsable
+   * la cierra. Una corrección posterior la hace Dirección o Administración.
+   */
+  @Column({ name: 'attendance_status', type: 'varchar', length: 16, default: 'open' })
+  attendanceStatus: 'open' | 'locked';
+
+  @Column({ name: 'attendance_closed_at', type: 'timestamptz', nullable: true })
+  attendanceClosedAt: Date | null;
+
+  @Column({ name: 'attendance_closed_by', type: 'uuid', nullable: true })
+  attendanceClosedById: string | null;
+
   /** V3.2 §9: quién hizo el último cambio. */
   @Column({ name: 'updated_by', type: 'uuid', nullable: true })
   updatedById: string | null;

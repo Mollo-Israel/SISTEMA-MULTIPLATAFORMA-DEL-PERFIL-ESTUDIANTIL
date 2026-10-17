@@ -336,7 +336,110 @@ async function batch3(ctx) {
     'V41.3.22 B16 La copia conserva áreas y habilidades', `${(dup.data?.activityAreas ?? []).length}`);
 }
 
-const BATCHES = { batch1, batch2, batch3 };
+// ===========================================================================
+//  BATCH V4.1-4 — Asistencia y derivados (A41-011, §5)
+// ===========================================================================
+async function batch4(ctx) {
+  objective('BATCH V4.1-4 · Regularización tras FINISHED, Cerrar asistencia y corrección excepcional con reconciliación');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dalia', lastName: `Acta${L}`, email: correoStaff('b4dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: `Acta${L}`, email: correoStaff('b4doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [3] } });
+  const alumno = async (k) => {
+    const e = await provisionAndActivate(ctx.admin, { firstName: 'Alu', lastName: `${k}${L}`, email: `v41.b4${k.toLowerCase()}.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 3 });
+    await req('POST', '/profiles/me', { token: e.token, body: {} });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const [a1, a2, a3, a4] = [await alumno('Uno'), await alumno('Dos'), await alumno('Tres'), await alumno('Cuatro')];
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const base = { type: 'academica', categoryId: taller.id, semesterScope: [3], activityDate: en(72), endAt: en(74), modality: 'presencial', location: 'Aula 201' };
+  const confirmar = (id, quien, perfil, status) => req('PATCH', `/activities/${id}/confirm-participation`, { token: quien.token, body: { studentProfileId: perfil, status } });
+
+  const ev = await req('POST', '/activities', {
+    token: director.token, body: { ...base, title: `Charla con acta ${L}`, status: 'open', responsibleUserIds: [docente.userId], outcomePolicy: 'internal_constancy' },
+  });
+  for (const e of [a1, a2, a3, a4]) await req('POST', `/activities/${ev.data?.id}/register`, { token: e.token });
+
+  // Antes de terminar: sin constancia, un error se corrige; con constancia, ya no.
+  const sinConst = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Sin constancia ${L}`, status: 'open', responsibleUserIds: [docente.userId] } });
+  await req('POST', `/activities/${sinConst.data?.id}/register`, { token: a4.token });
+  await confirmar(sinConst.data?.id, docente, a4.profileId, 'confirmed');
+  const deshace = await confirmar(sinConst.data?.id, docente, a4.profileId, 'absent');
+  check(deshace.status === 200, 'V41.4.1 Durante el evento y sin constancia, el responsable corrige un error propio', `status ${deshace.status}`);
+  const c1 = await confirmar(ev.data?.id, docente, a1.profileId, 'confirmed');
+  const conConstancia = await confirmar(ev.data?.id, docente, a1.profileId, 'absent');
+  check(c1.status === 200 && conConstancia.status === 409 && conConstancia.data?.code === 'PARTICIPATION_CONSOLIDATED',
+    'V41.4.2 B18 Con constancia emitida, el responsable no la retira libremente', `${c1.status} / ${conConstancia.status} ${conConstancia.data?.code}`);
+
+  // B17: terminado el evento, todavía se registran pendientes.
+  const antesDeTerminar = await req('POST', `/activities/${ev.data?.id}/attendance/close`, { token: docente.token });
+  check(antesDeTerminar.status === 409 && antesDeTerminar.data?.code === 'ATTENDANCE_NOT_FINISHED',
+    'V41.4.3 B19 La asistencia no se cierra antes de que termine la actividad', `status ${antesDeTerminar.status}`);
+  const fin = await req('PATCH', `/activities/${ev.data?.id}`, { token: director.token, body: { status: 'finished' } });
+  const c2 = await confirmar(ev.data?.id, docente, a2.profileId, 'confirmed');
+  check(fin.status === 200 && c2.status === 200 && c2.data?.status === 'confirmed',
+    'V41.4.4 B17 23.5 Terminada la actividad, el responsable registra una participación pendiente', `${fin.status} / ${c2.status}`);
+  const b18 = await confirmar(ev.data?.id, docente, a2.profileId, 'absent');
+  check(b18.status === 409 && b18.data?.code === 'PARTICIPATION_CONSOLIDATED',
+    'V41.4.5 B18 23.5 Tras FINISHED, un CONFIRMED no pasa libremente a ausente', `status ${b18.status} ${b18.data?.code}`);
+
+  // B19: cerrar asistencia congela el registro ordinario.
+  const adminCierra = await req('POST', `/activities/${ev.data?.id}/attendance/close`, { token: ctx.admin });
+  const cierre = await req('POST', `/activities/${ev.data?.id}/attendance/close`, { token: docente.token });
+  check(adminCierra.status === 403 && cierre.status === 200 && cierre.data?.attendanceStatus === 'locked' && !!cierre.data?.attendanceClosedAt,
+    'V41.4.6 B19 El responsable cierra la asistencia (Administración no: es operación del responsable)', `${adminCierra.status} / ${cierre.status} ${cierre.data?.attendanceStatus}`);
+  const tarde = await confirmar(ev.data?.id, docente, a3.profileId, 'confirmed');
+  check(tarde.status === 409 && tarde.data?.code === 'ATTENDANCE_LOCKED', 'V41.4.7 B19 Con el acta cerrada ya no se registra asistencia ordinaria', `status ${tarde.status}`);
+  const part = await req('GET', `/activities/${ev.data?.id}/participants`, { token: docente.token });
+  const filas = Array.isArray(part.data) ? part.data : part.data?.items ?? [];
+  check(filas.filter((r) => r.status === 'confirmed').length === 2, 'V41.4.8 B19 El historial se preserva tras cerrar', json(filas.map((r) => r.status)));
+
+  // Corrección excepcional de Dirección: motivo, reconciliación de constancia y puntos.
+  const g0 = await req('GET', '/gamification/me', { token: a1.token });
+  const conPuntos = (g0.data?.events ?? []).some((e) => e.trigger === 'participacion_confirmada' && e.points > 0);
+  const docCorrige = await req('POST', `/activities/${ev.data?.id}/participation-correction`, {
+    token: docente.token, body: { studentProfileId: a1.profileId, status: 'absent', reason: 'No asistió según la lista firmada.' },
+  });
+  const corto = await req('POST', `/activities/${ev.data?.id}/participation-correction`, {
+    token: director.token, body: { studentProfileId: a1.profileId, status: 'absent', reason: 'error' },
+  });
+  check(docCorrige.status === 403 && corto.status === 400,
+    'V41.4.9 B18 La corrección excepcional es de Dirección o Administración y exige un motivo', `${docCorrige.status} / ${corto.status}`);
+  const corrige = await req('POST', `/activities/${ev.data?.id}/participation-correction`, {
+    token: director.token, body: { studentProfileId: a1.profileId, status: 'absent', reason: 'La lista firmada muestra que no asistió.' },
+  });
+  check(corrige.status === 200 && corrige.data?.status === 'absent',
+    'V41.4.10 B18 Dirección corrige aunque el acta esté cerrada', `status ${corrige.status}`);
+  const constancias = (await req('GET', '/constancies/internal/my', { token: a1.token })).data ?? [];
+  check(!constancias.some((c) => c.activityId === ev.data?.id && c.status === 'authorized'),
+    'V41.4.11 La constancia de esa participación deja de estar vigente', json(constancias.map((c) => [c.activityId === ev.data?.id, c.status])));
+  const g1 = await req('GET', '/gamification/me', { token: a1.token });
+  const reverso = (g1.data?.events ?? []).find((e) => e.points < 0 && /Reverso por corrección/.test(e.reason));
+  check(!conPuntos || (!!reverso && g1.data?.totalPoints === g0.data?.totalPoints + reverso.points),
+    'V41.4.12 Los puntos se revierten con un movimiento auditable (no se borran)', json({ antes: g0.data?.totalPoints, despues: g1.data?.totalPoints, reverso: reverso?.points, conPuntos }));
+  const aud = await req('GET', `/audit/events?eventType=PARTICIPATION_CORRECTED&limit=20`, { token: ctx.admin });
+  const evAud = (aud.data ?? []).find((e) => e.entityId === corrige.data?.id);
+  check(evAud?.metadata?.motivo?.includes('lista firmada') && evAud?.metadata?.de === 'confirmed' && evAud?.metadata?.a === 'absent',
+    'V41.4.13 La corrección queda en la auditoría con antes, después y motivo', json(evAud?.metadata));
+  const vuelve = await req('POST', `/activities/${ev.data?.id}/participation-correction`, {
+    token: director.token, body: { studentProfileId: a1.profileId, status: 'confirmed', reason: 'Se encontró su firma en la segunda hoja.' },
+  });
+  const g2 = await req('GET', '/gamification/me', { token: a1.token });
+  check(vuelve.status === 200 && (!conPuntos || g2.data?.totalPoints === g0.data?.totalPoints),
+    'V41.4.14 Volver a confirmar restituye los puntos una sola vez', json({ antes: g0.data?.totalPoints, final: g2.data?.totalPoints }));
+
+  // Cancelada: no se otorga asistencia.
+  const cancelada = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Cancelada ${L}`, status: 'open', responsibleUserIds: [docente.userId] } });
+  await req('POST', `/activities/${cancelada.data?.id}/register`, { token: a3.token });
+  await req('PATCH', `/activities/${cancelada.data?.id}`, { token: director.token, body: { status: 'cancelled', cancellationReason: 'Se suspende por un corte de energía.' } });
+  const enCancelada = await confirmar(cancelada.data?.id, docente, a3.profileId, 'confirmed');
+  check(enCancelada.status === 409 && enCancelada.data?.code === 'ACTIVITY_CANCELLED', 'V41.4.15 En una actividad cancelada no se registra asistencia', `status ${enCancelada.status}`);
+  const autoconfirma = await req('PATCH', `/activities/${ev.data?.id}/confirm-participation`, { token: a3.token, body: { studentProfileId: a3.profileId, status: 'confirmed' } });
+  check(autoconfirma.status === 403, 'V41.4.16 Un estudiante nunca confirma su propia asistencia', `status ${autoconfirma.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

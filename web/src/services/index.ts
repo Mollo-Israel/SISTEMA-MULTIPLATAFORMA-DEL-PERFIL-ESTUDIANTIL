@@ -783,6 +783,11 @@ export const activityService = {
   confirm: (id: string, studentProfileId: string, status: string) =>
     api.patch(`/activities/${id}/confirm-participation`, { studentProfileId, status }).then((r) => r.data),
   participants: (id: string) => api.get<Participant[]>(`/activities/${id}/participants`).then((r) => r.data),
+  /** V4.1 A41-011: cerrar el acta de asistencia de una actividad terminada. */
+  closeAttendance: (id: string) => api.post<Activity>(`/activities/${id}/attendance/close`).then((r) => r.data),
+  /** V4.1 A41-011: corrección excepcional (Dirección o Administración), con motivo. */
+  correctParticipation: (id: string, studentProfileId: string, status: 'confirmed' | 'absent' | 'registered', reason: string) =>
+    api.post(`/activities/${id}/participation-correction`, { studentProfileId, status, reason }).then((r) => r.data),
   /** Actividades que el usuario gestiona, incluidos sus borradores. */
   managed: () => api.get<Activity[]>('/activities/managed').then((r) => r.data),
   /** V2 §27: enviar a Dirección, decidir, pendientes e historia. */
