@@ -1,7 +1,8 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { ImagenProtegida } from './ArchivoProtegido';
 import {
-  FiAlertCircle, FiCalendar, FiCheckCircle, FiExternalLink, FiLink, FiMapPin, FiMonitor, FiTag, FiUsers, FiVideo,
+  FiAlertCircle, FiCalendar, FiCheckCircle, FiChevronLeft, FiChevronRight, FiExternalLink, FiLink, FiMapPin, FiMonitor, FiTag,
+  FiUsers, FiVideo,
 } from 'react-icons/fi';
 import type { Activity } from '../services/types';
 import { Badge, Modal } from './ui';
@@ -112,7 +113,7 @@ export function ActivityDetail({ a, onClose, acciones }: { a: Activity; onClose:
   const skills = skillsDe(a);
   return (
     <Modal title={a.title} subtitle={`${lbl(ACTIVITY_TYPE_LABEL, a.type)} · ${lbl(ACTIVITY_STATUS_LABEL, a.status)}`} onClose={onClose} width={720}>
-      {a.imageUrl && <ImagenProtegida src={a.imageUrl} className="activity-detail-img" />}
+      <Carrusel a={a} />
       {a.status === 'cancelled' && a.cancellationReason && (
         <div className="form-alert" role="status"><FiAlertCircle size={15} /> <span>Cancelada: {a.cancellationReason}</span></div>
       )}
@@ -156,5 +157,43 @@ export function ActivityDetail({ a, onClose, acciones }: { a: Activity; onClose:
       )}
       {acciones && <div className="form-actions" style={{ marginTop: '0.8rem' }}>{acciones}</div>}
     </Modal>
+  );
+}
+
+/**
+ * V4.1 A41-006 (A.5): las imágenes de la actividad en el detalle. Con una sola
+ * se ve como antes; con varias, anterior / siguiente con botones, flechas del
+ * teclado y el número de imagen anunciado a los lectores de pantalla.
+ */
+function Carrusel({ a }: { a: Activity }) {
+  const imagenes = a.images?.length ? a.images : a.imageUrl ? [{ fileId: a.imageFileId ?? 'portada', url: a.imageUrl }] : [];
+  const [i, setI] = useState(0);
+  if (imagenes.length === 0) return null;
+  if (imagenes.length === 1) return <ImagenProtegida src={imagenes[0].url} className="activity-detail-img" />;
+  const actual = Math.min(i, imagenes.length - 1);
+  const ir = (n: number) => setI((n + imagenes.length) % imagenes.length);
+  return (
+    <div
+      className="activity-carousel"
+      role="group"
+      aria-roledescription="carrusel"
+      aria-label="Imágenes de la actividad"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowRight') { e.preventDefault(); ir(actual + 1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); ir(actual - 1); }
+      }}
+    >
+      <ImagenProtegida key={imagenes[actual].fileId} src={imagenes[actual].url} className="activity-detail-img" />
+      <div className="activity-carousel-ctrl">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => ir(actual - 1)} aria-label="Imagen anterior">
+          <FiChevronLeft />
+        </button>
+        <span className="muted small" aria-live="polite">Imagen {actual + 1} de {imagenes.length}</span>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => ir(actual + 1)} aria-label="Imagen siguiente">
+          <FiChevronRight />
+        </button>
+      </div>
+    </div>
   );
 }

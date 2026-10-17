@@ -488,6 +488,88 @@ async function pruebas(browser) {
   check(fallos41.length === 0, 'WEB.41.10 Sin errores de JavaScript en V4.1-1', fallos41.join(' | '));
   await c41.close();
 
+  // =========================================================================
+  //  V4.1-2 · Editar hidrata habilidades; varias imágenes, carrusel y tarjeta (A41-005, 006)
+  // =========================================================================
+  objective('V4.1-2 · La edición muestra lo guardado; hasta 5 imágenes con portada y carrusel');
+  const pngBase = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const subirDe = async (token, k) => {
+    const f = new FormData();
+    f.append('file', new Blob([Buffer.concat([pngBase, Buffer.from(`web-v41-${TS}-${k}`)])], { type: 'image/png' }), `v41-${k}.png`);
+    return (await (await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${otros.director.token}` }, body: f })).json())?.id;
+  };
+  const imgs = [await subirDe(otros.director.token, 1), await subirDe(otros.director.token, 2), await subirDe(otros.director.token, 3)];
+  const catAreas = (await req('GET', '/academic-areas', { token: admin })).data ?? [];
+  const catSkills = (await req('GET', '/skills', { token: admin })).data ?? [];
+  const cats41 = (await req('GET', '/activity-categories', { token: otros.director.token })).data ?? [];
+  const aBd = catAreas.find((x) => x.code === 'bases_de_datos');
+  const aRedes = catAreas.find((x) => /redes/i.test(x.code));
+  const sMongo = catSkills.find((x) => x.code === 'mongodb') ?? catSkills.find((x) => x.academicAreaId === aBd.id);
+  const sRedes = catSkills.find((x) => x.academicAreaId === aRedes.id && x.isActive !== false);
+  const titulo41 = `Taller BD y Redes ${TS}`;
+  const inicio = new Date(Date.now() + 72 * 3_600_000).toISOString();
+  const fin = new Date(Date.now() + 74 * 3_600_000).toISOString();
+  await req('POST', '/activities', {
+    token: otros.director.token,
+    body: {
+      title: titulo41, type: 'academica', categoryId: (cats41.find((c) => c.code === 'taller_academico') ?? cats41[0]).id,
+      semesterScope: [3], modality: 'presencial', location: 'Aula 201', activityDate: inicio, endAt: fin, status: 'open',
+      areaIds: [aBd.id, aRedes.id], skillIds: [sMongo.id, sRedes.id],
+      skillContexts: [{ skillId: sMongo.id, areaId: aBd.id }, { skillId: sRedes.id, areaId: aRedes.id }],
+      imageFileIds: imgs,
+    },
+  });
+
+  const c42 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p42 = await c42.newPage();
+  const fallos42 = [];
+  p42.on('pageerror', (e) => fallos42.push(e.message));
+  await entrar(p42, otros.director.email);
+  await p42.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p42.goto(`${WEB}/director/activities`);
+  await p42.getByPlaceholder('Buscar por título, lugar, categoría o etiqueta…').fill(titulo41);
+  await espera(500);
+  await p42.getByRole('button', { name: `Editar ${titulo41}` }).click();
+  await espera(1500);
+  const chipsOn = await p42.locator('button.chip[aria-pressed="true"]').allInnerTexts();
+  check(chipsOn.some((t) => t.includes(sMongo.name)) && chipsOn.some((t) => t.includes(sRedes.name)),
+    'WEB.42.1 B05 A41-005 Al editar, las habilidades guardadas aparecen marcadas en su área', chipsOn.join(' | '));
+  const miniaturas = await p42.locator('ul.activity-images-edit li').count();
+  const portada = await p42.locator('ul.activity-images-edit li').first().innerText();
+  check(miniaturas === 3 && /Portada/.test(portada), 'WEB.42.2 B08 A41-006 El formulario muestra las 3 imágenes y la portada', `${miniaturas} · ${portada}`);
+  await c42.close();
+
+  const estImg2 = await estudianteListo(admin, 'car');
+  const c43 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p43 = await c43.newPage();
+  p43.on('pageerror', (e) => fallos42.push(e.message));
+  await entrar(p43, estImg2.email);
+  await p43.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p43.goto(`${WEB}/student/activities?tab=todas`);
+  await p43.getByRole('tab', { name: 'Todas' }).first().click().catch(() => {});
+  await p43.getByPlaceholder('Buscar por título, descripción o lugar…').fill(titulo41);
+  await espera(800);
+  const tarjeta = p43.locator('article.activity-card', { hasText: titulo41 }).first();
+  await tarjeta.waitFor({ timeout: 8000 }).catch(() => {});
+  const tituloEnImagen = await tarjeta.locator('.activity-card-img').innerText().catch(() => '');
+  check(await tarjeta.count() > 0 && !tituloEnImagen.includes(titulo41) && await tarjeta.locator('.activity-card-body').innerText().then((t) => t.includes(titulo41)),
+    'WEB.42.3 B09 La tarjeta muestra la imagen en su propia región y el texto fuera de ella', tituloEnImagen.slice(0, 60));
+  await tarjeta.getByRole('button', { name: 'Ver detalle' }).click();
+  const carr = p43.locator('[aria-roledescription="carrusel"]');
+  await carr.waitFor({ timeout: 8000 }).catch(() => {});
+  const t1 = await carr.locator('[aria-live]').innerText().catch(() => '');
+  await carr.getByRole('button', { name: 'Imagen siguiente' }).click();
+  const t2 = await carr.locator('[aria-live]').innerText().catch(() => '');
+  await carr.focus();
+  await p43.keyboard.press('ArrowRight');
+  const t3 = await carr.locator('[aria-live]').innerText().catch(() => '');
+  await p43.waitForSelector('[aria-roledescription="carrusel"] img[src^="blob:"]', { timeout: 8000 }).catch(() => {});
+  const visible = await carr.locator('img[src^="blob:"]').count();
+  check(t1 === 'Imagen 1 de 3' && t2 === 'Imagen 2 de 3' && t3 === 'Imagen 3 de 3' && visible === 1,
+    'WEB.42.4 B08 A41-006 El detalle tiene carrusel con botones y teclado, y carga la imagen con la sesión', `${t1} → ${t2} → ${t3} · img=${visible}`);
+  check(fallos42.length === 0, 'WEB.42.5 Sin errores de JavaScript en V4.1-2', fallos42.join(' | '));
+  await c43.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

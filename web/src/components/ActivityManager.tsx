@@ -32,6 +32,9 @@ import {
   lbl,
 } from '../constants';
 
+/** V4.1 A41-006 (A.5): tope de imágenes por actividad. */
+const MAX_IMAGENES = 5;
+
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -64,8 +67,8 @@ const emptyForm = {
   meetingUrl: '',
   externalUrl: '',
   resourceLinks: [] as ResourceLink[],
-  imageFileId: '',
-  imageUrl: '',
+  /** V4.1 A41-006: hasta 5 imágenes; la primera es la portada. */
+  imagenes: [] as { fileId: string; url: string }[],
   /** V3.2 §28.3: emisor real del certificado institucional. */
   certificateIssuer: '',
   capacity: '',
@@ -95,7 +98,7 @@ const RESULTADOS: { value: OutcomePolicy; label: string; hint: string }[] = [
 const CAMPOS = [
   'title', 'categoryId', 'activityDate', 'endAt', 'location', 'meetingUrl', 'areaIds', 'skillIds', 'skillContexts',
   'provider', 'externalUrl', 'responsibleUserIds', 'responsibleUserId', 'contactUserIds', 'resourceLinks',
-  'imageFileId', 'capacity', 'outcomePolicy', 'semesterScope', 'status', 'certificateIssuer',
+  'imageFileIds', 'capacity', 'outcomePolicy', 'semesterScope', 'status', 'certificateIssuer',
 ] as const;
 
 const publicable = (a: Activity) =>
@@ -251,9 +254,10 @@ export default function ActivityManager({
         e.certificateIssuer = 'Indica quién emite el certificado: Afinia no se atribuye su autoría.';
       }
       if (form.areaIds.length === 0) e.areaIds = 'Selecciona al menos un área.';
-      if (form.skillIds.length === 0) e.skillIds = 'Selecciona al menos una habilidad vinculada.';
+      // V4.1 V41-01: una charla general puede no tener una habilidad concreta.
+      // V4.1 A41-007: el borrador puede guardarse sin responsable; se pide al publicar.
+      if (esAdmin && form.responsables.length === 0) e.responsibleUserIds = 'Indica quién responde por esta oportunidad antes de publicar.';
     }
-    if (esAdmin && form.responsables.length === 0) e.responsibleUserIds = 'Indica quién responde por esta oportunidad.';
     errores.setErrors(e as never);
     if (Object.keys(e).length) {
       const primero = document.querySelector<HTMLElement>(`[data-campo="${Object.keys(e)[0]}"] input, [data-campo="${Object.keys(e)[0]}"] select, [data-campo="${Object.keys(e)[0]}"] textarea, [data-campo="${Object.keys(e)[0]}"] button`);
@@ -308,7 +312,7 @@ export default function ActivityManager({
       resourceLinks: form.resourceLinks
         .filter((l) => l.label.trim() || l.url.trim())
         .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
-      imageFileId: form.imageFileId || (editing ? null : undefined),
+      imageFileIds: editing || form.imagenes.length ? form.imagenes.map((i) => i.fileId) : undefined,
       capacity: form.capacity ? Number(form.capacity) : undefined,
       semesterScope: form.semesterScope.length ? form.semesterScope : undefined,
       gamificationRules: form.points
@@ -354,22 +358,39 @@ export default function ActivityManager({
     }
   };
 
-  const subirImagen = async (f: File) => {
-    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) {
-      errores.setErrors({ imageFileId: 'La imagen tiene que ser PNG, JPG o WEBP.' } as never);
+  /** V4.1 A41-006: agrega imágenes hasta un máximo de 5, sin tocar las ya elegidas. */
+  const subirImagenes = async (archivos: File[]) => {
+    const libres = MAX_IMAGENES - form.imagenes.length;
+    if (archivos.some((f) => !/^image\/(png|jpeg|webp)$/.test(f.type))) {
+      errores.setErrors({ imageFileIds: 'Las imágenes tienen que ser PNG, JPG o WEBP.' } as never);
+      return;
+    }
+    if (archivos.length > libres) {
+      errores.setErrors({ imageFileIds: `Puedes agregar hasta ${MAX_IMAGENES} imágenes (te quedan ${Math.max(libres, 0)}).` } as never);
       return;
     }
     setSubiendoImagen(true);
     try {
-      const subido = await uploadService.upload(f);
-      setForm((x) => ({ ...x, imageFileId: subido.id, imageUrl: URL.createObjectURL(f) }));
-      errores.clear('imageFileId');
+      const nuevas: { fileId: string; url: string }[] = [];
+      for (const f of archivos) {
+        const subido = await uploadService.upload(f);
+        nuevas.push({ fileId: subido.id, url: URL.createObjectURL(f) });
+      }
+      setForm((x) => ({ ...x, imagenes: [...x.imagenes, ...nuevas].slice(0, MAX_IMAGENES) }));
+      errores.clear('imageFileIds');
     } catch (err) {
       toast.error(apiError(err));
     } finally {
       setSubiendoImagen(false);
     }
   };
+  const quitarImagen = (fileId: string) =>
+    setForm((x) => ({ ...x, imagenes: x.imagenes.filter((i) => i.fileId !== fileId) }));
+  const hacerPortada = (fileId: string) =>
+    setForm((x) => {
+      const elegida = x.imagenes.find((i) => i.fileId === fileId);
+      return elegida ? { ...x, imagenes: [elegida, ...x.imagenes.filter((i) => i.fileId !== fileId)] } : x;
+    });
 
   const startEdit = (a: Activity) => {
     setEditing(a);
@@ -400,8 +421,7 @@ export default function ActivityManager({
       meetingUrl: a.meetingUrl ?? '',
       externalUrl: a.externalUrl ?? '',
       resourceLinks: a.resourceLinks ?? [],
-      imageFileId: a.imageFileId ?? '',
-      imageUrl: a.imageUrl ?? '',
+      imagenes: a.images?.length ? a.images : a.imageFileId && a.imageUrl ? [{ fileId: a.imageFileId, url: a.imageUrl }] : [],
       certificateIssuer: a.certificateIssuer ?? '',
       capacity: a.capacity ? String(a.capacity) : '',
       status: a.status,
@@ -422,12 +442,20 @@ export default function ActivityManager({
       }))).catch(() => {});
     }
     errores.reset();
-    // El detalle trae responsables, contactos e imagen.
+    // El detalle trae responsables, contactos, imágenes y (V4.1 A41-005) las
+    // habilidades con su área: el formulario no abre con menos de lo guardado.
     activityService.get(a.id).then((d) => setForm((f) => ({
       ...f,
       responsables: d.responsibles ?? f.responsables,
       contactos: d.contacts ?? f.contactos,
-      imageUrl: d.imageUrl ?? f.imageUrl,
+      imagenes: d.images?.length ? d.images : f.imagenes,
+      ...(d.activitySkills ? {
+        skillIds: d.activitySkills.map((x) => x.skillId),
+        skillContexts: Object.fromEntries(
+          d.activitySkills.filter((x) => x.academicAreaId).map((x) => [x.skillId, x.academicAreaId as string]),
+        ),
+      } : {}),
+      ...(d.activityAreas?.length ? { areaIds: d.activityAreas.map((x) => x.academicAreaId) } : {}),
     }))).catch(() => {});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1035,26 +1063,42 @@ export default function ActivityManager({
               <FieldError message={errores.errors.resourceLinks} />
             </div>
 
-            {/* V3.2 §18.3: una imagen ilustrativa opcional. */}
-            <div className={`field ${errores.errors.imageFileId ? 'has-error' : ''}`} data-campo="imageFileId">
-              <label htmlFor="activity-manager-imagen">Imagen (opcional)</label>
-              {form.imageUrl && <ImagenProtegida src={form.imageUrl} className="activity-image-preview" />}
-              <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* V4.1 A41-006: hasta 5 imágenes opcionales; la primera es la portada. */}
+            <div className={`field ${errores.errors.imageFileIds ? 'has-error' : ''}`} data-campo="imageFileIds">
+              <label htmlFor="activity-manager-imagen">
+                Imágenes (opcional, hasta {MAX_IMAGENES}) <span className="muted small">· {form.imagenes.length}/{MAX_IMAGENES}</span>
+              </label>
+              {form.imagenes.length > 0 && (
+                <ul className="activity-images-edit" aria-label="Imágenes de la actividad">
+                  {form.imagenes.map((img, i) => (
+                    <li key={img.fileId}>
+                      <ImagenProtegida src={img.url} className="activity-image-thumb" />
+                      {i === 0 ? <Badge tone="green">Portada</Badge> : (
+                        <button type="button" className="link-button" onClick={() => hacerPortada(img.fileId)}>Usar como portada</button>
+                      )}
+                      <button type="button" className="link-button" onClick={() => quitarImagen(img.fileId)} aria-label={`Quitar la imagen ${i + 1}`}>
+                        <FiImage size={12} /> Quitar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {form.imagenes.length < MAX_IMAGENES && (
                 <input
                   id="activity-manager-imagen"
                   type="file"
+                  multiple
                   accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void subirImagen(f); }}
+                  onChange={(e) => {
+                    const archivos = Array.from(e.target.files ?? []);
+                    e.target.value = '';
+                    if (archivos.length) void subirImagenes(archivos);
+                  }}
                   disabled={subiendoImagen}
                 />
-                {form.imageFileId && (
-                  <Button type="button" variant="ghost" size="sm" icon={<FiImage size={14} />}
-                    onClick={() => setForm({ ...form, imageFileId: '', imageUrl: '' })}>
-                    Quitar imagen
-                  </Button>
-                )}
-              </div>
-              <FieldError message={errores.errors.imageFileId} />
+              )}
+              <p className="field-hint">PNG, JPG o WEBP. La portada se ve en la tarjeta; todas, en el detalle.</p>
+              <FieldError message={errores.errors.imageFileIds} />
             </div>
 
             <div className="row">

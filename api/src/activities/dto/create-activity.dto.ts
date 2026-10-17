@@ -260,6 +260,19 @@ export class CreateActivityDto {
   @IsUUID('4', { message: 'La imagen no es válida.' })
   imageFileId?: string | null;
 
+  /**
+   * V4.1 A41-006: hasta cinco imágenes, en orden; la primera es la portada
+   * (también queda en `imageFileId`). `[]` las quita todas. Si no se envía,
+   * se respeta `imageFileId` como hasta ahora.
+   */
+  @ApiProperty({ required: false, type: [String], maxItems: 5 })
+  @IsOptional()
+  @IsArray({ message: 'Las imágenes deben ser una lista.' })
+  @ArrayMaxSize(5, { message: 'Puedes agregar hasta 5 imágenes.' })
+  @ArrayUnique({ message: 'Hay imágenes repetidas.' })
+  @IsUUID('4', { each: true, message: 'Una de las imágenes no es válida.' })
+  imageFileIds?: string[];
+
   /** V3.2 §28.3: emisor real del certificado institucional. */
   @ApiProperty({ required: false, example: 'Universidad del Valle — Facultad de Informática' })
   @IsOptional()

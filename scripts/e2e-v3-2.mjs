@@ -529,8 +529,9 @@ async function batch5(ctx) {
   check(borrador.status === 201 && borrador.data?.status === 'draft', 'V32.5.3 §21.1 Un borrador puede quedar incompleto', `status ${borrador.status}`);
   const publicar = await req('PATCH', `/activities/${borrador.data?.id}`, { token: director.token, body: { status: 'open' } });
   const faltan = Object.keys(publicar.data?.fields ?? {}).sort();
-  check(publicar.status === 400 && ['activityDate', 'areaIds', 'endAt', 'location', 'skillIds'].every((c) => faltan.includes(c)),
-    'V32.5.4 §18–§19 Publicarlo incompleto se rechaza, campo por campo', json(faltan));
+  // V4.1 V41-01 (§3.1): la habilidad dejó de ser obligatoria para publicar (charlas generales).
+  check(publicar.status === 400 && ['activityDate', 'areaIds', 'endAt', 'location'].every((c) => faltan.includes(c)) && !faltan.includes('skillIds'),
+    'V32.5.4 §18–§19 Publicarlo incompleto se rechaza, campo por campo (la habilidad ya no es obligatoria, V4.1)', json(faltan));
 
   // ----- §18.1 Modalidad
   const virtualSin = await req('POST', '/activities', {

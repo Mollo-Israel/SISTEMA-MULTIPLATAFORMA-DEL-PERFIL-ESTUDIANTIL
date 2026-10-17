@@ -55,6 +55,7 @@ import { User } from '../entities/user.entity';
 import { ActivityResponsible } from '../entities/activity-responsible.entity';
 import { ActivityContact } from '../entities/activity-contact.entity';
 import { StoredFileRecord } from '../entities/stored-file.entity';
+import { ActivityImage } from '../entities/activity-image.entity';
 import { effectiveSemesters } from '../access/teacher-scope.service';
 import { assertSkillsBelongToAreas, resolveSkillContexts, SkillContext } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
@@ -350,9 +351,13 @@ export class ActivitiesService {
     user: AuthenticatedUser,
     type: ActivityType,
     dto: { responsibleUserIds?: string[]; responsibleUserId?: string },
+    borrador = false,
   ): Promise<string[]> {
     const pedidos = dto.responsibleUserIds ?? (dto.responsibleUserId ? [dto.responsibleUserId] : undefined);
     const campo = dto.responsibleUserIds !== undefined ? 'responsibleUserIds' : 'responsibleUserId';
+    // V4.1 A41-007 (§4.2, A.4): un borrador de Administración puede guardarse
+    // todavía sin responsable; se exige al publicar.
+    if (user.role === RolNombre.ADMIN && !pedidos?.length && borrador) return [];
     if (user.role === RolNombre.ADMIN && !pedidos?.length) {
       const msg = 'Como Administración, indica quién es el responsable académico de esta oportunidad.';
       throw new BadRequestException({ message: msg, fields: { [campo]: [msg] } });
@@ -467,21 +472,70 @@ export class ActivitiesService {
   }
 
   /** V3.2 §18.3: la imagen es un archivo de imagen que subió quien la pone. */
-  private async assertImagen(user: AuthenticatedUser, imageFileId: string | null | undefined): Promise<void> {
+  private async assertImagen(
+    user: AuthenticatedUser,
+    imageFileId: string | null | undefined,
+    campo: 'imageFileId' | 'imageFileIds' = 'imageFileId',
+  ): Promise<void> {
     if (!imageFileId) return;
     const archivo = await this.activities.manager.getRepository(StoredFileRecord).findOne({ where: { id: imageFileId } });
     const esImagen = !!archivo && /^image\/(png|jpeg|webp)$/.test(archivo.mimeTypeDetected ?? '');
     if (!archivo || !esImagen || (archivo.uploadedByUserId !== user.userId && user.role !== RolNombre.ADMIN)) {
       const msg = 'La imagen tiene que ser un PNG, JPG o WEBP que hayas subido tú.';
-      throw new BadRequestException({ message: msg, fields: { imageFileId: [msg] } });
+      throw new BadRequestException({ message: msg, fields: { [campo]: [msg] } });
     }
+  }
+
+  /**
+   * V4.1 A41-006 (A.5): la lista final de imágenes, en orden (la primera es la
+   * portada). Solo se validan las que se agregan: quien edita una actividad
+   * ajena conserva las imágenes que subió otra persona. Un cliente anterior
+   * que solo conoce `imageFileId` cambia o quita la portada sin perder el resto.
+   * `undefined` si el pedido no toca las imágenes.
+   */
+  private async resolverImagenes(
+    user: AuthenticatedUser,
+    dto: { imageFileIds?: string[]; imageFileId?: string | null },
+    actuales: string[],
+    portadaActual: string | null,
+  ): Promise<string[] | undefined> {
+    let ids: string[] | undefined;
+    if (dto.imageFileIds !== undefined) {
+      ids = [...new Set(dto.imageFileIds)];
+    } else if (dto.imageFileId !== undefined) {
+      const resto = actuales.filter((x) => x !== portadaActual && x !== dto.imageFileId);
+      ids = dto.imageFileId ? [dto.imageFileId, ...resto] : resto;
+    }
+    if (ids === undefined) return undefined;
+    if (ids.length > 5) {
+      const msg = 'Puedes agregar hasta 5 imágenes.';
+      throw new BadRequestException({ message: msg, fields: { imageFileIds: [msg] } });
+    }
+    const campo = dto.imageFileIds !== undefined ? 'imageFileIds' : 'imageFileId';
+    for (const id of ids) {
+      if (!actuales.includes(id)) await this.assertImagen(user, id, campo);
+    }
+    return ids;
+  }
+
+  private async imagenesDe(activityId: string): Promise<string[]> {
+    const filas = await this.activities.manager.getRepository(ActivityImage).find({
+      where: { activityId }, order: { position: 'ASC', createdAt: 'ASC' },
+    });
+    return filas.map((f) => f.storedFileId);
+  }
+
+  private async replaceImagenes(activityId: string, ids: string[], m: EntityManager): Promise<void> {
+    const repo = m.getRepository(ActivityImage);
+    await repo.delete({ activityId });
+    if (ids.length) await repo.insert(ids.map((storedFileId, position) => ({ activityId, storedFileId, position })));
   }
 
   /**
    * V3.2 §18, §19, §21.1: un borrador puede estar incompleto; lo que se
    * publica o se envía a revisión, no. Errores por campo (§6.4).
    */
-  private assertCompleta(activity: Activity, areaIds: string[], skillIds: string[]): void {
+  private assertCompleta(activity: Activity, areaIds: string[], _skillIds: string[], responsables?: number): void {
     const errores: Record<string, string[]> = {};
     const poner = (campo: string, msg: string) => { errores[campo] = [msg]; };
     if (!activity.eventDate) poner('activityDate', 'Indica la fecha y hora de inicio.');
@@ -499,7 +553,11 @@ export class ActivitiesService {
       poner('certificateIssuer', 'Indica quién emite el certificado: Afinia no se atribuye su autoría.');
     }
     if (areaIds.length === 0) poner('areaIds', 'Selecciona al menos un área.');
-    if (skillIds.length === 0) poner('skillIds', 'Selecciona al menos una habilidad vinculada.');
+    // V4.1 V41-01 (§3.1, 23.1): una charla general puede trabajar un área sin
+    // una tecnología concreta; no se obliga a inventar una habilidad. Si se
+    // eligen habilidades, igual tienen que pertenecer a las áreas (arriba).
+    // V4.1 A41-007: el responsable se exige aquí, al publicar, no al guardar.
+    if (responsables === 0) poner('responsibleUserIds', 'Indica quién es el responsable antes de publicar.');
     if (Object.keys(errores).length > 0) {
       throw new BadRequestException({
         message: 'Completa estos datos antes de publicar o enviar a revisión.',
@@ -921,10 +979,10 @@ export class ActivitiesService {
     await this.assertCategoryUsable(dto.categoryId, dto.type);
     const origen = dto.originType ?? ActivityOrigin.INTERNAL;
     this.assertExterna(origen, dto.provider, dto.externalUrl);
-    const responsables = await this.resolverResponsables(user, dto.type, dto);
-    const responsable = responsables[0];
+    const responsables = await this.resolverResponsables(user, dto.type, dto, (dto.status ?? ActivityStatus.DRAFT) === ActivityStatus.DRAFT);
+    const responsable = responsables[0] ?? null;
     const contactos = (await this.resolverContactos(user, dto.contactUserIds)) ?? [];
-    await this.assertImagen(user, dto.imageFileId);
+    const imagenes = (await this.resolverImagenes(user, dto, [], null)) ?? [];
 
     // §22: un docente solo alcanza a sus semestres habilitados, y eso
     // incluye lo que declara al crear. Sin esto bastaria con publicar una
@@ -970,7 +1028,7 @@ export class ActivitiesService {
       meetingUrl: dto.meetingUrl ?? null,
       certificateIssuer: dto.certificateIssuer?.trim() || null,
       resourceLinks: dto.resourceLinks ?? [],
-      imageFileId: dto.imageFileId ?? null,
+      imageFileId: imagenes[0] ?? null,
       updatedById: user.userId,
       // V3 §13.1: nunca se pide al estudiante evidencia de asistencia.
       evidenceRequired: false,
@@ -988,7 +1046,7 @@ export class ActivitiesService {
     this.normalizarModalidad(activity);
     // V3.2 §21.1–§22: guardar un borrador no publica; publicar exige lo mínimo.
     if (estadoInicial === ActivityStatus.PUBLISHED || estadoInicial === ActivityStatus.OPEN) {
-      this.assertCompleta(activity, areas, contextos.map((c) => c.skillId));
+      this.assertCompleta(activity, areas, contextos.map((c) => c.skillId), responsables.length);
     }
     // V3.2 C6: la actividad, sus áreas, habilidades y reglas se escriben juntas
     // o no se escribe nada.
@@ -998,6 +1056,7 @@ export class ActivitiesService {
       if (contextos.length) await this.replaceSkills(fila.id, contextos, m);
       await this.replaceResponsables(fila.id, responsables, m);
       await this.replaceContactos(fila.id, contactos, m);
+      if (imagenes.length) await this.replaceImagenes(fila.id, imagenes, m);
       await this.derivarPalabrasClave(fila.id, m);
       if (dto.gamificationRules?.length) await this.replaceRules(fila.id, user.userId, dto.gamificationRules, m);
       await this.audit.record({
@@ -1146,7 +1205,11 @@ export class ActivitiesService {
   /** Actividades cuyo responsable es el usuario (panel de gestion). */
   async findManagedBy(user: AuthenticatedUser): Promise<ActivityWithCounts[]> {
     const activities = await this.activities.find({
-      relations: { academicArea: true, creator: true, category: true, activityAreas: { academicArea: true } },
+      // V4.1 A41-005: el formulario de edición se hidrata desde esta fila;
+      // sin las habilidades abría vacío y guardar podía borrarlas.
+      relations: {
+        academicArea: true, creator: true, category: true, activityAreas: { academicArea: true }, activitySkills: { skill: true },
+      },
       order: { createdAt: 'DESC' },
     });
     const propias = await this.filtrarGestionables(user, activities, { incluirPublicadas: false });
@@ -1194,13 +1257,25 @@ export class ActivitiesService {
         where: { activityId: In(ids) }, relations: { user: { role: true } }, order: { createdAt: 'ASC' },
       }),
     ]);
-    const imagenes = lista.map((a) => a.imageFileId).filter((x): x is string => !!x);
+    // V4.1 A41-006: todas las imágenes en orden; la portada sigue en `imageUrl`.
+    const filasImagen = ids.length
+      ? await this.activities.manager.getRepository(ActivityImage).find({
+        where: { activityId: In(ids) }, order: { position: 'ASC', createdAt: 'ASC' },
+      })
+      : [];
+    const imagenes = [...new Set([
+      ...lista.map((a) => a.imageFileId).filter((x): x is string => !!x),
+      ...filasImagen.map((f) => f.storedFileId),
+    ])];
     const archivos = imagenes.length
       ? await this.activities.manager.getRepository(StoredFileRecord).find({ where: { id: In(imagenes) }, select: { id: true, storageKey: true } })
       : [];
     const claveDe = new Map(archivos.map((f) => [f.id, f.storageKey]));
     for (const a of lista) {
-      const extra = a as Activity & { responsibles?: unknown[]; contacts?: unknown[]; imageUrl?: string | null };
+      const extra = a as Activity & {
+        responsibles?: unknown[]; contacts?: unknown[]; imageUrl?: string | null;
+        images?: { fileId: string; url: string }[];
+      };
       const propios = resp.filter((r) => r.activityId === a.id && r.user);
       // El principal primero, aunque se haya agregado después.
       propios.sort((x, y) => Number(y.userId === a.responsibleUserId) - Number(x.userId === a.responsibleUserId));
@@ -1210,6 +1285,12 @@ export class ActivitiesService {
       // Pasa por /api/files, que autoriza: la imagen de un borrador no se sirve a cualquiera.
       const clave = a.imageFileId ? claveDe.get(a.imageFileId) : null;
       extra.imageUrl = clave ? `${FILES_ROUTE}/${clave}` : null;
+      const propias = filasImagen.filter((f) => f.activityId === a.id).map((f) => f.storedFileId);
+      const orden = propias.length ? propias : a.imageFileId ? [a.imageFileId] : [];
+      extra.images = orden
+        .map((fileId) => ({ fileId, clave: claveDe.get(fileId) }))
+        .filter((x): x is { fileId: string; clave: string } => !!x.clave)
+        .map((x) => ({ fileId: x.fileId, url: `${FILES_ROUTE}/${x.clave}` }));
     }
   }
 
@@ -1320,14 +1401,16 @@ export class ActivitiesService {
       if (user.role === RolNombre.TEACHER || user.role === RolNombre.STUDENT) {
         throw new ForbiddenException('Los responsables los reasignan Dirección o Administración.');
       }
-      responsablesNuevos = await this.resolverResponsables(user, activity.type, dto);
-      activity.responsibleUserId = responsablesNuevos[0];
+      responsablesNuevos = await this.resolverResponsables(
+        user, activity.type, dto, (dto.status ?? activity.status) === ActivityStatus.DRAFT,
+      );
+      activity.responsibleUserId = responsablesNuevos[0] ?? null;
     }
     const contactosNuevos = await this.resolverContactos(user, dto.contactUserIds);
-    if (dto.imageFileId !== undefined) {
-      await this.assertImagen(user, dto.imageFileId);
-      activity.imageFileId = dto.imageFileId ?? null;
-    }
+    const imagenesNuevas = (dto.imageFileIds !== undefined || dto.imageFileId !== undefined)
+      ? await this.resolverImagenes(user, dto, await this.imagenesDe(activity.id), activity.imageFileId)
+      : undefined;
+    if (imagenesNuevas !== undefined) activity.imageFileId = imagenesNuevas[0] ?? null;
     if (dto.meetingUrl !== undefined) activity.meetingUrl = dto.meetingUrl ?? null;
     if (dto.certificateIssuer !== undefined) activity.certificateIssuer = dto.certificateIssuer?.trim() || null;
     if (dto.resourceLinks !== undefined) activity.resourceLinks = dto.resourceLinks ?? [];
@@ -1392,7 +1475,9 @@ export class ActivitiesService {
     if (publica || (visible && cambiaLoMinimo)) {
       const areasFinales = areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
       const skillsFinales = contextos?.map((c) => c.skillId) ?? (activity.activitySkills ?? []).map((s) => s.skillId);
-      this.assertCompleta(activity, areasFinales, skillsFinales);
+      const responsablesFinales = responsablesNuevos?.length
+        ?? await this.activities.manager.getRepository(ActivityResponsible).count({ where: { activityId: activity.id } });
+      this.assertCompleta(activity, areasFinales, skillsFinales, responsablesFinales);
     }
 
     await this.activities.manager.transaction(async (m) => {
@@ -1401,6 +1486,7 @@ export class ActivitiesService {
       if (contextos !== undefined) await this.replaceSkills(activity.id, contextos, m);
       if (responsablesNuevos !== undefined) await this.replaceResponsables(activity.id, responsablesNuevos, m);
       if (contactosNuevos !== undefined) await this.replaceContactos(activity.id, contactosNuevos, m);
+      if (imagenesNuevas !== undefined) await this.replaceImagenes(activity.id, imagenesNuevas, m);
       if (areasNuevas !== undefined || contextos !== undefined) await this.derivarPalabrasClave(activity.id, m);
       if (dto.gamificationRules !== undefined) {
         await this.replaceRules(activity.id, user.userId, dto.gamificationRules ?? [], m);

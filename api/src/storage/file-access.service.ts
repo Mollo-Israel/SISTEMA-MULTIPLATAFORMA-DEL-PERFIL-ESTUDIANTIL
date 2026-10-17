@@ -140,10 +140,14 @@ export class FileAccessService {
 
     // V3.2 §18.3: imagen ilustrativa de una actividad. Publicada, la ve
     // cualquiera con sesión; en borrador, solo quien la gestiona.
+    // V4.1 A41-006: la portada o cualquiera de sus imágenes (`activity_images`).
     const conImagen = await this.records.manager.query(
       `SELECT a."status", a."creator_id", a."responsible_user_id", a."id"
-         FROM "activities" a JOIN "stored_files" f ON f."id" = a."image_file_id"
-        WHERE f."storage_key" = $1 LIMIT 1`,
+         FROM "activities" a
+         JOIN "stored_files" f ON f."storage_key" = $1
+        WHERE f."id" = a."image_file_id"
+           OR EXISTS (SELECT 1 FROM "activity_images" ai WHERE ai."activity_id" = a."id" AND ai."stored_file_id" = f."id")
+        LIMIT 1`,
       [storageKey],
     );
     if (conImagen.length) {

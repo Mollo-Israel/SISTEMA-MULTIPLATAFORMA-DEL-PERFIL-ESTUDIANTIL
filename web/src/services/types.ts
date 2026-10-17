@@ -518,6 +518,8 @@ export interface Activity {
   resourceLinks?: ResourceLink[];
   imageFileId?: string | null;
   imageUrl?: string | null;
+  /** V4.1 A41-006: hasta cinco imágenes en orden; la primera es la portada. */
+  images?: { fileId: string; url: string }[];
   /** V3.2 §21.6: motivo de la cancelación. */
   cancellationReason?: string | null;
   /** V3.2 §28.3: emisor real del certificado institucional. */
