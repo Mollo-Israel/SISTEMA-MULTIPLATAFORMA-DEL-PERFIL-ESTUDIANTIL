@@ -1068,24 +1068,40 @@ export class ActivitiesService {
           fields: { gamificationRules: ['En una actividad solo se premia la participación confirmada.'] },
         });
       }
-      if (r.points > max) {
+    }
+    // V4.1 A41-016 (§9.2, A.10): sin puntos libres. La regla nombra un criterio
+    // vigente de participación (no un extra de temporada) y toma sus puntos.
+    const resueltas: { r: ActivityGamificationRuleDto; criterio: GamificationCriterion }[] = [];
+    for (const r of reglas) {
+      const criterio = r.criterionId
+        ? await this.criteria.findOne({ where: { id: r.criterionId } })
+        : null;
+      if (!criterio || !criterio.isActive || criterio.isBonus || criterio.trigger !== r.trigger) {
+        const msg = 'Elige un criterio de puntos configurado por Dirección o Administración (no se admiten puntos libres).';
+        throw new BadRequestException({ message: msg, fields: { gamificationRules: [msg] } });
+      }
+      if (r.points !== undefined && r.points !== criterio.points) {
+        const msg = `Ese criterio da ${criterio.points} puntos; los puntos los fija el criterio.`;
+        throw new BadRequestException({ message: msg, fields: { gamificationRules: [msg] } });
+      }
+      if (criterio.points > max) {
         throw new BadRequestException({
           message: `Una actividad puede dar como máximo ${max} puntos por participación.`,
           fields: { gamificationRules: [`Como máximo ${max} puntos.`] },
         });
       }
+      resueltas.push({ r, criterio });
     }
-    const unicos = new Map(reglas.map((r) => [r.trigger, r]));
+    const unicos = new Map(resueltas.map((x) => [x.r.trigger, x]));
     await rulesRepo.delete({ activityId });
-    for (const r of unicos.values()) {
-      const criterio = await this.criteria.findOne({ where: { code: r.trigger } });
+    for (const { r, criterio } of unicos.values()) {
       await rulesRepo.save(rulesRepo.create({
         activityId,
         trigger: r.trigger,
-        points: r.points,
+        points: criterio.points,
         badgeId: r.badgeId ?? null,
         description: r.description ?? null,
-        criterionId: criterio?.id ?? null,
+        criterionId: criterio.id,
         createdById: userId,
       }));
     }

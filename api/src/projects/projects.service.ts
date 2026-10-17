@@ -651,6 +651,9 @@ export class ProjectsService {
           ? p.createdByProfile.user.firstName + ' ' + p.createdByProfile.user.lastName
           : null,
         semester: p.createdByProfile?.semester ?? null,
+        // V4.1 A41-016: para proponer puntos (dueño y respaldo del proyecto).
+        studentProfileId: p.createdByProfileId,
+        backingTier: p.backingTier,
       })),
     };
   }

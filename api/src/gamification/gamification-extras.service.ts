@@ -331,7 +331,7 @@ export class GamificationExtrasService {
    * No es un ranking público: lo ve solo quien acompaña a esos estudiantes,
    * para decidir a quién reconocer.
    */
-  async scopePoints(user: AuthenticatedUser, periodo: Periodo) {
+  async scopePoints(user: AuthenticatedUser, periodo: Periodo, q?: string) {
     const alcance = await this.scope.scopeFor(user);
     if (Array.isArray(alcance) && alcance.length === 0) return { period: periodo, students: [] };
     const qb = this.perfiles
@@ -348,6 +348,9 @@ export class GamificationExtrasService {
       .addOrderBy('"name"', 'ASC')
       .limit(200);
     if (alcance) qb.where(scopeSql('p', 'alcance'), { alcance });
+    // V4.1 §9.5: detalle por estudiante con filtro; el corte de 200 no esconde a nadie que se busque.
+    const texto = (q ?? '').trim().slice(0, 80);
+    if (texto) qb.andWhere(`(u.first_name || ' ' || u.last_name) ILIKE :texto`, { texto: `%${texto.replace(/[%_\\]/g, '')}%` });
     const filas = await qb.getRawMany<{ profileId: string; name: string; semester: number; points: string }>();
     return {
       period: periodo,

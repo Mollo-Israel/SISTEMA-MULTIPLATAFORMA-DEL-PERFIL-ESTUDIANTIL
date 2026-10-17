@@ -71,7 +71,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/teacher?tab=equipos', label: 'Necesidades de equipo' },
         { to: '/teacher?tab=semestre', label: 'Reporte por semestre' },
         { to: '/teacher/resources', label: 'Proponer recursos' },
-        { to: '/teacher/recognitions', label: 'Retos y recompensas' },
+        { to: '/teacher/points', label: 'Puntos de estudiantes' },
       ],
     },
     {
@@ -92,7 +92,8 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/director/credential-reviews', label: 'Revisión de credenciales' },
         { to: '/director/resources', label: 'Recursos' },
         { to: '/director/analytics', label: 'Analítica' },
-        { to: '/director/recognitions', label: 'Retos y recompensas' },
+        { to: '/director/points', label: 'Puntos de estudiantes' },
+        { to: '/director/gamification', label: 'Criterios de puntos' },
       ],
     },
     {
@@ -129,7 +130,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/activities', label: 'Actividades / oportunidades' },
         { to: '/admin/resources', label: 'Recursos' },
         { to: '/admin/gamification', label: 'Gamificación' },
-        { to: '/admin/recognitions', label: 'Retos y recompensas' },
+        { to: '/admin/points', label: 'Puntos de estudiantes' },
         { to: '/admin/audit', label: 'Auditoría' },
       ],
     },

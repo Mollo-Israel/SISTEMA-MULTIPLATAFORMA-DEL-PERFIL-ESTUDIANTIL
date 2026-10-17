@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FiAward, FiEdit2, FiGift, FiPlus, FiStar, FiTrendingUp } from 'react-icons/fi';
+import { FiAward, FiCalendar, FiEdit2, FiPlus, FiStar, FiTrendingUp } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
@@ -17,7 +17,7 @@ const TRIGGER_LABEL: Record<string, string> = Object.fromEntries(
 );
 const VIGENTES = new Set(GAMIFICATION_TRIGGERS.map((t) => t.value));
 
-const CAMPOS = ['name', 'code', 'trigger', 'points', 'academicAreaId', 'description'] as const;
+const CAMPOS = ['name', 'code', 'trigger', 'points', 'academicAreaId', 'description', 'validFrom', 'validUntil'] as const;
 type Campo = (typeof CAMPOS)[number];
 type Form = Record<Campo, string>;
 
@@ -28,16 +28,18 @@ const codigo: Validator = (v) =>
 const esGeneral = (c: GamificationCriterion) => !c.academicAreaId && c.code === c.trigger;
 
 /**
- * Criterios de gamificación (correcciones de QA).
+ * Criterios de gamificación (correcciones de QA; V4.1 A41-016, §9).
  *
  * Deja claro qué alimentan: cada vez que el sistema reconoce un hecho, da los
- * puntos de su criterio general, o los del extra de su área si existe. Los
- * puntos se canjean por recompensas y nunca cambian la afinidad (§66).
+ * puntos de su criterio general, o los del extra de su área si existe. Un
+ * extra de temporada suma encima mientras está vigente. Los docentes eligen
+ * estos criterios en sus actividades o los proponen sobre un proyecto; no hay
+ * puntos libres ni canjes, y nunca cambian la afinidad (§66).
  */
 export default function AdminGamificationPage() {
   const { data, loading, error, reload } = useAsync(() => adminService.listCriteria(), []);
   const areas = useAsync(() => catalogService.areas(), []);
-  const [modal, setModal] = useState<{ modo: 'general' | 'extra'; criterio: GamificationCriterion | null } | null>(null);
+  const [modal, setModal] = useState<{ modo: Modo; criterio: GamificationCriterion | null } | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -48,8 +50,9 @@ export default function AdminGamificationPage() {
         hecho: t,
         criterio: rows.find((c) => esGeneral(c) && c.trigger === t.value) ?? null,
       })),
-      extras: rows.filter((c) => c.academicAreaId && VIGENTES.has(c.trigger)),
-      retirados: rows.filter((c) => !VIGENTES.has(c.trigger) || (!c.academicAreaId && c.code !== c.trigger)),
+      extras: rows.filter((c) => !c.isBonus && c.academicAreaId && VIGENTES.has(c.trigger)),
+      bonos: rows.filter((c) => c.isBonus),
+      retirados: rows.filter((c) => !c.isBonus && (!VIGENTES.has(c.trigger) || (!c.academicAreaId && c.code !== c.trigger))),
     };
   }, [data]);
 
@@ -78,7 +81,7 @@ export default function AdminGamificationPage() {
     <div>
       <PageHeader
         title="Puntos y reconocimientos"
-        description="Aquí decides cuántos puntos gana un estudiante cuando logra algo verificable. Los puntos lo motivan y se canjean por recompensas; no cambian su afinidad ni sus recomendaciones."
+        description="Aquí decides cuántos puntos gana un estudiante cuando logra algo verificable. Los puntos lo motivan; no se canjean ni cambian su afinidad o sus recomendaciones."
       />
 
       <div className="how-grid" style={{ marginBottom: '1.2rem' }}>
@@ -93,14 +96,14 @@ export default function AdminGamificationPage() {
           <p className="muted small">Los del criterio de ese hecho. Si el hecho es de un área con extra, cuenta el extra.</p>
         </div>
         <div className="how-card c4">
-          <FiGift size={20} />
-          <strong>3. Se canjean</strong>
-          <p className="muted small">Cada estudiante ve sus puntos de la semana, el mes y el año, y los canjea por recompensas que ofrecen sus docentes.</p>
+          <FiCalendar size={20} />
+          <strong>3. Extras de temporada</strong>
+          <p className="muted small">Un extra con fechas suma encima de lo general, solo en su área y solo mientras está vigente.</p>
         </div>
         <div className="how-card c5">
           <FiAward size={20} />
-          <strong>Retos docentes</strong>
-          <p className="muted small">Además, cada docente crea sus propios retos con sus puntos en «Retos y recompensas».</p>
+          <strong>Propuestas docentes</strong>
+          <p className="muted small">El docente elige un criterio en su actividad o propone uno sobre un proyecto; Dirección decide en «Puntos de estudiantes».</p>
         </div>
       </div>
 
@@ -178,6 +181,46 @@ export default function AdminGamificationPage() {
               )}
             </Card>
 
+            <Card
+              title="Extras de temporada"
+              actions={
+                <Button size="sm" icon={<FiPlus size={14} />} onClick={() => setModal({ modo: 'bono', criterio: null })}>
+                  Nuevo extra de temporada
+                </Button>
+              }
+            >
+              <p className="muted" style={{ marginTop: 0 }}>
+                Puntos adicionales por un hecho en un área durante unas fechas: por ejemplo, +5 por participar en Ciberseguridad en octubre.
+              </p>
+              {grupos.bonos.length === 0 ? (
+                <EmptyState icon={<FiCalendar size={22} />} message="No hay extras de temporada." />
+              ) : (
+                <div className="table-scroll">
+                  <table>
+                    <thead><tr><th>Nombre</th><th>Hecho</th><th>Área</th><th>Vigencia</th><th>Puntos</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                      {grupos.bonos.map((c) => (
+                        <tr key={c.id} className={c.isActive ? '' : 'is-inactive'}>
+                          <td><strong>{c.name}</strong><div><span className="code-pill">{c.code}</span></div></td>
+                          <td className="muted">{lbl(TRIGGER_LABEL, c.trigger)}</td>
+                          <td>{c.academicArea?.name ?? 'Todas'}</td>
+                          <td className="muted small">{c.validFrom ?? '—'} → {c.validUntil ?? '—'}</td>
+                          <td><span className="points-pill">+{c.points}</span></td>
+                          <td><Badge tone={c.isActive ? 'green' : 'gray'}>{c.isActive ? 'Activo' : 'Pausado'}</Badge></td>
+                          <td>
+                            <div className="flex" style={{ gap: '0.35rem' }}>
+                              <Button size="sm" variant="secondary" icon={<FiEdit2 size={13} />} onClick={() => setModal({ modo: 'bono', criterio: c })}>Editar</Button>
+                              <Button size="sm" variant="ghost" onClick={() => alternar(c)}>{c.isActive ? 'Pausar' : 'Activar'}</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+
             {grupos.retirados.length > 0 && (
               <details className="card retired-block">
                 <summary>Criterios antiguos que ya no dan puntos ({grupos.retirados.length})</summary>
@@ -215,6 +258,8 @@ export default function AdminGamificationPage() {
   );
 }
 
+type Modo = 'general' | 'extra' | 'bono';
+
 function CriterioDialog({
   modo,
   criterio,
@@ -222,7 +267,7 @@ function CriterioDialog({
   onClose,
   onSaved,
 }: {
-  modo: 'general' | 'extra';
+  modo: Modo;
   criterio: GamificationCriterion | null;
   areas: { id: string; name: string }[];
   onClose: () => void;
@@ -235,11 +280,14 @@ function CriterioDialog({
     points: String(criterio?.points ?? 15),
     academicAreaId: criterio?.academicAreaId ?? '',
     description: criterio?.description ?? '',
+    validFrom: criterio?.validFrom ?? '',
+    validUntil: criterio?.validUntil ?? '',
   });
   const [codigoTocado, setCodigoTocado] = useState(Boolean(criterio));
   const [saving, setSaving] = useState(false);
   const errores = useFormErrors(CAMPOS);
   const general = modo === 'general';
+  const bono = modo === 'bono';
 
   const set = (c: Campo, v: string) => {
     setForm((f) => {
@@ -261,8 +309,14 @@ function CriterioDialog({
         ? {}
         : {
             code: codigo,
-            academicAreaId: (v: string) => (v ? null : 'Elige el área a la que se aplica el extra.'),
+            academicAreaId: (v: string) => (v || bono ? null : 'Elige el área a la que se aplica el extra.'),
           }),
+      ...(bono
+        ? {
+            validFrom: (v: string) => (v ? null : 'Indica desde cuándo vale.'),
+            validUntil: (v: string) => (!v ? 'Indica hasta cuándo vale.' : form.validFrom && v < form.validFrom ? 'La vigencia termina antes de empezar.' : null),
+          }
+        : {}),
     });
     if (Object.keys(locales).length) {
       errores.setErrors(locales);
@@ -276,7 +330,12 @@ function CriterioDialog({
     if (!general) {
       payload.code = form.code.trim();
       payload.trigger = form.trigger;
-      payload.academicAreaId = form.academicAreaId;
+      payload.academicAreaId = form.academicAreaId || null;
+    }
+    if (bono) {
+      payload.isBonus = true;
+      payload.validFrom = form.validFrom;
+      payload.validUntil = form.validUntil;
     }
     setSaving(true);
     try {
@@ -285,7 +344,7 @@ function CriterioDialog({
         onSaved('Criterio actualizado.');
       } else {
         await adminService.createCriterion(payload);
-        onSaved('Extra creado. Desde ahora el área usa estos puntos.');
+        onSaved(bono ? 'Extra de temporada creado.' : 'Extra creado. Desde ahora el área usa estos puntos.');
       }
     } catch (e2) {
       errores.fromApi(e2);
@@ -295,7 +354,7 @@ function CriterioDialog({
 
   return (
     <Modal
-      title={general ? `Puntos por «${lbl(TRIGGER_LABEL, form.trigger)}»` : criterio ? `Editar «${criterio.name}»` : 'Nuevo extra por área'}
+      title={general ? `Puntos por «${lbl(TRIGGER_LABEL, form.trigger)}»` : criterio ? `Editar «${criterio.name}»` : bono ? 'Nuevo extra de temporada' : 'Nuevo extra por área'}
       subtitle={general ? 'Valen para todas las áreas que no tengan un extra propio.' : undefined}
       onClose={onClose}
       width={560}
@@ -312,9 +371,9 @@ function CriterioDialog({
                 {GAMIFICATION_TRIGGERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </FormField>
-            <FormField label="Área" required error={errores.errors.academicAreaId}>
+            <FormField label="Área" required={!bono} error={errores.errors.academicAreaId}>
               <select value={form.academicAreaId} onChange={(e) => set('academicAreaId', e.target.value)}>
-                <option value="">Elige un área…</option>
+                <option value="">{bono ? 'Todas las áreas' : 'Elige un área…'}</option>
                 {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </FormField>
@@ -330,6 +389,16 @@ function CriterioDialog({
             </FormField>
           )}
         </div>
+        {bono && (
+          <div className="row">
+            <FormField label="Vale desde" required error={errores.errors.validFrom}>
+              <input type="date" value={form.validFrom} onChange={(e) => set('validFrom', e.target.value)} />
+            </FormField>
+            <FormField label="Vale hasta" required error={errores.errors.validUntil}>
+              <input type="date" value={form.validUntil} onChange={(e) => set('validUntil', e.target.value)} />
+            </FormField>
+          </div>
+        )}
         <FormField label="Descripción (opcional)" error={errores.errors.description}>
           <textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Por qué se premia este hecho." />
         </FormField>

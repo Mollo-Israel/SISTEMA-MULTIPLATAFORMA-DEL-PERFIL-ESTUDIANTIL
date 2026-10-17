@@ -448,7 +448,21 @@ export class CatalogsService {
     code: string,
     areaId: string | null | undefined,
     activo: boolean,
+    bono = false,
+    desde?: string | null,
+    hasta?: string | null,
   ) {
+    if (desde && hasta && hasta < desde) {
+      throw conflicto('validUntil', 'La vigencia termina antes de empezar.');
+    }
+    if (bono) {
+      // V4.1 A41-016: un extra de temporada necesita vigencia; no reemplaza el criterio general.
+      if (!desde || !hasta) throw conflicto('validFrom', 'Un extra de temporada necesita fecha de inicio y de fin.');
+      if (activo && !SYSTEM_GAMIFICATION_TRIGGERS.includes(trigger)) {
+        throw conflicto('trigger', 'Ese hecho no se puede premiar.');
+      }
+      return;
+    }
     if (trigger === GamificationTrigger.RECONOCIMIENTO_DOCENTE) {
       throw conflicto('trigger', 'Los retos docentes no usan criterios: cada reto define sus propios puntos.');
     }
@@ -466,12 +480,27 @@ export class CatalogsService {
     }
   }
 
+  /** V4.1 A41-016: criterios que una actividad puede elegir (participación, vigentes, no bonos). */
+  async availableParticipationCriteria(trigger?: string) {
+    // Solo los dos hechos que una persona elige o propone: participación (actividad) y proyecto.
+    const disparador = trigger === GamificationTrigger.PROYECTO_CORROBORADO
+      ? GamificationTrigger.PROYECTO_CORROBORADO
+      : GamificationTrigger.PARTICIPACION_CONFIRMADA;
+    const lista = await this.criteria.find({
+      where: { isActive: true, isBonus: false, trigger: disparador },
+      order: { points: 'ASC' },
+    });
+    return lista.map((c) => ({
+      id: c.id, code: c.code, name: c.name, trigger: c.trigger, points: c.points, academicAreaId: c.academicAreaId, isBonus: c.isBonus,
+    }));
+  }
+
   async createCriterion(dto: CreateGamificationCriterionDto): Promise<GamificationCriterion> {
     const exists = await this.criteria.findOne({ where: { code: ILike(dto.code) } });
     if (exists) {
       throw conflicto('code', 'Ya existe un criterio con ese código.');
     }
-    this.assertCriterionRules(dto.trigger, dto.code, dto.academicAreaId, dto.isActive ?? true);
+    this.assertCriterionRules(dto.trigger, dto.code, dto.academicAreaId, dto.isActive ?? true, dto.isBonus ?? false, dto.validFrom, dto.validUntil);
     await this.assertAreaExists(dto.academicAreaId);
     return this.criteria.save(
       this.criteria.create({
@@ -482,6 +511,9 @@ export class CatalogsService {
         points: dto.points,
         academicAreaId: dto.academicAreaId ?? null,
         isActive: dto.isActive ?? true,
+        isBonus: dto.isBonus ?? false,
+        validFrom: dto.validFrom ?? null,
+        validUntil: dto.validUntil ?? null,
       }),
     );
   }
@@ -512,7 +544,13 @@ export class CatalogsService {
       criterion.academicAreaId = dto.academicAreaId ?? null;
     }
     if (dto.isActive !== undefined) criterion.isActive = dto.isActive;
-    this.assertCriterionRules(criterion.trigger, criterion.code, criterion.academicAreaId, criterion.isActive);
+    if (dto.isBonus !== undefined) criterion.isBonus = dto.isBonus;
+    if (dto.validFrom !== undefined) criterion.validFrom = dto.validFrom || null;
+    if (dto.validUntil !== undefined) criterion.validUntil = dto.validUntil || null;
+    this.assertCriterionRules(
+      criterion.trigger, criterion.code, criterion.academicAreaId, criterion.isActive,
+      criterion.isBonus, criterion.validFrom, criterion.validUntil,
+    );
     return this.criteria.save(criterion);
   }
 

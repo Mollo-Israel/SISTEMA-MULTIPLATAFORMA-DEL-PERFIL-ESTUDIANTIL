@@ -56,11 +56,23 @@ export class ActivityGamificationRuleDto {
   @IsEnum(GamificationTrigger, { message: 'El hecho de la regla no es válido.' })
   trigger: GamificationTrigger;
 
-  @ApiProperty({ minimum: 1, example: 15 })
+  /**
+   * V4.1 A41-016 (§9.2, A.10): la actividad elige un criterio configurado por
+   * Dirección o Administración; los puntos salen del criterio. No hay puntos
+   * libres en el formulario.
+   */
+  @ApiProperty({ required: false, description: 'Criterio de gamificación (participación confirmada).' })
+  @IsOptional()
+  @IsUUID('4', { message: 'El criterio de puntos no es válido.' })
+  criterionId?: string;
+
+  /** Compatibilidad: si se envía, tiene que coincidir con los puntos del criterio. */
+  @ApiProperty({ required: false, minimum: 1, example: 15 })
+  @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'Los puntos deben ser un número entero, sin letras ni decimales.' })
   @Min(1, { message: 'Una regla da al menos 1 punto.' })
-  points: number;
+  points?: number;
 
   @ApiProperty({ required: false })
   @IsOptional()

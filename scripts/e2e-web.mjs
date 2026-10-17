@@ -715,6 +715,50 @@ async function pruebas(browser) {
   check(fallos47.length === 0, 'WEB.45.5 Sin errores de JavaScript en V4.1-5', fallos47.join(' | '));
   await c49.close();
 
+  // ===== V4.1-7 · Gamificación: sin Retos y recompensas, propuestas y bandeja única (A41-016/017)
+  objective('V4.1-7 · «Puntos de estudiantes» reemplaza «Retos y recompensas»; Dirección decide en Aprobaciones');
+  const fallos50 = [];
+  const c50 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p50 = await c50.newPage();
+  p50.on('pageerror', (e) => fallos50.push(e.message));
+  await entrar(p50, docActa.email);
+  await p50.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  const navDoc = await p50.locator('nav a.nav-link').allInnerTexts();
+  await p50.goto(`${WEB}/teacher/recognitions`);
+  await p50.getByRole('heading', { name: 'Puntos de estudiantes' }).first().waitFor({ timeout: 8000 }).catch(() => {});
+  const urlDoc = new URL(p50.url()).pathname;
+  check(navDoc.some((e) => e.includes('Puntos de estudiantes')) && !navDoc.some((e) => /Retos y recompensas/.test(e)) && urlDoc === '/teacher/points',
+    'WEB.46.1 A41-017 El docente ya no tiene «Retos y recompensas»: la ruta antigua lleva a «Puntos de estudiantes»', `${urlDoc} · ${navDoc.join(' | ')}`);
+  await p50.getByRole('tab', { name: 'Mis propuestas' }).click();
+  const formProp = await p50.getByText('Proponer puntos por un proyecto').first().waitFor({ timeout: 6000 }).then(() => true).catch(() => false);
+  check(formProp, 'WEB.46.2 §9.3 El docente propone puntos por un proyecto (no los otorga)');
+  await c50.close();
+
+  const c51 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p51 = await c51.newPage();
+  p51.on('pageerror', (e) => fallos50.push(e.message));
+  await entrar(p51, otros.director.email);
+  await p51.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  const navDir = await p51.locator('nav a.nav-link').allInnerTexts();
+  await p51.goto(`${WEB}/director/approvals`);
+  await p51.getByRole('tab', { name: /Pendientes — Gamificación/ }).click({ timeout: 8000 }).catch(() => {});
+  const bandejaPuntos = await p51.getByText('Propuestas de los docentes').first().waitFor({ timeout: 6000 }).then(() => true).catch(() => false);
+  check(bandejaPuntos && navDir.some((e) => e.includes('Criterios de puntos')),
+    'WEB.46.3 §9.4 Aprobaciones de Dirección tiene «Pendientes — Gamificación», y Dirección configura los criterios', navDir.join(' | '));
+  await c51.close();
+
+  const c52 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p52 = await c52.newPage();
+  p52.on('pageerror', (e) => fallos50.push(e.message));
+  await entrar(p52, estActa.email);
+  await p52.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p52.goto(`${WEB}/student/progress`);
+  await p52.getByRole('tab', { name: 'Mi trayectoria' }).first().waitFor({ timeout: 8000 }).catch(() => {});
+  const pestanasProgreso = await p52.getByRole('tab').allInnerTexts();
+  check(pestanasProgreso.length > 0 && !pestanasProgreso.some((t) => /Recompensas/.test(t)), 'WEB.46.4 A41-017 El estudiante ya no tiene la pestaña «Recompensas»', pestanasProgreso.join(' | '));
+  check(fallos50.length === 0, 'WEB.46.5 Sin errores de JavaScript en V4.1-7', fallos50.join(' | '));
+  await c52.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

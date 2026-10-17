@@ -216,8 +216,15 @@ export class CatalogsController {
 
   // ---------------- Criterios de gamificacion ----------------
 
+  @Get('gamification-criteria/available')
+  @Roles(RolNombre.ADMIN, RolNombre.CAREER_DIRECTOR, RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY)
+  @ApiOperation({ summary: 'Criterios vigentes de participación que una actividad puede elegir (V4.1 §9.2: sin puntos libres).' })
+  availableCriteria(@Query('trigger') trigger?: string) {
+    return this.catalogsService.availableParticipationCriteria(trigger);
+  }
+
   @Get('gamification-criteria')
-  @Roles(RolNombre.ADMIN)
+  @Roles(RolNombre.ADMIN, RolNombre.CAREER_DIRECTOR)
   @ApiOperation({
     summary:
       'Criterios de gamificación administrados. Ningún módulo los consume todavía: el motor pertenece a una fase posterior.',
@@ -228,14 +235,14 @@ export class CatalogsController {
 
   @Post('gamification-criteria')
   @ApiOperation({ summary: 'Crea un criterio global de puntos.' })
-  @Roles(RolNombre.ADMIN)
+  @Roles(RolNombre.ADMIN, RolNombre.CAREER_DIRECTOR)
   createCriterion(@Body() dto: CreateGamificationCriterionDto) {
     return this.catalogsService.createCriterion(dto);
   }
 
   @Patch('gamification-criteria/:id')
   @ApiOperation({ summary: 'Actualiza un criterio global de puntos.' })
-  @Roles(RolNombre.ADMIN)
+  @Roles(RolNombre.ADMIN, RolNombre.CAREER_DIRECTOR)
   updateCriterion(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateGamificationCriterionDto,

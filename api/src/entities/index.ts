@@ -51,5 +51,6 @@ export * from './contact-channel.entity';
 export * from './skill-area-relation.entity';
 export * from './activity-responsible.entity';
 export * from './activity-image.entity';
+export * from './gamification-proposal.entity';
 export * from './activity-contact.entity';
 export * from './learning-resource-library.entity';

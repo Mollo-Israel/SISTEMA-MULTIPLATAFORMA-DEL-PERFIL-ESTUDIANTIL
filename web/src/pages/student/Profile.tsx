@@ -1,10 +1,11 @@
 import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
 import { enMemoria, useCachedState } from '../../hooks/viewCache';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { FiCompass, FiLock, FiRefreshCw, FiSave } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { catalogService, onboardingService, profileService } from '../../services';
+import { catalogService, gamificationService, onboardingService, profileService } from '../../services';
+import { useAsync } from '../../hooks/useAsync';
 import {
   AVAILABILITY_LABEL,
   COLLABORATION_INTEREST_LABEL,
@@ -110,6 +111,7 @@ export default function StudentProfilePage() {
               <span className="lbl"><FiLock size={11} /> Código universitario</span>
               <span className="val">{profile.universityCode ?? 'Sin asignar'}</span>
             </div>
+            <SaldoPuntos />
           </div>
           <p className="muted small" style={{ marginBottom: 0 }}>
             El semestre y el código los registra la universidad. Si alguno está mal, avisa a la administración.
@@ -596,5 +598,22 @@ function CuestionarioTab() {
         {run ? 'Responder de nuevo' : 'Responder ahora'}
       </Button>
     </Card>
+  );
+}
+
+/**
+ * V4.1 A41-027: el saldo de puntos a la vista, con enlace al historial que
+ * explica de dónde sale cada punto. Solo lo ve el propio estudiante.
+ */
+function SaldoPuntos() {
+  const w = useAsync(() => gamificationService.wallet(), []);
+  if (!w.data) return null;
+  return (
+    <div className="inst-dato">
+      <span className="lbl">Puntos</span>
+      <span className="val">
+        {w.data.balance.available} · <Link to="/student/progress?tab=progreso">ver historial</Link>
+      </span>
+    </div>
   );
 }

@@ -25,6 +25,8 @@ import {
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
+// Apellido único por corrida (solo letras): sirve para buscar a este estudiante.
+const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
 
 const C = {
   r: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[90m',
@@ -240,7 +242,7 @@ async function bienvenida(ctx) {
   objective('Bienvenida · por pasos, sin saltarse lo mínimo');
 
   const est = await provisionAndActivate(ctx.admin, {
-    firstName: 'Rosa', lastName: 'Flores', email: correoEst('bienvenida'), role: 'STUDENT', semester: 4,
+    firstName: 'Rosa', lastName: `Flores${L}`, email: correoEst('bienvenida'), role: 'STUDENT', semester: 4,
   });
   ctx.est = est;
 
@@ -362,58 +364,44 @@ async function gamificacion(ctx) {
   const perfilAjeno = (await req('GET', '/profiles/me', { token: ajeno.token })).data;
   const perfilEst = (await req('GET', '/profiles/me', { token: ctx.est.token })).data;
 
-  const malReto = await req('POST', '/gamification/challenges', { token: docente.token, body: { title: 'Reto', points: 500 } });
-  check(malReto.status === 400 && malReto.data?.fields?.points, 'QA.54 Los puntos de un reto se validan (1 a 100)', json(malReto.data?.fields));
-  const reto = await req('POST', '/gamification/challenges', {
+  // V4.1 A41-016/017 (§9): sin retos ni recompensas. Crear, premiar y canjear
+  // responde 410; los puntos salen de criterios configurados y de propuestas
+  // docentes que decide Dirección (e2e-v4-1 batch7).
+  const SIN_ID = '00000000-0000-4000-8000-000000000000';
+  const malReto = await req('POST', '/gamification/challenges', { token: docente.token, body: { title: 'Reto', points: 40 } });
+  check(malReto.status === 410, 'QA.54 V4.1 El docente ya no crea retos con sus puntos (410)', `status ${malReto.status}`);
+  const premio = await req('POST', `/gamification/challenges/${SIN_ID}/award`, {
+    token: docente.token, body: { studentProfileIds: [perfilEst.id] },
+  });
+  check(premio.status === 410, 'QA.55 V4.1 Ni premia a mano a un estudiante (410)', `status ${premio.status}`);
+  const fuera = await req('POST', '/gamification/proposals', {
     token: docente.token,
-    body: { title: 'Laboratorio de bases de datos', points: 40 },
+    body: { projectId: SIN_ID, studentProfileId: perfilAjeno.id, criterionId: SIN_ID, reason: 'Fuera de mi alcance, a ver si pasa.' },
   });
-  check(reto.status === 201, 'QA.55 El docente crea un reto con sus puntos', json(reto.data));
+  check(fuera.status === 400 || fuera.status === 404, 'QA.56 Una propuesta sobre un estudiante fuera de su alcance no prospera', `status ${fuera.status}`);
 
-  const fuera = await req('POST', `/gamification/challenges/${reto.data.id}/award`, {
-    token: docente.token, body: { studentProfileIds: [perfilAjeno.id] },
-  });
-  check(fuera.status === 403, 'QA.56 No puede premiar a un estudiante fuera de su alcance cambiando el ID', `status ${fuera.status}`);
-  const dentro = await req('POST', `/gamification/challenges/${reto.data.id}/award`, {
-    token: docente.token, body: { studentProfileIds: [perfilEst.id] },
-  });
-  check((dentro.status === 201 || dentro.status === 200) && dentro.data?.awarded === 1, 'QA.57 Sí puede premiar a los suyos', json(dentro.data));
-  const otraVez = await req('POST', `/gamification/challenges/${reto.data.id}/award`, {
-    token: docente.token, body: { studentProfileIds: [perfilEst.id] },
-  });
-  check(otraVez.data?.awarded === 0 && otraVez.data?.alreadyHad === 1, 'QA.58 El mismo reto no se cobra dos veces', json(otraVez.data));
-
-  const alcance = await req('GET', '/gamification/scope-points?period=week', { token: docente.token });
+  // V4.1 §9.5: la tabla tiene filtro por nombre; con él se ubica a cualquiera del alcance.
+  const alcance = await req('GET', `/gamification/scope-points?period=week&q=${encodeURIComponent(`Rosa Flores${L}`)}`, { token: docente.token });
   const ids = (alcance.data?.students ?? []).map((s) => s.profileId);
-  check(ids.includes(perfilEst.id) && !ids.includes(perfilAjeno.id), 'QA.59 Ve los puntos de su alcance y de nadie más', `${ids.length} estudiantes`);
+  const delAjeno = await req('GET', '/gamification/scope-points?period=week&q=Mario%20Choque', { token: docente.token });
+  check(ids.includes(perfilEst.id) && !(delAjeno.data?.students ?? []).some((s) => s.profileId === perfilAjeno.id),
+    'QA.59 Ve los puntos de su alcance y de nadie más', `${ids.length} estudiantes`);
 
   const wallet = await req('GET', '/gamification/me/wallet', { token: ctx.est.token });
-  check(wallet.data?.balance?.available >= 40, 'QA.60 El estudiante ve su saldo canjeable', json(wallet.data?.balance));
-  check(wallet.data?.periods?.week >= 40 && wallet.data.periods.month >= wallet.data.periods.week
+  check(wallet.status === 200 && wallet.data?.balance?.available >= 0, 'QA.60 El estudiante ve su saldo', json(wallet.data?.balance));
+  check(wallet.data?.periods?.week >= 0 && wallet.data.periods.month >= wallet.data.periods.week
     && wallet.data.periods.year >= wallet.data.periods.month, 'QA.61 Y sus puntos de la semana, el mes y el año', json(wallet.data?.periods));
 
-  const caro = await req('POST', '/gamification/rewards', { token: docente.token, body: { name: 'Libro de algoritmos', cost: 9999 } });
-  const barato = await req('POST', '/gamification/rewards', { token: docente.token, body: { name: 'Certificado del curso', cost: 30, stock: 1 } });
-  check(caro.status === 201 && barato.status === 201, 'QA.62 El docente ofrece recompensas con costo y unidades', `${caro.status}/${barato.status}`);
-  const sinSaldo = await req('POST', `/gamification/rewards/${caro.data.id}/redeem`, { token: ctx.est.token });
-  check(sinSaldo.status === 400, 'QA.63 Sin puntos suficientes no se canjea', json(sinSaldo.data));
-  const canje = await req('POST', `/gamification/rewards/${barato.data.id}/redeem`, { token: ctx.est.token });
-  check(canje.status === 201, 'QA.64 Con puntos suficientes, se canjea', json(canje.data));
-  const agotada = await req('POST', `/gamification/rewards/${barato.data.id}/redeem`, { token: ctx.est.token });
-  check(agotada.status === 409 || agotada.status === 400, 'QA.65 Sin unidades ya no se puede canjear', `status ${agotada.status}`);
+  const recompensa = await req('POST', '/gamification/rewards', { token: docente.token, body: { name: 'Certificado del curso', cost: 30, stock: 1 } });
+  check(recompensa.status === 410, 'QA.62 V4.1 Ya no se ofrecen recompensas (410)', `status ${recompensa.status}`);
+  const canje = await req('POST', `/gamification/rewards/${SIN_ID}/redeem`, { token: ctx.est.token });
+  check(canje.status === 410, 'QA.64 V4.1 Ni se canjean puntos (410)', `status ${canje.status}`);
   const tras = await req('GET', '/gamification/me/wallet', { token: ctx.est.token });
-  check(tras.data?.balance?.available === wallet.data.balance.available - 30, 'QA.66 El costo sale del saldo', json(tras.data?.balance));
-
-  const ajenoResuelve = await req('PATCH', `/gamification/redemptions/${canje.data.id}`, {
+  check(tras.data?.balance?.available === wallet.data.balance.available, 'QA.66 El saldo no cambia', json(tras.data?.balance));
+  const ajenoResuelve = await req('PATCH', `/gamification/redemptions/${SIN_ID}`, {
     token: ajeno.token, body: { status: 'rejected' },
   });
-  check(ajenoResuelve.status === 403, 'QA.67 Un estudiante no resuelve canjes', `status ${ajenoResuelve.status}`);
-  const rechazo = await req('PATCH', `/gamification/redemptions/${canje.data.id}`, {
-    token: docente.token, body: { status: 'rejected', note: 'Prueba' },
-  });
-  check(rechazo.status === 200, 'QA.68 Quien la ofrece la resuelve', `status ${rechazo.status}`);
-  const devuelto = await req('GET', '/gamification/me/wallet', { token: ctx.est.token });
-  check(devuelto.data?.balance?.available === wallet.data.balance.available, 'QA.69 Al rechazar, los puntos vuelven', json(devuelto.data?.balance));
+  check(ajenoResuelve.status === 403, 'QA.67 Un estudiante no resuelve canjes históricos', `status ${ajenoResuelve.status}`);
 
   const afinidad = await req('GET', '/gamification/me', { token: ctx.est.token });
   check(/afinidad/i.test(afinidad.data?.note ?? ''), 'QA.70 La pantalla aclara que los puntos no cambian la afinidad', afinidad.data?.note);

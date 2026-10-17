@@ -57,8 +57,8 @@ export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
  */
 export const GAMIFICATION_TRIGGERS = [
   { value: 'participacion_confirmada', label: 'Participación confirmada', hint: 'El responsable confirma que el estudiante asistió a una actividad.' },
-  { value: 'primer_proyecto_respaldado', label: 'Primer proyecto respaldado', hint: 'Su primer proyecto recibe respaldo de un docente.' },
-  { value: 'proyecto_corroborado', label: 'Proyecto corroborado', hint: 'Un docente corrobora o revisa uno de sus proyectos.' },
+  { value: 'primer_proyecto_respaldado', label: 'Primer proyecto respaldado', hint: 'V4.1: ya no se otorga solo. Los proyectos se premian por propuesta docente que aprueba Dirección.' },
+  { value: 'proyecto_corroborado', label: 'Proyecto corroborado', hint: 'Un docente lo propone sobre un proyecto con respaldo suficiente y Dirección lo aprueba.' },
   { value: 'colaboracion_aceptada', label: 'Colaboración aceptada', hint: 'Se suma a un equipo o su contribución es aceptada.' },
   { value: 'hito_trayectoria', label: 'Hito de trayectoria', hint: 'Su respaldo en un área cruza un umbral.' },
 ];

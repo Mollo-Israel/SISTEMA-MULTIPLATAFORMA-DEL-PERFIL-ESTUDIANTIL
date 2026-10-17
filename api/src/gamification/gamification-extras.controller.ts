@@ -1,4 +1,5 @@
 import {
+  GoneException,
   Body,
   Controller,
   Get,
@@ -36,6 +37,8 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { cleanLine, cleanText, IsCatalogName } from '../common/validation';
 import { GamificationExtrasService, Periodo } from './gamification-extras.service';
+import { GamificationProposalsService } from './gamification-proposals.service';
+import { AuditEventType, AuditService } from '../audit/audit.service';
 
 class ChallengeDto {
   @ApiProperty({ example: 'Laboratorio de SQL completo' })
@@ -132,10 +135,25 @@ class ResolveDto {
   note?: string;
 }
 
+/** V4.1 A41-016: propuesta de un docente. */
+class ProposeGamificationDto {
+  @IsUUID('4') projectId: string;
+  @IsUUID('4') studentProfileId: string;
+  @IsUUID('4') criterionId: string;
+  @IsString() @MinLength(10, { message: 'Explica por qué lo propones (al menos 10 caracteres).' }) @MaxLength(500) reason: string;
+}
+
+class ReviewGamificationProposalDto {
+  @IsIn(['approve', 'reject'], { message: 'Decisión no válida.' }) decision: 'approve' | 'reject';
+  @IsOptional() @IsString() @MaxLength(500) comment?: string;
+}
+
 const PERSONAL = [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN];
 
 /**
  * Retos docentes, recompensas y puntos por periodo (correcciones de QA, §66).
+ * V4.1 A41-016: crear retos o recompensas y canjear responde 410; los
+ * históricos se conservan. Las propuestas docentes reemplazan los retos.
  */
 @ApiTags('gamification')
 @ApiBearerAuth()
@@ -144,6 +162,8 @@ export class GamificationExtrasController {
   constructor(
     private readonly extras: GamificationExtrasService,
     @InjectRepository(StudentProfile) private readonly profiles: Repository<StudentProfile>,
+    private readonly proposals: GamificationProposalsService,
+    private readonly audit: AuditService,
   ) {}
 
   private async profileId(user: AuthenticatedUser): Promise<string> {
@@ -177,7 +197,9 @@ export class GamificationExtrasController {
   @Roles(RolNombre.STUDENT)
   @ApiOperation({ summary: 'Canjear puntos por una recompensa.' })
   async redeem(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.extras.redeem(await this.profileId(user), id);
+    // V4.1 A41-017: retirado.
+    void user; void id;
+    throw new GoneException('Retos y recompensas se retiraron: los puntos se otorgan por criterios configurados y propuestas revisadas por Dirección. Los históricos se conservan.');
   }
 
   // --------------------------------------------------------------- retos
@@ -191,8 +213,9 @@ export class GamificationExtrasController {
   @Post('challenges')
   @Roles(...PERSONAL)
   @ApiOperation({ summary: 'Crear un reto para mis estudiantes.' })
-  createChallenge(@CurrentUser() user: AuthenticatedUser, @Body() dto: ChallengeDto) {
-    return this.extras.createChallenge(user, dto);
+  createChallenge(@CurrentUser() _user: AuthenticatedUser, @Body() _dto: ChallengeDto) {
+    // V4.1 A41-017 (§9.1): retirado; se conserva la ruta para responder claro.
+    throw new GoneException('Retos y recompensas se retiraron: los puntos se otorgan por criterios configurados y propuestas revisadas por Dirección. Los históricos se conservan.');
   }
 
   @Patch('challenges/:id')
@@ -218,15 +241,26 @@ export class GamificationExtrasController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AwardDto,
   ) {
-    return this.extras.awardChallenge(user, id, dto.studentProfileIds);
+    // V4.1 A41-017: retirado.
+    void user; void id;
+    throw new GoneException('Retos y recompensas se retiraron: los puntos se otorgan por criterios configurados y propuestas revisadas por Dirección. Los históricos se conservan.');
   }
 
   @Get('scope-points')
   @Roles(...PERSONAL)
   @ApiOperation({ summary: 'Puntos del periodo de los estudiantes que acompaño. No es público.' })
-  scopePoints(@CurrentUser() user: AuthenticatedUser, @Query('period') period?: string) {
+  async scopePoints(@CurrentUser() user: AuthenticatedUser, @Query('period') period?: string, @Query('q') q?: string) {
     const p = (['week', 'month', 'year'].includes(period ?? '') ? period : 'month') as Periodo;
-    return this.extras.scopePoints(user, p);
+    const r = await this.extras.scopePoints(user, p, q);
+    // V4.1 §9.5: ver puntos de otros estudiantes es un acceso que queda registrado.
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.GAMIFICATION_SCOPE_VIEWED,
+      entityType: 'gamification_scope',
+      entityId: null,
+      metadata: { period: p, q: q?.trim() || null, students: r.students.length },
+    });
+    return r;
   }
 
   // ----------------------------------------------------------- recompensas
@@ -240,8 +274,9 @@ export class GamificationExtrasController {
   @Post('rewards')
   @ApiOperation({ summary: 'Crea una recompensa canjeable.' })
   @Roles(...PERSONAL)
-  createReward(@CurrentUser() user: AuthenticatedUser, @Body() dto: RewardDto) {
-    return this.extras.createReward(user, dto);
+  createReward(@CurrentUser() _user: AuthenticatedUser, @Body() _dto: RewardDto) {
+    // V4.1 A41-017 (§9.1): retirado; se conserva la ruta para responder claro.
+    throw new GoneException('Retos y recompensas se retiraron: los puntos se otorgan por criterios configurados y propuestas revisadas por Dirección. Los históricos se conservan.');
   }
 
   @Patch('rewards/:id')
@@ -271,5 +306,32 @@ export class GamificationExtrasController {
     @Body() dto: ResolveDto,
   ) {
     return this.extras.resolveRedemption(user, id, dto.status, dto.note);
+  }
+
+  // ------------------------------------------------- propuestas (V4.1 A41-016)
+  @Post('proposals')
+  @Roles(RolNombre.TEACHER)
+  @ApiOperation({ summary: 'Proponer puntos por un proyecto de un estudiante de mi alcance; lo decide Dirección (V4.1 §9.3).' })
+  propose(@CurrentUser() user: AuthenticatedUser, @Body() dto: ProposeGamificationDto) {
+    return this.proposals.propose(user, dto);
+  }
+
+  @Get('proposals')
+  @Roles(RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Propuestas de puntos: las mías (docente) o todas (Dirección y Administración).' })
+  listProposals(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: string) {
+    return this.proposals.list(user, status);
+  }
+
+  @Post('proposals/:id/review')
+  @HttpCode(200)
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  @ApiOperation({ summary: 'Aprobar o rechazar una propuesta de puntos (V4.1 §9.4).' })
+  reviewProposal(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewGamificationProposalDto,
+  ) {
+    return this.proposals.review(user, id, dto.decision, dto.comment);
   }
 }

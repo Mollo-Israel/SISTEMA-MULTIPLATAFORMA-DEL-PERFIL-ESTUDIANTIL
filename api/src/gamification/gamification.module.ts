@@ -33,6 +33,7 @@ import { TrajectorySummaryService } from '../trajectory/trajectory-summary.servi
 import { GamificationService } from './gamification.service';
 import { GamificationController } from './gamification.controller';
 import { GamificationExtrasController } from './gamification-extras.controller';
+import { GamificationProposalsService } from './gamification-proposals.service';
 
 /**
  * Gamificación y resumen de trayectoria (§66, §67, §134).
@@ -75,7 +76,7 @@ import { GamificationExtrasController } from './gamification-extras.controller';
     AccessModule,
   ],
   controllers: [GamificationController, GamificationExtrasController],
-  providers: [GamificationService, GamificationExtrasService, TrajectorySummaryService],
+  providers: [GamificationProposalsService, GamificationService, GamificationExtrasService, TrajectorySummaryService],
   exports: [GamificationService],
 })
 export class GamificationModule {}

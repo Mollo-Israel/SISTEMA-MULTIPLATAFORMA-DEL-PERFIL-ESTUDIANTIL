@@ -2025,16 +2025,17 @@ async function batch19(ctx) {
   check(eventos(p, 'primer_proyecto_respaldado').length === 0 && eventos(p, 'proyecto_corroborado').length === 0 && (p?.totalPoints ?? 0) === inicio,
     'V3.19.2 §57 Un borrador no da puntos, aunque se le suban varias capturas', `${p?.totalPoints}`);
 
-  // ----- Al activarse, sí: una sola vez
+  // ----- V4.1 A41-016 (§9.3): activo y corroborado tampoco da puntos solo; un
+  // docente lo propone y Dirección decide (e2e-v4-1 batch7).
   await req('PATCH', `/projects/${borrador.id}`, { token: est.token, body: { status: 'active' } });
   p = await progreso();
-  check(eventos(p, 'primer_proyecto_respaldado').length === 1 && eventos(p, 'proyecto_corroborado').length === 1,
-    'V3.19.3 Activo y corroborado: se reconoce el primero respaldado y el corroborado', JSON.stringify((p?.events ?? []).map((e) => e.trigger)));
+  check(eventos(p, 'primer_proyecto_respaldado').length === 0 && eventos(p, 'proyecto_corroborado').length === 0 && (p?.totalPoints ?? 0) === inicio,
+    'V3.19.3 V4.1 §9.3 Activo y corroborado: el estudiante no se da puntos por su proyecto', JSON.stringify((p?.events ?? []).map((e) => e.trigger)));
   const tras = p.totalPoints;
   await req('POST', `/projects/${borrador.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${borrador.id}-otra.png`, description: 'Otra captura.' } });
   const p2 = await progreso();
   const p3 = await progreso();
-  check(p2.totalPoints === tras && p3.totalPoints === tras && eventos(p3, 'proyecto_corroborado').length === 1,
+  check(p2.totalPoints === tras && p3.totalPoints === tras && eventos(p3, 'proyecto_corroborado').length === 0,
     'V3.19.4 Idempotente: consultar o sumar archivos no repite puntos', `${tras} / ${p2.totalPoints} / ${p3.totalPoints}`);
 
   // ----- Contactos: ya no suman (spam)

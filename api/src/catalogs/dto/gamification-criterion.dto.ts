@@ -70,6 +70,22 @@ export class CreateGamificationCriterionDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** V4.1 A41-016: extra de temporada (suma además de los puntos del hecho). */
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  isBonus?: boolean;
+
+  @ApiProperty({ required: false, example: '2026-11-01' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'La fecha de inicio debe tener el formato AAAA-MM-DD.' })
+  validFrom?: string;
+
+  @ApiProperty({ required: false, example: '2026-11-30' })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'La fecha de fin debe tener el formato AAAA-MM-DD.' })
+  validUntil?: string;
 }
 
 export class UpdateGamificationCriterionDto extends PartialType(

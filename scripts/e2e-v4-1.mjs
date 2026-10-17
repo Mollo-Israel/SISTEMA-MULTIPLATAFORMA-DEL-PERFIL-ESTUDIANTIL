@@ -589,7 +589,167 @@ async function batch6(ctx) {
     'V41.6.8 §8 Nadie llega a 100 por una sola coincidencia', json(lista.filter((i) => Number(i.score) >= 100).map((i) => i.reasons)));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
+// ===========================================================================
+//  BATCH V4.1-7 — Gamificación simplificada (A41-016, A41-017, A41-027)
+// ===========================================================================
+async function batch7(ctx) {
+  objective('BATCH V4.1-7 · Criterios sin puntos libres, extras de temporada y propuestas docentes revisadas por Dirección');
+  const { execSync } = await import('node:child_process');
+  const psql = (sql) => execSync(
+    `docker exec perfil_postgres psql -U ${process.env.POSTGRES_USER ?? 'perfil_user'} -d ${process.env.POSTGRES_DB ?? 'perfil_estudiantil'} -tAc "${sql.replace(/"/g, '\\"')}"`,
+    { encoding: 'utf8' },
+  ).trim();
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Puntos${L}`, email: correoStaff('b7dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: `Puntos${L}`, email: correoStaff('b7doc'), role: 'TEACHER' });
+  const ajeno = await provisionAndActivate(ctx.admin, { firstName: 'Iris', lastName: `Puntos${L}`, email: correoStaff('b7ajeno'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [5] } });
+  await req('PUT', `/users/${ajeno.userId}/semesters`, { token: ctx.admin, body: { semesters: [9] } });
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Eva', lastName: `Puntos${L}`, email: `v41.b7est.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 5 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const base = { type: 'academica', categoryId: taller.id, semesterScope: [5], activityDate: en(72), endAt: en(74), modality: 'presencial', location: 'Aula 201' };
+
+  // ----- A41-017: Retos y recompensas se retiran sin borrar la historia
+  const reto = await req('POST', '/gamification/challenges', { token: docente.token, body: { title: `Reto ${L}`, points: 10 } });
+  const recompensa = await req('POST', '/gamification/rewards', { token: director.token, body: { name: `Premio ${L}`, cost: 10 } });
+  const historicos = await req('GET', '/gamification/challenges', { token: docente.token });
+  check(reto.status === 410 && recompensa.status === 410 && historicos.status === 200,
+    'V41.7.1 A41-017 Ya no se crean retos ni recompensas (410); lo histórico se sigue consultando', `${reto.status} / ${recompensa.status} / ${historicos.status}`);
+
+  // ----- A41-016 (§9.2): sin puntos libres en la actividad
+  const libres = await req('POST', '/activities', {
+    token: director.token, body: { ...base, title: `Puntos libres ${L}`, gamificationRules: [{ trigger: 'participacion_confirmada', points: 50 }] },
+  });
+  check(libres.status === 400 && !!libres.data?.fields?.gamificationRules,
+    'V41.7.2 §9.2 Puntos escritos a mano en la actividad se rechazan, con el error en su campo', `status ${libres.status} ${json(libres.data?.fields)}`);
+  const disponibles = (await req('GET', '/gamification-criteria/available', { token: docente.token })).data ?? [];
+  const deProyecto = (await req('GET', '/gamification-criteria/available?trigger=proyecto_corroborado', { token: docente.token })).data ?? [];
+  const general = disponibles.find((c) => c.code === 'participacion_confirmada');
+  check(!!general && disponibles.every((c) => c.trigger === 'participacion_confirmada' && !c.isBonus)
+    && deProyecto.length > 0 && deProyecto.every((c) => c.trigger === 'proyecto_corroborado' && !c.isBonus),
+    'V41.7.3 El docente ve solo criterios vigentes elegibles (participación o proyecto), sin extras de temporada', json(deProyecto.map((c) => c.code)));
+  const conCriterio = await req('POST', '/activities', {
+    token: director.token, body: { ...base, title: `Con criterio ${L}`, gamificationRules: [{ trigger: 'participacion_confirmada', criterionId: general?.id }] },
+  });
+  const regla = (conCriterio.data?.gamificationRules ?? [])[0];
+  check(conCriterio.status === 201 && regla?.criterionId === general?.id && regla?.points === general?.points,
+    'V41.7.4 §9.3 Al elegir un criterio, los puntos son los del criterio', json(conCriterio.data?.gamificationRules));
+  const trucado = await req('POST', '/activities', {
+    token: director.token, body: { ...base, title: `Trucado ${L}`, gamificationRules: [{ trigger: 'participacion_confirmada', criterionId: general?.id, points: 99 }] },
+  });
+  check(trucado.status === 400, 'V41.7.5 §9.2 Un criterio con otros puntos que los suyos se rechaza', `status ${trucado.status}`);
+
+  // ----- §9.1: Dirección también configura; extras de temporada con vigencia
+  const area = (await req('POST', '/academic-areas', {
+    token: ctx.admin, body: { name: `Robotica de temporada ${L}`, description: 'Área del escenario de extras de temporada.', tags: ['servomotores'] },
+  })).data;
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+  const manana = new Date(Date.now() + 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+  const sinFechas = await req('POST', '/gamification-criteria', {
+    token: director.token, body: { code: `bono_sf_${TS}`, name: 'Extra sin fechas', trigger: 'participacion_confirmada', points: 5, academicAreaId: area?.id, isBonus: true },
+  });
+  const alReves = await req('POST', '/gamification-criteria', {
+    token: director.token, body: { code: `bono_rv_${TS}`, name: 'Extra al reves', trigger: 'participacion_confirmada', points: 5, academicAreaId: area?.id, isBonus: true, validFrom: manana, validUntil: hoy },
+  });
+  check(sinFechas.status >= 400 && sinFechas.status < 500 && alReves.status >= 400 && alReves.status < 500,
+    'V41.7.6 §9.3 Un extra de temporada exige vigencia, y que termine después de empezar', `${sinFechas.status} / ${alReves.status}`);
+  const bono = await req('POST', '/gamification-criteria', {
+    token: director.token,
+    body: { code: `bono_${TS}`, name: 'Extra de robotica', trigger: 'participacion_confirmada', points: 7, academicAreaId: area?.id, isBonus: true, validFrom: hoy, validUntil: manana },
+  });
+  const estudianteCrea = await req('POST', '/gamification-criteria', {
+    token: est.token, body: { code: `est_${TS}`, name: 'Mis puntos', trigger: 'participacion_confirmada', points: 100 },
+  });
+  check(bono.status === 201 && bono.data?.isBonus === true && estudianteCrea.status === 403,
+    'V41.7.7 §9.1 Dirección crea un extra de temporada; un estudiante no crea criterios', `${bono.status} / ${estudianteCrea.status}`);
+  try {
+    const evento = await req('POST', '/activities', {
+      token: director.token,
+      body: { ...base, title: `Robotica en temporada ${L}`, areaIds: [area?.id], status: 'open', responsibleUserIds: [docente.userId] },
+    });
+    await req('POST', `/activities/${evento.data?.id}/register`, { token: est.token });
+    const conf = await req('PATCH', `/activities/${evento.data?.id}/confirm-participation`, {
+      token: docente.token, body: { studentProfileId: est.profileId, status: 'confirmed' },
+    });
+    const g = (await req('GET', '/gamification/me', { token: est.token })).data;
+    const bonos = (g?.events ?? []).filter((e) => /Bono de temporada «Extra de robotica»/.test(e.reason));
+    check(conf.status === 200 && bonos.length === 1 && bonos[0].points === 7,
+      'V41.7.8 §9.3 El extra vigente suma una vez, aparte, en el área de la actividad', json((g?.events ?? []).map((e) => [e.points, e.reason])));
+    await req('GET', '/gamification/me', { token: est.token });
+    const otraVez = ((await req('GET', '/gamification/me', { token: est.token })).data?.events ?? []).filter((e) => /Bono de temporada/.test(e.reason));
+    check(otraVez.length === 1, 'V41.7.9 §9.6 Recalcular no vuelve a dar el extra (una recompensa por hecho)', `${otraVez.length}`);
+  } finally {
+    await req('PATCH', `/gamification-criteria/${bono.data?.id}`, { token: ctx.admin, body: { isActive: false } });
+  }
+
+  // ----- §9.3 Proyecto: el docente propone, Dirección decide
+  const proy = await req('POST', '/projects', {
+    token: est.token, body: { title: `Brazo robotico ${L}`, description: 'Brazo robótico con visión para clasificar piezas.', visibility: 'teachers', status: 'draft' },
+  });
+  const criterioProyecto = deProyecto.find((c) => c.code === 'proyecto_corroborado') ?? deProyecto[0];
+  const proponer = (quien, extra = {}) => req('POST', '/gamification/proposals', {
+    token: quien.token,
+    body: { projectId: proy.data?.id, studentProfileId: est.profileId, criterionId: criterioProyecto?.id, reason: 'Integró visión y control con evidencia propia.', ...extra },
+  });
+  psql(`update projects set backing_tier='declared' where id='${proy.data?.id}'`);
+  const sinRespaldo = await proponer(docente);
+  check(sinRespaldo.status === 400 && sinRespaldo.data?.code === 'PROJECT_BACKING_INSUFFICIENT',
+    'V41.7.10 §9.3 Un proyecto solo declarado no se propone', `status ${sinRespaldo.status} ${sinRespaldo.data?.code}`);
+  psql(`update projects set backing_tier='supported' where id='${proy.data?.id}'`);
+  const propiaEst = await proponer(est);
+  const fueraDeAlcance = await proponer(ajeno);
+  const corta = await proponer(docente, { reason: 'bien' });
+  const conBono = await proponer(docente, { criterionId: bono.data?.id });
+  check(propiaEst.status === 403 && fueraDeAlcance.status === 404 && corta.status === 400 && conBono.status === 400,
+    'V41.7.11 §9.3 El estudiante no se premia; otro docente fuera de alcance no propone; motivo y criterio válidos',
+    `${propiaEst.status} / ${fueraDeAlcance.status} / ${corta.status} / ${conBono.status}`);
+  const propuesta = await proponer(docente);
+  const repetida = await proponer(docente);
+  check(propuesta.status === 201 && propuesta.data?.status === 'pending' && repetida.status === 409,
+    'V41.7.12 §9.6 La propuesta queda pendiente y no se duplica', `${propuesta.status} / ${repetida.status}`);
+  const bandeja = (await req('GET', '/gamification/proposals?status=pending', { token: director.token })).data ?? [];
+  const enBandeja = bandeja.find((p) => p.id === propuesta.data?.id);
+  const delAjeno = (await req('GET', '/gamification/proposals', { token: ajeno.token })).data ?? [];
+  check(!!enBandeja && enBandeja.project?.title?.includes('Brazo') && enBandeja.student?.profileId === est.profileId
+    && enBandeja.project?.backingTier === 'supported' && !!enBandeja.reason && !delAjeno.some((p) => p.id === propuesta.data?.id),
+    'V41.7.13 §9.4 Dirección ve proyecto, estudiante, respaldo y motivo; otro docente no ve propuestas ajenas', json(enBandeja));
+  const docenteDecide = await req('POST', `/gamification/proposals/${propuesta.data?.id}/review`, { token: docente.token, body: { decision: 'approve' } });
+  const rechazoMudo = await req('POST', `/gamification/proposals/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'reject' } });
+  check(docenteDecide.status === 403 && rechazoMudo.status === 400,
+    'V41.7.14 §9.3 El docente no aprueba lo suyo; rechazar exige motivo', `${docenteDecide.status} / ${rechazoMudo.status}`);
+  const antes = (await req('GET', '/gamification/me', { token: est.token })).data?.totalPoints ?? 0;
+  const aprueba = await req('POST', `/gamification/proposals/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'approve', comment: 'Respaldado.' } });
+  const despues = (await req('GET', '/gamification/me', { token: est.token })).data;
+  const evento = (despues?.events ?? []).find((e) => /Brazo robotico/.test(e.reason));
+  check(aprueba.status === 200 && aprueba.data?.status === 'approved' && evento?.points === criterioProyecto?.points
+    && (despues?.totalPoints ?? 0) - antes === criterioProyecto?.points,
+    'V41.7.15 §9.3 Al aprobar, los puntos del criterio entran al historial con su origen', json(evento));
+  const otraDecision = await req('POST', `/gamification/proposals/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'approve' } });
+  const tras = await proponer(docente);
+  check(otraDecision.status === 409 && tras.status === 409,
+    'V41.7.16 §9.6 Una propuesta decidida no se vuelve a decidir ni a proponer', `${otraDecision.status} / ${tras.status}`);
+  const auditoria = psql(`select string_agg(event_type, ',') from audit_events where entity_id='${propuesta.data?.id}'`);
+  check(/GAMIFICATION_PROPOSED/.test(auditoria) && /GAMIFICATION_PROPOSAL_REVIEWED/.test(auditoria),
+    'V41.7.17 Propuesta y decisión quedan en la auditoría', auditoria);
+
+  // ----- §9.5 Puntos por estudiante: solo personal, con alcance y auditado
+  const delDocente = (await req('GET', '/gamification/scope-points?period=year', { token: docente.token })).data?.students ?? [];
+  const deOtro = (await req('GET', '/gamification/scope-points?period=year', { token: ajeno.token })).data?.students ?? [];
+  const delEst = await req('GET', '/gamification/scope-points', { token: est.token });
+  check(delDocente.some((s) => s.profileId === est.profileId && s.points > 0) && !deOtro.some((s) => s.profileId === est.profileId) && delEst.status === 403,
+    'V41.7.18 §9.5 El docente ve los puntos de sus semestres; otro docente no; el estudiante no ve la tabla', `${delDocente.length} / ${deOtro.length} / ${delEst.status}`);
+  const accesos = Number(psql(`select count(*) from audit_events where event_type='GAMIFICATION_SCOPE_VIEWED' and actor_user_id='${docente.userId}'`));
+  check(accesos >= 1, 'V41.7.19 §9.5 Consultar puntos de otros queda auditado', `${accesos}`);
+
+  // ----- A41-027: saldo propio con historial trazable
+  const billetera = await req('GET', '/gamification/me/wallet', { token: est.token });
+  check(billetera.status === 200 && billetera.data?.balance?.available === despues?.totalPoints,
+    'V41.7.20 A41-027 El estudiante ve su saldo, igual a la suma de su historial', json(billetera.data?.balance));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

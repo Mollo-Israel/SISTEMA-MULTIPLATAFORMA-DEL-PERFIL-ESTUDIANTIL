@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useAsync } from '../../hooks/useAsync';
+import { BandejaDireccion } from '../staff/StudentPoints';
 import { FiAlertCircle, FiCheck, FiClock, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { useCachedState } from '../../hooks/viewCache';
-import { activityService } from '../../services';
+import { activityService, gamificationService, learningResourceService } from '../../services';
 import {
-  Badge, Button, Card, Diferido, EmptyState, PageHeader, SkeletonCards, Stagger,
+  Badge, Button, Card, Diferido, EmptyState, PageHeader, SkeletonCards, Stagger, Tabs,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
 import type { Activity } from '../../services/types';
@@ -28,6 +31,46 @@ const fecha = (v: string | null) =>
  * rechaza. La API es la que decide: esta página solo la usa.
  */
 export default function DirectorApprovalsPage() {
+  // V4.1 §9.4: una sola bandeja con Actividades, Recursos y Gamificación.
+  const [params, setParams] = useSearchParams();
+  const tab = (['recursos', 'gamificacion'].includes(params.get('tab') ?? '') ? params.get('tab') : 'actividades') as string;
+  const actividades = useAsync(() => activityService.pendingReviews(), [], { cache: false });
+  const recursos = useAsync(() => learningResourceService.pending(), [], { cache: false });
+  const puntos = useAsync(() => gamificationService.proposals('pending'), [], { cache: false });
+  return (
+    <div>
+      <PageHeader
+        title="Aprobaciones"
+        description="Lo que docentes y la sociedad científica enviaron a Dirección: actividades, recursos propuestos y propuestas de puntos. Cada pendiente se aprueba, se observa o se rechaza con motivo."
+      />
+      <Tabs
+        items={[
+          { key: 'actividades', label: 'Pendientes — Actividades', count: actividades.data?.length },
+          { key: 'recursos', label: 'Pendientes — Recursos', count: recursos.data?.length },
+          { key: 'gamificacion', label: 'Pendientes — Gamificación', count: puntos.data?.length },
+        ]}
+        value={tab}
+        onChange={(k) => setParams(k === 'actividades' ? {} : { tab: k }, { replace: true })}
+      />
+      {tab === 'actividades' ? (
+        <ActividadesPendientes />
+      ) : tab === 'recursos' ? (
+        <Card title="Recursos propuestos por docentes">
+          <p className="muted" style={{ marginTop: 0 }}>
+            {recursos.data?.length
+              ? `Hay ${recursos.data.length} recurso${recursos.data.length === 1 ? '' : 's'} esperando revisión.`
+              : 'No hay recursos esperando revisión.'}{' '}
+            Se revisan con su contenido completo en <Link to="/director/resources">Recursos</Link>.
+          </p>
+        </Card>
+      ) : (
+        <BandejaDireccion />
+      )}
+    </div>
+  );
+}
+
+function ActividadesPendientes() {
   const [items, setItems] = useCachedState<Activity[] | null>('pendientes', null);
   const [abierta, setAbierta] = useState<string | null>(null);
   const [historia, setHistoria] = useState<Record<string, Historia>>({});
@@ -89,10 +132,7 @@ export default function DirectorApprovalsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Aprobaciones"
-        description="Actividades que docentes y la sociedad científica enviaron a revisión. Solo las aprobadas pueden publicarse; la constancia interna y los puntos se aprueban junto con ellas."
-      />
+      <p className="muted">Solo las actividades aprobadas pueden publicarse; la constancia interna y el criterio de puntos se aprueban junto con ellas.</p>
 
       {items === null ? (
         <Diferido><SkeletonCards count={3} /></Diferido>

@@ -552,3 +552,106 @@ Detalle de la API:
 **Riesgos:** quien había guardado recomendaciones pierde ese 5 % de empuje. Es el comportamiento que pide el contrato.
 
 **Commit propuesto:** `feat(v4.1-batch-6): «Me interesa» como señal reversible, «Guardar» sin efecto en el puntaje y motivos por intereses o mejora`
+
+---
+
+## BATCH V4.1-7 — Gamificación simplificada: criterios, extras de temporada y propuestas docentes
+
+**Hallazgos:** A41-016, A41-017, A41-027 (§9.1–§9.6, A.10).
+
+**Archivos modificados:**
+- **Migración `1780730000000-V41GamificationCriteria`** (aditiva):
+  - `gamification_criteria` gana `valid_from`, `valid_until` e `is_bonus`, con un control de vigencia;
+  - nueva tabla `gamification_proposals`, con un índice único parcial que impide repetir la misma propuesta mientras no se rechace.
+- **Entidades:** `GamificationProposal` (nueva) y campos de vigencia y de bono en `GamificationCriterion`.
+- **`catalogs.service.ts`, `catalogs.controller.ts` y su DTO:**
+  - Dirección y Administración configuran los criterios;
+  - un extra de temporada exige fechas, y que termine después de empezar;
+  - `GET /gamification-criteria/available?trigger=` lista solo los criterios vigentes que se pueden elegir (participación o proyecto), sin extras de temporada.
+- **`activities.service.ts` y `create-activity.dto.ts`:** la regla de puntos de una actividad nombra un `criterionId` y los puntos salen del criterio. Escribir puntos a mano se rechaza, con el error en su campo.
+- **`gamification.service.ts`:**
+  - los extras de temporada vigentes (hora de Bolivia) suman aparte, una vez por hecho y en su área;
+  - los proyectos ya no dan puntos solos: «primer proyecto respaldado» y «proyecto corroborado» dejan de otorgarse automáticamente;
+  - lo ya otorgado se conserva en el historial.
+- **`gamification-proposals.service.ts` (nuevo) y `gamification-extras.controller.ts`:**
+  - el docente propone un criterio sobre un proyecto, con estas condiciones:
+    - visible para docentes;
+    - respaldo SUPPORTED o mayor;
+    - de un estudiante de su alcance: dueño, o integrante con su contribución confirmada;
+    - con un motivo;
+    - sin duplicados;
+    - sobre un hecho que no haya recibido ya puntos.
+  - Dirección (o Administración) aprueba, o rechaza con motivo. Al aprobar, los puntos entran una vez, con la clave `criterio:<id>:project:<id>`.
+  - Crear retos o recompensas, premiar a mano y canjear responde **410**. Los históricos se siguen consultando.
+- **`gamification-extras.service.ts`:** la tabla de puntos por estudiante tiene filtro por nombre, y cada consulta queda auditada (`GAMIFICATION_SCOPE_VIEWED`).
+- **`projects.service.ts`:** el portafolio institucional expone `studentProfileId` y `backingTier` para el formulario de propuesta.
+- **Auditoría:** `GAMIFICATION_PROPOSED`, `GAMIFICATION_PROPOSAL_REVIEWED` y `GAMIFICATION_SCOPE_VIEWED`.
+- **Web:**
+  - página nueva «Puntos de estudiantes» (`/teacher|director|admin/points`):
+    - tabla por alcance, con búsqueda;
+    - el docente propone desde la pestaña «Mis propuestas»;
+    - Dirección tiene su bandeja.
+  - «Retos y recompensas» sale del menú; su ruta antigua redirige y se retiró `Recognitions.tsx`;
+  - Aprobaciones de Dirección es una sola bandeja con «Pendientes — Actividades / Recursos / Gamificación»;
+  - Dirección tiene «Criterios de puntos»;
+  - la página de criterios gana «Extras de temporada» con fechas;
+  - el formulario de actividad elige un criterio en lugar de escribir puntos;
+  - el estudiante ya no tiene la pestaña «Recompensas» y ve su saldo en el Perfil, con enlace al historial.
+
+**Migraciones:**
+- `V41GamificationCriteria`: aditiva. Los criterios existentes quedan sin vigencia y no son bonos.
+- `pg_dump` previo en `pre-v41-b7.dump`. Probada `run → revert → run`.
+- Las 70 reglas de actividad existentes ya tenían `criterion_id`, así que editarlas no pierde puntos.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch7` → **20/20**:
+  - retos y recompensas devuelven 410;
+  - puntos libres rechazados; criterios elegibles; los puntos vienen del criterio;
+  - el extra exige vigencia; Dirección lo crea, el estudiante no;
+  - el extra vigente suma una vez y no se repite al recalcular;
+  - un proyecto solo declarado no se propone;
+  - el estudiante no se premia; un docente fuera de alcance no propone; motivo y criterio válidos;
+  - la propuesta queda pendiente y no se duplica;
+  - la bandeja muestra proyecto, estudiante, respaldo y motivo; otro docente no la ve;
+  - el docente no aprueba; rechazar exige motivo;
+  - al aprobar entran los puntos del criterio; una decisión no se repite;
+  - propuesta y decisión quedan auditadas;
+  - puntos por alcance, sin acceso del estudiante, y la consulta queda auditada;
+  - el saldo coincide con el historial.
+- `node scripts/e2e-web.mjs` → **82/82**, incluidos WEB.46.1–46.5:
+  - la ruta antigua lleva a «Puntos de estudiantes»;
+  - el docente propone;
+  - la bandeja de Dirección tiene la pestaña de gamificación;
+  - el estudiante no tiene «Recompensas»;
+  - sin errores de JavaScript.
+- Unitarias: **130/130** (sin cambios en este batch).
+- **Regresión completa (22 suites):** 2182 correctas, 1 fallo (V2.5.26). Tras corregirlo, `e2e-v2` 162/162. **2183 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+- **QA.59 → FAIL** en una corrida parcial. *Causa real:* la tabla de puntos tiene un tope de 200 filas, ordenadas por puntos, así que un estudiante con 0 puntos quedaba fuera cuando el alcance era grande. *Corrección:* filtro por nombre en la API y en la web (§9.5: detalle por estudiante con filtros), y un apellido único por corrida en la prueba. *Regresión:* PASS.
+- **V2.5.26 → FAIL.** La prueba esperaba los 20 puntos escritos a mano. *Causa:* §9.2 prohíbe los puntos libres. *Corrección:* la prueba espera los puntos del criterio elegido. *Regresión:* PASS.
+- **Pruebas antiguas actualizadas a la regla V4.1:**
+  - QA.54–QA.67: retos y recompensas devuelven 410;
+  - V2.5.4 y V2.5.13: la regla de la actividad usa `criterionId`;
+  - V3.19.3, V3.19.4, B9.10, B9.11 y B9.15: el respaldo del propio proyecto ya no da puntos (§9.3: el estudiante no se da puntos; un docente propone y Dirección decide).
+- **Error de arranque:** «Cannot access 'ProposeGamificationDto' before initialization». *Causa:* los DTO estaban declarados después del controlador. *Corrección:* se movieron arriba.
+
+**Efecto:**
+- **Backend:** criterios, ledger, propuestas y la tabla por alcance.
+- **Frontend:** menú, puntos, aprobaciones, criterios, actividad, progreso y perfil.
+- **Móvil:** si muestra «Recompensas», los canjes devolverán 410. Queda para el informe de impacto móvil del BATCH 12.
+
+**Seguridad y permisos:**
+- el estudiante no crea criterios (403) ni ve la tabla (403);
+- el docente no aprueba (403) ni propone fuera de su alcance (404);
+- toda propuesta, decisión y consulta de puntos de otros queda auditada.
+
+**Pendientes:**
+- «Recursos» sigue sin dar puntos: no existe un hito externo verificable. Es la alternativa de menor alcance que el §9.3 permite.
+- Las insignias históricas se conservan y no se crean nuevas.
+
+**Riesgos:**
+- Antes, un proyecto propio con respaldo daba puntos automáticamente; ahora solo los da una propuesta aprobada.
+- Los puntos ya otorgados no se retiraron.
+
+**Commit propuesto:** `feat(v4.1-batch-7): puntos por criterios configurados, extras de temporada, propuestas docentes con decisión de Dirección y sin retos ni recompensas`

@@ -12,7 +12,7 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { enMemoria, useCachedState } from '../hooks/viewCache';
 import { apiError } from '../api/client';
-import { activityService, catalogService, constancyService, uploadService, validationReferenceService } from '../services';
+import { activityService, catalogService, constancyService, gamificationService, uploadService, validationReferenceService } from '../services';
 import type {
   AcademicArea, Activity, ActivityCategoryItem, ActivityPerson, OutcomePolicy, Participant, ResourceLink, Skill,
 } from '../services/types';
@@ -74,7 +74,8 @@ const emptyForm = {
   capacity: '',
   status: 'draft',
   semesterScope: [] as number[],
-  points: '',
+  /** V4.1 A41-016: criterio de puntos configurado (sin puntos libres). */
+  criterionId: '',
 };
 
 /** Estado de revisión (V2 §27) en palabras y color. */
@@ -98,7 +99,7 @@ const RESULTADOS: { value: OutcomePolicy; label: string; hint: string }[] = [
 const CAMPOS = [
   'title', 'categoryId', 'activityDate', 'endAt', 'location', 'meetingUrl', 'areaIds', 'skillIds', 'skillContexts',
   'provider', 'externalUrl', 'responsibleUserIds', 'responsibleUserId', 'contactUserIds', 'resourceLinks',
-  'imageFileIds', 'capacity', 'outcomePolicy', 'semesterScope', 'status', 'certificateIssuer',
+  'imageFileIds', 'capacity', 'outcomePolicy', 'semesterScope', 'status', 'certificateIssuer', 'gamificationRules',
 ] as const;
 
 const publicable = (a: Activity) =>
@@ -166,6 +167,12 @@ export default function ActivityManager({
       ? a.originType === 'external'
       : a.type === activityType && (!filtroOrigen || (a.originType ?? 'internal') === filtroOrigen))));
   }, [activityType, filtroOrigen]);
+
+  // V4.1 A41-016 (§9.2): los puntos salen de un criterio vigente; no se escriben a mano.
+  const [criterios, setCriterios] = useState<{ id: string; name: string; points: number }[]>([]);
+  useEffect(() => {
+    gamificationService.availableCriteria('participacion_confirmada').then(setCriterios).catch(() => setCriterios([]));
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -320,8 +327,8 @@ export default function ActivityManager({
       imageFileIds: editing || form.imagenes.length ? form.imagenes.map((i) => i.fileId) : undefined,
       capacity: form.capacity ? Number(form.capacity) : undefined,
       semesterScope: form.semesterScope.length ? form.semesterScope : undefined,
-      gamificationRules: form.points
-        ? [{ trigger: 'participacion_confirmada', points: Number(form.points) }]
+      gamificationRules: form.criterionId
+        ? [{ trigger: 'participacion_confirmada', criterionId: form.criterionId }]
         : [],
     };
     if (!editing) payload.status = accion === 'publish' ? 'open' : 'draft';
@@ -452,7 +459,7 @@ export default function ActivityManager({
       capacity: a.capacity ? String(a.capacity) : '',
       status: a.status,
       semesterScope: a.semesterScope ?? [],
-      points: String(a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.points ?? ''),
+      criterionId: a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.criterionId ?? '',
       expectedCourseName: '',
       credentialIdPattern: '',
       sampleStoredFileId: '',
@@ -1185,13 +1192,18 @@ export default function ActivityManager({
                 <FieldError message={errores.errors.capacity} />
               </div>
               <div className="field">
-                <label htmlFor="activity-manager-puntos-por-participar-opcional">Puntos por participar (opcional)</label>
-                <input id="activity-manager-puntos-por-participar-opcional"
-                  inputMode="numeric"
-                  value={form.points}
-                  onChange={(e) => setForm({ ...form, points: e.target.value.replace(/[^\d]/g, '').slice(0, 3) })}
-                  placeholder="Los del criterio general"
-                />
+                <label htmlFor="activity-manager-puntos-por-participar-opcional">Criterio de puntos (opcional)</label>
+                <select id="activity-manager-puntos-por-participar-opcional"
+                  value={form.criterionId}
+                  onChange={(e) => setForm({ ...form, criterionId: e.target.value })}
+                >
+                  <option value="">El criterio general de participación</option>
+                  {criterios.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name} · {c.points} puntos</option>
+                  ))}
+                </select>
+                <span className="muted small">Los puntos los fija el criterio que configuran Dirección o Administración.</span>
+                <FieldError message={errores.errors.gamificationRules} />
               </div>
             </div>
 

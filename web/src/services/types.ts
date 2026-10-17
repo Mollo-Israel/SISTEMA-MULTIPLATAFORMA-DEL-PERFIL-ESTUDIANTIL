@@ -208,6 +208,24 @@ export interface GamificationCriterion {
   academicAreaId: string | null;
   academicArea?: AcademicArea | null;
   isActive: boolean;
+  /** V4.1 §9.5: extra de temporada para un área, con vigencia. */
+  isBonus?: boolean;
+  validFrom?: string | null;
+  validUntil?: string | null;
+}
+
+/** V4.1 A41-016 (§9.3): lo que un docente propone premiar y la decisión de Dirección. */
+export interface GamificationProposal {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reason: string;
+  reviewComment: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  criterion: { id: string; name: string; points: number } | null;
+  project: { id: string; title: string; backingTier: string; repositoryUrl: string | null } | null;
+  student: { profileId: string; name: string; semester: number | null } | null;
+  proposedBy: string | null;
 }
 
 export interface Skill {
@@ -593,7 +611,7 @@ export interface Activity {
   reviewComment?: string | null;
   submittedAt?: string | null;
   internalConstancyEnabled?: boolean;
-  gamificationRules?: { id: string; trigger: string; points: number; description: string | null }[];
+  gamificationRules?: { id: string; trigger: string; points: number; description: string | null; criterionId?: string | null }[];
 }
 
 export type ActivityReviewStatus = 'not_required' | 'pending' | 'observed' | 'approved' | 'rejected';
@@ -1159,6 +1177,9 @@ export interface InstitutionalProject {
   updatedAt: string;
   student: string | null;
   semester: number | null;
+  /** V4.1 §9.3: a quién se le propondrían puntos y con qué respaldo. */
+  studentProfileId?: string;
+  backingTier?: string;
 }
 
 export interface InstitutionalPortfolio {

@@ -7,8 +7,6 @@ import {
   GAMIFICATION_TRIGGER_LABEL,
   SYSTEM_GAMIFICATION_TRIGGERS,
   GamificationTrigger,
-  ProjectBackingTier,
-  ProjectStatus,
   PUBLISHABLE_REVIEW_STATUSES,
   RegistrationStatus,
 } from '@perfil/shared';
@@ -97,7 +95,8 @@ export class GamificationService {
    * evento en el momento en que se reconoce.
    */
   async puntosPorHecho(): Promise<(trigger: GamificationTrigger, areaId?: string | null) => number> {
-    const activos = await this.criteria.find({ where: { isActive: true } });
+    // V4.1 A41-016: los extras de temporada no reemplazan el valor del hecho.
+    const activos = (await this.criteria.find({ where: { isActive: true } })).filter((c) => !c.isBonus);
     return (trigger, areaId) => {
       const delArea = areaId
         ? activos.filter((c) => c.trigger === trigger && c.academicAreaId === areaId)
@@ -145,14 +144,31 @@ export class GamificationService {
 
     const hechos = [
       ...(await this.participacionesConfirmadas(studentProfileId)),
-      ...(await this.proyectosConRespaldo(studentProfileId, perfil.userId)),
+      // V4.1 A41-016 (§9.3): los proyectos ya no dan puntos solos. El docente
+      // propone un criterio y Dirección decide (GamificationProposalsService);
+      // lo ya otorgado se conserva en el historial.
       ...(await this.colaboracionesAceptadas(studentProfileId, perfil.userId)),
       ...(await this.hitosDeTrayectoria(studentProfileId)),
     ];
     const puntos = await this.puntosPorHecho();
-    const valorados = hechos
+    const valoradosBase = hechos
       .map((h) => ({ ...h, points: h.fixedPoints ?? puntos(h.trigger, h.areaId) }))
       .filter((h) => h.points > 0);
+    // V4.1 A41-016 (§9.3, A.10): extras de temporada vigentes hoy (Bolivia), por
+    // hecho y área; cada uno se reconoce una vez por hecho (clave propia).
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+    const bonos = (await this.criteria.find({ where: { isActive: true, isBonus: true } }))
+      .filter((b) => (!b.validFrom || b.validFrom <= hoy) && (!b.validUntil || b.validUntil >= hoy));
+    const extras = valoradosBase.flatMap((h) => bonos
+      .filter((b) => b.trigger === h.trigger && (!b.academicAreaId || b.academicAreaId === h.areaId))
+      .map((b) => ({
+        ...h,
+        dedupeKey: `bono:${b.id}:${h.dedupeKey}`.slice(0, 120),
+        reason: `Bono de temporada «${b.name}»: ${h.reason}`,
+        points: b.points,
+        badgeId: null,
+      })));
+    const valorados = [...valoradosBase, ...extras];
     // Insignias que otorgan las reglas de las actividades (idempotente).
     const insigniasDeReglas = [...new Set(hechos.map((h) => h.badgeId).filter((b): b is string => !!b))];
     if (insigniasDeReglas.length) {
@@ -234,83 +250,6 @@ export class GamificationService {
         badgeId: regla?.badgeId ?? null,
       };
     });
-  }
-
-  /**
-   * Proyectos con respaldo (§66).
-   *
-   * Dos hechos distintos: el **primero** que deja de ser una declaración, y
-   * cada uno que llega a corroborado o revisado. §66 los nombra por separado
-   * porque reconocen cosas distintas: empezar a poder demostrar, y demostrar.
-   *
-   * Un proyecto DECLARED no da nada: §66 excluye los proyectos vacíos.
-   */
-  private async proyectosConRespaldo(
-    studentProfileId: string,
-    userId: string,
-  ): Promise<Hecho[]> {
-    const propios = await this.projects.find({ where: { createdByProfileId: studentProfileId } });
-
-    // Un integrante cuenta el proyecto solo si confirmó su contribución (§33):
-    // lo mismo que exige la afinidad, por la misma razón.
-    const pertenencias = await this.members.find({ where: { userId } });
-    const confirmadas = pertenencias.filter((m) => m.contributionConfirmedAt);
-    const ajenos = confirmadas.length
-      ? await this.projects.find({
-          where: { id: In(confirmadas.map((m) => m.projectId)) },
-        })
-      : [];
-
-    // V3 §21 / §57: un borrador no da puntos aunque tenga evidencias o un
-    // repositorio que corrobore. Si diera, subir una captura a un borrador
-    // sería una forma de sumar, y §57 excluye puntos por subir archivos.
-    const todos = [...propios, ...ajenos.filter((p) => p.createdByProfileId !== studentProfileId)]
-      .filter((p) => p.status !== ProjectStatus.DRAFT);
-    const conRespaldo = todos.filter(
-      (p) =>
-        p.backingTier === ProjectBackingTier.SUPPORTED
-        || p.backingTier === ProjectBackingTier.CORROBORATED
-        || p.backingTier === ProjectBackingTier.REVIEWED,
-    );
-    const corroborados = todos.filter(
-      (p) =>
-        p.backingTier === ProjectBackingTier.CORROBORATED
-        || p.backingTier === ProjectBackingTier.REVIEWED,
-    );
-
-    const hechos: Hecho[] = [];
-
-    /*
-     * «Primer proyecto respaldado» es uno por estudiante, no uno por proyecto.
-     * La clave no lleva el id del proyecto: si lo llevara, el segundo proyecto
-     * respaldado volvería a dar el punto del primero, y «primero» dejaría de
-     * significar nada.
-     */
-    if (conRespaldo.length > 0) {
-      const primero = conRespaldo.sort(
-        (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
-      )[0];
-      hechos.push({
-        trigger: GamificationTrigger.PRIMER_PROYECTO_RESPALDADO,
-        dedupeKey: 'primer_proyecto_respaldado',
-        reason: `Tu primer proyecto con respaldo: «${primero.title}»`,
-        sourceEntityType: 'project',
-        sourceEntityId: primero.id,
-        areaId: primero.academicAreaId ?? null,
-      });
-    }
-
-    for (const p of corroborados) {
-      hechos.push({
-        trigger: GamificationTrigger.PROYECTO_CORROBORADO,
-        dedupeKey: `proyecto_corroborado:${p.id}`,
-        reason: `Proyecto corroborado: «${p.title}»`,
-        sourceEntityType: 'project',
-        sourceEntityId: p.id,
-        areaId: p.academicAreaId ?? null,
-      });
-    }
-    return hechos;
   }
 
   /**

@@ -53,6 +53,20 @@ export class GamificationCriterion {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
+  /**
+   * V4.1 A41-016 (§9.3, A.10): extra de temporada. Un bono suma ADEMÁS de los
+   * puntos del hecho, solo dentro de su vigencia (hora de Bolivia) y, si tiene
+   * área, solo en hechos de esa área. No puntúa afinidad.
+   */
+  @Column({ name: 'is_bonus', type: 'boolean', default: false })
+  isBonus: boolean;
+
+  @Column({ name: 'valid_from', type: 'date', nullable: true })
+  validFrom: string | null;
+
+  @Column({ name: 'valid_until', type: 'date', nullable: true })
+  validUntil: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

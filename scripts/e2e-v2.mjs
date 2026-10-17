@@ -472,17 +472,21 @@ async function batch5(ctx) {
   });
   check(publicada.status === 409, 'V2.5.2 §27.3 El docente no publica sin aprobación', `status ${publicada.status}`);
 
+  // V4.1 A41-016 (§9.2): la regla nombra un criterio configurado; sin puntos libres.
+  const criterioGeneral = ((await req('GET', '/gamification-criteria/available', { token: docente.token })).data ?? [])
+    .find((c) => c.code === 'participacion_confirmada');
   const creada = await req('POST', '/activities', {
     token: docente.token,
     body: {
       title: `Taller de Docker ${TS}`, type: 'academica', categoryId: taller.id, semesterScope: [1, 5],
-      internalConstancyEnabled: true, gamificationRules: [{ trigger: 'participacion_confirmada', points: 30 }],
+      internalConstancyEnabled: true, gamificationRules: [{ trigger: 'participacion_confirmada', criterionId: criterioGeneral?.id }],
     },
   });
   const id = creada.data?.id;
   check(creada.status === 201 && creada.data?.requiresReview === true && creada.data?.reviewStatus === null,
     'V2.5.3 §27.3 Nace en borrador, pendiente de enviar a revisión', json({ rs: creada.data?.reviewStatus, rr: creada.data?.requiresReview, st: creada.status }));
-  check((creada.data?.gamificationRules ?? []).some((r) => r.points === 30), 'V2.5.4 §31.2 Lleva su regla de puntos', json(creada.data?.gamificationRules));
+  check((creada.data?.gamificationRules ?? []).some((r) => r.criterionId === criterioGeneral?.id && r.points === criterioGeneral?.points),
+    'V2.5.4 §31.2 V4.1 Lleva su regla de puntos, con los puntos del criterio elegido', json(creada.data?.gamificationRules));
 
   const abrir = await req('PATCH', `/activities/${id}`, { token: docente.token, body: { status: 'open' } });
   check(abrir.status === 409, 'V2.5.5 §27.6 Sin aprobación no se abre', `status ${abrir.status}`);
@@ -507,7 +511,7 @@ async function batch5(ctx) {
   check(observada.data?.reviewStatus === 'observed' && /laboratorio/.test(observada.data?.reviewComment ?? ''),
     'V2.5.12 §27.3 OBSERVED conserva la observación', json(observada.data?.reviewComment));
   const corregida = await req('PATCH', `/activities/${id}`, {
-    token: docente.token, body: { location: 'Laboratorio 3', gamificationRules: [{ trigger: 'participacion_confirmada', points: 20 }] },
+    token: docente.token, body: { location: 'Laboratorio 3', gamificationRules: [{ trigger: 'participacion_confirmada', criterionId: criterioGeneral?.id }] },
   });
   check(corregida.status === 200, 'V2.5.13 §27.3 Observada se puede editar', `status ${corregida.status}`);
   const reenviada = await req('POST', `/activities/${id}/submit`, { token: docente.token, body: { comment: 'Corregida.' } });
@@ -553,8 +557,8 @@ async function batch5(ctx) {
   });
   check(confirmada.status === 200, 'V2.5.25 §29 El responsable confirma', `status ${confirmada.status}`);
   const progreso = (await req('GET', '/gamification/me', { token: est.token })).data;
-  check((progreso?.events ?? []).some((e) => e.points === 20 && /actividad/.test(e.reason ?? '')),
-    'V2.5.26 §31.2 La participación da los puntos que fijó la actividad, aprobados por Dirección', json(progreso?.events?.slice(0, 2)));
+  check((progreso?.events ?? []).some((e) => e.points === criterioGeneral?.points && /actividad/.test(e.reason ?? '')),
+    'V2.5.26 §31.2 V4.1 La participación da los puntos del criterio que eligió la actividad, aprobado por Dirección', json(progreso?.events?.slice(0, 2)));
 
   const constancia = await req('POST', '/constancies/internal', {
     token: docente.token, body: { profileId: perfil.id, activityId: id, description: `Constancia del taller ${TS}` },

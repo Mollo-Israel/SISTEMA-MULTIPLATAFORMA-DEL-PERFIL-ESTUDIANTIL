@@ -41,7 +41,7 @@ import StudentLibraryPage from './pages/student/Library';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorAnalyticsPage from './pages/director/Analytics';
 import CredentialReviewsPage from './pages/director/CredentialReviews';
-import RecognitionsPage from './pages/staff/Recognitions';
+import StudentPointsPage from './pages/staff/StudentPoints';
 import SocietyMetricsPage from './pages/society/Metrics';
 import SocietyParticipantsPage from './pages/society/Participants';
 import AdminHomePage from './pages/admin/Home';
@@ -165,7 +165,9 @@ export default function App() {
             <Route path="/teacher/projects" element={<APestana to="/teacher" tab="proyectos" />} />
             <Route path="/teacher/reports" element={<APestana to="/teacher" tab="semestre" />} />
             <Route path="/teacher/team-needs" element={<APestana to="/teacher" tab="equipos" />} />
-            <Route path="/teacher/recognitions" element={<RecognitionsPage />} />
+            {/* V4.1 A41-016: «Retos y recompensas» pasa a «Puntos de estudiantes». */}
+            <Route path="/teacher/points" element={<StudentPointsPage />} />
+            <Route path="/teacher/recognitions" element={<Navigate to="/teacher/points" replace />} />
             {/* V4.1 A41-014: el docente propone recursos para sus semestres. */}
             <Route path="/teacher/resources" element={<DirectorLearningResourcesPage />} />
           </Route>
@@ -181,7 +183,10 @@ export default function App() {
             <Route path="/director/resources" element={<DirectorLearningResourcesPage />} />
             <Route path="/director/trends" element={<APestana to="/director/analytics" tab="evolucion" />} />
             <Route path="/director/credential-reviews" element={<CredentialReviewsPage />} />
-            <Route path="/director/recognitions" element={<RecognitionsPage />} />
+            <Route path="/director/points" element={<StudentPointsPage />} />
+            <Route path="/director/recognitions" element={<Navigate to="/director/points" replace />} />
+            {/* V4.1 A41-016 (§9.1): Dirección también configura los criterios. */}
+            <Route path="/director/gamification" element={<AdminGamificationPage />} />
           </Route>
 
           <Route element={<RoleGate roles={[SC]}><Outlet /></RoleGate>}>
@@ -201,7 +206,8 @@ export default function App() {
             <Route path="/admin/skills" element={<Navigate to="/admin/areas?tab=skills" replace />} />
             <Route path="/admin/activity-categories" element={<AdminActivityCategoriesPage />} />
             <Route path="/admin/gamification" element={<AdminGamificationPage />} />
-            <Route path="/admin/recognitions" element={<RecognitionsPage />} />
+            <Route path="/admin/points" element={<StudentPointsPage />} />
+            <Route path="/admin/recognitions" element={<Navigate to="/admin/points" replace />} />
             <Route path="/admin/resources" element={<DirectorLearningResourcesPage />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />
           </Route>

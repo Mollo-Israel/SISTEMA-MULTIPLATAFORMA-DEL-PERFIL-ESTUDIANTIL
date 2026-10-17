@@ -17,6 +17,7 @@ import type {
   ProjectReadiness,
   PublicProjectView,
   GamificationCriterion,
+  GamificationProposal,
   InternalConstancy,
   StoredFile,
   StudentDirectory,
@@ -579,22 +580,19 @@ export const gamificationService = {
   myProgress: () => api.get<GamificationSummary>('/gamification/me').then((r) => r.data),
   /** Saldo canjeable, puntos por periodo y mis canjes. */
   wallet: () => api.get<Wallet>('/gamification/me/wallet').then((r) => r.data),
-  rewards: () => api.get<RewardItem[]>('/gamification/rewards').then((r) => r.data),
-  redeem: (id: string) => api.post(`/gamification/rewards/${id}/redeem`).then((r) => r.data),
-  // --- personal: retos, recompensas y canjes
-  challenges: () => api.get<ChallengeItem[]>('/gamification/challenges').then((r) => r.data),
-  createChallenge: (data: Record<string, unknown>) => api.post<ChallengeItem>('/gamification/challenges', data).then((r) => r.data),
-  updateChallenge: (id: string, data: Record<string, unknown>) =>
-    api.patch<ChallengeItem>(`/gamification/challenges/${id}`, data).then((r) => r.data),
-  award: (id: string, studentProfileIds: string[]) =>
-    api.post<{ awarded: number; alreadyHad: number }>(`/gamification/challenges/${id}/award`, { studentProfileIds }).then((r) => r.data),
-  scopePoints: (period: 'week' | 'month' | 'year') =>
-    api.get<ScopePoints>('/gamification/scope-points', { params: { period } }).then((r) => r.data),
-  createReward: (data: Record<string, unknown>) => api.post('/gamification/rewards', data).then((r) => r.data),
-  updateReward: (id: string, data: Record<string, unknown>) => api.patch(`/gamification/rewards/${id}`, data).then((r) => r.data),
-  redemptions: () => api.get<RedemptionItem[]>('/gamification/redemptions').then((r) => r.data),
-  resolve: (id: string, status: 'delivered' | 'rejected', note?: string) =>
-    api.patch(`/gamification/redemptions/${id}`, { status, note }).then((r) => r.data),
+  // V4.1 A41-016: retos, recompensas y canjes se retiraron (la API responde 410).
+  scopePoints: (period: 'week' | 'month' | 'year', q?: string) =>
+    api.get<ScopePoints>('/gamification/scope-points', { params: q ? { period, q } : { period } }).then((r) => r.data),
+  // --- V4.1 A41-016: criterios configurados y propuestas docentes
+  /** Criterios vigentes que se pueden elegir (participación en actividades o proyecto). */
+  availableCriteria: (trigger?: 'participacion_confirmada' | 'proyecto_corroborado') =>
+    api.get<GamificationCriterion[]>('/gamification-criteria/available', { params: trigger ? { trigger } : {} }).then((r) => r.data),
+  proposals: (status?: 'pending' | 'approved' | 'rejected') =>
+    api.get<GamificationProposal[]>('/gamification/proposals', { params: status ? { status } : {} }).then((r) => r.data),
+  propose: (data: { projectId: string; studentProfileId: string; criterionId: string; reason: string }) =>
+    api.post<GamificationProposal>('/gamification/proposals', data).then((r) => r.data),
+  reviewProposal: (id: string, decision: 'approve' | 'reject', comment?: string) =>
+    api.post<GamificationProposal>(`/gamification/proposals/${id}/review`, { decision, comment }).then((r) => r.data),
 };
 
 export const trajectoryService = {

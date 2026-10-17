@@ -168,14 +168,16 @@ async function accionesValidas(ctx) {
   const activar = await req('PATCH', `/projects/${ctx.proyectoId}`, { token: ctx.est.token, body: { status: 'active' } });
   check(activar.status === 200, 'B9.10b V3 §21 Con tecnología y evidencia, el proyecto se activa', JSON.stringify(activar.data?.code ?? activar.status));
   const trasRespaldo = await progreso(ctx.est.token);
+  // V4.1 A41-016 (§9.3): el respaldo que el propio estudiante consigue no le
+  // da puntos solo; los proyectos se premian por propuesta docente revisada.
   check(
-    eventosCon(trasRespaldo, 'primer_proyecto_respaldado').length === 1,
-    'B9.10 Cuando el proyecto deja de ser una declaración, eso sí se reconoce (§66)',
+    eventosCon(trasRespaldo, 'primer_proyecto_respaldado').length === 0,
+    'B9.10 V4.1 §9.3 El estudiante no se da puntos por respaldar su propio proyecto',
     JSON.stringify(eventosCon(trasRespaldo, 'primer_proyecto_respaldado').map((e) => e.reason)),
   );
   check(
-    trasRespaldo.totalPoints === 35,
-    'B9.11 Diez de la participación más veinticinco del respaldo',
+    trasRespaldo.totalPoints === 10,
+    'B9.11 V4.1 Solo los diez de la participación confirmada por un responsable',
     String(trasRespaldo.totalPoints),
   );
 }
@@ -232,8 +234,8 @@ async function idempotencia(ctx) {
   await req('PATCH', `/projects/${otro.data.id}`, { token: ctx.est.token, body: { status: 'active' } });
   const conDos = await progreso(ctx.est.token);
   check(
-    eventosCon(conDos, 'primer_proyecto_respaldado').length === 1,
-    'B9.15 Un segundo proyecto respaldado no vuelve a dar el punto del primero',
+    eventosCon(conDos, 'primer_proyecto_respaldado').length === 0,
+    'B9.15 V4.1 Un segundo proyecto respaldado tampoco da puntos solo',
     String(eventosCon(conDos, 'primer_proyecto_respaldado').length),
   );
 }
