@@ -1,5 +1,5 @@
 import { validarFormulario } from '../../components/form';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useCachedState } from '../../hooks/viewCache';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
@@ -94,6 +94,11 @@ export default function StudentCollaborationPage() {
 
       {tab === 'enlace' && (
         <>
+          {/* V4.1 A41-026 (§16): el ajuste vive en Mi perfil → Visibilidad; aquí es un acceso rápido al mismo. */}
+          <p className="inline-note" data-testid="acceso-rapido-qr">
+            Tu enlace y tu QR se administran en <Link to="/student/profile?tab=visibilidad">Mi perfil → Visibilidad</Link>.
+            Esto es un acceso rápido al mismo ajuste: compartir el QR muestra tu perfil público permitido, no agrega contactos sin aceptación.
+          </p>
           <MiEnlace toast={toast} confirm={confirm} />
           <MisCanales toast={toast} />
         </>
@@ -108,7 +113,7 @@ export default function StudentCollaborationPage() {
 // §43 · Mi enlace y mi QR
 // ---------------------------------------------------------------------------
 
-function MiEnlace({ toast, confirm }: { toast: any; confirm: any }) {
+export function MiEnlace({ toast, confirm }: { toast: any; confirm: any }) {
   const [enlace, setEnlace] = useCachedState<PublicLinkView | null>('enlace', null);
   const [rotando, setRotando] = useState(false);
   const [copiado, setCopiado] = useState(false);

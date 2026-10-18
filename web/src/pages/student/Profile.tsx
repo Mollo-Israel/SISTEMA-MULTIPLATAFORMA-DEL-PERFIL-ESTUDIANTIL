@@ -23,7 +23,8 @@ import type {
   StudentProfile,
 } from '../../services/types';
 import { Badge, Button, Card, Diferido, PageHeader, ProgressBar, SkeletonCards, Tabs } from '../../components/ui';
-import { useToast } from '../../components/feedback';
+import { useConfirm, useToast } from '../../components/feedback';
+import { MiEnlace } from './Collaboration';
 import { AreaChooser, InterestChooser, SkillInterestChooser } from '../../components/Declarations';
 import QuestionnaireRunner from '../../components/QuestionnaireRunner';
 import Avatar, { AvatarChooser } from '../../components/Avatar';
@@ -62,6 +63,7 @@ export default function StudentProfilePage() {
   const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
   const [loading, setLoading] = useState(() => !enMemoria('perfil'));
   const toast = useToast();
+  const confirm = useConfirm();
   const { user } = useAuth();
   const nombreVisible = user ? `${user.firstName} ${user.lastName}` : '';
 
@@ -143,7 +145,11 @@ export default function StudentProfilePage() {
       ) : tab === 'disponibilidad' ? (
         <DisponibilidadTab profile={profile} onSaved={(p) => setProfile(p)} />
       ) : (
-        <StudentPrivacyPage embedded />
+        <>
+          {/* V4.1 A41-026 (§16): el enlace y el QR viven aquí, junto a lo que decide qué se ve. */}
+          <MiEnlace toast={toast} confirm={confirm} />
+          <StudentPrivacyPage embedded />
+        </>
       )}
     </div>
   );

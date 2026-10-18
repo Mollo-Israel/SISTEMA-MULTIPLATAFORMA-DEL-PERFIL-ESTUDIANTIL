@@ -868,6 +868,37 @@ async function pruebas(browser) {
   check(fallos56.length === 0, 'WEB.50.2 Sin errores de JavaScript en V4.1-11', fallos56.join(' | '));
   await c56.close();
 
+  // ===== V4.1-12 · Evidencias en pestañas, QR en Mi perfil, Colaboración agrupada, visibilidad clara (A41-024..026)
+  objective('V4.1-12 · Pestañas de evidencias, QR en Mi perfil → Visibilidad y ayudas de visibilidad');
+  const fallos57 = [];
+  const estPriv = await estudianteListo(admin, 'privacidad');
+  const c57 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p57 = await c57.newPage();
+  p57.on('pageerror', (e) => fallos57.push(e.message));
+  await entrar(p57, estPriv.email);
+  await p57.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  const navEst = await p57.locator('nav a.nav-link').allInnerTexts();
+  await p57.goto(`${WEB}/student/evidences`);
+  await p57.getByRole('tab', { name: /Credenciales externas/ }).first().waitFor({ timeout: 8000 }).catch(() => {});
+  const pestanasEv = await p57.getByRole('tab').allInnerTexts();
+  const tieneValidacion = await p57.getByText('Mis credenciales y su validación').first().isVisible().catch(() => false);
+  check(['Evidencias de proyectos', 'Credenciales externas', 'Constancias y certificados institucionales recibidos'].every((t) => pestanasEv.some((x) => x.includes(t))) && tieneValidacion,
+    'WEB.51.1 A41-025 §15 Evidencias en tres pestañas sobre los mismos datos', pestanasEv.join(' | '));
+  await p57.goto(`${WEB}/student/profile?tab=visibilidad`);
+  const qrPerfil = await p57.locator('.qr-lienzo svg').first().waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+  await p57.goto(`${WEB}/student/collaboration`);
+  const enlaceRapido = p57.locator('[data-testid="acceso-rapido-qr"] a[href="/student/profile?tab=visibilidad"]');
+  await enlaceRapido.first().waitFor({ timeout: 8000 }).catch(() => {});
+  const accesoRapido = await enlaceRapido.count();
+  check(qrPerfil && accesoRapido === 1 && navEst.some((t) => t.includes('Contactos')) && navEst.some((t) => t.includes('Equipos')),
+    'WEB.51.2 A41-026 §16 El QR vive en Mi perfil → Visibilidad; Colaboración da un acceso rápido; Contactos y Equipos agrupados', `${qrPerfil} · ${accesoRapido} · ${navEst.join(' | ')}`);
+  await p57.goto(`${WEB}/student/projects`);
+  const ayudaVis = await p57.locator('[data-testid="ayuda-visibilidad"]').innerText({ timeout: 8000 }).catch(() => '');
+  check(/no tu repositorio/.test(ayudaVis) && /borrador nunca se publica/.test(ayudaVis),
+    'WEB.51.3 A41-024 §14 La visibilidad explica que es del registro en Afinia, no de GitHub, y que un borrador no se publica', ayudaVis.slice(0, 160));
+  check(fallos57.length === 0, 'WEB.51.4 Sin errores de JavaScript en V4.1-12', fallos57.join(' | '));
+  await c57.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

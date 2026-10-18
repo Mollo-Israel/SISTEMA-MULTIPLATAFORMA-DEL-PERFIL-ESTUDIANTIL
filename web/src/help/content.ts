@@ -62,7 +62,7 @@ export const TUTORIAL: Record<string, TutorialStep[]> = {
     { icon: 'calendar', title: 'Actividades', text: 'Inscríbete en talleres y actividades. Solo la participación confirmada por quien la organiza cuenta como experiencia.', to: '/student/activities' },
     { icon: 'folder', title: 'Proyectos y evidencias', text: 'Registra tus proyectos, confirma las tecnologías que usaste y sube evidencias. Eso es lo que respalda tu afinidad.', to: '/student/projects' },
     { icon: 'target', title: 'Afinidad', text: 'Tu afinidad por área sale de lo que hiciste y está respaldado, no de lo que declaras. Siempre puedes ver de dónde sale cada punto.', to: '/student/affinity' },
-    { icon: 'users', title: 'Colaboración', text: 'Comparte tu perfil con un QR, acepta contactos y forma equipos con quien complemente lo que te falta.', to: '/student/collaboration' },
+    { icon: 'users', title: 'Colaboración', text: 'Acepta contactos y forma equipos con quien complemente lo que te falta. Tu enlace y tu QR se administran en Mi perfil → Visibilidad.', to: '/student/collaboration' },
     { icon: 'award', title: 'Mi progreso y CV', text: 'Mira tus insignias y descarga tu CV en PDF con la plantilla que prefieras.', to: '/student/progress' },
   ],
   [RolNombre.TEACHER]: [

@@ -63,7 +63,7 @@ export default function ProgressScreen() {
         <Card title="Tus puntos">
           <View style={styles.periodos}>
             {([
-              [wallet.data.balance.available, 'para canjear'],
+              [wallet.data.balance.available, 'saldo de puntos'],
               [wallet.data.periods.week, 'esta semana'],
               [wallet.data.periods.month, 'este mes'],
               [wallet.data.periods.year, 'este año'],

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiAward,
+  FiUserPlus,
   FiBarChart2,
   FiBookOpen,
   FiCalendar,
@@ -81,6 +82,7 @@ const ICONS: Record<string, IconType> = {
   '/director/gamification': FiStar,
   '/admin/points': FiGift,
   '/student/collaboration?tab=equipos': FiUsers,
+  '/student/collaboration?tab=contactos': FiUserPlus,
   '/student/progress?tab=resumen': FiFileText,
   '/teacher/team-needs': FiUsers,
   '/teacher/my-activities': FiCalendar,

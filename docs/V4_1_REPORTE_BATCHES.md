@@ -953,3 +953,66 @@ Detalle de la API:
 **Riesgos:** ninguno nuevo.
 
 **Commit propuesto:** `feat(v4.1-batch-11): equipo con búsqueda y candidatos, excluir del proyecto con motivo sin tocar el equipo y confirmación individual`
+
+---
+
+## BATCH V4.1-12 — Privacidad, vistas de evidencias, QR en Mi perfil e impacto móvil
+
+**Hallazgos:** A41-024, A41-025, A41-026 (§14, §15, §16), más el informe de impacto móvil.
+
+**Defecto encontrado y corregido (§14):** el perfil público listaba los proyectos con visibilidad «perfil» **aunque siguieran en borrador**. El contrato exige que un borrador nunca se publique por haber elegido antes su visibilidad.
+
+**Archivos modificados:**
+- **API, `public-profile.service.ts`:** el perfil público y su QR solo muestran proyectos con visibilidad «perfil» que **no** sean borradores. El enlace público ya excluía los borradores; se volvió a probar.
+- **Web, `services/types.ts`:**
+  - nombres claros de las cinco visibilidades reales («Solo yo y los integrantes», «Además, mi equipo», «Docentes autorizados», «En mi perfil», «Público por enlace (sin iniciar sesión)»);
+  - `PROJECT_VISIBILITY_HELP`, con lo que significa cada una;
+  - una nota común: la visibilidad es del registro en Afinia, no del repositorio de GitHub; y un borrador nunca se publica.
+- **Web, `Projects.tsx`:** la ayuda aparece bajo cada selector de visibilidad.
+- **Web, `Evidences.tsx` (§15):** tres pestañas sobre los mismos datos, sin duplicar nada:
+  - «Evidencias de proyectos»;
+  - «Credenciales externas»: «Registrar credencial histórica o acreditar una oportunidad externa finalizada» y «Mis credenciales y su validación»;
+  - «Constancias y certificados institucionales recibidos».
+  Se aclara que las constancias internas llegan solas.
+- **Web, `Profile.tsx` y `Collaboration.tsx` (§16):**
+  - el enlace y el QR viven en **Mi perfil → Visibilidad**, junto a lo que decide qué se ve;
+  - Colaboración conserva el mismo componente como **acceso rápido**, sin una segunda fuente de verdad, y aclara que compartir el QR no agrega contactos.
+- **Web, `navigation.ts`:** nueva sección «Colaboración» con «Contactos» y «Equipos»; «Credenciales y constancias» pasa a llamarse «Evidencias y credenciales».
+- **Móvil:**
+  - se cambió «para canjear» por «saldo de puntos» (`ProgressScreen`);
+  - en la Biblioteca se corrigió el texto «Guardar orienta tus recomendaciones», que desde el V4.1-6 sería falso.
+- **Docs:** `docs/V4_1_IMPACTO_MOVIL.md`, con el impacto de cada batch en la app móvil y la prioridad sugerida.
+
+**Migraciones:** ninguna.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch12` → **5/5**:
+  - un borrador no aparece en el perfil público aunque tenga visibilidad «perfil»;
+  - un activo con «perfil» sí aparece, y uno privado no;
+  - «Público por enlace» se abre sin sesión cuando está activo; un borrador, no;
+  - el resumen público no expone correo, código ni identificadores internos;
+  - B40: sin sesión, 401; un ajeno no abre un proyecto privado.
+- `node scripts/e2e-web.mjs` → **95/95**, incluidos:
+  - WEB.51.1: las tres pestañas;
+  - WEB.51.2: el QR en Mi perfil, el acceso rápido y la sección «Colaboración»;
+  - WEB.51.3: la ayuda de visibilidad.
+- `npx tsc --noEmit` en `mobile/`: sin errores.
+- **Regresión completa (22 suites):** **2248 correctas, 0 fallos** a la primera.
+
+**Fallo → causa → corrección → regresión:**
+- **WEB.51.2, durante su escritura:** el enlace del acceso rápido se contaba antes de que la página terminara de cargar. *Corrección:* se espera al elemento. *Regresión:* PASS.
+
+**Efecto:**
+- **Backend:** perfil público.
+- **Frontend:** proyectos, evidencias, perfil, colaboración y menú.
+- **Móvil:** dos textos corregidos, más el informe.
+
+**Seguridad y permisos:**
+- el borrador ya no se filtra por el perfil público;
+- el QR solo lleva el enlace público, sin datos privados.
+
+**Pendientes:** las mejoras móviles del informe; no bloquean, porque la API ya protege.
+
+**Riesgos:** ninguno nuevo.
+
+**Commit propuesto:** `feat(v4.1-batch-12): un borrador nunca se publica, visibilidad con nombres claros, evidencias en pestañas, QR en Mi perfil e informe de impacto móvil`

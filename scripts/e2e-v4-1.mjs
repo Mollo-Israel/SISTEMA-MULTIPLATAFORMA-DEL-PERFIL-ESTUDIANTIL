@@ -10,7 +10,7 @@
  * Uso:
  *   API_URL=http://localhost:3010/api node scripts/e2e-v4-1.mjs [batch]
  */
-import { API, asegurarGithubSimulado, loginAdmin, provisionAndActivate, repoDePrueba, req } from './lib/fixtures.mjs';
+import { API, asegurarGithubSimulado, crearProyectoActivo, loginAdmin, provisionAndActivate, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -1189,7 +1189,52 @@ async function batch11(ctx) {
   check(otroQuita.status === 403 || otroQuita.status === 404, 'V41.11.11 B40 Un integrante no excluye a otros', `status ${otroQuita.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
+// ===========================================================================
+//  BATCH V4.1-12 — Privacidad de proyectos y perfil público (A41-024..026)
+// ===========================================================================
+async function batch12(ctx) {
+  objective('BATCH V4.1-12 · Un borrador nunca se publica; el perfil público y el enlace respetan la visibilidad');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Rita', lastName: `Privada${L}`, email: `v41.b12est.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 5 });
+  await req('POST', '/profiles/me', { token: est.token, body: { bio: 'Estudiante de sistemas.' } });
+  await req('PUT', '/profiles/me/visibility', { token: est.token, body: { publicProfileEnabled: true, fields: { bio: true, projects: true } } });
+  const enlace = (await req('GET', '/profiles/me/public-link', { token: est.token })).data;
+  const slug = String(enlace?.url ?? '').split('/').filter(Boolean).pop();
+  const publico = async () => (await req('GET', `/public/profiles/${slug}`)).data;
+
+  // ----- §14: un borrador con visibilidad «perfil» no se publica
+  const borrador = await req('POST', '/projects', { token: est.token, body: { title: `Borrador visible ${L}`, visibility: 'profile', status: 'draft' } });
+  const p1 = await publico();
+  check(borrador.status === 201 && !(p1?.projects ?? []).some((p) => p.title === `Borrador visible ${L}`),
+    'V41.12.1 §14 Un borrador no aparece en el perfil público aunque ya tenga visibilidad «perfil»', json((p1?.projects ?? []).map((p) => p.title)));
+  const activo = await crearProyectoActivo(est.token, { title: `Proyecto publicado ${L}`, visibility: 'profile' });
+  const privado = await crearProyectoActivo(est.token, { title: `Proyecto privado ${L}`, visibility: 'private' });
+  const p2 = await publico();
+  const titulos = (p2?.projects ?? []).map((p) => p.title);
+  check(activo.status === 201 && titulos.includes(`Proyecto publicado ${L}`) && !titulos.includes(`Proyecto privado ${L}`),
+    'V41.12.2 §14 Activo con «perfil» sí aparece; un activo privado no', json(titulos));
+
+  // ----- §14: «Público por enlace» sin iniciar sesión, y nunca para un borrador
+  const conEnlace = await req('POST', '/projects', { token: est.token, body: { title: `Borrador con enlace ${L}`, visibility: 'public_link', status: 'draft' } });
+  const token = conEnlace.data?.publicLinkToken;
+  const verBorrador = await req('GET', `/projects/public/${token}`);
+  const activoEnlace = await crearProyectoActivo(est.token, { title: `Activo con enlace ${L}`, visibility: 'public_link' });
+  const verActivo = await req('GET', `/projects/public/${activoEnlace.data?.publicLinkToken}`);
+  check(!!token && verBorrador.status === 404 && verActivo.status === 200 && verActivo.data?.title === `Activo con enlace ${L}`,
+    'V41.12.3 §14 «Público por enlace» se abre sin sesión cuando está activo; un borrador con enlace no se ve', json([verBorrador.status, verActivo.status]));
+  check(!JSON.stringify(verActivo.data ?? {}).match(/@|createdByProfileId|universityCode|email/i),
+    'V41.12.4 §16 El resumen público no expone correo, código universitario ni identificadores internos', Object.keys(verActivo.data ?? {}).join(','));
+
+  // ----- 401 / 403
+  const sinSesion = await req('GET', '/projects/my');
+  const otro = await provisionAndActivate(ctx.admin, { firstName: 'Saul', lastName: `Ajeno${L}`, email: `v41.b12otro.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 5 });
+  await req('POST', '/profiles/me', { token: otro.token, body: {} });
+  const ajenoPrivado = await req('GET', `/projects/${privado.data?.id}`, { token: otro.token });
+  check(sinSesion.status === 401 && (ajenoPrivado.status === 403 || ajenoPrivado.status === 404),
+    'V41.12.5 B40 Sin sesión: 401; otro estudiante no abre un proyecto privado', json([sinSesion.status, ajenoPrivado.status]));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

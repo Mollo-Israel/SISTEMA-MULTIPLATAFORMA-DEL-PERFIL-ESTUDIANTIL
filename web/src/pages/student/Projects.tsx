@@ -37,7 +37,9 @@ import {
   PROJECT_BACKING_HELP,
   PROJECT_BACKING_LABEL,
   PROJECT_EVENT_LABEL,
+  PROJECT_VISIBILITY_HELP,
   PROJECT_VISIBILITY_LABEL,
+  PROJECT_VISIBILITY_NOTE,
   SKILL_EVIDENCE_LABEL,
 } from '../../services/types';
 import type {
@@ -348,6 +350,8 @@ export default function StudentProjectsPage() {
               >
                 {VISIBILIDADES.map((v) => <option key={v} value={v}>{PROJECT_VISIBILITY_LABEL[v]}</option>)}
               </select>
+              {/* V4.1 A41-024 (§14): qué significa la opción y qué NO cambia. */}
+              <span className="field-hint" data-testid="ayuda-visibilidad">{PROJECT_VISIBILITY_HELP[form.visibility]} {PROJECT_VISIBILITY_NOTE}</span>
             </div>
           </div>
           <div className="field">
@@ -573,6 +577,7 @@ export default function StudentProjectsPage() {
                   >
                     {VISIBILIDADES.map((v) => <option key={v} value={v}>{PROJECT_VISIBILITY_LABEL[v]}</option>)}
                   </select>
+                  <span className="field-hint">{PROJECT_VISIBILITY_HELP[p.visibility ?? 'profile']}</span>
                   {p.visibility === 'public_link' && p.publicLinkToken && (
                     <span className="field-hint">
                       Enlace:{' '}

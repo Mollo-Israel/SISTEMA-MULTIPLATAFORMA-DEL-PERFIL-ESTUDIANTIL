@@ -17,8 +17,9 @@ import {
 import { useAsync } from '../../hooks/useAsync';
 import {
   AsyncView, Badge, Button, Card, EmptyState, Loading, PageHeader, ResultCount,
-  SearchInput, SkeletonTable,
+  SearchInput, SkeletonTable, Tabs,
 } from '../../components/ui';
+import { useSearchParams } from 'react-router-dom';
 import { useConfirm, useToast } from '../../components/feedback';
 
 const normalize = (s: string) =>
@@ -61,7 +62,13 @@ const VALIDACION_TONO: Record<string, string> = {
   REJECTED: 'red',
 };
 
+type PestanaEvidencias = 'proyectos' | 'credenciales' | 'constancias';
+
 export default function StudentEvidencesPage() {
+  // V4.1 A41-025 (§15): tres pestañas sobre los mismos datos; nada se duplica.
+  const [params, setParams] = useSearchParams();
+  const pedida = params.get('tab');
+  const pestana: PestanaEvidencias = pedida === 'proyectos' || pedida === 'constancias' ? pedida : 'credenciales';
   const evidences = useAsync<Evidence[]>(() => evidenceService.mine(), []);
   const certificates = useAsync<ExternalCertificate[]>(() => certificateService.mine(), []);
   const constancies = useAsync(() => constancyService.mine(), []);
@@ -116,10 +123,21 @@ export default function StudentEvidencesPage() {
   return (
     <div>
       <PageHeader
-        title="Credenciales y constancias"
+        title="Evidencias y credenciales"
         description="Tus credenciales externas y las constancias internas que recibiste. Afinia no las certifica: las valida por niveles y lo indica en cada una."
       />
 
+      <Tabs
+        items={[
+          { key: 'proyectos', label: 'Evidencias de proyectos', count: evidences.data?.length },
+          { key: 'credenciales', label: 'Credenciales externas', count: certificates.data?.length },
+          { key: 'constancias', label: 'Constancias y certificados institucionales recibidos', count: (constancies.data as unknown[] | undefined)?.length },
+        ]}
+        value={pestana}
+        onChange={(k) => setParams(k === 'credenciales' ? {} : { tab: k }, { replace: true })}
+      />
+
+      {pestana === 'proyectos' && (<>
       {/* V3 §23: ya no hay una bandeja genérica de evidencias. Las de un
           proyecto se agregan dentro del proyecto. Las registradas antes se
           conservan aquí, sin borrar datos. */}
@@ -225,7 +243,14 @@ export default function StudentEvidencesPage() {
           }}
         </AsyncView>
       </Card>
+      </>)}
 
+      {pestana === 'credenciales' && (<>
+      <p className="inline-note">
+        Registra una credencial histórica (la obtuviste antes o fuera de Afinia) o acredita una oportunidad externa que ya terminó.
+        Cada una muestra su estado de validación y qué se pudo verificar. Las constancias internas no se registran aquí: llegan solas
+        a «Constancias y certificados institucionales recibidos».
+      </p>
       <CertificateForm
         areas={areas}
         onError={(m) => toast.error(m)}
@@ -236,7 +261,7 @@ export default function StudentEvidencesPage() {
       />
 
       <Card
-        title="Mis certificados externos"
+        title="Mis credenciales y su validación"
         actions={
           <SearchInput
             value={certificateQuery}
@@ -348,8 +373,10 @@ export default function StudentEvidencesPage() {
           }}
         </AsyncView>
       </Card>
+      </>)}
 
-      <Card title="Constancias y certificados recibidos">
+      {pestana === 'constancias' && (
+      <Card title="Constancias y certificados institucionales recibidos">
         <p className="muted" style={{ marginBottom: '0.7rem' }}>
           Las constancias internas las emite Afinia cuando el responsable confirma tu participación.
           Los certificados de la institución los emite quien figura como emisor; el responsable te los entrega aquí.
@@ -394,6 +421,7 @@ export default function StudentEvidencesPage() {
           )}
         </AsyncView>
       </Card>
+      )}
     </div>
   );
 }
@@ -558,7 +586,7 @@ function CertificateForm({
   };
 
   return (
-    <Card title="Adjuntar credencial externa">
+    <Card title="Registrar credencial histórica o acreditar una oportunidad externa finalizada">
       <form noValidate onSubmit={submit}>
         <div className="field">
           <label htmlFor="cert-origen">¿De dónde viene?</label>

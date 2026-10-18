@@ -4,8 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { StudentContactChannel } from '../entities/contact-channel.entity';
 import { channelView } from './contacts.service';
 import { randomInt } from 'crypto';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import {
+  ProjectStatus,
   AffinityLevel,
   DEFAULT_PUBLIC_VISIBILITY,
   ProjectVisibility,
@@ -180,6 +181,8 @@ export class PublicProfileService {
         where: {
           createdByProfileId: perfil.id,
           visibility: ProjectVisibility.PROFILE,
+          // V4.1 §14: un borrador nunca se publica por haber elegido antes su visibilidad.
+          status: Not(ProjectStatus.DRAFT),
         },
         order: { createdAt: 'DESC' },
         take: 10,

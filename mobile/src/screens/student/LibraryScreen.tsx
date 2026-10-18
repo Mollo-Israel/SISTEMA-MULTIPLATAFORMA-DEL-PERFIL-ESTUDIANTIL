@@ -134,7 +134,7 @@ export default function LibraryScreen() {
       {pagina.data && (
         <View style={styles.nota}>
           <Icon name="info" size={13} />
-          <Muted>Guardar un recurso orienta tus recomendaciones; tu afinidad sale de lo que haces y queda respaldado.</Muted>
+          <Muted>Guardar un recurso es un acceso rápido: no cambia tus recomendaciones ni tu afinidad, que sale de lo que haces y queda respaldado.</Muted>
         </View>
       )}
     </Screen>

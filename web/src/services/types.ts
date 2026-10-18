@@ -810,13 +810,27 @@ export const PROJECT_ROLES = [
 /** V3 §40: de más cerrado a más abierto. */
 export type ProjectVisibility = 'private' | 'team' | 'teachers' | 'profile' | 'public_link';
 
+/** V4.1 A41-024 (§14): nombres claros de las cinco visibilidades reales. */
 export const PROJECT_VISIBILITY_LABEL: Record<ProjectVisibility, string> = {
-  private: 'Privado: tú y tus integrantes',
-  team: 'Equipo: además, tu equipo de colaboración',
-  teachers: 'Docentes: además, tus docentes pueden comentarlo',
-  profile: 'Perfil: aparece en tu perfil',
-  public_link: 'Enlace público: un resumen para quien tenga el enlace',
+  private: 'Solo yo y los integrantes del proyecto',
+  team: 'Además, mi equipo de colaboración',
+  teachers: 'Además, docentes autorizados (de mi semestre)',
+  profile: 'En mi perfil (comunidad Afinia y mi perfil público, si lo publico)',
+  public_link: 'Público por enlace (sin iniciar sesión)',
 };
+
+/** V4.1 §14: qué significa cada una, y lo que NO cambia. */
+export const PROJECT_VISIBILITY_HELP: Record<ProjectVisibility, string> = {
+  private: 'Nadie más lo ve en Afinia. Docentes y Dirección no lo consultan.',
+  team: 'Lo ven tus integrantes y los miembros de tu equipo de colaboración.',
+  teachers: 'Lo ven los docentes de tus semestres y pueden dejarte retroalimentación. No aparece en tu perfil público.',
+  profile: 'Aparece en tu perfil dentro de Afinia y, si publicaste tu perfil, en tu perfil público y su QR.',
+  public_link: 'Cualquiera con el enlace ve un resumen, sin iniciar sesión. Un borrador no se ve hasta que lo actives.',
+};
+
+/** V4.1 §14: aclaraciones comunes a todas las opciones. */
+export const PROJECT_VISIBILITY_NOTE =
+  'Esto decide quién ve el registro en Afinia, no tu repositorio: si el repositorio es público en GitHub, cualquiera puede verlo allí. Un borrador nunca se publica, aunque elijas ya su visibilidad.';
 
 /** V3 §22: qué le falta a un proyecto para pasar a ACTIVE. */
 export interface ProjectReadiness {

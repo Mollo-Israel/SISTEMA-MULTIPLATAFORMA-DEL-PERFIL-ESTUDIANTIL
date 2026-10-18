@@ -32,7 +32,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/student', label: 'Inicio' },
         { to: '/student/profile', label: 'Mi perfil' },
         { to: '/student/projects', label: 'Proyectos' },
-        { to: '/student/evidences', label: 'Credenciales y constancias' },
+        { to: '/student/evidences', label: 'Evidencias y credenciales' },
         { to: '/student/affinity', label: 'Áreas de afinidad' },
       ],
     },
@@ -41,7 +41,14 @@ export const NAV: Record<string, NavGroup[]> = {
       items: [
         { to: '/student/activities', label: 'Actividades' },
         { to: '/student/library', label: 'Biblioteca' },
-        { to: '/student/collaboration', label: 'Colaboración' },
+      ],
+    },
+    {
+      // V4.1 A41-026 (§16): Contactos y Equipos agrupados en Colaboración; el
+      // enlace y el QR se administran en Mi perfil → Visibilidad.
+      section: 'Colaboración',
+      items: [
+        { to: '/student/collaboration?tab=contactos', label: 'Contactos' },
         { to: '/student/collaboration?tab=equipos', label: 'Equipos' },
       ],
     },
