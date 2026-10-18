@@ -10,7 +10,7 @@
  * Uso:
  *   API_URL=http://localhost:3010/api node scripts/e2e-v4-1.mjs [batch]
  */
-import { API, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { API, asegurarGithubSimulado, loginAdmin, provisionAndActivate, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -922,7 +922,87 @@ async function batch8(ctx) {
   }
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
+// ===========================================================================
+//  BATCH V4.1-9 — Proyectos: borrador, edición y readiness (A41-019)
+// ===========================================================================
+async function batch9(ctx) {
+  objective('BATCH V4.1-9 · Borrador sin repositorio, edición también activo, una tecnología por área y reconfirmación');
+  await asegurarGithubSimulado();
+  const alumno = async (k, nombre) => {
+    const e = await provisionAndActivate(ctx.admin, { firstName: nombre, lastName: `Proyecto${L}`, email: `v41.b9${k}.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 5 });
+    await req('POST', '/profiles/me', { token: e.token, body: {} });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const ana = await alumno('ana', 'Ana');
+  const beto = await alumno('beto', 'Beto');
+  const codigos = async (id, token = ana.token) => ((await req('GET', `/projects/${id}/readiness`, { token })).data?.missing ?? []).map((m) => m.code);
+
+  // ----- B33 / 23.2: borrador individual sin repositorio
+  const borrador = await req('POST', '/projects', { token: ana.token, body: { title: `Proyecto X ${L}`, status: 'draft' } });
+  check(borrador.status === 201 && borrador.data?.status === 'draft' && !borrador.data?.repositoryUrl,
+    'V41.9.1 B33 23.2 Un borrador individual sin repositorio se guarda', `status ${borrador.status}`);
+  const id = borrador.data?.id;
+  const edita = await req('PATCH', `/projects/${id}`, {
+    token: ana.token, body: { title: `Proyecto X renombrado ${L}`, description: 'Gestor de turnos.', repositoryUrl: repoDePrueba(`proyecto-x-${TS}`) },
+  });
+  const tras = (await req('GET', `/projects/${id}`, { token: ana.token })).data;
+  check(edita.status === 200 && tras?.title === `Proyecto X renombrado ${L}` && tras?.repositoryUrl === repoDePrueba(`proyecto-x-${TS}`),
+    'V41.9.2 B33 §10.3 Título, descripción y repositorio del borrador se editan y quedan guardados', json({ s: edita.status, t: tras?.title }));
+  const activarIncompleto = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { status: 'active' } });
+  const faltan = (activarIncompleto.data?.details?.missing ?? []).map((m) => m.code);
+  check(activarIncompleto.status === 400 && activarIncompleto.data?.code === 'PROJECT_NOT_READY'
+    && faltan.includes('area') && faltan.includes('skill') && faltan.includes('evidence')
+    && (activarIncompleto.data?.details?.missing ?? []).every((m) => m.message?.length > 10),
+    'V41.9.3 B33 23.2 Publicar está bloqueado con una lista de verificación explicable', json(faltan));
+
+  // ----- §10.2: una tecnología por cada área alegada
+  const catalogo = ((await req('GET', '/skills', { token: ana.token })).data ?? []).filter((s) => s.isActive !== false && s.academicAreaId);
+  const areas = [...new Set(catalogo.map((s) => s.academicAreaId))];
+  const [areaA, areaB] = areas;
+  const skA = catalogo.find((s) => s.academicAreaId === areaA);
+  const skB = catalogo.find((s) => s.academicAreaId === areaB);
+  await req('PATCH', `/projects/${id}`, { token: ana.token, body: { areaIds: [areaA, areaB], skillIds: [skA.id] } });
+  const r1 = await req('GET', `/projects/${id}/readiness`, { token: ana.token });
+  const porArea = (r1.data?.missing ?? []).find((m) => m.code === 'skill_per_area');
+  check(!!porArea && /falta en/.test(porArea.message), 'V41.9.4 §10.2 Dos áreas y tecnología solo de una: la lista nombra el área sin tecnología', json(porArea));
+  const guardaBorrador = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { description: 'Sigue incompleto.' } });
+  check(guardaBorrador.status === 200, 'V41.9.5 §10.2 El borrador se sigue guardando incompleto: la regla solo bloquea al activar', `status ${guardaBorrador.status}`);
+  await req('PATCH', `/projects/${id}`, { token: ana.token, body: { areaIds: [areaA, areaB], skillIds: [skA.id, skB.id] } });
+  check(!(await codigos(id)).includes('skill_per_area'), 'V41.9.6 §10.2 Con una tecnología por área, ese requisito se cumple');
+
+  // ----- §10.3: activo, editar y revalidar
+  const inv = await req('POST', `/projects/${id}/invitations`, { token: ana.token, body: { invitedProfileId: beto.profileId, proposedRole: 'Backend' } });
+  await req('PATCH', `/projects/invitations/${inv.data?.id}`, { token: beto.token, body: { decision: 'accept' } });
+  await req('PUT', `/projects/${id}/my-contribution`, { token: beto.token, body: { contribution: 'Programé la API y la base de datos.', skillIds: [skB.id] } });
+  await req('POST', `/projects/${id}/evidences`, { token: ana.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${id}.png`, description: 'Captura del panel.' } });
+  const activa = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { status: 'active' } });
+  check(activa.status === 200 && activa.data?.status === 'active' && activa.data?.backingTier !== 'corroborated',
+    'V41.9.7 §10.2 Cumplida la lista, se activa; activar no lo vuelve CORROBORATED por sí solo', json({ s: activa.status, st: activa.data?.status, t: activa.data?.backingTier }));
+  const titulo = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { title: `Proyecto X activo ${L}` } });
+  check(titulo.status === 200 && titulo.data?.status === 'active', 'V41.9.8 §10.3 Un proyecto activo se puede editar (título)', `status ${titulo.status}`);
+  const dejaArea = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { skillIds: [skA.id] } });
+  check(dejaArea.status === 400 && dejaArea.data?.code === 'PROJECT_ACTIVE_REQUIREMENT',
+    'V41.9.9 §10.2 Activo, no puede quedar un área sin tecnología', `status ${dejaArea.status} ${dejaArea.data?.code}`);
+  const skB2 = catalogo.find((s) => s.academicAreaId === areaB && s.id !== skB.id);
+  const cambia = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { skillIds: [skA.id, skB2.id] } });
+  const miembros = (await req('GET', `/projects/${id}/members/detailed`, { token: ana.token })).data ?? [];
+  const deBeto = miembros.find((m) => m.userId === beto.userId || m.user?.id === beto.userId);
+  const bitacora = (await req('GET', `/projects/${id}/timeline`, { token: ana.token })).data ?? [];
+  check(cambia.status === 200 && deBeto && deBeto.contributionConfirmed === false
+    && bitacora.some((e) => e.eventType === 'contribution_updated' && e.metadata?.motivo === 'tecnologias_del_proyecto_cambiaron'),
+    'V41.9.10 §10.3 Quitar una tecnología que un integrante confirmó le pide reconfirmar, y queda en la bitácora', json({ s: cambia.status, b: deBeto?.contributionConfirmed }));
+  const sigue = (await req('GET', `/projects/${id}`, { token: ana.token })).data;
+  check(sigue?.status === 'active', 'V41.9.11 §10.3 Sin downgrade destructivo: el proyecto sigue activo mientras reconfirma');
+  const nuevoRepo = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { repositoryUrl: repoDePrueba(`proyecto-x-v2-${TS}`) } });
+  const checks = (await req('GET', `/projects/${id}/checks`, { token: ana.token })).data;
+  check(nuevoRepo.status === 200 && JSON.stringify(checks ?? {}).includes(`proyecto-x-v2-${TS}`),
+    'V41.9.12 §10.3 Cambiar el repositorio vuelve a comprobarlo (lo detectado antes no respalda al nuevo)', json(checks?.repository ?? checks).slice(0, 200));
+  const ajeno = await req('PATCH', `/projects/${id}`, { token: beto.token, body: { title: 'Lo cambio yo' } });
+  check(ajeno.status === 403 || ajeno.status === 404, 'V41.9.13 B40 Un integrante no edita el proyecto del responsable', `status ${ajeno.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

@@ -17,6 +17,8 @@ export type ReadinessCode =
   | 'title'
   | 'area'
   | 'skill'
+  /** V4.1 §10.2: cada área alegada necesita al menos una tecnología suya. */
+  | 'skill_per_area'
   | 'repository'
   | 'repository_invalid'
   | 'repository_not_public'
@@ -29,6 +31,7 @@ export const READINESS_MESSAGE: Record<ReadinessCode, string> = {
   title: 'Ponle un título de al menos 3 caracteres.',
   area: 'Elige al menos un área.',
   skill: 'Elige al menos una tecnología del catálogo.',
+  skill_per_area: 'Cada área del proyecto necesita al menos una tecnología usada en ella.',
   repository: 'Agrega el enlace al repositorio.',
   repository_invalid: 'El enlace no es de un repositorio (GitHub, GitLab o Bitbucket: usuario/repositorio).',
   repository_not_public: 'El repositorio no existe o no es público.',
@@ -42,6 +45,8 @@ export interface ReadinessInput {
   title: string;
   areaCount: number;
   skillCount: number;
+  /** V4.1 §10.2: nombres de las áreas del proyecto sin ninguna tecnología usada en ellas. */
+  areasWithoutSkill?: string[];
   repositoryUrl: string | null;
   /** Estado de la comprobación del repositorio; `null` si nunca se comprobó. */
   repositoryCheck: LinkCheckStatus | null;
@@ -73,6 +78,7 @@ export function projectReadiness(i: ReadinessInput): Readiness {
   if (!i.title || i.title.trim().length < 3) missing.push('title');
   if (i.areaCount < 1) missing.push('area');
   if (i.skillCount < 1) missing.push('skill');
+  else if ((i.areasWithoutSkill ?? []).length > 0) missing.push('skill_per_area');
 
   if (!i.repositoryUrl) {
     missing.push('repository');
@@ -95,7 +101,12 @@ export function projectReadiness(i: ReadinessInput): Readiness {
 
   return {
     ready: missing.length === 0,
-    missing: missing.map((code) => ({ code, message: READINESS_MESSAGE[code] })),
+    missing: missing.map((code) => ({
+      code,
+      message: code === 'skill_per_area'
+        ? `Cada área necesita al menos una tecnología usada en ella: falta en ${(i.areasWithoutSkill ?? []).join(', ')}.`
+        : READINESS_MESSAGE[code],
+    })),
     warnings,
   };
 }

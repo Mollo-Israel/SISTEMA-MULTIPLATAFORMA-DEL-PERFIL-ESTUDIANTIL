@@ -786,6 +786,29 @@ async function pruebas(browser) {
   check(fallos53.length === 0, 'WEB.47.3 Sin errores de JavaScript en V4.1-8', fallos53.join(' | '));
   await c53.close();
 
+  // ===== V4.1-9 · Proyectos: el dueño edita título y repositorio desde la web (A41-019, B33)
+  objective('V4.1-9 · Editar un proyecto (también el repositorio) desde su tarjeta');
+  const fallos54 = [];
+  const estProy = await estudianteListo(admin, 'proyedit');
+  const borradorWeb = await req('POST', '/projects', { token: estProy.token, body: { title: `Borrador web ${TS}`, status: 'draft' } });
+  const c54 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p54 = await c54.newPage();
+  p54.on('pageerror', (e) => fallos54.push(e.message));
+  await entrar(p54, estProy.email);
+  await p54.goto(`${WEB}/student/projects`);
+  await p54.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p54.getByRole('button', { name: 'Editar proyecto' }).first().click({ timeout: 8000 });
+  const encabezado = await p54.getByText(`Editar «Borrador web ${TS}»`).first().isVisible().catch(() => false);
+  await p54.fill('#pr-titulo', `Borrador web editado ${TS}`);
+  await p54.fill('#pr-repo', `https://github.com/afinia-pruebas/web-edit-${TS}`);
+  await p54.getByRole('button', { name: 'Guardar cambios' }).click();
+  await espera(1500);
+  const guardado = (await req('GET', `/projects/${borradorWeb.data?.id}`, { token: estProy.token })).data;
+  check(encabezado && guardado?.title === `Borrador web editado ${TS}` && guardado?.repositoryUrl?.includes(`web-edit-${TS}`),
+    'WEB.48.1 B33 §10.3 El dueño edita título y repositorio desde la tarjeta y se guardan', JSON.stringify({ e: encabezado, t: guardado?.title }));
+  check(fallos54.length === 0, 'WEB.48.2 Sin errores de JavaScript en V4.1-9', fallos54.join(' | '));
+  await c54.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

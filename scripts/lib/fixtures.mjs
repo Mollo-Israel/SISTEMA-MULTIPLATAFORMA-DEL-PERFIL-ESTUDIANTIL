@@ -565,6 +565,14 @@ export async function crearProyectoActivo(token, body = {}) {
     }
     const areasDeSkills = catalogo.filter((s) => skillIds.includes(s.id)).map((s) => s.academicAreaId);
     areaIds = [...new Set([...areaIds, ...areasDeSkills])].slice(0, 6);
+    // V4.1 §10.2: activar exige una tecnología por cada área alegada.
+    if (!body.skillIds?.length) {
+      for (const a of areaIds) {
+        const cubierta = catalogo.some((s) => skillIds.includes(s.id) && s.academicAreaId === a);
+        const deArea = catalogo.find((s) => s.academicAreaId === a);
+        if (!cubierta && deArea && skillIds.length < 20) skillIds.push(deArea.id);
+      }
+    }
   }
   const slug = String(body.title ?? 'proyecto').toLowerCase().normalize('NFD')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'proyecto';

@@ -243,6 +243,9 @@ async function rf13(ctx) {
   check(detail.status === 200 && detail.data.title.includes('IoT'), '13.10 El detalle persiste tras releer');
 
   section('Edicion');
+  // V4.1 §10.2: al sumar el área web, el proyecto activo suma también una tecnología de esa área.
+  const skWeb = ((await req('GET', '/skills', { token: A.token })).data ?? []).find((s) => s.academicAreaId === webArea.id && s.isActive !== false);
+  const skillsPrevias = (created.data?.projectSkills ?? []).map((s) => s.skillId);
   const edited = await req('PATCH', `/projects/${projectId}`, {
     token: A.token,
     body: {
@@ -251,6 +254,7 @@ async function rf13(ctx) {
       // V3 §21.2: el área web pasa a ser la principal; se conservan las de
       // sus tecnologías, que no pueden quedar fuera de sus áreas (§4).
       areaIds: [webArea.id, ...(created.data?.projectAreas ?? []).map((a) => a.academicAreaId).filter((x) => x !== webArea.id)],
+      skillIds: [...new Set([...skillsPrevias, skWeb?.id].filter(Boolean))],
       status: 'active',
     },
   });

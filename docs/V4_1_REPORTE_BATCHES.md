@@ -735,3 +735,62 @@ Detalle de la API:
 **Riesgos:** los registros validados con la versión 2 conservan su veredicto hasta que Administración los reprocese (`POST /validation/reprocess-outdated`). Hasta entonces no se puede pedir para ellos la revisión excepcional.
 
 **Commit propuesto:** `feat(v4.1-batch-8): estado de validación de credenciales aparte del respaldo, revisión con prueba externa y proveedores declarados sin integrar`
+
+---
+
+## BATCH V4.1-9 — Proyectos: borrador, edición y readiness
+
+**Hallazgos:** A41-019 (§10.1–§10.3; B33, 23.2).
+
+**Reproducción (§10.1):**
+- La API ya permitía editar el título y el repositorio, pero la **web no tenía forma de editar un proyecto**: solo crearlo y cambiar su visibilidad. Ese es el «al volver no se podía editar».
+- *Defecto confirmado:* readiness pedía una tecnología **en total**, no una por cada área alegada.
+
+**Archivos modificados:**
+- **`project-readiness.rules.ts`:** nuevo requisito `skill_per_area`. Su mensaje nombra las áreas sin tecnología («falta en Redes»). Solo bloquea al activar: el borrador sigue guardándose incompleto.
+- **`projects.service.ts`:**
+  - `readinessOf` calcula qué áreas no tienen tecnología, según el área de contexto de cada una o, si no hay, su área principal;
+  - en un ACTIVE, una edición no puede dejar un área sin tecnología (`PROJECT_ACTIVE_REQUIREMENT`);
+  - si un ACTIVE quita una tecnología que un integrante confirmó como suya, ese integrante vuelve a confirmar su contribución: se le avisa, queda en la bitácora y se recalcula su afinidad. El proyecto **sigue activo**, sin downgrade destructivo.
+- **Web `Projects.tsx`:**
+  - botón «Editar proyecto» en cada tarjeta del dueño;
+  - el mismo formulario edita título, descripción, áreas, tecnologías con su contexto, repositorio, demo y visibilidad;
+  - en un ACTIVE, un aviso explica qué se revalida y qué lo bloquea.
+
+**Migraciones:** ninguna.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch9` → **13/13**:
+  - B33: un borrador sin repositorio se guarda; título, descripción y repositorio se editan;
+  - publicar queda bloqueado con una lista explicable;
+  - con dos áreas y tecnología de una sola, la lista nombra la otra; el borrador se sigue guardando; con una tecnología por área, se cumple;
+  - activar no lo vuelve CORROBORATED;
+  - el activo se edita; no puede quedar un área sin tecnología;
+  - quitar una tecnología confirmada pide reconfirmar, queda en la bitácora y el proyecto sigue activo;
+  - cambiar el repositorio lo vuelve a comprobar;
+  - un integrante no edita el proyecto del responsable.
+- `node scripts/e2e-web.mjs` → **87/87**, incluido WEB.48.1: el dueño edita título y repositorio desde la tarjeta.
+- Unitarias: **140/140** (+1: una tecnología por área).
+- **Regresión completa (22 suites):** 2104 correctas, 17 fallos. Tras las correcciones: `e2e-objective-5` 116/116, `e2e-batch-5` 50/50 y `e2e-v3-2` 206/206. **2213 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+- **13.11–13.13 (`e2e-objective-5`), B5.17b, B5.18 y B5.23 (`e2e-batch-5`), V32.15.2 (`e2e-v3-2`) → FAIL.** *Causa:* esos proyectos alegaban un área sin ninguna tecnología usada en ella. *Corrección:* las pruebas cumplen la regla:
+  - el área nueva llega con una tecnología suya;
+  - el proyecto queda en el área de su tecnología, y el desglose se consulta en esa área;
+  - el proyecto multiárea alega solo el área de contexto. V32.15.3 sigue probando que no suma en el área principal.
+  *Regresión:* PASS.
+- El fixture `crearProyectoActivo` elige una tecnología por cada área.
+- **`e2e-v3-2`, 401 en cadena (batch 6 en adelante, en la corrida completa).** *Causa probable:* la sesión de Administración caducó a mitad de la suite. No se reprodujo: al repetirla, 206/206.
+
+**Efecto:**
+- **Backend:** readiness y edición de un activo.
+- **Frontend:** edición de proyectos.
+- **Móvil:** sin cambios. La lista de readiness llega con el código nuevo y su mensaje ya legible.
+
+**Seguridad y permisos:** solo el dueño edita (403 al integrante); la reconfirmación la hace cada integrante.
+
+**Pendientes:** el respaldo que da CORROBORATED solo por cumplir readiness (A41-021) se corrige en el V4.1-10.
+
+**Riesgos:** los proyectos activos que ya alegan un área sin tecnología siguen activos: la regla actúa al activar o al editar. Se informan en el recálculo del V4.1-10.
+
+**Commit propuesto:** `feat(v4.1-batch-9): editar proyectos desde la web, una tecnología por área para activar y reconfirmación al quitar tecnologías confirmadas`

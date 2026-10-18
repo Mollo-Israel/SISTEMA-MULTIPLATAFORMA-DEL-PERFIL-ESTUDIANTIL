@@ -715,6 +715,12 @@ describe('V3 §22 requisitos de ACTIVE', () => {
     assert.deepEqual(codigos({ ...listo, pendingInvitations: 1 }), ['members_pending']);
     assert.deepEqual(codigos({ ...listo, members: [{ confirmed: false }] }), ['members_unconfirmed']);
   });
+  it('V4.1 §10.2 cada área alegada necesita una tecnología, y se nombra la que falta', () => {
+    const r = projectReadiness({ ...listo, areaCount: 2, areasWithoutSkill: ['Redes'] });
+    assert.deepEqual(r.missing.map((m) => m.code), ['skill_per_area']);
+    assert.match(r.missing[0].message, /falta en Redes/);
+    assert.equal(projectReadiness({ ...listo, areaCount: 2, areasWithoutSkill: [] }).ready, true);
+  });
   it('repositorio: forma, público, y «no se pudo comprobar» no bloquea', () => {
     assert.equal(isRepositoryUrl('https://github.com/ana/tutorias'), true);
     assert.equal(isRepositoryUrl('https://gitlab.com/ana/tutorias.git'), true);

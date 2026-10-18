@@ -1249,7 +1249,8 @@ async function batch15(ctx) {
   const proyecto = await req('POST', '/projects', {
     token: est.token,
     body: {
-      title: `Panel web del brazo ${TS}`, areaIds: [areaP.id, areaW.id], skillIds: [sX.id],
+      // V4.1 §10.2: el proyecto alega solo el área en la que usó la tecnología.
+      title: `Panel web del brazo ${TS}`, areaIds: [areaW.id], skillIds: [sX.id],
       skillContexts: [{ skillId: sX.id, areaId: areaW.id }],
       repositoryUrl: repoQueCorrobora(sX.name), visibility: 'teachers', status: 'draft',
     },

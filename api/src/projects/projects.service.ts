@@ -190,9 +190,9 @@ export class ProjectsService {
   async readinessOf(projectId: string): Promise<Readiness> {
     const project = await this.projects.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Proyecto no encontrado.');
-    const [areaCount, skillCount, repo, demo, miembros, pendientes, evidencias] = await Promise.all([
-      this.projectAreas.count({ where: { projectId } }),
-      this.projectSkills.count({ where: { projectId } }),
+    const [areasProyecto, skillsProyecto, repo, demo, miembros, pendientes, evidencias] = await Promise.all([
+      this.projectAreas.find({ where: { projectId }, relations: { academicArea: true } }),
+      this.projectSkills.find({ where: { projectId }, relations: { skill: true } }),
       this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } }),
       this.linkChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } }),
       this.members.find({ where: { projectId } }),
@@ -200,10 +200,17 @@ export class ProjectsService {
       this.evidences.count({ where: { projectId } }),
     ]);
     const owner = miembros.find((m) => m.isOwner);
+    // V4.1 §10.2: el área de cada tecnología es la que se eligió al guardarla
+    // (contexto); si no hay, la principal de la tecnología.
+    const areasConSkill = new Set(skillsProyecto.map((s) => s.academicAreaId ?? s.skill?.academicAreaId).filter(Boolean));
+    const areasWithoutSkill = areasProyecto
+      .filter((a) => !areasConSkill.has(a.academicAreaId))
+      .map((a) => a.academicArea?.name ?? 'un área');
     return projectReadiness({
       title: project.title,
-      areaCount,
-      skillCount,
+      areaCount: areasProyecto.length,
+      skillCount: skillsProyecto.length,
+      areasWithoutSkill,
       repositoryUrl: project.repositoryUrl,
       repositoryCheck: repo && repo.repositoryUrl === project.repositoryUrl ? repo.status : null,
       members: miembros.filter((m) => !m.isOwner).map((m) => ({ confirmed: m.contributionConfirmedAt !== null })),
@@ -376,6 +383,11 @@ export class ProjectsService {
       if (areaIds !== undefined && areaIds.length === 0) quitar.push('Un proyecto activo necesita al menos un área.');
       if (dto.skillIds !== undefined && dto.skillIds.length === 0) quitar.push('Un proyecto activo necesita al menos una tecnología.');
       if (dto.repositoryUrl !== undefined && !dto.repositoryUrl) quitar.push('Un proyecto activo necesita su repositorio.');
+      // V4.1 §10.2: tampoco puede quedar un área sin ninguna tecnología usada en ella.
+      if (contextos && skillsFinales && skillsFinales.length > 0) {
+        const sinSkill = areasFinales.filter((a) => !contextos!.some((c) => c.areaId === a));
+        if (sinSkill.length) quitar.push('Cada área de un proyecto activo necesita al menos una tecnología usada en ella.');
+      }
       if (quitar.length) {
         throw new BadRequestException({ code: 'PROJECT_ACTIVE_REQUIREMENT', message: quitar.join(' '), fields: { status: quitar } });
       }
@@ -400,6 +412,11 @@ export class ProjectsService {
     if (dto.skillIds === undefined && contextos !== undefined && skillsFinales !== undefined) {
       await this.replaceSkills(project.id, skillsFinales, contextos);
     }
+    // V4.1 §10.3: en un ACTIVE, quitar una tecnología que un integrante
+    // confirmó como suya le pide reconfirmar; no se le atribuye en silencio.
+    const skillsAntes = dto.skillIds !== undefined && sigueActivo
+      ? (await this.projectSkills.find({ where: { projectId: project.id } })).map((x) => x.skillId)
+      : [];
     if (dto.skillIds !== undefined) {
       await this.replaceSkills(project.id, dto.skillIds, contextos);
       const nombres = (await this.skills.find({ where: { id: In(dto.skillIds.length ? dto.skillIds : ['00000000-0000-4000-8000-000000000000']) } })).map((s) => s.name);
@@ -421,6 +438,11 @@ export class ProjectsService {
         eventType: ProjectEventType.PROJECT_ARCHIVED,
         metadata: {},
       });
+    }
+
+    if (sigueActivo && dto.skillIds !== undefined) {
+      const quitadas = skillsAntes.filter((s) => !dto.skillIds!.includes(s));
+      if (quitadas.length) await this.pedirReconfirmacion(project, user.userId, quitadas);
     }
 
     // Los enlaces solo se vuelven a comprobar si cambiaron: consultar
@@ -450,6 +472,38 @@ export class ProjectsService {
       }
     }
     return this.findOneOrFail(id);
+  }
+
+  /**
+   * V4.1 §10.3: integrantes (no el responsable) que confirmaron alguna de las
+   * tecnologías quitadas vuelven a confirmar. El proyecto sigue activo y la
+   * historia queda en la bitácora.
+   */
+  private async pedirReconfirmacion(project: Project, actorUserId: string, quitadas: string[]): Promise<void> {
+    const afectadas = await this.memberSkills.find({ where: { skillId: In(quitadas) } });
+    const ids = [...new Set(afectadas.map((x) => x.projectMemberId))];
+    if (!ids.length) return;
+    const miembros = await this.members.find({ where: { id: In(ids), projectId: project.id, isOwner: false } });
+    for (const m of miembros.filter((x) => x.contributionConfirmedAt)) {
+      m.contributionConfirmedAt = null;
+      await this.members.save(m);
+      await this.events.record({
+        projectId: project.id,
+        actorUserId,
+        eventType: ProjectEventType.CONTRIBUTION_UPDATED,
+        metadata: { memberId: m.id, requiereConfirmacion: true, motivo: 'tecnologias_del_proyecto_cambiaron' },
+      });
+      await this.avisar({
+        userId: m.userId,
+        kind: 'PROJECT_CONTRIBUTION_CHANGED',
+        title: 'Revisa tu contribución',
+        body: `«${project.title}» cambió sus tecnologías y una de las que confirmaste ya no figura. Vuelve a confirmar tu contribución.`,
+        link: '/student/projects',
+        dedupeKey: `project-reconfirm:${m.id}:${Date.now()}`,
+      });
+      const perfil = await this.profiles.findOne({ where: { userId: m.userId } });
+      if (perfil) await this.trajectory.requestRecalculation(perfil.id);
+    }
   }
 
   async findMine(userId: string) {

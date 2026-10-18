@@ -4,6 +4,7 @@ import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import {
   FiChevronDown,
   FiChevronRight,
+  FiEdit2,
   FiFolder,
   FiGithub,
   FiLink,
@@ -91,6 +92,8 @@ export default function StudentProjectsPage() {
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [form, setForm] = useState(emptyForm);
+  /** V4.1 §10.3: proyecto que se está editando (el mismo formulario). */
+  const [editando, setEditando] = useState<Project | null>(null);
   const [evForm, setEvForm] = useState<Record<string, { externalUrl: string; description: string }>>({});
   const toast = useToast();
 
@@ -165,6 +168,28 @@ export default function StudentProjectsPage() {
     }
   };
 
+  /** V4.1 §10.3: el dueño edita título, repositorio, áreas y tecnologías, también si ya está activo. */
+  const editar = (p: Project) => {
+    const skillIds = (p.projectSkills ?? []).map((s) => s.skillId);
+    setEditando(p);
+    setForm({
+      ...emptyForm,
+      title: p.title,
+      description: p.description ?? '',
+      areaIds: (p.projectAreas ?? []).map((a) => a.academicAreaId),
+      skillIds,
+      skillContexts: Object.fromEntries((p.projectSkills ?? []).filter((s) => s.academicAreaId).map((s) => [s.skillId, s.academicAreaId as string])),
+      repositoryUrl: p.repositoryUrl ?? '',
+      demoUrl: p.demoUrl ?? '',
+      visibility: p.visibility ?? 'profile',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const cancelarEdicion = () => {
+    setEditando(null);
+    setForm(emptyForm);
+  };
+
   // V3 §21: se guarda como borrador aunque esté incompleto; se activa cuando
   // cumple los requisitos (§22), desde la tarjeta del proyecto.
   const create = async (e: React.FormEvent) => {
@@ -172,6 +197,33 @@ export default function StudentProjectsPage() {
     // V3 §67: error debajo de cada campo, no el globo del navegador.
     if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
     setCreating(true);
+    if (editando) {
+      try {
+        await projectService.update(editando.id, {
+          title: form.title,
+          description: form.description || null,
+          areaIds: form.areaIds,
+          skillIds: form.skillIds,
+          skillContexts: form.skillIds
+            .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
+            .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
+          repositoryUrl: form.repositoryUrl || null,
+          demoUrl: form.demoUrl || null,
+          visibility: form.visibility,
+        });
+        const eraActivo = editando.status === 'active';
+        cancelarEdicion();
+        await load();
+        toast.success('Cambios guardados', eraActivo
+          ? 'Si cambiaste el repositorio o la demo, se vuelven a comprobar; los integrantes afectados reconfirman su contribución.'
+          : 'Sigue siendo un borrador hasta que lo actives.');
+      } catch (err) {
+        toast.error(apiError(err));
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
     try {
       await projectService.create({
         title: form.title,
@@ -258,7 +310,14 @@ export default function StudentProjectsPage() {
         description="Guarda tus proyectos como borrador y actívalos cuando cumplan lo mínimo: áreas, tecnologías, repositorio público, integrantes confirmados y una evidencia de funcionamiento. Las evidencias viven dentro de cada proyecto."
       />
 
-      <Card title="Nuevo proyecto">
+      <Card title={editando ? `Editar «${editando.title}»` : 'Nuevo proyecto'}>
+        {editando?.status === 'active' && (
+          <p className="muted" style={{ marginTop: 0 }} data-testid="aviso-edicion-activo">
+            Está activo: puedes corregirlo, pero no dejarlo sin área, tecnología o repositorio. Si cambias el repositorio o la demo
+            se vuelven a comprobar (lo detectado antes no respalda al nuevo); si quitas una tecnología que un integrante confirmó,
+            él vuelve a confirmar su contribución.
+          </p>
+        )}
         <form noValidate onSubmit={create}>
           <div className="row">
             <div className="field">
@@ -322,7 +381,7 @@ export default function StudentProjectsPage() {
               />
             </div>
           </div>
-          {teams.length > 0 && (
+          {teams.length > 0 && !editando && (
             <div className="field">
               <label htmlFor="pr-equipo">Equipo de colaboración (opcional)</label>
               <select id="pr-equipo" value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
@@ -341,9 +400,12 @@ export default function StudentProjectsPage() {
               )}
             </div>
           )}
-          <Button type="submit" loading={creating} icon={<FiPlus size={15} />}>
-            Guardar borrador
-          </Button>
+          <div className="flex" style={{ gap: '0.5rem' }}>
+            <Button type="submit" loading={creating} icon={editando ? <FiEdit2 size={15} /> : <FiPlus size={15} />}>
+              {editando ? 'Guardar cambios' : 'Guardar borrador'}
+            </Button>
+            {editando && <Button type="button" variant="ghost" onClick={cancelarEdicion}>Cancelar</Button>}
+          </div>
         </form>
       </Card>
 
@@ -424,6 +486,12 @@ export default function StudentProjectsPage() {
                     <span key={t} className="badge badge-gray">{t}</span>
                   ))}
                 </div>
+              )}
+
+              {p.isOwner && (
+                <Button size="sm" variant="secondary" icon={<FiEdit2 size={13} />} onClick={() => editar(p)} style={{ marginTop: '0.6rem' }}>
+                  Editar proyecto
+                </Button>
               )}
 
               {p.status === 'draft' && (

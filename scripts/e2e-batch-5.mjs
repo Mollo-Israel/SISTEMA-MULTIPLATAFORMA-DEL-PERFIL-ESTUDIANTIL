@@ -210,10 +210,13 @@ async function contribucion(ctx) {
   // V3 §21–§22: el borrador pasa a ACTIVE cuando cumple los requisitos; solo
   // entonces es experiencia que alimenta la afinidad.
   await asegurarGithubSimulado();
+  ctx.areaProyecto = react.academicAreaId;
   await req('PATCH', `/projects/${ctx.projectId}`, {
     token: ctx.autor.token,
     body: {
-      areaIds: [...new Set([ctx.area.id, react.academicAreaId].filter(Boolean))],
+      // V4.1 §10.2: cada área alegada necesita una tecnología usada en ella;
+      // el área del escenario no tiene ninguna, así que el proyecto se queda con la de React.
+      areaIds: [react.academicAreaId],
       skillIds: [react.id],
       // V4 §35.3: el repositorio corrobora React (package.json), así puede sumar afinidad.
       repositoryUrl: repoDePrueba(`stack-seguimiento-${TS}`),
@@ -286,10 +289,12 @@ async function evidencias(ctx) {
   // §50 y §55: una evidencia no crea una experiencia más, mejora el respaldo
   // de la que ya existe. Lo que §35 exige es que la señal se atribuya a quien
   // la aportó, y eso se ve en el desglose, no en el puntaje.
-  const suyo = await req('GET', `/affinity/me/areas/${ctx.area.id}/breakdown`, {
+  // V4.1 §10.2: el proyecto quedó en el área de su tecnología (React).
+  const areaProyecto = ctx.areaProyecto ?? ctx.area.id;
+  const suyo = await req('GET', `/affinity/me/areas/${areaProyecto}/breakdown`, {
     token: ctx.integrante.token,
   });
-  const ajeno = await req('GET', `/affinity/me/areas/${ctx.area.id}/breakdown`, {
+  const ajeno = await req('GET', `/affinity/me/areas/${areaProyecto}/breakdown`, {
     token: ctx.autor.token,
   });
   const idEvidencia = evidencia.data?.id;

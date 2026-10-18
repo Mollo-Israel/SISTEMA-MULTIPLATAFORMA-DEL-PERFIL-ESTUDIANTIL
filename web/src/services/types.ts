@@ -781,6 +781,8 @@ export interface Project {
     evidenceStatus?: SkillEvidenceStatus;
     evidenceSource?: string | null;
     academicReviewedAt?: string | null;
+    /** V3.2 §11.4: área en la que se usó. */
+    academicAreaId?: string | null;
   }[];
   /** V3 §40. */
   visibility?: ProjectVisibility;
