@@ -1,15 +1,19 @@
 import { ProjectBackingTier, ProjectSkillEvidenceStatus, TechnologyStatus } from '@perfil/shared';
 
 /**
- * Respaldo de un proyecto (V3 §28). Reglas puras.
+ * Respaldo de un proyecto (V3 §28; V4.1 A41-021, §12). Reglas puras.
  *
  *   DECLARED     — sin repositorio accesible: no hay respaldo técnico suficiente.
  *   SUPPORTED    — repositorio válido + al menos una señal técnica o contextual.
  *   CORROBORATED — repositorio accesible
- *                  + ≥1 corroboración técnica relevante (lenguaje o manifiesto
- *                    que respalda una tecnología declarada)
- *                  + ≥1 señal independiente (demo accesible, integrantes que
- *                    confirmaron su contribución o evidencia contextual).
+ *                  + ≥1 señal técnica (lenguaje o manifiesto del repositorio;
+ *                    del MISMO repositorio cuentan como UNA sola fuente)
+ *                  + ≥1 señal independiente de otro tipo: demo accesible u
+ *                    otra persona que confirmó su contribución
+ *                  + atribución no disputada (el repositorio no figura en el
+ *                    proyecto de otra persona).
+ *                  Una captura sin procedencia no es independiente: activar
+ *                  ya exige una, y readiness no es CORROBORATED (§12).
  *   REVIEWED     — SUPPORTED o CORROBORATED con retroalimentación docente.
  *                  No es aprobación académica oficial.
  *   FLAGGED      — contradicción importante. No suma mientras siga así.
@@ -24,16 +28,19 @@ export interface ProjectBackingInput {
   evidenceCount: number;
   feedbackCount: number;
   problems: string[];
+  /** V4.1 §11.5 (B35): el mismo repositorio figura en el proyecto de otra persona. */
+  attributionContested?: boolean;
 }
 
 export function decideProjectBacking(i: ProjectBackingInput): ProjectBackingTier {
   if (i.problems.length > 0) return ProjectBackingTier.FLAGGED;
   if (!i.repositoryAccessible) return ProjectBackingTier.DECLARED;
 
-  const independiente = i.demoAccessible || i.confirmedMembers > 0 || i.evidenceCount > 0;
+  // V4.1 §12: la evidencia de contexto apoya (SUPPORTED), pero no es una fuente independiente.
+  const independiente = i.demoAccessible || i.confirmedMembers > 0;
   let tier: ProjectBackingTier = ProjectBackingTier.DECLARED;
-  if (i.technicalCorroborations > 0 || independiente) tier = ProjectBackingTier.SUPPORTED;
-  if (i.technicalCorroborations > 0 && independiente) tier = ProjectBackingTier.CORROBORATED;
+  if (i.technicalCorroborations > 0 || independiente || i.evidenceCount > 0) tier = ProjectBackingTier.SUPPORTED;
+  if (i.technicalCorroborations > 0 && independiente && !i.attributionContested) tier = ProjectBackingTier.CORROBORATED;
   if (tier !== ProjectBackingTier.DECLARED && i.feedbackCount > 0) tier = ProjectBackingTier.REVIEWED;
   return tier;
 }

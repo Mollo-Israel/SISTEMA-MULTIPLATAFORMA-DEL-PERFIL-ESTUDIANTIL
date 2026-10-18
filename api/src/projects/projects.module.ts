@@ -27,6 +27,7 @@ import { AccessModule } from '../access/access.module';
 import { ProjectsService } from './projects.service';
 import { ProjectMembersService } from './project-members.service';
 import { ProjectsController } from './projects.controller';
+import { ProjectsAdminController } from './projects-admin.controller';
 
 /**
  * Portafolio de proyectos (Objetivo 5).
@@ -59,7 +60,7 @@ import { ProjectsController } from './projects.controller';
     AccessModule,
     StorageModule,
   ],
-  controllers: [ProjectsController],
+  controllers: [ProjectsController, ProjectsAdminController],
   providers: [
     ProjectsService,
     ProjectMembersService,

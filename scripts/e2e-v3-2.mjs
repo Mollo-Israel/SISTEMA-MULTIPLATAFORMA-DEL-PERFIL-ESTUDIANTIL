@@ -1257,7 +1257,14 @@ async function batch15(ctx) {
   });
   await req('POST', `/projects/${proyecto.data?.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${proyecto.data?.id}.png`, description: 'Captura.' } });
   await req('PUT', `/projects/${proyecto.data?.id}/my-contribution`, { token: est.token, body: { contribution: 'Diseño e implementación.', skillIds: [sX.id] } });
-  const activo = await req('PATCH', `/projects/${proyecto.data?.id}`, { token: est.token, body: { status: 'active' } });
+  // V4.1 §12: la captura no es fuente independiente; una demo accesible sí.
+  const { createServer } = await import('node:http');
+  const demo = createServer((rq, rs) => { rs.writeHead(200, { 'content-type': 'text/html' }); rs.end('<html><head><title>Demo</title></head><body>ok</body></html>'); });
+  await new Promise((r) => demo.listen(3997, '127.0.0.1', r));
+  const activo = await req('PATCH', `/projects/${proyecto.data?.id}`, {
+    token: est.token, body: { status: 'active', demoUrl: `http://verificador.afinia-pruebas.org:3997/demo-b15-${TS}` },
+  });
+  demo.close();
   s = await resumen();
   check(activo.data?.backingTier === 'corroborated' && crudo(s, areaW) === 18,
     'V32.15.2 §11.5 La tecnología corroborada suma en el área de su contexto (Interfaces Web)', `${activo.data?.backingTier} / W ${crudo(s, areaW)}`);

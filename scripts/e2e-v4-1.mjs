@@ -1002,7 +1002,114 @@ async function batch9(ctx) {
   check(ajeno.status === 403 || ajeno.status === 404, 'V41.9.13 B40 Un integrante no edita el proyecto del responsable', `status ${ajeno.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
+// ===========================================================================
+//  BATCH V4.1-10 — GitHub con procedencia y respaldo honesto (A41-020, A41-021)
+// ===========================================================================
+async function batch10(ctx) {
+  objective('BATCH V4.1-10 · Sugerencias con procedencia, tecnología no catalogada, repo ajeno y CORROBORATED que exige fuente independiente');
+  await asegurarGithubSimulado();
+  const alumno = async (k, nombre) => {
+    const e = await provisionAndActivate(ctx.admin, { firstName: nombre, lastName: `Github${L}`, email: `v41.b10${k}.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 5 });
+    await req('POST', '/profiles/me', { token: e.token, body: {} });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const [ana, beto, caro, dani] = [await alumno('ana', 'Ana'), await alumno('beto', 'Beto'), await alumno('caro', 'Caro'), await alumno('dani', 'Dani')];
+  const catalogo = ((await req('GET', '/skills', { token: ana.token })).data ?? []).filter((s) => s.isActive !== false && s.academicAreaId);
+  const sk = (n) => catalogo.find((s) => s.name.toLowerCase() === n.toLowerCase());
+  const react = sk('React');
+  const proyecto = (id, token) => req('GET', `/projects/${id}`, { token }).then((r) => r.data);
+  const invitarYConfirmar = async (id, dueno, otro, skill) => {
+    const inv = await req('POST', `/projects/${id}/invitations`, { token: dueno.token, body: { invitedProfileId: otro.profileId, proposedRole: 'Backend' } });
+    await req('PATCH', `/projects/invitations/${inv.data?.id}`, { token: otro.token, body: { decision: 'accept' } });
+    await req('PUT', `/projects/${id}/my-contribution`, { token: otro.token, body: { contribution: 'Implementé una parte del sistema.', skillIds: [skill.id] } });
+  };
+  const evidencia = (id, token) => req('POST', `/projects/${id}/evidences`, { token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${id}.png`, description: 'Captura.' } });
+
+  // ----- B34: señales del repositorio como SUGERENCIAS, con procedencia
+  const p1 = await req('POST', '/projects', {
+    token: ana.token,
+    body: { title: `API de turnos ${L}`, areaIds: [react.academicAreaId], skillIds: [react.id], repositoryUrl: repoDePrueba(`py-turnos-${TS}`), status: 'draft' },
+  });
+  const s1 = (await req('GET', `/projects/${p1.data?.id}/suggestions`, { token: ana.token })).data;
+  const fastapi = (s1?.suggestions ?? []).find((x) => /fastapi/i.test(x.skill?.name ?? ''));
+  const python = (s1?.suggestions ?? []).find((x) => /^python$/i.test(x.skill?.name ?? ''));
+  const skillsP1 = ((await proyecto(p1.data?.id, ana.token))?.projectSkills ?? []).map((x) => x.skillId);
+  check(!!fastapi && /requirements\.txt/.test(fastapi.why) && fastapi.areas.length >= 1 && skillsP1.length === 1,
+    'V41.10.1 B34 §11.2 FastAPI aparece como sugerencia con su procedencia (requirements.txt); nada se agrega solo', json(s1?.suggestions?.map((x) => [x.skill.name, x.why])));
+  const acepta = await req('POST', `/projects/${p1.data?.id}/suggestions/accept`, {
+    token: ana.token, body: { skillId: fastapi?.skill.id, areaId: fastapi?.areas[0]?.id, signal: fastapi?.signal, source: fastapi?.source },
+  });
+  const tras = await proyecto(p1.data?.id, ana.token);
+  const aceptada = (tras?.projectSkills ?? []).find((x) => x.skillId === fastapi?.skill.id);
+  check(acepta.status === 200 && /^sugerida: /.test(aceptada?.provenance ?? '') && aceptada?.academicAreaId === fastapi?.areas[0]?.id
+    && tras?.backingTier !== 'corroborated',
+    'V41.10.2 §11.3 Aceptarla la vuelve SU afirmación con área y procedencia, sin CORROBORATED por un clic', json({ p: aceptada?.provenance, t: tras?.backingTier }));
+  if (python) await req('POST', `/projects/${p1.data?.id}/suggestions/dismiss`, { token: ana.token, body: { signal: python.signal } });
+  const s2 = (await req('GET', `/projects/${p1.data?.id}/suggestions`, { token: ana.token })).data;
+  check(!!python && !(s2?.suggestions ?? []).some((x) => x.signal === python.signal),
+    'V41.10.3 §11.2 Una sugerencia descartada no se vuelve a proponer', json(s2?.suggestions?.map((x) => x.signal)));
+
+  // ----- §11.4: tecnología no catalogada → pedido a Administración, sin crearla sola
+  const pedido = await req('POST', `/projects/${p1.data?.id}/suggestions/request-skill`, { token: ana.token, body: { name: `Uvicorn${L}`, source: 'requirements.txt (uvicorn)' } });
+  const repetido = await req('POST', `/projects/${p1.data?.id}/suggestions/request-skill`, { token: ana.token, body: { name: `Uvicorn${L}` } });
+  const enCatalogo = ((await req('GET', '/skills', { token: ana.token })).data ?? []).some((s) => s.name === `Uvicorn${L}`);
+  check(pedido.status === 201 && pedido.data?.status === 'pending' && repetido.status === 409 && !enCatalogo,
+    'V41.10.4 §11.4 «Tecnología no catalogada» se pide a Administración, una vez, y no se crea sola', json([pedido.status, repetido.status, enCatalogo]));
+  const estLista = await req('GET', '/skill-requests', { token: ana.token });
+  const lista = (await req('GET', '/skill-requests?status=pending', { token: ctx.admin })).data ?? [];
+  const sinMotivo = await req('POST', `/skill-requests/${pedido.data?.id}/decision`, { token: ctx.admin, body: { decision: 'rejected' } });
+  const rechazo = await req('POST', `/skill-requests/${pedido.data?.id}/decision`, { token: ctx.admin, body: { decision: 'rejected', note: 'Es un servidor, no una tecnología del plan de estudios.' } });
+  check(estLista.status === 403 && lista.some((r) => r.id === pedido.data?.id) && sinMotivo.status === 400 && rechazo.status === 200 && rechazo.data?.status === 'rejected',
+    'V41.10.5 §11.4 Administración ve el pedido y decide; rechazar exige motivo; el estudiante no administra pedidos', json([estLista.status, sinMotivo.status, rechazo.status]));
+
+  // ----- §12 / A41-021: CORROBORATED exige una fuente independiente y atribución
+  const soloCapturas = await req('POST', '/projects', {
+    token: beto.token,
+    body: { title: `Panel con capturas ${L}`, areaIds: [react.academicAreaId], skillIds: [react.id], repositoryUrl: repoDePrueba(`stack-capturas-${TS}`), status: 'draft' },
+  });
+  await evidencia(soloCapturas.data?.id, beto.token);
+  const act1 = await req('PATCH', `/projects/${soloCapturas.data?.id}`, { token: beto.token, body: { status: 'active' } });
+  check(act1.status === 200 && act1.data?.backingTier === 'supported' && (act1.data?.backingReasons ?? []).some((r) => /no son una fuente independiente/.test(r)),
+    'V41.10.6 §12 23.7 Repositorio + manifiesto + captura: SUPPORTED, no CORROBORATED (readiness ≠ corroborado), con la razón', json({ t: act1.data?.backingTier, r: act1.data?.backingReasons }));
+
+  const repoCompartido = repoDePrueba(`stack-compartido-${TS}`);
+  const original = await req('POST', '/projects', {
+    token: caro.token,
+    body: { title: `Original ${L}`, areaIds: [react.academicAreaId], skillIds: [react.id], repositoryUrl: repoCompartido, status: 'draft' },
+  });
+  await invitarYConfirmar(original.data?.id, caro, beto, react);
+  await evidencia(original.data?.id, caro.token);
+  const act2 = await req('PATCH', `/projects/${original.data?.id}`, { token: caro.token, body: { status: 'active' } });
+  check(act2.status === 200 && act2.data?.backingTier === 'corroborated',
+    'V41.10.7 §12 Señal técnica + otra persona que confirmó su contribución: CORROBORATED', json({ s: act2.status, t: act2.data?.backingTier }));
+  const copia = await req('POST', '/projects', {
+    token: dani.token,
+    body: { title: `Copia ${L}`, areaIds: [react.academicAreaId], skillIds: [react.id], repositoryUrl: `${repoCompartido}/tree/main`, status: 'draft' },
+  });
+  check(copia.data?.repositoryUrl === repoCompartido, 'V41.10.8 §11.2 Una URL con /tree/rama se guarda como la raíz del repositorio', json(copia.data?.repositoryUrl));
+  await invitarYConfirmar(copia.data?.id, dani, ana, react);
+  await evidencia(copia.data?.id, dani.token);
+  const act3 = await req('PATCH', `/projects/${copia.data?.id}`, { token: dani.token, body: { status: 'active' } });
+  check(act3.status === 200 && act3.data?.backingTier === 'supported' && (act3.data?.backingReasons ?? []).some((r) => /otra persona/.test(r)),
+    'V41.10.9 B35 23.6 Repo público ajeno: se ven las señales, pero no se le atribuyen (SUPPORTED, con la razón)', json({ t: act3.data?.backingTier, r: act3.data?.backingReasons }));
+
+  // ----- §11.1: diagnóstico honesto de GitHub
+  const noEsta = await req('POST', '/projects', { token: ana.token, body: { title: `No encontrado ${L}`, repositoryUrl: repoDePrueba(`inexistente-${TS}`), status: 'draft' } });
+  const cuota = await req('POST', '/projects', { token: ana.token, body: { title: `Con cuota ${L}`, repositoryUrl: repoDePrueba(`cuota-${TS}`), status: 'draft' } });
+  const e404 = JSON.stringify((await req('GET', `/projects/${noEsta.data?.id}/checks`, { token: ana.token })).data?.repository?.metadata?.error ?? '');
+  const e403 = JSON.stringify((await req('GET', `/projects/${cuota.data?.id}/checks`, { token: ana.token })).data?.repository?.metadata?.error ?? '');
+  check(/404/.test(e404) && /no se concluye/.test(e404) && /403|límite/.test(e403) && /no se concluye/.test(e403),
+    'V41.10.10 §11.1 404 y límite de consultas se diagnostican sin concluir «privado» ni «falso»', `${e404} | ${e403}`);
+
+  // ----- Recálculo auditado (§12)
+  const estRecalc = await req('POST', '/project-backing/recalculate', { token: ana.token, body: {} });
+  const informe = await req('POST', '/project-backing/recalculate', { token: ctx.admin, body: { apply: false } });
+  check(estRecalc.status === 403 && informe.status === 200 && informe.data?.applied === false && typeof informe.data?.total === 'number' && !!informe.data?.before && !!informe.data?.after,
+    'V41.10.11 §12 Administración obtiene el informe antes/después sin aplicar; el estudiante no puede', json({ s: estRecalc.status, i: { t: informe.data?.total, c: informe.data?.changed } }));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

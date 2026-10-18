@@ -796,8 +796,8 @@ export type SkillEvidenceStatus =
 
 export const SKILL_EVIDENCE_LABEL: Record<SkillEvidenceStatus, string> = {
   declared: 'Declarada',
-  corroborated_by_github_language: 'Corroborada por los lenguajes',
-  corroborated_by_manifest: 'Corroborada por un manifiesto',
+  corroborated_by_github_language: 'Señal detectada en los lenguajes del repositorio',
+  corroborated_by_manifest: 'Señal detectada en un manifiesto',
   corroborated_by_academic_review: 'Confirmada por un docente',
 };
 

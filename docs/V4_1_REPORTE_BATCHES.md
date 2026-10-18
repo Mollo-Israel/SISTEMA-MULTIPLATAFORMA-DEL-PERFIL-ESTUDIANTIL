@@ -794,3 +794,102 @@ Detalle de la API:
 **Riesgos:** los proyectos activos que ya alegan un área sin tecnología siguen activos: la regla actúa al activar o al editar. Se informan en el recálculo del V4.1-10.
 
 **Commit propuesto:** `feat(v4.1-batch-9): editar proyectos desde la web, una tecnología por área para activar y reconfirmación al quitar tecnologías confirmadas`
+
+---
+
+## BATCH V4.1-10 — GitHub con procedencia y respaldo honesto (recálculo auditado)
+
+**Hallazgos:** A41-020, A41-021 (§11.1–§11.5, §12; B34, B35, 23.6, 23.7).
+
+**Defecto confirmado (A41-021):**
+- `decideProjectBacking` contaba **cualquier evidencia** como «señal independiente».
+- Activar ya exige una evidencia, así que readiness ≈ CORROBORATED.
+- Un segundo estudiante con el **mismo repositorio** también quedaba CORROBORATED.
+
+**Archivos modificados:**
+- **`project-backing.rules.ts`:**
+  - CORROBORATED exige señal técnica (lenguaje o manifiesto del mismo repositorio, que cuentan como **una** fuente), más una fuente independiente de otro tipo (demo accesible u otra persona que confirmó su contribución), más atribución no disputada;
+  - la captura apoya (SUPPORTED), pero no es independiente.
+- **`project-backing.service.ts`:**
+  - `computar` separa el cálculo del guardado;
+  - `atribucionDisputada` detecta el mismo repositorio normalizado en el proyecto de otra persona que no integra este (B35);
+  - nuevas razones legibles («no son una fuente independiente», «el mismo repositorio figura en el proyecto de otra persona»);
+  - `recalculateAll(apply)` devuelve el informe antes / después.
+- **`projects-admin.controller.ts` (nuevo):**
+  - `POST /project-backing/recalculate`: sin `apply` solo informa; queda auditado (`PROJECT_BACKING_RECALCULATED`);
+  - `GET /skill-requests` y `POST /skill-requests/:id/decision`: Administración vincula la tecnología del catálogo, o rechaza con motivo.
+- **`projects.service.ts`:**
+  - `suggestions`: las señales DETECTED se cotejan con el catálogo por nombre o alias **exactos**, con su porqué («requirements.txt», «lenguaje del repositorio») y sus áreas, principal y secundarias;
+  - `acceptSuggestion`: el estudiante elige el área y queda **su** afirmación, con `provenance` («sugerida: …»). El respaldo lo decide la regla, no el clic;
+  - `dismissSuggestion`;
+  - `requestSkill`: «Tecnología no catalogada». Avisa a Administración y queda auditado (`SKILL_REQUESTED`). No se crea nada solo;
+  - las URL de GitHub con `/tree/rama`, `/blob`, `.git` o barra final se guardan como la raíz del repositorio.
+- **`repository-inspector.service.ts`:** diagnóstico honesto:
+  - un 404 «puede no existir, haber cambiado de nombre o ser privado; no se concluye cuál»;
+  - un 403 o 429 es límite de consultas o acceso denegado;
+  - un tiempo agotado o un error de red: no se concluye nada.
+- **Entidades y migración:** `project_skills.provenance`, `projects.dismissed_suggestions` y la tabla `skill_requests`.
+- **Web:**
+  - «Validación técnica» muestra las sugerencias con su porqué, «La usé» con la elección de área, «Descartar», «Tecnología no catalogada → Pedir que la evalúen» y el diagnóstico del repositorio;
+  - las etiquetas dicen «Señal detectada…», no «Corroborada»;
+  - página nueva de Administración «Pedidos de tecnologías».
+
+**Migraciones:**
+- `V41GithubProvenance`: aditiva.
+- `pg_dump` previo en `pre-v41-b10.dump`. Probada `run → revert → run`.
+
+**Recálculo auditado (§12) — informe antes / después:**
+- 3541 proyectos, 535 cambiaron. Primero se ejecutó en seco (`b10-dryrun.json`), luego se aplicó (`b10-apply.json`); una segunda pasada en seco da 0 pendientes.
+
+| Nivel | Antes | Después |
+|---|---|---|
+| declared | 1743 | 2053 |
+| supported | 1056 | 1041 |
+| corroborated | 229 | **44** |
+| reviewed | 298 | 251 |
+| flagged | 215 | 152 |
+
+- **Transiciones:**
+  - **corroborated → supported: 185.** Es la corrección de A41-021: tenían solo capturas, o un repositorio compartido.
+  - **supported → declared: 240, reviewed → declared: 47, flagged → declared: 23 y flagged → supported: 40.** Son niveles **anteriores** que nunca se habían recalculado con la regla V3 vigente: «sin repositorio comprobado, DECLARED»; y una marca que ya no tiene contradicción.
+- Son datos de prueba. Los proyectos afectados pidieron el recálculo de la afinidad de sus integrantes.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch10` → **11/11**:
+  - B34: FastAPI aparece como sugerencia con su procedencia; aceptarla da área y procedencia, sin CORROBORATED; lo descartado no vuelve;
+  - la tecnología no catalogada se pide una vez y no se crea sola; Administración decide; rechazar exige motivo;
+  - 23.7: con captura queda SUPPORTED, con su razón; con otra persona que confirma, CORROBORATED;
+  - `/tree/main` se guarda como la raíz;
+  - B35 y 23.6: el repositorio ajeno queda SUPPORTED, con su razón;
+  - el diagnóstico de 404 y 403 no concluye «privado»;
+  - el informe de recálculo es solo para Administración.
+- `node scripts/e2e-web.mjs` → **89/89**, incluido WEB.49.1: el panel de sugerencias, con procedencia y «La usé».
+- Unitarias: **141/141** (+1: una captura no es independiente; repo ajeno).
+- **Regresión completa (22 suites):** 2212 correctas, 14 fallos. Tras las correcciones: `e2e-objective-6` 85, `e2e-batch-6` 53, `e2e-v3` 379, `e2e-v3-2` 206 y `e2e-web` 89. **2226 correctas, 0 fallos**.
+
+**Fallo → causa → corrección → regresión:**
+- **17.9b–17.12 (`e2e-objective-6`), B6.25b–B6.31b (`e2e-batch-6`), V3.13.5, V3.14.4, V3.14.5, V3.18.0 (`e2e-v3`), V32.15.2 (`e2e-v3-2`) → FAIL.** *Causa:* esperaban CORROBORATED con una captura como segunda señal; el contrato (§12) lo prohíbe. *Corrección:*
+  - las pruebas agregan una fuente independiente real: una demo accesible (servida localmente por el origen de prueba) o un compañero que confirma su contribución;
+  - V3.13.5 ahora verifica que con una captura queda SUPPORTED y lo explica.
+  *Regresión:* PASS.
+- **Mismo grupo (segunda causa):** el helper `repoQueCorrobora(nombre)` daba **la misma URL** a todos los estudiantes, así que la nueva regla B35 los veía como repositorio ajeno, tal como debe. *Corrección:* cada llamada da una URL única («lenguaje-react--…»); el GitHub simulado lee el lenguaje antes de «--». *Regresión:* PASS.
+- **WEB.49.1 → FAIL.** *Causa:* `e2e-web` no levantaba el GitHub simulado. *Corrección:* lo levanta. *Regresión:* PASS.
+
+**Efecto:**
+- **Backend:** respaldo, GitHub y catálogo.
+- **Frontend:** validación técnica y pedidos de Administración.
+- **Móvil:** lee `backingTier` y razones sin cambios. Las sugerencias son solo web por ahora; queda anotado para el BATCH 12.
+- **Afinidad:** la fórmula no cambió; cambian sus entradas, porque hay menos CORROBORATED.
+
+**Seguridad y permisos:**
+- sugerencias: dueño o integrante; aceptar o descartar: solo el dueño;
+- pedidos y recálculo: solo Administración (403 al estudiante);
+- todo queda auditado.
+
+**Pendientes:**
+- OAuth de GitHub y atribución por commits (§11.5) no se implementan: es opcional, no se improvisa su alcance. La atribución se apoya en la confirmación individual y en la regla del repositorio compartido.
+
+**Riesgos:**
+- Hay menos proyectos CORROBORATED (de 229 a 44 en estos datos). Es el comportamiento que pide el contrato, y queda el informe.
+
+**Commit propuesto:** `feat(v4.1-batch-10): sugerencias de GitHub con procedencia, tecnologías no catalogadas a Administración y CORROBORATED solo con fuente independiente y atribución, con recálculo auditado`

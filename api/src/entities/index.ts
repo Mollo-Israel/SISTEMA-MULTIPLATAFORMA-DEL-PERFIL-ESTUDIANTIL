@@ -54,3 +54,4 @@ export * from './activity-image.entity';
 export * from './gamification-proposal.entity';
 export * from './activity-contact.entity';
 export * from './learning-resource-library.entity';
+export * from './skill-request.entity';

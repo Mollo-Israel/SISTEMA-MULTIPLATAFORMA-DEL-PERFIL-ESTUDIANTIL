@@ -191,13 +191,21 @@ async function proyectos(ctx) {
     'B6.25 V4 §35.1 Un borrador no es trayectoria: tampoco suma respaldo', `respaldo ${respaldo(s, areaProy.id)}`);
 
   // V3 §22: se activa con su tecnología del catálogo y un repositorio que la
-  // corrobora (lenguaje informado por GitHub, §24.2).
+  // corrobora (lenguaje informado por GitHub, §24.2). V4.1 §12: la captura
+  // apoya pero no es independiente; la demo accesible sí lo es.
+  const { createServer } = await import('node:http');
+  const demo = createServer((rq, rs) => { rs.writeHead(200, { 'content-type': 'text/html' }); rs.end('<html><head><title>Demo B6</title></head><body>ok</body></html>'); });
+  await new Promise((r) => demo.listen(3997, '127.0.0.1', r));
   const activo = await req('PATCH', `/projects/${ctx.projectId}`, {
     token: est.token,
-    body: { skillIds: [ctx.skillProy.id], repositoryUrl: repoQueCorrobora(ctx.skillProy.name), status: 'active' },
+    body: {
+      skillIds: [ctx.skillProy.id], repositoryUrl: repoQueCorrobora(ctx.skillProy.name),
+      demoUrl: `http://verificador.afinia-pruebas.org:3997/demo-b6-${TS}`, status: 'active',
+    },
   });
+  demo.close();
   check(activo.status === 200 && activo.data?.status === 'active' && activo.data?.backingTier === 'corroborated',
-    'B6.25b §28 Activo, con la tecnología corroborada y una evidencia de contexto: CORROBORATED', JSON.stringify({ s: activo.status, t: activo.data?.backingTier, c: activo.data?.code }));
+    'B6.25b §28 V4.1 §12 Activo, con la tecnología corroborada y una demo accesible (fuente independiente): CORROBORATED', JSON.stringify({ s: activo.status, t: activo.data?.backingTier, c: activo.data?.code }));
   s = await resumen(est.token);
   check(crudo(s, areaProy.id) === 0 && respaldo(s, areaProy.id) === 15,
     'B6.25c V4 §35.3 Sin tecnologías confirmadas por el integrante no suma afinidad; su respaldo sí cuenta (15)', `crudo ${crudo(s, areaProy.id)} / respaldo ${respaldo(s, areaProy.id)}`);

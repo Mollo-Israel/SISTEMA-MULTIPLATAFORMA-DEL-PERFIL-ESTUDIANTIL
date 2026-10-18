@@ -1372,7 +1372,8 @@ async function batch13(ctx) {
   check(v?.backingTier === 'supported', 'V3.13.4 §28 Repositorio + corroboración técnica, sin señal independiente: SUPPORTED', json(v?.backingTier));
   await req('POST', `/projects/${p1.data.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: 'https://capturas.example.org/b13.png', description: 'Captura.' } });
   v = await proyecto(p1.data.id);
-  check(v?.backingTier === 'corroborated', 'V3.13.5 §28 + una señal independiente (evidencia de contexto): CORROBORATED', json({ t: v?.backingTier, r: v?.backingReasons }));
+  check(v?.backingTier === 'supported' && (v?.backingReasons ?? []).some((r) => /no son una fuente independiente/.test(r)),
+    'V3.13.5 §28 V4.1 §12 Una captura no es fuente independiente: sigue SUPPORTED y lo explica', json({ t: v?.backingTier, r: v?.backingReasons }));
   check((v?.backingReasons ?? []).some((r) => r.includes('React')), 'V3.13.6 §25 La explicación nombra la tecnología respaldada', json(v?.backingReasons));
   const sinRepo = await crear('Idea sin repositorio', [react], null);
   await req('POST', `/projects/${sinRepo.data.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: 'https://capturas.example.org/b13b.png', description: 'Captura.' } });
@@ -1470,8 +1471,16 @@ async function batch14(ctx) {
     && crudo(s, areaQ) === 0 && respaldo(s, areaQ) > 0,
   'V3.14.3 §35.3/§37 SUPPORTED no suma afinidad, pero sí respaldo', `crudo ${crudo(s, areaQ)} / respaldo ${respaldo(s, areaQ)}`);
 
+  // V4.1 §12: una captura apoya, pero no es fuente independiente; una demo accesible sí.
+  const conDemo = async (fn) => {
+    const srv = createServer((rq, rs) => { rs.writeHead(200, { 'content-type': 'text/html' }); rs.end('<html><head><title>Demo</title></head><body>ok</body></html>'); });
+    await new Promise((r) => srv.listen(3997, '127.0.0.1', r));
+    try { return await fn(); } finally { srv.close(); }
+  };
   // ----- CORROBORATED: 18, solo con tecnologías corroboradas para él
-  const activar = await req('PATCH', `/projects/${borrador.data.id}`, { token: est.token, body: { status: 'active' } });
+  const activar = await conDemo(() => req('PATCH', `/projects/${borrador.data.id}`, {
+    token: est.token, body: { status: 'active', demoUrl: `http://verificador.afinia-pruebas.org:3997/demo-b14-${TS}` },
+  }));
   s = await resumenFull();
   check(activar.data?.backingTier === 'corroborated' && crudo(s, areaP) === 18,
     'V3.14.4 §35.3 CORROBORATED + tecnología confirmada y corroborada: 18', `${activar.data?.backingTier} / crudo ${crudo(s, areaP)}`);
@@ -1878,7 +1887,15 @@ async function batch18(ctx) {
   const corroborado = (await nuevo('Sistema de turnos', repoQueCorrobora(sk.name))).data;
   await req('POST', `/projects/${corroborado.id}/evidences`, { token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${corroborado.id}.png`, description: 'Captura.' } });
   await req('PUT', `/projects/${corroborado.id}/my-contribution`, { token: est.token, body: { contribution: 'Backend y base de datos.', skillIds: [sk.id] } });
-  const activo = await req('PATCH', `/projects/${corroborado.id}`, { token: est.token, body: { status: 'active' } });
+  // V4.1 §12: una captura apoya, pero no es fuente independiente; una demo accesible sí.
+  const conDemo = async (fn) => {
+    const srv = createServer((rq, rs) => { rs.writeHead(200, { 'content-type': 'text/html' }); rs.end('<html><head><title>Demo</title></head><body>ok</body></html>'); });
+    await new Promise((r) => srv.listen(3997, '127.0.0.1', r));
+    try { return await fn(); } finally { srv.close(); }
+  };
+  const activo = await conDemo(() => req('PATCH', `/projects/${corroborado.id}`, {
+    token: est.token, body: { status: 'active', demoUrl: `http://verificador.afinia-pruebas.org:3997/demo-b18-${TS}` },
+  }));
   const borrador = (await nuevo('Idea sin terminar', repoDePrueba(`generico-b18-${TS}`))).data;
 
   // ----- Actividades: académica con constancia, extracurricular y una sin confirmar

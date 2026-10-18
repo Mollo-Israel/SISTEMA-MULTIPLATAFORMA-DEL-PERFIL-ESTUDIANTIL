@@ -113,6 +113,10 @@ export class Project {
   @Column({ name: 'backing_reasons', type: 'text', array: true, nullable: true })
   backingReasons: string[] | null;
 
+  /** V4.1 §11.2: señales detectadas que el estudiante descartó como sugerencia. */
+  @Column({ name: 'dismissed_suggestions', type: 'jsonb', default: () => "'[]'::jsonb" })
+  dismissedSuggestions: string[];
+
   @OneToMany(() => ProjectMember, (member) => member.project)
   members: ProjectMember[];
 

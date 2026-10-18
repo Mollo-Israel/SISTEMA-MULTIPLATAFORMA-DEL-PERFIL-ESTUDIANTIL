@@ -602,7 +602,7 @@ export default function StudentProjectsPage() {
                 </button>
                 {openCheck === p.id && (
                   <div className="feedback-list">
-                    <ProjectTechnicalCheck projectId={p.id} canRecheck={p.isOwner === true} />
+                    <ProjectTechnicalCheck projectId={p.id} canRecheck={p.isOwner === true} onChanged={load} />
                   </div>
                 )}
               </div>

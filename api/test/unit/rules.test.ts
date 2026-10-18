@@ -788,6 +788,10 @@ describe('V3 §28 respaldo del proyecto', () => {
     assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 1, confirmedMembers: 1 }), ProjectBackingTier.CORROBORATED);
     assert.equal(decideProjectBacking({ ...base, demoAccessible: true, confirmedMembers: 2 }), ProjectBackingTier.SUPPORTED);
   });
+  it('V4.1 §12: una captura no es fuente independiente; el repo ajeno no se atribuye (B35)', () => {
+    assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 2, evidenceCount: 3 }), ProjectBackingTier.SUPPORTED);
+    assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 1, confirmedMembers: 1, attributionContested: true }), ProjectBackingTier.SUPPORTED);
+  });
   it('REVIEWED con retroalimentación; FLAGGED manda', () => {
     assert.equal(decideProjectBacking({ ...base, evidenceCount: 1, feedbackCount: 1 }), ProjectBackingTier.REVIEWED);
     assert.equal(decideProjectBacking({ ...base, technicalCorroborations: 3, demoAccessible: true, problems: ['x'] }), ProjectBackingTier.FLAGGED);

@@ -126,6 +126,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/users', label: 'Usuarios' },
         { to: '/admin/imports', label: 'Importar padrón' },
         { to: '/admin/areas', label: 'Áreas y habilidades' },
+        { to: '/admin/skill-requests', label: 'Pedidos de tecnologías' },
         { to: '/admin/activity-categories', label: 'Categorías' },
         { to: '/admin/activities', label: 'Actividades / oportunidades' },
         { to: '/admin/resources', label: 'Recursos' },

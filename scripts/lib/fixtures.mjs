@@ -426,7 +426,8 @@ let githubSimulado = null;
 function contenidoSimulado(nombre) {
   const b64 = (t) => Buffer.from(t, 'utf8').toString('base64');
   if (nombre.startsWith('lenguaje-')) {
-    return { languages: { [nombre.slice('lenguaje-'.length)]: 9000 }, files: { 'README.md': '# Proyecto' } };
+    // «lenguaje-react--abc123»: lo que sigue a «--» solo hace única la URL.
+    return { languages: { [nombre.slice('lenguaje-'.length).split('--')[0]]: 9000 }, files: { 'README.md': '# Proyecto' } };
   }
   if (nombre.startsWith('stack-')) {
     return {
@@ -455,9 +456,14 @@ function contenidoSimulado(nombre) {
   };
 }
 
-/** Repositorio simulado cuyo lenguaje corrobora la tecnología `nombre` (§24.2). */
+/**
+ * Repositorio simulado cuyo lenguaje corrobora la tecnología `nombre` (§24.2).
+ * V4.1 §11.5: cada llamada da una URL distinta; el mismo repositorio en
+ * proyectos de personas distintas ya no se atribuye a ninguna.
+ */
+let repoUnico = 0;
 export const repoQueCorrobora = (nombre) =>
-  repoDePrueba(`lenguaje-${nombre.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '')}`);
+  repoDePrueba(`lenguaje-${nombre.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '')}--${Date.now().toString(36)}${(repoUnico += 1)}`);
 
 /** Peticiones recibidas por el GitHub simulado, para que las suites las inspeccionen. */
 export const githubSimuladoLog = [];

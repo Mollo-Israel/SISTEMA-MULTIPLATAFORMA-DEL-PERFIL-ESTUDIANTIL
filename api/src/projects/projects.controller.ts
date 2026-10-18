@@ -12,6 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -27,6 +28,22 @@ import {
   ProposeContributionDto, RequestCorrectionDto } from './dto/contribution.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { InviteMemberDto, RespondInvitationDto } from './dto/invite-member.dto';
+
+class AcceptSuggestionDto {
+  @IsUUID('4') skillId: string;
+  @IsUUID('4') areaId: string;
+  @IsOptional() @IsString() @MaxLength(80) signal?: string;
+  @IsOptional() @IsString() @MaxLength(160) source?: string;
+}
+
+class SignalDto {
+  @IsString() @MinLength(1) @MaxLength(80) signal: string;
+}
+
+class RequestSkillDto {
+  @IsString() @MinLength(2, { message: 'Indica el nombre de la tecnología.' }) @MaxLength(80) name: string;
+  @IsOptional() @IsString() @MaxLength(160) source?: string;
+}
 
 /**
  * Portafolio de proyectos estudiantiles (Objetivo 5, RF13 a RF15).
@@ -231,6 +248,50 @@ export class ProjectsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.projectsService.externalChecks(user, id);
+  }
+
+  // ---------------- V4.1 A41-020 · Sugerencias de GitHub con procedencia ----------------
+
+  @Get(':id/suggestions')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Señales detectadas en el repositorio, cotejadas con el catálogo (sin añadirlas solas).' })
+  suggestions(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.projectsService.suggestions(user, id);
+  }
+
+  @Post(':id/suggestions/accept')
+  @Roles(RolNombre.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Aceptar una sugerencia eligiendo el área en la que se usó. Queda con su procedencia.' })
+  acceptSuggestion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AcceptSuggestionDto,
+  ) {
+    return this.projectsService.acceptSuggestion(user, id, dto);
+  }
+
+  @Post(':id/suggestions/dismiss')
+  @Roles(RolNombre.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Descartar una sugerencia: no se vuelve a proponer.' })
+  dismissSuggestion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SignalDto,
+  ) {
+    return this.projectsService.dismissSuggestion(user, id, dto.signal);
+  }
+
+  @Post(':id/suggestions/request-skill')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: '«Tecnología no catalogada»: pedir a Administración que la evalúe.' })
+  requestSkill(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestSkillDto,
+  ) {
+    return this.projectsService.requestSkill(user, id, dto);
   }
 
   @Post(':id/checks/recheck')

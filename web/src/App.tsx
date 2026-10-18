@@ -54,6 +54,7 @@ import AdminImportsPage from './pages/admin/Imports';
 import AdminActivitiesPage from './pages/admin/Activities';
 import AdminMailPage from './pages/admin/Mail';
 import AdminAreasSkillsPage from './pages/admin/AreasSkills';
+import AdminSkillRequestsPage from './pages/admin/SkillRequests';
 import AdminGamificationPage from './pages/admin/Gamification';
 import AdminActivityCategoriesPage from './pages/admin/ActivityCategories';
 
@@ -203,6 +204,8 @@ export default function App() {
             <Route path="/admin/activities" element={<AdminActivitiesPage />} />
             {MODO_TECNICO && <Route path="/admin/mail" element={<AdminMailPage />} />}
             <Route path="/admin/areas" element={<AdminAreasSkillsPage />} />
+            {/* V4.1 A41-020: tecnologías no catalogadas que piden los estudiantes. */}
+            <Route path="/admin/skill-requests" element={<AdminSkillRequestsPage />} />
             <Route path="/admin/skills" element={<Navigate to="/admin/areas?tab=skills" replace />} />
             <Route path="/admin/activity-categories" element={<AdminActivityCategoriesPage />} />
             <Route path="/admin/gamification" element={<AdminGamificationPage />} />

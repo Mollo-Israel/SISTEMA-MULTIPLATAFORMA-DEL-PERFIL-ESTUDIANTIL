@@ -24,6 +24,19 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { ProjectSkill } from '../entities/project-area.entity';
 import { TECHNICAL_EVIDENCE, decideProjectBacking } from './project-backing.rules';
 
+/** Repositorio normalizado: host + dueño/nombre en minúsculas, sin `.git`, rama ni barra final. */
+export function normalizarRepo(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.trim());
+    const partes = u.pathname.split('/').filter(Boolean);
+    if (partes.length < 2) return null;
+    return `https://${u.hostname.toLowerCase().replace(/^www\./, '')}/${partes[0].toLowerCase()}/${partes[1].toLowerCase().replace(/\.git$/, '')}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Nivel de respaldo de un proyecto (especificacion §36).
  *
@@ -75,6 +88,77 @@ export class ProjectBackingService {
   async recalculate(projectId: string, actorUserId: string | null = null): Promise<Project | null> {
     const project = await this.projects.findOne({ where: { id: projectId } });
     if (!project) return null;
+    const { tier, razones, senales } = await this.computar(project);
+
+    const anterior = project.backingTier;
+    if (anterior === tier && this.mismasRazones(project.backingReasons, razones)) {
+      return project;
+    }
+
+    project.backingTier = tier;
+    project.backingReasons = razones;
+    await this.projects.save(project);
+
+    if (anterior !== tier) {
+      await this.events.record({
+        projectId,
+        actorUserId,
+        eventType: ProjectEventType.BACKING_TIER_CHANGED,
+        metadata: { de: anterior, a: tier, senales },
+      });
+      await this.recalcularAfinidades(project);
+    }
+    return project;
+  }
+
+  /**
+   * V4.1 A41-021 (§12): recálculo de todos los proyectos con informe antes /
+   * después. Sin `apply` solo informa (no guarda nada).
+   */
+  async recalculateAll(apply: boolean, actorUserId: string | null) {
+    const todos = await this.projects.find({ order: { createdAt: 'ASC' } });
+    const cambios: { id: string; title: string; de: ProjectBackingTier; a: ProjectBackingTier }[] = [];
+    const antes: Record<string, number> = {};
+    const despues: Record<string, number> = {};
+    for (const p of todos) {
+      const { tier } = await this.computar(p);
+      antes[p.backingTier] = (antes[p.backingTier] ?? 0) + 1;
+      despues[tier] = (despues[tier] ?? 0) + 1;
+      if (tier !== p.backingTier) cambios.push({ id: p.id, title: p.title, de: p.backingTier, a: tier });
+    }
+    if (apply) {
+      for (const c of cambios) await this.recalculate(c.id, actorUserId);
+    }
+    const transiciones: Record<string, number> = {};
+    for (const c of cambios) transiciones[`${c.de}→${c.a}`] = (transiciones[`${c.de}→${c.a}`] ?? 0) + 1;
+    return { applied: apply, total: todos.length, changed: cambios.length, before: antes, after: despues, transitions: transiciones, changes: cambios.slice(0, 500) };
+  }
+
+  /** V4.1 §11.5: ¿el mismo repositorio figura en un proyecto de otra persona, ajeno a este? */
+  private async atribucionDisputada(project: Project): Promise<boolean> {
+    const clave = normalizarRepo(project.repositoryUrl);
+    if (!clave) return false;
+    const otros = (await this.projects
+      .createQueryBuilder('p')
+      .where('p.id <> :id', { id: project.id })
+      .andWhere('p.created_by_profile_id <> :owner', { owner: project.createdByProfileId })
+      .andWhere('lower(p.repository_url) LIKE :pref', { pref: `${clave}%` })
+      .getMany()).filter((p) => normalizarRepo(p.repositoryUrl) === clave);
+    if (!otros.length) return false;
+    // No es ajeno si el dueño de este proyecto integra aquel, o al revés.
+    const perfilDueno = await this.profiles.findOne({ where: { id: project.createdByProfileId } });
+    for (const o of otros) {
+      const duenoOtro = await this.profiles.findOne({ where: { id: o.createdByProfileId } });
+      const yoEnSuyo = perfilDueno && await this.members.exist({ where: { projectId: o.id, userId: perfilDueno.userId } });
+      const elEnMio = duenoOtro && await this.members.exist({ where: { projectId: project.id, userId: duenoOtro.userId } });
+      if (!yoEnSuyo && !elEnMio) return true;
+    }
+    return false;
+  }
+
+  /** Nivel, razones y señales, sin guardar. */
+  private async computar(project: Project) {
+    const projectId = project.id;
 
     const [
       confirmados,
@@ -111,6 +195,13 @@ export class ProjectBackingService {
     if (comentarios > 0) razones.push(`${comentarios} retroalimentación(es) docente(s)`);
 
     const problemas = this.detectarProblemas(project, repoCheck, demoCheck);
+    const disputada = repoAccesible && await this.atribucionDisputada(project);
+    if (disputada) {
+      razones.push('El mismo repositorio figura en el proyecto de otra persona: sus señales no se le atribuyen automáticamente (§11.5).');
+    }
+    if (evidencias > 0 && tecnicas.length > 0 && !demoAccesible && confirmados === 0) {
+      razones.push('Las capturas apoyan, pero no son una fuente independiente: para corroborar falta una demo accesible u otra persona que confirme su contribución (§12).');
+    }
     const tier = decideProjectBacking({
       repositoryAccessible: repoAccesible,
       technicalCorroborations: tecnicas.length,
@@ -119,29 +210,11 @@ export class ProjectBackingService {
       evidenceCount: evidencias,
       feedbackCount: comentarios,
       problems: problemas,
+      attributionContested: disputada,
     });
     if (problemas.length > 0) razones.push(...problemas);
-    const senales = { tecnicas: tecnicas.length, demo: demoAccesible, confirmados, evidencias };
-
-    const anterior = project.backingTier;
-    if (anterior === tier && this.mismasRazones(project.backingReasons, razones)) {
-      return project;
-    }
-
-    project.backingTier = tier;
-    project.backingReasons = razones;
-    await this.projects.save(project);
-
-    if (anterior !== tier) {
-      await this.events.record({
-        projectId,
-        actorUserId,
-        eventType: ProjectEventType.BACKING_TIER_CHANGED,
-        metadata: { de: anterior, a: tier, senales },
-      });
-      await this.recalcularAfinidades(project);
-    }
-    return project;
+    const senales = { tecnicas: tecnicas.length, demo: demoAccesible, confirmados, evidencias, disputada };
+    return { tier, razones, senales };
   }
 
   /**

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -16,6 +17,7 @@ import {
   ProjectStatus,
   ProjectVisibility,
   RolNombre,
+  TechnologyStatus,
   ValidationResourceType,
 } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
@@ -32,6 +34,9 @@ import { Readiness, projectReadiness } from './project-readiness.rules';
 import { skillEvidenceFromSignal } from './project-backing.rules';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { Skill } from '../entities/skill.entity';
+import { SkillAreaRelation } from '../entities/skill-area-relation.entity';
+import { SkillRequest } from '../entities/skill-request.entity';
+import { normalizarRepo } from './project-backing.service';
 import {
   ProjectLinkCheck,
   ProjectRepositoryCheck,
@@ -101,6 +106,203 @@ export class ProjectsService {
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
+
+  // ====================================================================
+  //  V4.1 A41-020 · Sugerencias de GitHub con procedencia (§11.2–§11.4)
+  // ====================================================================
+
+  private normSenal(t: string): string {
+    return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
+  }
+
+  /**
+   * Señales que GitHub vio y el estudiante no declaró, cotejadas con el
+   * catálogo por nombre o alias exactos (sin subcadenas). Lo que no está en
+   * el catálogo se muestra como «Tecnología no catalogada».
+   */
+  async suggestions(user: AuthenticatedUser, projectId: string) {
+    const project = await this.findOneOrFail(projectId);
+    await this.assertOwnerOrMember(user, project);
+    const check = await this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } });
+    const vigente = check && check.repositoryUrl === project.repositoryUrl ? check : null;
+    const descartadas = new Set((project.dismissedSuggestions ?? []).map((d) => this.normSenal(d)));
+    const detectadas = (vigente?.technologySignals ?? [])
+      .filter((t) => t.status === TechnologyStatus.DETECTED && !descartadas.has(this.normSenal(t.name)));
+    if (!detectadas.length) return { repositoryUrl: project.repositoryUrl, suggestions: [], uncatalogued: [] };
+    const catalogo = await this.skills.find({ where: { isActive: true } });
+    const secundarias = await this.projects.manager.getRepository(SkillAreaRelation).find({ relations: { academicArea: true } });
+    const areas = await this.areas.find();
+    const nombreArea = new Map(areas.map((a) => [a.id, a.name]));
+    const pedidos = await this.projects.manager.getRepository(SkillRequest).find({ where: { requestedBy: user.userId, status: 'pending' } });
+    const yaPedidas = new Set(pedidos.map((p) => this.normSenal(p.name)));
+    const suggestions: unknown[] = [];
+    const uncatalogued: unknown[] = [];
+    for (const t of detectadas) {
+      const clave = this.normSenal(t.name);
+      const skill = catalogo.find((s) => this.normSenal(s.name) === clave || (s.aliases ?? []).some((a) => this.normSenal(a) === clave));
+      if (!skill) {
+        uncatalogued.push({ signal: t.name, source: t.source, requested: yaPedidas.has(clave) });
+        continue;
+      }
+      const areasSkill = [
+        ...(skill.academicAreaId ? [{ id: skill.academicAreaId, name: nombreArea.get(skill.academicAreaId) ?? null, primary: true }] : []),
+        ...secundarias.filter((r) => r.skillId === skill.id && r.academicAreaId !== skill.academicAreaId)
+          .map((r) => ({ id: r.academicAreaId, name: nombreArea.get(r.academicAreaId) ?? null, primary: false })),
+      ];
+      suggestions.push({
+        signal: t.name,
+        source: t.source,
+        why: t.source === 'languages' ? `lenguaje del repositorio: ${t.name}` : `${t.source}`,
+        skill: { id: skill.id, name: skill.name },
+        areas: areasSkill,
+      });
+    }
+    return { repositoryUrl: project.repositoryUrl, suggestions, uncatalogued };
+  }
+
+  /**
+   * El estudiante acepta una sugerencia eligiendo el área en la que la usó.
+   * Queda como SU afirmación, con su procedencia; el respaldo lo decide la
+   * regla de siempre, no el clic (§11.3).
+   */
+  async acceptSuggestion(user: AuthenticatedUser, projectId: string, dto: { skillId: string; areaId: string; signal?: string; source?: string }) {
+    const project = await this.projects.findOne({ where: { id: projectId }, relations: { createdByProfile: true } });
+    if (!project) throw new NotFoundException('Proyecto no encontrado.');
+    await this.assertIsOwner(user, project);
+    const actuales = await this.projectSkills.find({ where: { projectId } });
+    if (actuales.some((s) => s.skillId === dto.skillId)) {
+      throw new ConflictException('Esa tecnología ya figura en el proyecto.');
+    }
+    const areasProyecto = (await this.projectAreas.find({ where: { projectId } })).map((a) => a.academicAreaId);
+    const areasFinales = areasProyecto.includes(dto.areaId) ? areasProyecto : [...areasProyecto, dto.areaId];
+    if (areasFinales.length > 6) {
+      throw new BadRequestException({ message: 'Un proyecto admite hasta 6 áreas.', fields: { areaId: ['Un proyecto admite hasta 6 áreas.'] } });
+    }
+    await assertSkillsBelongToAreas(this.projects.manager, [dto.skillId], [dto.areaId], 'skillId');
+    if (!areasProyecto.includes(dto.areaId)) await this.replaceAreas(projectId, areasFinales);
+    const procedencia = `sugerida: ${(dto.source ?? dto.signal ?? 'GitHub').slice(0, 140)}`;
+    await this.projectSkills.save(this.projectSkills.create({ projectId, skillId: dto.skillId, academicAreaId: dto.areaId, provenance: procedencia }));
+    const nombres = (await this.skills.find({ where: { id: In([...actuales.map((a) => a.skillId), dto.skillId]) } })).map((s) => s.name);
+    await this.projects.update(projectId, { technologies: nombres });
+    await this.syncSkillEvidence(projectId);
+    await this.backing.recalculate(projectId, user.userId);
+    await this.trajectory.requestRecalculation(project.createdByProfileId);
+    return this.suggestions(user, projectId);
+  }
+
+  async dismissSuggestion(user: AuthenticatedUser, projectId: string, signal: string) {
+    const project = await this.projects.findOne({ where: { id: projectId }, relations: { createdByProfile: true } });
+    if (!project) throw new NotFoundException('Proyecto no encontrado.');
+    await this.assertIsOwner(user, project);
+    const lista = new Set(project.dismissedSuggestions ?? []);
+    lista.add(signal.trim().slice(0, 80));
+    await this.projects.update(projectId, { dismissedSuggestions: [...lista].slice(0, 200) });
+    return this.suggestions(user, projectId);
+  }
+
+  /** «Tecnología no catalogada»: se pide a Administración; nada se crea solo (§11.4). */
+  async requestSkill(user: AuthenticatedUser, projectId: string, dto: { name: string; source?: string }) {
+    const project = await this.findOneOrFail(projectId);
+    await this.assertOwnerOrMember(user, project);
+    const nombre = dto.name.trim().slice(0, 80);
+    const repo = this.projects.manager.getRepository(SkillRequest);
+    const previa = await repo.createQueryBuilder('r')
+      .where('lower(r.name) = lower(:n)', { n: nombre })
+      .andWhere('r.requested_by = :u', { u: user.userId })
+      .andWhere(`r.status = 'pending'`)
+      .getOne();
+    if (previa) throw new ConflictException('Ya pediste evaluar esa tecnología.');
+    const guardada = await repo.save(repo.create({
+      name: nombre, source: dto.source?.slice(0, 160) ?? null, projectId, requestedBy: user.userId, status: 'pending',
+    }));
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.SKILL_REQUESTED,
+      entityType: 'skill_request',
+      entityId: guardada.id,
+      metadata: { name: nombre, projectId, source: guardada.source },
+    });
+    const admins = await this.users.createQueryBuilder('u').innerJoin('u.role', 'r').where('r.name = :n', { n: RolNombre.ADMIN }).getMany();
+    for (const a of admins.slice(0, 20)) {
+      await this.avisar({
+        userId: a.id,
+        kind: 'SKILL_REQUESTED',
+        title: 'Tecnología por evaluar',
+        body: `Un estudiante pide agregar «${nombre}» al catálogo${guardada.source ? ` (detectada en ${guardada.source})` : ''}.`,
+        link: '/admin/skill-requests',
+        dedupeKey: `skill-request:${guardada.id}:${a.id}`,
+      });
+    }
+    return guardada;
+  }
+
+  async listSkillRequests(status?: string) {
+    const repo = this.projects.manager.getRepository(SkillRequest);
+    const where = status && ['pending', 'added', 'rejected'].includes(status) ? { status: status as SkillRequest['status'] } : {};
+    const filas = await repo.find({ where, order: { createdAt: 'DESC' }, take: 200 });
+    const usuarios = filas.length ? await this.users.find({ where: { id: In([...new Set(filas.map((f) => f.requestedBy))]) } }) : [];
+    return filas.map((f) => {
+      const u = usuarios.find((x) => x.id === f.requestedBy);
+      return { ...f, requestedByName: u ? `${u.firstName} ${u.lastName}` : null };
+    });
+  }
+
+  async decideSkillRequest(user: AuthenticatedUser, id: string, dto: { decision: 'added' | 'rejected'; skillId?: string; note?: string }) {
+    const repo = this.projects.manager.getRepository(SkillRequest);
+    const r = await repo.findOne({ where: { id } });
+    if (!r) throw new NotFoundException('Pedido no encontrado.');
+    if (r.status !== 'pending') throw new ConflictException('Ese pedido ya fue decidido.');
+    if (dto.decision === 'added') {
+      const skill = dto.skillId ? await this.skills.findOne({ where: { id: dto.skillId } }) : null;
+      if (!skill) {
+        const m = 'Indica la tecnología del catálogo (créala antes en «Áreas y habilidades», con su área y alias).';
+        throw new BadRequestException({ message: m, fields: { skillId: [m] } });
+      }
+      r.skillId = skill.id;
+    } else if (!dto.note?.trim()) {
+      throw new BadRequestException({ message: 'Explica por qué se rechaza.', fields: { note: ['Explica por qué se rechaza.'] } });
+    }
+    r.status = dto.decision;
+    r.decisionNote = dto.note?.trim().slice(0, 300) || null;
+    r.decidedBy = user.userId;
+    r.decidedAt = new Date();
+    await repo.save(r);
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.SKILL_REQUEST_DECIDED,
+      entityType: 'skill_request',
+      entityId: r.id,
+      metadata: { decision: r.status, skillId: r.skillId, note: r.decisionNote },
+    });
+    await this.avisar({
+      userId: r.requestedBy,
+      kind: 'SKILL_REQUEST_DECIDED',
+      title: r.status === 'added' ? 'Tecnología agregada al catálogo' : 'Pedido de tecnología revisado',
+      body: r.status === 'added'
+        ? `«${r.name}» ya está en el catálogo: puedes agregarla a tu proyecto.`
+        : `«${r.name}» no se agregó: ${r.decisionNote}`,
+      link: '/student/projects',
+      dedupeKey: `skill-request-decided:${r.id}`,
+    });
+    return r;
+  }
+
+  /**
+   * V4.1 §11.2: una URL de GitHub con `/tree/rama`, `/blob/…`, `.git` o barra
+   * final se guarda como la raíz del repositorio. Otras URLs no se tocan.
+   */
+  private repoRaiz(url: string | null | undefined): string | null {
+    if (!url) return null;
+    try {
+      const u = new URL(url.trim());
+      if (!/(^|\.)github\.com$/i.test(u.hostname)) return url.trim();
+      const [owner, name] = u.pathname.split('/').filter(Boolean);
+      if (!owner || !name) return url.trim();
+      return `https://github.com/${owner}/${name.replace(/\.git$/i, '')}`;
+    } catch {
+      return url.trim();
+    }
+  }
 
   /** Áreas pedidas: `areaIds`, o el `areaId` de antes. `undefined` si no se tocan. */
   private areasPedidas(dto: { areaIds?: string[]; areaId?: string | null }): string[] | undefined {
@@ -282,7 +484,7 @@ export class ProjectsService {
         ? unirTecnologias(dto.technologies ?? [], skillsCatalogo.map((s) => s.name))
         : (dto.technologies ?? null),
       status: quiereActivo ? ProjectStatus.DRAFT : (dto.status ?? ProjectStatus.DRAFT),
-      repositoryUrl: dto.repositoryUrl ?? null,
+      repositoryUrl: this.repoRaiz(dto.repositoryUrl),
       demoUrl: dto.demoUrl ?? null,
       visibility: dto.visibility ?? ProjectVisibility.PROFILE,
       teamId: dto.teamId ?? null,
@@ -399,10 +601,10 @@ export class ProjectsService {
     const activar = dto.status === ProjectStatus.ACTIVE && estadoAnterior !== ProjectStatus.ACTIVE;
     if (dto.status !== undefined && !activar) project.status = dto.status;
     const enlacesCambian =
-      (dto.repositoryUrl !== undefined && dto.repositoryUrl !== project.repositoryUrl)
+      (dto.repositoryUrl !== undefined && this.repoRaiz(dto.repositoryUrl) !== project.repositoryUrl)
       || (dto.demoUrl !== undefined && dto.demoUrl !== project.demoUrl);
 
-    if (dto.repositoryUrl !== undefined) project.repositoryUrl = dto.repositoryUrl;
+    if (dto.repositoryUrl !== undefined) project.repositoryUrl = this.repoRaiz(dto.repositoryUrl);
     if (dto.demoUrl !== undefined) project.demoUrl = dto.demoUrl;
     if (dto.visibility !== undefined) project.visibility = dto.visibility;
     this.sincronizarEnlacePublico(project);

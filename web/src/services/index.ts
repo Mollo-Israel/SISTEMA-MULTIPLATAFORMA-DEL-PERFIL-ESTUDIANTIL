@@ -877,7 +877,43 @@ export const validationService = {
 };
 
 /** Proyectos: contribución, respaldo y bitácora (§33 a §41). */
+/** V4.1 A41-020: sugerencias de GitHub con su procedencia. */
+export interface ProjectSuggestions {
+  repositoryUrl: string | null;
+  suggestions: {
+    signal: string;
+    source: string | null;
+    why: string;
+    skill: { id: string; name: string };
+    areas: { id: string; name: string | null; primary: boolean }[];
+  }[];
+  uncatalogued: { signal: string; source: string | null; requested: boolean }[];
+}
+
+export interface SkillRequestItem {
+  id: string;
+  name: string;
+  source: string | null;
+  status: 'pending' | 'added' | 'rejected';
+  decisionNote: string | null;
+  requestedByName: string | null;
+  createdAt: string;
+}
+
+export const skillRequestService = {
+  list: (status?: string) => api.get<SkillRequestItem[]>('/skill-requests', { params: status ? { status } : {} }).then((r) => r.data),
+  decide: (id: string, body: { decision: 'added' | 'rejected'; skillId?: string; note?: string }) =>
+    api.post(`/skill-requests/${id}/decision`, body).then((r) => r.data),
+};
+
 export const projectDetailService = {
+  suggestions: (projectId: string) => api.get<ProjectSuggestions>(`/projects/${projectId}/suggestions`).then((r) => r.data),
+  acceptSuggestion: (projectId: string, body: { skillId: string; areaId: string; signal?: string; source?: string }) =>
+    api.post<ProjectSuggestions>(`/projects/${projectId}/suggestions/accept`, body).then((r) => r.data),
+  dismissSuggestion: (projectId: string, signal: string) =>
+    api.post<ProjectSuggestions>(`/projects/${projectId}/suggestions/dismiss`, { signal }).then((r) => r.data),
+  requestSkill: (projectId: string, body: { name: string; source?: string }) =>
+    api.post(`/projects/${projectId}/suggestions/request-skill`, body).then((r) => r.data),
   membersDetailed: (projectId: string) =>
     api
       .get<ProjectMemberDetailed[]>(`/projects/${projectId}/members/detailed`)

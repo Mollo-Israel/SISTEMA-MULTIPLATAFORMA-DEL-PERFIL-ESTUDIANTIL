@@ -122,17 +122,18 @@ export class RepositoryInspectorService {
       if (repo.status === 404) {
         return {
           status: LinkCheckStatus.UNAVAILABLE,
-          metadata: this.metadataVacia(ref, 'El repositorio no existe o no es público.'),
+          // V4.1 §11.1: un 404 no distingue «no existe», «cambió de nombre» o «es privado».
+          metadata: this.metadataVacia(ref, 'GitHub respondió 404: no se encontró públicamente. Puede no existir, haber cambiado de nombre o ser privado; no se concluye cuál.'),
           technologySignals: this.cruzar(declaradas, [], []),
         };
       }
       if (repo.status === 403 || repo.status === 429) {
         // Cuota agotada. No se sabe nada del repositorio, y decir que no
         // existe sería mentir.
-        return sinComprobar('No se pudo consultar: cuota de la API agotada.');
+        return sinComprobar(`GitHub respondió ${repo.status} (límite de consultas o acceso denegado): no se concluye nada del repositorio; se volverá a intentar.`);
       }
       if (!repo.ok || !repo.data) {
-        return sinComprobar(`Respuesta inesperada (${repo.status}).`);
+        return sinComprobar(`GitHub respondió ${repo.status}: respuesta inesperada, no se concluye nada del repositorio.`);
       }
 
       // V3 §22: con un token, GitHub también devuelve repositorios privados.
@@ -180,7 +181,7 @@ export class RepositoryInspectorService {
       this.logger.debug(`No se pudo inspeccionar ${repositoryUrl}: ${String(error)}`);
       // V3 §20: no poder contactar con GitHub no prueba que el repositorio
       // no exista. Queda sin comprobar, no «no disponible».
-      return sinComprobar('No se pudo contactar con el proveedor.');
+      return sinComprobar('No se pudo contactar con GitHub (tiempo agotado o red): no se concluye nada del repositorio.');
     }
   }
 

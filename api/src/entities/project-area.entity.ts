@@ -71,4 +71,11 @@ export class ProjectSkill {
 
   @Column({ name: 'academic_review_comment', type: 'varchar', length: 500, nullable: true })
   academicReviewComment: string | null;
+
+  /**
+   * V4.1 §11.3: de dónde salió la afirmación del estudiante: `declarada` o
+   * `sugerida: requirements.txt (fastapi)`. La señal no es la afirmación.
+   */
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  provenance: string | null;
 }

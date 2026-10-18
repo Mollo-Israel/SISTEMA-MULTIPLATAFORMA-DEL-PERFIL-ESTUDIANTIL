@@ -104,6 +104,9 @@ export const AUDIT_EVENT_LABEL: Record<string, { modulo: AuditModule; accion: st
   GAMIFICATION_PROPOSED: { modulo: 'configuracion', accion: 'Puntos propuestos por un docente' },
   GAMIFICATION_PROPOSAL_REVIEWED: { modulo: 'configuracion', accion: 'Propuesta de puntos decidida' },
   GAMIFICATION_SCOPE_VIEWED: { modulo: 'configuracion', accion: 'Consulta de puntos de estudiantes' },
+  SKILL_REQUESTED: { modulo: 'catalogo', accion: 'Pedido de tecnología no catalogada' },
+  SKILL_REQUEST_DECIDED: { modulo: 'catalogo', accion: 'Pedido de tecnología decidido' },
+  PROJECT_BACKING_RECALCULATED: { modulo: 'proyectos', accion: 'Recálculo del respaldo de proyectos' },
   RESOURCE_REVIEWED: { modulo: 'catalogo', accion: 'Revisión de un recurso propuesto' },
   CURRICULUM_EXPORTED: { modulo: 'curriculo', accion: 'Currículo exportado' },
 };

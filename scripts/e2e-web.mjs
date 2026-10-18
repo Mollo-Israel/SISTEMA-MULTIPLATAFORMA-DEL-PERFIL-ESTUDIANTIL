@@ -21,7 +21,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { ADMIN_CREDENTIALS, API, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
+import { ADMIN_CREDENTIALS, API, asegurarGithubSimulado, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = 'http://localhost:5173';
@@ -808,6 +808,32 @@ async function pruebas(browser) {
     'WEB.48.1 B33 §10.3 El dueño edita título y repositorio desde la tarjeta y se guardan', JSON.stringify({ e: encabezado, t: guardado?.title }));
   check(fallos54.length === 0, 'WEB.48.2 Sin errores de JavaScript en V4.1-9', fallos54.join(' | '));
   await c54.close();
+
+  // ===== V4.1-10 · Sugerencias de GitHub con procedencia (A41-020, B34)
+  objective('V4.1-10 · La validación técnica muestra señales como sugerencias, con por qué');
+  const fallos55 = [];
+  await asegurarGithubSimulado();
+  const estGh = await estudianteListo(admin, 'github');
+  const catGh = ((await req('GET', '/skills', { token: estGh.token })).data ?? []).filter((s) => s.isActive !== false && s.academicAreaId);
+  const reactGh = catGh.find((s) => s.name === 'React');
+  await req('POST', '/projects', {
+    token: estGh.token,
+    body: { title: `Turnos web ${TS}`, areaIds: [reactGh.academicAreaId], skillIds: [reactGh.id], repositoryUrl: `https://github.com/afinia-pruebas/py-web-${TS}`, status: 'draft' },
+  });
+  const c55 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p55 = await c55.newPage();
+  p55.on('pageerror', (e) => fallos55.push(e.message));
+  await entrar(p55, estGh.email);
+  await p55.goto(`${WEB}/student/projects`);
+  await p55.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p55.getByRole('button', { name: /Validación técnica/ }).first().click({ timeout: 8000 });
+  const panel = p55.locator('[data-testid="sugerencias-github"]');
+  await panel.waitFor({ timeout: 8000 }).catch(() => {});
+  const textoPanel = await panel.innerText().catch(() => '');
+  check(/requirements\.txt/.test(textoPanel) && /no prueba que la usaste/.test(textoPanel) && (await p55.getByRole('button', { name: 'La usé' }).count()) > 0,
+    'WEB.49.1 B34 §11.2 Las señales aparecen como sugerencias con su procedencia y se aceptan a mano', textoPanel.slice(0, 160));
+  check(fallos55.length === 0, 'WEB.49.2 Sin errores de JavaScript en V4.1-10', fallos55.join(' | '));
+  await c55.close();
 
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();

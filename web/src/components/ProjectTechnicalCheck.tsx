@@ -3,13 +3,15 @@ import { FiRefreshCw } from 'react-icons/fi';
 import { apiError } from '../api/client';
 import { projectDetailService } from '../services';
 import type { ProjectChecks } from '../services/types';
+import type { ProjectSuggestions } from '../services';
 import { Badge, Button, Loading } from './ui';
 import { useToast } from './feedback';
 
+// V4.1 §11.3–§11.4: lo que GitHub ve es una señal; no valida que se usó ni quién la usó.
 const ESTADO_TEC: Record<string, { label: string; tone: 'green' | 'gray' | 'bordo' }> = {
-  both: { label: 'Corroborada', tone: 'green' },
+  both: { label: 'Declarada · señal detectada', tone: 'green' },
   declared: { label: 'Declarada', tone: 'gray' },
-  detected: { label: 'Encontrada, no declarada', tone: 'bordo' },
+  detected: { label: 'Señal detectada, no declarada', tone: 'bordo' },
 };
 
 const ESTADO_ENLACE: Record<string, string> = {
@@ -26,14 +28,48 @@ const ESTADO_ENLACE: Record<string, string> = {
  * dependencia de un manifiesto o la imagen de docker-compose. Lo que no se
  * encontró queda «Declarada»: no es falso ni resta (§29).
  */
-export default function ProjectTechnicalCheck({ projectId, canRecheck }: { projectId: string; canRecheck: boolean }) {
+export default function ProjectTechnicalCheck({ projectId, canRecheck, onChanged }: { projectId: string; canRecheck: boolean; onChanged?: () => void }) {
   const [c, setC] = useState<ProjectChecks | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sug, setSug] = useState<ProjectSuggestions | null>(null);
+  const [areaDe, setAreaDe] = useState<Record<string, string>>({});
   const toast = useToast();
 
   useEffect(() => {
     projectDetailService.checks(projectId).then(setC).catch(() => setC(null));
+    projectDetailService.suggestions(projectId).then(setSug).catch(() => setSug(null));
   }, [projectId]);
+
+  const aceptar = async (s: ProjectSuggestions['suggestions'][number]) => {
+    const areaId = areaDe[s.skill.id] ?? (s.areas.length === 1 ? s.areas[0].id : '');
+    if (!areaId) {
+      toast.info('Elige en qué área usaste esta tecnología.');
+      return;
+    }
+    try {
+      setSug(await projectDetailService.acceptSuggestion(projectId, { skillId: s.skill.id, areaId, signal: s.signal, source: s.source ?? undefined }));
+      toast.success(`${s.skill.name} agregada como tuya.`, 'Queda con su procedencia; el respaldo lo decide la regla, no el clic.');
+      onChanged?.();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+  const descartar = async (signal: string) => {
+    try {
+      setSug(await projectDetailService.dismissSuggestion(projectId, signal));
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+  const pedir = async (u: ProjectSuggestions['uncatalogued'][number]) => {
+    try {
+      await projectDetailService.requestSkill(projectId, { name: u.signal, source: u.source ?? undefined });
+      toast.success('Pedido enviado a Administración.', 'No suma ni bloquea tu borrador mientras se evalúa.');
+      setSug(await projectDetailService.suggestions(projectId));
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
 
   const recheck = async () => {
     setBusy(true);
@@ -83,6 +119,47 @@ export default function ProjectTechnicalCheck({ projectId, canRecheck }: { proje
           {c.demo.title ? ` · «${c.demo.title}»` : ''}
           {c.demo.isHttps ? ' · HTTPS' : ''}
         </p>
+      )}
+      {meta?.error && <p className="muted small" data-testid="diagnostico-repo">{meta.error}</p>}
+      {sug && (sug.suggestions.length > 0 || sug.uncatalogued.length > 0) && (
+        <div className="sugerencias" data-testid="sugerencias-github">
+          <strong>Sugerencias a partir de las señales del repositorio</strong>
+          <p className="muted small" style={{ margin: '0.2rem 0 0.4rem' }}>
+            Una señal no prueba que la usaste. Si la usaste, agrégala tú, con el área en la que la usaste.
+          </p>
+          <ul className="plain-list">
+            {sug.suggestions.map((s) => (
+              <li key={s.skill.id} className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span>{s.skill.name} <span className="muted small">· por qué: {s.why}</span></span>
+                {canRecheck && (
+                  <span className="flex" style={{ gap: '0.35rem' }}>
+                    {s.areas.length > 1 && (
+                      <select aria-label={`Área de ${s.skill.name}`} value={areaDe[s.skill.id] ?? ''} onChange={(e) => setAreaDe((x) => ({ ...x, [s.skill.id]: e.target.value }))}>
+                        <option value="">¿En qué área?</option>
+                        {s.areas.map((a) => <option key={a.id} value={a.id}>{a.name}{a.primary ? '' : ' (secundaria)'}</option>)}
+                      </select>
+                    )}
+                    <Button size="sm" onClick={() => aceptar(s)}>La usé</Button>
+                    <Button size="sm" variant="ghost" onClick={() => descartar(s.signal)}>Descartar</Button>
+                  </span>
+                )}
+              </li>
+            ))}
+            {sug.uncatalogued.map((u) => (
+              <li key={u.signal} className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span>Tecnología no catalogada: {u.signal} {u.source && <span className="muted small">· {u.source}</span>}</span>
+                {canRecheck && (u.requested
+                  ? <Badge tone="gray">Pedida a Administración</Badge>
+                  : (
+                    <span className="flex" style={{ gap: '0.35rem' }}>
+                      <Button size="sm" variant="secondary" onClick={() => pedir(u)}>Pedir que la evalúen</Button>
+                      <Button size="sm" variant="ghost" onClick={() => descartar(u.signal)}>Descartar</Button>
+                    </span>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <p className="muted small">{c.disclaimer}</p>
       {canRecheck && (

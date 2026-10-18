@@ -287,13 +287,22 @@ async function rf17Calculo(ctx) {
   check(rawOf(s, areaPrincipal.id) === 0,
     '17.9 V4 §35.1 Un borrador SUPPORTED no es trayectoria: no suma', `crudo ${rawOf(s, areaPrincipal.id)}`);
   // V3 §22 + §28: se activa con su tecnología en el catálogo y un repositorio
-  // que la corrobora; con la evidencia, queda CORROBORATED.
+  // que la corrobora. V4.1 §12: la captura apoya, pero no es independiente;
+  // corrobora otra persona que confirma su contribución.
+  const companero = await provisionAndActivate(ctx.admin, {
+    firstName: 'Ciro', lastName: 'Orquesta', email: `obj6.companero.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 4,
+  });
+  await req('POST', '/profiles/me', { token: companero.token, body: {} });
+  const perfilCompanero = (await req('GET', '/profiles/me', { token: companero.token })).data?.id;
+  const invitacion = await req('POST', `/projects/${ctx.proyectoId}/invitations`, { token: A.token, body: { invitedProfileId: perfilCompanero, proposedRole: 'Backend' } });
+  await req('PATCH', `/projects/invitations/${invitacion.data?.id}`, { token: companero.token, body: { decision: 'accept' } });
+  await req('PUT', `/projects/${ctx.proyectoId}/my-contribution`, { token: companero.token, body: { contribution: 'Configuré el despliegue del orquestador.', skillIds: [skill.id] } });
   const activo = await req('PATCH', `/projects/${ctx.proyectoId}`, {
     token: A.token,
     body: { skillIds: [skill.id], repositoryUrl: repoQueCorrobora(skill.name), status: 'active' },
   });
   check(activo.status === 200 && activo.data?.backingTier === 'corroborated',
-    '17.9b §28 Activo y CORROBORATED (tecnología corroborada + evidencia de contexto)', JSON.stringify({ s: activo.status, t: activo.data?.backingTier }));
+    '17.9b §28 V4.1 §12 Activo y CORROBORATED (tecnología corroborada + otra persona que confirma su contribución)', JSON.stringify({ s: activo.status, t: activo.data?.backingTier }));
   s = await summaryOf(A.token);
   check(rawOf(s, areaPrincipal.id) === 18 && areaOf(s, areaPrincipal.id)?.supportScore === 15,
     '17.9c V4 §35.3 CORROBORATED suma 18 de afinidad y 15 de respaldo en el área de su tecnología',
