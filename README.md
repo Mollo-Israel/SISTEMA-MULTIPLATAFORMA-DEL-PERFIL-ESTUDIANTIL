@@ -2,7 +2,8 @@
 
 Ingeniería en Sistemas Informáticos – Universidad Privada del Valle. Implementa la
 *Especificación Maestra Final V3.1* (`AFINIA_ESPECIFICACION_MAESTRA_FINAL_V3_1_2026-10-06.md`)
-con los ajustes del *Cierre Final V3.2* (`AFINIA_CIERRE_FINAL_V3_2_AJUSTES_CLAUDE_CODE_2026-10-12.md`),
+con los ajustes del *Cierre Final V3.2* (`AFINIA_CIERRE_FINAL_V3_2_AJUSTES_CLAUDE_CODE_2026-10-12.md`)
+y del *Contrato Único V4 + V4.1* (`AFINIA_CONTRATO_UNICO_CONSOLIDADO_V4_V4_1_CLAUDE_2026-10-16.md`),
 sobre la base de la V2.
 
 Plataforma **complementaria** —no reemplaza al SIU, a Teams, las notas ni los
@@ -128,12 +129,13 @@ Las suites hablan HTTP con la API en marcha y una base real.
 
 ```bash
 npm run api:dev          # en una terminal
-npm run test:all         # en otra: unitarias + 19 suites de API (incluidas V3 y V3.2) + IA simulada + navegador
+npm run test:all         # en otra: unitarias + 20 suites de API (incluidas V3, V3.2 y V4.1) + IA simulada + navegador
 ```
 
 | Script | Qué prueba |
 |--------|-----------|
 | `npm run test:unit` | Reglas puras (afinidad, recomendaciones 40/30/15/10/5, respaldo, credenciales, currículo, transiciones de estado, guard del correo, auditoría, respaldos de OCR y correo…) |
+| `npm run test:v41` | Los batches del cierre V4.1 (`node scripts/e2e-v4-1.mjs batch10` corre uno) |
 | `npm run test:v32` | Los batches del cierre V3.2 (`node scripts/e2e-v3-2.mjs batch15` corre uno) |
 | `npm run test:v3` | Los batches de la V3 (`node scripts/e2e-v3.mjs batch17` corre uno) |
 | `npm run test:v2` | Los batches de la V2 (`node scripts/e2e-v2.mjs batch5` corre uno) |
@@ -143,9 +145,9 @@ npm run test:all         # en otra: unitarias + 19 suites de API (incluidas V3 y
 | `npm run test:load` | Carga con k6 en Docker (V3 RNF09) |
 | `npm run test:security` | OWASP ZAP en Docker: **escaneo activo**, solo contra una base de desarrollo respaldada |
 
-Última corrida completa (cierre V3.2, 13/10/2026): 21 suites, **2040 comprobaciones
-sin fallos**, y 130 unitarias. Qué se ejecutó y qué no, en
-[`docs/V3_2_QA.md`](docs/V3_2_QA.md); k6 y ZAP corresponden a la V3
+Última corrida completa (cierre V4.1, 18/10/2026): 22 suites, **2254 comprobaciones
+sin fallos**, y 141 unitarias. Qué se ejecutó y qué no, en
+[`docs/V4_1_QA.md`](docs/V4_1_QA.md) (la del cierre V3.2, en [`docs/V3_2_QA.md`](docs/V3_2_QA.md)); k6 y ZAP corresponden a la V3
 ([`docs/V3_QA_HARDENING.md`](docs/V3_QA_HARDENING.md)) y no se repitieron en este cierre.
 
 ## Flujo principal
@@ -164,6 +166,11 @@ sin fallos**, y 130 unitarias. Qué se ejecutó y qué no, en
 
 ## Documentación
 
+- [`docs/V4_1_REPORTE_BATCHES.md`](docs/V4_1_REPORTE_BATCHES.md) — el cierre V4.1 batch por batch (§25 del contrato): hallazgos, cambios, migraciones, pruebas, fallos y riesgos.
+- [`docs/V4_1_QA.md`](docs/V4_1_QA.md) — QA integral del cierre V4.1: compilación, pruebas, migraciones, seguridad y pendientes declarados.
+- [`docs/MATRIZ_TRAZABILIDAD_V4_1.md`](docs/MATRIZ_TRAZABILIDAD_V4_1.md) — A41-001 a A41-030 → batch → código → pruebas → estado.
+- [`docs/V4_1_IMPACTO_MOVIL.md`](docs/V4_1_IMPACTO_MOVIL.md) — impacto de cada cambio V4.1 en la app móvil.
+- [`docs/CAMBIOS_DOCUMENTO_GRADO_V4_1.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V4_1.md) — qué ajustar en la tesis para la V4.1 (el `.docx` no se modificó).
 - [`docs/V3_2_REPORTE_BATCHES.md`](docs/V3_2_REPORTE_BATCHES.md) — el cierre V3.2 batch por batch: hallazgos, cambios, migraciones, pruebas y riesgos.
 - [`docs/V3_2_QA.md`](docs/V3_2_QA.md) — QA final del cierre: qué se ejecutó, con qué resultado, y qué no se ejecutó.
 - [`docs/MATRIZ_TRAZABILIDAD_V3_2.md`](docs/MATRIZ_TRAZABILIDAD_V3_2.md) — secciones del cierre → batch → API → pantallas → pruebas.

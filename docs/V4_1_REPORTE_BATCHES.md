@@ -1062,3 +1062,41 @@ Detalle de la API:
 **Riesgos:** ninguno.
 
 **Commit propuesto:** `feat(v4.1-batch-13): el currículo no marca nada por omisión; afinidad y trayectoria verificadas sobre el respaldo honesto`
+
+---
+
+## BATCH V4.1-14 — QA integral, seguridad y documentación
+
+**Hallazgos:** A41-030 (BATCH 14 del contrato).
+
+**Ejecutado:**
+- **Compilación:**
+  - `tsc --noEmit` de shared, API, web y **móvil (Expo)**: sin errores;
+  - `build:e2e` de la API y `vite build` de la web: OK.
+- **Unitarias:** **141/141**.
+- **Regresión completa (22 suites, API real y Postgres):** **2254 comprobaciones correctas, 0 fallos** (18/10/2026).
+- **Migraciones:** las 7 de V4.1 son aditivas, con `up` y `down`, `pg_dump` previo y `run → revert → run` (tabla en `docs/V4_1_QA.md`). El único recálculo de datos (respaldo de proyectos) quedó auditado, con su informe.
+- **Rama:** `main` es ancestro de `feature/afinia-v4-1-cierre`, así que la fusión sería fast-forward, sin conflictos. **No se tocó `main` ni se hizo push.**
+- **Configuración:** V4.1 no agregó variables de entorno (se revisaron los commits de V4.1); `.env.example` sigue vigente.
+- **Seguridad:** rutas negativas (401, 403 y 404), SSRF, subidas protegidas, privacidad del perfil público y del enlace, auditoría de cada decisión nueva, correo en `console` durante las pruebas y GitHub sin conclusiones falsas. El detalle, en `docs/V4_1_QA.md` §4.
+
+**Documentación nueva:**
+- `docs/V4_1_QA.md`: QA integral.
+- `docs/MATRIZ_TRAZABILIDAD_V4_1.md`: A41-001 a A41-030, cada uno con su batch, su código, sus pruebas y su estado.
+- `docs/CAMBIOS_DOCUMENTO_GRADO_V4_1.md`: qué ajustar en los capítulos II a IV de la tesis. El `.docx` **no** se modificó: su SHA-256 sigue empezando por `bf5c0fb860e97e5b`, igual que el respaldo.
+- `README.md`: el cierre V4.1, la última corrida y los documentos nuevos.
+- Ya existentes de este cierre: `docs/V4_1_REPORTE_BATCHES.md` y `docs/V4_1_IMPACTO_MOVIL.md`.
+
+**UI obsoleta retirada en el cierre:**
+- «Retos y recompensas» y la pestaña «Recompensas»;
+- los puntos libres de la actividad;
+- la opción «credencial externa esperada»;
+- la preselección total del currículo.
+
+**Pendientes declarados (no bloquean):**
+- **BLOCKED:** verificadores de Credly/IBM, Cisco y Huawei (§6.3). No se pudieron comprobar con un caso legítimo; quedan declarados «sin verificador integrado».
+- OAuth de GitHub y atribución por commits (§11.5): es opcional.
+- Las mejoras móviles de `docs/V4_1_IMPACTO_MOVIL.md`.
+- La gamificación de recursos sigue desactivada hasta que exista un hito verificable (§9.3).
+
+**Commit propuesto:** `docs(v4.1-batch-14): QA integral, matriz de trazabilidad A41, cambios para el documento de grado y README del cierre V4.1`
