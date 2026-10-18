@@ -835,6 +835,39 @@ async function pruebas(browser) {
   check(fallos55.length === 0, 'WEB.49.2 Sin errores de JavaScript en V4.1-10', fallos55.join(' | '));
   await c55.close();
 
+  // ===== V4.1-11 · Equipo con búsqueda, candidatos y exclusión con motivo (A41-022, A41-023)
+  objective('V4.1-11 · Elegir equipo con búsqueda, ver sus miembros como candidatos y excluir con motivo');
+  const fallos56 = [];
+  const lider = await estudianteListo(admin, 'liderequipo');
+  const companeros = [await estudianteListo(admin, 'companeraa'), await estudianteListo(admin, 'companerob')];
+  const perfilDe = async (t) => (await req('GET', '/profiles/me', { token: t })).data?.id;
+  const necesidad = (await req('POST', '/team-needs', { token: lider.token, body: { purpose: `Equipo web ${TS}`, maxMembers: 4 } })).data;
+  const nombreEquipo = `Equipo Web ${String(TS).slice(-6).split('').map((d) => String.fromCharCode(65 + Number(d))).join('')}`;
+  const equipoWeb = (await req('POST', `/team-needs/${necesidad.id}/team`, { token: lider.token, body: { name: nombreEquipo } })).data;
+  for (const c of companeros) {
+    const inv = (await req('POST', `/teams/${equipoWeb.id}/invitations`, { token: lider.token, body: { invitedProfileId: await perfilDe(c.token) } })).data;
+    await req('PATCH', `/teams/invitations/${inv.id}`, { token: c.token, body: { decision: 'accept' } });
+  }
+  const c56 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p56 = await c56.newPage();
+  p56.on('pageerror', (e) => fallos56.push(e.message));
+  await entrar(p56, lider.email);
+  await p56.goto(`${WEB}/student/projects`);
+  await p56.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p56.locator('#pr-equipo-buscar').waitFor({ timeout: 8000 });
+  await espera(1000);
+  await p56.locator('#pr-equipo-buscar').fill(nombreEquipo);
+  await p56.locator('#pr-equipo-opciones button').first().click({ timeout: 8000 });
+  const candidatos = p56.locator('[data-testid="candidatos-equipo"] li');
+  await candidatos.first().waitFor({ timeout: 6000 }).catch(() => {});
+  const nCandidatos = await candidatos.count();
+  await candidatos.first().locator('input[type=checkbox]').uncheck();
+  const pideMotivo = await p56.locator('[data-testid="candidatos-equipo"] input[aria-label^="Motivo para no incluir"]').count();
+  check(nCandidatos === 2 && pideMotivo === 1,
+    'WEB.50.1 A41-022 23.8 El equipo se elige con búsqueda, sus miembros aparecen como candidatos y quitar a uno pide motivo', `candidatos ${nCandidatos} · motivo ${pideMotivo}`);
+  check(fallos56.length === 0, 'WEB.50.2 Sin errores de JavaScript en V4.1-11', fallos56.join(' | '));
+  await c56.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

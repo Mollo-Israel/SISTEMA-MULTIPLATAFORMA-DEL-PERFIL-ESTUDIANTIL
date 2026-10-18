@@ -893,3 +893,63 @@ Detalle de la API:
 - Hay menos proyectos CORROBORATED (de 229 a 44 en estos datos). Es el comportamiento que pide el contrato, y queda el informe.
 
 **Commit propuesto:** `feat(v4.1-batch-10): sugerencias de GitHub con procedencia, tecnologías no catalogadas a Administración y CORROBORATED solo con fuente independiente y atribución, con recálculo auditado`
+
+---
+
+## BATCH V4.1-11 — Equipos y confirmaciones
+
+**Hallazgos:** A41-022, A41-023 (§13; B36, B37, 23.8).
+
+**Antes:**
+- Elegir un equipo invitaba automáticamente a **todos** sus miembros; no se podía dejar a alguien fuera de ese proyecto.
+- El equipo se elegía con un `<select>` sin búsqueda.
+- Retirar a un integrante no pedía motivo ni dejaba historial.
+
+**Archivos modificados:**
+- **`create-project.dto.ts`:** `excludedTeamMembers: [{ profileId, reason }]`. El motivo tiene al menos 10 caracteres.
+- **`project-members.service.ts`:**
+  - `inviteTeam` precarga a los miembros como **candidatos** y salta a los excluidos, que deben ser de ese equipo;
+  - `registrarExclusion` deja en la bitácora quién excluyó, a quién, por qué, de qué equipo, y que el equipo no cambia;
+  - avisa al excluido de forma respetuosa: su lugar en el equipo no cambia, y el motivo no se le envía como acusación. El aviso no se duplica;
+  - `removeMember`: si el integrante viene del equipo, excluirlo exige motivo (`PROJECT_EXCLUSION_REASON_REQUIRED`). Nunca toca la membresía del equipo.
+- **`projects.controller.ts`:** el alta pasa los excluidos; `DELETE …/members/:memberId` acepta `{ reason }`.
+- **Web:**
+  - `Projects.tsx`: el equipo se elige con búsqueda (combobox); sus miembros aparecen como candidatos con una casilla; quitar a uno pide su motivo, que viaja con el alta;
+  - `ProjectContribution.tsx`: «Excluir del proyecto», con motivo, para el responsable.
+
+**Migraciones:** ninguna. El motivo vive en los metadatos del evento de la bitácora, que ya existían.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch11` → **11/11**:
+  - 23.8: excluir exige motivo y solo se excluye a gente del equipo;
+  - de 4, se invita a los 2 que quedan; el excluido sigue en el equipo;
+  - el historial guarda quién, a quién y por qué;
+  - el aviso es respetuoso y no expone el motivo;
+  - B37: el creador no confirma por los demás; si uno discrepa, se bloquea (no se vota);
+  - B36: excluir después exige motivo y no saca del equipo;
+  - con la exclusión justificada, se activa;
+  - B40: un integrante no excluye a otros.
+- `node scripts/e2e-web.mjs` → **91/91**, incluido WEB.50.1: combobox con búsqueda, candidatos y motivo al quitar.
+- **Regresión completa (22 suites):** **2239 correctas, 0 fallos** a la primera.
+
+**Fallo → causa → corrección → regresión:**
+- **WEB.50.1, durante su escritura (no en la regresión):**
+  - claves con números en el apellido del fixture (la API las rechaza);
+  - la búsqueda se escribía antes de que la página terminara de cargar.
+  *Corrección:* claves solo con letras y una espera a la carga. *Regresión:* PASS.
+
+**Efecto:**
+- **Backend:** invitaciones de equipo y exclusiones.
+- **Frontend:** alta de proyecto y contribuciones.
+- **Móvil:** `DELETE …/members/:id` pide ahora un motivo si el integrante viene de un equipo; queda anotado en `docs/V4_1_IMPACTO_MOVIL.md`.
+
+**Seguridad y permisos:**
+- solo el responsable excluye (403 o 404 al integrante);
+- la exclusión no toca el equipo;
+- el aviso no comparte datos privados.
+
+**Pendientes:** ninguno.
+
+**Riesgos:** ninguno nuevo.
+
+**Commit propuesto:** `feat(v4.1-batch-11): equipo con búsqueda y candidatos, excluir del proyecto con motivo sin tocar el equipo y confirmación individual`

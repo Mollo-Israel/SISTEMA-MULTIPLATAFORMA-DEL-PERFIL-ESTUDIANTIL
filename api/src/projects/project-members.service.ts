@@ -69,7 +69,11 @@ export class ProjectMembersService {
    * contribución. Quien ya es integrante o tiene una invitación pendiente se
    * salta. El rol del equipo se conserva si está en el catálogo (§30.1).
    */
-  async inviteTeam(user: AuthenticatedUser, projectId: string): Promise<{ invitados: number; omitidos: number }> {
+  async inviteTeam(
+    user: AuthenticatedUser,
+    projectId: string,
+    excluidos: { profileId: string; reason: string }[] = [],
+  ): Promise<{ invitados: number; omitidos: number; excluidos: number }> {
     const project = await this.requireOwnedProject(user, projectId);
     if (!project.teamId) {
       throw new BadRequestException('El proyecto no tiene un equipo vinculado.');
@@ -80,6 +84,19 @@ export class ProjectMembersService {
     const perfiles = new Map<string, string | null>([[team.ownerProfileId, 'Responsable']]);
     for (const f of filas) perfiles.set(f.studentProfileId, f.role);
     perfiles.delete(project.createdByProfileId);
+
+    // V4.1 A41-023 (§13, 23.8): se precargan como candidatos; el creador puede
+    // dejar fuera a alguien de ESTE proyecto, con motivo. Sigue en el equipo.
+    for (const e of excluidos) {
+      if (!perfiles.has(e.profileId)) {
+        const m = 'Solo puedes excluir a integrantes de ese equipo.';
+        throw new BadRequestException({ message: m, fields: { excludedTeamMembers: [m] } });
+      }
+    }
+    for (const e of excluidos) {
+      perfiles.delete(e.profileId);
+      await this.registrarExclusion(user, project, e.profileId, e.reason, team.id, team.name);
+    }
 
     let invitados = 0;
     let omitidos = 0;
@@ -95,7 +112,42 @@ export class ProjectMembersService {
         omitidos += 1;
       }
     }
-    return { invitados, omitidos };
+    return { invitados, omitidos, excluidos: excluidos.length };
+  }
+
+  /**
+   * V4.1 A41-023: historial (quién excluyó, a quién y por qué) y un aviso
+   * respetuoso al excluido. El motivo queda en la bitácora; el aviso no lo
+   * expone como acusación ni dice nada de su equipo, que no cambia.
+   */
+  private async registrarExclusion(
+    user: AuthenticatedUser,
+    project: Project,
+    profileId: string,
+    motivo: string,
+    teamId: string | null,
+    teamName: string | null,
+  ): Promise<void> {
+    await this.events.record({
+      projectId: project.id,
+      actorUserId: user.userId,
+      eventType: ProjectEventType.MEMBER_REMOVED,
+      metadata: { excluidoDelProyecto: true, profileId, motivo: motivo.trim().slice(0, 300), equipo: teamId, equipoSinCambios: true },
+    });
+    const perfil = await this.profiles.findOne({ where: { id: profileId } });
+    if (!perfil) return;
+    try {
+      await this.notifications.emit({
+        userId: perfil.userId,
+        kind: 'PROJECT_MEMBER_EXCLUDED',
+        title: 'Un proyecto de tu equipo',
+        body: `«${project.title}» se registró sin incluirte como integrante. Tu lugar en ${teamName ? `el equipo «${teamName}»` : 'tu equipo'} no cambia. Si crees que es un error, habla con quien lo registró.`,
+        link: '/student/projects',
+        dedupeKey: `project-excluded:${project.id}:${profileId}`,
+      });
+    } catch {
+      // El aviso nunca deshace la exclusión.
+    }
   }
 
   // ------------------------------------------------------------------
@@ -207,7 +259,7 @@ export class ProjectMembersService {
   }
 
   /** El responsable retira a un integrante ya aceptado. */
-  async removeMember(user: AuthenticatedUser, projectId: string, memberId: string): Promise<void> {
+  async removeMember(user: AuthenticatedUser, projectId: string, memberId: string, reason?: string): Promise<void> {
     const project = await this.requireOwnedProject(user, projectId);
     const member = await this.members.findOne({
       where: { id: memberId, projectId: project.id },
@@ -219,7 +271,24 @@ export class ProjectMembersService {
       throw new BadRequestException('El responsable del proyecto no se puede retirar.');
     }
     const profile = await this.profiles.findOne({ where: { userId: member.userId } });
+    // V4.1 A41-023: si viene de un equipo, excluirlo del proyecto exige motivo; el equipo no cambia.
+    const team = project.teamId ? await this.teams.findOne({ where: { id: project.teamId } }) : null;
+    const delEquipo = !!team && !!profile && (team.ownerProfileId === profile.id
+      || await this.teamMembers.exist({ where: { teamId: team.id, studentProfileId: profile.id } }));
+    const motivo = reason?.trim() ?? '';
+    if (delEquipo && motivo.length < 10) {
+      const m = 'Viene de tu equipo: explica el motivo (al menos 10 caracteres). Seguirá en el equipo.';
+      throw new BadRequestException({ code: 'PROJECT_EXCLUSION_REASON_REQUIRED', message: m, fields: { reason: [m] } });
+    }
     await this.members.delete(member.id);
+    if (profile) {
+      if (delEquipo || motivo) await this.registrarExclusion(user, project, profile.id, motivo || 'Retirado del proyecto.', team?.id ?? null, team?.name ?? null);
+      else {
+        await this.events.record({
+          projectId: project.id, actorUserId: user.userId, eventType: ProjectEventType.MEMBER_REMOVED, metadata: { memberId: member.id },
+        });
+      }
+    }
     // El proyecto deja de contar en el portafolio y la afinidad del ex integrante.
     if (profile) {
       await this.trajectory.requestRecalculation(profile.id);

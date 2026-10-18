@@ -73,6 +73,20 @@ export default function ProjectContribution({
     return skills.filter((s) => normalize(s.name).includes(q)).slice(0, 40);
   }, [skills, query]);
 
+  // V4.1 A41-023: el responsable excluye a alguien de ESTE proyecto, con motivo; el equipo no cambia.
+  const excluir = async (m: ProjectMemberDetailed) => {
+    const motivo = window.prompt(`¿Por qué ${m.name ?? 'este integrante'} no forma parte de este proyecto? Queda en el historial; seguirá en tu equipo.`, '');
+    if (motivo === null) return;
+    try {
+      await projectDetailService.removeMember(projectId, m.id, motivo.trim() || undefined);
+      toast.success('Integrante excluido del proyecto.', 'Su lugar en el equipo no cambia.');
+      await load();
+      onChanged?.();
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
+
   // V3 §30: si lo que te propusieron no es lo que hiciste, pídele que lo corrija.
   const pedirCorreccion = async () => {
     const nota = window.prompt('¿Qué hay que corregir de lo que te propusieron?', '');
@@ -239,6 +253,7 @@ export default function ProjectContribution({
                 <th>Contribución</th>
                 <th>Tecnologías</th>
                 <th>Estado</th>
+                {isOwner && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -265,6 +280,13 @@ export default function ProjectContribution({
                       <Badge tone="amber">Pendiente</Badge>
                     )}
                   </td>
+                  {isOwner && (
+                    <td>
+                      {m.userId !== currentUserId && (
+                        <Button size="sm" variant="ghost" onClick={() => excluir(m)}>Excluir del proyecto</Button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

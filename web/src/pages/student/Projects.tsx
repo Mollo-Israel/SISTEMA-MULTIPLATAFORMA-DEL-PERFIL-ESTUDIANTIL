@@ -19,6 +19,7 @@ import { apiError } from '../../api/client';
 import {
   catalogService,
   collaborationService,
+  profileService,
   evidenceService,
   projectDetailService,
   projectFeedbackService,
@@ -75,6 +76,8 @@ const emptyForm = {
   visibility: 'profile' as ProjectVisibility,
   teamId: '',
   inviteTeamMembers: true,
+  /** V4.1 A41-023: integrantes del equipo que no entran a este proyecto, con su motivo. */
+  excluidos: {} as Record<string, string>,
 };
 const VISIBILIDADES = Object.keys(PROJECT_VISIBILITY_LABEL) as ProjectVisibility[];
 
@@ -87,6 +90,8 @@ export default function StudentProjectsPage() {
   const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
   const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
   const [teams, setTeams] = useState<TeamView[]>([]);
+  const [buscarEquipo, setBuscarEquipo] = useState('');
+  const [miPerfil, setMiPerfil] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => !enMemoria('proyectos'));
   const [creating, setCreating] = useState(false);
   const [addingTo, setAddingTo] = useState<string | null>(null);
@@ -136,6 +141,7 @@ export default function StudentProjectsPage() {
       .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
     collaborationService.myTeams().then(setTeams).catch(() => setTeams([]));
+    profileService.getMine().then((p) => setMiPerfil(p.id)).catch(() => setMiPerfil(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -238,6 +244,9 @@ export default function StudentProjectsPage() {
         visibility: form.visibility,
         teamId: form.teamId || undefined,
         inviteTeamMembers: form.teamId ? form.inviteTeamMembers : undefined,
+        excludedTeamMembers: form.teamId && form.inviteTeamMembers
+          ? Object.entries(form.excluidos).map(([profileId, reason]) => ({ profileId, reason: reason.trim() }))
+          : undefined,
         status: 'draft',
       });
       setForm(emptyForm);
@@ -383,20 +392,76 @@ export default function StudentProjectsPage() {
           </div>
           {teams.length > 0 && !editando && (
             <div className="field">
-              <label htmlFor="pr-equipo">Equipo de colaboración (opcional)</label>
-              <select id="pr-equipo" value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
-                <option value="">Sin equipo</option>
-                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              {/* V4.1 A41-022 (§13): equipo con búsqueda; sus miembros son candidatos, no integrantes garantizados. */}
+              <label htmlFor="pr-equipo-buscar">Equipo de colaboración (opcional)</label>
+              <input
+                id="pr-equipo-buscar"
+                role="combobox"
+                aria-expanded={!form.teamId && buscarEquipo.length > 0}
+                aria-controls="pr-equipo-opciones"
+                placeholder={form.teamId ? teams.find((t) => t.id === form.teamId)?.name : 'Busca uno de tus equipos…'}
+                value={buscarEquipo}
+                onChange={(e) => setBuscarEquipo(e.target.value)}
+              />
+              {!form.teamId && buscarEquipo && (
+                <ul id="pr-equipo-opciones" role="listbox" className="plain-list">
+                  {teams.filter((t) => normalize(t.name).includes(normalize(buscarEquipo))).slice(0, 8).map((t) => (
+                    <li key={t.id} role="option" aria-selected={false}>
+                      <button type="button" className="link-button" onClick={() => { setForm({ ...form, teamId: t.id, excluidos: {} }); setBuscarEquipo(''); }}>
+                        {t.name} <span className="muted small">· {t.members.length} integrante{t.members.length === 1 ? '' : 's'}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {form.teamId && (
-                <label className="check-line" style={{ marginTop: '0.4rem' }}>
-                  <input
-                    type="checkbox"
-                    checked={form.inviteTeamMembers}
-                    onChange={(e) => setForm({ ...form, inviteTeamMembers: e.target.checked })}
-                  />
-                  Invitar a los integrantes del equipo (cada uno acepta y confirma su contribución)
-                </label>
+                <>
+                  <p className="field-hint">
+                    Equipo: <strong>{teams.find((t) => t.id === form.teamId)?.name}</strong>{' '}
+                    <button type="button" className="link-button" onClick={() => setForm({ ...form, teamId: '', excluidos: {} })}>quitar</button>
+                  </p>
+                  <label className="check-line" style={{ marginTop: '0.4rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.inviteTeamMembers}
+                      onChange={(e) => setForm({ ...form, inviteTeamMembers: e.target.checked })}
+                    />
+                    Invitar a los integrantes del equipo (cada uno acepta y confirma su contribución)
+                  </label>
+                  {form.inviteTeamMembers && (
+                    <ul className="plain-list" data-testid="candidatos-equipo">
+                      {(teams.find((t) => t.id === form.teamId)?.members ?? []).filter((m) => m.profileId !== miPerfil).map((m) => {
+                        const fuera = m.profileId in form.excluidos;
+                        return (
+                          <li key={m.profileId} style={{ marginBottom: '0.35rem' }}>
+                            <label className="check-line">
+                              <input
+                                type="checkbox"
+                                checked={!fuera}
+                                onChange={(e) => {
+                                  const ex = { ...form.excluidos };
+                                  if (e.target.checked) delete ex[m.profileId];
+                                  else ex[m.profileId] = '';
+                                  setForm({ ...form, excluidos: ex });
+                                }}
+                              />
+                              {m.name}{m.role ? <span className="muted small"> · {m.role}</span> : null}
+                            </label>
+                            {fuera && (
+                              <input
+                                aria-label={`Motivo para no incluir a ${m.name}`}
+                                placeholder="Motivo (queda en el historial; seguirá en el equipo)"
+                                value={form.excluidos[m.profileId]}
+                                maxLength={300}
+                                onChange={(e) => setForm({ ...form, excluidos: { ...form.excluidos, [m.profileId]: e.target.value } })}
+                              />
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </>
               )}
             </div>
           )}

@@ -907,6 +907,9 @@ export const skillRequestService = {
 };
 
 export const projectDetailService = {
+  /** V4.1 A41-023: excluir del proyecto (no del equipo), con motivo si viene de un equipo. */
+  removeMember: (projectId: string, memberId: string, reason?: string) =>
+    api.delete(`/projects/${projectId}/members/${memberId}`, { data: reason ? { reason } : {} }).then((r) => r.data),
   suggestions: (projectId: string) => api.get<ProjectSuggestions>(`/projects/${projectId}/suggestions`).then((r) => r.data),
   acceptSuggestion: (projectId: string, body: { skillId: string; areaId: string; signal?: string; source?: string }) =>
     api.post<ProjectSuggestions>(`/projects/${projectId}/suggestions/accept`, body).then((r) => r.data),

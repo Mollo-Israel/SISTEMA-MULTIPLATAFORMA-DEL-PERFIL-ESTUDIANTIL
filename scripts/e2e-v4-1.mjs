@@ -1109,7 +1109,87 @@ async function batch10(ctx) {
     'V41.10.11 §12 Administración obtiene el informe antes/después sin aplicar; el estudiante no puede', json({ s: estRecalc.status, i: { t: informe.data?.total, c: informe.data?.changed } }));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
+// ===========================================================================
+//  BATCH V4.1-11 — Equipos y confirmaciones (A41-022, A41-023)
+// ===========================================================================
+async function batch11(ctx) {
+  objective('BATCH V4.1-11 · Equipo de 4: excluir a uno del proyecto con motivo, sin tocar el equipo; confirmación individual');
+  await asegurarGithubSimulado();
+  const alumno = async (k, nombre) => {
+    const e = await provisionAndActivate(ctx.admin, { firstName: nombre, lastName: `Equipo${L}`, email: `v41.b11${k}.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 6 });
+    await req('POST', '/profiles/me', { token: e.token, body: {} });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    return e;
+  };
+  const lider = await alumno('lider', 'Lidia');
+  const [m1, m2, m3] = [await alumno('m1', 'Mateo'), await alumno('m2', 'Nora'), await alumno('m3', 'Olga')];
+  const necesidad = (await req('POST', '/team-needs', { token: lider.token, body: { purpose: `Equipo del sistema de turnos ${L}`, maxMembers: 5 } })).data;
+  const equipo = (await req('POST', `/team-needs/${necesidad.id}/team`, { token: lider.token, body: { name: `Equipo Turnos ${L.toUpperCase()}` } })).data;
+  for (const m of [m1, m2, m3]) {
+    const inv = (await req('POST', `/teams/${equipo.id}/invitations`, { token: lider.token, body: { invitedProfileId: m.profileId } })).data;
+    await req('PATCH', `/teams/invitations/${inv.id}`, { token: m.token, body: { decision: 'accept' } });
+  }
+  const catalogo = ((await req('GET', '/skills', { token: lider.token })).data ?? []).filter((s) => s.academicAreaId);
+  const sk = catalogo.find((s) => s.name === 'React') ?? catalogo[0];
+  const base = { areaIds: [sk.academicAreaId], skillIds: [sk.id], repositoryUrl: repoDePrueba(`stack-turnos-${TS}`), teamId: equipo.id, inviteTeamMembers: true, status: 'draft' };
+
+  // ----- 23.8 / B36: excluir a uno de ESTE proyecto con motivo
+  const sinMotivo = await req('POST', '/projects', { token: lider.token, body: { ...base, title: `Turnos sin motivo ${L}`, excludedTeamMembers: [{ profileId: m3.profileId, reason: 'no' }] } });
+  check(sinMotivo.status === 400, 'V41.11.1 23.8 Excluir a un integrante del equipo exige un motivo', `status ${sinMotivo.status}`);
+  const ajeno = await alumno('ajeno', 'Pablo');
+  const noEsDelEquipo = await req('POST', '/projects', { token: lider.token, body: { ...base, title: `Turnos ajeno ${L}`, excludedTeamMembers: [{ profileId: ajeno.profileId, reason: 'No participó en este desarrollo.' }] } });
+  check(noEsDelEquipo.status === 400, 'V41.11.2 Solo se excluye a integrantes de ese equipo', `status ${noEsDelEquipo.status}`);
+  const proyecto = await req('POST', '/projects', {
+    token: lider.token,
+    body: { ...base, title: `Sistema de turnos ${L}`, excludedTeamMembers: [{ profileId: m3.profileId, reason: 'Trabajó en otro módulo del semestre, no en este proyecto.' }] },
+  });
+  const id = proyecto.data?.id;
+  const invitaciones = (await req('GET', `/projects/${id}/invitations`, { token: lider.token })).data ?? [];
+  const invitados = invitaciones.filter((i) => i.status === 'pending').map((i) => i.invitedProfileId ?? i.invitedProfile?.id);
+  check(proyecto.status === 201 && invitados.length === 2 && invitados.includes(m1.profileId) && invitados.includes(m2.profileId) && !invitados.includes(m3.profileId),
+    'V41.11.3 B36 23.8 De 4, se invita a los 2 candidatos que quedan (sin el responsable ni el excluido)', json(invitados));
+  const miembrosEquipo = (await req('GET', '/teams/mine', { token: m3.token })).data ?? [];
+  check(miembrosEquipo.some((t) => t.id === equipo.id), 'V41.11.4 B36 El excluido sigue en el equipo original', json(miembrosEquipo.map((t) => t.id)));
+  const bitacora = (await req('GET', `/projects/${id}/timeline`, { token: lider.token })).data ?? [];
+  const exclusion = bitacora.find((e) => e.eventType === 'member_removed' && e.metadata?.excluidoDelProyecto);
+  check(!!exclusion && /otro módulo/.test(exclusion.metadata?.motivo ?? '') && exclusion.metadata?.equipoSinCambios === true,
+    'V41.11.5 §13 El historial guarda quién excluyó, a quién y por qué', json(exclusion?.metadata));
+  const avisos = (await req('GET', '/notifications/me', { token: m3.token })).data;
+  const aviso = (avisos?.items ?? avisos ?? []).find((n) => (n.kind ?? n.type) === 'PROJECT_MEMBER_EXCLUDED');
+  check(!!aviso && /no cambia/.test(aviso.body ?? '') && !/otro módulo/.test(aviso.body ?? ''),
+    'V41.11.6 §13 Aviso respetuoso al excluido: su equipo no cambia y no se le expone el motivo como acusación', json(aviso?.body));
+
+  // ----- B37: confirmación individual, sin autopermiso del creador
+  for (const m of [m1, m2]) {
+    const inv = invitaciones.find((i) => (i.invitedProfileId ?? i.invitedProfile?.id) === m.profileId);
+    await req('PATCH', `/projects/invitations/${inv?.id}`, { token: m.token, body: { decision: 'accept' } });
+  }
+  const miembros = (await req('GET', `/projects/${id}/members/detailed`, { token: lider.token })).data ?? [];
+  const deM1 = miembros.find((m) => m.userId === m1.userId);
+  const ajenaConfirma = await req('PUT', `/projects/${id}/my-contribution`, { token: lider.token, body: { contribution: 'Todo el equipo hizo todo.' } });
+  const sigue = ((await req('GET', `/projects/${id}/members/detailed`, { token: lider.token })).data ?? []).find((m) => m.userId === m1.userId);
+  check(!!deM1 && sigue?.contributionConfirmed === false, 'V41.11.7 B37 El creador no confirma por los demás: la contribución de cada uno sigue pendiente', json({ a: ajenaConfirma.status, c: sigue?.contributionConfirmed }));
+  await req('PUT', `/projects/${id}/my-contribution`, { token: m1.token, body: { contribution: 'Programé la agenda de turnos.', role: 'Backend', skillIds: [sk.id] } });
+  await req('POST', `/projects/${id}/my-contribution/correction`, { token: m2.token, body: { note: 'No hice el frontend, hice las pruebas de integración.' } });
+  await req('POST', `/projects/${id}/evidences`, { token: lider.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${id}.png`, description: 'Captura.' } });
+  const bloqueado = await req('PATCH', `/projects/${id}`, { token: lider.token, body: { status: 'active' } });
+  check(bloqueado.status === 400 && (bloqueado.data?.details?.missing ?? []).some((m) => m.code === 'members_unconfirmed'),
+    'V41.11.8 §13 Si uno discrepa, la activación queda bloqueada (no se vota por mayoría)', json(bloqueado.data?.details?.missing?.map((m) => m.code)));
+
+  // ----- Excluir después, con motivo; el equipo no cambia
+  const deM2 = ((await req('GET', `/projects/${id}/members/detailed`, { token: lider.token })).data ?? []).find((m) => m.userId === m2.userId);
+  const sinRazon = await req('DELETE', `/projects/${id}/members/${deM2?.id}`, { token: lider.token, body: {} });
+  const conRazon = await req('DELETE', `/projects/${id}/members/${deM2?.id}`, { token: lider.token, body: { reason: 'Su aporte fue a otro proyecto del equipo; lo registrará allí.' } });
+  const equipoM2 = ((await req('GET', '/teams/mine', { token: m2.token })).data ?? []).some((t) => t.id === equipo.id);
+  check(sinRazon.status === 400 && sinRazon.data?.code === 'PROJECT_EXCLUSION_REASON_REQUIRED' && conRazon.status === 204 && equipoM2,
+    'V41.11.9 B36 Excluir a un integrante que viene del equipo exige motivo y no lo saca del equipo', json([sinRazon.status, conRazon.status, equipoM2]));
+  const activa = await req('PATCH', `/projects/${id}`, { token: lider.token, body: { status: 'active' } });
+  check(activa.status === 200 && activa.data?.status === 'active', 'V41.11.10 B37 Resuelta la discrepancia con una exclusión justificada, se activa con quienes confirmaron', json({ s: activa.status }));
+  const otroQuita = await req('DELETE', `/projects/${id}/members/${deM1?.id}`, { token: m1.token, body: { reason: 'Me quito a mí mismo del proyecto.' } });
+  check(otroQuita.status === 403 || otroQuita.status === 404, 'V41.11.11 B40 Un integrante no excluye a otros', `status ${otroQuita.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

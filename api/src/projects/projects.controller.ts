@@ -36,6 +36,10 @@ class AcceptSuggestionDto {
   @IsOptional() @IsString() @MaxLength(160) source?: string;
 }
 
+class ExclusionReasonDto {
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+}
+
 class SignalDto {
   @IsString() @MinLength(1) @MaxLength(80) signal: string;
 }
@@ -66,11 +70,12 @@ export class ProjectsController {
   @Roles(RolNombre.STUDENT)
   @ApiOperation({ summary: 'Registrar un proyecto en el portafolio.' })
   async create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateProjectDto) {
-    const { inviteTeamMembers, ...datos } = dto;
+    const { inviteTeamMembers, excludedTeamMembers, ...datos } = dto;
     const creado = await this.projectsService.create(user.userId, datos);
     // V3 §31: «usar uno de mis equipos» precarga las invitaciones.
+    // V4.1 A41-023: menos los que el creador dejó fuera de ESTE proyecto, con motivo.
     if (inviteTeamMembers && creado.teamId) {
-      await this.membersService.inviteTeam(user, creado.id);
+      await this.membersService.inviteTeam(user, creado.id, excludedTeamMembers ?? []);
     }
     return creado;
   }
@@ -375,8 +380,9 @@ export class ProjectsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Body() dto: ExclusionReasonDto,
   ) {
-    return this.membersService.removeMember(user, id, memberId);
+    return this.membersService.removeMember(user, id, memberId, dto?.reason);
   }
 
   // ---------------- Evidencias del proyecto (RF11 · RF13) ----------------

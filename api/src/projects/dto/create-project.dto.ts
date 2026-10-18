@@ -19,6 +19,18 @@ import { ProjectStatus, ProjectVisibility } from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
 import { SkillContextDto } from '../../activities/dto/create-activity.dto';
+/** V4.1 A41-023: integrante del equipo excluido de este proyecto, con motivo. */
+export class ExcludedTeamMemberDto {
+  @IsUUID('4', { message: 'Integrante no válido.' })
+  profileId: string;
+
+  @Transform(cleanText)
+  @IsString()
+  @MinLength(10, { message: 'Explica el motivo (al menos 10 caracteres). Queda en el historial, no se le envía como acusación.' })
+  @MaxLength(300)
+  reason: string;
+}
+
 export class CreateProjectDto {
   @ApiProperty({ example: 'Plataforma de tutorías' })
   @Transform(cleanLine)
@@ -78,6 +90,18 @@ export class CreateProjectDto {
   @IsOptional()
   @IsBoolean()
   inviteTeamMembers?: boolean;
+
+  /**
+   * V4.1 A41-023 (§13): integrantes del equipo que NO entran a este proyecto,
+   * cada uno con su motivo. No los saca del equipo.
+   */
+  @ApiProperty({ required: false, type: () => [ExcludedTeamMemberDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => ExcludedTeamMemberDto)
+  excludedTeamMembers?: ExcludedTeamMemberDto[];
 
   /** V3 §21.1: equipo de colaboración del que forma parte quien registra. */
   @ApiProperty({ required: false, nullable: true })
