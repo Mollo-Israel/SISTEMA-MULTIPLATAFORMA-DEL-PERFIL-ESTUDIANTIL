@@ -899,6 +899,28 @@ async function pruebas(browser) {
   check(fallos57.length === 0, 'WEB.51.4 Sin errores de JavaScript en V4.1-12', fallos57.join(' | '));
   await c57.close();
 
+  // ===== V4.1-13 · Currículo: nada entra solo (A41-029, §17.4)
+  objective('V4.1-13 · El currículo lista lo elegible sin marcar nada por omisión');
+  const fallos58 = [];
+  const c58 = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const p58 = await c58.newPage();
+  p58.on('pageerror', (e) => fallos58.push(e.message));
+  await entrar(p58, estActa.email);
+  await p58.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p58.goto(`${WEB}/student/progress?tab=resumen`);
+  await p58.getByText('Paso 2 · Qué ítems de cada sección').first().waitFor({ timeout: 8000 }).catch(() => {});
+  await espera(800);
+  const paso2 = p58.locator('.card', { hasText: 'Paso 2 · Qué ítems de cada sección' }).first();
+  const casillas = paso2.locator('input[type=checkbox]');
+  const total = await casillas.count();
+  let marcadas = 0;
+  for (let i = 0; i < total; i += 1) if (await casillas.nth(i).isChecked()) marcadas += 1;
+  const textoPaso2 = await paso2.innerText().catch(() => '');
+  check(marcadas === 0 && /nada entra solo/.test(textoPaso2),
+    'WEB.52.1 A41-029 §17.4 Ningún ítem viene marcado: el estudiante elige qué entra al currículo', `marcadas ${marcadas} de ${total}`);
+  check(fallos58.length === 0, 'WEB.52.2 Sin errores de JavaScript en V4.1-13', fallos58.join(' | '));
+  await c58.close();
+
   const val = await browser.newContext({ viewport: { width: 1280, height: 860 } });
   const pv = await val.newPage();
   const estVal = await estudianteListo(admin, 'val');

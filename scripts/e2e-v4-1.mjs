@@ -1234,7 +1234,44 @@ async function batch12(ctx) {
     'V41.12.5 B40 Sin sesión: 401; otro estudiante no abre un proyecto privado', json([sinSesion.status, ajenoPrivado.status]));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
+// ===========================================================================
+//  BATCH V4.1-13 — Afinidad, trayectoria y currículo (A41-027..029)
+// ===========================================================================
+async function batch13(ctx) {
+  objective('BATCH V4.1-13 · El currículo y la afinidad heredan el respaldo honesto; nada entra solo');
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(ctx.admin, { firstName: 'Ines', lastName: `Curriculum${L}`, email: `v41.b13est.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 6 });
+  await req('POST', '/profiles/me', { token: est.token, body: {} });
+  const catalogo = ((await req('GET', '/skills', { token: est.token })).data ?? []).filter((s) => s.isActive !== false && s.academicAreaId);
+  const react = catalogo.find((s) => s.name === 'React') ?? catalogo[0];
+
+  // ----- A41-028/029: un proyecto que antes era CORROBORATED solo por una captura ya no entra
+  const soloCaptura = await crearProyectoActivo(est.token, { title: `Solo captura ${L}`, areaIds: [react.academicAreaId], skillIds: [react.id], repositoryUrl: repoDePrueba(`stack-cv-${TS}`) });
+  await req('PUT', `/projects/${soloCaptura.data?.id}/my-contribution`, { token: est.token, body: { contribution: 'Todo el desarrollo.', skillIds: [react.id] } });
+  const items = (await req('GET', '/trajectory-summary/items', { token: est.token })).data;
+  const proyectos = (items?.sections ?? []).find((s) => s.key === 'projects');
+  check(soloCaptura.data?.backingTier === 'supported' && !(proyectos?.items ?? []).some((i) => i.id === soloCaptura.data?.id),
+    'V41.13.1 A41-029 Un proyecto SUPPORTED (solo con captura) no se ofrece al currículo verificado', json({ t: soloCaptura.data?.backingTier, ex: proyectos?.excluded }));
+  const pedirlo = await req('POST', '/trajectory-summary/preview', { token: est.token, body: { sections: ['basic', 'projects'], items: { projects: [soloCaptura.data?.id] } } });
+  check(pedirlo.status === 400 && pedirlo.data?.code === 'CV_ITEM_NOT_ELIGIBLE', 'V41.13.2 B38 Y pedirlo por id se rechaza: el currículo no afirma lo que no está corroborado', `status ${pedirlo.status}`);
+
+  // ----- A41-028: afinidad sin ese proyecto ni intereses
+  const areas = (await req('GET', '/academic-areas', { token: est.token })).data ?? [];
+  const areaReact = areas.find((a) => a.id === react.academicAreaId);
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: areaReact.id, priority: 1 }] } });
+  await req('POST', '/affinity/recalculate/me', { token: est.token });
+  const resumen = (await req('GET', '/affinity/me/summary', { token: est.token })).data;
+  const crudo = Number((resumen?.areas ?? []).find((a) => a.academicAreaId === areaReact.id)?.rawPoints ?? 0);
+  check(crudo === 0, 'V41.13.3 A41-028 Ni un proyecto SUPPORTED ni un interés declarado suman afinidad', `crudo ${crudo}`);
+
+  // ----- A41-027 / §17.2: la trayectoria distingue niveles y explica; los puntos van aparte
+  const tray = (await req('GET', '/trajectory/me', { token: est.token })).data;
+  const entrada = (tray?.entries ?? []).find((e) => e.id === soloCaptura.data?.id);
+  check(!!entrada && entrada.cvEligible === false && /respaldo|Respaldo/.test(entrada.levelLabel ?? '') && !JSON.stringify(tray ?? {}).includes('totalPoints'),
+    'V41.13.4 §17.2 La trayectoria muestra el proyecto con su nivel real y no mezcla puntos con respaldo', json(entrada));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13 };
 
 async function main() {
   console.log(`${C.bold}Afinia V4.1 — verificación del contrato contra la API${C.r}`);

@@ -1016,3 +1016,49 @@ Detalle de la API:
 **Riesgos:** ninguno nuevo.
 
 **Commit propuesto:** `feat(v4.1-batch-12): un borrador nunca se publica, visibilidad con nombres claros, evidencias en pestañas, QR en Mi perfil e informe de impacto móvil`
+
+---
+
+## BATCH V4.1-13 — Afinidad, trayectoria y currículo
+
+**Hallazgos:** A41-027, A41-028, A41-029 (§17.1–§17.4; B38).
+
+**Diagnóstico:**
+- La **fórmula** de afinidad (motor V5) y las **reglas de elegibilidad** del currículo (`cv-eligibility.rules.ts`) ya cumplían el contrato. No se tocaron, como pide el batch.
+- Heredaban el defecto A41-021 (proyectos CORROBORATED de más), corregido en el V4.1-10 con su recálculo auditado.
+- **Defecto propio:** el paso 2 del currículo marcaba por omisión **todos** los ítems elegibles. §17.4: «No incluir automáticamente TODAS las experiencias».
+
+**Archivos modificados:**
+- **Web `Progress.tsx`:** el paso 2 lista lo elegible **sin marcar nada**, y lo dice: «nada entra solo: marca los que quieres incluir». La API conserva su contrato: sin lista explícita, devuelve todo lo elegible para quien lo pida a propósito (V3.18.24).
+
+**Migraciones:** ninguna. No hicieron falta.
+
+**Verificación del checklist A41-027:**
+- saldo en el Perfil con enlace al historial (V4.1-7);
+- historial de puntos idempotente y reversos auditables en el ledger (V4.1-4 y V4.1-7);
+- la trayectoria no mezcla puntos con respaldo.
+
+**Pruebas y comandos ejecutados:**
+- `node scripts/e2e-v4-1.mjs batch13` → **4/4**:
+  - un proyecto SUPPORTED (solo con captura) no se ofrece al currículo;
+  - pedirlo por id se rechaza (`CV_ITEM_NOT_ELIGIBLE`);
+  - ni ese proyecto ni un interés declarado suman afinidad;
+  - la trayectoria muestra su nivel real («Con respaldo»), no es elegible y no mezcla puntos.
+- `node scripts/e2e-web.mjs` → **97/97**, incluido WEB.52.1: ningún ítem del paso 2 viene marcado.
+- B38 ya lo cubría V3.18.10–V3.18.24, que siguen en verde: selección por sección e ítem, orden, constancia sin duplicar, rechazo de lo no elegible o ajeno.
+- **Regresión completa (22 suites):** **2254 correctas, 0 fallos** a la primera.
+
+**Fallo → causa → corrección → regresión:** ninguno.
+
+**Efecto:**
+- **Frontend:** el currículo.
+- **Backend:** sin cambios.
+- **Móvil:** sin cambios (el currículo se arma en la web).
+
+**Seguridad y permisos:** sin cambios; la trayectoria sigue siendo solo del estudiante (V3.18.9).
+
+**Pendientes:** la sección «Evidencias» del currículo solo existe en la API anterior; no se ofrece en el paso 1 de la web.
+
+**Riesgos:** ninguno.
+
+**Commit propuesto:** `feat(v4.1-batch-13): el currículo no marca nada por omisión; afinidad y trayectoria verificadas sobre el respaldo honesto`

@@ -371,8 +371,9 @@ function Resumen() {
       .items()
       .then((r) => {
         setDisponibles(r.sections);
-        // Por omisión, todo lo elegible queda marcado: el estudiante quita, no busca.
-        setMarcados(Object.fromEntries(r.sections.map((s) => [s.key, s.items.map((i) => i.id)])));
+        // V4.1 A41-029 (§17.4): no se incluye todo de forma automática; el
+        // estudiante marca lo que quiere que entre (los elegibles se listan).
+        setMarcados(Object.fromEntries(r.sections.map((s) => [s.key, [] as string[]])));
       })
       .catch((e) => toast.error(apiError(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -487,7 +488,7 @@ function Resumen() {
       {seccionesConItems.length > 0 && (
         <Card title="Paso 2 · Qué ítems de cada sección">
           <p className="muted" style={{ marginTop: 0 }}>
-            Solo aparecen los elegibles para un currículo verificado. Lo demás sigue en «Mi trayectoria».
+            Solo aparecen los elegibles para un currículo verificado, y nada entra solo: marca los que quieres incluir. Lo demás sigue en «Mi trayectoria».
             Puedes cambiar el orden con las flechas.
           </p>
           {seccionesConItems.map((sec) => {
