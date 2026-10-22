@@ -1,0 +1,325 @@
+{
+    "metrics": {
+        "http_req_tls_handshaking": {
+            "p(95)": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0
+        },
+        "http_req_waiting": {
+            "avg": 67.04461007900366,
+            "min": 4.899185,
+            "med": 41.293454499999996,
+            "max": 608.897824,
+            "p(90)": 148.92438970000006,
+            "p(95)": 204.27818329999988
+        },
+        "http_req_duration{tipo:crud}": {
+            "min": 5.038596,
+            "med": 43.142062,
+            "max": 614.433659,
+            "p(90)": 157.502824,
+            "p(95)": 214.04565520000008,
+            "avg": 69.87721779999997,
+            "thresholds": {
+                "p(95)<3000": false
+            }
+        },
+        "vus": {
+            "value": 2,
+            "min": 2,
+            "max": 27
+        },
+        "http_req_duration{tipo:reporte}": {
+            "p(95)": 93.98568384999999,
+            "avg": 33.550103120689656,
+            "min": 5.476433,
+            "med": 25.9876465,
+            "max": 158.466317,
+            "p(90)": 66.814285,
+            "thresholds": {
+                "p(95)<5000": false
+            }
+        },
+        "group_duration": {
+            "avg": 157.05632347447445,
+            "min": 30.771335,
+            "med": 116.6139925,
+            "max": 642.817289,
+            "p(90)": 340.8128726,
+            "p(95)": 399.97994954999984
+        },
+        "vus_max": {
+            "value": 27,
+            "min": 27,
+            "max": 27
+        },
+        "http_req_duration{tipo:login}": {
+            "avg": 116.53702991803279,
+            "min": 82.954211,
+            "med": 105.581393,
+            "max": 227.490955,
+            "p(90)": 152.445665,
+            "p(95)": 206.13339,
+            "thresholds": {
+                "p(95)<3000": false
+            }
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 68.67892624431087,
+            "min": 5.038596,
+            "med": 42.5744945,
+            "max": 614.433659,
+            "p(90)": 153.64938930000005,
+            "p(95)": 209.21154219999954
+        },
+        "http_req_connecting": {
+            "avg": 0.019698666165736373,
+            "min": 0,
+            "med": 0,
+            "max": 11.424737,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "iterations": {
+            "count": 543,
+            "rate": 8.733544168360542
+        },
+        "http_req_duration": {
+            "min": 5.038596,
+            "med": 42.5744945,
+            "max": 614.433659,
+            "p(90)": 153.64938930000005,
+            "p(95)": 209.21154219999954,
+            "avg": 68.67892624431087
+        },
+        "checks": {
+            "fails": 0,
+            "passes": 4658,
+            "thresholds": {
+                "rate>0.99": false
+            },
+            "value": 1
+        },
+        "http_req_receiving": {
+            "min": 0.022701,
+            "med": 0.206967,
+            "max": 124.332665,
+            "p(90)": 4.941317400000002,
+            "p(95)": 6.9527759999999965,
+            "avg": 1.610720992486047
+        },
+        "iteration_duration": {
+            "avg": 1698.556500023941,
+            "min": 1163.311145,
+            "med": 1570.768887,
+            "max": 2706.500972,
+            "p(90)": 2345.05181,
+            "p(95)": 2445.8585359
+        },
+        "http_reqs": {
+            "count": 4658,
+            "rate": 74.91869012195839
+        },
+        "http_req_blocked": {
+            "avg": 0.028740396307428116,
+            "min": 0.0016,
+            "med": 0.0046,
+            "max": 11.547646,
+            "p(90)": 0.006601,
+            "p(95)": 0.007815849999999964
+        },
+        "data_sent": {
+            "count": 1953150,
+            "rate": 31414.22061221619
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 4658,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "data_received": {
+            "count": 8679918,
+            "rate": 139606.71681537328
+        },
+        "http_req_sending": {
+            "med": 0.014001,
+            "max": 2.343484,
+            "p(90)": 0.036603,
+            "p(95)": 0.046003,
+            "avg": 0.023595172820953206,
+            "min": 0.0058
+        }
+    },
+    "setup_data": {
+        "director": "[token omitido]",
+        "estudiante": "[token omitido]"
+    },
+    "root_group": {
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "setup": {
+                "id": "5c0f8025f7e0b6654089e5b00e950f1a",
+                "groups": {},
+                "checks": {
+                        "login 200": {
+                            "passes": 2,
+                            "fails": 0,
+                            "name": "login 200",
+                            "path": "::setup::login 200",
+                            "id": "647055af8ffe21e58084ae4b140cdda0"
+                        }
+                    },
+                "name": "setup",
+                "path": "::setup"
+            },
+            "Reportes": {
+                "name": "Reportes",
+                "path": "::Reportes",
+                "id": "c9eff668a2427993185d1be60bb00852",
+                "groups": {},
+                "checks": {
+                        "panel 200": {
+                            "name": "panel 200",
+                            "path": "::Reportes::panel 200",
+                            "id": "d8a8211d1471ad957642cd5387c2370b",
+                            "passes": 58,
+                            "fails": 0
+                        },
+                        "tendencias 200": {
+                            "name": "tendencias 200",
+                            "path": "::Reportes::tendencias 200",
+                            "id": "0e4919ae4af19701e5ff42f5f04ed148",
+                            "passes": 58,
+                            "fails": 0
+                        },
+                        "mapa 200": {
+                            "path": "::Reportes::mapa 200",
+                            "id": "738cab20d6b48bfadad7f0369cdce595",
+                            "passes": 58,
+                            "fails": 0,
+                            "name": "mapa 200"
+                        },
+                        "pendientes 200": {
+                            "name": "pendientes 200",
+                            "path": "::Reportes::pendientes 200",
+                            "id": "f13e08120492e92ba001fed21e8bcc4c",
+                            "passes": 58,
+                            "fails": 0
+                        }
+                    }
+            },
+            "Perfil": {
+                "name": "Perfil",
+                "path": "::Perfil",
+                "id": "1c2d2a23a50b228a451a9a198989711b",
+                "groups": {},
+                "checks": {
+                        "resumen 200": {
+                            "name": "resumen 200",
+                            "path": "::Perfil::resumen 200",
+                            "id": "c464a1139604a03b3947cdef4799ed09",
+                            "passes": 485,
+                            "fails": 0
+                        },
+                        "afinidad 200": {
+                            "name": "afinidad 200",
+                            "path": "::Perfil::afinidad 200",
+                            "id": "76dfde72be6429d152487432779e5a75",
+                            "passes": 485,
+                            "fails": 0
+                        }
+                    }
+            },
+            "Listados": {
+                "name": "Listados",
+                "path": "::Listados",
+                "id": "861d0d6930158536dd07f2665cd4c676",
+                "groups": {},
+                "checks": {
+                        "actividades 200": {
+                            "name": "actividades 200",
+                            "path": "::Listados::actividades 200",
+                            "id": "85454defbd01a2f977677409134d6a8d",
+                            "passes": 485,
+                            "fails": 0
+                        },
+                        "proyectos 200": {
+                            "name": "proyectos 200",
+                            "path": "::Listados::proyectos 200",
+                            "id": "a70dd1a97f24567fd9fc058dcec28ba5",
+                            "passes": 485,
+                            "fails": 0
+                        }
+                    }
+            },
+            "Recomendaciones": {
+                "path": "::Recomendaciones",
+                "id": "e633d9e7bfee33fef2a4fa834ad18989",
+                "groups": {},
+                "checks": {
+                        "recomendaciones 200": {
+                            "name": "recomendaciones 200",
+                            "path": "::Recomendaciones::recomendaciones 200",
+                            "id": "02c0d40537d3aef22649fee9d2237873",
+                            "passes": 485,
+                            "fails": 0
+                        }
+                    },
+                "name": "Recomendaciones"
+            },
+            "V3": {
+                "name": "V3",
+                "path": "::V3",
+                "id": "58a2a5557a4bb3a98334a9f79e27313b",
+                "groups": {},
+                "checks": {
+                        "avisos 200": {
+                            "fails": 0,
+                            "name": "avisos 200",
+                            "path": "::V3::avisos 200",
+                            "id": "cf16d5b48943a1516c697c931e6ae691",
+                            "passes": 485
+                        },
+                        "trayectoria 200": {
+                            "passes": 485,
+                            "fails": 0,
+                            "name": "trayectoria 200",
+                            "path": "::V3::trayectoria 200",
+                            "id": "17cfddf7583671535b69df9ef684749d"
+                        },
+                        "necesidades 200": {
+                            "name": "necesidades 200",
+                            "path": "::V3::necesidades 200",
+                            "id": "93b8c0138ff9eebc5792a12ca4b09884",
+                            "passes": 485,
+                            "fails": 0
+                        },
+                        "items cv 200": {
+                            "fails": 0,
+                            "name": "items cv 200",
+                            "path": "::V3::items cv 200",
+                            "id": "d4894a5e2f59f08e2603926651e68f75",
+                            "passes": 485
+                        }
+                    }
+            }
+        },
+        "checks": {
+            "login 200": {
+                "id": "48b06dc5cde7f6ebb606ad7da726a2a5",
+                "passes": 59,
+                "fails": 0,
+                "name": "login 200",
+                "path": "::login 200"
+            }
+        },
+        "name": ""
+    }
+}

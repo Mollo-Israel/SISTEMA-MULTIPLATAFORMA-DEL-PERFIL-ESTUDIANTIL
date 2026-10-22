@@ -1,0 +1,25 @@
+{
+  "qualityGate": "OK",
+  "condiciones": [
+    {
+      "status": "OK",
+      "metricKey": "new_violations",
+      "comparator": "GT",
+      "errorThreshold": "0",
+      "actualValue": "0"
+    }
+  ],
+  "metricas": {
+    "coverage": "28.3",
+    "bugs": "5",
+    "reliability_rating": "4.0",
+    "code_smells": "794",
+    "duplicated_lines_density": "1.4",
+    "security_rating": "2.0",
+    "ncloc": "67639",
+    "vulnerabilities": "1",
+    "security_hotspots": "0",
+    "sqale_rating": "1.0"
+  },
+  "fecha": "2026-10-22T01:19:13.232Z"
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "tipo": "BUG",
+    "severidad": "CRITICAL",
+    "regla": "typescript:S2871",
+    "archivo": "web/src/pages/society/Metrics.tsx",
+    "linea": 65,
+    "mensaje": "Provide a compare function that depends on \"String.localeCompare\", to reliably sort elements alphabetically."
+  },
+  {
+    "tipo": "BUG",
+    "severidad": "CRITICAL",
+    "regla": "typescript:S2871",
+    "archivo": "web/src/pages/society/Metrics.tsx",
+    "linea": 66,
+    "mensaje": "Provide a compare function that depends on \"String.localeCompare\", to reliably sort elements alphabetically."
+  },
+  {
+    "tipo": "BUG",
+    "severidad": "MAJOR",
+    "regla": "typescript:S5850",
+    "archivo": "api/src/projects/dependency-map.ts",
+    "linea": 122,
+    "mensaje": "Group parts of the regex together to make the intended operator precedence explicit."
+  },
+  {
+    "tipo": "BUG",
+    "severidad": "MAJOR",
+    "regla": "typescript:S5850",
+    "archivo": "api/src/projects/dependency-map.ts",
+    "linea": 129,
+    "mensaje": "Group parts of the regex together to make the intended operator precedence explicit."
+  },
+  {
+    "tipo": "BUG",
+    "severidad": "MAJOR",
+    "regla": "typescript:S5850",
+    "archivo": "api/src/projects/dependency-map.ts",
+    "linea": 130,
+    "mensaje": "Group parts of the regex together to make the intended operator precedence explicit."
+  },
+  {
+    "tipo": "VULNERABILITY",
+    "severidad": "MINOR",
+    "regla": "typescript:S5332",
+    "archivo": "api/src/mail/mail.service.ts",
+    "linea": 176,
+    "mensaje": "Using http protocol is insecure. Use https instead."
+  }
+]

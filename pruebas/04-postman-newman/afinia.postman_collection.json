@@ -1,0 +1,1004 @@
+{
+  "info": {
+    "name": "Afinia — API (pruebas de control de calidad)",
+    "description": "Colección de apoyo exploratorio y documental. La regresión crítica de autorización e integridad está en Jest + SuperTest (api/test/jest).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 · Identidad y sesión",
+      "item": [
+        {
+          "name": "Iniciar sesión · admin",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200/201 con token de acceso', () => { pm.expect(pm.response.code).to.be.oneOf([200, 201]); pm.expect(pm.response.json().accessToken).to.be.a('string'); });",
+                  "pm.environment.set('token_admin', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Iniciar sesión · estudiante",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana.quispe@est.univalle.edu\",\n  \"password\": \"{{clave}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200/201 con token de acceso', () => { pm.expect(pm.response.code).to.be.oneOf([200, 201]); pm.expect(pm.response.json().accessToken).to.be.a('string'); });",
+                  "pm.environment.set('token_estudiante', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Iniciar sesión · docente",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"carlos.perez@univalle.edu\",\n  \"password\": \"{{clave}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200/201 con token de acceso', () => { pm.expect(pm.response.code).to.be.oneOf([200, 201]); pm.expect(pm.response.json().accessToken).to.be.a('string'); });",
+                  "pm.environment.set('token_docente', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Iniciar sesión · director",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jorge.vargas@univalle.edu\",\n  \"password\": \"{{clave}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200/201 con token de acceso', () => { pm.expect(pm.response.code).to.be.oneOf([200, 201]); pm.expect(pm.response.json().accessToken).to.be.a('string'); });",
+                  "pm.environment.set('token_director', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Iniciar sesión · sociedad",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"lucia.fernandez@univalle.edu\",\n  \"password\": \"{{clave}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200/201 con token de acceso', () => { pm.expect(pm.response.code).to.be.oneOf([200, 201]); pm.expect(pm.response.json().accessToken).to.be.a('string'); });",
+                  "pm.environment.set('token_sociedad', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contraseña incorrecta → 401 genérico",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana.quispe@est.univalle.edu\",\n  \"password\": \"Incorrecta2026*\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin revelar si la cuenta existe', () => { pm.response.to.have.status(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recuperar contraseña de una cuenta que no existe → respuesta genérica",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nadie.existe@est.univalle.edu\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/activation/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "activation",
+                "forgot-password"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde sin revelar la existencia de la cuenta', () => { pm.expect(pm.response.code).to.be.below(300); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta protegida sin sesión → 401",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/profiles/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "profiles",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 · Estudiante",
+      "item": [
+        {
+          "name": "Mi perfil",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/profiles/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "profiles",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con su semestre', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().semester).to.eql(1); });",
+                  "pm.test('no expone hash de contraseña', () => pm.expect(pm.response.text()).to.not.include('passwordHash'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mi afinidad (resumen)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/affinity/me/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "affinity",
+                "me",
+                "summary"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mis recomendaciones",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recommendations/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "recommendations",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mi trayectoria",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/trajectory/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "trajectory",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con entradas y niveles', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().entries).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mis proyectos",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/my",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "my"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Actividades publicadas",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/activities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "activities"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 · Autorización y alcance (casos negativos)",
+      "item": [
+        {
+          "name": "Estudiante → auditoría → 403",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "events"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estudiante → lista de estudiantes → 403",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/profiles/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "profiles",
+                "students"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Docente (sem. 1–4) → estudiantes de su alcance",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_docente}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/profiles/students",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "profiles",
+                "students"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con alcance restringido a sus semestres', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().scope.semesters).to.eql([1,2,3,4]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Docente → criterios de puntos (solo lectura de los elegibles)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_docente}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/gamification-criteria/available",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gamification-criteria",
+                "available"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Docente → crear criterio → 403",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_docente}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"postman_prueba\",\n  \"name\": \"Prueba\",\n  \"trigger\": \"participacion_confirmada\",\n  \"points\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/gamification-criteria",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gamification-criteria"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: los criterios los configura Dirección o Administración', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retos (retirados en V4.1) → 410",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_docente}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Reto\",\n  \"points\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/gamification/challenges",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gamification",
+                "challenges"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('410 Gone', () => pm.response.to.have.status(410));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 · Dirección y Administración",
+      "item": [
+        {
+          "name": "Dirección → pendientes de aprobación",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_director}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/activities/reviews/pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "activities",
+                "reviews",
+                "pending"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dirección → propuestas de puntos pendientes",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_director}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/gamification/proposals?status=pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gamification",
+                "proposals"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Administración → auditoría",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audit/events?limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audit",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Administración → informe de recálculo de respaldo (en seco)",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apply\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/project-backing/recalculate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "project-backing",
+                "recalculate"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 sin aplicar cambios', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().applied).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('responde en menos de 2 s', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+
+> @perfil/api@0.1.0 test:cov
+> jest --coverage --forceExit
+
+📦 report is created on: C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\pruebas\02-jest-supertest\reporte\reporte-jest.html
+
+=============================== Coverage summary ===============================
+Statements   : 37.44% ( 5650/15089 )
+Branches     : 30.28% ( 3401/11231 )
+Functions    : 21.61% ( 585/2707 )
+Lines        : 39.32% ( 5150/13097 )
+================================================================================
+
+PASS test/jest/api/autorizacion-alcance.spec.ts
+PASS test/jest/api/integridad-negocio.spec.ts
+PASS test/jest/api/autenticacion.spec.ts
+PASS test/jest/unit/reglas-negocio.spec.ts
+
+Test Suites: 4 passed, 4 total
+Tests:       30 passed, 30 total
+Snapshots:   0 total
+Time:        9.805 s, estimated 36 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

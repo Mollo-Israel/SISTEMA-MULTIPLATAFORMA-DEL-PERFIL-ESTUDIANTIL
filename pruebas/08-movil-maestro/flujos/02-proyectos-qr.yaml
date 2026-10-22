@@ -1,0 +1,38 @@
+# Flujo del estudiante: abrir proyectos y compartir el perfil por QR
+# (Investigación §3.4 y tareas de §3.8). Mismos requisitos que el flujo 01.
+appId: host.exp.exponent
+env:
+  EMAIL: ana.quispe@est.univalle.edu
+  PASSWORD: Univalle2026*
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "nombre.apellido@est.univalle.edu"
+    timeout: 60000
+- tapOn: "nombre.apellido@est.univalle.edu"
+- inputText: ${EMAIL}
+- tapOn:
+    text: ".*contraseña.*"
+    optional: true
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn: "Ingresar"
+- extendedWaitUntil:
+    visible: "Inicio"
+    timeout: 30000
+- tapOn: "Proyectos"
+- extendedWaitUntil:
+    visible: "Portafolio"
+    timeout: 20000
+- takeScreenshot: 08-proyectos
+- tapOn: "Perfil"
+- scrollUntilVisible:
+    element: "Colaboración"
+    direction: DOWN
+    timeout: 20000
+    optional: true
+- tapOn:
+    text: "Colaboración"
+    optional: true
+- takeScreenshot: 09-colaboracion-qr

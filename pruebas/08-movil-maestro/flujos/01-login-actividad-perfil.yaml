@@ -1,0 +1,64 @@
+# Flujo representativo del estudiante (Investigación §3.4):
+# abrir Afinia → iniciar sesión → consultar una actividad → inscribirse →
+# abrir el perfil → verificar afinidad y recomendación.
+#
+# Requiere Android Emulator con Expo Go o un Expo Development Build, y la
+# app apuntando a la API de pruebas:
+#   EXPO_PUBLIC_API_URL=http://10.0.2.2:3020/api npx expo start --android
+# Ejecutar:
+#   maestro test pruebas/08-movil-maestro/flujos/01-login-actividad-perfil.yaml \
+#     --test-output-dir pruebas/08-movil-maestro/capturas
+appId: host.exp.exponent
+env:
+  EMAIL: ana.quispe@est.univalle.edu
+  PASSWORD: Univalle2026*
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "nombre.apellido@est.univalle.edu"
+    timeout: 60000
+- takeScreenshot: 01-login
+- tapOn: "nombre.apellido@est.univalle.edu"
+- inputText: ${EMAIL}
+- tapOn:
+    text: ".*contraseña.*"
+    optional: true
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn: "Ingresar"
+- extendedWaitUntil:
+    visible: "Inicio"
+    timeout: 30000
+- takeScreenshot: 02-inicio
+- tapOn: "Actividades"
+- extendedWaitUntil:
+    visible: "Actividades"
+    timeout: 20000
+- takeScreenshot: 03-actividades
+- scrollUntilVisible:
+    element: "Inscribirme"
+    direction: DOWN
+    timeout: 20000
+    optional: true
+- tapOn:
+    text: "Inscribirme"
+    optional: true
+- takeScreenshot: 04-inscripcion
+- tapOn: "Perfil"
+- takeScreenshot: 05-perfil
+- tapOn: "Afinidad"
+- extendedWaitUntil:
+    visible: "Mis afinidades"
+    timeout: 20000
+- takeScreenshot: 06-afinidad
+- tapOn: "Inicio"
+- scrollUntilVisible:
+    element: "Más sugerencias"
+    direction: DOWN
+    timeout: 20000
+    optional: true
+- tapOn:
+    text: "Más sugerencias"
+    optional: true
+- takeScreenshot: 07-recomendaciones

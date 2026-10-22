@@ -1,0 +1,27 @@
+e2e-objectives-40 ok=249 fallos=0 exit=0
+e2e-objective-5 ok=116 fallos=0 exit=0
+e2e-objective-6 ok=85 fallos=0 exit=0
+e2e-objective-7 ok=89 fallos=0 exit=0
+e2e-batch-1 ok=59 fallos=0 exit=0
+e2e-batch-2 ok=65 fallos=0 exit=0
+e2e-batch-3 ok=58 fallos=0 exit=0
+e2e-batch-4 ok=48 fallos=0 exit=0
+e2e-batch-5 ok=50 fallos=0 exit=0
+e2e-batch-6 ok=53 fallos=0 exit=0
+e2e-batch-7 ok=57 fallos=0 exit=0
+e2e-batch-8 ok=63 fallos=0 exit=0
+e2e-batch-9 ok=52 fallos=0 exit=0
+e2e-batch-10 ok=42 fallos=0 exit=0
+e2e-batch-11 ok=46 fallos=0 exit=0
+e2e-qa ok=68 fallos=0 exit=0
+e2e-v2 ok=162 fallos=0 exit=0
+e2e-v3 ok=379 fallos=0 exit=0
+e2e-v3-2 ok=206 fallos=0 exit=0
+e2e-v4-1 ok=173 fallos=0 exit=0
+e2e-ai-provider ok=0 fallos=8 exit=1
+e2e-web ok=97 fallos=0 exit=0
+TOTAL ok=2217 fallos=8
+
+# Reintento tras mover el entorno de pruebas a :3020 (conflicto de puerto con 3011)
+e2e-ai-provider ok=37 fallos=0 exit=0  (registros/e2e-ai-provider.reintento.log)
+TOTAL FINAL ok=2254 fallos=0

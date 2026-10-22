@@ -1,0 +1,2134 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\node_modules\\@playwright\\test\\cli.js",
+      "test"
+    ],
+    "configFile": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\playwright.config.ts",
+    "rootDir": "C:/Talleres I/SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL/pruebas-e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Talleres I/SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL/pruebas/03-playwright/resultados",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/Talleres I/SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL/pruebas-e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "C:/Talleres I/SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL/pruebas/03-playwright/resultados",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "C:/Talleres I/SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL/pruebas-e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "C:/Talleres I/SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL/pruebas/03-playwright/resultados",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "C:/Talleres I/SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL/pruebas-e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "html",
+        {
+          "outputFolder": "./pruebas/03-playwright/reporte",
+          "open": "never"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "./pruebas/03-playwright/resultados.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.63.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "01-acceso.spec.ts",
+      "file": "01-acceso.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Acceso: inicio de sesión y recuperación",
+          "file": "01-acceso.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "pantalla de inicio de sesión",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2587,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:48:24.938Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-01-login",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-d20a9-antalla-de-inicio-de-sesión-chromium\\attachments\\01-01-login-cac3c37a1b3b1e06d322a130fae257d09efb40fd.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-e2a5b5f62a16038d225c",
+              "file": "01-acceso.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "contraseña incorrecta: mensaje genérico, sin entrar",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2252,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:48:27.899Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-02-login-error",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-52fdf-mensaje-genérico-sin-entrar-chromium\\attachments\\01-02-login-error-2566c856fd99e43802ca4a0029255981d65e5f2e.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-d3712a3e259f1a243003",
+              "file": "01-acceso.spec.ts",
+              "line": 11,
+              "column": 7
+            },
+            {
+              "title": "recuperar contraseña: respuesta que no revela si la cuenta existe",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3536,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:48:30.163Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-03-recuperar-formulario",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-5afea--revela-si-la-cuenta-existe-chromium\\attachments\\01-03-recuperar-formulario-99ee2ef26413faf974bb7fb348cb1e24d1f3fcf8.png"
+                        },
+                        {
+                          "name": "01-04-recuperar-respuesta",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-5afea--revela-si-la-cuenta-existe-chromium\\attachments\\01-04-recuperar-respuesta-b86c45434f718978119dfe76b0ad98182d8346e0.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-e99d275dc8d93bc20f81",
+              "file": "01-acceso.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "inicio de sesión correcto lleva al panel del estudiante",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4525,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:48:33.713Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-05-estudiante-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-500b6-eva-al-panel-del-estudiante-chromium\\attachments\\01-05-estudiante-inicio-a5868d4191e43e447ca220016faa867fc8c4e012.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-2e88b8c0d4fc3adbb37e",
+              "file": "01-acceso.spec.ts",
+              "line": 30,
+              "column": 7
+            },
+            {
+              "title": "pantalla de inicio de sesión",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6059,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:50:49.175Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-01-login",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-d20a9-antalla-de-inicio-de-sesión-firefox\\attachments\\01-01-login-4f8960d1fcd52e3baa610f6a24f2581f707bd1f9.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-58ea0961a37bccd8a5d8",
+              "file": "01-acceso.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "contraseña incorrecta: mensaje genérico, sin entrar",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2518,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:50:58.672Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-02-login-error",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-52fdf-mensaje-genérico-sin-entrar-firefox\\attachments\\01-02-login-error-8cb4460fe688cbf351bfa0a16a73433cabd53c0c.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-ee0deec69cfaaaf842f2",
+              "file": "01-acceso.spec.ts",
+              "line": 11,
+              "column": 7
+            },
+            {
+              "title": "recuperar contraseña: respuesta que no revela si la cuenta existe",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3927,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:51:01.204Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-03-recuperar-formulario",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-5afea--revela-si-la-cuenta-existe-firefox\\attachments\\01-03-recuperar-formulario-ca3c2dfe585639b56daf66e3fd4847e7b5f60c69.png"
+                        },
+                        {
+                          "name": "01-04-recuperar-respuesta",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-5afea--revela-si-la-cuenta-existe-firefox\\attachments\\01-04-recuperar-respuesta-74bcaafc04440a84f27232f3fce38b8eb5cf4e1c.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-0e78836b1a405e0399e1",
+              "file": "01-acceso.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "inicio de sesión correcto lleva al panel del estudiante",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 2519,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:51:05.145Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-05-estudiante-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-500b6-eva-al-panel-del-estudiante-firefox\\attachments\\01-05-estudiante-inicio-70ed82b7a2dd4a2b36b813a5b9aa67c1e8feca5d.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-123a506b6f1fe9d390d2",
+              "file": "01-acceso.spec.ts",
+              "line": 30,
+              "column": 7
+            },
+            {
+              "title": "pantalla de inicio de sesión",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3568,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:22.929Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-01-login",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-d20a9-antalla-de-inicio-de-sesión-webkit\\attachments\\01-01-login-79fb26b9c729370598e61472c9b48cb15d28c69a.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-f5a4abf1bdb2866326b2",
+              "file": "01-acceso.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "contraseña incorrecta: mensaje genérico, sin entrar",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3836,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:27.380Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-02-login-error",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-52fdf-mensaje-genérico-sin-entrar-webkit\\attachments\\01-02-login-error-3d2b89fc1779af6151abe0859cf52e16fa04b5b5.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-b2f749fb43b6780ceeb1",
+              "file": "01-acceso.spec.ts",
+              "line": 11,
+              "column": 7
+            },
+            {
+              "title": "recuperar contraseña: respuesta que no revela si la cuenta existe",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4542,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:31.227Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-03-recuperar-formulario",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-5afea--revela-si-la-cuenta-existe-webkit\\attachments\\01-03-recuperar-formulario-be78063c28ca2e519a2641a3784ceeb85437a113.png"
+                        },
+                        {
+                          "name": "01-04-recuperar-respuesta",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-5afea--revela-si-la-cuenta-existe-webkit\\attachments\\01-04-recuperar-respuesta-a50993e27f253d3e4101e7cbad5c453266629f73.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-065f5f57892996a100b7",
+              "file": "01-acceso.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "inicio de sesión correcto lleva al panel del estudiante",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3508,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:35.782Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "01-05-estudiante-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\01-acceso-Acceso-inicio-de-500b6-eva-al-panel-del-estudiante-webkit\\attachments\\01-05-estudiante-inicio-a368b3e14d1941edfa5e4a9112411f95859d6719.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "5907bba80f843dadafa5-24b180f854ecdf1e2432",
+              "file": "01-acceso.spec.ts",
+              "line": 30,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "02-estudiante.spec.ts",
+      "file": "02-estudiante.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Estudiante: perfil, actividades, proyectos, evidencias, afinidad y recomendaciones",
+          "file": "02-estudiante.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "primera vez: el estudiante llega a la bienvenida (onboarding) antes que al resto",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6588,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:48:38.254Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "02-00-bienvenida-onboarding",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-69e72-boarding-antes-que-al-resto-chromium\\attachments\\02-00-bienvenida-onboarding-7adfe1f82bdb806574d18ce647c6458f6ffadb35.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "cbb62a5e929d1cf7e42e-98dfe3945209ca758ef1",
+              "file": "02-estudiante.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "recorrido completo del estudiante",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 48310,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:48:44.852Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "02-01-perfil",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-01-perfil-baaf703d8ab11d3771363fb299e1f6dc972c25ba.png"
+                        },
+                        {
+                          "name": "02-02-perfil-visibilidad-qr",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-02-perfil-visibilidad-qr-c1017e3be204d19f2bcbfa697cce1cbaee83ec75.png"
+                        },
+                        {
+                          "name": "02-03-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-03-actividades-c9713a7d591c004899540fb9bd22a499c26aef2e.png"
+                        },
+                        {
+                          "name": "02-04-proyectos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-04-proyectos-adc05d22313efb5909b4e081f503ca9443d26f57.png"
+                        },
+                        {
+                          "name": "02-05-evidencias-credenciales",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-05-evidencias-credenciales-3902de5bf4cda05b85f6d7867310799c205e6cd1.png"
+                        },
+                        {
+                          "name": "02-06-evidencias-constancias",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-06-evidencias-constancias-045640a4ac25b72bde9337e3ba1d38af68f37db0.png"
+                        },
+                        {
+                          "name": "02-07-afinidad",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-07-afinidad-efd043c28b1d0a54aedc3e32493f08b770ee4c1b.png"
+                        },
+                        {
+                          "name": "02-08-recomendaciones",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-08-recomendaciones-32efe48bf41e32328ad25f4c677f0d896661f9af.png"
+                        },
+                        {
+                          "name": "02-09-biblioteca",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-09-biblioteca-83e1b960ad567bbe4d329a8adde6ba61e68c2dac.png"
+                        },
+                        {
+                          "name": "02-10-trayectoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-10-trayectoria-f5030b15fe308bfc2ad4c634b8306c3bf7e86177.png"
+                        },
+                        {
+                          "name": "02-11-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-11-puntos-91ca3c3b10c47ec18185edd8ebd4b809e264232f.png"
+                        },
+                        {
+                          "name": "02-12-curriculo",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-12-curriculo-2c90e6cca8507bae0d37edf45a5fdf3f02560e16.png"
+                        },
+                        {
+                          "name": "02-13-colaboracion-equipos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-chromium\\attachments\\02-13-colaboracion-equipos-e8c500fe87d054f05789c553ebfaa7adcf810b1b.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "cbb62a5e929d1cf7e42e-d80927852b23c19b28a0",
+              "file": "02-estudiante.spec.ts",
+              "line": 14,
+              "column": 7
+            },
+            {
+              "title": "primera vez: el estudiante llega a la bienvenida (onboarding) antes que al resto",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4114,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:51:07.696Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "02-00-bienvenida-onboarding",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-69e72-boarding-antes-que-al-resto-firefox\\attachments\\02-00-bienvenida-onboarding-aa45324aa6f7992fac2d2fd8fff5eb8a853c6b39.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "cbb62a5e929d1cf7e42e-f32a40e87dc50a37ff6f",
+              "file": "02-estudiante.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "recorrido completo del estudiante",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 50504,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:51:11.821Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "02-01-perfil",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-01-perfil-0c2ff798df98aaf549e619fcf489732bd18db4d5.png"
+                        },
+                        {
+                          "name": "02-02-perfil-visibilidad-qr",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-02-perfil-visibilidad-qr-9ecf285ca745b4aaae4335d8693c4ce439264bda.png"
+                        },
+                        {
+                          "name": "02-03-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-03-actividades-d010a504c5debc7fb667999a3d435c2c52a6d501.png"
+                        },
+                        {
+                          "name": "02-04-proyectos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-04-proyectos-bc0743b9db22b61a15a99e0fd5f1c04e562de005.png"
+                        },
+                        {
+                          "name": "02-05-evidencias-credenciales",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-05-evidencias-credenciales-e1bf33f6e2f4f8ebcd744bff556f1728d054506a.png"
+                        },
+                        {
+                          "name": "02-06-evidencias-constancias",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-06-evidencias-constancias-21177ba25999c5d175556fd17af691c3c6434b39.png"
+                        },
+                        {
+                          "name": "02-07-afinidad",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-07-afinidad-94b99250003a4db78110344ad6be526b48cd5ad2.png"
+                        },
+                        {
+                          "name": "02-08-recomendaciones",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-08-recomendaciones-0a15d86d9f694e5aa87b988f3bee3ba9c119b760.png"
+                        },
+                        {
+                          "name": "02-09-biblioteca",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-09-biblioteca-93607b932b0bd9d2924d0059535832ba239fb9f1.png"
+                        },
+                        {
+                          "name": "02-10-trayectoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-10-trayectoria-eb9d0b325640f30c56035ccc540c9955a8c2f6b8.png"
+                        },
+                        {
+                          "name": "02-11-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-11-puntos-037d51970f1439e85863f5408aa012c18473ed73.png"
+                        },
+                        {
+                          "name": "02-12-curriculo",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-12-curriculo-9c399b1dfd08a99021f447658030592b0b3af27e.png"
+                        },
+                        {
+                          "name": "02-13-colaboracion-equipos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-firefox\\attachments\\02-13-colaboracion-equipos-a2e584731c2dae1cf7ea73c3fa660ec5579008ab.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "cbb62a5e929d1cf7e42e-58270d40d00cc2f29952",
+              "file": "02-estudiante.spec.ts",
+              "line": 14,
+              "column": 7
+            },
+            {
+              "title": "primera vez: el estudiante llega a la bienvenida (onboarding) antes que al resto",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5419,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:39.322Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "02-00-bienvenida-onboarding",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-69e72-boarding-antes-que-al-resto-webkit\\attachments\\02-00-bienvenida-onboarding-426c9950f5c39a4dd764a988b842547c0a4df733.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "cbb62a5e929d1cf7e42e-5ba944c006631f896e07",
+              "file": "02-estudiante.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "recorrido completo del estudiante",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 56087,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:44.766Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "02-01-perfil",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-01-perfil-86b3c1d4ad111e9237fd8caa1e1472b5e133893f.png"
+                        },
+                        {
+                          "name": "02-02-perfil-visibilidad-qr",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-02-perfil-visibilidad-qr-aeddd246d16f0b650e5429c6058b30bbce139e4f.png"
+                        },
+                        {
+                          "name": "02-03-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-03-actividades-66b63be06178d6f7a510cc546c3b7e5360668e3c.png"
+                        },
+                        {
+                          "name": "02-04-proyectos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-04-proyectos-f4c55fec77cb9997ecb539e6fb8c33cb409df3ad.png"
+                        },
+                        {
+                          "name": "02-05-evidencias-credenciales",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-05-evidencias-credenciales-2ec14f83b8bcd168ca985c10858ac3be1ee83968.png"
+                        },
+                        {
+                          "name": "02-06-evidencias-constancias",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-06-evidencias-constancias-ae8302f8804943cd683b3e16df63d6afb99fabf2.png"
+                        },
+                        {
+                          "name": "02-07-afinidad",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-07-afinidad-d612e94fce55aef2eef97d58a8550d963cf6398c.png"
+                        },
+                        {
+                          "name": "02-08-recomendaciones",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-08-recomendaciones-87cb1ee8f7d8045963eee517ff16f04c68127ef7.png"
+                        },
+                        {
+                          "name": "02-09-biblioteca",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-09-biblioteca-f2c4413d6c65dbe2d364f4e490aff1cc1a31fe7c.png"
+                        },
+                        {
+                          "name": "02-10-trayectoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-10-trayectoria-4d42505b3697a31651b80fbd7baac563bac2cf46.png"
+                        },
+                        {
+                          "name": "02-11-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-11-puntos-60ce06124ac5349e823cc85989f697a742b29ac3.png"
+                        },
+                        {
+                          "name": "02-12-curriculo",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-12-curriculo-3e24b9b63e474b3425f979b90db177c31afc200f.png"
+                        },
+                        {
+                          "name": "02-13-colaboracion-equipos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\02-estudiante-Estudiante-p-b6bac-ido-completo-del-estudiante-webkit\\attachments\\02-13-colaboracion-equipos-d50e1ae77a63483405320e9661a0e24d1a8ce3fe.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "cbb62a5e929d1cf7e42e-dfcdd9c814e4fc9339df",
+              "file": "02-estudiante.spec.ts",
+              "line": 14,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "03-personal.spec.ts",
+      "file": "03-personal.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Paneles del personal según sus permisos",
+          "file": "03-personal.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "docente: panel académico, estudiantes de su alcance, actividades y puntos",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16208,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:49:33.180Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-01-docente-panel",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-chromium\\attachments\\03-01-docente-panel-0d80b7b8c27e866e9f4144dca866eea0eed73786.png"
+                        },
+                        {
+                          "name": "03-02-docente-estudiantes-alcance",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-chromium\\attachments\\03-02-docente-estudiantes-alcance-c19e220353b3399f00daded222385bd10ec1a4d6.png"
+                        },
+                        {
+                          "name": "03-03-docente-mis-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-chromium\\attachments\\03-03-docente-mis-actividades-578d574b3d68bbc04a9ed76534b3a6fab33251e9.png"
+                        },
+                        {
+                          "name": "03-04-docente-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-chromium\\attachments\\03-04-docente-puntos-f320b7b6a465012c19f84d057baa5f503ca31a8f.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-1f203301cbaf4ab1fc37",
+              "file": "03-personal.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "dirección: aprobaciones, actividades, credenciales y analítica",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 19935,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:49:49.400Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-05-direccion-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-chromium\\attachments\\03-05-direccion-inicio-c3f0da6f117f48d24397fb0488ecd15f5c416825.png"
+                        },
+                        {
+                          "name": "03-06-direccion-aprobaciones",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-chromium\\attachments\\03-06-direccion-aprobaciones-9f72f33786f104f80110688fed67be7bb30bd12e.png"
+                        },
+                        {
+                          "name": "03-07-direccion-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-chromium\\attachments\\03-07-direccion-actividades-1b93ebc4ab42d2ac2d4d0b15e3cc1488add27a94.png"
+                        },
+                        {
+                          "name": "03-08-direccion-credenciales",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-chromium\\attachments\\03-08-direccion-credenciales-51e9b0e9d106d06b812d2ee84d9357b65823750b.png"
+                        },
+                        {
+                          "name": "03-09-direccion-analitica",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-chromium\\attachments\\03-09-direccion-analitica-56d998fdfc99b97bd8abd1260b7a92f0a7d9ad14.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-4f4812439e4372a54941",
+              "file": "03-personal.spec.ts",
+              "line": 15,
+              "column": 7
+            },
+            {
+              "title": "sociedad científica: inicio, actividades y participantes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 12118,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:50:09.352Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-10-sociedad-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-chromium\\attachments\\03-10-sociedad-inicio-284e16754004a461a202e055aadfc94e03577812.png"
+                        },
+                        {
+                          "name": "03-11-sociedad-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-chromium\\attachments\\03-11-sociedad-actividades-a3e3961aee313d5686a55aaf619a2d3a70b52b8b.png"
+                        },
+                        {
+                          "name": "03-12-sociedad-participantes",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-chromium\\attachments\\03-12-sociedad-participantes-a7658a4dfb15d2576dacb6ca3beba002e9e73ceb.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-904142631964a1f490af",
+              "file": "03-personal.spec.ts",
+              "line": 26,
+              "column": 7
+            },
+            {
+              "title": "administración: usuarios, importación con previsualización, criterios y auditoría",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17117,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:50:21.478Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-13-admin-usuarios",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-chromium\\attachments\\03-13-admin-usuarios-9efd856cbf46890242469831415d9420ecc04bee.png"
+                        },
+                        {
+                          "name": "03-14-admin-importar",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-chromium\\attachments\\03-14-admin-importar-af49ed3bbd5149d192e857348e97afae1432c904.png"
+                        },
+                        {
+                          "name": "03-15-admin-importar-previsualizacion",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-chromium\\attachments\\03-15-admin-importar-previsualizacion-333723eb1de64d10efab01d7dcdf4871d90ffd3d.png"
+                        },
+                        {
+                          "name": "03-16-admin-criterios-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-chromium\\attachments\\03-16-admin-criterios-puntos-230bf2aa683b25987f4d582084e3be542fab71f6.png"
+                        },
+                        {
+                          "name": "03-17-admin-auditoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-chromium\\attachments\\03-17-admin-auditoria-0bd8aa9b287827e608de46092b1bd9d254cfb06f.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-40e79a0397904844f678",
+              "file": "03-personal.spec.ts",
+              "line": 35,
+              "column": 7
+            },
+            {
+              "title": "docente: panel académico, estudiantes de su alcance, actividades y puntos",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 17398,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:52:02.708Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-01-docente-panel",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-firefox\\attachments\\03-01-docente-panel-18772f18d1b8069c1f69a940a70dc51630283055.png"
+                        },
+                        {
+                          "name": "03-02-docente-estudiantes-alcance",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-firefox\\attachments\\03-02-docente-estudiantes-alcance-a53ae0e5288ed7e6cc85ed484f080599cc357fd4.png"
+                        },
+                        {
+                          "name": "03-03-docente-mis-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-firefox\\attachments\\03-03-docente-mis-actividades-e487450b0a95f53e25e5a6768c8084db16d8bb2d.png"
+                        },
+                        {
+                          "name": "03-04-docente-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-firefox\\attachments\\03-04-docente-puntos-46c9eba0d3837eb717f5233b9ab0db1eace6e219.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-f03a290536e4587618d2",
+              "file": "03-personal.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "dirección: aprobaciones, actividades, credenciales y analítica",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 20967,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:52:20.128Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-05-direccion-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-firefox\\attachments\\03-05-direccion-inicio-1c9351a9a5dc450ae3868ce2bd907537d26e4069.png"
+                        },
+                        {
+                          "name": "03-06-direccion-aprobaciones",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-firefox\\attachments\\03-06-direccion-aprobaciones-6651207bee2b4bdfd65b5cbc27a45f043ae49ab4.png"
+                        },
+                        {
+                          "name": "03-07-direccion-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-firefox\\attachments\\03-07-direccion-actividades-204e521a9a7ac9ea44dd6df0a2cf8b85eb62c8b1.png"
+                        },
+                        {
+                          "name": "03-08-direccion-credenciales",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-firefox\\attachments\\03-08-direccion-credenciales-29286da8b2dc9b3e724eb0b016f14a0f2b119d60.png"
+                        },
+                        {
+                          "name": "03-09-direccion-analitica",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-firefox\\attachments\\03-09-direccion-analitica-5e05d7c84cef157d2ce7c5a15d80505bea6a34ac.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-a924e41f9b002e51a1c6",
+              "file": "03-personal.spec.ts",
+              "line": 15,
+              "column": 7
+            },
+            {
+              "title": "sociedad científica: inicio, actividades y participantes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 13210,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:52:41.107Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-10-sociedad-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-firefox\\attachments\\03-10-sociedad-inicio-8479f578a0fd1e64bd0c7157412160ea20d0666e.png"
+                        },
+                        {
+                          "name": "03-11-sociedad-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-firefox\\attachments\\03-11-sociedad-actividades-e062277a5d3bbc3d62653bdac5b2a6f3248da292.png"
+                        },
+                        {
+                          "name": "03-12-sociedad-participantes",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-firefox\\attachments\\03-12-sociedad-participantes-3ee9f42e66ad2a7a633efce8486920a53e6c8979.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-1fd08bd61dc8572c0620",
+              "file": "03-personal.spec.ts",
+              "line": 26,
+              "column": 7
+            },
+            {
+              "title": "administración: usuarios, importación con previsualización, criterios y auditoría",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 18467,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:52:54.326Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-13-admin-usuarios",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-firefox\\attachments\\03-13-admin-usuarios-10779998fc3dc14f593b9a764b9907e3acb52d04.png"
+                        },
+                        {
+                          "name": "03-14-admin-importar",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-firefox\\attachments\\03-14-admin-importar-d0403d45cd28775f47e21a2eb971e2acf5ccde9f.png"
+                        },
+                        {
+                          "name": "03-15-admin-importar-previsualizacion",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-firefox\\attachments\\03-15-admin-importar-previsualizacion-0b298316431020e484bda45c51d48eb916a896c2.png"
+                        },
+                        {
+                          "name": "03-16-admin-criterios-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-firefox\\attachments\\03-16-admin-criterios-puntos-da19801caae14a7a37673f923a4316901681dd60.png"
+                        },
+                        {
+                          "name": "03-17-admin-auditoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-firefox\\attachments\\03-17-admin-auditoria-70180d747014513ff021e8bf1c1776a5045dd789.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-a3fb132fcf1606327bfc",
+              "file": "03-personal.spec.ts",
+              "line": 35,
+              "column": 7
+            },
+            {
+              "title": "docente: panel académico, estudiantes de su alcance, actividades y puntos",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 19066,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:54:40.875Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-01-docente-panel",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-webkit\\attachments\\03-01-docente-panel-cc491a73bfdc8cee60055600437bb7de96d28e33.png"
+                        },
+                        {
+                          "name": "03-02-docente-estudiantes-alcance",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-webkit\\attachments\\03-02-docente-estudiantes-alcance-8f3f24352da0cc60cd0727137602e6c03456902f.png"
+                        },
+                        {
+                          "name": "03-03-docente-mis-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-webkit\\attachments\\03-03-docente-mis-actividades-3245574e92de64d38275a19be09401ee5e0e5fab.png"
+                        },
+                        {
+                          "name": "03-04-docente-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-5b551-lcance-actividades-y-puntos-webkit\\attachments\\03-04-docente-puntos-c6153e81488bdd20e8816e974748f1326cce5fe2.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-12cede02ee978a69ee2c",
+              "file": "03-personal.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "dirección: aprobaciones, actividades, credenciales y analítica",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 23022,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:54:59.953Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-05-direccion-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-webkit\\attachments\\03-05-direccion-inicio-208d1c2dafb17ab6b00a2ed7356611d8644adead.png"
+                        },
+                        {
+                          "name": "03-06-direccion-aprobaciones",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-webkit\\attachments\\03-06-direccion-aprobaciones-a382ef0fda00cd0a18620d402fffc51d258a90fe.png"
+                        },
+                        {
+                          "name": "03-07-direccion-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-webkit\\attachments\\03-07-direccion-actividades-6243e60df8324624da8100135a79cff4dc497250.png"
+                        },
+                        {
+                          "name": "03-08-direccion-credenciales",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-webkit\\attachments\\03-08-direccion-credenciales-2e1ea51b9c16eb5eeff099b8eef7ca8fecfee386.png"
+                        },
+                        {
+                          "name": "03-09-direccion-analitica",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-1e39d-es-credenciales-y-analítica-webkit\\attachments\\03-09-direccion-analitica-044818d0b8ee2e08f59a2d15ea829b980e0fe37e.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-b67373c976d74e3c91c5",
+              "file": "03-personal.spec.ts",
+              "line": 15,
+              "column": 7
+            },
+            {
+              "title": "sociedad científica: inicio, actividades y participantes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 14152,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:55:22.985Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-10-sociedad-inicio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-webkit\\attachments\\03-10-sociedad-inicio-583246c8abc755c2b8b79307f6720b45c279d574.png"
+                        },
+                        {
+                          "name": "03-11-sociedad-actividades",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-webkit\\attachments\\03-11-sociedad-actividades-651f6c7ce0098262f6a0eb5467d83539bb55c8fd.png"
+                        },
+                        {
+                          "name": "03-12-sociedad-participantes",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-df764-actividades-y-participantes-webkit\\attachments\\03-12-sociedad-participantes-e43292f4e705a88a038a704aa80df3b9062a76e7.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-de84c88b1513c57f6277",
+              "file": "03-personal.spec.ts",
+              "line": 26,
+              "column": 7
+            },
+            {
+              "title": "administración: usuarios, importación con previsualización, criterios y auditoría",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 20769,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:55:37.147Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "03-13-admin-usuarios",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-webkit\\attachments\\03-13-admin-usuarios-e0c8b3aa5dc311d3a755cc18655886b622d386fd.png"
+                        },
+                        {
+                          "name": "03-14-admin-importar",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-webkit\\attachments\\03-14-admin-importar-7ba9b8c48cc062f7b930a0f4f82cc4c35c0114ee.png"
+                        },
+                        {
+                          "name": "03-15-admin-importar-previsualizacion",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-webkit\\attachments\\03-15-admin-importar-previsualizacion-88403b3ee4ef283ca33a11d053f7b1b10a9eeec6.png"
+                        },
+                        {
+                          "name": "03-16-admin-criterios-puntos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-webkit\\attachments\\03-16-admin-criterios-puntos-dbbb2bf9577eb4c4d193c029bb11fa2663a64b44.png"
+                        },
+                        {
+                          "name": "03-17-admin-auditoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\03-personal-Paneles-del-pe-24671-ación-criterios-y-auditoría-webkit\\attachments\\03-17-admin-auditoria-61bd06088c4d3b9c7b4457c0e8ce990d03bf7aba.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "ffbb714e48e4690df91b-3abff0202d76af5b9345",
+              "file": "03-personal.spec.ts",
+              "line": 35,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "04-negativos.spec.ts",
+      "file": "04-negativos.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Casos negativos de acceso",
+          "file": "04-negativos.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "sin sesión, una ruta privada lleva al inicio de sesión",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1843,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:50:38.614Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-01-sin-sesion-redirige-login",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-0cd90-a-lleva-al-inicio-de-sesión-chromium\\attachments\\04-01-sin-sesion-redirige-login-c2da62a3e038d95379ac8d9602cb04449188e514.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-6eee5872cf965a8718de",
+              "file": "04-negativos.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "un estudiante no entra a la administración",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3506,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:50:40.469Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-02-estudiante-sin-acceso-admin",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-180e7-o-entra-a-la-administración-chromium\\attachments\\04-02-estudiante-sin-acceso-admin-e05fa69686a156618167205f873e6199dfa856f1.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-294b393ed8344ce4d19d",
+              "file": "04-negativos.spec.ts",
+              "line": 11,
+              "column": 7
+            },
+            {
+              "title": "un docente no entra a las aprobaciones de Dirección",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3907,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:50:43.986Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-03-docente-sin-acceso-direccion",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-c801e-s-aprobaciones-de-Dirección-chromium\\attachments\\04-03-docente-sin-acceso-direccion-ecf98b331d5bac947680508d5df887e63461ef6a.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-ee0a9d2ffd4b5c5dcc66",
+              "file": "04-negativos.spec.ts",
+              "line": 19,
+              "column": 7
+            },
+            {
+              "title": "sin sesión, una ruta privada lleva al inicio de sesión",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1878,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:12.815Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-01-sin-sesion-redirige-login",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-0cd90-a-lleva-al-inicio-de-sesión-firefox\\attachments\\04-01-sin-sesion-redirige-login-615845df27c51355bb34d7814d462610fe3688e0.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-26cc36c9e6dbcfab1fb7",
+              "file": "04-negativos.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "un estudiante no entra a la administración",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3335,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:14.703Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-02-estudiante-sin-acceso-admin",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-180e7-o-entra-a-la-administración-firefox\\attachments\\04-02-estudiante-sin-acceso-admin-1ea4e2ad2b2ed01b94888222f7761da32ef99da6.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-a7a1dfcaa7dacbb988d5",
+              "file": "04-negativos.spec.ts",
+              "line": 11,
+              "column": 7
+            },
+            {
+              "title": "un docente no entra a las aprobaciones de Dirección",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3602,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:53:18.047Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-03-docente-sin-acceso-direccion",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-c801e-s-aprobaciones-de-Dirección-firefox\\attachments\\04-03-docente-sin-acceso-direccion-8b079a2f54647a62f2a88b2bf487682eb7287270.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-d649f87e128878e8bc5d",
+              "file": "04-negativos.spec.ts",
+              "line": 19,
+              "column": 7
+            },
+            {
+              "title": "sin sesión, una ruta privada lleva al inicio de sesión",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3178,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:55:57.934Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-01-sin-sesion-redirige-login",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-0cd90-a-lleva-al-inicio-de-sesión-webkit\\attachments\\04-01-sin-sesion-redirige-login-0285b5e66402bd278f6cc349c91153d64597b483.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-79086810f2e100a7c865",
+              "file": "04-negativos.spec.ts",
+              "line": 5,
+              "column": 7
+            },
+            {
+              "title": "un estudiante no entra a la administración",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4867,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:56:01.122Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-02-estudiante-sin-acceso-admin",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-180e7-o-entra-a-la-administración-webkit\\attachments\\04-02-estudiante-sin-acceso-admin-d1b7413b2ccb915100e1e4de48ebdfc3531e4673.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-eff0ac33292a47e2d9f9",
+              "file": "04-negativos.spec.ts",
+              "line": 11,
+              "column": 7
+            },
+            {
+              "title": "un docente no entra a las aprobaciones de Dirección",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4648,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-22T00:56:05.999Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "04-03-docente-sin-acceso-direccion",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\04-negativos-Casos-negativ-c801e-s-aprobaciones-de-Dirección-webkit\\attachments\\04-03-docente-sin-acceso-direccion-e2f47f0a27a092f22befa7dd94060471751caee9.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3cbb292846be9bc71cca-9a4cc8fa57767a6243c1",
+              "file": "04-negativos.spec.ts",
+              "line": 19,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-22T00:48:24.384Z",
+    "duration": 466352.179,
+    "expected": 39,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

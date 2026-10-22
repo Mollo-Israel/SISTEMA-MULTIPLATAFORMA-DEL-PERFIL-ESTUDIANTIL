@@ -1,0 +1,135 @@
+01:13:18.087 INFO  Scanner configuration file: /opt/sonar-scanner/conf/sonar-scanner.properties
+01:13:18.092 INFO  Project root configuration file: /usr/src/sonar-project.properties
+01:13:18.130 INFO  SonarScanner CLI 8.1.0.6389
+01:13:18.134 INFO  Linux 6.18.54.1-microsoft-standard-WSL2 amd64
+01:13:19.354 INFO  Communicating with SonarQube Community Build 26.9.0.129388
+01:13:19.356 INFO  JRE provisioning: os[linux], arch[x86_64]
+01:13:27.654 INFO  Starting SonarScanner Engine...
+01:13:27.655 INFO  Java 21.0.11 Eclipse Adoptium (64-bit)
+01:13:28.887 INFO  Load global settings
+01:13:28.971 INFO  Load global settings (done) | time=82ms
+01:13:28.975 INFO  Server id: 147B411E-AaFhI2HVBEtH5OPdlBNA
+01:13:28.987 INFO  Loading required plugins
+01:13:28.987 INFO  Load plugins index
+01:13:29.004 INFO  Load plugins index (done) | time=17ms
+01:13:29.004 INFO  Load/download plugins
+01:13:31.078 INFO  Load/download plugins (done) | time=2074ms
+01:13:31.396 INFO  Process project properties
+01:13:31.415 INFO  Process project properties (done) | time=18ms
+01:13:31.428 INFO  Project key: afinia
+01:13:31.428 INFO  Base dir: /usr/src
+01:13:31.429 INFO  Working dir: /tmp/.scannerwork
+01:13:31.441 INFO  Load project settings for component key: 'afinia'
+01:13:31.462 INFO  Load project settings for component key: 'afinia' (done) | time=21ms
+01:13:31.500 INFO  Load quality profiles
+01:13:31.562 INFO  Load quality profiles (done) | time=62ms
+01:13:31.627 INFO  Load active rules
+01:13:32.078 INFO  Load active rules (done) | time=448ms
+01:13:32.082 INFO  Load analysis cache
+01:13:32.327 INFO  Load analysis cache | time=245ms
+01:13:32.509 INFO  Preprocessing files...
+01:13:38.586 INFO  3 languages detected in 470 preprocessed files (done) | time=6073ms
+01:13:38.587 INFO  17 files ignored because of inclusion/exclusion patterns
+01:13:38.587 INFO  2 directories skipped because of exclusion patterns (content not counted)
+01:13:38.588 INFO  0 files ignored because of scm ignore settings
+01:13:38.588 INFO  Loading plugins for detected languages
+01:13:38.588 INFO  Load/download plugins
+01:13:48.416 INFO  Load/download plugins (done) | time=9827ms
+01:13:48.551 INFO  Load project repositories
+01:13:48.680 INFO  Load project repositories (done) | time=129ms
+01:13:48.706 INFO  Indexing files...
+01:13:48.706 INFO  Project configuration:
+01:13:48.709 INFO    Excluded sources: **/node_modules/**, **/dist/**, **/dist-e2e/**, api/src/database/migrations/**, api/src/database/seeds/**, api/test/**/*.ts, scripts/e2e-*.mjs
+01:13:48.709 INFO    Included tests: api/test/**/*.ts, scripts/e2e-*.mjs
+01:13:50.653 INFO  469 files indexed (done) | time=1946ms
+01:13:50.654 INFO  Quality profile for css: Sonar way
+01:13:50.654 INFO  Quality profile for js: Sonar way
+01:13:50.654 INFO  Quality profile for ts: Sonar way
+01:13:50.655 INFO  ------------- Run sensors on module Afinia
+01:13:50.687 INFO  Load metrics repository
+01:13:50.711 INFO  Load metrics repository (done) | time=24ms
+01:13:51.016 INFO  Reflections took 67 ms to scan 1 urls, producing 30 keys and 295 values
+01:13:51.118 INFO  Sensor IaC YAML File Type Classification Sensor [iac]
+01:13:51.125 INFO  Sensor IaC YAML File Type Classification Sensor [iac] (done) | time=6ms
+01:13:51.126 INFO  Sensor IaC hadolint report Sensor [iac]
+01:13:51.126 INFO  Sensor IaC hadolint report Sensor [iac] (done) | time=0ms
+01:13:51.126 INFO  Sensor Java Config Sensor [iac]
+01:13:51.128 INFO  There are no files to be analyzed for the Java language
+01:13:51.128 INFO  Sensor Java Config Sensor [iac] (done) | time=1ms
+01:13:51.129 INFO  Sensor IaC Docker Sensor [iac]
+01:13:51.137 INFO  There are no files to be analyzed for the Docker language
+01:13:51.142 INFO  Sensor IaC Docker Sensor [iac] (done) | time=8ms
+01:13:51.142 INFO  Sensor HTML [web]
+01:13:51.149 INFO  Sensor HTML [web] (done) | time=12ms
+01:13:51.149 INFO  Sensor JavaScript/TypeScript Coverage [javascript]
+01:13:51.156 INFO  Analysing [/usr/src/api/coverage/lcov-sonar.info]
+01:13:55.203 INFO  Sensor JavaScript/TypeScript Coverage [javascript] (done) | time=4053ms
+01:13:55.203 INFO  Sensor TextAndSecretsSensor [text]
+01:13:55.224 INFO  Available processors: 6
+01:13:55.226 INFO  Using 6 threads for analysis.
+01:13:55.493 INFO  Start fetching files for the text and secrets analysis
+01:13:55.501 INFO  Using Git CLI to retrieve dirty files
+01:13:55.510 WARN  Retrieving only language associated files, make sure to run the analysis inside a git repository to make use of inclusions specified via "sonar.text.inclusions"
+01:13:55.512 INFO  Starting the text and secrets analysis
+01:13:55.514 INFO  469 source files to be analyzed for the text and secrets analysis
+01:13:56.961 INFO  469/469 source files have been analyzed for the text and secrets analysis
+01:13:56.962 INFO  Sensor TextAndSecretsSensor [text] (done) | time=1759ms
+01:13:56.965 INFO  ------------- Run sensors on project
+01:13:57.198 INFO  Sensor JavaScript/TypeScript/CSS analysis [javascript]
+01:13:57.474 INFO  Detected os: Linux arch: amd64 alpine: false. Platform: LINUX_X64
+01:13:57.475 INFO  Deploy location /opt/sonar-scanner/.sonar/js/node-runtime, tagetRuntime: /opt/sonar-scanner/.sonar/js/node-runtime/node,  version: /opt/sonar-scanner/.sonar/js/node-runtime/version.txt
+01:14:00.155 INFO  Using embedded Node.js runtime.
+01:14:00.156 INFO  Using Node.js executable: '/opt/sonar-scanner/.sonar/js/node-runtime/node'.
+01:14:02.860 INFO  Memory configuration: OS (7906 MB), Node.js (2240 MB).
+01:14:02.879 INFO  gRPC analyze-project server listening on 127.0.0.1:44335
+01:14:03.076 INFO  Plugin version: [13.8.0.44569]
+01:14:08.666 INFO  Found 4 tsconfig.json file(s): [/usr/src/api/tsconfig.json, /usr/src/mobile/tsconfig.json, /usr/src/shared/tsconfig.json, /usr/src/web/tsconfig.json]
+01:18:52.953 INFO  469 source files to be analyzed
+01:18:52.954 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/api/tsconfig.json [lib: lib.es2024.d.ts, lib.dom.d.ts]
+01:18:52.954 INFO  Analyzing 281 file(s) from tsconfig /usr/src/api/tsconfig.json (1683 total files in program)
+01:18:52.954 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/mobile/tsconfig.json [lib: lib.dom.d.ts, lib.esnext.d.ts]
+01:18:52.955 INFO  Analyzing 37 file(s) from tsconfig /usr/src/mobile/tsconfig.json (492 total files in program)
+01:18:52.955 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/shared/tsconfig.json [lib: lib.es2023.d.ts, lib.dom.d.ts]
+01:18:52.955 INFO  Analyzing 24 file(s) from tsconfig /usr/src/shared/tsconfig.json (86 total files in program)
+01:18:52.955 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/web/tsconfig.json [lib: lib.es2020.d.ts, lib.dom.d.ts, lib.dom.iterable.d.ts]
+01:18:52.955 INFO  Analyzing 91 file(s) from tsconfig /usr/src/web/tsconfig.json (243 total files in program)
+01:18:52.955 INFO  Analyzing 10 file(s) using merged compiler options [lib: lib.es2024.d.ts, lib.dom.d.ts]
+01:18:52.955 INFO  Analyzing 22 file(s) using merged compiler options [lib: lib.es2023.d.ts, lib.dom.d.ts]
+01:18:52.956 INFO  469/469 source files have been analyzed
+01:18:52.999 INFO  Hit the cache for 0 out of 465
+01:18:53.000 INFO  Miss the cache for 465 out of 465: ANALYSIS_MODE_INELIGIBLE [465/465]
+01:18:53.002 INFO  Sensor JavaScript/TypeScript/CSS analysis [javascript] (done) | time=295802ms
+01:18:53.004 INFO  Sensor IaC Project Sensor [iac]
+01:18:53.013 INFO  Sensor IaC Project Sensor [iac] (done) | time=8ms
+01:18:53.013 INFO  Sensor Zero Coverage Sensor
+01:18:53.091 INFO  Sensor Zero Coverage Sensor (done) | time=77ms
+01:18:53.091 INFO  ------------- Gather SCA dependencies on project
+01:18:53.140 INFO  Dependency analysis skipped
+01:18:53.230 INFO  SCM Publisher SCM provider for this project is: git
+01:18:53.234 INFO  SCM Publisher 7 source files to be analyzed
+01:18:53.387 WARN  Thread[#63,ForkJoinPool.commonPool-worker-1,5,main]: got smaller file timestamp on /usr/src (C:\), /usr/src/.git: 2026-10-22T01:18:53Z < 2026-10-22T01:18:53.3458642Z. Aborting measurement at resolution PT0.6541358S.
+01:18:54.205 INFO  SCM Publisher 0/7 source files have been analyzed (done) | time=974ms
+01:18:54.205 WARN  Missing blame information for the following files:
+01:18:54.205 WARN    * api/test/jest/entorno.ts
+01:18:54.205 WARN    * api/test/jest/api/integridad-negocio.spec.ts
+01:18:54.206 WARN    * api/test/jest/api/autorizacion-alcance.spec.ts
+01:18:54.206 WARN    * api/test/jest/app.ts
+01:18:54.206 WARN    * api/src/activities/activities.service.ts
+01:18:54.206 WARN    * api/test/jest/unit/reglas-negocio.spec.ts
+01:18:54.206 WARN    * api/test/jest/api/autenticacion.spec.ts
+01:18:54.206 WARN  This may lead to missing/broken features in SonarQube
+01:18:54.321 INFO  CPD Executor 38 files had no CPD blocks
+01:18:54.321 INFO  CPD Executor Calculating CPD for 399 files
+01:18:54.841 INFO  CPD Executor CPD calculation finished (done) | time=520ms
+01:18:54.998 INFO  SCM revision ID '80447c608c00f8f74a5c20931f154109eb2c09f4'
+01:18:57.685 INFO  Analysis report generated in 2794ms, dir size=11.6 MB
+01:18:58.700 INFO  Analysis report compressed in 1014ms, zip size=6.4 MB
+01:18:58.874 INFO  Analysis report uploaded in 174ms
+01:18:58.876 INFO  ------------- Check Quality Gate status
+01:18:58.878 INFO  Waiting for the analysis report to be processed (max 600s)
+01:19:08.950 INFO  QUALITY GATE STATUS: PASSED - View details on http://host.docker.internal:9100/dashboard?id=afinia
+01:19:09.358 INFO  Analysis total time: 5:38.231 s
+01:19:09.374 INFO  SonarScanner Engine completed successfully
+01:19:09.408 INFO  EXECUTION SUCCESS
+01:19:09.409 INFO  Total time: 5:51.326s
+

@@ -51,12 +51,25 @@
     "test:ai": "npm --prefix api run build:e2e && node scripts/e2e-ai-provider.mjs",
     "test:load": "node scripts/k6/run-k6.mjs",
     "test:security": "node scripts/zap/run-zap.mjs",
-    "test:all": "npm run test:unit && node scripts/e2e-objectives-40.mjs && node scripts/e2e-objective-5.mjs && node scripts/e2e-objective-6.mjs && node scripts/e2e-objective-7.mjs && node scripts/e2e-batch-1.mjs && node scripts/e2e-batch-2.mjs && node scripts/e2e-batch-3.mjs && node scripts/e2e-batch-4.mjs && node scripts/e2e-batch-5.mjs && node scripts/e2e-batch-6.mjs && node scripts/e2e-batch-7.mjs && node scripts/e2e-batch-8.mjs && node scripts/e2e-batch-9.mjs && node scripts/e2e-batch-10.mjs && node scripts/e2e-batch-11.mjs && node scripts/e2e-qa.mjs && node scripts/e2e-v2.mjs && node scripts/e2e-v3.mjs && node scripts/e2e-v3-2.mjs && node scripts/e2e-v4-1.mjs && npm run test:ai && npm run test:web"
+    "test:all": "npm run test:unit && node scripts/e2e-objectives-40.mjs && node scripts/e2e-objective-5.mjs && node scripts/e2e-objective-6.mjs && node scripts/e2e-objective-7.mjs && node scripts/e2e-batch-1.mjs && node scripts/e2e-batch-2.mjs && node scripts/e2e-batch-3.mjs && node scripts/e2e-batch-4.mjs && node scripts/e2e-batch-5.mjs && node scripts/e2e-batch-6.mjs && node scripts/e2e-batch-7.mjs && node scripts/e2e-batch-8.mjs && node scripts/e2e-batch-9.mjs && node scripts/e2e-batch-10.mjs && node scripts/e2e-batch-11.mjs && node scripts/e2e-qa.mjs && node scripts/e2e-v2.mjs && node scripts/e2e-v3.mjs && node scripts/e2e-v3-2.mjs && node scripts/e2e-v4-1.mjs && npm run test:ai && npm run test:web",
+    "pruebas:entorno": "node scripts/pruebas/entorno.mjs reconstruir",
+    "pruebas:api": "node scripts/pruebas/entorno.mjs api",
+    "pruebas:web": "node scripts/pruebas/entorno.mjs web",
+    "pruebas:jest": "node scripts/pruebas/jest.mjs",
+    "pruebas:playwright": "playwright test",
+    "pruebas:postman": "node scripts/pruebas/newman.mjs",
+    "pruebas:k6": "node scripts/pruebas/k6.mjs",
+    "pruebas:zap": "node scripts/pruebas/zap.mjs",
+    "pruebas:sonar": "node scripts/pruebas/sonar.mjs",
+    "pruebas:capturas": "node scripts/pruebas/capturar-reportes.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "newman": "^6.2.1",
+    "newman-reporter-htmlextra": "^1.23.1",
     "playwright-core": "^1.63.0",
     "qrcode": "^1.5.4"
   }

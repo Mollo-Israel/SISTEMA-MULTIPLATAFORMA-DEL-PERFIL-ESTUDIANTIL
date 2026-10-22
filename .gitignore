@@ -56,3 +56,11 @@ backups/
 .mail-outbox/
 scripts/k6/out/
 scripts/zap/out/
+
+# Evidencias de pruebas (pruebas/): quedan en disco; en git solo lo documental
+pruebas/01-entorno/almacenamiento-temporal/
+pruebas/01-entorno/api-pruebas.log
+pruebas/03-playwright/resultados/
+web/dist-pruebas/
+pruebas/07-sonarqube/.credenciales-local.json
+api/coverage/

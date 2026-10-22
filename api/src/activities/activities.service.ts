@@ -1336,6 +1336,12 @@ export class ActivitiesService {
         activityAreas: { academicArea: true }, activitySkills: { skill: true },
       },
       order: { eventDate: 'DESC', createdAt: 'DESC' },
+      // Pruebas de rendimiento (k6, 22/10/2026): para UNA PÁGINA (≤ 30 ids),
+      // el JOIN de las cinco relaciones tardaba ~1,7 s y por consultas
+      // separadas ~26 ms. Para la lista completa (miles de filas) es al revés:
+      // las consultas separadas obligan a TypeORM a unir en memoria y la API
+      // se bloquea (regresión, 22/10/2026). Por eso solo se usa con página.
+      ...(soloIds ? { relationLoadStrategy: 'query' as const } : {}),
     });
 
     // El estudiante nunca ve borradores. El resto ve los suyos, y como
