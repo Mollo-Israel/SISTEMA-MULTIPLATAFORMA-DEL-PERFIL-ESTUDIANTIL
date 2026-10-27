@@ -8,7 +8,7 @@
  * Uso:
  *   API_URL=http://localhost:3010/api node scripts/e2e-v5.mjs [batch4 …]
  */
-import { API, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
+import { API, asegurarGithubSimulado, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -216,6 +216,74 @@ async function batch3(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-10 + V5-11 — Señales de GitHub al día y pedidos: alias ≠ tecnología nueva
+// ===========================================================================
+async function batch10(ctx) {
+  objective('BATCH V5-10/11 · «La usé» al día, PyMongo como señal, y FastAPI/Pytest no son Python');
+  await asegurarGithubSimulado();
+  const est = await provisionStudent(ctx.admin, { firstName: 'Gael', lastName: `Repo${L}`, email: correoEst('b10e1'), semester: 5 });
+  const p = await req('POST', '/projects', {
+    token: est.token, body: { title: `API de inventario ${L}`, repositoryUrl: repoDePrueba(`pymongo-inv-${TS}`), status: 'draft' },
+  });
+  const id = p.data?.id;
+  const sug = (await req('GET', `/projects/${id}/suggestions`, { token: est.token })).data;
+  const mongo = (sug?.suggestions ?? []).find((x) => /^mongodb$/i.test(x.skill?.name ?? ''));
+  const python = (sug?.suggestions ?? []).find((x) => /^python$/i.test(x.skill?.name ?? ''));
+  check(p.status === 201 && !!mongo && /pymongo/i.test(mongo.why ?? ''),
+    'V5.10.1 F03 PyMongo sugiere MongoDB con su procedencia (señal del repositorio, no un servidor ni una persona)', json(sug?.suggestions?.map((x) => [x.skill?.name, x.why])));
+
+  const antes = (await req('GET', `/projects/${id}/checks`, { token: est.token })).data;
+  const pyAntes = (antes?.repository?.technologySignals ?? []).find((t) => /^python$/i.test(t.name));
+  const acepta = await req('POST', `/projects/${id}/suggestions/accept`, {
+    token: est.token, body: { skillId: python?.skill.id, areaId: python?.areas?.[0]?.id, signal: python?.signal, source: python?.source },
+  });
+  const despues = (await req('GET', `/projects/${id}/checks`, { token: est.token })).data;
+  const pyDespues = (despues?.repository?.technologySignals ?? []).find((t) => /^python$/i.test(t.name));
+  const sug2 = (await req('GET', `/projects/${id}/suggestions`, { token: est.token })).data;
+  check(pyAntes?.status === 'detected' && acepta.status === 200 && pyDespues?.status === 'both'
+    && !(sug2?.suggestions ?? []).some((x) => /^python$/i.test(x.skill?.name ?? '')),
+  'V5.10.2 F04 Aceptar Python lo muestra enseguida como declarada y detectada, y deja de sugerirse', json({ antes: pyAntes?.status, despues: pyDespues?.status }));
+
+  // --- V5-25: un pedido no catalogado se resuelve como tecnología nueva o como alias, nunca mezclado
+  const nombreNuevo = `Pytest${L}`;
+  const pedido = await req('POST', `/projects/${id}/suggestions/request-skill`, { token: est.token, body: { name: nombreNuevo, source: 'requirements.txt (pytest)' } });
+  const pythonSkill = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => /^python$/i.test(s.name));
+  const aliasSinConfirmar = await req('POST', `/skill-requests/${pedido.data?.id}/decision`, {
+    token: ctx.admin, body: { decision: 'alias', skillId: pythonSkill?.id },
+  });
+  check(aliasSinConfirmar.status === 400 && aliasSinConfirmar.data?.code === 'ALIAS_NOT_CONFIRMED',
+    'V5.11.1 F07 Registrar un alias exige confirmar que es la misma tecnología (FastAPI usa Python, no es Python)', `${aliasSinConfirmar.status} ${aliasSinConfirmar.data?.code}`);
+  const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];
+  const area = areas.find((a) => /software/i.test(a.name)) ?? areas[0];
+  const nueva = await req('POST', `/skill-requests/${pedido.data?.id}/decision`, {
+    token: ctx.admin, body: { decision: 'new_skill', newSkill: { academicAreaId: area.id, overrideReason: 'Herramienta de pruebas del área de software.' } },
+  });
+  const catalogo = (await req('GET', '/skills', { token: est.token })).data ?? [];
+  const creada = catalogo.find((s) => s.name === nombreNuevo);
+  const pythonDespues = catalogo.find((s) => s.id === pythonSkill?.id);
+  check(nueva.status === 200 && nueva.data?.status === 'added' && nueva.data?.resolution === 'new_skill' && !!creada
+    && creada.academicAreaId === area.id && !(pythonDespues?.aliases ?? []).includes(nombreNuevo),
+  'V5.11.2 F08/F09 La tecnología nueva aparece en el catálogo con su área, y Python no gana un alias falso', json({ s: nueva.status, r: nueva.data?.resolution, a: creada?.academicAreaId === area.id }));
+  const otraVez = await req('POST', `/skill-requests/${pedido.data?.id}/decision`, { token: ctx.admin, body: { decision: 'rejected', note: 'Doble clic.' } });
+  check(otraVez.status === 409, 'V5.11.3 Decidir dos veces el mismo pedido no lo cambia (idempotente)', `${otraVez.status}`);
+  const avisos = (await req('GET', '/notifications/me', { token: est.token })).data;
+  const aviso = (avisos?.items ?? avisos ?? []).find?.((n) => n.type === 'SKILL_REQUEST_DECIDED' && n.body?.includes(nombreNuevo));
+  check(!!aviso && /se agregó al catálogo/.test(aviso.body), 'V5.11.4 F09 El aviso dice lo que pasó de verdad', json(aviso?.body));
+
+  // --- alias verdadero: el nombre detectado es otra forma de escribir una tecnología existente
+  const alias = `postgres${L.toLowerCase()}`;
+  const pedido2 = await req('POST', `/projects/${id}/suggestions/request-skill`, { token: est.token, body: { name: alias } });
+  const pg = catalogo.find((s) => /^postgresql$/i.test(s.name));
+  const comoAlias = await req('POST', `/skill-requests/${pedido2.data?.id}/decision`, {
+    token: ctx.admin, body: { decision: 'alias', skillId: pg?.id, sameTechnology: true },
+  });
+  const pgDespues = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => s.id === pg?.id);
+  const cuantas = ((await req('GET', '/skills', { token: est.token })).data ?? []).length;
+  check(comoAlias.status === 200 && comoAlias.data?.resolution === 'alias' && (pgDespues?.aliases ?? []).includes(alias) && cuantas === catalogo.length,
+    'V5.11.5 Un alias confirmado se agrega a la tecnología existente sin crear otra', json({ s: comoAlias.status, r: comoAlias.data?.resolution }));
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -367,7 +435,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

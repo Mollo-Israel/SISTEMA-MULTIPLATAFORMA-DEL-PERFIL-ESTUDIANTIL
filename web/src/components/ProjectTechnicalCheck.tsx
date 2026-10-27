@@ -8,10 +8,12 @@ import { Badge, Button, Loading } from './ui';
 import { useToast } from './feedback';
 
 // V4.1 §11.3–§11.4: lo que GitHub ve es una señal; no valida que se usó ni quién la usó.
-const ESTADO_TEC: Record<string, { label: string; tone: 'green' | 'gray' | 'bordo' }> = {
-  both: { label: 'Declarada · señal detectada', tone: 'green' },
-  declared: { label: 'Declarada', tone: 'gray' },
-  detected: { label: 'Señal detectada, no declarada', tone: 'bordo' },
+// V5 §12.3: color y texto siempre juntos. Verde no es «competencia validada» y
+// una sugerencia sin aceptar nunca va en rojo.
+const ESTADO_TEC: Record<string, { label: string; tone: 'green' | 'gray' | 'neutral' }> = {
+  both: { label: 'Declarada · detectada en el repositorio', tone: 'green' },
+  declared: { label: 'Declarada · sin señal en el repositorio', tone: 'gray' },
+  detected: { label: 'Detectada en el repositorio · aún no añadida', tone: 'neutral' },
 };
 
 const ESTADO_ENLACE: Record<string, string> = {
@@ -48,7 +50,9 @@ export default function ProjectTechnicalCheck({ projectId, canRecheck, onChanged
     }
     try {
       setSug(await projectDetailService.acceptSuggestion(projectId, { skillId: s.skill.id, areaId, signal: s.signal, source: s.source ?? undefined }));
-      toast.success(`${s.skill.name} agregada como tuya.`, 'Queda con su procedencia; el respaldo lo decide la regla, no el clic.');
+      // V5-24: la señal se vuelve a cruzar con lo declarado; deja de figurar «aún no añadida».
+      setC(await projectDetailService.checks(projectId));
+      toast.success(`${s.skill.name} agregada al proyecto.`, 'Con su procedencia: la señal es del repositorio, no prueba quién la usó.');
       onChanged?.();
     } catch (e) {
       toast.error(apiError(e));

@@ -487,6 +487,7 @@ let githubSimulado = null;
  * nombre:
  *   stack-*     Node: React, NestJS, pg, TypeScript; compose con postgres.
  *   py-*        Python: FastAPI y psycopg2 en requirements.txt.
+ *   pymongo-*   Python: PyMongo y Pytest en requirements.txt (V5 §12.2, F03–F08).
  *   cuota-*     GitHub responde «cuota agotada» (403, reinicio en 2 s).
  *   inestable-* Falla con 500 las dos primeras veces y luego responde.
  *   lenguaje-X  GitHub informa el lenguaje «X» (corrobora una tecnología X).
@@ -506,6 +507,12 @@ function contenidoSimulado(nombre) {
         'docker-compose.yml': 'services:\n  db:\n    image: postgres:16\n  api:\n    build: .\n',
         'README.md': '# Proyecto',
       },
+    };
+  }
+  if (nombre.startsWith('pymongo-')) {
+    return {
+      languages: { Python: 30000 },
+      files: { 'requirements.txt': 'pymongo>=4.6\npytest==8.0\n', 'README.md': '# API' },
     };
   }
   if (nombre.startsWith('py-')) {

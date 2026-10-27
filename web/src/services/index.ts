@@ -910,11 +910,19 @@ export interface SkillRequestItem {
   decisionNote: string | null;
   requestedByName: string | null;
   createdAt: string;
+  /** V5-25: cómo se agregó (otro nombre de una existente, o tecnología nueva). */
+  resolution?: 'alias' | 'new_skill' | null;
 }
 
 export const skillRequestService = {
   list: (status?: string) => api.get<SkillRequestItem[]>('/skill-requests', { params: status ? { status } : {} }).then((r) => r.data),
-  decide: (id: string, body: { decision: 'added' | 'rejected'; skillId?: string; note?: string }) =>
+  decide: (id: string, body: {
+    decision: 'alias' | 'new_skill' | 'rejected';
+    skillId?: string;
+    sameTechnology?: boolean;
+    newSkill?: { name?: string; academicAreaId: string; secondaryAreaIds?: string[] };
+    note?: string;
+  }) =>
     api.post(`/skill-requests/${id}/decision`, body).then((r) => r.data),
 };
 

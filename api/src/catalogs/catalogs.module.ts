@@ -30,5 +30,7 @@ import { CatalogsController } from './catalogs.controller';
     ])],
   controllers: [CatalogsController],
   providers: [CatalogsService],
+  // V5-25: Administración resuelve los pedidos de tecnologías con las mismas reglas del catálogo.
+  exports: [CatalogsService],
 })
 export class CatalogsModule {}

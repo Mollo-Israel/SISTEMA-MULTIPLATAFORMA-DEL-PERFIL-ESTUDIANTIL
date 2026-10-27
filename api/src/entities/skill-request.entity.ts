@@ -31,6 +31,13 @@ export class SkillRequest {
   @Column({ name: 'skill_id', type: 'uuid', nullable: true })
   skillId: string | null;
 
+  /**
+   * V5-25: cómo se agregó. `alias`: es otro nombre de una tecnología que ya
+   * existía. `new_skill`: es una tecnología distinta, creada con su área.
+   */
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  resolution: 'alias' | 'new_skill' | null;
+
   @Column({ name: 'decision_note', type: 'varchar', length: 300, nullable: true })
   decisionNote: string | null;
 

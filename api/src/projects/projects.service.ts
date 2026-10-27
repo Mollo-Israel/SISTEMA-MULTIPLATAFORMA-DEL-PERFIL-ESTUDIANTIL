@@ -40,6 +40,7 @@ import { normalizarRepo } from './project-backing.service';
 import {
   ProjectLinkCheck,
   ProjectRepositoryCheck,
+  TechnologySignal,
 } from '../entities/project-check.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AcademicArea } from '../entities/academic-area.entity';
@@ -57,6 +58,8 @@ import { FILES_ROUTE } from '../storage/local-storage.driver';
 import { ProjectEventsService } from './project-events.service';
 import { ProjectBackingService } from './project-backing.service';
 import { RepositoryInspectorService } from './repository-inspector.service';
+import { CatalogsService } from '../catalogs/catalogs.service';
+import { CreateSkillDto } from '../catalogs/dto/create-skill.dto';
 import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
@@ -105,11 +108,27 @@ export class ProjectsService {
     @InjectRepository(TeamMember) private readonly teamMembers: Repository<TeamMember>,
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
+    private readonly catalogs: CatalogsService,
   ) {}
 
   // ====================================================================
   //  V4.1 A41-020 · Sugerencias de GitHub con procedencia (§11.2–§11.4)
   // ====================================================================
+
+  /**
+   * V5-24: las señales de la última comprobación, cruzadas con lo que el
+   * proyecto declara AHORA (sin llamar a GitHub). Lo usan la validación técnica
+   * y las sugerencias: lo aceptado deja de figurar «no añadido» y de sugerirse.
+   */
+  private async senalesVigentes(project: Project, check: ProjectRepositoryCheck | null): Promise<TechnologySignal[]> {
+    if (!check) return [];
+    const declaradas = unirTecnologias(
+      (await this.projectSkills.find({ where: { projectId: project.id }, relations: { skill: true } }))
+        .map((x) => x.skill?.name).filter((n): n is string => !!n),
+      project.technologies ?? [],
+    );
+    return this.repositoryInspector.recruzar(check.technologySignals ?? [], declaradas);
+  }
 
   private normSenal(t: string): string {
     return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
@@ -126,7 +145,7 @@ export class ProjectsService {
     const check = await this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } });
     const vigente = check && check.repositoryUrl === project.repositoryUrl ? check : null;
     const descartadas = new Set((project.dismissedSuggestions ?? []).map((d) => this.normSenal(d)));
-    const detectadas = (vigente?.technologySignals ?? [])
+    const detectadas = (await this.senalesVigentes(project, vigente))
       .filter((t) => t.status === TechnologyStatus.DETECTED && !descartadas.has(this.normSenal(t.name)));
     if (!detectadas.length) return { repositoryUrl: project.repositoryUrl, suggestions: [], uncatalogued: [] };
     const catalogo = await this.skills.find({ where: { isActive: true } });
@@ -247,44 +266,98 @@ export class ProjectsService {
     });
   }
 
-  async decideSkillRequest(user: AuthenticatedUser, id: string, dto: { decision: 'added' | 'rejected'; skillId?: string; note?: string }) {
+  /**
+   * V5-25 (§4.3, §12.4; F07–F09): resolver un pedido son tres decisiones
+   * distintas, no una «vinculación» que lo mezcla todo:
+   *  - `alias`: el nombre detectado es OTRO NOMBRE de una tecnología que ya
+   *    existe (postgres → PostgreSQL). Se agrega como alias y no se crea nada.
+   *    Exige que Administración confirme que es la misma tecnología: «usa
+   *    Python» no es «es Python» (FastAPI ≠ Python).
+   *  - `new_skill`: es una tecnología distinta. Se crea en el catálogo con su
+   *    área principal y secundarias, con las mismas reglas de siempre.
+   *  - `rejected`: con motivo.
+   * Los pedidos pendientes del mismo nombre se resuelven igual, y cada aviso
+   * dice lo que de verdad pasó. Nada se agrega solo por una detección.
+   */
+  async decideSkillRequest(user: AuthenticatedUser, id: string, dto: {
+    decision: 'alias' | 'new_skill' | 'added' | 'rejected';
+    skillId?: string;
+    sameTechnology?: boolean;
+    newSkill?: { name?: string; academicAreaId: string; secondaryAreaIds?: string[]; overrideReason?: string };
+    note?: string;
+  }) {
     const repo = this.projects.manager.getRepository(SkillRequest);
     const r = await repo.findOne({ where: { id } });
     if (!r) throw new NotFoundException('Pedido no encontrado.');
     if (r.status !== 'pending') throw new ConflictException('Ese pedido ya fue decidido.');
-    if (dto.decision === 'added') {
-      const skill = dto.skillId ? await this.skills.findOne({ where: { id: dto.skillId } }) : null;
+    // Compatibilidad: «added» con una tecnología era el alias de antes.
+    const decision = dto.decision === 'added' ? 'alias' : dto.decision;
+    let skill: Skill | null = null;
+    if (decision === 'alias') {
+      skill = dto.skillId ? await this.skills.findOne({ where: { id: dto.skillId } }) : null;
       if (!skill) {
-        const m = 'Indica la tecnología del catálogo (créala antes en «Áreas y habilidades», con su área y alias).';
+        const m = 'Elige la tecnología del catálogo de la que este nombre es sinónimo.';
         throw new BadRequestException({ message: m, fields: { skillId: [m] } });
       }
-      r.skillId = skill.id;
+      if (dto.decision === 'alias' && dto.sameTechnology !== true) {
+        const m = `Confirma que «${r.name}» es otro nombre de «${skill.name}». Si es una tecnología distinta, créala como nueva.`;
+        throw new BadRequestException({ code: 'ALIAS_NOT_CONFIRMED', message: m, fields: { sameTechnology: [m] } });
+      }
+      const yaEs = this.normSenal(skill.name) === this.normSenal(r.name)
+        || (skill.aliases ?? []).some((a) => this.normSenal(a) === this.normSenal(r.name));
+      if (!yaEs) skill = await this.catalogs.updateSkill(skill.id, { aliases: [...(skill.aliases ?? []), r.name] }, user.userId);
+    } else if (decision === 'new_skill') {
+      if (!dto.newSkill?.academicAreaId) {
+        const m = 'Elige el área principal de la tecnología nueva.';
+        throw new BadRequestException({ message: m, fields: { academicAreaId: [m] } });
+      }
+      const nombre = dto.newSkill.name?.trim() || r.name;
+      skill = await this.catalogs.createSkill({
+        name: nombre,
+        academicAreaId: dto.newSkill.academicAreaId,
+        secondaryAreaIds: dto.newSkill.secondaryAreaIds ?? [],
+        aliases: this.normSenal(nombre) === this.normSenal(r.name) ? [] : [r.name],
+        overrideReason: dto.newSkill.overrideReason,
+      } satisfies CreateSkillDto, user.userId);
     } else if (!dto.note?.trim()) {
       throw new BadRequestException({ message: 'Explica por qué se rechaza.', fields: { note: ['Explica por qué se rechaza.'] } });
     }
-    r.status = dto.decision;
-    r.decisionNote = dto.note?.trim().slice(0, 300) || null;
-    r.decidedBy = user.userId;
-    r.decidedAt = new Date();
-    await repo.save(r);
+
+    // El mismo nombre pedido por otras personas queda resuelto igual.
+    const mismos = (await repo.find({ where: { status: 'pending' } }))
+      .filter((p) => this.normSenal(p.name) === this.normSenal(r.name));
+    const ahora = new Date();
+    for (const p of mismos) {
+      p.status = decision === 'rejected' ? 'rejected' : 'added';
+      p.resolution = decision === 'rejected' ? null : decision;
+      p.skillId = skill?.id ?? null;
+      p.decisionNote = dto.note?.trim().slice(0, 300) || null;
+      p.decidedBy = user.userId;
+      p.decidedAt = ahora;
+    }
+    await repo.save(mismos);
     await this.audit.record({
       actorUserId: user.userId,
       eventType: AuditEventType.SKILL_REQUEST_DECIDED,
       entityType: 'skill_request',
       entityId: r.id,
-      metadata: { decision: r.status, skillId: r.skillId, note: r.decisionNote },
+      metadata: { decision, skillId: skill?.id ?? null, skillName: skill?.name ?? null, note: dto.note?.trim() || null, pedidos: mismos.length },
     });
-    await this.avisar({
-      userId: r.requestedBy,
-      kind: 'SKILL_REQUEST_DECIDED',
-      title: r.status === 'added' ? 'Tecnología agregada al catálogo' : 'Pedido de tecnología revisado',
-      body: r.status === 'added'
-        ? `«${r.name}» ya está en el catálogo: puedes agregarla a tu proyecto.`
-        : `«${r.name}» no se agregó: ${r.decisionNote}`,
-      link: '/student/projects',
-      dedupeKey: `skill-request-decided:${r.id}`,
-    });
-    return r;
+    for (const p of mismos) {
+      const aviso = decision === 'alias'
+        ? { title: 'Pedido de tecnología resuelto', body: `«${p.name}» quedó registrado como otro nombre de «${skill!.name}»: ya puedes agregarla a tu proyecto.` }
+        : decision === 'new_skill'
+          ? { title: 'Tecnología agregada al catálogo', body: `«${skill!.name}» se agregó al catálogo: ya puedes agregarla a tu proyecto.` }
+          : { title: 'Pedido de tecnología revisado', body: `«${p.name}» no se agregó: ${p.decisionNote}` };
+      await this.avisar({
+        userId: p.requestedBy,
+        kind: 'SKILL_REQUEST_DECIDED',
+        ...aviso,
+        link: '/student/projects',
+        dedupeKey: `skill-request-decided:${p.id}`,
+      });
+    }
+    return mismos.find((p) => p.id === r.id) ?? r;
   }
 
   /**
@@ -1327,7 +1400,7 @@ export class ProjectsService {
           url: repo.repositoryUrl,
           status: repo.status,
           metadata: repo.metadata,
-          technologySignals: repo.technologySignals,
+          technologySignals: await this.senalesVigentes(project, repo),
           checkedAt: repo.checkedAt,
         }
         : null,

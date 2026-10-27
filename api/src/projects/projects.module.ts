@@ -24,6 +24,7 @@ import { AcademicArea } from '../entities/academic-area.entity';
 import { User } from '../entities/user.entity';
 import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { AccessModule } from '../access/access.module';
+import { CatalogsModule } from '../catalogs/catalogs.module';
 import { ProjectsService } from './projects.service';
 import { ProjectMembersService } from './project-members.service';
 import { ProjectsController } from './projects.controller';
@@ -58,6 +59,7 @@ import { ProjectsAdminController } from './projects-admin.controller';
     ]),
     TrajectoryModule,
     AccessModule,
+    CatalogsModule,
     StorageModule,
   ],
   controllers: [ProjectsController, ProjectsAdminController],

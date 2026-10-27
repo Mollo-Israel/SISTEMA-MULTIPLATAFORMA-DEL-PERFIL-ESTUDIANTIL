@@ -13,42 +13,84 @@ const ESTADO: Record<SkillRequestItem['status'], { label: string; tone: string }
   rejected: { label: 'Rechazada', tone: 'gray' },
 };
 
+const RESOLUCION: Record<'alias' | 'new_skill', string> = {
+  alias: 'Otro nombre de una existente',
+  new_skill: 'Tecnología nueva',
+};
+
+type Modo = 'new_skill' | 'alias' | 'rejected';
+interface Eleccion {
+  modo: Modo;
+  nombre: string;
+  areaId: string;
+  secundarias: string[];
+  skillId: string;
+  misma: boolean;
+  nota: string;
+}
+
 /**
- * V4.1 A41-020 (§11.2, §11.4) · Pedidos de tecnologías no catalogadas.
+ * V4.1 A41-020 y V5-25 (§4.3, §12.4) · Pedidos de tecnologías no catalogadas.
  *
- * Una dependencia detectada en GitHub no crea una tecnología sola. El
- * estudiante pide evaluarla; Administración la crea antes en «Áreas y
- * habilidades» (con su área y alias) y aquí la vincula, o rechaza con motivo.
+ * Una dependencia detectada en GitHub no crea una tecnología sola. Al
+ * resolver el pedido, Administración elige entre dos cosas distintas:
+ *  - «Es una tecnología nueva» (FastAPI, Pytest): se crea en el catálogo con
+ *    su área principal y, si corresponde, secundarias.
+ *  - «Es otro nombre de…» (postgres → PostgreSQL): se agrega como alias. Hay
+ *    que confirmar que es la MISMA tecnología: que FastAPI use Python no hace
+ *    que FastAPI sea Python.
+ * O la rechaza con motivo. Cada estudiante recibe un aviso con lo que pasó.
  */
 export default function AdminSkillRequestsPage() {
   const [estado, setEstado] = useState<SkillRequestItem['status']>('pending');
   const lista = useAsync(() => skillRequestService.list(estado), [estado], { cache: false });
   const skills = useAsync(() => catalogService.skills(), []);
-  const [eleccion, setEleccion] = useState<Record<string, { skillId: string; note: string }>>({});
+  const areas = useAsync(() => catalogService.areas(), []);
+  const [eleccion, setEleccion] = useState<Record<string, Eleccion>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const toast = useToast();
 
-  const decidir = async (r: SkillRequestItem, decision: 'added' | 'rejected') => {
-    const e = eleccion[r.id] ?? { skillId: '', note: '' };
+  const de = (r: SkillRequestItem): Eleccion => eleccion[r.id]
+    ?? { modo: 'new_skill', nombre: r.name, areaId: '', secundarias: [], skillId: '', misma: false, nota: '' };
+  const set = (r: SkillRequestItem, cambio: Partial<Eleccion>) =>
+    setEleccion((x) => ({ ...x, [r.id]: { ...de(r), ...cambio } }));
+
+  const decidir = async (r: SkillRequestItem) => {
+    const e = de(r);
     setBusy(r.id);
     try {
-      await skillRequestService.decide(r.id, { decision, skillId: e.skillId || undefined, note: e.note.trim() || undefined });
-      toast.success(decision === 'added' ? 'Pedido resuelto: tecnología vinculada.' : 'Pedido rechazado.');
+      if (e.modo === 'new_skill') {
+        await skillRequestService.decide(r.id, {
+          decision: 'new_skill',
+          newSkill: { name: e.nombre.trim() || undefined, academicAreaId: e.areaId, secondaryAreaIds: e.secundarias },
+        });
+        toast.success(`«${e.nombre.trim() || r.name}» se agregó al catálogo.`, 'Quien la pidió ya puede agregarla a su proyecto.');
+      } else if (e.modo === 'alias') {
+        await skillRequestService.decide(r.id, { decision: 'alias', skillId: e.skillId, sameTechnology: e.misma });
+        const nombre = (skills.data ?? []).find((s) => s.id === e.skillId)?.name ?? 'la tecnología elegida';
+        toast.success(`«${r.name}» quedó como otro nombre de «${nombre}».`, 'No se creó ninguna tecnología nueva.');
+      } else {
+        await skillRequestService.decide(r.id, { decision: 'rejected', note: e.nota.trim() || undefined });
+        toast.success('Pedido rechazado.', 'Quien lo pidió verá el motivo.');
+      }
       lista.reload();
+      skills.reload();
     } catch (err) {
       toast.error(apiError(err));
     } finally {
       setBusy(null);
     }
   };
-  const set = (id: string, campo: 'skillId' | 'note', v: string) =>
-    setEleccion((x) => ({ ...x, [id]: { ...(x[id] ?? { skillId: '', note: '' }), [campo]: v } }));
+
+  const listo = (e: Eleccion) => (e.modo === 'new_skill' ? !!e.areaId
+    : e.modo === 'alias' ? !!e.skillId && e.misma
+      : e.nota.trim().length > 0);
 
   return (
     <div>
       <PageHeader
         title="Pedidos de tecnologías"
-        description="Tecnologías que GitHub detectó en un proyecto y no están en el catálogo. Nada se agrega solo: créala en «Áreas y habilidades» con su área y alias, y vincúlala aquí; o recházala con motivo."
+        description="Tecnologías que GitHub detectó en un proyecto y no están en el catálogo. Nada se agrega solo: decide si es una tecnología nueva (con su área), otro nombre de una que ya existe, o recházala con motivo."
       />
       <Card
         title="Pedidos"
@@ -71,34 +113,95 @@ export default function AdminSkillRequestsPage() {
           {(filas) => (
             <div className="table-scroll">
               <table>
-                <thead><tr><th>Tecnología</th><th>Dónde se detectó</th><th>Pidió</th><th>Estado</th>{estado === 'pending' && <th></th>}</tr></thead>
+                <thead><tr><th>Tecnología</th><th>Dónde se detectó</th><th>Pidió</th><th>Estado</th>{estado === 'pending' && <th>Decisión</th>}</tr></thead>
                 <tbody>
-                  {filas.map((r) => (
-                    <tr key={r.id}>
-                      <td><strong>{r.name}</strong></td>
-                      <td className="muted small">{r.source ?? '—'}</td>
-                      <td>{r.requestedByName ?? '—'}</td>
-                      <td>
-                        <Badge tone={ESTADO[r.status].tone}>{ESTADO[r.status].label}</Badge>
-                        {r.decisionNote && <div className="muted small">{r.decisionNote}</div>}
-                      </td>
-                      {estado === 'pending' && (
+                  {filas.map((r) => {
+                    const e = de(r);
+                    return (
+                      <tr key={r.id}>
+                        <td><strong>{r.name}</strong></td>
+                        <td className="muted small">{r.source ?? '—'}</td>
+                        <td>{r.requestedByName ?? '—'}</td>
                         <td>
-                          <div className="stack" style={{ gap: '0.35rem', minWidth: 220 }}>
-                            <select aria-label="Tecnología del catálogo" value={eleccion[r.id]?.skillId ?? ''} onChange={(e) => set(r.id, 'skillId', e.target.value)}>
-                              <option value="">Vincular con…</option>
-                              {(skills.data ?? []).filter((s) => s.isActive !== false).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                            <input aria-label="Motivo" placeholder="Motivo (obligatorio al rechazar)" value={eleccion[r.id]?.note ?? ''} onChange={(e) => set(r.id, 'note', e.target.value)} />
-                            <div className="flex" style={{ gap: '0.35rem' }}>
-                              <Button size="sm" icon={<FiCheck size={13} />} loading={busy === r.id} disabled={!eleccion[r.id]?.skillId} onClick={() => decidir(r, 'added')}>Vincular</Button>
-                              <Button size="sm" variant="secondary" icon={<FiX size={13} />} disabled={busy === r.id} onClick={() => decidir(r, 'rejected')}>Rechazar</Button>
-                            </div>
-                          </div>
+                          <Badge tone={ESTADO[r.status].tone}>{ESTADO[r.status].label}</Badge>
+                          {r.resolution && <div className="muted small">{RESOLUCION[r.resolution]}</div>}
+                          {r.decisionNote && <div className="muted small">{r.decisionNote}</div>}
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        {estado === 'pending' && (
+                          <td>
+                            <div className="stack" style={{ gap: '0.4rem', minWidth: 260 }}>
+                              <div className="chip-row" role="radiogroup" aria-label={`Decisión sobre ${r.name}`}>
+                                {([
+                                  ['new_skill', 'Tecnología nueva'],
+                                  ['alias', 'Es otro nombre de…'],
+                                  ['rejected', 'Rechazar'],
+                                ] as const).map(([k, etiqueta]) => (
+                                  <button key={k} type="button" role="radio" aria-checked={e.modo === k}
+                                    className={`chip ${e.modo === k ? 'on' : ''}`} onClick={() => set(r, { modo: k })}>
+                                    {etiqueta}
+                                  </button>
+                                ))}
+                              </div>
+
+                              {e.modo === 'new_skill' && (
+                                <>
+                                  <input aria-label="Nombre en el catálogo" value={e.nombre} onChange={(ev) => set(r, { nombre: ev.target.value })} />
+                                  <select aria-label="Área principal" value={e.areaId} onChange={(ev) => set(r, { areaId: ev.target.value, secundarias: e.secundarias.filter((x) => x !== ev.target.value) })}>
+                                    <option value="">Área principal…</option>
+                                    {(areas.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                  </select>
+                                  <details>
+                                    <summary className="small">Áreas secundarias (opcional)</summary>
+                                    <div className="chip-row">
+                                      {(areas.data ?? []).filter((a) => a.id !== e.areaId).map((a) => {
+                                        const on = e.secundarias.includes(a.id);
+                                        return (
+                                          <button key={a.id} type="button" className={`chip ${on ? 'on' : ''}`} aria-pressed={on}
+                                            onClick={() => set(r, { secundarias: on ? e.secundarias.filter((x) => x !== a.id) : [...e.secundarias, a.id] })}>
+                                            {a.name}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </details>
+                                </>
+                              )}
+
+                              {e.modo === 'alias' && (
+                                <>
+                                  <select aria-label="Tecnología del catálogo" value={e.skillId} onChange={(ev) => set(r, { skillId: ev.target.value, misma: false })}>
+                                    <option value="">Es otro nombre de…</option>
+                                    {(skills.data ?? []).filter((s) => s.isActive !== false).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                  </select>
+                                  {e.skillId && (
+                                    <label className="flex small" style={{ gap: '0.35rem', alignItems: 'flex-start' }}>
+                                      <input type="checkbox" checked={e.misma} onChange={(ev) => set(r, { misma: ev.target.checked })} />
+                                      <span>
+                                        Confirmo que «{r.name}» es la misma tecnología que «{(skills.data ?? []).find((s) => s.id === e.skillId)?.name}»,
+                                        no una que la usa (FastAPI usa Python, pero no es Python).
+                                      </span>
+                                    </label>
+                                  )}
+                                </>
+                              )}
+
+                              {e.modo === 'rejected' && (
+                                <input aria-label="Motivo" placeholder="Motivo (lo verá quien lo pidió)" value={e.nota} onChange={(ev) => set(r, { nota: ev.target.value })} />
+                              )}
+
+                              <div className="flex" style={{ gap: '0.35rem' }}>
+                                <Button size="sm" variant={e.modo === 'rejected' ? 'secondary' : 'primary'}
+                                  icon={e.modo === 'rejected' ? <FiX size={13} /> : <FiCheck size={13} />}
+                                  loading={busy === r.id} disabled={!listo(e)} onClick={() => void decidir(r)}>
+                                  {e.modo === 'new_skill' ? 'Agregar al catálogo' : e.modo === 'alias' ? 'Registrar como alias' : 'Rechazar'}
+                                </Button>
+                              </div>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

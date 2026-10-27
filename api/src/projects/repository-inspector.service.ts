@@ -216,7 +216,26 @@ export class RepositoryInspectorService {
         });
       }
     }
+    return this.marcar(declaradas, encontradas);
+  }
 
+  /**
+   * V5-24: vuelve a cruzar las señales guardadas con las tecnologías que el
+   * proyecto declara AHORA, sin llamar a GitHub. Así, aceptar una sugerencia
+   * («La usé») la muestra enseguida como «declarada · detectada en el
+   * repositorio», en lugar de seguir «no declarada» hasta la próxima comprobación.
+   */
+  recruzar(guardadas: TechnologySignal[], declaradas: string[]): TechnologySignal[] {
+    const encontradas = new Map<string, { nombre: string; source: string }>();
+    for (const s of guardadas) {
+      if (s.status === TechnologyStatus.DECLARED || !s.source) continue;
+      encontradas.set(this.norm(s.name), { nombre: s.name, source: s.source });
+    }
+    return this.marcar(declaradas, encontradas);
+  }
+
+  /** Lo declarado con su señal, si la hay, y lo detectado que nadie declaró. */
+  private marcar(declaradas: string[], encontradas: Map<string, { nombre: string; source: string }>): TechnologySignal[] {
     const salida: TechnologySignal[] = [];
     const yaVistas = new Set<string>();
     for (const d of declaradas) {

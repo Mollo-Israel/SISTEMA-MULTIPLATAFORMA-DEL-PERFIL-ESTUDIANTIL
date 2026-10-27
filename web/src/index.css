@@ -115,6 +115,8 @@ textarea { min-height: 80px; resize: vertical; }
 .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
 .badge-gray { background: var(--gray-100); color: var(--gray-700); }
 .badge-bordo { background: var(--bordo-100); color: var(--bordo); }
+/* V5 §12.3: sugerencia detectada que todavía no se añadió (neutra, nunca roja). */
+.badge-neutral { background: #eef2f7; color: #2f4a66; }
 .badge-green { background: #e3f3ea; color: var(--green); }
 .badge-amber { background: #f8efdc; color: var(--amber); }
 .badge-red { background: #f9e3e1; color: var(--red); }
