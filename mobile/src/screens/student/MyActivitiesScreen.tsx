@@ -37,9 +37,10 @@ export default function MyActivitiesScreen() {
   }, [data, query]);
 
   const groups = [
-    { key: 'confirmed', title: 'Participación confirmada' },
-    { key: 'accepted', title: 'Aceptado en oportunidades externas' },
-    { key: 'registered', title: 'Inscripciones pendientes' },
+    { key: 'confirmed', title: 'Asistencia registrada' },
+    { key: 'accepted', title: 'Admitido o aceptado por el proveedor' },
+    { key: 'registered', title: 'Solicitudes pendientes' },
+    { key: 'rejected', title: 'No admitidas' },
     { key: 'interested', title: 'Marcadas como interés' },
     { key: 'absent', title: 'Ausencias registradas' },
   ];

@@ -786,8 +786,9 @@ export const activityService = {
   /** Baja voluntaria, solo antes de que confirmen la participación (§23). */
   cancelRegistration: (id: string) =>
     api.post(`/activities/${id}/cancel-registration`).then((r) => r.data),
-  confirm: (id: string, studentProfileId: string, status: string) =>
-    api.patch(`/activities/${id}/confirm-participation`, { studentProfileId, status }).then((r) => r.data),
+  /** V5 §6: admitir (`accepted`), no admitir (`rejected`, con motivo) o registrar asistencia. */
+  confirm: (id: string, studentProfileId: string, status: string, reason?: string) =>
+    api.patch(`/activities/${id}/confirm-participation`, { studentProfileId, status, ...(reason ? { reason } : {}) }).then((r) => r.data),
   participants: (id: string) => api.get<Participant[]>(`/activities/${id}/participants`).then((r) => r.data),
   /** V4.1 A41-011: cerrar el acta de asistencia de una actividad terminada. */
   closeAttendance: (id: string) => api.post<Activity>(`/activities/${id}/attendance/close`).then((r) => r.data),

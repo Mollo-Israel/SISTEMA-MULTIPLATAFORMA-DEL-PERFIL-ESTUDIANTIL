@@ -604,7 +604,7 @@ export interface Activity {
   registrationBlockReason?: string | null;
   /** Situación del estudiante que consulta. Solo llega en su listado. */
   /** `evidenceEligible`: V3 §15, ya puede adjuntar la credencial del proveedor. */
-  myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean } | null;
+  myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean; decisionReason?: string | null } | null;
   /** Revisión de Dirección (V2 §27). null = sin enviar. */
   reviewStatus?: ActivityReviewStatus | null;
   requiresReview?: boolean;
@@ -627,12 +627,15 @@ export const ACTIVITY_REVIEW_LABEL: Record<ActivityReviewStatus | 'unsubmitted',
 
 /** Participación de un estudiante en una actividad (§23). */
 export type RegistrationStatus =
-  | 'interested' | 'registered' | 'accepted' | 'confirmed' | 'absent' | 'cancelled';
+  | 'interested' | 'registered' | 'accepted' | 'rejected' | 'confirmed' | 'absent' | 'cancelled';
 
 export interface Participant {
   id: string;
   studentProfileId: string;
   status: string;
+  /** V5 §6: motivo de una solicitud no admitida. */
+  decisionReason?: string | null;
+  acceptedAt?: string | null;
   studentName: string | null;
   semester: number | null;
   createdAt: string;

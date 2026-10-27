@@ -461,14 +461,19 @@ export default function ActivitiesScreen({ navigation }: any) {
                   <View style={styles.myState}>
                     <Text style={styles.myStateText}>
                       Tu estado:{' '}
+                      {/* V5 §6: pedir un lugar, tenerlo y asistir son tres cosas. */}
                       {mine.status === 'confirmed'
-                        ? 'participación confirmada'
+                        ? 'asistencia registrada por el responsable'
                         : mine.status === 'accepted'
-                          ? mine.evidenceEligible
-                            ? 'aceptado; ya puedes adjuntar tu credencial en Evidencias'
-                            : 'aceptado por el proveedor'
+                          ? a.originType === 'external'
+                            ? mine.evidenceEligible
+                              ? 'aceptado; ya puedes adjuntar tu credencial en Evidencias'
+                              : 'aceptado por el proveedor'
+                            : 'admitido: tienes un lugar. La asistencia se registra el día del evento'
+                        : mine.status === 'rejected'
+                          ? `no admitido${mine.decisionReason ? `: ${mine.decisionReason}` : ''}`
                         : mine.status === 'registered'
-                          ? 'inscrito, pendiente de registro por el responsable'
+                          ? 'solicitud pendiente: el responsable decide si te admite'
                           : mine.status === 'absent'
                             ? 'registrado como ausente'
                             : mine.status === 'cancelled'
@@ -482,9 +487,12 @@ export default function ActivitiesScreen({ navigation }: any) {
                   <View style={styles.blocked}>
                     <Text style={styles.blockedText}>{blocked}</Text>
                   </View>
-                ) : mine?.status === 'confirmed' || mine?.status === 'accepted' || mine?.status === 'absent' ? (
+                ) : mine?.status === 'confirmed' || mine?.status === 'absent' || mine?.status === 'rejected'
+                  || (mine?.status === 'accepted' && a.originType === 'external') ? (
                   <Muted>
-                    Tu participación ya fue registrada por el responsable y no puede modificarse.
+                    {mine?.status === 'rejected'
+                      ? 'Si crees que es un error, escribe al responsable.'
+                      : 'Lo registró el responsable y no puede modificarse desde aquí.'}
                   </Muted>
                 ) : (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -507,15 +515,15 @@ export default function ActivitiesScreen({ navigation }: any) {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Button
-                        title={mine?.status === 'registered' ? 'Darme de baja' : 'Inscribirme'}
-                        icon={mine?.status === 'registered' ? 'user-minus' : 'user-plus'}
-                        variant={mine?.status === 'registered' ? 'danger' : 'primary'}
+                        title={(mine?.status === 'registered' || mine?.status === 'accepted') ? 'Darme de baja' : 'Inscribirme'}
+                        icon={(mine?.status === 'registered' || mine?.status === 'accepted') ? 'user-minus' : 'user-plus'}
+                        variant={(mine?.status === 'registered' || mine?.status === 'accepted') ? 'danger' : 'primary'}
                         loading={busy === a.id}
                         onPress={() =>
                           // §23: mientras nadie haya confirmado, la inscripción es
                           // reversible. Una vez confirmada ya es experiencia y solo
                           // el responsable puede corregirla.
-                          (mine?.status === 'registered'
+                          ((mine?.status === 'registered' || mine?.status === 'accepted')
                             ? act(
                               () => activityService.cancelRegistration(a.id),
                               'Inscripción dada de baja.',

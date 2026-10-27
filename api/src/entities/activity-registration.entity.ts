@@ -45,9 +45,16 @@ export class ActivityRegistration {
   @Column({ type: 'enum', enum: RegistrationStatus, default: RegistrationStatus.INTERESTED })
   status: RegistrationStatus;
 
-  /** V3 §15: cuándo registró el responsable que el proveedor lo aceptó. */
+  /**
+   * Cuándo se admitió la inscripción: el responsable de una interna (o la
+   * admisión automática, V5 §6.1) o el proveedor de una externa (V3 §15).
+   */
   @Column({ name: 'accepted_at', type: 'timestamptz', nullable: true })
   acceptedAt: Date | null;
+
+  /** V5 §6: motivo de una solicitud no admitida. Lo ve el estudiante. */
+  @Column({ name: 'decision_reason', type: 'varchar', length: 300, nullable: true })
+  decisionReason: string | null;
 
   @Column({ name: 'confirmed_by', type: 'uuid', nullable: true })
   confirmedById: string | null;

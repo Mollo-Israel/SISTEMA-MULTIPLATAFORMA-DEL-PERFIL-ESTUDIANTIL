@@ -121,7 +121,7 @@ export const HELP: Record<string, HelpEntry[]> = {
   [RolNombre.SCIENTIFIC_SOCIETY]: [
     ...CUENTA,
     { tema: 'actividades', question: '¿Por qué mi actividad sigue en borrador?', answer: 'Hasta que Dirección la aprueba no se puede publicar. Revisa su estado en la columna «Revisión». Para crear una nueva usa el botón «Nueva actividad» de Mis actividades.', to: '/society/activities', image: IMG.actividad },
-    { tema: 'actividades', question: '¿Cómo confirmo quién participó?', answer: 'En Participantes elige la actividad y marca la asistencia. Solo la participación confirmada cuenta para el estudiante.', to: '/society/participants' },
+    { tema: 'actividades', question: '¿Cómo confirmo quién participó?', answer: 'Son dos pasos. Antes del evento admites (o no, con motivo) a quien pidió un lugar; si la actividad es abierta y sin cupo, la admisión es automática. Cuando el evento empezó, marcas Presente o Ausente. Solo la asistencia registrada cuenta para el estudiante.', to: '/society/participants' },
   ],
   [RolNombre.ADMIN]: [
     ...CUENTA,

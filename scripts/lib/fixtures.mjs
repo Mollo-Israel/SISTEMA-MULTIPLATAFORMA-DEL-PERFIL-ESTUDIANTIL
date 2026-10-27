@@ -55,6 +55,8 @@ export async function req(method, path, { token, body, raw } = {}) {
 export async function ajustarCuerpoActividad(method, path, token, body) {
   if (!body || typeof body !== 'object') return body;
   if (method === 'POST' && path === '/activities') return completarActividad(token, body);
+  const asistencia = method === 'PATCH' && path.match(/^\/activities\/([0-9a-f-]{36})\/confirm-participation$/);
+  if (asistencia) return prepararAsistencia(asistencia[1], token, body);
   if (method === 'PATCH' && /^\/activities\/[0-9a-f-]{36}$/.test(path)
     && body.status === 'cancelled' && body.cancellationReason === undefined) {
     return { ...body, cancellationReason: 'Cancelada por la prueba automática.' };
@@ -64,6 +66,50 @@ export async function ajustarCuerpoActividad(method, path, token, body) {
 
 let catalogoCache = null;
 let adminDePrueba = null;
+
+/**
+ * V5 §6: la asistencia se registra a quien fue admitido y con el evento ya
+ * empezado. Las suites anteriores registran asistencia sobre actividades
+ * futuras porque prueban otra cosa (trayectoria, afinidad, puntos…). Como
+ * con `completarActividad`, aquí se cumple el requisito por la vía legítima
+ * de la API: el administrador adelanta el inicio de esa actividad de prueba y
+ * el responsable admite la solicitud. La regla del servidor no se relaja: la
+ * prueba directa está en `e2e-v5.mjs`, que lo pide con `__sinAdelantar`.
+ */
+async function prepararAsistencia(activityId, token, original) {
+  const { __sinAdelantar, ...body } = original;
+  if (__sinAdelantar || !['confirmed', 'absent'].includes(body.status)) return body;
+  const llamar = async (m, p, t, b) => {
+    const r = await fetch(`${API}${p}`, {
+      method: m,
+      headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) },
+      body: b ? JSON.stringify(b) : undefined,
+    });
+    let data = null;
+    try { data = await r.json(); } catch { /* sin cuerpo */ }
+    return { status: r.status, data };
+  };
+  adminDePrueba ??= await loginAdmin();
+  const act = await llamar('GET', `/activities/${activityId}`, adminDePrueba);
+  if (act.status !== 200 || act.data?.originType === 'external') return body;
+  const inicio = act.data?.eventDate ? new Date(act.data.eventDate).getTime() : null;
+  if (inicio === null || inicio - 2 * 60_000 > Date.now()) {
+    const fin = act.data?.endAt ? new Date(act.data.endAt).getTime() : 0;
+    await llamar('PATCH', `/activities/${activityId}`, adminDePrueba, {
+      activityDate: new Date(Date.now() - 3_600_000).toISOString(),
+      endAt: new Date(Math.max(fin, Date.now() + 24 * 3_600_000)).toISOString(),
+    });
+  }
+  const filas = await llamar('GET', `/activities/${activityId}/participants`, token);
+  const fila = (filas.data ?? []).find?.((r) => r.studentProfileId === body.studentProfileId);
+  const autoAdmite = (act.data?.registrationMode ?? 'open') === 'open' && !act.data?.capacity;
+  if (fila?.status === 'registered' && !autoAdmite) {
+    await llamar('PATCH', `/activities/${activityId}/confirm-participation`, token, {
+      studentProfileId: body.studentProfileId, status: 'accepted',
+    });
+  }
+  return body;
+}
 
 /** Una habilidad neutra para un área de prueba que no tiene ninguna. */
 async function habilidadNeutra(areaId) {

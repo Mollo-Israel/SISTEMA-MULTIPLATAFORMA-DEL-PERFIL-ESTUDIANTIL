@@ -29,6 +29,9 @@ import {
   ActivityType,
   canTransition,
   GamificationTrigger,
+  ACTIVITY_START_TOLERANCE_MINUTES_DEFAULT,
+  ATTENDANCE_STATUSES,
+  ATTENDANCE_WINDOW_DAYS_DEFAULT,
   OCCUPYING_STATUSES,
   PUBLISHABLE_REVIEW_STATUSES,
   REGISTRABLE_ACTIVITY_STATUSES,
@@ -50,6 +53,7 @@ import { CREDENTIAL_PATTERN_CHARS } from './credential-pattern';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
 import { UploadsService } from '../storage/uploads.service';
 import { CredentialEligibilityService } from './credential-eligibility.service';
+import { admisionAutomatica, admitidoParaAsistencia, bloqueoAsistencia, yaEmpezo } from './registration.rules';
 import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 import { User } from '../entities/user.entity';
 import { ActivityResponsible } from '../entities/activity-responsible.entity';
@@ -133,7 +137,7 @@ export interface ActivityWithCounts extends Activity {
    * Solo se rellena para el rol estudiante: a un docente no le sirve de
    * nada y consultarlo seria trabajo tirado.
    */
-  myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean } | null;
+  myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean; decisionReason?: string | null } | null;
 }
 
 /**
@@ -565,6 +569,18 @@ export class ActivitiesService {
         code: 'ACTIVITY_RESPONSIBLE_OPERATION_ONLY',
       });
     }
+  }
+
+  /** V5 §5.5: tolerancia, en minutos, al comparar el inicio con «ahora». */
+  private toleranciaInicioMin(): number {
+    const v = Number(this.config.get<string>('ACTIVITY_START_TOLERANCE_MINUTES'));
+    return Number.isFinite(v) && v >= 0 && v <= 10 ? v : ACTIVITY_START_TOLERANCE_MINUTES_DEFAULT;
+  }
+
+  /** V5 ND-06: días después del fin para regularizar la asistencia. */
+  private ventanaAsistenciaDias(): number {
+    const v = Number(this.config.get<string>('ATTENDANCE_WINDOW_DAYS'));
+    return Number.isFinite(v) && v >= 0 && v <= 60 ? v : ATTENDANCE_WINDOW_DAYS_DEFAULT;
   }
 
   /** V4.1 A41-010 (§4.6, 23.5): una actividad nueva no se publica con un inicio que ya pasó. */
@@ -1474,6 +1490,7 @@ export class ActivitiesService {
           id: registration.id,
           status: registration.status,
           evidenceEligible: CredentialEligibilityService.elegible(activity, registration.status),
+          decisionReason: registration.decisionReason,
         }
         : null,
       confirmedCount: confirmed,
@@ -1712,10 +1729,20 @@ export class ActivitiesService {
     if (!registration) {
       throw new NotFoundException('No está inscrito ni manifestó interés en esta actividad.');
     }
-    if (registration.status === RegistrationStatus.ACCEPTED) {
+    // V5 §6: en una interna, retirarse de una plaza admitida la libera; en una
+    // externa, la aceptación la registró el responsable por el proveedor.
+    const activity = await this.activities.findOne({ where: { id: activityId } });
+    if (registration.status === RegistrationStatus.ACCEPTED && activity?.originType === ActivityOrigin.EXTERNAL) {
       throw new BadRequestException(
         'El responsable ya registró que el proveedor te aceptó. Si hubo un error, avísale.',
       );
+    }
+    if (registration.status === RegistrationStatus.ACCEPTED && activity?.eventDate
+      && activity.eventDate.getTime() <= Date.now()) {
+      throw new BadRequestException('La actividad ya empezó: avisa al responsable si no pudiste asistir.');
+    }
+    if (registration.status === RegistrationStatus.REJECTED) {
+      throw new BadRequestException('Tu solicitud no fue admitida: no hay inscripción que cancelar.');
     }
     if (registration.status === RegistrationStatus.CONFIRMED) {
       throw new BadRequestException(
@@ -1740,6 +1767,7 @@ export class ActivitiesService {
     activityId: string,
     studentProfileId: string,
     status: RegistrationStatus,
+    reason?: string,
   ): Promise<ActivityRegistration> {
     const activity = await this.findOne(activityId);
     // V2 §6.5: la administración es técnica; confirmar participación no es
@@ -1771,49 +1799,87 @@ export class ActivitiesService {
     }
 
     // V3 §15: en una externa no se confirma asistencia —no ocurre en la
-    // carrera—; se registra que el proveedor lo aceptó. Y al revés, una
-    // interna no tiene «aceptación del proveedor».
+    // carrera—; se registra que el proveedor lo aceptó.
     const externa = activity.originType === ActivityOrigin.EXTERNAL;
     if (externa && status === RegistrationStatus.CONFIRMED) {
       const m = 'En una oportunidad externa se registra la aceptación del proveedor; '
         + 'la credencial la adjunta el estudiante cuando termine.';
       throw new BadRequestException({ code: 'EXTERNAL_USES_ACCEPTANCE', message: m, fields: { status: [m] } });
     }
-    if (!externa && status === RegistrationStatus.ACCEPTED) {
-      const m = 'La aceptación del proveedor solo existe en oportunidades externas.';
-      throw new BadRequestException({ code: 'ACCEPTANCE_ONLY_EXTERNAL', message: m, fields: { status: [m] } });
-    }
-
-    // V4.1 A41-011 (§5): el acta cerrada no se edita por esta vía; una actividad
-    // cancelada no otorga asistencia; y una participación ya consolidada (la
-    // actividad terminó o hay constancia emitida) no se retira libremente.
-    if (activity.attendanceStatus === 'locked') {
-      const m = 'La asistencia ya está cerrada. Si hay un error, la corrige Dirección con un motivo.';
-      throw new ConflictException({ code: 'ATTENDANCE_LOCKED', message: m });
-    }
-    if (activity.status === ActivityStatus.CANCELLED && OCCUPYING_STATUSES.includes(status)) {
-      const m = 'La actividad está cancelada: no se registra asistencia.';
+    if (activity.status === ActivityStatus.CANCELLED && status !== RegistrationStatus.REJECTED) {
+      const m = 'La actividad está cancelada: no se admite ni se registra asistencia.';
       throw new ConflictException({ code: 'ACTIVITY_CANCELLED', message: m });
-    }
-    if (registration.status === RegistrationStatus.CONFIRMED && status !== RegistrationStatus.CONFIRMED
-      && await this.participacionConsolidada(activity, registration)) {
-      const m = 'Esta participación ya está consolidada (la actividad terminó o tiene constancia). '
-        + 'Si hay un error, la corrige Dirección con un motivo.';
-      throw new ConflictException({ code: 'PARTICIPATION_CONSOLIDATED', message: m });
-    }
-
-    // El cupo se controla al aprobar: solo los confirmados (o aceptados) ocupan lugar.
-    if (OCCUPYING_STATUSES.includes(status) && !OCCUPYING_STATUSES.includes(registration.status)) {
-      await this.assertConfirmCapacity(activity);
     }
 
     const anterior = registration.status;
+    const asistencia = ATTENDANCE_STATUSES.includes(status);
+    const yaAsistencia = ATTENDANCE_STATUSES.includes(anterior);
+
+    if (asistencia) {
+      // V5 §6.1 / §5.7 / ND-06: asistir solo se registra con el evento empezado,
+      // dentro de la ventana de regularización y con el acta abierta.
+      const bloqueo = bloqueoAsistencia(activity, new Date(), this.toleranciaInicioMin(), this.ventanaAsistenciaDias());
+      if (bloqueo) throw new ConflictException(bloqueo);
+      if (!admitidoParaAsistencia(activity, anterior)) {
+        const m = 'Primero admite la solicitud: la asistencia se registra a quien tiene un lugar.';
+        throw new ConflictException({ code: 'ATTENDANCE_REQUIRES_ADMISSION', message: m, fields: { status: [m] } });
+      }
+      // V4.1 A41-011: una participación consolidada (la actividad terminó o
+      // hay constancia emitida) no se retira libremente.
+      if (anterior === RegistrationStatus.CONFIRMED && status !== RegistrationStatus.CONFIRMED
+        && await this.participacionConsolidada(activity, registration)) {
+        const m = 'Esta participación ya está consolidada (la actividad terminó o tiene constancia). '
+          + 'Si hay un error, la corrige Dirección con un motivo.';
+        throw new ConflictException({ code: 'PARTICIPATION_CONSOLIDATED', message: m });
+      }
+    } else {
+      // Admitir o rechazar es una decisión sobre la solicitud, no sobre la
+      // asistencia: no se toma después de registrarla, ni con el acta cerrada.
+      if (activity.attendanceStatus === 'locked') {
+        const m = 'La asistencia ya está cerrada. Si hay un error, la corrige Dirección con un motivo.';
+        throw new ConflictException({ code: 'ATTENDANCE_LOCKED', message: m });
+      }
+      if (yaAsistencia) {
+        const m = 'Ya se registró su asistencia: la admisión no se cambia. Si hay un error, la corrige Dirección con un motivo.';
+        throw new ConflictException({ code: 'ADMISSION_AFTER_ATTENDANCE', message: m });
+      }
+      if (anterior === RegistrationStatus.INTERESTED || anterior === RegistrationStatus.CANCELLED) {
+        const m = 'El estudiante no tiene una solicitud de inscripción vigente.';
+        throw new ConflictException({ code: 'NO_PENDING_REQUEST', message: m });
+      }
+      if (status === RegistrationStatus.REJECTED && !reason?.trim()) {
+        const m = 'Explica el motivo: el estudiante lo verá.';
+        throw new BadRequestException({ code: 'REJECTION_REASON_REQUIRED', message: m, fields: { reason: [m] } });
+      }
+    }
+
+    // V5 §6.1 (C05): ocupar plaza es atómico. La fila de la actividad se
+    // bloquea y el cupo se cuenta dentro de la misma transacción, así dos
+    // decisiones simultáneas no superan el cupo.
+    const ocupa = OCCUPYING_STATUSES.includes(status) && !OCCUPYING_STATUSES.includes(anterior);
     registration.status = status;
     registration.confirmedById = confirmer.userId;
-    registration.acceptedAt = status === RegistrationStatus.ACCEPTED
-      ? (anterior === RegistrationStatus.ACCEPTED ? registration.acceptedAt : new Date())
-      : null;
-    const saved = await this.registrations.save(registration);
+    if (status === RegistrationStatus.ACCEPTED) {
+      registration.acceptedAt = anterior === RegistrationStatus.ACCEPTED ? registration.acceptedAt : new Date();
+      registration.decisionReason = null;
+    } else if (status === RegistrationStatus.REJECTED) {
+      registration.acceptedAt = null;
+      registration.decisionReason = reason!.trim().slice(0, 300);
+    }
+    const saved = await this.activities.manager.transaction(async (m) => {
+      if (ocupa && activity.capacity) {
+        await m.getRepository(Activity).createQueryBuilder('a')
+          .setLock('pessimistic_write').where('a.id = :id', { id: activity.id }).getOne();
+        const ocupados = await m.getRepository(ActivityRegistration).count({
+          where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
+        });
+        if (ocupados >= activity.capacity) {
+          const msg = `La actividad alcanzó su cupo de ${activity.capacity} lugares.`;
+          throw new ConflictException({ code: 'ACTIVITY_FULL', message: msg });
+        }
+      }
+      return m.getRepository(ActivityRegistration).save(registration);
+    });
 
     // §23: confirmar dispara trayectoria, afinidad, recomendaciones,
     // gamificación y auditoría. Las tres primeras cuelgan del recálculo;
@@ -1827,8 +1893,10 @@ export class ActivitiesService {
     await this.audit.record({
       actorUserId: confirmer.userId,
       eventType: status === RegistrationStatus.ACCEPTED
-        ? AuditEventType.EXTERNAL_OPPORTUNITY_ACCEPTED
-        : AuditEventType.PARTICIPATION_CONFIRMED,
+        ? (externa ? AuditEventType.EXTERNAL_OPPORTUNITY_ACCEPTED : AuditEventType.REGISTRATION_ADMITTED)
+        : status === RegistrationStatus.REJECTED
+          ? AuditEventType.REGISTRATION_REJECTED
+          : AuditEventType.PARTICIPATION_CONFIRMED,
       entityType: 'activity_registration',
       entityId: saved.id,
       metadata: {
@@ -1836,22 +1904,39 @@ export class ActivitiesService {
         studentProfileId,
         de: anterior,
         a: status,
+        ...(status === RegistrationStatus.REJECTED ? { motivo: saved.decisionReason } : {}),
       },
     });
 
     // Si la oportunidad ya terminó, desde ahora puede adjuntar su credencial.
     if (status !== anterior) {
       await this.eligibility.announce(activity, [saved], confirmer.userId);
-      // V3 §33: PARTICIPATION_CONFIRMED / ACTIVITY_REGISTRATION_ACCEPTED.
-      if (status === RegistrationStatus.CONFIRMED || status === RegistrationStatus.ACCEPTED) {
+      // V3 §33 y V5 §6: cada aviso dice lo que pasó. Admitir no es asistir.
+      const aviso: Record<string, { kind: string; title: string; body: string } | undefined> = {
+        [RegistrationStatus.CONFIRMED]: {
+          kind: 'PARTICIPATION_CONFIRMED',
+          title: 'Asistencia registrada',
+          body: `El responsable registró tu asistencia a «${activity.title}». Ya cuenta en tu trayectoria.`,
+        },
+        [RegistrationStatus.ACCEPTED]: {
+          kind: 'ACTIVITY_REGISTRATION_ACCEPTED',
+          title: externa ? 'Te aceptaron' : 'Inscripción admitida',
+          body: externa
+            ? `El proveedor te aceptó en «${activity.title}». Al terminar podrás adjuntar tu credencial.`
+            : `Tienes un lugar en «${activity.title}». La asistencia la registra el responsable el día del evento.`,
+        },
+        [RegistrationStatus.REJECTED]: {
+          kind: 'ACTIVITY_REGISTRATION_REJECTED',
+          title: 'Inscripción no admitida',
+          body: `Tu solicitud para «${activity.title}» no fue admitida: ${saved.decisionReason}`,
+        },
+      };
+      const a = aviso[status];
+      if (a) {
         try {
           await this.notifications.emit({
             userId: profile.userId,
-            kind: status === RegistrationStatus.CONFIRMED ? 'PARTICIPATION_CONFIRMED' : 'ACTIVITY_REGISTRATION_ACCEPTED',
-            title: status === RegistrationStatus.CONFIRMED ? 'Participación confirmada' : 'Te aceptaron',
-            body: status === RegistrationStatus.CONFIRMED
-              ? `El responsable confirmó tu participación en «${activity.title}». Ya cuenta en tu trayectoria.`
-              : `El proveedor te aceptó en «${activity.title}». Al terminar podrás adjuntar tu credencial.`,
+            ...a,
             link: '/student/activities',
             entityType: 'activity_registration',
             entityId: saved.id,
@@ -1939,6 +2024,13 @@ export class ActivitiesService {
     }
     if (activity.status === ActivityStatus.CANCELLED && status === RegistrationStatus.CONFIRMED) {
       throw new ConflictException({ code: 'ACTIVITY_CANCELLED', message: 'La actividad está cancelada: no se registra asistencia.' });
+    }
+    // V5 §6: ni una corrección registra asistencia a algo que no empezó.
+    if (status !== RegistrationStatus.REGISTERED && !yaEmpezo(activity.eventDate, new Date(), this.toleranciaInicioMin())) {
+      throw new ConflictException({
+        code: 'ATTENDANCE_BEFORE_START',
+        message: 'La actividad todavía no empezó: no hay asistencia que corregir.',
+      });
     }
     const registration = await this.registrations.findOne({ where: { activityId, studentProfileId } });
     if (!registration) throw new NotFoundException('El estudiante no está inscrito en esta actividad.');
@@ -2041,6 +2133,7 @@ export class ActivitiesService {
       studentProfileId: r.studentProfileId,
       status: r.status,
       acceptedAt: r.acceptedAt,
+      decisionReason: r.decisionReason,
       evidenceEligible: CredentialEligibilityService.elegible(activity, r.status),
       studentName: r.studentProfile?.user
         ? `${r.studentProfile.user.firstName} ${r.studentProfile.user.lastName}`
@@ -2184,29 +2277,45 @@ export class ActivitiesService {
       where: { activityId: activity.id, studentProfileId: profile.id },
     });
 
-    if (!registration) {
-      registration = this.registrations.create({
-        activityId: activity.id,
-        studentProfileId: profile.id,
-        status: target,
-      });
-    } else if (
-      registration.status === RegistrationStatus.CONFIRMED ||
-      registration.status === RegistrationStatus.ACCEPTED ||
-      registration.status === RegistrationStatus.ABSENT
+    if (registration && registration.status === RegistrationStatus.REJECTED) {
+      throw new BadRequestException(
+        `Tu solicitud no fue admitida${registration.decisionReason ? `: ${registration.decisionReason}` : '.'} `
+        + 'Si crees que es un error, escribe al responsable.',
+      );
+    }
+    if (
+      registration && (registration.status === RegistrationStatus.CONFIRMED
+        || registration.status === RegistrationStatus.ABSENT
+        || (registration.status === RegistrationStatus.ACCEPTED && target === RegistrationStatus.INTERESTED))
     ) {
       throw new BadRequestException(
         'Su participación ya fue registrada por el responsable de la actividad.',
       );
-    } else if (registration.status === target) {
+    }
+    if (registration && (registration.status === target
+      || (target === RegistrationStatus.REGISTERED && registration.status === RegistrationStatus.ACCEPTED))) {
       throw new BadRequestException(
         target === RegistrationStatus.REGISTERED
           ? 'Ya está inscrito en esta actividad.'
           : 'Ya marcó interés en esta actividad.',
       );
-    } else {
-      registration.status = target;
     }
+
+    // V5 §6.1: una interna abierta y sin cupo admite sola. No es asistencia:
+    // la asistencia la registra el responsable cuando el evento ya empezó.
+    const admitida = target === RegistrationStatus.REGISTERED && admisionAutomatica(activity);
+    const estado = admitida ? RegistrationStatus.ACCEPTED : target;
+    if (!registration) {
+      registration = this.registrations.create({
+        activityId: activity.id,
+        studentProfileId: profile.id,
+        status: estado,
+      });
+    } else {
+      registration.status = estado;
+    }
+    registration.acceptedAt = admitida ? new Date() : null;
+    registration.decisionReason = null;
     const guardada = await this.registrations.save(registration);
     if (target === RegistrationStatus.REGISTERED) {
       await this.audit.record({
@@ -2214,7 +2323,7 @@ export class ActivitiesService {
         eventType: AuditEventType.ACTIVITY_REGISTERED,
         entityType: 'activity_registration',
         entityId: guardada.id,
-        metadata: { activityId: activity.id, studentProfileId: profile.id },
+        metadata: { activityId: activity.id, studentProfileId: profile.id, admisionAutomatica: admitida },
       });
     }
     return guardada;
@@ -2431,6 +2540,7 @@ export class ActivitiesService {
             id: propia.id,
             status: propia.status,
             evidenceEligible: CredentialEligibilityService.elegible(a, propia.status),
+            decisionReason: propia.decisionReason,
           }
           : null,
       };

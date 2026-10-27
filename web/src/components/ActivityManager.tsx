@@ -28,7 +28,7 @@ import {
   ACTIVITY_STATUS_LABEL,
   ACTIVITY_STATUSES,
   REGISTRATION_BADGE,
-  REGISTRATION_STATUS_LABEL,
+  registrationLabel,
   lbl,
 } from '../constants';
 
@@ -72,6 +72,8 @@ const emptyForm = {
   /** V3.2 §28.3: emisor real del certificado institucional. */
   certificateIssuer: '',
   capacity: '',
+  /** V5 §6.1: abierta (admite sola si no hay cupo) o por aprobación del responsable. */
+  registrationMode: 'open' as 'open' | 'approval',
   status: 'draft',
   semesterScope: [] as number[],
   /** V4.1 A41-016: criterio de puntos configurado (sin puntos libres). */
@@ -326,6 +328,7 @@ export default function ActivityManager({
         .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
       imageFileIds: editing || form.imagenes.length ? form.imagenes.map((i) => i.fileId) : undefined,
       capacity: form.capacity ? Number(form.capacity) : undefined,
+      ...(externa ? {} : { registrationMode: form.registrationMode }),
       semesterScope: form.semesterScope.length ? form.semesterScope : undefined,
       gamificationRules: form.criterionId
         ? [{ trigger: 'participacion_confirmada', criterionId: form.criterionId }]
@@ -457,6 +460,7 @@ export default function ActivityManager({
       imagenes: a.images?.length ? a.images : a.imageFileId && a.imageUrl ? [{ fileId: a.imageFileId, url: a.imageUrl }] : [],
       certificateIssuer: a.certificateIssuer ?? '',
       capacity: a.capacity ? String(a.capacity) : '',
+      registrationMode: a.registrationMode ?? 'open',
       status: a.status,
       semesterScope: a.semesterScope ?? [],
       criterionId: a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.criterionId ?? '',
@@ -560,6 +564,9 @@ export default function ActivityManager({
   const [entrega, setEntrega] = useState<{ ids: string[]; nombre: string } | null>(null);
   /** V4.1 A41-011: corrección excepcional en curso. */
   const [correccion, setCorreccion] = useState<{ row: Participant; status: 'confirmed' | 'absent' } | null>(null);
+  const [rechazo, setRechazo] = useState<Participant | null>(null);
+  const [motivoRechazo, setMotivoRechazo] = useState('');
+  const [errorRechazo, setErrorRechazo] = useState<string | null>(null);
   const [motivoCorr, setMotivoCorr] = useState('');
   const [errorCorr, setErrorCorr] = useState<string | null>(null);
   const [corrigiendo, setCorrigiendo] = useState(false);
@@ -621,9 +628,11 @@ export default function ActivityManager({
   const decide = async (
     activityId: string,
     row: Participant,
-    status: 'confirmed' | 'absent' | 'accepted',
+    status: 'confirmed' | 'absent' | 'accepted' | 'rejected',
+    reason?: string,
   ) => {
     const who = row.studentName ?? 'el estudiante';
+    const externa = activities.find((a) => a.id === activityId)?.originType === 'external';
     if (status === 'absent') {
       const ok = await confirm({
         title: 'Registrar ausencia',
@@ -641,26 +650,32 @@ export default function ActivityManager({
     }
     setBusyRow(row.id);
     try {
-      await activityService.confirm(activityId, row.studentProfileId, status);
+      await activityService.confirm(activityId, row.studentProfileId, status, reason);
       setParticipants(await activityService.participants(activityId));
       await load();
-      notify(
-        status === 'confirmed'
-          ? 'Participación confirmada.'
-          : status === 'accepted'
-            ? 'Aceptación registrada.'
-            : 'Registrado como ausente.',
-        `${who} · ${status === 'confirmed'
-          ? 'suma a su perfil'
-          : status === 'accepted'
-            ? 'podrá adjuntar su credencial cuando termine la oportunidad'
-            : 'ya no cuenta en su perfil'}`,
-      );
+      // V5 §6: cada aviso dice qué pasó; admitir no es asistir.
+      const aviso: Record<typeof status, [string, string]> = {
+        confirmed: ['Asistencia registrada.', 'suma a su trayectoria'],
+        accepted: externa
+          ? ['Aceptación registrada.', 'podrá adjuntar su credencial cuando termine la oportunidad']
+          : ['Inscripción admitida.', 'tiene un lugar; la asistencia se registra el día del evento'],
+        rejected: ['Solicitud no admitida.', 'verá el motivo'],
+        absent: ['Registrado como ausente.', 'no cuenta en su trayectoria'],
+      };
+      notify(aviso[status][0], `${who} · ${aviso[status][1]}`);
     } catch (e) {
       toast.error(apiError(e));
     } finally {
       setBusyRow(null);
     }
+  };
+
+  /** V5 §6: no admitir una solicitud exige un motivo que verá el estudiante. */
+  const noAdmitir = async () => {
+    if (!selected || !rechazo) return;
+    if (motivoRechazo.trim().length < 5) { setErrorRechazo('Explica el motivo (al menos 5 caracteres): el estudiante lo verá.'); return; }
+    await decide(selected, rechazo, 'rejected', motivoRechazo.trim());
+    setRechazo(null);
   };
 
   /** V4.1 A41-011 (§5, B19): cerrar el acta; después no se editan filas por la vía ordinaria. */
@@ -732,16 +747,25 @@ export default function ActivityManager({
   const shownParticipants = partNeedle
     ? participants.filter((r) => normalize(r.studentName ?? '').includes(partNeedle))
     : participants;
-  const pending = shownParticipants.filter((r) => r.status === 'registered');
-  const interested = shownParticipants.filter((r) => r.status === 'interested');
-  const confirmed = shownParticipants.filter((r) => r.status === 'confirmed' || r.status === 'accepted');
-  const absent = shownParticipants.filter((r) => r.status === 'absent');
-  const allConfirmed = participants.filter((r) => r.status === 'confirmed' || r.status === 'accepted');
   // V3 §15: en una externa el responsable registra la aceptación; la
   // credencial la emite el proveedor y la adjunta el estudiante al terminar.
   const esExterna = activities.find((a) => a.id === selected)?.originType === 'external';
+  /*
+   * V5 §6: solicitar, ser admitido y asistir son tres cosas. Una interna
+   * abierta y sin cupo admite sola, y sus solicitudes anteriores cuentan como
+   * admitidas. La asistencia se registra cuando el evento ya empezó.
+   */
+  const autoAdmite = !esExterna && (selectedActivity?.registrationMode ?? 'open') === 'open' && !selectedActivity?.capacity;
+  const empezo = !!selectedActivity?.eventDate && new Date(selectedActivity.eventDate).getTime() - 2 * 60_000 <= Date.now();
+  const pending = shownParticipants.filter((r) => r.status === 'registered' && !autoAdmite);
+  const interested = shownParticipants.filter((r) => r.status === 'interested');
+  const admitted = shownParticipants.filter((r) => r.status === 'accepted' || (r.status === 'registered' && autoAdmite));
+  const confirmed = shownParticipants.filter((r) => r.status === 'confirmed' || (esExterna && r.status === 'accepted'));
+  const absent = shownParticipants.filter((r) => r.status === 'absent');
+  const rejected = shownParticipants.filter((r) => r.status === 'rejected');
+  const allConfirmed = participants.filter((r) => r.status === 'confirmed' || r.status === 'accepted');
   const okStatus: 'confirmed' | 'accepted' = esExterna ? 'accepted' : 'confirmed';
-  const okLabel = esExterna ? 'Registrar aceptación' : 'Confirmar participación';
+  const okLabel = esExterna ? 'Registrar aceptación' : 'Presente';
   const full = !!(selectedActivity?.capacity && allConfirmed.length >= selectedActivity.capacity);
   // V4.1 A41-011: acta cerrada y participación consolidada (la actividad ya terminó).
   const actaCerrada = selectedActivity?.attendanceStatus === 'locked';
@@ -1191,6 +1215,21 @@ export default function ActivityManager({
                 />
                 <FieldError message={errores.errors.capacity} />
               </div>
+              {!externa && (
+                <div className="field">
+                  <label htmlFor="activity-manager-admision">Admisión</label>
+                  <select id="activity-manager-admision" value={form.registrationMode}
+                    onChange={(e) => setForm({ ...form, registrationMode: e.target.value as 'open' | 'approval' })}>
+                    <option value="open">Abierta</option>
+                    <option value="approval">Cada solicitud la admite el responsable</option>
+                  </select>
+                  <span className="field-hint">
+                    {form.registrationMode === 'open' && !form.capacity
+                      ? 'Sin cupo, quien se inscribe queda admitido. La asistencia se registra el día del evento.'
+                      : 'Las solicitudes quedan pendientes hasta que las admitas; así el cupo nunca se supera.'}
+                  </span>
+                </div>
+              )}
               <div className="field">
                 <label htmlFor="activity-manager-puntos-por-participar-opcional">Criterio de puntos (opcional)</label>
                 <select id="activity-manager-puntos-por-participar-opcional"
@@ -1539,9 +1578,12 @@ export default function ActivityManager({
           }
         >
           <p className="muted">
-            {esExterna ? 'Aceptados' : 'Confirmados'}: <strong>{allConfirmed.length}</strong> de{' '}
+            {esExterna ? 'Aceptados' : 'Lugares ocupados (admitidos y asistentes)'}: <strong>{allConfirmed.length}</strong> de{' '}
             {selectedActivity.capacity ?? 'cupo ilimitado'}
             {full && ' · el cupo está lleno'}
+            {!esExterna && (autoAdmite
+              ? ' · admisión automática (abierta y sin cupo)'
+              : ' · cada solicitud la admites tú')}
           </p>
           {/* V4.1 A41-011 (§5): terminar el evento no cierra el acta; se regulariza y se cierra a mano. */}
           {!esExterna && actaCerrada && (
@@ -1578,58 +1620,98 @@ export default function ActivityManager({
             />
           ) : (
             <>
-              <ParticipantGroup
-                title={`Inscritos pendientes de registro (${pending.length})`}
-                rows={pending}
-                empty="No hay inscripciones pendientes."
-                render={(r) => (
-                  <div className="flex" style={{ gap: '0.35rem' }}>
-                    <Button
-                      size="sm"
-                      disabled={full || actaCerrada}
-                      loading={busyRow === r.id}
-                      title={full ? 'El cupo está lleno' : 'Registrar asistencia'}
-                      onClick={() => decide(selectedActivity.id, r, okStatus)}
-                      icon={<FiCheck size={14} />}
-                    >
-                      {okLabel}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={actaCerrada}
-                      loading={busyRow === r.id}
-                      onClick={() => decide(selectedActivity.id, r, 'absent')}
-                      icon={<FiUserX size={14} />}
-                    >
-                      Ausente
-                    </Button>
-                  </div>
-                )}
-              />
+              {/* V5 §6: primero se decide la solicitud; asistir es otro paso. */}
+              {(pending.length > 0 || !autoAdmite) && (
+                <ParticipantGroup
+                  title={esExterna ? 'Inscritos: falta registrar si el proveedor los aceptó' : 'Solicitudes pendientes de admisión'}
+                  rows={pending}
+                  externa={esExterna}
+                  empty="No hay solicitudes pendientes."
+                  render={(r) => (
+                    <div className="flex" style={{ gap: '0.35rem' }}>
+                      <Button
+                        size="sm"
+                        disabled={full || actaCerrada}
+                        loading={busyRow === r.id}
+                        title={full ? 'El cupo está lleno' : esExterna ? 'El proveedor lo aceptó' : 'Darle un lugar'}
+                        onClick={() => decide(selectedActivity.id, r, 'accepted')}
+                        icon={<FiCheck size={14} />}
+                      >
+                        {esExterna ? 'Registrar aceptación' : 'Admitir'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={actaCerrada}
+                        loading={busyRow === r.id}
+                        onClick={() => { setRechazo(r); setMotivoRechazo(''); setErrorRechazo(null); }}
+                        icon={<FiUserX size={14} />}
+                      >
+                        No admitir
+                      </Button>
+                    </div>
+                  )}
+                />
+              )}
+
+              {!esExterna && (
+                <ParticipantGroup
+                  title="Admitidos: falta registrar asistencia"
+                  rows={admitted}
+                  empty={autoAdmite ? 'Nadie se inscribió todavía. Esta actividad admite sola: es abierta y sin cupo.' : 'Todavía no admitiste a nadie.'}
+                  render={(r) => (
+                    empezo ? (
+                      <div className="flex" style={{ gap: '0.35rem' }}>
+                        <Button
+                          size="sm"
+                          disabled={actaCerrada}
+                          loading={busyRow === r.id}
+                          title="Asistió"
+                          onClick={() => decide(selectedActivity.id, r, 'confirmed')}
+                          icon={<FiCheck size={14} />}
+                        >
+                          Presente
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={actaCerrada}
+                          loading={busyRow === r.id}
+                          onClick={() => decide(selectedActivity.id, r, 'absent')}
+                          icon={<FiUserX size={14} />}
+                        >
+                          Ausente
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex" style={{ gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span className="muted small">La asistencia se registra cuando empiece.</span>
+                        {r.status === 'accepted' && (
+                          <Button variant="ghost" size="sm" disabled={actaCerrada} loading={busyRow === r.id}
+                            onClick={() => { setRechazo(r); setMotivoRechazo(''); setErrorRechazo(null); }}>
+                            Retirar admisión
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  )}
+                />
+              )}
+
+              {interested.length > 0 && (
+                <ParticipantGroup
+                  title="Solo interesados (no pidieron un lugar)"
+                  rows={interested}
+                  empty=""
+                  render={() => <span className="muted small">«Me interesa» no es una inscripción.</span>}
+                />
+              )}
 
               <ParticipantGroup
-                title={`Solo interesados (${interested.length})`}
-                rows={interested}
-                empty="Nadie marcó únicamente interés."
-                render={(r) => (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={full || actaCerrada}
-                    loading={busyRow === r.id}
-                    onClick={() => decide(selectedActivity.id, r, okStatus)}
-                    icon={<FiCheck size={14} />}
-                  >
-                    {okLabel}
-                  </Button>
-                )}
-              />
-
-              <ParticipantGroup
-                title={esExterna ? `Aceptados (${confirmed.length})` : `Participación confirmada (${confirmed.length})`}
+                title={esExterna ? 'Aceptados por el proveedor' : 'Asistieron'}
                 rows={confirmed}
-                empty={esExterna ? 'Todavía no registras aceptados.' : 'Todavía no hay participación confirmada.'}
+                externa={esExterna}
+                empty={esExterna ? 'Todavía no registras aceptados.' : 'Todavía no registras asistencia.'}
                 render={(r) => (
                   <div className="flex" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
                     {selectedActivity.outcomePolicy === 'institution_issued_certificate' && r.status === 'confirmed' && (
@@ -1675,9 +1757,30 @@ export default function ActivityManager({
                 </div>
               )}
 
+              {rejected.length > 0 && (
+                <ParticipantGroup
+                  title="No admitidos"
+                  rows={rejected}
+                  externa={esExterna}
+                  empty=""
+                  render={(r) => (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={full || actaCerrada}
+                      loading={busyRow === r.id}
+                      onClick={() => decide(selectedActivity.id, r, 'accepted')}
+                      icon={<FiCheck size={14} />}
+                    >
+                      {esExterna ? 'Registrar aceptación' : 'Admitir'}
+                    </Button>
+                  )}
+                />
+              )}
+
               {absent.length > 0 && (
                 <ParticipantGroup
-                  title={`Ausentes (${absent.length})`}
+                  title="Ausentes"
                   rows={absent}
                   empty=""
                   render={(r) => (
@@ -1734,6 +1837,25 @@ export default function ActivityManager({
           <div className="form-actions">
             <Button variant="secondary" onClick={() => setEntrega(null)}>Cancelar</Button>
             <Button loading={entregando} icon={<FiAward size={14} />} onClick={() => void entregarCertificado()}>Entregar</Button>
+          </div>
+        </Modal>
+      )}
+      {rechazo && selectedActivity && (
+        <Modal title={rechazo.status === 'accepted' ? 'Retirar la admisión' : 'No admitir la solicitud'} subtitle={rechazo.studentName ?? 'Solicitud'} onClose={() => setRechazo(null)} width={520}>
+          <p className="muted">
+            No es una ausencia: la solicitud queda como «No admitida» y el estudiante verá tu motivo.
+            {rechazo.status === 'accepted' && ' Su lugar queda libre.'}
+          </p>
+          <div className={`field ${errorRechazo ? 'has-error' : ''}`}>
+            <label htmlFor="rechazo-motivo">Motivo</label>
+            <textarea id="rechazo-motivo" value={motivoRechazo} maxLength={300}
+              onChange={(e) => { setMotivoRechazo(e.target.value); setErrorRechazo(null); }}
+              placeholder="Por ejemplo: el taller es solo para 5.º semestre." />
+            <FieldError message={errorRechazo} />
+          </div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => setRechazo(null)}>Volver</Button>
+            <Button variant="danger" loading={busyRow === rechazo.id} onClick={() => void noAdmitir()}>No admitir</Button>
           </div>
         </Modal>
       )}
@@ -1797,11 +1919,14 @@ function ParticipantGroup({
   rows,
   empty,
   render,
+  externa,
 }: {
   title: string;
   rows: Participant[];
   empty: string;
   render: (r: Participant) => React.ReactNode;
+  /** En una externa, admitir es «aceptado por el proveedor». */
+  externa?: boolean;
 }) {
   // V3.2 §64 (C17): 10 por página, con contador, y apilada en el teléfono.
   const pag = usePaginacion(rows, FILAS_POR_PAGINA, [rows.length]);
@@ -1823,10 +1948,13 @@ function ParticipantGroup({
                     <div className="muted">
                       {r.semester ? `${r.semester}º semestre` : 'Semestre no declarado'}
                     </div>
+                    {r.status === 'rejected' && r.decisionReason && (
+                      <div className="muted small">Motivo: {r.decisionReason}</div>
+                    )}
                   </td>
                   <td style={{ width: 130 }}>
                     <Badge tone={(REGISTRATION_BADGE[r.status] ?? 'badge-gray').replace('badge-', '')}>
-                      {lbl(REGISTRATION_STATUS_LABEL, r.status)}
+                      {registrationLabel(r.status, externa)}
                     </Badge>
                   </td>
                   <td style={{ width: 300 }}>{render(r)}</td>

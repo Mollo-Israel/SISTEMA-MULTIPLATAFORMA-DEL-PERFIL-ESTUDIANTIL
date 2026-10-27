@@ -141,6 +141,8 @@ export class ReportsService {
         byStatus: {
           [RegistrationStatus.INTERESTED]: 0,
           [RegistrationStatus.REGISTERED]: 0,
+          [RegistrationStatus.ACCEPTED]: 0,
+          [RegistrationStatus.REJECTED]: 0,
           [RegistrationStatus.CONFIRMED]: 0,
           [RegistrationStatus.ABSENT]: 0,
         },
@@ -229,6 +231,8 @@ export class ReportsService {
           byStatus: {
             [RegistrationStatus.INTERESTED]: 0,
             [RegistrationStatus.REGISTERED]: 0,
+            [RegistrationStatus.ACCEPTED]: 0,
+            [RegistrationStatus.REJECTED]: 0,
             [RegistrationStatus.CONFIRMED]: 0,
             [RegistrationStatus.ABSENT]: 0,
           },
@@ -410,6 +414,8 @@ export class ReportsService {
     const byStatus = {
       [RegistrationStatus.INTERESTED]: 0,
       [RegistrationStatus.REGISTERED]: 0,
+      [RegistrationStatus.ACCEPTED]: 0,
+      [RegistrationStatus.REJECTED]: 0,
       [RegistrationStatus.CONFIRMED]: 0,
       [RegistrationStatus.ABSENT]: 0,
     };

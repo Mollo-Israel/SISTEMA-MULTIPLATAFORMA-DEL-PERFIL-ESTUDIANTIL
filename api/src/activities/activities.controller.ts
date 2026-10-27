@@ -222,7 +222,7 @@ export class ActivitiesController {
   @HttpCode(200)
   @ApiOperation({
     summary:
-      'Registrar asistencia o participación. Solo el responsable de la actividad (RF10).',
+      'Admitir o rechazar una solicitud, o registrar la asistencia. Solo el responsable de la actividad (RF10, V5 §6).',
   })
   confirmParticipation(
     @CurrentUser() user: AuthenticatedUser,
@@ -234,6 +234,7 @@ export class ActivitiesController {
       id,
       dto.studentProfileId,
       dto.status,
+      dto.reason,
     );
   }
 

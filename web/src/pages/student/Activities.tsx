@@ -115,13 +115,22 @@ export default function StudentActivitiesPage() {
   const markInterest = (a: Activity) =>
     run(() => activityService.registerInterest(a.id), a.id, 'Interés registrado', `“${a.title}” quedó marcada como de tu interés.`);
 
+  /*
+   * V5 §6: pedir un lugar, tenerlo y asistir son tres cosas. Una interna
+   * abierta y sin cupo admite sola; las demás las admite el responsable. En
+   * ningún caso cuenta en la trayectoria hasta que registren tu asistencia.
+   */
   const requestSeat = async (a: Activity) => {
+    const auto = a.originType !== 'external' && (a.registrationMode ?? 'open') === 'open' && !a.capacity;
     const ok = await confirm({
       title: 'Solicitar inscripción',
       message: (
         <>
-          Vas a solicitar un lugar en <strong>{a.title}</strong>. El responsable de la actividad
-          debe aprobarlo, y tu participación solo cuenta cuando te la confirmen.
+          Vas a pedir un lugar en <strong>{a.title}</strong>.{' '}
+          {auto
+            ? 'Esta actividad es abierta: quedarás admitido al instante.'
+            : 'El responsable decide si te admite.'}
+          {' '}Cuenta en tu trayectoria cuando el responsable registre tu asistencia.
         </>
       ),
       confirmLabel: 'Solicitar inscripción',
@@ -130,8 +139,8 @@ export default function StudentActivitiesPage() {
     run(
       () => activityService.register(a.id),
       a.id,
-      'Solicitud enviada',
-      'Queda pendiente de aprobación del responsable.',
+      auto ? 'Inscripción admitida' : 'Solicitud enviada',
+      auto ? 'Tienes un lugar. La asistencia la registra el responsable el día del evento.' : 'Queda pendiente de que el responsable la admita.',
     );
   };
 
@@ -278,8 +287,9 @@ export default function StudentActivitiesPage() {
                       experiencia registrada y solo el responsable la corrige.
                     */}
                     {a.myRegistration?.status === 'confirmed'
-                      || a.myRegistration?.status === 'accepted'
-                      || a.myRegistration?.status === 'absent' ? (
+                      || (a.myRegistration?.status === 'accepted' && a.originType === 'external')
+                      || a.myRegistration?.status === 'absent'
+                      || a.myRegistration?.status === 'rejected' ? (
                         <p className="inline-note" style={{ margin: 0 }}>
                           <FiAlertCircle size={13} />{' '}
                           {a.myRegistration.status === 'accepted'
@@ -288,9 +298,11 @@ export default function StudentActivitiesPage() {
                               : 'Fuiste aceptado. Cuando termine, podrás adjuntar la credencial que emita el proveedor.'
                             : a.myRegistration.status === 'confirmed'
                               ? a.myRegistration.evidenceEligible
-                                ? 'Participación confirmada. Ya puedes adjuntar en Evidencias la credencial del proveedor.'
-                                : 'Tu participación ya fue confirmada. Si hay un error, avisa al responsable.'
-                              : 'El responsable registró tu ausencia.'}
+                                ? 'Asistencia registrada. Ya puedes adjuntar en Evidencias la credencial del proveedor.'
+                                : 'El responsable registró tu asistencia. Si hay un error, avísale.'
+                              : a.myRegistration.status === 'rejected'
+                                ? `Tu solicitud no fue admitida${a.myRegistration.decisionReason ? `: ${a.myRegistration.decisionReason}` : '.'}`
+                                : 'El responsable registró tu ausencia.'}
                         </p>
                       ) : (
                         <>
@@ -308,7 +320,17 @@ export default function StudentActivitiesPage() {
                               ? 'Te interesa'
                               : 'Me interesa'}
                           </Button>
-                          {yaPaso(a) || a.status === 'cancelled' ? null : a.myRegistration?.status === 'registered' ? (
+                          {a.myRegistration?.status === 'accepted' && (
+                            <span className="inline-note" style={{ margin: 0 }}>
+                              <FiAlertCircle size={13} /> Tienes un lugar. La asistencia la registra el responsable el día del evento.
+                            </span>
+                          )}
+                          {a.myRegistration?.status === 'registered' && a.originType !== 'external' && (
+                            <span className="inline-note" style={{ margin: 0 }}>
+                              <FiAlertCircle size={13} /> Solicitud pendiente: el responsable decide si te admite.
+                            </span>
+                          )}
+                          {yaPaso(a) || a.status === 'cancelled' ? null : a.myRegistration?.status === 'registered' || a.myRegistration?.status === 'accepted' ? (
                             <Button
                               variant="secondary"
                               size="sm"

@@ -355,7 +355,8 @@ async function participacion(ctx) {
   const inscripcion = await req('POST', `/activities/${id}/register`, { token: ctx.est.token });
   check(
     (inscripcion.status === 201 || inscripcion.status === 200)
-      && inscripcion.data?.status === 'registered',
+      // V5 §6.1: abierta y sin cupo, queda admitida al instante (no es asistencia).
+      && ['registered', 'accepted'].includes(inscripcion.data?.status),
     'B4.28 Se inscribe',
     msgOf(inscripcion),
   );

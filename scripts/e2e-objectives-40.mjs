@@ -1165,6 +1165,25 @@ async function objective4(ctx) {
   });
   check(selfConfirm.status === 403, '4.8 El estudiante NO confirma su propia participacion -> 403');
 
+  // Cupo: la actividad admite 2 lugares. V5 §6: todos piden su lugar antes del
+  // evento; la asistencia se registra cuando ya empezó.
+  const s3 = await provisionarCuenta(ctx.admin, {
+    firstName: 'Camila',
+    lastName: 'Ortiz',
+    email: studentEmail('est3'),
+  });
+  const s3Token = s3.accessToken;
+  const s3Profile = (await crearPerfilConSemestre(s3Token, ctx.admin, { semester: 4 })).data;
+  await req('POST', `/activities/${academicActivityId}/register`, { token: s3Token });
+  const s4 = await provisionarCuenta(ctx.admin, {
+    firstName: 'Bruno',
+    lastName: 'Aguilar',
+    email: studentEmail('est4'),
+  });
+  const s4Token = s4.accessToken;
+  const s4Profile = (await crearPerfilConSemestre(s4Token, ctx.admin, { semester: 4 })).data;
+  await req('POST', `/activities/${academicActivityId}/register`, { token: s4Token });
+
   const confirmed = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
     token: directorToken,
     body: { studentProfileId, status: 'confirmed' },
@@ -1199,24 +1218,6 @@ async function objective4(ctx) {
     '4.12 La afinidad se recalculo con la participacion confirmada',
   );
 
-  // Cupo: la actividad admite 2 confirmados
-  const s3 = await provisionarCuenta(ctx.admin, {
-    firstName: 'Camila',
-    lastName: 'Ortiz',
-    email: studentEmail('est3'),
-  });
-  const s3Token = s3.accessToken;
-  const s3Profile = (await crearPerfilConSemestre(s3Token, ctx.admin, { semester: 4 })).data;
-  await req('POST', `/activities/${academicActivityId}/register`, { token: s3Token });
-  const s4 = await provisionarCuenta(ctx.admin, {
-    firstName: 'Bruno',
-    lastName: 'Aguilar',
-    email: studentEmail('est4'),
-  });
-  const s4Token = s4.accessToken;
-  const s4Profile = (await crearPerfilConSemestre(s4Token, ctx.admin, { semester: 4 })).data;
-  await req('POST', `/activities/${academicActivityId}/register`, { token: s4Token });
-
   const second = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
     token: directorToken,
     body: { studentProfileId: s3Profile.id, status: 'confirmed' },
@@ -1226,15 +1227,16 @@ async function objective4(ctx) {
     token: directorToken,
     body: { studentProfileId: s4Profile.id, status: 'confirmed' },
   });
+  // V5 §6.1: el cupo se controla al admitir; sin lugar no hay asistencia.
   check(
-    overCapacity.status === 400,
-    '4.14 Al superar el cupo de confirmados -> 400',
-    `status ${overCapacity.status}`,
+    overCapacity.status === 409,
+    '4.14 Con el cupo lleno no se admite a otro, y sin admisión no hay asistencia -> 409',
+    `status ${overCapacity.status} ${overCapacity.data?.code ?? ''}`,
   );
 
   const absent = await req('PATCH', `/activities/${academicActivityId}/confirm-participation`, {
     token: directorToken,
-    body: { studentProfileId: s4Profile.id, status: 'absent' },
+    body: { studentProfileId: s3Profile.id, status: 'absent' },
   });
   check(absent.status === 200 && absent.data.status === 'absent', '4.15 Se registra una ausencia');
 

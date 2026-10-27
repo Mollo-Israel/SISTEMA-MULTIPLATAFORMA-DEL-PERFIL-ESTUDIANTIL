@@ -557,8 +557,10 @@ export class TrajectorySummaryService {
       const externa = r.activity?.originType === ActivityOrigin.EXTERNAL;
       const detalle: Record<string, string> = {
         [RegistrationStatus.CONFIRMED]: 'El responsable confirmó tu participación.',
-        [RegistrationStatus.REGISTERED]: 'Inscrito: falta que el responsable confirme tu participación.',
-        [RegistrationStatus.ACCEPTED]: 'El proveedor te aceptó: al terminar podrás adjuntar tu credencial.',
+        [RegistrationStatus.REGISTERED]: 'Solicitaste inscripción: falta que el responsable la admita.',
+        [RegistrationStatus.ACCEPTED]: externa
+          ? 'El proveedor te aceptó: al terminar podrás adjuntar tu credencial.'
+          : 'Tienes un lugar: la asistencia la registra el responsable el día del evento.',
         [RegistrationStatus.INTERESTED]: 'Te interesa: todavía no te inscribiste.',
       };
       entradas.push({

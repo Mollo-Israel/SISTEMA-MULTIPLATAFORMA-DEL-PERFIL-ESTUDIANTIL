@@ -104,7 +104,8 @@ export const REGISTRATION_BADGE: Record<string, string> = {
   interested: 'badge-gray',
   registered: 'badge-amber',
   confirmed: 'badge-green',
-  accepted: 'badge-green',
+  accepted: 'badge-bordo',
+  rejected: 'badge-gray',
   absent: 'badge-red',
   cancelled: 'badge-gray',
 };
@@ -128,15 +129,27 @@ export const ACTIVITY_STATUS_LABEL: Record<string, string> = {
  * dice al estudiante que le negaron la inscripción cuando lo que ocurrió es
  * que se inscribió y no asistió. Y «cancelled» no estaba, así que una baja se
  * mostraba con el valor interno en crudo.
+ *
+ * V5 §6: solicitar, ser admitido y asistir son tres cosas distintas, y las
+ * etiquetas lo dicen. En una externa, «admitido» es que el proveedor lo
+ * aceptó (ver registrationLabel).
  */
 export const REGISTRATION_STATUS_LABEL: Record<string, string> = {
   interested: 'Interesado',
-  registered: 'Inscrito',
-  confirmed: 'Participación confirmada',
-  accepted: 'Aceptado por el proveedor',
+  registered: 'Solicitud pendiente',
+  accepted: 'Admitido',
+  rejected: 'No admitido',
+  confirmed: 'Asistió',
   absent: 'Ausente',
   cancelled: 'Baja',
 };
+
+/** Etiqueta de un estado según el origen: en una externa, admitir es «aceptado por el proveedor». */
+export function registrationLabel(status: string, externa?: boolean): string {
+  if (externa && status === 'accepted') return 'Aceptado por el proveedor';
+  if (externa && status === 'registered') return 'Inscrito';
+  return REGISTRATION_STATUS_LABEL[status] ?? status;
+}
 export const AFFINITY_LEVEL_LABEL: Record<string, string> = {
   low: 'Baja',
   medium: 'Media',
