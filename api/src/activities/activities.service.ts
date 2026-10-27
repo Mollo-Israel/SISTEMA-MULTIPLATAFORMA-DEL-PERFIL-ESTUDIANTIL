@@ -53,7 +53,7 @@ import { CREDENTIAL_PATTERN_CHARS } from './credential-pattern';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
 import { UploadsService } from '../storage/uploads.service';
 import { CredentialEligibilityService } from './credential-eligibility.service';
-import { admisionAutomatica, admitidoParaAsistencia, bloqueoAsistencia, yaEmpezo } from './registration.rules';
+import { admisionAutomatica, admitidoParaAsistencia, bloqueoAsistencia, inicioYaPaso, yaEmpezo } from './registration.rules';
 import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 import { User } from '../entities/user.entity';
 import { ActivityResponsible } from '../entities/activity-responsible.entity';
@@ -571,10 +571,14 @@ export class ActivitiesService {
     return Number.isFinite(v) && v >= 0 && v <= 60 ? v : ATTENDANCE_WINDOW_DAYS_DEFAULT;
   }
 
-  /** V4.1 A41-010 (§4.6, 23.5): una actividad nueva no se publica con un inicio que ya pasó. */
+  /**
+   * V4.1 A41-010 (§4.6, 23.5): una actividad nueva no se publica con un inicio
+   * que ya pasó. V5 §5.5 (B04): se compara al minuto con tolerancia acotada,
+   * porque la interfaz elige la hora al minuto y el servidor mide milisegundos.
+   */
   private assertInicioFuturo(activity: Activity): void {
-    if (activity.eventDate && activity.eventDate.getTime() <= Date.now()) {
-      const msg = 'La fecha de inicio ya pasó: elige una fecha futura para publicarla.';
+    if (inicioYaPaso(activity.eventDate, new Date(), this.toleranciaInicioMin())) {
+      const msg = 'La fecha de inicio ya pasó: elige este momento o una fecha futura para publicarla.';
       throw new BadRequestException({ message: msg, code: 'ACTIVITY_START_IN_PAST', fields: { activityDate: [msg] } });
     }
   }
@@ -614,6 +618,50 @@ export class ActivitiesService {
    * ni constancias de la original. Las imágenes no se copian (son archivos de
    * quien las subió).
    */
+  /**
+   * V5-06 (§5.6, B07): borrar un borrador. Solo un DRAFT que nunca se envió
+   * ni se publicó, de quien lo creó (o Administración, auditado), y sin
+   * historia: inscripciones, revisiones, constancias, credenciales,
+   * evidencias o necesidades de equipo. Se va con su propia configuración
+   * (áreas, tecnologías, responsables, contactos, imágenes y reglas). Lo
+   * publicado nunca se borra: se cancela con motivo.
+   */
+  async deleteDraft(user: AuthenticatedUser, id: string): Promise<void> {
+    const activity = await this.findOne(id);
+    if (activity.creatorId !== user.userId && user.role !== RolNombre.ADMIN) {
+      throw new ForbiddenException('Solo quien creó el borrador puede borrarlo.');
+    }
+    if (activity.status !== ActivityStatus.DRAFT || activity.submittedAt) {
+      throw new ConflictException({
+        code: 'ACTIVITY_NOT_DELETABLE',
+        message: 'Solo se borra un borrador que nunca se envió ni se publicó. Una actividad publicada se cancela con un motivo.',
+      });
+    }
+    const referencias = await this.activities.manager.query(`
+      SELECT (SELECT count(*) FROM activity_registrations WHERE activity_id = $1)
+           + (SELECT count(*) FROM activity_reviews WHERE activity_id = $1)
+           + (SELECT count(*) FROM internal_constancies WHERE activity_id = $1)
+           + (SELECT count(*) FROM external_certificates WHERE activity_id = $1)
+           + (SELECT count(*) FROM project_evidences WHERE activity_id = $1)
+           + (SELECT count(*) FROM team_needs WHERE activity_id = $1) AS n`, [id]);
+    if (Number(referencias[0]?.n ?? 0) > 0) {
+      throw new ConflictException({
+        code: 'ACTIVITY_HAS_HISTORY',
+        message: 'Este borrador ya tiene historia (inscripciones, revisiones o documentos): no se borra. Puedes dejarlo como está o cancelarlo.',
+      });
+    }
+    await this.activities.manager.transaction(async (m) => {
+      await m.getRepository(Activity).delete({ id });
+      await this.audit.record({
+        actorUserId: user.userId,
+        eventType: AuditEventType.ACTIVITY_DRAFT_DELETED,
+        entityType: 'activity',
+        entityId: id,
+        metadata: { title: activity.title, creatorId: activity.creatorId, comoSoporte: activity.creatorId !== user.userId },
+      }, m);
+    });
+  }
+
   async duplicate(user: AuthenticatedUser, id: string): Promise<Activity> {
     const origen = await this.findOne(id);
     await this.assertCanManage(user, origen);
@@ -668,11 +716,17 @@ export class ActivitiesService {
     if (activity.eventDate && activity.endAt && activity.endAt.getTime() <= activity.eventDate.getTime()) {
       poner('endAt', 'La fecha final debe ser posterior a la fecha inicial.');
     }
-    if (activity.originType !== ActivityOrigin.EXTERNAL) {
-      const presencial = activity.modality === ActivityModality.PRESENCIAL || activity.modality === ActivityModality.HIBRIDA;
-      const virtual = activity.modality === ActivityModality.VIRTUAL || activity.modality === ActivityModality.HIBRIDA;
-      if (presencial && !activity.location?.trim()) poner('location', 'Indica el aula o el lugar.');
-      if (virtual && !activity.meetingUrl) poner('meetingUrl', 'Indica el enlace de la reunión.');
+    // V5-11 (§5.4): la modalidad se valida igual en internas y externas. En una
+    // externa virtual, el enlace oficial del proveedor sirve de enlace de acceso
+    // (un curso asíncrono no tiene «reunión»), pero alguno tiene que haber.
+    const externa = activity.originType === ActivityOrigin.EXTERNAL;
+    const presencial = activity.modality === ActivityModality.PRESENCIAL || activity.modality === ActivityModality.HIBRIDA;
+    const virtual = activity.modality === ActivityModality.VIRTUAL || activity.modality === ActivityModality.HIBRIDA;
+    if (presencial && !activity.location?.trim()) poner('location', 'Indica el aula o el lugar.');
+    if (virtual && !activity.meetingUrl && !(externa && activity.externalUrl)) {
+      poner('meetingUrl', externa
+        ? 'Indica el enlace de acceso: el de la reunión o el oficial del proveedor.'
+        : 'Indica el enlace de la reunión.');
     }
     if (activity.outcomePolicy === ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE && !activity.certificateIssuer?.trim()) {
       poner('certificateIssuer', 'Indica quién emite el certificado: Afinia no se atribuye su autoría.');

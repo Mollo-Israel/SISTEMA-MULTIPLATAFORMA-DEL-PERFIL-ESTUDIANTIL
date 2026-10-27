@@ -43,6 +43,72 @@ const decidir = (token, activityId, studentProfileId, status, extra = {}) => req
 });
 
 // ===========================================================================
+//  BATCH V5-2 — Fechas al minuto, externas validadas, borrar borradores (§5, B02…B07, B10)
+// ===========================================================================
+async function batch2(ctx) {
+  objective('BATCH V5-2 · Fechas al minuto, externas validadas y borradores (§5)');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Delia', lastName: `Fechas${L}`, email: correoStaff('b2dir'), role: 'CAREER_DIRECTOR' });
+  const otro = await provisionAndActivate(ctx.admin, { firstName: 'Omar', lastName: `Ajeno${L}`, email: correoStaff('b2dir2'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Iris', lastName: `Borr${L}`, email: correoEst('b2e1'), semester: 3 });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const charla = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const areas = (await req('GET', '/academic-areas', { token: director.token })).data ?? [];
+  const base = { type: 'academica', categoryId: charla.id, semesterScope: [3], modality: 'presencial', location: 'Aula 201' };
+  const crear = (titulo, extra = {}) => req('POST', '/activities', { token: director.token, body: { ...base, title: `${titulo} ${L}`, ...extra } });
+
+  // --- B04 / B05: fechas al minuto con tolerancia, sin abrir el pasado
+  const minuto = new Date(); minuto.setSeconds(0, 0);
+  const ahora = await crear('Empieza ahora', { activityDate: minuto.toISOString(), endAt: en(2), status: 'open' });
+  check(ahora.status === 201 && ahora.data?.status === 'open',
+    'V5.2.1 B04 Elegir «ahora» al minuto se publica aunque ya pasaron unos segundos', `${ahora.status} ${ahora.data?.code ?? ahora.data?.status}`);
+  const manana = new Date(); manana.setHours(Math.max(0, manana.getHours() - 3), 0, 0, 0);
+  const pasada = await crear('Empezó hace horas', { activityDate: manana.toISOString(), endAt: en(2), status: 'open' });
+  check(pasada.status === 400 && pasada.data?.code === 'ACTIVITY_START_IN_PAST',
+    'V5.2.2 B05 Un evento que empezó hace horas no se publica como futuro', `${pasada.status} ${pasada.data?.code}`);
+
+  // --- B02 / B03: la externa se valida igual que la interna
+  const ext = { originType: 'external', provider: 'Cisco NetAcad', externalUrl: 'https://www.netacad.com/', activityDate: en(48), endAt: en(50), status: 'open' };
+  const lugarMalo = await crear('Externa lugar malo', { ...ext, location: '1234' });
+  check(lugarMalo.status === 400 && !!lugarMalo.data?.fields?.location, 'V5.2.3 B02 Externa presencial con lugar «1234» se rechaza en su campo', `${lugarMalo.status}`);
+  const sinLugar = await crear('Externa sin lugar', { ...ext, location: undefined, __sinCompletar: true, areaIds: [areas[0]?.id] });
+  check(sinLugar.status === 400 && !!sinLugar.data?.fields?.location, 'V5.2.4 B02 Externa presencial sin lugar tampoco se publica', `${sinLugar.status} ${json(sinLugar.data?.fields)}`);
+  const virtualSinEnlace = await crear('Externa virtual sin enlace', { ...ext, modality: 'virtual', location: undefined, externalUrl: undefined, __sinCompletar: true, areaIds: [areas[0]?.id] });
+  check(virtualSinEnlace.status === 400, 'V5.2.5 B03 Externa virtual sin ningún enlace se rechaza', `${virtualSinEnlace.status} ${json(virtualSinEnlace.data?.fields)}`);
+  const virtualOficial = await crear('Externa virtual con enlace oficial', { ...ext, modality: 'virtual', location: undefined });
+  check(virtualOficial.status === 201, 'V5.2.6 B03 Externa virtual con el enlace oficial del proveedor se publica', `${virtualOficial.status} ${json(virtualOficial.data?.fields)}`);
+
+  // --- B07: borrar un borrador propio; lo publicado no
+  const borrador = await crear('Borrador para borrar', { activityDate: en(48), endAt: en(50) });
+  const ajeno = await req('DELETE', `/activities/${borrador.data?.id}`, { token: otro.token });
+  check(ajeno.status === 403, 'V5.2.7 B07 Otra persona no borra mi borrador', `${ajeno.status}`);
+  const borrado = await req('DELETE', `/activities/${borrador.data?.id}`, { token: director.token });
+  const yaNo = await req('GET', `/activities/${borrador.data?.id}`, { token: director.token });
+  check(borrado.status === 204 && yaNo.status === 404, 'V5.2.8 B07 El borrador propio sin historia se borra', `${borrado.status} / ${yaNo.status}`);
+  const audit = await req('GET', `/audit/events?eventType=ACTIVITY_DRAFT_DELETED&entityId=${borrador.data?.id}`, { token: ctx.admin });
+  check(((audit.data?.items ?? audit.data) ?? []).length >= 1, 'V5.2.9 B07 Queda la huella en la auditoría', json(audit.data).slice(0, 120));
+  const publicada = await crear('Publicada', { activityDate: en(48), endAt: en(50), status: 'open' });
+  const noPublicada = await req('DELETE', `/activities/${publicada.data?.id}`, { token: director.token });
+  check(noPublicada.status === 409 && noPublicada.data?.code === 'ACTIVITY_NOT_DELETABLE', 'V5.2.10 B07 Una publicada no se borra: se cancela', `${noPublicada.status} ${noPublicada.data?.code}`);
+
+  // --- B06: duplicar una terminada da un borrador limpio
+  await req('POST', `/activities/${publicada.data?.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${publicada.data?.id}`, { token: director.token, body: { activityDate: en(-3), endAt: en(-2) } });
+  await req('PATCH', `/activities/${publicada.data?.id}`, { token: director.token, body: { status: 'finished' } });
+  const copia = await req('POST', `/activities/${publicada.data?.id}/duplicate`, { token: director.token });
+  const filasCopia = (await req('GET', `/activities/${copia.data?.id}/participants`, { token: director.token })).data ?? [];
+  check(copia.status === 201 && copia.data?.status === 'draft' && copia.data?.id !== publicada.data?.id && filasCopia.length === 0,
+    'V5.2.11 B06 Duplicar una terminada da un borrador nuevo sin participantes', `${copia.status} ${copia.data?.status} ${filasCopia.length}`);
+  const borraCopia = await req('DELETE', `/activities/${copia.data?.id}`, { token: director.token });
+  check(borraCopia.status === 204, 'V5.2.12 B07 La copia (borrador sin historia) sí se puede borrar', `${borraCopia.status}`);
+
+  // --- B10: una charla general publica con un área y sin tecnologías
+  const ia = areas.find((a) => /inteligencia/i.test(a.name)) ?? areas[0];
+  const general = await crear('Introducción a IA', { areaIds: [ia.id], skillIds: [], activityDate: en(48), endAt: en(50), status: 'open' });
+  check(general.status === 201 && (general.data?.activitySkills ?? []).length === 0,
+    'V5.2.13 B10 Una charla general se publica con un área y sin tecnologías', `${general.status} ${json(general.data?.fields)}`);
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -194,7 +260,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch4, batch5 };
+const BATCHES = { batch2, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

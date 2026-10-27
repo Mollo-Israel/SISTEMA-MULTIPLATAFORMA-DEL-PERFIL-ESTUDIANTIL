@@ -6,6 +6,7 @@ import {
   admisionAutomatica,
   admitidoParaAsistencia,
   bloqueoAsistencia,
+  inicioYaPaso,
   yaEmpezo,
 } from '../../../src/activities/registration.rules';
 
@@ -50,6 +51,22 @@ describe('V5 §5.5 · «ya empezó» se compara al minuto con tolerancia', () =>
   });
   it('sin fecha no empezó', () => {
     expect(yaEmpezo(null, AHORA, 2)).toBe(false);
+  });
+});
+
+describe('V5 §5.5 · publicar con inicio «ahora» (B04, B05)', () => {
+  it('B04: hora local 18:33 y selector 18:33 (pasaron 23 s) → se puede publicar', () => {
+    expect(inicioYaPaso(new Date('2026-10-27T18:33:00.000Z'), AHORA, 2)).toBe(false);
+  });
+  it('dentro de la tolerancia (hace 2 min) todavía se puede', () => {
+    expect(inicioYaPaso(min(-2), AHORA, 2)).toBe(false);
+  });
+  it('fuera de la tolerancia (hace 3 min) ya no', () => {
+    expect(inicioYaPaso(min(-3), AHORA, 2)).toBe(true);
+  });
+  it('B05: a las 23:59, un evento de las 08:00 no se publica como futuro', () => {
+    const noche = new Date('2026-10-27T23:59:30.000Z');
+    expect(inicioYaPaso(new Date('2026-10-27T08:00:00.000Z'), noche, 2)).toBe(true);
   });
 });
 

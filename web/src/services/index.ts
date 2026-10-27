@@ -777,6 +777,8 @@ export const activityService = {
   get: (id: string) => api.get<Activity>(`/activities/${id}`).then((r) => r.data),
   /** V4.1 A41-010: copia como borrador nuevo, sin fechas ni participantes. */
   duplicate: (id: string) => api.post<Activity>(`/activities/${id}/duplicate`).then((r) => r.data),
+  /** V5-06: borrar un borrador propio sin historia. */
+  deleteDraft: (id: string) => api.delete(`/activities/${id}`).then(() => undefined),
   create: (data: Partial<Activity> & { areaId?: string; activityDate?: string }) =>
     api.post<Activity>('/activities', data).then((r) => r.data),
   update: (id: string, data: Record<string, unknown>) =>

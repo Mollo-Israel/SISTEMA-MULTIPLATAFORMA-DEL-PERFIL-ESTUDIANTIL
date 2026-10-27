@@ -112,12 +112,15 @@ export default function ActivityManager({
   activityType,
   filtroOrigen,
   puedeCrear = true,
+  onFormularioAbierto,
 }: {
   activityType: 'academica' | 'extracurricular';
   /** V3.2 §26: la vista «Externas» de Dirección muestra las externas de cualquier tipo. */
   filtroOrigen?: 'internal' | 'external';
   /** Dirección da seguimiento a lo extracurricular aprobado, pero no lo crea (§15). */
   puedeCrear?: boolean;
+  /** V5 §5.1: avisa si hay un formulario abierto, para confirmar antes de cambiar de pestaña. */
+  onFormularioAbierto?: (abierto: boolean) => void;
 }) {
   const { user } = useAuth();
   /** Docente y Sociedad proponen; Dirección decide. Dirección y Administración publican sin revisión (V3 §12.2). */
@@ -146,6 +149,7 @@ export default function ActivityManager({
   const [categories, setCategories] = useCachedState<ActivityCategoryItem[]>('categorias', []);
   const [editing, setEditing] = useState<Activity | null>(null);
   const [showForm, setShowForm] = useState(false);
+  useEffect(() => { onFormularioAbierto?.(showForm); }, [showForm, onFormularioAbierto]);
   const [form, setForm] = useState(emptyForm);
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -417,6 +421,30 @@ export default function ActivityManager({
     if (!form.responsables.every((p) => p.role === 'TEACHER' && Array.isArray(p.semesters))) return null;
     return [...new Set(form.responsables.flatMap((p) => p.semesters ?? []))].sort((x, y) => x - y);
   }, [esAutoridad, activityType, form.responsables]);
+
+  /** V5-06 (B07): borrar un borrador propio sin historia; lo publicado se cancela. */
+  const borrarBorrador = async (a: Activity) => {
+    const ok = await confirm({
+      title: 'Borrar el borrador',
+      message: (
+        <>
+          Se borrará <strong>{a.title}</strong> con su configuración. No se puede deshacer.
+          Solo se borran borradores que nunca se enviaron ni se publicaron.
+        </>
+      ),
+      confirmLabel: 'Borrar borrador',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await activityService.deleteDraft(a.id);
+      if (selected === a.id) setSelected(null);
+      await load();
+      notify('Borrador eliminado.', 'Queda registrado en la auditoría.');
+    } catch (e) {
+      toast.error(apiError(e));
+    }
+  };
 
   const duplicar = async (a: Activity) => {
     try {
@@ -729,7 +757,11 @@ export default function ActivityManager({
     if (!nuevo && !actividad) return;
     atendido.current = true;
     if (nuevo) {
-      setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
+      setForm({
+        ...emptyForm,
+        categoryId: usableCategories[0]?.id ?? '',
+        ...(filtroOrigen === 'external' ? { originType: 'external' as const, outcomePolicy: 'external_credential_expected' as OutcomePolicy } : {}),
+      });
       setShowForm(true);
     } else if (actividad && activities.some((a) => a.id === actividad)) {
       void openParticipants(actividad);
@@ -790,7 +822,7 @@ export default function ActivityManager({
           }}
           icon={<FiPlus size={15} />}
         >
-          Nueva actividad {tipo}
+          {filtroOrigen === 'external' ? 'Nueva oportunidad externa' : `Nueva actividad ${tipo}`}
         </Button>
       )}
 
@@ -813,27 +845,12 @@ export default function ActivityManager({
         >
           <form noValidate onSubmit={(e) => { e.preventDefault(); void guardar(editing && editing.status !== 'draft' ? 'save' : 'draft'); }}>
             <FormAlert message={errores.general} />
-            <div className="field">
-              <span className="field-label" id="activity-manager-origen">Origen</span>
-              <div className="li-tabs" role="radiogroup" aria-label="Origen de la oportunidad">
-                {(['internal', 'external'] as const).map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    role="radio"
-                    aria-checked={form.originType === o}
-                    className={form.originType === o ? 'on' : ''}
-                    onClick={() => setForm({
-                      ...form,
-                      originType: o,
-                      outcomePolicy: o === 'external' ? 'external_credential_expected' : form.outcomePolicy,
-                    })}
-                  >
-                    {o === 'internal' ? 'Interna (la organiza la carrera)' : 'Externa (de un proveedor)'}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* V5 §5.1 (V5-10): el origen lo da la pestaña; no hay selector que mezcle formularios. */}
+            <p className="muted small" style={{ marginTop: 0 }}>
+              {form.originType === 'external'
+                ? 'Oportunidad externa: la ofrece un proveedor; su resultado es la credencial que el estudiante acreditará.'
+                : `Actividad interna ${tipo}: la organiza la carrera.`}
+            </p>
             <div className="row">
               <div className={`field ${errores.errors.title ? 'has-error' : ''}`} data-campo="title">
                 <label htmlFor="activity-manager-titulo">Título *</label>
@@ -1526,6 +1543,17 @@ export default function ActivityManager({
                               aria-label={`Editar ${a.title}`}
                             >
                               <FiEdit2 />
+                            </button>
+                          )}
+                          {/* V5-06: solo un borrador propio que nunca se envió; lo publicado se cancela. */}
+                          {a.status === 'draft' && !a.submittedAt && (a.creatorId === user?.id || esAdmin) && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => void borrarBorrador(a)}
+                              title="Borrar borrador"
+                              aria-label={`Borrar el borrador ${a.title}`}
+                            >
+                              <FiTrash2 />
                             </button>
                           )}
                           {/* V4.1 A41-010: repetir una actividad (también una finalizada) es duplicarla. */}

@@ -41,6 +41,18 @@ export function yaEmpezo(inicio: Date | null, ahora: Date, toleranciaMin: number
   return minutoInicio <= minutoAhora + Math.max(0, toleranciaMin);
 }
 
+/**
+ * V5 §5.5 (B04/B05): ¿el inicio ya pasó, para publicar? Al minuto y con la
+ * misma tolerancia acotada: «ahora» (el minuto en curso) se puede publicar;
+ * una hora de la mañana a medianoche, no.
+ */
+export function inicioYaPaso(inicio: Date | null, ahora: Date, toleranciaMin: number): boolean {
+  if (!inicio) return false;
+  const minutoInicio = Math.floor(inicio.getTime() / MINUTO);
+  const minutoAhora = Math.floor(ahora.getTime() / MINUTO);
+  return minutoInicio < minutoAhora - Math.max(0, toleranciaMin);
+}
+
 /** Código y mensaje del motivo por el que no se puede registrar asistencia, o null. */
 export type BloqueoAsistencia = { code: string; message: string } | null;
 

@@ -2,6 +2,7 @@ import { ReviewActivityDto, SubmitActivityDto } from './dto/review-activity.dto'
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -136,6 +137,16 @@ export class ActivitiesController {
     @Body() dto: UpdateActivityDto,
   ) {
     return this.activitiesService.update(user, id, dto);
+  }
+
+  @Delete(':id')
+  @Roles(...MANAGER_ROLES)
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Borrar un borrador propio sin historia (V5-06). Lo publicado no se borra: se cancela.',
+  })
+  deleteDraft(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.deleteDraft(user, id);
   }
 
   @Post(':id/duplicate')

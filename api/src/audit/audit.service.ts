@@ -36,6 +36,8 @@ export const AuditEventType = {
   // Actividades
   ACTIVITY_CREATED: 'ACTIVITY_CREATED',
   ACTIVITY_DUPLICATED: 'ACTIVITY_DUPLICATED',
+  /** V5-06: un borrador sin historia se puede borrar; queda la huella. */
+  ACTIVITY_DRAFT_DELETED: 'ACTIVITY_DRAFT_DELETED',
   ACTIVITY_STATUS_CHANGED: 'ACTIVITY_STATUS_CHANGED',
   /** V2 §27, §69: revisión de Dirección. */
   ACTIVITY_SUBMITTED: 'ACTIVITY_SUBMITTED',

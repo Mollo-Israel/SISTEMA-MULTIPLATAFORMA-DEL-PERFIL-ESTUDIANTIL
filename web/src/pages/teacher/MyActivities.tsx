@@ -1,4 +1,4 @@
-import ActivityManager from '../../components/ActivityManager';
+import ActivityTabs from '../../components/ActivityTabs';
 import { PageHeader } from '../../components/ui';
 
 /**
@@ -18,14 +18,15 @@ export default function TeacherMyActivitiesPage() {
     <div>
       <PageHeader
         title="Mis actividades"
-        description="Publique talleres, clases espejo y seminarios para sus semestres habilitados. Desde aquí también confirma la participación de quienes asistieron."
+        description="Publique talleres, clases espejo y seminarios para sus semestres habilitados. Desde aquí también admite a quienes piden un lugar y registra la asistencia."
       />
       <div className="inline-note">
         Estas actividades quedan dirigidas a los semestres que tiene habilitados. Las
         actividades de toda la carrera las publica la dirección, y las extracurriculares
         la sociedad científica.
       </div>
-      <ActivityManager activityType="academica" />
+      {/* V5 §5.3: el docente crea académicas internas y oportunidades externas de su alcance. */}
+      <ActivityTabs vistas={['academica', 'externa']} />
     </div>
   );
 }
