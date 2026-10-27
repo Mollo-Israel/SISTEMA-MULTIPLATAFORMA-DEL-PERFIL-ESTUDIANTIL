@@ -554,8 +554,12 @@ async function rn16Decisiones(ctx) {
   objective('RN-16 · Las recomendaciones no son obligatorias');
 
   const items = flat(ctx.rec2);
-  const guardar = items[0];
-  const descartar = items[1];
+  // Una actividad puede empezar durante la corrida y salir sola del cálculo
+  // (ya no se recomienda algo que empezó). Para probar la decisión se prefieren
+  // ítems que no dependen del reloj; si no hay, los primeros.
+  const estables = items.filter((i) => (i.targetType ?? i.type) !== 'activity');
+  const guardar = estables[0] ?? items[0];
+  const descartar = estables[1] ?? items.find((i) => i.id !== guardar.id);
 
   section('Detalle y estado');
   const detalle = await req('GET', `/recommendations/me/${guardar.id}`, { token: ctx.S1.token });
@@ -573,7 +577,8 @@ async function rn16Decisiones(ctx) {
   const nueva = await recsOf(ctx.S1.token);
   const vigentes = flat(nueva);
   check(!vigentes.some((i) => i.id === descartar.id), '18.36 La descartada NO vuelve a proponerse');
-  check(vigentes.find((i) => i.id === guardar.id)?.status === 'saved', '18.37 La guardada sigue guardada');
+  check(vigentes.find((i) => i.id === guardar.id)?.status === 'saved', '18.37 La guardada sigue guardada',
+    JSON.stringify({ guardada: { id: guardar.id, tipo: guardar.targetType ?? guardar.type, t: guardar.title ?? guardar.targetTitle }, ahora: vigentes.find((i) => i.id === guardar.id) ?? null, n: vigentes.length }).slice(0, 400));
   check(nueva.counts.saved >= 1 && nueva.counts.dismissed >= 1, '18.38 Los conteos reflejan las decisiones', JSON.stringify(nueva.counts));
 
   section('Historial y deshacer');

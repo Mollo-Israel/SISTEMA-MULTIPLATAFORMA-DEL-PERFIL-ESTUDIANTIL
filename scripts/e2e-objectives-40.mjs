@@ -2027,9 +2027,10 @@ async function cierreFinal(ctx) {
   const eligibleDraft = await req('GET', `/constancies/internal/eligible/${draft.data?.id}`, {
     token: directorToken,
   });
+  // V5 §7.2: «quién asistió» es una consulta; un borrador no tiene asistencia.
   check(
-    eligibleDraft.status === 400,
-    '5.51 Los elegibles de una actividad no autorizada -> 400 con el motivo',
+    eligibleDraft.status === 200 && Array.isArray(eligibleDraft.data) && eligibleDraft.data.length === 0,
+    '5.51 Un borrador no tiene asistencia registrada (lista vacía)',
     `status ${eligibleDraft.status}`,
   );
 
@@ -2061,9 +2062,10 @@ async function cierreFinal(ctx) {
       description: 'Participó en el club de estudio organizado por la sociedad científica.',
     },
   });
+  // V5 §1.2, §7.2: Afinia ya no emite constancias, tampoco en una extracurricular.
   check(
-    extraConstancy.status === 201,
-    '5.53 El director emite constancia sobre una extracurricular autorizada',
+    [400, 403].includes(extraConstancy.status) && !extraConstancy.data?.id,
+    '5.53 V5 El director tampoco emite una constancia sobre una extracurricular',
     msgOf(extraConstancy),
   );
 
@@ -2075,8 +2077,8 @@ async function cierreFinal(ctx) {
         activityId: extraOk.data?.id,
         description: 'Segunda constancia para la misma actividad.',
       },
-    })).data?.id === extraConstancy.data?.id,
-    '5.54 V3 §14.1 Pedirla otra vez no la duplica: devuelve la misma',
+    })).status >= 400,
+    '5.54 Pedirla otra vez tampoco la emite',
   );
 
   check(
@@ -2087,14 +2089,15 @@ async function cierreFinal(ctx) {
         activityId: extraOk.data?.id,
         description: 'Intento de la sociedad.',
       },
-    })).data?.id === extraConstancy.data?.id,
-    '5.55 V2 §30: la sociedad, responsable de la actividad, puede pedirla; ya existe y devuelve la misma',
+    })).status >= 400,
+    '5.55 V2 §30 V5: la sociedad, aun siendo responsable, tampoco la emite',
   );
 
   const finalSummary = await req('GET', '/profiles/me/summary', { token: student });
   check(
-    finalSummary.data?.internalConstancies?.length >= 2,
-    '5.56 El perfil dinámico integra las constancias emitidas',
+    Array.isArray(finalSummary.data?.internalConstancies)
+      && !finalSummary.data.internalConstancies.some((c) => c.activityId === extraOk.data?.id),
+    '5.56 El perfil dinámico no muestra constancias que Afinia no emitió',
   );
 }
 
