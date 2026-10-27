@@ -563,8 +563,9 @@ async function batch5(ctx) {
   const constancia = await req('POST', '/constancies/internal', {
     token: docente.token, body: { profileId: perfil.id, activityId: id, description: `Constancia del taller ${TS}` },
   });
-  check(constancia.status === 201 && constancia.data?.authorizedById === director.userId && constancia.data?.issuedById === docente.userId,
-    'V2.5.27 §30 El responsable emite la constancia; la autorizó la Dirección que aprobó', json({ s: constancia.status, a: constancia.data?.authorizedById, i: constancia.data?.issuedById, m: constancia.data?.message }));
+  // V5 §1.2, §7.2: Afinia ya no emite constancias, tampoco a pedido del responsable.
+  check([400, 403].includes(constancia.status) && !constancia.data?.id,
+    'V2.5.27 §30 V5 El responsable ya no emite una constancia desde Afinia', json({ s: constancia.status, c: constancia.data?.code }));
   const adminConstancia = await req('POST', '/constancies/internal', {
     token: ctx.admin, body: { profileId: perfil.id, activityId: deDireccion.data.id, description: 'Constancia de prueba' },
   });

@@ -99,6 +99,10 @@ async function prepararAsistencia(activityId, token, original) {
     try { data = await r.json(); } catch { /* sin cuerpo */ }
     return { status: r.status, data };
   };
+  // Solo si quien la pide gestiona la actividad: un intento que la prueba espera
+  // que se rechace por permisos no debe cambiar la fecha de nadie.
+  const filas = await llamar('GET', `/activities/${activityId}/participants`, token);
+  if (filas.status !== 200) return body;
   adminDePrueba ??= await loginAdmin();
   const act = await llamar('GET', `/activities/${activityId}`, adminDePrueba);
   if (act.status !== 200 || act.data?.originType === 'external') return body;
@@ -110,7 +114,6 @@ async function prepararAsistencia(activityId, token, original) {
       endAt: new Date(Math.max(fin, Date.now() + 24 * 3_600_000)).toISOString(),
     });
   }
-  const filas = await llamar('GET', `/activities/${activityId}/participants`, token);
   const fila = (filas.data ?? []).find?.((r) => r.studentProfileId === body.studentProfileId);
   const autoAdmite = (act.data?.registrationMode ?? 'open') === 'open' && !act.data?.capacity;
   if (fila?.status === 'registered' && !autoAdmite) {
@@ -165,12 +168,14 @@ export async function completarActividad(token, original) {
     // Si la prueba la fecha en el pasado, se mantiene «en curso» hasta mañana.
     out.endAt = new Date(Math.max(inicio + 2 * 3_600_000, Date.now() + 24 * 3_600_000)).toISOString();
   }
+  // V5-11: la modalidad se valida igual en internas y externas. En una externa
+  // virtual basta su enlace oficial; si no lo trae, se le da uno de reunión.
   const externa = out.originType === 'external';
   const modalidad = out.modality ?? 'presencial';
-  if (!externa && (modalidad === 'presencial' || modalidad === 'hibrida') && out.location === undefined) {
+  if ((modalidad === 'presencial' || modalidad === 'hibrida') && out.location === undefined) {
     out.location = 'Aula de pruebas';
   }
-  if (!externa && (modalidad === 'virtual' || modalidad === 'hibrida') && out.meetingUrl === undefined) {
+  if ((modalidad === 'virtual' || modalidad === 'hibrida') && out.meetingUrl === undefined && !(externa && out.externalUrl)) {
     out.meetingUrl = 'https://meet.afinia-pruebas.org/sala';
   }
   const areasPedidas = out.areaIds ?? (out.areaId ? [out.areaId] : undefined);

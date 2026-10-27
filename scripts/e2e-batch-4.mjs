@@ -467,15 +467,17 @@ async function constancias(ctx) {
       description: `Constancia de participación ${TS}`,
     },
   });
+  // V5 §1.2, §7.2: Afinia ya no emite constancias; la asistencia es el registro.
   check(
-    emitida.status === 201,
-    'B4.38 La dirección emite la constancia interna',
+    [400, 403].includes(emitida.status),
+    'B4.38 V5 La dirección ya no emite una constancia desde Afinia',
     msgOf(emitida),
   );
+  const constanciasEst = (await req('GET', '/constancies/internal/my', { token: ctx.est.token })).data ?? [];
   check(
-    emitida.data?.activityRegistrationId === registro.id,
-    'B4.39 Queda vinculada a la inscripción concreta, no solo a la actividad (§24)',
-    `esperado ${registro.id} / recibido ${emitida.data?.activityRegistrationId}`,
+    !!registro && !constanciasEst.some((c) => c.activityId === ctx.actividadDocente.id),
+    'B4.39 La participación queda registrada en su inscripción, sin constancia (§24, V5 §7)',
+    `constancias ${constanciasEst.length}`,
   );
 
   const tras = await req('GET', '/profiles/me/summary', { token: ctx.est.token });
@@ -491,8 +493,8 @@ async function constancias(ctx) {
   const desglose = await req('GET', `/affinity/me/areas/${ctx.area.id}/breakdown`, { token: ctx.est.token });
   const lineas = desglose.data?.contributions ?? [];
   check(
-    lineas.some((c) => c.signalType === 'constancy'),
-    'B4.41 Pero sí aparece en el desglose: aumenta trazabilidad (§24)',
+    lineas.some((c) => c.signalType === 'activity'),
+    'B4.41 La participación aparece en el desglose: trazabilidad (§24)',
     lineas.map((c) => c.signalType).join(','),
   );
   check(

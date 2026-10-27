@@ -418,13 +418,14 @@ async function batch7(ctx) {
   });
 
   const conConstancia = await crear('Clase espejo con constancia', { outcomePolicy: 'internal_constancy', evidenceRequired: true });
-  check(conConstancia.status === 201 && conConstancia.data?.outcomePolicy === 'internal_constancy'
-    && conConstancia.data?.internalConstancyEnabled === true,
-  'V3.7.1 §14 La oportunidad declara qué genera al terminar (constancia interna)', json({ p: conConstancia.data?.outcomePolicy }));
+  // V5 §7: la constancia interna ya no se elige (el fixture la traduce a «solo participación»).
+  check(conConstancia.status === 201 && conConstancia.data?.outcomePolicy === 'participation_only'
+    && conConstancia.data?.internalConstancyEnabled === false,
+  'V3.7.1 §14 La oportunidad declara qué genera al terminar (la asistencia queda en la trayectoria)', json({ p: conConstancia.data?.outcomePolicy }));
   check(conConstancia.data?.evidenceRequired === false,
     'V3.7.2 §13.1 Nunca se pide al estudiante evidencia de asistencia (el flag se ignora)', json(conConstancia.data?.evidenceRequired));
   const externaConConstancia = await crear('Curso externo', {
-    originType: 'external', provider: 'Coursera', externalUrl: 'https://coursera.org/x', outcomePolicy: 'internal_constancy',
+    originType: 'external', provider: 'Coursera', externalUrl: 'https://coursera.org/x', outcomePolicy: 'internal_constancy', __constanciaLiteral: true,
   });
   check(externaConConstancia.status === 400 && externaConConstancia.data?.fields?.outcomePolicy,
     'V3.7.3 §14 Una externa no emite constancia interna (su resultado es la credencial)', `status ${externaConConstancia.status}`);
@@ -450,12 +451,13 @@ async function batch7(ctx) {
   const mias = async () => ((await req('GET', '/constancies/internal/my', { token: est.token })).data ?? [])
     .filter((c) => c.activityId === conConstancia.data.id);
   const tras = await mias();
-  check(tras.length === 1 && tras[0].status === 'authorized' && tras[0].issuedById === director.userId,
-    'V3.7.8 §14.1 La constancia aparece sola en la trayectoria, emitida por el responsable', json(tras.map((c) => ({ s: c.status, i: c.issuedById === director.userId }))));
+  // V5 §1.2 (H02): confirmar la asistencia ya no emite ninguna constancia.
+  check(tras.length === 0,
+    'V3.7.8 §14.1 Confirmar la asistencia no emite una constancia (V5 §1.2)', json(tras.map((c) => c.status)));
   const manual = await req('POST', '/constancies/internal', {
     token: director.token, body: { profileId, activityId: conConstancia.data.id, description: 'Constancia pedida otra vez por la misma participación.' },
   });
-  check(manual.data?.id === tras[0]?.id, 'V3.7.9 §38 Pedirla otra vez no la duplica', json({ s: manual.status }));
+  check([400, 403].includes(manual.status) && (await mias()).length === 0, 'V3.7.9 §38 Tampoco se emite pidiéndola a mano (V5 §7.2)', json({ s: manual.status, c: manual.data?.code }));
 
   // V4.1 A41-011 (§5, B18): con constancia emitida, la participación está consolidada;
   // el responsable ya no la retira libremente: la corrige Dirección con un motivo.
@@ -464,11 +466,11 @@ async function batch7(ctx) {
   });
   await corregirComo('absent', 'La lista de asistencia muestra que no asistió.');
   const corregida = await mias();
-  check(corregida.length === 1 && corregida[0].status === 'rejected',
-    'V3.7.10 §14.1 Si la confirmación se corrige a ausente, la constancia queda rechazada (no se borra)', json(corregida.map((c) => c.status)));
+  check(corregida.length === 0,
+    'V3.7.10 §14.1 La corrección a ausente funciona sin constancias de por medio', json(corregida.map((c) => c.status)));
   await corregirComo('confirmed', 'Se encontró su firma en la segunda hoja de la lista.');
   const otraVez = await mias();
-  check(otraVez.length === 1 && otraVez[0].status === 'authorized', 'V3.7.11 Y vuelve a valer si se confirma de nuevo', json(otraVez.map((c) => c.status)));
+  check(otraVez.length === 0, 'V3.7.11 Y volver a confirmar tampoco emite una constancia nueva', json(otraVez.map((c) => c.status)));
 
   // ----- Sin política de constancia, confirmar no emite nada
   const sinConstancia = await crear('Charla abierta', { outcomePolicy: 'none' });
@@ -1916,8 +1918,9 @@ async function batch18(ctx) {
     if (r.data.requiresReview) await aprobarActividad(quien.token, director.token, r.data.id);
     return r.data;
   };
-  // §14.1: con esta política, confirmar la participación emite la constancia.
-  const acad1 = await actividad('Clase espejo de bases de datos', 'academica', catAcad.id, 3, { outcomePolicy: 'internal_constancy' });
+  // V5 §7: Afinia ya no emite constancias; el documento de esta actividad lo emite
+  // la institución y Afinia lo registra con su emisor real (V3.2 §28.3).
+  const acad1 = await actividad('Clase espejo de bases de datos', 'academica', catAcad.id, 3, { outcomePolicy: 'institution_issued_certificate', certificateIssuer: 'Universidad del Valle' });
   const acad2 = await actividad('Taller de pruebas', 'academica', catAcad.id, 4);
   const extra = await actividad('Hackatón interna', 'extracurricular', catExtra.id, 5, {}, sociedad);
   const pendiente = await actividad('Seminario por confirmar', 'academica', catAcad.id, 6);
@@ -1925,6 +1928,7 @@ async function batch18(ctx) {
   for (const [a, quien] of [[acad1, director], [acad2, director], [extra, sociedad]]) {
     await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: quien.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
   }
+  await req('POST', `/constancies/internal/institution-certificates/${acad1.id}`, { token: director.token, body: { profileIds: [est.profileId] } });
   const constancia = { status: ((await req('GET', '/constancies/internal/my', { token: est.token })).data ?? []).some((c) => c.activityId === acad1.id) ? 201 : 404 };
 
   // ----- Credencial externa declarada (no corroborada)
@@ -1934,7 +1938,7 @@ async function batch18(ctx) {
   await req('POST', `/projects/${corroborado.id}/feedback`, { token: docente.token, body: { comment: 'Buena separación de capas en el backend.' } });
 
   check(activo.data?.backingTier === 'corroborated' && constancia.status === 201 && cert.status === 201,
-    'V3.18.0 Preparación: proyecto corroborado, constancia emitida y credencial declarada',
+    'V3.18.0 Preparación: proyecto corroborado, certificado institucional registrado y credencial declarada',
     JSON.stringify({ t: activo.data?.backingTier, c: constancia.status, x: cert.status }));
 
   // =========================================================== §42 Trayectoria
@@ -1971,8 +1975,8 @@ async function batch18(ctx) {
     'V3.18.12 §43.1 Actividades internas confirmadas, separadas en académicas y extracurriculares');
   check(!sec('academic_activities')?.items.some((i) => i.id === pendiente.id) && sec('academic_activities')?.excluded?.count === 1,
     'V3.18.13 §44 La inscripción sin confirmar no se ofrece');
-  check(sec('academic_activities')?.items.find((i) => i.id === acad1.id)?.detail?.includes('Constancia interna disponible'),
-    'V3.18.14 §44 La constancia se indica en la misma actividad');
+  check(sec('academic_activities')?.items.find((i) => i.id === acad1.id)?.detail?.includes('Certificado emitido por Universidad del Valle'),
+    'V3.18.14 §44 El documento se indica en la misma actividad, con su emisor real');
   check(sec('certificates')?.items.length === 0 && sec('certificates')?.excluded?.count === 1 && /corroboradas/.test(sec('certificates')?.excluded?.reason ?? ''),
     'V3.18.15 §45 Una credencial no corroborada no se ofrece: no prueba que terminaste', JSON.stringify(sec('certificates')?.excluded));
 
@@ -2007,7 +2011,7 @@ async function batch18(ctx) {
     body: JSON.stringify({ sections: ['projects', 'academic_activities', 'extracurricular_activities'], items: { academic_activities: [acad1.id] } }),
   });
   const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
-  check(res.status === 201 && pdf.startsWith('%PDF-') && pdf.includes('Participaci') && pdf.includes('Constancia interna disponible'),
+  check(res.status === 201 && pdf.startsWith('%PDF-') && pdf.includes('Asistencia registrada') && pdf.includes('Certificado emitido por'),
     'V3.18.25 §43.4 El PDF sale de la misma selección', `status ${res.status}`);
   check(pdf.includes('registrada y respaldada en Afinia') && pdf.includes('No constituye historial'),
     'V3.18.26 §43.6 Con el descargo exacto de V3');

@@ -369,9 +369,13 @@ async function batch4(ctx) {
   const deshace = await confirmar(sinConst.data?.id, docente, a4.profileId, 'absent');
   check(deshace.status === 200, 'V41.4.1 Durante el evento y sin constancia, el responsable corrige un error propio', `status ${deshace.status}`);
   const c1 = await confirmar(ev.data?.id, docente, a1.profileId, 'confirmed');
+  // V5 §7: confirmar ya no emite constancia, así que durante el evento nada está
+  // consolidado todavía; la consolidación llega al terminar (V41.4.5).
   const conConstancia = await confirmar(ev.data?.id, docente, a1.profileId, 'absent');
-  check(c1.status === 200 && conConstancia.status === 409 && conConstancia.data?.code === 'PARTICIPATION_CONSOLIDATED',
-    'V41.4.2 B18 Con constancia emitida, el responsable no la retira libremente', `${c1.status} / ${conConstancia.status} ${conConstancia.data?.code}`);
+  const reconfirma = await confirmar(ev.data?.id, docente, a1.profileId, 'confirmed');
+  const constanciasA1 = (await req('GET', '/constancies/internal/my', { token: a1.token })).data ?? [];
+  check(c1.status === 200 && conConstancia.status === 200 && reconfirma.status === 200 && !constanciasA1.some((c) => c.activityId === ev.data?.id),
+    'V41.4.2 B18 Sin constancia automática (V5 §7), durante el evento el responsable aún corrige su error', `${c1.status} / ${conConstancia.status} / ${reconfirma.status}`);
 
   // B17: terminado el evento, todavía se registran pendientes.
   const antesDeTerminar = await req('POST', `/activities/${ev.data?.id}/attendance/close`, { token: docente.token });

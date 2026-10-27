@@ -1494,9 +1494,10 @@ async function objective4(ctx) {
     token: directorToken,
   });
   check(eligible.status === 200, '4.41 El director consulta los participantes elegibles', msgOf(eligible));
+  // V5 §1.2: la asistencia confirmada es el registro; Afinia ya no emite constancias.
   check(
-    (eligible.data ?? []).length > 0 && eligible.data.every((e) => e.hasConstancy === true),
-    '4.42 V3 §14.1 Al confirmar, la constancia ya se emitió sola',
+    (eligible.data ?? []).length > 0 && eligible.data.every((e) => e.hasConstancy === false),
+    '4.42 V5 §1.2 Confirmar la asistencia ya no emite una constancia',
   );
 
   const societyConstancy = await req('POST', '/constancies/internal', {
@@ -1556,11 +1557,9 @@ async function objective4(ctx) {
       description: 'Participo como asistente en el taller de arquitectura de software.',
     },
   });
-  check(constancy.status === 201, '4.48 El director emite la constancia interna', msgOf(constancy));
-  check(
-    constancy.data?.activityRegistrationId,
-    '4.49 La constancia queda vinculada a la participacion concreta',
-  );
+  check([400, 403].includes(constancy.status), '4.48 V5 §7.2 Tampoco Dirección emite una constancia desde Afinia', msgOf(constancy));
+  const propias = ((await req('GET', '/constancies/internal/my', { token: student })).data ?? []).filter((c) => c.activityId === academicActivityId);
+  check(propias.length === 0, '4.49 No se creó ninguna constancia para esa participación', `${propias.length}`);
 
   const duplicate = await req('POST', '/constancies/internal', {
     token: directorToken,
@@ -1570,29 +1569,28 @@ async function objective4(ctx) {
       description: 'Segunda constancia por la misma actividad.',
     },
   });
-  // V3 §14.1: la constancia no se duplica; pedirla otra vez devuelve la misma.
-  check(duplicate.data?.id === constancy.data?.id,
-    '4.50 Pedir otra constancia por la misma participación no la duplica (devuelve la existente)', `status ${duplicate.status}`);
+  check([400, 403].includes(duplicate.status),
+    '4.50 Pedirla otra vez tampoco la emite', `status ${duplicate.status}`);
 
   const eligibleAfter = await req('GET', `/constancies/internal/eligible/${academicActivityId}`, {
     token: directorToken,
   });
   check(
-    eligibleAfter.data?.find((e) => e.studentProfileId === studentProfileId)?.hasConstancy === true,
-    '4.51 El listado marca al estudiante que ya tiene constancia',
+    eligibleAfter.data?.find((e) => e.studentProfileId === studentProfileId)?.hasConstancy === false,
+    '4.51 El listado de asistentes sigue sin constancia para el estudiante',
   );
 
   const mineConstancies = await req('GET', '/constancies/internal/my', { token: student });
   check(
-    mineConstancies.status === 200 && mineConstancies.data.length >= 1,
-    '4.52 El estudiante consulta sus constancias',
+    mineConstancies.status === 200 && Array.isArray(mineConstancies.data),
+    '4.52 El estudiante consulta sus documentos registrados',
   );
 
   // --- Integracion final en el perfil dinamico ---
   section('Integracion final en el perfil dinamico');
   const finalSummary = await req('GET', '/profiles/me/summary', { token: student });
   const fs = finalSummary.data ?? {};
-  check(fs.internalConstancies?.length >= 1, '4.53 El perfil dinamico muestra la constancia interna');
+  check(Array.isArray(fs.internalConstancies), '4.53 El perfil dinamico incluye la sección de documentos registrados');
   check(fs.externalCertificates?.length >= 1, '4.54 El perfil dinamico muestra el certificado externo');
   check(fs.evidences?.length >= 1, '4.55 El perfil dinamico muestra las evidencias');
   check(

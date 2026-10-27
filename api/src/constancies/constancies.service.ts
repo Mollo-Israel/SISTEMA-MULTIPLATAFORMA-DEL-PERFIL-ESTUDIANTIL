@@ -72,16 +72,16 @@ export class ConstanciesService {
     if (!activity) {
       throw new BadRequestException('La actividad indicada no existe.');
     }
-    this.assertActivityAuthorized(activity);
-
     // V2 §30: emite Dirección, o el responsable de la actividad cuando
     // Dirección la aprobó con constancias habilitadas. La administración es
-    // técnica y no otorga constancias académicas (§6.5).
+    // técnica y no otorga constancias académicas (§6.5). Menor privilegio:
+    // primero el permiso, después los detalles de la actividad.
     const esDireccion = authorizer.role === RolNombre.CAREER_DIRECTOR;
     const esResponsable = activity.creatorId === authorizer.userId || activity.responsibleUserId === authorizer.userId;
     if (!esDireccion && !esResponsable) {
       throw new ForbiddenException('Solo Dirección o el responsable de la actividad emiten su constancia.');
     }
+    this.assertActivityAuthorized(activity);
 
     const registration = await this.registrations.findOne({
       where: { activityId: dto.activityId, studentProfileId: dto.profileId },
@@ -185,9 +185,9 @@ export class ConstanciesService {
     if (activity.outcomePolicy === ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE) {
       return this.confirmadosConDocumento(activity);
     }
-    // Si la actividad no esta autorizada, no se ofrecen candidatos: la interfaz
-    // recibe el motivo en lugar de una lista que luego seria rechazada.
-    this.assertActivityAuthorized(activity);
+    // V5 §7.2: «Participaciones confirmadas» es una consulta de quién asistió,
+    // en cualquier actividad que gestione: ya no es la lista de candidatos a
+    // una constancia (Afinia no las emite), así que no exige tenerlas habilitadas.
     const confirmed = await this.registrations.find({
       where: { activityId, status: RegistrationStatus.CONFIRMED },
       relations: { studentProfile: { user: true } },

@@ -181,8 +181,9 @@ async function pruebas(browser) {
   check(await omitir.isVisible(), 'WEB.14b §65 El estudiante también recibe su tutorial');
   await omitir.click();
   const items = await p3.locator('nav a.nav-link').allInnerTexts();
-  check(['Mi perfil', 'Equipos', 'CV / Exportar', 'Ayuda'].every((t) => items.some((e) => e.includes(t))),
-    'WEB.15 §77 El estudiante tiene Mi perfil, Equipos, CV / Exportar y Ayuda', items.join(' | '));
+  // V5 §1.1: «CV / Exportar» pasa a «Resumen de trayectoria» (borrador informativo).
+  check(['Mi perfil', 'Equipos', 'Resumen de trayectoria', 'Ayuda'].every((t) => items.some((e) => e.includes(t))),
+    'WEB.15 §77 El estudiante tiene Mi perfil, Equipos, Resumen de trayectoria y Ayuda', items.join(' | '));
   check(!items.some((e) => /Preferencias|Privacidad/.test(e)),
     'WEB.15b V3 §11.1 Intereses y privacidad viven dentro de Mi perfil: sin entradas duplicadas en el menú', items.join(' | '));
   // V3 §11.1: Mi perfil en cuatro pestañas; los enlaces antiguos llegan a la suya.
@@ -200,7 +201,7 @@ async function pruebas(browser) {
   check(activos.length === 1 && activos[0].includes('Equipos'), 'WEB.16 §77 Solo «Equipos» queda marcado en el menú', activos.join(' | '));
   check(await p3.getByText('¿Qué le falta a tu equipo?').isVisible(), 'WEB.17 §77 Y abre directo la pestaña de equipos');
   await p3.click('a[href="/student/progress?tab=resumen"]');
-  check(await p3.getByText('Plantilla', { exact: true }).first().isVisible(), 'WEB.18 §61 CV / Exportar abre el generador con plantillas');
+  check(await p3.getByText('Plantilla', { exact: true }).first().isVisible(), 'WEB.18 §61 Resumen de trayectoria abre el generador con plantillas');
   await p3.getByText('Paso 1 · Qué secciones incluir').first().waitFor({ timeout: 8000 }).catch(() => {});
   // Las casillas llegan con la respuesta de secciones: se esperan, no se suponen.
   await p3.getByLabel('Credenciales / cursos externos').first().waitFor({ timeout: 8000 }).catch(() => {});

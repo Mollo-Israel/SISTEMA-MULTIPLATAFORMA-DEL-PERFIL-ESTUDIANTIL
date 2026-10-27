@@ -107,12 +107,13 @@ async function actividades(ctx) {
   s = await resumen(est.token);
   check(crudo(s, areaAct.id) === 10 && puntaje(s, areaAct.id) === 10,
     'B6.8 Una participación confirmada vale 10 (§47.1)', `crudo ${crudo(s, areaAct.id)}`);
-  check(respaldo(s, areaAct.id) === 12, 'B6.9 Y aporta 8 de respaldo más 4 de la constancia que V3 §14.1 emite sola (§49)', `respaldo ${respaldo(s, areaAct.id)}`);
+  check(respaldo(s, areaAct.id) === 8, 'B6.9 Y aporta 8 de respaldo; confirmar ya no emite una constancia (§49, V5 §7)', `respaldo ${respaldo(s, areaAct.id)}`);
 
   for (const a of ctx.actividades.slice(1, 3)) await confirmar(ctx, est, a);
   s = await resumen(est.token);
   check(crudo(s, areaAct.id) === 22, 'B6.10 La 2.ª vale el 70 % y la 3.ª el 50 %: 10 + 7 + 5 = 22 (§47.1)', `crudo ${crudo(s, areaAct.id)}`);
-  check(respaldo(s, areaAct.id) === 20, 'B6.11 El respaldo sigue su escala con las constancias automáticas y topa en 20 (§49)', `respaldo ${respaldo(s, areaAct.id)}`);
+  // V5 §7: sin constancias automáticas, tres participaciones dan 18 de respaldo (tope 20).
+  check(respaldo(s, areaAct.id) === 18, 'B6.11 El respaldo sigue su escala sin constancias automáticas, bajo el tope de 20 (§49)', `respaldo ${respaldo(s, areaAct.id)}`);
 
   const d = await desglose(est.token, areaAct.id);
   const conMulti = (d.contributing ?? []).filter((c) => c.multiplier < 1);
@@ -135,15 +136,16 @@ async function actividades(ctx) {
 //  §50 · Una realidad, un evento de afinidad
 // ===========================================================================
 async function sinDobleConteo(ctx) {
-  objective('§50 · La constancia respalda; no vuelve a contar');
+  objective('§50 · Un documento institucional respalda; no vuelve a contar');
   const { est, areaAct } = ctx;
   const antes = await resumen(est.token);
 
-  const emitida = await req('POST', '/constancies/internal', {
-    token: ctx.director.token,
-    body: { profileId: est.profileId, activityId: ctx.actividades[0].id, description: `Constancia de participacion ${TS}` },
+  // V5 §7: el documento lo emite la institución; Afinia lo registra con su emisor.
+  const emitida = await req('POST', `/constancies/internal/institution-certificates/${ctx.actividades[0].id}`, {
+    token: ctx.docente.token,
+    body: { profileIds: [est.profileId] },
   });
-  check(emitida.status === 201, 'B6.17 La dirección emite una constancia', msgOf(emitida));
+  check(emitida.status === 201, 'B6.17 El responsable registra el certificado que emitió la institución', msgOf(emitida));
 
   const despues = await resumen(est.token);
   check(crudo(despues, areaAct.id) === crudo(antes, areaAct.id),
@@ -153,7 +155,7 @@ async function sinDobleConteo(ctx) {
 
   const d = await desglose(est.token, areaAct.id);
   const constancia = (d.contributions ?? []).find((c) => c.weightCode === 'constancy');
-  check(!!constancia && constancia.points === 0, 'B6.20 La constancia figura en el desglose con cero de afinidad', JSON.stringify(constancia));
+  check(!!constancia && constancia.points === 0, 'B6.20 El documento figura en el desglose con cero de afinidad', JSON.stringify(constancia));
 }
 
 // ===========================================================================
@@ -399,7 +401,9 @@ async function preparar() {
         categoryId: categoria.id,
         areaId: areaAct.id,
         semesterScope: [5],
-        internalConstancyEnabled: true,
+        // V5 §7: Afinia ya no emite constancias. La primera actividad tiene un
+        // certificado que emite la institución y Afinia registra (§50 abajo).
+        ...(i === 0 ? { outcomePolicy: 'institution_issued_certificate', certificateIssuer: 'Universidad del Valle' } : {}),
       },
     });
     if (creada.status !== 201) throw new Error(`No se pudo crear la actividad ${i}: ${JSON.stringify(creada.data)}`);
