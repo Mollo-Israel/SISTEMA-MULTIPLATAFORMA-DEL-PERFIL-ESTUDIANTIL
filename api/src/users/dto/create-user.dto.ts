@@ -61,13 +61,40 @@ export class CreateUserDto {
   @Matches(NAME_RE, { message: `El nombre. ${NAME_MSG}` })
   firstName: string;
 
-  @ApiProperty({ example: 'Pérez' })
+  /**
+   * Apellido completo, por compatibilidad con clientes y plantillas anteriores.
+   * V5-04: lo nuevo es `firstSurname` (obligatorio) y `secondSurname`
+   * (opcional); con ellos, `lastName` se compone en el servidor.
+   */
+  @ApiProperty({ example: 'Pérez', required: false, description: 'Apellido completo (anterior a V5). Preferir firstSurname/secondSurname.' })
+  @IsOptional()
   @Transform(cleanLine)
   @IsString()
   @MinLength(2, { message: 'El apellido debe tener al menos 2 caracteres.' })
-  @MaxLength(50, { message: 'El apellido no puede superar 50 caracteres.' })
+  @MaxLength(100, { message: 'El apellido no puede superar 100 caracteres.' })
   @Matches(NAME_RE, { message: `El apellido. ${NAME_MSG}` })
-  lastName: string;
+  lastName?: string;
+
+  /** V5-04: primer apellido (obligatorio si no se envía `lastName`). */
+  @ApiProperty({ example: 'Pérez', required: false })
+  @IsOptional()
+  @Transform(cleanLine)
+  @IsString()
+  @MinLength(2, { message: 'El primer apellido debe tener al menos 2 caracteres.' })
+  @MaxLength(50, { message: 'El primer apellido no puede superar 50 caracteres.' })
+  @Matches(NAME_RE, { message: `El primer apellido. ${NAME_MSG}` })
+  firstSurname?: string;
+
+  /** V5-04: segundo apellido, opcional. Vacío o null lo quita. */
+  @ApiProperty({ example: 'García', required: false, nullable: true })
+  @IsOptional()
+  @Transform(cleanLine)
+  @ValidateIf((o: CreateUserDto) => !!o.secondSurname)
+  @IsString()
+  @MinLength(2, { message: 'El segundo apellido debe tener al menos 2 caracteres.' })
+  @MaxLength(50, { message: 'El segundo apellido no puede superar 50 caracteres.' })
+  @Matches(NAME_RE, { message: `El segundo apellido. ${NAME_MSG}` })
+  secondSurname?: string | null;
 
   @ApiProperty({ example: 'carlos.perez@univalle.edu' })
   @Transform(trimLower)

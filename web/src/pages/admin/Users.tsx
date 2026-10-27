@@ -30,13 +30,15 @@ const STATUS_TONE: Record<UserStatus, string> = {
   inactive: 'gray',
 };
 
-const CAMPOS = ['firstName', 'lastName', 'email', 'role', 'semester', 'universityCode'] as const;
+// V5-04: primer apellido obligatorio y segundo opcional, en campos separados.
+const CAMPOS = ['firstName', 'firstSurname', 'secondSurname', 'email', 'role', 'semester', 'universityCode'] as const;
 type Campo = (typeof CAMPOS)[number];
 
 // Sin contraseña a propósito (§12): la elige el titular al activar.
 const emptyForm: Record<Campo, string> = {
   firstName: '',
-  lastName: '',
+  firstSurname: '',
+  secondSurname: '',
   email: '',
   role: RolNombre.STUDENT,
   semester: '',
@@ -55,7 +57,8 @@ function codigoParaRol(actual: string, rol: RolNombre): string {
 function reglas(form: Record<Campo, string>) {
   return validate(form, {
     firstName: personName('nombre'),
-    lastName: personName('apellido'),
+    firstSurname: personName('apellido'),
+    secondSurname: (v) => (v.trim() ? personName('apellido')(v) : null),
     email: institutionalEmail,
     semester: (v) => (SEMESTER_ROLES.includes(form.role as RolNombre) && !v ? 'Elige el semestre que cursa.' : null),
     universityCode: universityCodeFor(form.role as RolNombre),
@@ -123,7 +126,8 @@ export default function AdminUsersPage() {
     try {
       const body: Record<string, unknown> = {
         firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
+        firstSurname: form.firstSurname.trim(),
+        ...(form.secondSurname.trim() ? { secondSurname: form.secondSurname.trim() } : {}),
         email: form.email.trim().toLowerCase(),
         role: form.role,
         universityCode: normalizeUniversityCode(form.universityCode),
@@ -258,17 +262,20 @@ export default function AdminUsersPage() {
                 aria-invalid={!!errores.errors.firstName}
               />
             </FormField>
-            <FormField
-              label="Apellidos"
-              required
-              error={errores.errors.lastName}
-              hint="Uno o dos apellidos."
-            >
+            <FormField label="Primer apellido" required error={errores.errors.firstSurname}>
               <input
-                value={form.lastName}
-                onChange={(e) => set('lastName', e.target.value)}
-                placeholder="Pérez Rojas"
-                aria-invalid={!!errores.errors.lastName}
+                value={form.firstSurname}
+                onChange={(e) => set('firstSurname', e.target.value)}
+                placeholder="Pérez"
+                aria-invalid={!!errores.errors.firstSurname}
+              />
+            </FormField>
+            <FormField label="Segundo apellido" error={errores.errors.secondSurname} hint="Opcional.">
+              <input
+                value={form.secondSurname}
+                onChange={(e) => set('secondSurname', e.target.value)}
+                placeholder="Rojas"
+                aria-invalid={!!errores.errors.secondSurname}
               />
             </FormField>
           </div>
@@ -437,7 +444,12 @@ const TablaUsuarios = memo(function TablaUsuarios({
   rol: string;
   acciones: AccionesTabla;
 }) {
-  const users = useMemo(() => (rol ? todos.filter((u) => u.role === rol) : todos), [todos, rol]);
+  // V5-04 (A02): las cuentas con un apellido heredado que falta separar.
+  const [soloPendientes, setSoloPendientes] = useState(false);
+  const users = useMemo(
+    () => todos.filter((u) => (!rol || u.role === rol) && (!soloPendientes || u.surnamesPending)),
+    [todos, rol, soloPendientes],
+  );
   // V3.2 §6.1: 10 filas por página, ordenables, con contador.
   const { ordenados, orden, alternar } = useOrden(users, {
     nombre: (u) => `${u.lastName} ${u.firstName}`,
@@ -446,7 +458,7 @@ const TablaUsuarios = memo(function TablaUsuarios({
     semestre: (u) => u.semester ?? null,
     estado: (u) => estadoCuenta(u).label,
   });
-  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [todos, rol, orden]);
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [todos, rol, orden, soloPendientes]);
   return (
     <>
       <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -460,6 +472,10 @@ const TablaUsuarios = memo(function TablaUsuarios({
           <option value="">Todos los roles</option>
           {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
+        <label className="flex" style={{ gap: '0.35rem', alignItems: 'center' }}>
+          <input type="checkbox" checked={soloPendientes} onChange={(e) => setSoloPendientes(e.target.checked)} />
+          Apellidos por separar ({todos.filter((u) => u.surnamesPending).length})
+        </label>
         {rol === RolNombre.TEACHER && (
           <span className="muted small">Cada docente ve solo a los estudiantes de los semestres que tiene habilitados.</span>
         )}
@@ -639,7 +655,9 @@ function EditUserDialog({
 }) {
   const [form, setForm] = useState<Record<Campo, string>>({
     firstName: user.firstName,
-    lastName: user.lastName,
+    // V5-04 (A02): un apellido heredado sin separar se muestra aparte y se separa aquí.
+    firstSurname: user.firstSurname ?? '',
+    secondSurname: user.secondSurname ?? '',
     email: user.email,
     role: user.role,
     semester: user.semester ? String(user.semester) : '',
@@ -667,7 +685,8 @@ function EditUserDialog({
     try {
       const body: Record<string, unknown> = {
         firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
+        firstSurname: form.firstSurname.trim(),
+        secondSurname: form.secondSurname.trim() || null,
         email: form.email.trim().toLowerCase(),
       };
       if (canChangeRole) body.role = form.role;
@@ -694,10 +713,19 @@ function EditUserDialog({
           <FormField label="Nombres" required error={errores.errors.firstName}>
             <input value={form.firstName} onChange={(e) => set('firstName', e.target.value)} />
           </FormField>
-          <FormField label="Apellidos" required error={errores.errors.lastName}>
-            <input value={form.lastName} onChange={(e) => set('lastName', e.target.value)} />
+          <FormField label="Primer apellido" required error={errores.errors.firstSurname}>
+            <input value={form.firstSurname} onChange={(e) => set('firstSurname', e.target.value)} />
+          </FormField>
+          <FormField label="Segundo apellido" error={errores.errors.secondSurname} hint="Opcional.">
+            <input value={form.secondSurname} onChange={(e) => set('secondSurname', e.target.value)} />
           </FormField>
         </div>
+        {user.surnamesPending && (
+          <div className="inline-note" role="status">
+            Apellido registrado: <strong>{user.lastName}</strong>. No se separó automáticamente para no
+            confundir un apellido compuesto con dos; indica cuál es el primero y cuál el segundo.
+          </div>
+        )}
         <FormField label="Correo institucional" required error={errores.errors.email}>
           <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
         </FormField>

@@ -8,7 +8,7 @@
  * Uso:
  *   API_URL=http://localhost:3010/api node scripts/e2e-v5.mjs [batch4 …]
  */
-import { API, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
+import { API, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -41,6 +41,63 @@ const en = (h) => new Date(Date.now() + h * 3_600_000).toISOString();
 const decidir = (token, activityId, studentProfileId, status, extra = {}) => req('PATCH', `/activities/${activityId}/confirm-participation`, {
   token, body: { studentProfileId, status, __sinAdelantar: true, ...extra },
 });
+
+// ===========================================================================
+//  BATCH V5-1 — Primer y segundo apellido, con compatibilidad (V5-04, V5-05, A01…A05)
+// ===========================================================================
+async function subirPadron(token, contenido) {
+  const form = new FormData();
+  form.append('file', new Blob([contenido], { type: 'text/csv' }), 'padron.csv');
+  const res = await fetch(`${API}/imports/students/preview`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  let data = null;
+  try { data = await res.json(); } catch { /* sin cuerpo */ }
+  return { status: res.status, data };
+}
+
+async function batch1(ctx) {
+  objective('BATCH V5-1 · Primer apellido obligatorio, segundo opcional, sin partir apellidos por suposición');
+  const usuario = async (email) => ((await req('GET', `/users?search=${encodeURIComponent(email)}`, { token: ctx.admin })).data ?? [])
+    .find((u) => u.email === email);
+
+  // --- A01: alta con primer apellido y segundo vacío
+  const e1 = correoEst('b1a01');
+  const a01 = await req('POST', '/users', { token: ctx.admin, body: { firstName: 'Ana', firstSurname: 'Quispe', email: e1, role: 'STUDENT', semester: 2, universityCode: codigoUniversitario('STUDENT') } });
+  check(a01.status === 201 && a01.data?.firstSurname === 'Quispe' && a01.data?.secondSurname === null && a01.data?.lastName === 'Quispe' && a01.data?.surnamesPending === false,
+    'V5.1.1 A01 Alta con primer apellido y sin el segundo', json(a01.data && { f: a01.data.firstSurname, s: a01.data.secondSurname, l: a01.data.lastName }));
+  const sinApellido = await req('POST', '/users', { token: ctx.admin, body: { firstName: 'Sin', email: correoEst('b1sin'), role: 'STUDENT', semester: 2, universityCode: codigoUniversitario('STUDENT') } });
+  check(sinApellido.status === 400 && !!sinApellido.data?.fields?.firstSurname, 'V5.1.2 A01 Sin primer apellido no se crea la cuenta (error en su campo)', `${sinApellido.status}`);
+  const dos = await req('POST', '/users', { token: ctx.admin, body: { firstName: 'Luis', firstSurname: 'Mamani', secondSurname: 'Condori', email: correoEst('b1dos'), role: 'STUDENT', semester: 3, universityCode: codigoUniversitario('STUDENT') } });
+  check(dos.status === 201 && dos.data?.lastName === 'Mamani Condori', 'V5.1.3 Los dos apellidos componen el apellido que se muestra', json(dos.data?.lastName));
+
+  // --- A02: un cliente anterior con «Pérez García» no se parte por suposición
+  const e2 = correoEst('b1a02');
+  const a02 = await req('POST', '/users', { token: ctx.admin, body: { firstName: 'Rosa', lastName: 'Pérez García', email: e2, role: 'STUDENT', semester: 2, universityCode: codigoUniversitario('STUDENT') } });
+  check(a02.status === 201 && a02.data?.lastName === 'Pérez García' && a02.data?.firstSurname === null && a02.data?.surnamesPending === true,
+    'V5.1.4 A02 «Pérez García» se conserva y queda por separar (no se asigna como dos apellidos)', json(a02.data && { f: a02.data.firstSurname, p: a02.data.surnamesPending }));
+  const separado = await req('PATCH', `/users/${a02.data?.id}`, { token: ctx.admin, body: { firstSurname: 'Pérez', secondSurname: 'García' } });
+  check(separado.status === 200 && separado.data?.firstSurname === 'Pérez' && separado.data?.secondSurname === 'García' && separado.data?.surnamesPending === false && separado.data?.lastName === 'Pérez García',
+    'V5.1.5 A05 Administración lo separa explícitamente; el apellido mostrado no cambia', json(separado.data && { f: separado.data.firstSurname, s: separado.data.secondSurname }));
+
+  // --- A03: padrón con la plantilla nueva y con la anterior
+  const c1 = codigoUniversitario('STUDENT');
+  const c2 = codigoUniversitario('STUDENT');
+  const nuevo = correoEst('b1padron1');
+  const viejo = correoEst('b1padron2');
+  const plantillaNueva = `university_code,first_name,first_surname,second_surname,institutional_email,semester\n${c1},Eva,Choque,Mamani,${nuevo},4\n`;
+  const pNueva = await subirPadron(ctx.admin, plantillaNueva);
+  const apNueva = await req('POST', `/imports/students/${pNueva.data?.batchId}/apply`, { token: ctx.admin });
+  const uNueva = await usuario(nuevo);
+  check(pNueva.status === 201 && apNueva.status < 300 && uNueva?.firstSurname === 'Choque' && uNueva?.secondSurname === 'Mamani' && uNueva?.lastName === 'Choque Mamani',
+    'V5.1.6 A03 Plantilla nueva: el padrón crea la cuenta con sus dos apellidos', json(uNueva && { f: uNueva.firstSurname, s: uNueva.secondSurname, l: uNueva.lastName }));
+  const plantillaVieja = `university_code,first_name,last_name,institutional_email,semester\n${c2},Iván,Flores Rojas,${viejo},4\n`;
+  const pVieja = await subirPadron(ctx.admin, plantillaVieja);
+  const fila = (pVieja.data?.rows ?? [])[0];
+  const apVieja = await req('POST', `/imports/students/${pVieja.data?.batchId}/apply`, { token: ctx.admin });
+  const uVieja = await usuario(viejo);
+  check(pVieja.status === 201 && fila?.status === 'new' && fila?.institutionalEmail === viejo && apVieja.status < 300
+    && uVieja?.lastName === 'Flores Rojas' && uVieja?.surnamesPending === true,
+  'V5.1.7 A03 Plantilla anterior: sin desplazar columnas y con el apellido compuesto por separar', json(uVieja && { l: uVieja.lastName, p: uVieja.surnamesPending }));
+}
 
 // ===========================================================================
 //  BATCH V5-2 — Fechas al minuto, externas validadas, borrar borradores (§5, B02…B07, B10)
@@ -310,7 +367,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

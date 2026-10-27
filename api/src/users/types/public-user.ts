@@ -6,6 +6,11 @@ export interface PublicUser {
   email: string;
   firstName: string;
   lastName: string;
+  /** V5-04: los dos apellidos por separado. */
+  firstSurname: string | null;
+  secondSurname: string | null;
+  /** V5-04 (A02): apellido heredado con espacios que Administración aún no separó. */
+  surnamesPending: boolean;
   status: UserStatus;
   role: RolNombre;
   createdAt: Date;
@@ -60,6 +65,9 @@ export function toPublicUser(user: User): PublicUser {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    firstSurname: user.firstSurname ?? null,
+    secondSurname: user.secondSurname ?? null,
+    surnamesPending: !user.firstSurname,
     universityCode: user.universityCode ?? null,
     semester: user.semester ?? null,
     academicScopeSemesters: user.academicScopeSemesters ?? [],

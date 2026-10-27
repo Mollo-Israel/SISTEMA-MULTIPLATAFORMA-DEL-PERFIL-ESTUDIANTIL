@@ -1,4 +1,5 @@
 import {
+  BeforeInsert,
   Column,
   CreateDateColumn,
   Entity,
@@ -30,8 +31,17 @@ export class User {
   @Column({ name: 'first_name', type: 'varchar', length: 100 })
   firstName: string;
 
+  /** Apellido completo, tal como se muestra. V5-04: se compone de los dos de abajo. */
   @Column({ name: 'last_name', type: 'varchar', length: 100 })
   lastName: string;
+
+  /** V5-04: primer apellido. Null en un apellido heredado que falta separar. */
+  @Column({ name: 'first_surname', type: 'varchar', length: 50, nullable: true })
+  firstSurname: string | null;
+
+  /** V5-04: segundo apellido (opcional). */
+  @Column({ name: 'second_surname', type: 'varchar', length: 50, nullable: true })
+  secondSurname: string | null;
 
   /**
    * Código universitario, en toda cuenta: `PREFIJO-XXXXXXX` según el rol
@@ -76,6 +86,18 @@ export class User {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  /**
+   * V5-04: quien crea una cuenta solo con el apellido completo (semillas,
+   * padrón anterior) deja el primer apellido listo si no hay ambigüedad; uno
+   * con espacios queda por separar (A02).
+   */
+  @BeforeInsert()
+  completarPrimerApellido(): void {
+    if (this.firstSurname || !this.lastName) return;
+    const limpio = this.lastName.trim();
+    if (limpio && !limpio.includes(' ') && limpio.length <= 50) this.firstSurname = limpio;
+  }
 
   /**
    * El hash nunca sale en una respuesta, aunque el usuario viaje anidado en

@@ -21,25 +21,29 @@ const PADRON: Record<ImportKind, {
 }> = {
   students: {
     etiqueta: 'Estudiantes',
-    plantilla: 'university_code,first_name,last_name,institutional_email,semester',
+    // V5-05: primer apellido obligatorio y segundo opcional, en columnas separadas.
+    plantilla: 'university_code,first_name,first_surname,second_surname,institutional_email,semester',
     ejemplo: [
-      'EST-38DJ1HA,Ana,Rojas Vargas,ana.rojas@est.univalle.edu,5',
-      'EST-4KQ7M2B,Luis,Mamani Quispe,luis.mamani@est.univalle.edu,3',
+      'EST-38DJ1HA,Ana,Rojas,Vargas,ana.rojas@est.univalle.edu,5',
+      'EST-4KQ7M2B,Luis,Mamani,,luis.mamani@est.univalle.edu,3',
     ],
     archivo: 'plantilla-padron-estudiantes.csv',
     formato: (
       <>
         El código universitario sigue el formato <code>EST-</code> y 7 letras o números (por ejemplo{' '}
         <code>EST-38DJ1HA</code>). La columna del semestre también puede llamarse <code>current_semester</code>.
+        {' '}<code>first_surname</code> (primer apellido) es obligatorio y <code>second_surname</code>, opcional.
+        La plantilla anterior, con <code>last_name</code>, se sigue aceptando: ese apellido no se parte por suposición
+        y queda marcado para separarlo en Usuarios.
       </>
     ),
   },
   teachers: {
     etiqueta: 'Docentes',
-    plantilla: 'university_code,first_name,last_name,institutional_email,authorized_semesters',
+    plantilla: 'university_code,first_name,first_surname,second_surname,institutional_email,authorized_semesters',
     ejemplo: [
-      'DOC-7RQ2M4A,Carlos,Pérez Rojas,carlos.perez@univalle.edu,1;2',
-      'DOC-K93TB1Z,María,Gutiérrez,maria.gutierrez@univalle.edu,5|6|7',
+      'DOC-7RQ2M4A,Carlos,Pérez,Rojas,carlos.perez@univalle.edu,1;2',
+      'DOC-K93TB1Z,María,Gutiérrez,,maria.gutierrez@univalle.edu,5|6|7',
     ],
     archivo: 'plantilla-padron-docentes.csv',
     formato: (
@@ -47,6 +51,7 @@ const PADRON: Record<ImportKind, {
         El código sigue el formato <code>DOC-</code> y 7 letras o números. En{' '}
         <code>authorized_semesters</code> van los semestres que acompaña, del 1 al 8, separados por{' '}
         <code>;</code> o <code>|</code> (por ejemplo <code>1;5</code>). Esos semestres se convierten en su alcance.
+        {' '}El segundo apellido es opcional; la plantilla anterior con <code>last_name</code> se sigue aceptando.
       </>
     ),
   },

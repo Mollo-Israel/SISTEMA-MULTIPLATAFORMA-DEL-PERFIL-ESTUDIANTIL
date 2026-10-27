@@ -20,7 +20,8 @@ import { AuditEventType, AuditService } from '../audit/audit.service';
 import { ActivationService } from '../identity/activation.service';
 import { institutionalEmailDomains, isInstitutionalEmail } from '../config/identity.config';
 import { NAME_RE } from '../common/validation';
-import { codificacionProblema, columnasProblema, parseCsv } from './csv.parser';
+import { codificacionProblema, columnasDeApellido, columnasProblema, parseCsv } from './csv.parser';
+import { resolverApellidos } from '../users/surnames';
 import { ImportsService } from './imports.service';
 
 /** Columnas del padrón de docentes (V3 §7.1). */
@@ -61,6 +62,9 @@ interface FilaEvaluada {
   institutionalEmail: string | null;
   firstName: string | null;
   lastName: string | null;
+  /** V5-05: de la plantilla nueva; null en la anterior. */
+  firstSurname: string | null;
+  secondSurname: string | null;
   semesters: number[] | null;
   status: ImportRowStatus;
   message: string | null;
@@ -96,6 +100,10 @@ export class TeacherImportService {
     if (codificacion) throw new BadRequestException({ code: 'IMPORT_ENCODING', message: codificacion });
     await this.imports.limpiarPrevisualizaciones();
     const parsed = parseCsv(contenido);
+    // V3.2 §7.6: las columnas de la plantilla se cuentan antes de normalizar.
+    const columnasPlantilla = parsed.headers.length;
+    // V5-05: plantilla con primer y segundo apellido (la anterior sigue valiendo).
+    columnasDeApellido(parsed);
     const faltan = TEACHER_IMPORT_HEADERS.filter((h) => !parsed.headers.includes(h));
     if (faltan.length > 0) {
       throw new BadRequestException(
@@ -105,7 +113,7 @@ export class TeacherImportService {
     }
     if (parsed.rows.length === 0) throw new BadRequestException('El archivo no contiene filas de datos.');
 
-    const evaluadas = await this.evaluar(parsed.rows, parsed.headers.length);
+    const evaluadas = await this.evaluar(parsed.rows, columnasPlantilla);
     const counts = this.contar(evaluadas);
     const batch = await this.batches.save(
       this.batches.create({
@@ -127,6 +135,8 @@ export class TeacherImportService {
           institutionalEmail: r.institutionalEmail,
           firstName: r.firstName,
           lastName: r.lastName,
+          firstSurname: r.firstSurname,
+          secondSurname: r.secondSurname,
           semester: null,
           semesters: r.semesters,
           status: r.status,
@@ -189,6 +199,8 @@ export class TeacherImportService {
       const email = values.institutional_email?.trim().toLowerCase() || null;
       const firstName = values.first_name?.trim() || null;
       const lastName = values.last_name?.trim() || null;
+      const firstSurname = values.first_surname?.trim() || null;
+      const secondSurname = values.second_surname?.trim() || null;
       const semestres = parseAuthorizedSemesters(values.authorized_semesters);
       const base = {
         lineNumber,
@@ -196,6 +208,8 @@ export class TeacherImportService {
         institutionalEmail: email,
         firstName,
         lastName,
+        firstSurname,
+        secondSurname,
         semesters: Array.isArray(semestres) ? semestres : null,
         existingUserId: null as string | null,
       };
@@ -311,7 +325,7 @@ export class TeacherImportService {
             const docente = await usuarios.save(
               usuarios.create({
                 firstName: fila.firstName!,
-                lastName: fila.lastName!,
+                ...resolverApellidos({ firstSurname: fila.firstSurname, secondSurname: fila.secondSurname, lastName: fila.lastName })!,
                 email: fila.institutionalEmail!,
                 passwordHash: placeholder,
                 roleId: rolDocente.id,
@@ -328,7 +342,11 @@ export class TeacherImportService {
           if (!fila.userId) continue;
           await usuarios.update(
             { id: fila.userId },
-            { firstName: fila.firstName!, lastName: fila.lastName!, email: fila.institutionalEmail! },
+            {
+              firstName: fila.firstName!,
+              ...resolverApellidos({ firstSurname: fila.firstSurname, secondSurname: fila.secondSurname, lastName: fila.lastName })!,
+              email: fila.institutionalEmail!,
+            },
           );
           await reemplazarSemestres(fila.userId, semestres);
           await this.audit.record(

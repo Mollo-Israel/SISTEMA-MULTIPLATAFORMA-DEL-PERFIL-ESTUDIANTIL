@@ -29,13 +29,17 @@ import { AccountMailService } from '../identity/account-mail.service';
 import { MailService, maskEmail } from '../mail/mail.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { deliveryStateOf, InvitationView, PublicUser, toPublicUser } from './types/public-user';
+import { resolverApellidos } from './surnames';
 
 /** Lo que el alta espera al correo antes de responder. Después, «en cola». */
 const ESPERA_INVITACION_MS = 6_000;
 
 interface CreateUserParams {
   firstName: string;
-  lastName: string;
+  /** V5-04: apellido completo (anterior), o los dos apellidos por separado. */
+  lastName?: string;
+  firstSurname?: string;
+  secondSurname?: string | null;
   email: string;
   /** Si se omite, se guarda un hash aleatorio hasta que el titular active (§12). */
   password?: string;
@@ -50,6 +54,8 @@ interface CreateUserParams {
 interface UpdateUserParams {
   firstName?: string;
   lastName?: string;
+  firstSurname?: string;
+  secondSurname?: string | null;
   email?: string;
   role?: RolNombre;
   status?: UserStatus;
@@ -87,6 +93,15 @@ export class UsersService {
     const email = params.email.toLowerCase().trim();
     await this.assertEmailAvailable(email);
 
+    // V5-04 (A01): el primer apellido es obligatorio; el segundo, opcional.
+    const apellidos = resolverApellidos(params);
+    if (!apellidos) {
+      throw new BadRequestException({
+        message: 'Indique el primer apellido.',
+        fields: { firstSurname: ['Indique el primer apellido.'] },
+      });
+    }
+
     const esEstudiante = params.role === RolNombre.STUDENT;
     const llevaSemestre = SEMESTER_ROLES.includes(params.role);
     // El semestre es un dato institucional (§17.1): quien cursa no puede
@@ -113,7 +128,7 @@ export class UsersService {
       const user = await manager.getRepository(User).save(
         manager.getRepository(User).create({
           firstName: params.firstName,
-          lastName: params.lastName,
+          ...apellidos,
           email,
           passwordHash,
           roleId: role.id,
@@ -302,7 +317,17 @@ export class UsersService {
       user.email = email;
     }
     if (params.firstName !== undefined) user.firstName = params.firstName;
-    if (params.lastName !== undefined) user.lastName = params.lastName;
+    // V5-04: los dos apellidos mandan; un apellido completo solo se separa si no es ambiguo.
+    if (params.firstSurname !== undefined || params.lastName !== undefined) {
+      const nuevos = resolverApellidos({
+        firstSurname: params.firstSurname,
+        secondSurname: params.secondSurname ?? (params.firstSurname === undefined ? null : user.secondSurname),
+        lastName: params.lastName,
+      });
+      if (nuevos) Object.assign(user, nuevos);
+    } else if (params.secondSurname !== undefined && user.firstSurname) {
+      Object.assign(user, resolverApellidos({ firstSurname: user.firstSurname, secondSurname: params.secondSurname }));
+    }
     if (params.status !== undefined) user.status = params.status;
     const antes = {
       semester: user.semester,

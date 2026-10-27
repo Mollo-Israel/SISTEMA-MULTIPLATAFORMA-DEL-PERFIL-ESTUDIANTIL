@@ -23,7 +23,8 @@ import {
   isInstitutionalEmail,
 } from '../config/identity.config';
 import { NAME_RE } from '../common/validation';
-import { codificacionProblema, columnasProblema, parseCsv } from './csv.parser';
+import { codificacionProblema, columnasDeApellido, columnasProblema, parseCsv } from './csv.parser';
+import { resolverApellidos } from '../users/surnames';
 
 /** Columnas mínimas de la plantilla (§10). */
 const REQUIRED_HEADERS = [
@@ -40,6 +41,9 @@ interface EvaluatedRow {
   institutionalEmail: string | null;
   firstName: string | null;
   lastName: string | null;
+  /** V5-05: de la plantilla nueva; null en la anterior. */
+  firstSurname: string | null;
+  secondSurname: string | null;
   semester: number | null;
   status: ImportRowStatus;
   message: string | null;
@@ -89,6 +93,8 @@ export class ImportsService {
       parsed.headers.push('semester');
       for (const r of parsed.rows) r.values.semester = r.values.current_semester;
     }
+    // V5-05: plantilla con primer y segundo apellido (la anterior sigue valiendo).
+    columnasDeApellido(parsed);
 
     const missing = REQUIRED_HEADERS.filter((h) => !parsed.headers.includes(h));
     if (missing.length > 0) {
@@ -124,6 +130,8 @@ export class ImportsService {
           institutionalEmail: row.institutionalEmail,
           firstName: row.firstName,
           lastName: row.lastName,
+          firstSurname: row.firstSurname,
+          secondSurname: row.secondSurname,
           semester: row.semester,
           status: row.status,
           message: row.message,
@@ -197,6 +205,8 @@ export class ImportsService {
       const email = values.institutional_email?.trim().toLowerCase() || null;
       const firstName = values.first_name?.trim() || null;
       const lastName = values.last_name?.trim() || null;
+      const firstSurname = values.first_surname?.trim() || null;
+      const secondSurname = values.second_surname?.trim() || null;
       const semesterRaw = values.semester?.trim() || '';
       const semester = semesterRaw ? Number(semesterRaw) : null;
 
@@ -206,6 +216,8 @@ export class ImportsService {
         institutionalEmail: email,
         firstName,
         lastName,
+        firstSurname,
+        secondSurname,
         semester: Number.isFinite(semester) ? semester : null,
         existingUserId: null as string | null,
       };
@@ -378,7 +390,8 @@ export class ImportsService {
             const user = await userRepo.save(
               userRepo.create({
                 firstName: row.firstName!,
-                lastName: row.lastName!,
+                // V5-05: los dos apellidos si vienen; si no, el completo sin partirlo por suposición.
+                ...resolverApellidos({ firstSurname: row.firstSurname, secondSurname: row.secondSurname, lastName: row.lastName })!,
                 email: row.institutionalEmail!,
                 passwordHash: placeholder,
                 roleId: studentRole.id,
@@ -408,7 +421,7 @@ export class ImportsService {
             { id: userId },
             {
               firstName: row.firstName!,
-              lastName: row.lastName!,
+              ...resolverApellidos({ firstSurname: row.firstSurname, secondSurname: row.secondSurname, lastName: row.lastName })!,
               email: row.institutionalEmail!,
               semester: row.semester,
             },

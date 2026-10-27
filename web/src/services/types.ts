@@ -3,6 +3,10 @@ export interface PublicUser {
   email: string;
   firstName: string;
   lastName: string;
+  /** V5-04: los dos apellidos; null en un apellido heredado sin separar. */
+  firstSurname?: string | null;
+  secondSurname?: string | null;
+  surnamesPending?: boolean;
   status: UserStatus;
   role: string;
   createdAt: string;

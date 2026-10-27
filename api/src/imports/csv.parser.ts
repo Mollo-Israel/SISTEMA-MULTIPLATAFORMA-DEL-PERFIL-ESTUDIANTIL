@@ -18,6 +18,23 @@ export interface ParsedCsv {
 }
 
 /**
+ * V5-05 (A03): la plantilla nueva trae `first_surname` y `second_surname`; la
+ * anterior, `last_name`. Con la nueva se compone `last_name` (el apellido
+ * completo que valida y muestra el padrón) y se conservan los dos apellidos.
+ * Con la anterior no se toca nada: no hay desplazamiento de columnas porque
+ * cada valor se lee por su nombre de cabecera.
+ */
+export function columnasDeApellido(parsed: ParsedCsv): void {
+  if (!parsed.headers.includes('first_surname')) return;
+  if (!parsed.headers.includes('last_name')) parsed.headers.push('last_name');
+  for (const r of parsed.rows) {
+    const primero = r.values.first_surname?.trim() ?? '';
+    const segundo = r.values.second_surname?.trim() ?? '';
+    r.values.last_name = [primero, segundo].filter(Boolean).join(' ');
+  }
+}
+
+/**
  * V3.2 §7.6: una fila con distinta cantidad de columnas que la cabecera no se
  * interpreta. Si se rellenara por posición, el correo terminaría en el
  * apellido y la fila parecería válida.

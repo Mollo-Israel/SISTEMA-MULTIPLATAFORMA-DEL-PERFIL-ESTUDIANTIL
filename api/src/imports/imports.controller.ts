@@ -98,7 +98,8 @@ export class ImportsController {
   @ApiOperation({
     summary: 'Analizar un CSV de padrón de docentes sin aplicar nada.',
     description:
-      'Columnas: university_code (DOC-…), first_name, last_name, institutional_email, '
+      'Columnas: university_code (DOC-…), first_name, first_surname, second_surname (opcional), institutional_email, '
+      + '(o la plantilla anterior con last_name), '
       + 'authorized_semesters (por ejemplo «1;5»). Veredicto por fila: NEW, UPDATE, UNCHANGED, CONFLICT o INVALID.',
   })
   @ApiConsumes('multipart/form-data')

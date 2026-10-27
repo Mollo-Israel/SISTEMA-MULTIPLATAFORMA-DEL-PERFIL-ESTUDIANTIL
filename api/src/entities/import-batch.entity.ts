@@ -112,6 +112,13 @@ export class ImportBatchRow {
   @Column({ name: 'last_name', type: 'varchar', length: 100, nullable: true })
   lastName: string | null;
 
+  /** V5-05: primer y segundo apellido de la plantilla nueva (null en la anterior). */
+  @Column({ name: 'first_surname', type: 'varchar', length: 50, nullable: true })
+  firstSurname: string | null;
+
+  @Column({ name: 'second_surname', type: 'varchar', length: 50, nullable: true })
+  secondSurname: string | null;
+
   @Column({ type: 'int', nullable: true })
   semester: number | null;
 
