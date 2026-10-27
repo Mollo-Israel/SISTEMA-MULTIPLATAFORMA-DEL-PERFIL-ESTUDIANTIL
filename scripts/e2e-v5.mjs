@@ -109,6 +109,56 @@ async function batch2(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-3 — Vista docente, filtro por responsable y favoritos (V5-01, V5-02)
+// ===========================================================================
+async function batch3(ctx) {
+  objective('BATCH V5-3 · Vista docente por páginas, filtro por responsable y favoritos');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Rita', lastName: `Resp${L}`, email: correoStaff('b3dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Tito', lastName: `Doc${L}`, email: correoStaff('b3doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [3] } });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Ugo', lastName: `Fav${L}`, email: correoEst('b3e1'), semester: 3 });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const charla = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const crear = (titulo, extra = {}) => req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${L}`, type: 'academica', categoryId: charla.id, semesterScope: [3], activityDate: en(48), endAt: en(50), ...extra },
+  });
+  const publicada = await crear('Con responsable docente', { status: 'open', responsibleUserIds: [docente.userId] });
+  const borrador = await crear('Borrador de Dirección', { responsibleUserIds: [docente.userId] });
+
+  // --- V5-01: el docente consulta por páginas, sin borradores
+  const pag = await req('GET', `/activities?limit=6&q=${encodeURIComponent(L)}`, { token: docente.token });
+  const ids = (pag.data?.items ?? []).map((a) => a.id);
+  check(pag.status === 200 && Array.isArray(pag.data?.items) && Number.isInteger(pag.data?.total) && ids.includes(publicada.data?.id),
+    'V5.3.1 V5-01 El docente consulta la oferta por páginas (con total)', `${pag.status} ${json(ids)}`);
+  check(!ids.includes(borrador.data?.id), 'V5.3.2 B08 En la consulta del docente no aparecen borradores ajenos', json(ids));
+  check((pag.data?.items ?? []).every((a) => typeof a.isFavorite === 'boolean'), 'V5.3.3 Cada tarjeta dice si es favorita de quien consulta');
+
+  // --- V5-02: filtro por responsable
+  const porResp = await req('GET', `/activities?limit=6&responsibleId=${docente.userId}`, { token: est.token });
+  check(porResp.status === 200 && (porResp.data?.items ?? []).some((a) => a.id === publicada.data?.id)
+    && (porResp.data?.items ?? []).every((a) => a.status !== 'draft'),
+  'V5.3.4 V5-02 El estudiante filtra por responsable (y no ve borradores)', json((porResp.data?.items ?? []).map((a) => a.title)));
+  const buscar = await req('GET', `/activities/responsibles?q=${encodeURIComponent('Tito')}`, { token: est.token });
+  const fila = (buscar.data ?? []).find((p) => p.id === docente.userId);
+  check(buscar.status === 200 && !!fila && fila.email === undefined, 'V5.3.5 V5-02 El buscador de responsables da nombre y rol, sin correo', json(fila));
+
+  // --- V5-01: favoritos, idempotentes y sin efecto en lo demás
+  const f1 = await req('PUT', `/activities/${publicada.data?.id}/favorite`, { token: docente.token });
+  const f2 = await req('PUT', `/activities/${publicada.data?.id}/favorite`, { token: docente.token });
+  const favs = await req('GET', '/activities?limit=6&favorites=true', { token: docente.token });
+  check(f1.status === 200 && f2.status === 200 && (favs.data?.items ?? []).map((a) => a.id).join() === publicada.data?.id,
+    'V5.3.6 V5-01 Marcar favorita es idempotente y el filtro «Solo favoritas» la trae', json((favs.data?.items ?? []).map((a) => a.id)));
+  const participantes = (await req('GET', `/activities/${publicada.data?.id}/participants`, { token: director.token })).data ?? [];
+  check(participantes.length === 0, 'V5.3.7 §14.1 Un favorito no es una inscripción ni reserva lugar', `${participantes.length}`);
+  const ajeno = await req('PUT', `/activities/${borrador.data?.id}/favorite`, { token: est.token });
+  check(ajeno.status === 404, 'V5.3.8 No se marca como favorito un borrador que no se puede ver', `${ajeno.status}`);
+  const quita = await req('DELETE', `/activities/${publicada.data?.id}/favorite`, { token: docente.token });
+  const sinFavs = await req('GET', '/activities?limit=6&favorites=true', { token: docente.token });
+  check(quita.status === 200 && (sinFavs.data?.items ?? []).length === 0, 'V5.3.9 Quitarla la saca de favoritas', `${quita.status} ${(sinFavs.data?.items ?? []).length}`);
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -260,7 +310,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch2, batch4, batch5 };
+const BATCHES = { batch2, batch3, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

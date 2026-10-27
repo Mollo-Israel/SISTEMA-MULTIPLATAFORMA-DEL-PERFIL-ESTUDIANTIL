@@ -1313,7 +1313,11 @@ export class ActivitiesService {
     const limit = filters.limit ?? 30;
     const offset = filters.offset ?? 0;
     const qb = this.activities.createQueryBuilder('a').select('a.id', 'id');
-    if (user.role === RolNombre.STUDENT) qb.andWhere('a.status <> :borrador', { borrador: ActivityStatus.DRAFT });
+    // V5-01: el docente consulta aquí la oferta de la carrera; sus borradores
+    // viven en «Mis actividades». Ninguno de los dos ve borradores en esta vista.
+    if (user.role === RolNombre.STUDENT || user.role === RolNombre.TEACHER) {
+      qb.andWhere('a.status <> :borrador', { borrador: ActivityStatus.DRAFT });
+    }
     if (filters.type) qb.andWhere('a.type = :type', { type: filters.type });
     if (filters.categoryId) qb.andWhere('a.category_id = :cat', { cat: filters.categoryId });
     if (filters.status) qb.andWhere('a.status = :status', { status: filters.status });
@@ -1339,6 +1343,16 @@ export class ActivitiesService {
         { perfil: perfil?.id ?? '00000000-0000-4000-8000-000000000000', estados },
       );
     }
+    if (filters.responsibleId) {
+      // V5-02: quien responde por ella (lista de responsables o el campo de siempre).
+      qb.andWhere(
+        '(a.responsible_user_id = :resp OR a.id IN (SELECT ar.activity_id FROM activity_responsibles ar WHERE ar.user_id = :resp))',
+        { resp: filters.responsibleId },
+      );
+    }
+    if (filters.favorites === 'true') {
+      qb.andWhere('a.id IN (SELECT f.activity_id FROM activity_favorites f WHERE f.user_id = :yo)', { yo: user.userId });
+    }
     const total = await qb.getCount();
     const filas: { id: string }[] = await qb
       .orderBy('CASE WHEN a.event_date >= now() THEN 0 WHEN a.event_date IS NULL THEN 2 ELSE 1 END', 'ASC')
@@ -1352,7 +1366,57 @@ export class ActivitiesService {
     const items = ids.length ? await this.listar(user, filters, ids) : [];
     const orden = new Map(ids.map((id, i) => [id, i]));
     items.sort((x, y) => (orden.get((x as { id: string }).id) ?? 0) - (orden.get((y as { id: string }).id) ?? 0));
-    return { items, total, limit, offset };
+    const favoritas = new Set<string>(ids.length
+      ? (await this.activities.manager.query(
+        'SELECT activity_id FROM activity_favorites WHERE user_id = $1 AND activity_id = ANY($2::uuid[])',
+        [user.userId, ids],
+      )).map((f: { activity_id: string }) => f.activity_id)
+      : []);
+    return {
+      items: items.map((a) => ({ ...a, isFavorite: favoritas.has((a as { id: string }).id) })),
+      total, limit, offset,
+    };
+  }
+
+  /**
+   * V5-01 (§14.1): marcar o quitar una actividad de favoritas. Es un marcador
+   * personal: no reserva lugar, no es «Me interesa» y no cambia las
+   * recomendaciones, la afinidad ni los puntos. Idempotente.
+   */
+  async setFavorite(user: AuthenticatedUser, id: string, favorita: boolean): Promise<{ isFavorite: boolean }> {
+    const activity = await this.findOne(id);
+    if (activity.status === ActivityStatus.DRAFT && !(await this.veBorrador(user, activity))) {
+      throw new NotFoundException('Actividad no encontrada.');
+    }
+    if (favorita) {
+      await this.activities.manager.query(
+        'INSERT INTO activity_favorites (user_id, activity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [user.userId, id],
+      );
+    } else {
+      await this.activities.manager.query('DELETE FROM activity_favorites WHERE user_id = $1 AND activity_id = $2', [user.userId, id]);
+    }
+    return { isFavorite: favorita };
+  }
+
+  /**
+   * V5-02: personas que responden por actividades publicadas, para filtrar por
+   * responsable. Solo el nombre y el rol: ni correo ni datos de contacto.
+   */
+  async responsablesPublicados(q?: string): Promise<{ id: string; name: string; role: string }[]> {
+    const texto = q?.trim() ? `%${q.trim().replace(/[%_\\]/g, (c) => `\\${c}`)}%` : null;
+    const filas: { id: string; first_name: string; last_name: string; role: string }[] = await this.activities.manager.query(`
+      SELECT DISTINCT u.id, u.first_name, u.last_name, r.name AS role
+        FROM users u
+        JOIN roles r ON r.id = u.role_id
+       WHERE u.id IN (
+             SELECT ar.user_id FROM activity_responsibles ar JOIN activities a ON a.id = ar.activity_id WHERE a.status <> 'draft'
+             UNION
+             SELECT a.responsible_user_id FROM activities a WHERE a.status <> 'draft' AND a.responsible_user_id IS NOT NULL)
+         AND ($1::text IS NULL OR u.first_name ILIKE $1 OR u.last_name ILIKE $1 OR CONCAT(u.first_name, ' ', u.last_name) ILIKE $1)
+       ORDER BY u.last_name, u.first_name
+       LIMIT 20`, [texto]);
+    return filas.map((f) => ({ id: f.id, name: `${f.first_name} ${f.last_name}`, role: f.role }));
   }
 
   /** Lista completa o, con `soloIds`, solo esas actividades (para una página). */

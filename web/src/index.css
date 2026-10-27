@@ -697,6 +697,9 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 }
 .chip:hover { border-color: #e7c9cf; transform: translateY(-1px); }
 .chip.on { background: var(--bordo); border-color: var(--bordo); color: #fff; }
+/* V5-08: semestre que ningún docente responsable cubre. */
+.chip.chip-fuera { border-style: dashed; opacity: 0.75; }
+.block { display: block; }
 
 /* Aviso breve dentro de una tarjeta */
 .inline-note {

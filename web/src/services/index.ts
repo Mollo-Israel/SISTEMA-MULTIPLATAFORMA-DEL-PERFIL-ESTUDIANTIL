@@ -768,7 +768,10 @@ export const analyticsService = {
 
 export const activityService = {
   /** V3 B23: una página del listado, con lo más próximo primero. */
-  page: (params: { limit: number; offset?: number; q?: string; type?: string; originType?: 'internal' | 'external'; mine?: 'interested' | 'enrolled' }) =>
+  page: (params: {
+    limit: number; offset?: number; q?: string; type?: string; originType?: 'internal' | 'external';
+    mine?: 'interested' | 'enrolled'; categoryId?: string; responsibleId?: string; favorites?: 'true';
+  }) =>
     api.get<{ items: Activity[]; total: number; limit: number; offset: number }>('/activities', {
       params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')),
     }).then((r) => r.data),
@@ -777,6 +780,12 @@ export const activityService = {
   get: (id: string) => api.get<Activity>(`/activities/${id}`).then((r) => r.data),
   /** V4.1 A41-010: copia como borrador nuevo, sin fechas ni participantes. */
   duplicate: (id: string) => api.post<Activity>(`/activities/${id}/duplicate`).then((r) => r.data),
+  /** V5-01: favorito personal; no recomienda ni reserva lugar. */
+  favorite: (id: string) => api.put<{ isFavorite: boolean }>(`/activities/${id}/favorite`).then((r) => r.data),
+  unfavorite: (id: string) => api.delete<{ isFavorite: boolean }>(`/activities/${id}/favorite`).then((r) => r.data),
+  /** V5-02: responsables de actividades publicadas (solo nombre y rol). */
+  responsibles: (q?: string) =>
+    api.get<{ id: string; name: string; role: string }[]>('/activities/responsibles', { params: q ? { q } : {} }).then((r) => r.data),
   /** V5-06: borrar un borrador propio sin historia. */
   deleteDraft: (id: string) => api.delete(`/activities/${id}`).then(() => undefined),
   create: (data: Partial<Activity> & { areaId?: string; activityDate?: string }) =>

@@ -95,4 +95,16 @@ export class QueryActivitiesDto {
   @IsOptional()
   @IsIn(['interested', 'enrolled'], { message: 'Filtro propio no válido.' })
   mine?: 'interested' | 'enrolled';
+
+  /** V5-02: solo las actividades de las que responde esta persona (con limit). */
+  @ApiPropertyOptional({ description: 'ID de un responsable (con limit)' })
+  @IsOptional()
+  @IsUUID('4', { message: 'El responsable indicado no es válido.' })
+  responsibleId?: string;
+
+  /** V5-01: solo mis favoritas (con limit). Un favorito organiza: no recomienda ni suma. */
+  @ApiPropertyOptional({ enum: ['true'], description: 'Solo mis favoritas (con limit)' })
+  @IsOptional()
+  @IsIn(['true'], { message: 'El filtro de favoritas no es válido.' })
+  favorites?: 'true';
 }

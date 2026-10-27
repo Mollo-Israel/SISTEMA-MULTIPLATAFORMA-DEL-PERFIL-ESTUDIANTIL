@@ -67,7 +67,8 @@ export class ActivitiesController {
   })
   findAll(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryActivitiesDto) {
     // V3 BATCH 23: con `limit`, una página; sin él, la lista completa de siempre.
-    if (query.limit !== undefined && user.role === RolNombre.STUDENT) {
+    // V5-01: también el docente consulta la oferta de la carrera por páginas.
+    if (query.limit !== undefined && (user.role === RolNombre.STUDENT || user.role === RolNombre.TEACHER)) {
       return this.activitiesService.findPage(user, query);
     }
     return this.activitiesService.findAll(user, query);
@@ -85,6 +86,27 @@ export class ActivitiesController {
   @ApiOperation({ summary: 'Semestres a los que el docente puede dirigir actividades (V2 §28).' })
   myScope(@CurrentUser() user: AuthenticatedUser) {
     return this.activitiesService.myScope(user);
+  }
+
+  @Get('responsibles')
+  @ApiOperation({
+    summary: 'Responsables de actividades publicadas, para filtrar (V5-02).',
+    description: 'Solo nombre y rol, hasta 20; ningún dato de contacto.',
+  })
+  responsables(@Query('q') q = '') {
+    return this.activitiesService.responsablesPublicados(String(q).slice(0, 80));
+  }
+
+  @Put(':id/favorite')
+  @ApiOperation({ summary: 'Marcar una actividad como favorita (V5-01). No recomienda ni reserva lugar.' })
+  marcarFavorita(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.setFavorite(user, id, true);
+  }
+
+  @Delete(':id/favorite')
+  @ApiOperation({ summary: 'Quitar una actividad de favoritas (V5-01).' })
+  quitarFavorita(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activitiesService.setFavorite(user, id, false);
   }
 
   @Get('people')

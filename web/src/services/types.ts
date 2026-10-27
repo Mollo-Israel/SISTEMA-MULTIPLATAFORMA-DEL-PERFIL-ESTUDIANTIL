@@ -596,7 +596,7 @@ export interface Activity {
   tags: string[] | null;
   externalUrl: string | null;
   evidenceRequired: boolean;
-  creator?: { id: string; firstName: string; lastName: string } | null;
+  creator?: { id: string; firstName: string; lastName: string; role?: { name: string } | null } | null;
   /** Presentes en los listados; el detalle del estudiante trae los suyos. */
   registrationCount?: number;
   confirmedCount?: number;
@@ -605,6 +605,8 @@ export interface Activity {
   /** Situación del estudiante que consulta. Solo llega en su listado. */
   /** `evidenceEligible`: V3 §15, ya puede adjuntar la credencial del proveedor. */
   myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean; decisionReason?: string | null } | null;
+  /** V5-01: favorita de quien consulta (en las páginas del listado). */
+  isFavorite?: boolean;
   /** Revisión de Dirección (V2 §27). null = sin enviar. */
   reviewStatus?: ActivityReviewStatus | null;
   requiresReview?: boolean;

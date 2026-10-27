@@ -47,6 +47,18 @@ export default function StudentActivitiesPage() {
   const [query, setQuery] = useState('');
   /** Lo que se busca en el servidor: espera a que se deje de escribir. */
   const [buscado, setBuscado] = useState('');
+  // V5-02: filtrar por quien responde por la actividad.
+  const [responsable, setResponsable] = useState<{ id: string; name: string } | null>(null);
+  const [buscarResp, setBuscarResp] = useState('');
+  const [candidatos, setCandidatos] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    const t = buscarResp.trim();
+    if (!t) { setCandidatos([]); return; }
+    const id = window.setTimeout(() => {
+      activityService.responsibles(t).then(setCandidatos).catch(() => setCandidatos([]));
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [buscarResp]);
   // V4.1 A41-012 (§4.1): dos ejes (origen × carácter) en tres pestañas amigables.
   const [type, setType] = useState<'todas' | 'academica' | 'extracurricular' | 'externas'>('todas');
   const [busy, setBusy] = useState<string | null>(null);
@@ -80,7 +92,7 @@ export default function StudentActivitiesPage() {
     setLoading(true);
     try {
       const r = await activityService.page({
-        limit: PASO, offset, q: buscado.trim() || undefined, mine,
+        limit: PASO, offset, q: buscado.trim() || undefined, mine, responsibleId: responsable?.id,
         ...(type === 'externas' ? { originType: 'external' as const }
           : type === 'todas' ? {} : { type, originType: 'internal' as const }),
       });
@@ -93,7 +105,7 @@ export default function StudentActivitiesPage() {
       setLoading(false);
       setCargado(true);
     }
-  }, [buscado, type, mine]);
+  }, [buscado, type, mine, responsable]);
   useEffect(() => { if (lista) void pedir(0); }, [pedir, lista]);
   const reload = () => { void pedir(0); historial.reload(); };
   const data = cargado ? items : null;
@@ -241,6 +253,39 @@ export default function StudentActivitiesPage() {
               {opt.label}
             </button>
           ))}
+        </div>
+        <div className="field">
+          <label htmlFor="est-responsable">Responsable</label>
+          {responsable ? (
+            <div className="flex" style={{ gap: '0.4rem', alignItems: 'center' }}>
+              <strong>{responsable.name}</strong>
+              <Button variant="ghost" size="sm" onClick={() => { setResponsable(null); setBuscarResp(''); }}>Quitar</Button>
+            </div>
+          ) : (
+            <div>
+              <input
+                id="est-responsable"
+                value={buscarResp}
+                onChange={(e) => setBuscarResp(e.target.value)}
+                placeholder="Busca por nombre…"
+                role="combobox"
+                aria-expanded={candidatos.length > 0}
+                aria-controls="est-responsable-lista"
+                autoComplete="off"
+              />
+              {candidatos.length > 0 && (
+                <ul id="est-responsable-lista" className="plain-list" role="listbox">
+                  {candidatos.map((c) => (
+                    <li key={c.id} role="option" aria-selected={false}>
+                      <button type="button" className="link-button" onClick={() => { setResponsable(c); setCandidatos([]); }}>
+                        {c.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
         <ResultCount shown={visible.length} total={total} noun="actividades" />
       </div>

@@ -542,7 +542,15 @@ export default function ActivityManager({
   };
 
   /** V3.2 §23.3 (C10): aprobada, Docente y Sociedad ya no editan su contenido. */
-  const editable = (a: Activity) => !(necesitaRevision && a.requiresReview && a.reviewStatus === 'approved');
+  /*
+   * V5-09 (B08, I03): «Editar» aparece solo donde el backend lo permite. Quien
+   * fue asignado responsable de una actividad que creó Dirección o
+   * Administración opera (inscripciones, asistencia, abrir o cerrar), pero no
+   * cambia su contenido: no se le ofrece un botón que fallaría al guardar.
+   */
+  const soloOpera = (a: Activity) => a.creatorId !== user?.id && !esAutoridad
+    && ['CAREER_DIRECTOR', 'ADMIN'].includes(a.creator?.role?.name ?? '');
+  const editable = (a: Activity) => !soloOpera(a) && !(necesitaRevision && a.requiresReview && a.reviewStatus === 'approved');
 
   const enviarARevision = async (a: Activity) => {
     try {
@@ -1270,12 +1278,15 @@ export default function ActivityManager({
                 <div role="group" aria-labelledby="activity-manager-semestres-a-los-que" className="chip-row">
                   {semestresPermitidos.map((n) => {
                     const on = form.semesterScope.includes(n);
+                    // V5-08: un semestre que no cubre ningún docente responsable se marca y se explica.
+                    const fuera = !!cobertura && !cobertura.includes(n);
                     return (
                       <button
                         type="button"
                         key={n}
-                        className={`chip ${on ? 'on' : ''}`}
+                        className={`chip ${on ? 'on' : ''} ${fuera ? 'chip-fuera' : ''}`}
                         aria-pressed={on}
+                        title={fuera ? 'Ningún docente responsable cubre este semestre' : undefined}
                         onClick={() =>
                           setForm({
                             ...form,
@@ -1296,6 +1307,11 @@ export default function ActivityManager({
                   <p className="field-hint" data-testid="cobertura">
                     Los docentes responsables cubren: {cobertura.length ? cobertura.map((n) => `${n}.º`).join(', ') : 'ningún semestre'}.
                     {' '}Para publicar, elige solo esos semestres o suma un responsable que cubra toda la carrera.
+                    {/* V5-08: qué cubre cada uno; la unión no amplía el alcance de nadie. */}
+                    <span className="block small">
+                      {form.responsables.map((p) => `${p.firstName} ${p.lastName}: ${(p.semesters ?? []).length ? (p.semesters ?? []).map((n) => `${n}.º`).join(', ') : 'sin semestres'}`).join(' · ')}.
+                      {' '}Cada docente gestiona solo a los estudiantes de sus semestres.
+                    </span>
                   </p>
                 )}
                 <FieldError message={errores.errors.semesterScope} />
