@@ -242,7 +242,8 @@ export class TrajectorySummaryService {
     const extra = confirmadas.filter((r) => r.activity?.type === ActivityType.EXTRACURRICULAR);
     const pendientesInternas = f.inscripciones.filter((r) =>
       (r.activity?.originType ?? ActivityOrigin.INTERNAL) === ActivityOrigin.INTERNAL
-      && [RegistrationStatus.REGISTERED, RegistrationStatus.INTERESTED].includes(r.status));
+      // V5 §6: admitido tampoco es asistir; sigue pendiente de la asistencia.
+      && [RegistrationStatus.REGISTERED, RegistrationStatus.ACCEPTED, RegistrationStatus.INTERESTED].includes(r.status));
     const certs = f.certs.filter((c) => certificateCvEligible(f.tierDe(c.id)));
     const skills = await this.backedSkills.forProfile(studentProfileId);
     const insignias = await this.badges.find({ where: { studentProfileId }, relations: { badge: true }, order: { awardedAt: 'ASC' } });
@@ -276,7 +277,7 @@ export class TrajectorySummaryService {
           'Solo entran proyectos activos y corroborados o revisados por un docente. Los demás siguen en tu trayectoria.',
         ),
         seccion(TrajectorySection.ACADEMIC_ACTIVITIES, academicas.map(actividad),
-          pendientesInternas.length, 'Una actividad entra cuando el responsable confirma tu participación.'),
+          pendientesInternas.length, 'Una actividad entra cuando el responsable registra tu asistencia.'),
         seccion(TrajectorySection.EXTRACURRICULAR_ACTIVITIES, extra.map(actividad)),
         seccion(
           TrajectorySection.CERTIFICATES,

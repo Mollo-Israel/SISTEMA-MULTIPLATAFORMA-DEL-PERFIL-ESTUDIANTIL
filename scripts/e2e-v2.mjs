@@ -920,8 +920,10 @@ async function batch13(ctx) {
   };
   const vuelve = await nuevo('vuelve');
   const falta = await nuevo('falta');
-  for (const [est, act, estado] of [[vuelve, a1, 'confirmed'], [vuelve, a2, 'confirmed'], [falta, a1, 'absent']]) {
-    await req('POST', `/activities/${act}/register`, { token: est.token });
+  const plan = [[vuelve, a1, 'confirmed'], [vuelve, a2, 'confirmed'], [falta, a1, 'absent']];
+  // V5 §6: todos piden su lugar antes del evento; la asistencia, después.
+  for (const [est, act] of plan) await req('POST', `/activities/${act}/register`, { token: est.token });
+  for (const [est, act, estado] of plan) {
     await req('PATCH', `/activities/${act}/confirm-participation`, { token: sociedad.token, body: { studentProfileId: est.profileId, status: estado } });
   }
   const m = await req('GET', '/reports/society/activities', { token: sociedad.token });

@@ -312,8 +312,9 @@ async function batch3(ctx) {
   const lleno = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Cupo lleno ${L}`, capacity: 1, status: 'open' } });
   await req('POST', `/activities/${lleno.data?.id}/register`, { token: est.token });
   // El cupo lo ocupa la participación confirmada o aceptada (OCCUPYING_STATUSES).
+  // V5 §6.1: antes del evento, la plaza la ocupa la admisión.
   const perfilEst = (await req('GET', '/profiles/me', { token: est.token })).data;
-  await req('PATCH', `/activities/${lleno.data?.id}/confirm-participation`, { token: director.token, body: { studentProfileId: perfilEst?.id, status: 'confirmed' } });
+  await req('PATCH', `/activities/${lleno.data?.id}/confirm-participation`, { token: director.token, body: { studentProfileId: perfilEst?.id, status: 'accepted' } });
   await req('PATCH', `/activities/${lleno.data?.id}`, { token: director.token, body: { status: 'closed' } });
   const reabreLleno = await req('PATCH', `/activities/${lleno.data?.id}`, { token: director.token, body: { status: 'open' } });
   check(reabreLleno.status === 400 && reabreLleno.data?.code === 'ACTIVITY_REOPEN_FULL',

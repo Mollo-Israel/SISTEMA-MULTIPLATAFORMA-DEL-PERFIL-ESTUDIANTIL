@@ -412,6 +412,8 @@ async function preparar() {
   const practica2 = await crearActividad(director.token, {
     title: `Práctica de visión 2 ${TS}`, description: 'Actividad del escenario.', type: 'academica', categoryId: taller.id, areaId: area.id,
   });
+  // V5 §6: todos piden su lugar antes del evento; la asistencia, después.
+  for (const quien of [est, estOtro]) await req('POST', `/activities/${practica1.id}/register`, { token: quien.token });
   for (const quien of [est, estOtro]) await participar(quien, practica1);
 
   // Un segundo cálculo distinto, para que haya evolución que mirar.

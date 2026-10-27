@@ -554,7 +554,8 @@ async function batch8(ctx) {
     'V3.8.5 §65 La aceptación queda auditada (EXTERNAL_OPPORTUNITY_ACCEPTED)');
 
   const sinCupo = await decidir(ccna, otro, 'accepted');
-  check(sinCupo.status === 400, 'V3.8.6 §12 La aceptación ocupa cupo: con cupo 1, no entra un segundo', `status ${sinCupo.status}`);
+  // V5 §6.1: el cupo lleno es un conflicto (409 ACTIVITY_FULL), reservado de forma atómica.
+  check(sinCupo.status === 409 && sinCupo.data?.code === 'ACTIVITY_FULL', 'V3.8.6 §12 La aceptación ocupa cupo: con cupo 1, no entra un segundo', `status ${sinCupo.status}`);
 
   const baja = await req('POST', `/activities/${ccna.id}/cancel-registration`, { token: est.token });
   check(baja.status === 400, 'V3.8.7 Aceptado, el estudiante ya no se da de baja por su cuenta', `status ${baja.status}`);
@@ -574,8 +575,9 @@ async function batch8(ctx) {
   const interna = (await crear('Charla de redes', { outcomePolicy: 'none' })).data;
   await req('POST', `/activities/${interna.id}/register`, { token: est.token });
   const aceptarInterna = await decidir(interna, est, 'accepted');
-  check(aceptarInterna.status === 400 && aceptarInterna.data?.code === 'ACCEPTANCE_ONLY_EXTERNAL',
-    'V3.8.11 §15 Una interna no tiene «aceptación del proveedor»', json({ s: aceptarInterna.status, c: aceptarInterna.data?.code }));
+  // V5 §6: en una interna, «accepted» es la admisión de la solicitud. No es asistencia.
+  check(aceptarInterna.status === 200 && aceptarInterna.data?.status === 'accepted',
+    'V3.8.11 §15 En una interna, aceptar es admitir la solicitud (no la aceptación de un proveedor ni la asistencia)', json({ s: aceptarInterna.status, st: aceptarInterna.data?.status }));
 
   // ----- §17 Referencia de validación
   const ref = (actividad, token, body) => req('PUT', `/activities/${actividad.id}/validation-reference`, { token, body });
@@ -681,7 +683,8 @@ async function batch8(ctx) {
     outcomePolicy: 'external_credential_expected', provider: 'Linux Professional Institute', ...futuro,
   })).data;
   await req('POST', `/activities/${prepa.id}/register`, { token: est.token });
-  await req('PATCH', `/activities/${prepa.id}`, { token: director.token, body: yaPaso });
+  // V5 ND-06: la asistencia se registra hasta 7 días después del fin; terminó hace dos.
+  await req('PATCH', `/activities/${prepa.id}`, { token: director.token, body: { activityDate: new Date(Date.now() - 3 * dia).toISOString(), endAt: new Date(Date.now() - 2 * dia).toISOString() } });
   await decidir(prepa, est, 'confirmed');
   check((await elegibles(est)).some((o) => o.activityId === prepa.id && o.originType === 'internal'),
     'V3.8.36 §14.2 Una interna que conduce a una credencial también la habilita al confirmar y terminar');
@@ -1944,7 +1947,7 @@ async function batch18(ctx) {
     'V3.18.2 El proyecto revisado por un docente aparece como tal y es elegible para el currículo', entrada('project', corroborado.id)?.levelLabel);
   check(entrada('project', borrador.id)?.levelLabel === 'Inconcluso' && entrada('project', borrador.id)?.cvEligible === false,
     'V3.18.3 El borrador sigue en la trayectoria como inconcluso, explicado', entrada('project', borrador.id)?.detail);
-  check(entrada('activity', pendiente.id)?.levelLabel === 'Inconcluso' && /confirme/.test(entrada('activity', pendiente.id)?.detail ?? ''),
+  check(entrada('activity', pendiente.id)?.levelLabel === 'Inconcluso' && /confirme|asistencia/.test(entrada('activity', pendiente.id)?.detail ?? ''),
     'V3.18.4 La inscripción sin confirmar dice qué le falta', entrada('activity', pendiente.id)?.detail);
   check(entrada('activity', acad1.id)?.levelLabel === 'Corroborado', 'V3.18.5 La participación confirmada está corroborada por el responsable');
   check(entrada('credential', cert.data.id)?.cvEligible === false && ['Declarado', 'Con respaldo', 'Inconcluso'].includes(entrada('credential', cert.data.id)?.levelLabel),
@@ -2247,7 +2250,8 @@ async function batch23(ctx) {
   const inscritas = await pagina('&mine=enrolled');
   check(interesadas.data?.items?.map((a) => a.id).join() === media.id && inscritas.data?.items?.map((a) => a.id).join() === proxima.id,
     'V3.23.6 «Interesadas» e «Inscritas» salen del servidor');
-  check(inscritas.data?.items?.[0]?.myRegistration?.status === 'registered', 'V3.23.7 Cada ítem trae su propia inscripción');
+  // V5 §6.1: abierta y sin cupo, la inscripción queda admitida al instante.
+  check(['registered', 'accepted'].includes(inscritas.data?.items?.[0]?.myRegistration?.status), 'V3.23.7 Cada ítem trae su propia inscripción');
   for (const [q, nombre] of [['&limit=0', 'limit 0'], ['&limit=101', 'limit 101'], ['&limit=5&offset=-1', 'offset negativo'], ['&limit=5&mine=todas', 'mine inventado']]) {
     const r = await req('GET', `/activities?${q.slice(1)}`, { token: est.token });
     check(r.status === 400, `V3.23.8 Se rechaza ${nombre}`, `status ${r.status}`);
