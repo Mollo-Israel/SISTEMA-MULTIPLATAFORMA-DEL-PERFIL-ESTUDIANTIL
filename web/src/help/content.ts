@@ -34,7 +34,7 @@ export const TEMA_LABEL: Record<HelpTema, string> = {
   proyectos: 'Proyectos',
   evidencias: 'Credenciales y evidencias',
   afinidad: 'Afinidad',
-  curriculo: 'Currículo',
+  curriculo: 'Resumen de trayectoria',
   privacidad: 'Privacidad',
   gestion: 'Gestión',
 };
@@ -63,7 +63,7 @@ export const TUTORIAL: Record<string, TutorialStep[]> = {
     { icon: 'folder', title: 'Proyectos y evidencias', text: 'Registra tus proyectos, confirma las tecnologías que usaste y sube evidencias. Eso es lo que respalda tu afinidad.', to: '/student/projects' },
     { icon: 'target', title: 'Afinidad', text: 'Tu afinidad por área sale de lo que hiciste y está respaldado, no de lo que declaras. Siempre puedes ver de dónde sale cada punto.', to: '/student/affinity' },
     { icon: 'users', title: 'Colaboración', text: 'Acepta contactos y forma equipos con quien complemente lo que te falta. Tu enlace y tu QR se administran en Mi perfil → Visibilidad.', to: '/student/collaboration' },
-    { icon: 'award', title: 'Mi progreso y CV', text: 'Mira tus insignias y descarga tu CV en PDF con la plantilla que prefieras.', to: '/student/progress' },
+    { icon: 'award', title: 'Mi progreso y resumen de trayectoria', text: 'Mira tus puntos y descarga un resumen informativo en PDF, eligiendo qué incluir y con la plantilla que prefieras.', to: '/student/progress' },
   ],
   [RolNombre.TEACHER]: [
     { icon: 'home', title: 'Tu panel', text: 'Ves solo a los estudiantes de los semestres que la administración te habilitó.', to: '/teacher' },
@@ -75,7 +75,7 @@ export const TUTORIAL: Record<string, TutorialStep[]> = {
   [RolNombre.CAREER_DIRECTOR]: [
     { icon: 'check', title: 'Aprobaciones', text: 'Las actividades de docentes y sociedad llegan aquí. Apruébalas, obsérvalas con un comentario o recházalas.', to: '/director/approvals' },
     { icon: 'calendar', title: 'Actividades académicas', text: 'Las que creas tú se publican directamente.', to: '/director/activities' },
-    { icon: 'award', title: 'Constancias internas', text: 'Se emiten solo sobre participación confirmada en actividades que las tienen habilitadas.', to: '/director/constancies' },
+    { icon: 'award', title: 'Participaciones confirmadas', text: 'Quién asistió a cada actividad, según lo registró su responsable. Afinia no emite certificados; los documentos anteriores se conservan.', to: '/director/constancies' },
     { icon: 'chart', title: 'Mapa y tendencias', text: 'Analítica descriptiva de la carrera. Los grupos muy pequeños no se desglosan para proteger a las personas.', to: '/director/analytics' },
   ],
   [RolNombre.SCIENTIFIC_SOCIETY]: [
@@ -96,11 +96,11 @@ export const HELP: Record<string, HelpEntry[]> = {
     { tema: 'perfil', question: '¿Qué completo en mi perfil?', answer: 'Sobre ti, tus intereses y objetivos, tu disponibilidad y quién puede verlo. Los intereses orientan las recomendaciones; lo que suma a tu afinidad es lo que haces.', to: '/student/profile' },
     { tema: 'actividades', question: '¿Cómo cuenta una actividad?', answer: 'Inscríbete en Actividades. Al terminar, quien la organiza confirma tu participación: solo entonces suma a tu trayectoria y a tu afinidad, en el área de la actividad. Puedes guardar una actividad que te interese aunque ya haya pasado.', to: '/student/activities', image: IMG.actividad },
     { tema: 'proyectos', question: '¿Cómo registro un proyecto para que cuente?', answer: 'Indica sus áreas y, en cada una, las tecnologías que usaste. Agrega evidencias (repositorio, demo, capturas). El proyecto suma cuando queda con respaldo, y cada tecnología suma en el área en la que la pusiste.', to: '/student/projects', image: IMG.proyecto },
-    { tema: 'evidencias', question: '¿Qué diferencia hay entre una constancia y una credencial externa?', answer: 'La constancia la emite la institución sobre una participación confirmada. La credencial externa (un curso, un certificado de otra entidad) la registras tú con sus áreas y tecnologías; suma cuando queda con respaldo.', to: '/student/evidences' },
+    { tema: 'evidencias', question: '¿Qué diferencia hay entre una constancia y una credencial externa?', answer: 'Afinia no emite constancias: registra tu asistencia, y si la institución te entrega un documento propio, queda con su emisor real. La credencial externa (un curso, un certificado de otra entidad) la registras tú con sus áreas y tecnologías; suma cuando queda con respaldo.', to: '/student/evidences' },
     { tema: 'evidencias', question: '¿Qué significa «con respaldo»?', answer: 'Que hay algo que lo sostiene además de tu palabra: una evidencia, una confirmación del organizador o la revisión de un docente. «No se pudo comprobar» quiere decir que la verificación automática no encontró el recurso; no es una sanción.' },
     { tema: 'afinidad', question: '¿Por qué mi afinidad no sube si marqué que me interesa un área?', answer: 'Los intereses orientan tus recomendaciones, pero la afinidad solo cuenta lo que hiciste y está respaldado: actividades confirmadas, proyectos y credenciales con respaldo, cada uno en el área que se indicó.', to: '/student/affinity', image: IMG.afinidad },
     { tema: 'afinidad', question: '¿De dónde sale cada punto?', answer: 'En Áreas de afinidad abre un área: el desglose muestra cada actividad, proyecto o credencial que aporta y cuánto.', to: '/student/affinity' },
-    { tema: 'curriculo', question: '¿El CV es un documento oficial?', answer: 'No. Resume lo registrado en Afinia y lo dice en el propio PDF. Si usas la ayuda de redacción, nada entra al CV hasta que eliges la propuesta.', to: '/student/progress?tab=resumen' },
+    { tema: 'curriculo', question: '¿El resumen de trayectoria es un documento oficial?', answer: 'No. Es un borrador informativo: resume lo registrado en Afinia con su procedencia y lo dice en el propio PDF, con la fecha en que se generó. Si usas la ayuda de redacción, nada entra al resumen hasta que eliges la propuesta.', to: '/student/progress?tab=resumen' },
     { tema: 'privacidad', question: '¿Quién puede ver mi perfil?', answer: 'Nadie fuera del sistema, salvo que actives tu perfil compartible. Tú eliges qué se muestra; tu correo institucional y tu código no aparecen nunca por omisión.', to: '/student/profile?tab=visibilidad' },
     { tema: 'privacidad', question: '¿Cómo me contactan si no hay chat?', answer: 'Configura tus canales (Teams, WhatsApp, LinkedIn, correo o un enlace) en Colaboración. Tus contactos aceptados los ven; en tu perfil público, solo los que marques.', to: '/student/collaboration' },
   ],
@@ -114,8 +114,8 @@ export const HELP: Record<string, HelpEntry[]> = {
   ],
   [RolNombre.CAREER_DIRECTOR]: [
     ...CUENTA,
-    { tema: 'actividades', question: '¿Qué apruebo junto con una actividad?', answer: 'Su contenido, si emite constancia o certificado y cuántos puntos da por participar. Después de aprobarla puedes ajustar sus datos; cada cambio queda auditado.', to: '/director/approvals', image: IMG.actividad },
-    { tema: 'evidencias', question: '¿Cuándo se emite una constancia?', answer: 'Solo sobre participación confirmada en actividades que la tienen habilitada.', to: '/director/constancies' },
+    { tema: 'actividades', question: '¿Qué apruebo junto con una actividad?', answer: 'Su contenido, si la institución entregará un certificado propio y cuántos puntos da por participar. Después de aprobarla puedes ajustar sus datos; cada cambio queda auditado.', to: '/director/approvals', image: IMG.actividad },
+    { tema: 'evidencias', question: '¿Afinia emite constancias?', answer: 'No. La asistencia que registra el responsable queda en la trayectoria del estudiante. Las constancias emitidas antes se conservan como historia, y un documento de la institución se registra con su emisor real.', to: '/director/constancies' },
     { tema: 'afinidad', question: '¿Por qué una fila dice «sin desglose»?', answer: 'Porque el grupo es tan pequeño que el detalle identificaría a las personas. Se muestra el tamaño del grupo y no sus datos.', to: '/director/analytics' },
   ],
   [RolNombre.SCIENTIFIC_SOCIETY]: [

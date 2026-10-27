@@ -46,7 +46,7 @@ export default function StudentProgressPage() {
     <div>
       <PageHeader
         title="Mi progreso"
-        description="Tu trayectoria completa, tus puntos y el currículo que puedes llevarte."
+        description="Tu trayectoria completa, tus puntos y un resumen informativo que puedes descargar."
       />
       <Tabs
         value={tab}
@@ -54,7 +54,7 @@ export default function StudentProgressPage() {
         items={[
           { key: 'trayectoria', label: 'Mi trayectoria' },
           { key: 'progreso', label: 'Puntos e insignias' },
-          { key: 'resumen', label: 'Currículo' },
+          { key: 'resumen', label: 'Resumen de trayectoria' },
         ]}
       />
       {tab === 'trayectoria' ? <Trayectoria /> : tab === 'progreso' ? <Progreso /> : <Resumen />}
@@ -128,7 +128,7 @@ function Trayectoria() {
                         </span>
                         <span className="flex" style={{ gap: '0.35rem' }}>
                           {e.levelLabel && <Badge tone={TONO_NIVEL[e.level ?? 'declared']}>{e.levelLabel}</Badge>}
-                          {e.cvEligible && <Badge tone="green"><FiCheckCircle size={11} /> Puede ir al currículo</Badge>}
+                          {e.cvEligible && <Badge tone="green"><FiCheckCircle size={11} /> Puede ir al resumen</Badge>}
                         </span>
                       </div>
                       <p className="muted" style={{ margin: '0.2rem 0 0' }}>
@@ -284,9 +284,12 @@ function Progreso() {
 
 const NIVEL: Record<string, string> = { high: 'alto', medium: 'medio', low: 'bajo' };
 
-/** V3 §44: la constancia va en la misma línea de la actividad. */
+/**
+ * V3 §44: el documento va en la misma línea de la actividad. V5 §1: la
+ * asistencia la registró el responsable; no es un certificado de Afinia.
+ */
 const actividadCv = (a: any) =>
-  `Participación confirmada en ${a.title}${a.date ? ` (${FECHA(a.date)})` : ''}${a.constancyLabel ? ` · ${a.constancyLabel}` : a.constancy ? ' · Constancia interna disponible' : ''}`;
+  `Asistencia registrada por el responsable en ${a.title}${a.date ? ` (${FECHA(a.date)})` : ''}${a.constancyLabel ? ` · ${a.constancyLabel}` : a.constancy ? ' · Documento registrado' : ''}`;
 
 /**
  * La vista previa se dibuja con la misma información que irá al PDF, y con el
@@ -302,8 +305,10 @@ function CvPreview({ d }: { d: Record<string, any> }) {
       </section>
     );
   return (
-    <article className={`cv-preview cv-${d.template ?? 'classic'}`} aria-label="Vista previa del CV">
+    <article className={`cv-preview cv-${d.template ?? 'classic'}`} aria-label="Vista previa del resumen de trayectoria">
       <h3>Resumen de Trayectoria Académica Complementaria</h3>
+      {/* V5 §1.1: currículo estudiantil como borrador informativo, no un documento oficial. */}
+      <p className="cv-sub"><strong>Currículo estudiantil (borrador informativo)</strong></p>
       <p className="cv-sub">
         {d.student?.name}{d.student?.semester ? ` · ${d.student.semester}.º semestre` : ''} · {d.student?.career}
       </p>
@@ -330,11 +335,11 @@ function CvPreview({ d }: { d: Record<string, any> }) {
       {(d.skills ?? []).length > 0 && (
         <section><h4>Habilidades respaldadas</h4><p>{d.skills.map((x: any) => x.name).join(' · ')}</p></section>
       )}
-      {lista('Actividades con participación confirmada', (d.activities ?? []).map(actividadCv))}
+      {lista('Actividades con asistencia registrada', (d.activities ?? []).map(actividadCv))}
       {lista('Actividades académicas internas', (d.academicActivities ?? []).map(actividadCv))}
       {lista('Actividades extracurriculares internas', (d.extracurricularActivities ?? []).map(actividadCv))}
       {lista('Credenciales y cursos externos', (d.certificates ?? []).map((c: any) => `${c.name} — ${c.issuer}`))}
-      {lista('Constancias internas', (d.constancies ?? []).map((c: any) => c.description))}
+      {lista('Documentos registrados', (d.constancies ?? []).map((c: any) => c.description))}
       {lista('Evidencias', (d.evidences ?? []).map((e: any) => (e.context ? `${e.description ?? 'Evidencia'} — ${e.context}` : e.description)))}
       {lista('Insignias de Afinia', (d.badges ?? []).map((b: any) => `${b.name} (${FECHA(b.awardedAt)})`))}
       {lista('Contacto', (d.contact ?? []).map((c: any) => `${c.label}: ${c.value}`))}
@@ -450,7 +455,7 @@ function Resumen() {
   return (
     <>
       <Card title="Plantilla">
-        <div className="cv-templates" role="radiogroup" aria-label="Plantilla del CV">
+        <div className="cv-templates" role="radiogroup" aria-label="Plantilla del resumen">
           {plantillas.map((t) => (
             <button
               type="button"
@@ -488,7 +493,7 @@ function Resumen() {
       {seccionesConItems.length > 0 && (
         <Card title="Paso 2 · Qué ítems de cada sección">
           <p className="muted" style={{ marginTop: 0 }}>
-            Solo aparecen los elegibles para un currículo verificado, y nada entra solo: marca los que quieres incluir. Lo demás sigue en «Mi trayectoria».
+            Solo aparecen los ítems con respaldo suficiente, y nada entra solo: marca los que quieres incluir. Lo demás sigue en «Mi trayectoria».
             Puedes cambiar el orden con las flechas.
           </p>
           {seccionesConItems.map((sec) => {
@@ -540,7 +545,7 @@ function Resumen() {
         <Card title="Presentación">
           <p className="muted" style={{ marginTop: 0 }}>
             Opcional. Si la dejas vacía se usa la biografía de tu perfil. Si pides ayuda, la propuesta
-            no entra al CV hasta que la elijas, y luego puedes editarla. La ayuda mejora la redacción;
+            no entra al resumen hasta que la elijas, y luego puedes editarla. La ayuda mejora la redacción;
             nunca agrega cargos, tecnologías, actividades, certificados ni fechas.
           </p>
           <div className="field">

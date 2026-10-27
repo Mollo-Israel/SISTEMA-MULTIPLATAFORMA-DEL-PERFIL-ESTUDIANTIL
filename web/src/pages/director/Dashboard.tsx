@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FiArrowRight, FiBarChart2, FiCheckSquare, FiFileText, FiShield } from 'react-icons/fi';
+import { FiArrowRight, FiBarChart2, FiCheckSquare, FiShield } from 'react-icons/fi';
 import { useAsync } from '../../hooks/useAsync';
 import { reportService, type DirectorPending } from '../../services';
 import { AsyncView, Card, PageHeader, SkeletonCards, Stat } from '../../components/ui';
@@ -35,13 +35,6 @@ export default function DirectorDashboard() {
               n={p.credentialsPendingManualReview}
               titulo="Credenciales en revisión"
               detalle="Revisión manual excepcional"
-            />
-            <Pendiente
-              to="/director/constancies"
-              icon={<FiFileText />}
-              n={p.constanciesPending}
-              titulo="Constancias pendientes"
-              detalle="Participaciones confirmadas por emitir"
             />
           </div>
         )}

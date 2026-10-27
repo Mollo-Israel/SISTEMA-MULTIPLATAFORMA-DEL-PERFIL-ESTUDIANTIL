@@ -26,7 +26,7 @@ export class ConstanciesController {
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY)
   @ApiOperation({
     summary:
-      'Emitir constancia interna. Requiere participación confirmada y no admite duplicados.',
+      'Constancia interna: devuelve la ya emitida. V5 §1.2: Afinia no emite constancias nuevas (403 CONSTANCY_ISSUANCE_DISABLED).',
   })
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateInternalConstancyDto) {
     return this.constanciesService.create(user, dto);

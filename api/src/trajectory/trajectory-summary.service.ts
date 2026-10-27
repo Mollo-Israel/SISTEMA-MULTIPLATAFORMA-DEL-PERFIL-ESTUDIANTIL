@@ -225,7 +225,8 @@ export class TrajectorySummaryService {
       if (c.kind === 'institution_certificate') {
         m.set(c.activityId, `Certificado emitido por ${c.issuerName ?? 'la institución'}`);
       } else if (!m.has(c.activityId)) {
-        m.set(c.activityId, 'Constancia interna disponible');
+        // V5 §7: Afinia ya no emite constancias; las que existen son historia.
+        m.set(c.activityId, 'Constancia histórica del sistema');
       }
     }
     return m;
@@ -589,7 +590,7 @@ export class TrajectorySummaryService {
         levelLabel: nivel(TrajectoryLevel.CORROBORATED),
         detail: c.kind === 'institution_certificate'
           ? `Certificado emitido por ${c.issuerName ?? 'la institución'}${c.activity?.title ? ` por «${c.activity.title}»` : ''}.`
-          : c.activity?.title ? `Constancia interna de «${c.activity.title}».` : 'Constancia interna emitida.',
+          : c.activity?.title ? `Constancia histórica del sistema por «${c.activity.title}».` : 'Constancia histórica del sistema.',
         cvEligible: true,
       });
     }
@@ -691,6 +692,9 @@ export class TrajectorySummaryService {
       + (datos.student.semester ? ` · ${datos.student.semester}.º semestre` : '')
       + ` · ${datos.student.career}`,
     );
+    // V5 §1.1 y H04: currículo estudiantil como borrador informativo, con su
+    // fecha de generación. No es un documento oficial ni un certificado.
+    pdf.subtitle(`Currículo estudiantil (borrador informativo) · generado el ${this.fecha(new Date())}`);
 
     if (datos.bio) {
       pdf.section('Presentación');
@@ -731,11 +735,11 @@ export class TrajectorySummaryService {
       pdf.section(titulo);
       for (const a of lista) {
         const fecha = a.date ? ` (${this.fecha(a.date)})` : '';
-        const respaldo = a.constancyLabel ?? (a.constancy ? 'Constancia interna disponible' : null);
-        pdf.bullet(`Participación confirmada en ${a.title}${fecha}${respaldo ? ` · ${respaldo}` : ''}`);
+        const respaldo = a.constancyLabel ?? (a.constancy ? 'Documento registrado' : null);
+        pdf.bullet(`Asistencia registrada por el responsable en ${a.title}${fecha}${respaldo ? ` · ${respaldo}` : ''}`);
       }
     };
-    actividades('Actividades con participación confirmada', datos.activities);
+    actividades('Actividades con asistencia registrada', datos.activities);
     actividades('Actividades académicas internas', datos.academicActivities);
     actividades('Actividades extracurriculares internas', datos.extracurricularActivities);
 
@@ -747,7 +751,7 @@ export class TrajectorySummaryService {
     }
 
     if (Array.isArray(datos.constancies) && datos.constancies.length > 0) {
-      pdf.section('Constancias internas');
+      pdf.section('Documentos registrados');
       for (const c of datos.constancies) pdf.bullet(c.description);
     }
 

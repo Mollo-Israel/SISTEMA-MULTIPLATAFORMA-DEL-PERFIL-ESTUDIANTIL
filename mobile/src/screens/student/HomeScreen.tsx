@@ -68,7 +68,7 @@ export default function HomeScreen({ navigation }: any) {
             <Text>Semestre: {data.profile.semester ?? '—'}</Text>
             <Text>Intereses: {data.interests.length} · Habilidades: {data.skills.length}</Text>
             <Text>Certificados externos: {data.externalCertificates.length}</Text>
-            <Text>Constancias internas: {data.internalConstancies.length}</Text>
+            <Text>Documentos registrados: {data.internalConstancies.length}</Text>
           </Card>
         </>
       )}

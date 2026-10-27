@@ -132,7 +132,7 @@ function ActividadesPendientes() {
 
   return (
     <div>
-      <p className="muted">Solo las actividades aprobadas pueden publicarse; la constancia interna y el criterio de puntos se aprueban junto con ellas.</p>
+      <p className="muted">Solo las actividades aprobadas pueden publicarse; el criterio de puntos se aprueba junto con ellas.</p>
 
       {items === null ? (
         <Diferido><SkeletonCards count={3} /></Diferido>
@@ -167,9 +167,6 @@ function ActividadesPendientes() {
                     Semestres: {a.semesterScope?.length ? a.semesterScope.map((n) => `${n}º`).join(', ') : 'toda la carrera'}
                   </Badge>
                   <Badge tone="gray">Cupo: {a.capacity ?? 'sin límite'}</Badge>
-                  <Badge tone={a.internalConstancyEnabled ? 'green' : 'gray'}>
-                    {a.internalConstancyEnabled ? 'Emite constancia interna' : 'Sin constancia interna'}
-                  </Badge>
                   <Badge tone={puntos ? 'bordo' : 'gray'}>
                     {puntos ? `${puntos} puntos por participar` : 'Puntos del criterio general'}
                   </Badge>

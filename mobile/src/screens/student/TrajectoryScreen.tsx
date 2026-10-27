@@ -16,7 +16,7 @@ const TIPO: Record<string, string> = {
   project: 'Proyecto',
   activity: 'Actividad interna',
   external_opportunity: 'Oportunidad externa',
-  constancy: 'Constancia',
+  constancy: 'Documento registrado',
   credential: 'Credencial externa',
   team: 'Equipo',
   feedback: 'Retroalimentación',
@@ -25,7 +25,7 @@ const TIPO: Record<string, string> = {
 /**
  * Mi trayectoria (V3 §42): todo lo hecho, con el nivel de cada cosa en
  * palabras —declarado, con respaldo, corroborado, revisado o inconcluso—, y
- * qué puede ir al currículo. El currículo se arma desde la web.
+ * qué puede ir al resumen de trayectoria. El resumen se arma desde la web.
  */
 export default function TrajectoryScreen() {
   const { data, loading, error, reload } = useAsync<TrajectoryHistory>(() => trajectoryService.history(), []);
@@ -62,7 +62,7 @@ export default function TrajectoryScreen() {
               <Text style={styles.titulo}>{e.title}</Text>
               <View style={styles.fila}>
                 {e.levelLabel && <Badge color={COLOR_NIVEL[e.level ?? 'declared']}>{e.levelLabel}</Badge>}
-                {e.cvEligible && <Badge color={colors.green}>Puede ir al currículo</Badge>}
+                {e.cvEligible && <Badge color={colors.green}>Puede ir al resumen</Badge>}
               </View>
               <Muted>
                 {e.date ? `${new Date(e.date).toLocaleDateString('es-BO', { day: 'numeric', month: 'short', year: 'numeric' })} · ` : ''}

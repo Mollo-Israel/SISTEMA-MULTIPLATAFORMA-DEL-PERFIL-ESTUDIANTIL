@@ -14,7 +14,8 @@ const MODALIDAD: Record<string, string> = { presencial: 'Presencial', virtual: '
 export const RESULTADO_LABEL: Record<string, string> = {
   none: 'Sin resultado',
   participation_only: 'La participación confirmada queda en tu trayectoria',
-  internal_constancy: 'Constancia interna al confirmar tu participación',
+  // V5 §7: Afinia ya no emite constancias; la asistencia queda registrada.
+  internal_constancy: 'La asistencia registrada queda en tu trayectoria',
   institution_issued_certificate: 'Certificado emitido por la institución',
   external_credential_expected: 'Credencial del proveedor, que acreditarás al terminar',
   other_authorized_resource: 'Otro recurso autorizado',

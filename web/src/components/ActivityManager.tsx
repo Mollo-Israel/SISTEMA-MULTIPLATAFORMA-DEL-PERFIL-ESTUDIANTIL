@@ -91,8 +91,9 @@ function revision(a: Activity): { label: string; tone: string } {
 /** V3.2 §28: lo que ofrece una actividad interna al terminar. */
 const RESULTADOS: { value: OutcomePolicy; label: string; hint: string }[] = [
   { value: 'none', label: 'Sin resultado', hint: 'No genera ningún documento.' },
-  { value: 'participation_only', label: 'Solo participación', hint: 'La participación confirmada queda en la trayectoria del estudiante.' },
-  { value: 'internal_constancy', label: 'Constancia interna', hint: 'Al confirmar la participación, Afinia emite la constancia y la adjunta a la trayectoria. El estudiante no sube nada.' },
+  { value: 'participation_only', label: 'Solo participación', hint: 'La asistencia que registra el responsable queda en la trayectoria del estudiante. No es un certificado.' },
+  // V5 §1.2, §7: Afinia ya no emite constancias. Solo se muestra en una actividad antigua que la tenía.
+  { value: 'internal_constancy', label: 'Constancia interna (histórica)', hint: 'Afinia ya no emite constancias nuevas: la asistencia registrada queda en la trayectoria. Las constancias ya emitidas se conservan.' },
   { value: 'institution_issued_certificate', label: 'Certificado emitido por la institución', hint: 'Lo emite Univalle u otro actor institucional: Afinia no se atribuye la autoría y guarda el emisor real.' },
   { value: 'external_credential_expected', label: 'Credencial externa esperada', hint: 'Conduce a una credencial de un tercero que el estudiante acreditará después.' },
 ];
@@ -1299,9 +1300,10 @@ export default function ActivityManager({
                   onChange={(e) => setForm({ ...form, outcomePolicy: e.target.value as OutcomePolicy })}
                 >
                   {/* V4.1 A41-013 (§4.1): «Credencial externa esperada» es el flujo de una oportunidad
-                      externa; en una interna solo se muestra si una actividad antigua ya la tiene. */}
+                      externa; y V5 §7: «Constancia interna» ya no se emite. Las dos solo se muestran
+                      si una actividad antigua ya las tiene. */}
                   {RESULTADOS
-                    .filter((o) => o.value !== 'external_credential_expected' || form.outcomePolicy === 'external_credential_expected')
+                    .filter((o) => (o.value !== 'external_credential_expected' && o.value !== 'internal_constancy') || form.outcomePolicy === o.value)
                     .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <span className="field-hint">

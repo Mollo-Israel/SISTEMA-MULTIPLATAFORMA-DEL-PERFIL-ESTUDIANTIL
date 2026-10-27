@@ -56,7 +56,7 @@ export const NAV: Record<string, NavGroup[]> = {
       section: 'Mi trayectoria',
       items: [
         { to: '/student/progress', label: 'Mi progreso' },
-        { to: '/student/progress?tab=resumen', label: 'CV / Exportar' },
+        { to: '/student/progress?tab=resumen', label: 'Resumen de trayectoria' },
       ],
     },
     {
@@ -95,7 +95,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/director', label: 'Inicio' },
         { to: '/director/approvals', label: 'Aprobaciones' },
         { to: '/director/activities', label: 'Actividades' },
-        { to: '/director/constancies', label: 'Constancias' },
+        { to: '/director/constancies', label: 'Participaciones' },
         { to: '/director/credential-reviews', label: 'Revisión de credenciales' },
         { to: '/director/resources', label: 'Recursos' },
         { to: '/director/analytics', label: 'Analítica' },

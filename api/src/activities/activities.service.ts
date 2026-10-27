@@ -241,6 +241,13 @@ export class ActivitiesService {
     // V3.2 §29: una externa no tiene selector: su resultado es siempre la
     // credencial del proveedor que el estudiante acreditará.
     if (origen === ActivityOrigin.EXTERNAL) return ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED;
+    // V5 §1.2, §7: Afinia ya no emite constancias. Una actividad que ya la
+    // tenía conserva el dato histórico; elegirla de nuevo no se permite.
+    if (politica === ActivityOutcomePolicy.INTERNAL_CONSTANCY && actual !== ActivityOutcomePolicy.INTERNAL_CONSTANCY) {
+      const msg = 'Afinia ya no emite constancias: elige «Solo participación» (la asistencia queda en la trayectoria) '
+        + 'o «Certificado emitido por la institución» si la institución entrega un documento propio.';
+      throw new BadRequestException({ code: 'CONSTANCY_ISSUANCE_DISABLED', message: msg, fields: { outcomePolicy: [msg] } });
+    }
     if (politica === ActivityOutcomePolicy.OTHER_AUTHORIZED_RESOURCE && dto.outcomePolicy !== undefined) {
       const msg = 'Esa opción ya no se ofrece: elige una de las cinco de V3.2 §28.';
       throw new BadRequestException({ message: msg, fields: { outcomePolicy: [msg] } });
@@ -262,11 +269,13 @@ export class ActivitiesService {
   }
 
   /**
-   * Constancia automática (V3 §14.1): al confirmar la participación en una
-   * actividad con constancia, el sistema la emite a nombre de quien confirmó
-   * (el responsable) y la adjunta a la trayectoria. El estudiante no sube nada.
-   * Si después se corrige la confirmación, la constancia queda rechazada (no
-   * se borra: es historia).
+   * Constancia de una participación (V3 §14.1, ajustado por V5 §1.2 y §7).
+   *
+   * Afinia ya no emite constancias: la asistencia confirmada es el registro.
+   * Lo que se conserva es la historia de las que ya existían: si se corrige
+   * la asistencia, la constancia queda revocada (no se borra); si se vuelve a
+   * confirmar, esa misma constancia vuelve a estar vigente. Nunca se crea una
+   * nueva.
    */
   private async sincronizarConstancia(
     activity: Activity,
@@ -276,46 +285,25 @@ export class ActivitiesService {
     const existente = await this.constancies.findOne({
       where: { studentProfileId: registration.studentProfileId, activityId: activity.id },
     });
+    if (!existente) return;
     if (registration.status !== RegistrationStatus.CONFIRMED) {
-      if (existente && existente.status === ConstancyStatus.AUTHORIZED) {
+      if (existente.status === ConstancyStatus.AUTHORIZED) {
         existente.status = ConstancyStatus.REJECTED;
         await this.constancies.save(existente);
       }
       return;
     }
-    const autorizada = activity.outcomePolicy === ActivityOutcomePolicy.INTERNAL_CONSTANCY
+    // Como antes: solo vuelve a estar vigente la constancia de una actividad
+    // que la emitía; un certificado institucional revocado lo decide su emisor.
+    const vigente = activity.outcomePolicy === ActivityOutcomePolicy.INTERNAL_CONSTANCY
       && activity.status !== ActivityStatus.DRAFT
       && activity.status !== ActivityStatus.CANCELLED
       && PUBLISHABLE_REVIEW_STATUSES.includes(activity.reviewStatus as ActivityReviewStatus);
-    if (!autorizada) return;
-    if (existente) {
-      if (existente.status !== ConstancyStatus.AUTHORIZED) {
-        existente.status = ConstancyStatus.AUTHORIZED;
-        existente.issuedById = confirmerId;
-        await this.constancies.save(existente);
-      }
-      return;
+    if (vigente && existente.status !== ConstancyStatus.AUTHORIZED) {
+      existente.status = ConstancyStatus.AUTHORIZED;
+      existente.issuedById = confirmerId;
+      await this.constancies.save(existente);
     }
-    const constancia = await this.constancies.save(
-      this.constancies.create({
-        studentProfileId: registration.studentProfileId,
-        activityId: activity.id,
-        activityRegistrationId: registration.id,
-        description: `Participación confirmada en «${activity.title}».`.slice(0, 300),
-        status: ConstancyStatus.AUTHORIZED,
-        // §6.5: emite quien responde y confirmó; autoriza quien aprobó la
-        // actividad (o quien la publicó sin revisión, si fue Dirección).
-        issuedById: confirmerId,
-        authorizedById: activity.reviewedById ?? (activity.requiresReview ? null : activity.creatorId),
-      }),
-    );
-    await this.audit.record({
-      actorUserId: confirmerId,
-      eventType: AuditEventType.CONSTANCY_ISSUED,
-      entityType: 'internal_constancy',
-      entityId: constancia.id,
-      metadata: { activityId: activity.id, studentProfileId: registration.studentProfileId, automatica: true },
-    });
   }
 
   /** Áreas pedidas: `areaIds` (V3) o el `areaId` de siempre. */
@@ -651,7 +639,10 @@ export class ActivitiesService {
       semesterScope: origen.semesterScope ?? undefined,
       registrationMode: origen.registrationMode,
       requirements: origen.requirements ?? undefined,
-      outcomePolicy: origen.outcomePolicy ?? undefined,
+      // V5 §7: una copia ya no emite constancias; la asistencia queda registrada.
+      outcomePolicy: origen.outcomePolicy === ActivityOutcomePolicy.INTERNAL_CONSTANCY
+        ? ActivityOutcomePolicy.PARTICIPATION_ONLY
+        : origen.outcomePolicy ?? undefined,
       certificateIssuer: origen.certificateIssuer ?? undefined,
       status: ActivityStatus.DRAFT,
     } as unknown as CreateActivityDto);

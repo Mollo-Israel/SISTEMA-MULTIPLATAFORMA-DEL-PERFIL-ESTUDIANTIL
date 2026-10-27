@@ -58,6 +58,16 @@ export async function ajustarCuerpoActividad(method, path, token, body) {
   const asistencia = method === 'PATCH' && path.match(/^\/activities\/([0-9a-f-]{36})\/confirm-participation$/);
   if (asistencia) return prepararAsistencia(asistencia[1], token, body);
   if (method === 'PATCH' && /^\/activities\/[0-9a-f-]{36}$/.test(path)
+    && (body.outcomePolicy === 'internal_constancy' || body.internalConstancyEnabled === true || body.__constanciaLiteral)) {
+    // V5 §7: misma traducción que al crear (ver completarActividad).
+    const { __constanciaLiteral, ...resto } = body;
+    if (!__constanciaLiteral) {
+      delete resto.internalConstancyEnabled;
+      if (resto.outcomePolicy === 'internal_constancy' || resto.outcomePolicy === undefined) resto.outcomePolicy = 'participation_only';
+    }
+    body = resto;
+  }
+  if (method === 'PATCH' && /^\/activities\/[0-9a-f-]{36}$/.test(path)
     && body.status === 'cancelled' && body.cancellationReason === undefined) {
     return { ...body, cancellationReason: 'Cancelada por la prueba automática.' };
   }
@@ -137,7 +147,15 @@ async function catalogoDePrueba(token) {
 
 /** Completa lo mínimo para publicar (V3.2 §18): fechas, lugar o enlace, área y habilidad. */
 export async function completarActividad(token, original) {
-  const { __sinCompletar, ...body } = original;
+  const { __sinCompletar, __constanciaLiteral, ...sinMarcas } = original;
+  // V5 §1.2, §7: Afinia ya no emite constancias. Las suites anteriores las
+  // pedían al crear su actividad de prueba; se traduce a «solo participación».
+  // La regla se prueba tal cual en e2e-v5.mjs (con `__constanciaLiteral`).
+  const body = { ...sinMarcas };
+  if (!__constanciaLiteral && (body.outcomePolicy === 'internal_constancy' || body.internalConstancyEnabled === true)) {
+    delete body.internalConstancyEnabled;
+    if (body.outcomePolicy === 'internal_constancy' || body.outcomePolicy === undefined) body.outcomePolicy = 'participation_only';
+  }
   if (__sinCompletar) return body;
   const out = { ...body };
   const enUnaSemana = Date.now() + 14 * 24 * 3_600_000;

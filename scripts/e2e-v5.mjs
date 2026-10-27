@@ -8,7 +8,7 @@
  * Uso:
  *   API_URL=http://localhost:3010/api node scripts/e2e-v5.mjs [batch4 …]
  */
-import { loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
+import { API, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -148,7 +148,53 @@ async function batch4(ctx) {
   check(await estadoDe(id, admitido.profileId) === 'confirmed', 'V5.4.17 El estado final del asistente se conserva', '');
 }
 
-const BATCHES = { batch4 };
+// ===========================================================================
+//  BATCH V5-5 — Afinia registra la participación; no certifica (§1, §7, H01…H04)
+// ===========================================================================
+async function batch5(ctx) {
+  objective('BATCH V5-5 · Afinia registra la participación; no emite certificados (§1, §7)');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Registro${L}`, email: correoStaff('b5dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Elsa', lastName: `Tray${L}`, email: correoEst('b5e1'), semester: 3 });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const charla = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const base = { type: 'academica', categoryId: charla.id, semesterScope: [3], activityDate: en(48), endAt: en(50) };
+
+  const conConstancia = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Con constancia ${L}`, outcomePolicy: 'internal_constancy', __constanciaLiteral: true } });
+  check(conConstancia.status === 400 && conConstancia.data?.code === 'CONSTANCY_ISSUANCE_DISABLED' && !!conConstancia.data?.fields?.outcomePolicy,
+    'V5.5.1 §1.2 Una actividad nueva ya no puede prometer una constancia de Afinia (error en su campo)', `${conConstancia.status} ${conConstancia.data?.code}`);
+
+  const act = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Solo participación ${L}`, outcomePolicy: 'participation_only', status: 'open' } });
+  await req('POST', `/activities/${act.data?.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${act.data?.id}`, { token: director.token, body: { activityDate: en(-1), endAt: en(2) } });
+  const asistio = await decidir(director.token, act.data?.id, est.profileId, 'confirmed');
+  const mias = (await req('GET', '/constancies/internal/my', { token: est.token })).data ?? [];
+  check(asistio.status === 200 && !mias.some((c) => c.activityId === act.data?.id),
+    'V5.5.2 H02 Registrar la asistencia no genera ninguna constancia', `${asistio.status} · ${mias.length}`);
+
+  const manual = await req('POST', '/constancies/internal', {
+    token: director.token, body: { profileId: est.profileId, activityId: act.data?.id, description: 'Participó en la charla de prueba.' },
+  });
+  const mias2 = (await req('GET', '/constancies/internal/my', { token: est.token })).data ?? [];
+  // 400 si la actividad nunca tuvo constancias; 403 CONSTANCY_ISSUANCE_DISABLED en una antigua que sí (Jest).
+  check([400, 403].includes(manual.status) && !mias2.some((c) => c.activityId === act.data?.id),
+    'V5.5.3 §7.2 Dirección tampoco emite constancias nuevas desde Afinia', `${manual.status} ${manual.data?.code} ${json(manual.data?.fields ?? manual.data?.errors)}`);
+
+  const tray = (await req('GET', '/trajectory/me', { token: est.token })).data;
+  const entrada = (tray?.entries ?? []).find((x) => x.id === act.data?.id);
+  check(!!entrada && /responsable/.test(entrada.detail ?? '') && !/certific/i.test(entrada.detail ?? ''),
+    'V5.5.4 H01 La trayectoria la presenta como registro del responsable, no como certificado', json(entrada));
+
+  const res = await fetch(`${API}/trajectory-summary/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${est.token}` },
+    body: JSON.stringify({ sections: ['academic_activities'], items: { academic_activities: [act.data?.id] } }),
+  });
+  const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
+  check(res.status === 201 && pdf.includes('borrador informativo') && pdf.includes('generado el') && pdf.includes('No constituye historial'),
+    'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
+}
+
+const BATCHES = { batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

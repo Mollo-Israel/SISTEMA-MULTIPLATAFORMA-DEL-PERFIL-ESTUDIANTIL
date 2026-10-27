@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -50,14 +49,12 @@ export class ConstanciesService {
   ) {}
 
   /**
-   * Emision de una constancia interna (RF12).
+   * Constancia interna (RF12), hoy solo de consulta.
    *
-   * Solo la emite el director de carrera. Requiere que exista la actividad, que
-   * el estudiante tenga participacion CONFIRMADA en ella y que no exista ya una
-   * constancia para ese par estudiante-actividad.
-   *
-   * ALCANCE: es una constancia interna del sistema. No sustituye ni equivale a
-   * un certificado oficial de la universidad.
+   * V5 §1.2 y §7.2: Afinia no emite documentos nuevos con apariencia oficial.
+   * Se conservan las validaciones (quién puede pedirla, participación
+   * confirmada) para que el motivo del rechazo sea claro, y una constancia
+   * ya emitida se devuelve tal cual: es historia y no se borra.
    */
   async create(
     authorizer: AuthenticatedUser,
@@ -100,33 +97,21 @@ export class ConstanciesService {
       );
     }
 
-    const duplicate = await this.constancies.findOne({
+    // Una constancia ya emitida es historia: se devuelve tal cual.
+    const existente = await this.constancies.findOne({
       where: { studentProfileId: dto.profileId, activityId: dto.activityId },
     });
-    if (duplicate) {
-      // V3 §14.1: al confirmar la participación la constancia se emite sola.
-      // Pedirla otra vez no crea una segunda: devuelve la que ya existe.
-      if (duplicate.status === ConstancyStatus.AUTHORIZED) return this.findOneOrFail(duplicate.id);
-      throw new ConflictException(
-        'Ya existe una constancia interna para este estudiante en esta actividad.',
-      );
-    }
+    if (existente?.status === ConstancyStatus.AUTHORIZED) return this.findOneOrFail(existente.id);
 
-    const constancy = this.constancies.create({
-      studentProfileId: dto.profileId,
-      activityId: dto.activityId,
-      // La constancia queda anclada a la participacion concreta que la respalda.
-      activityRegistrationId: registration.id,
-      description: dto.description,
-      status: dto.status ?? ConstancyStatus.AUTHORIZED,
-      issuedById: authorizer.userId,
-      // Quien autoriza es la Dirección: ella misma si emite, o quien aprobó
-      // la actividad si emite el responsable.
-      authorizedById: esDireccion ? authorizer.userId : activity.reviewedById ?? null,
+    // V5 §1.2, §7.2: Afinia registra la participación; no emite documentos
+    // nuevos con apariencia oficial mientras Dirección no defina su política
+    // (ND-01). Un documento que emita la institución se registra con su
+    // emisor real («certificado emitido por la institución»).
+    throw new ForbiddenException({
+      code: 'CONSTANCY_ISSUANCE_DISABLED',
+      message: 'Afinia ya no emite constancias: la asistencia confirmada queda registrada en la trayectoria del estudiante. '
+        + 'Si la institución emite un documento, regístralo desde la actividad con su emisor real.',
     });
-    const saved = await this.constancies.save(constancy);
-    await this.trajectory.requestRecalculation(dto.profileId);
-    return this.findOneOrFail(saved.id);
   }
 
   /**

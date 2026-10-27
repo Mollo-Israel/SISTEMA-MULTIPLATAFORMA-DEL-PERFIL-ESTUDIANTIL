@@ -1,22 +1,29 @@
-import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
-import { FiAward, FiCalendar, FiCheck, FiSearch, FiX } from 'react-icons/fi';
+import { FiAward, FiCalendar, FiCheck, FiSearch, FiUsers } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import { activityService, constancyService } from '../../services';
 import {
   Badge, Button, Card, Diferido, EmptyState, PageHeader, ResultCount, SearchInput, SkeletonCards,
-  SkeletonTable, Stagger,
+  SkeletonTable,
 } from '../../components/ui';
-import { useConfirm, useToast } from '../../components/feedback';
+import { useToast } from '../../components/feedback';
 import type { Activity, EligibleParticipant, InternalConstancy } from '../../services/types';
 
 const normalize = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+const fecha = (iso: string) =>
+  new Date(iso).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
 
 /**
- * Emisión de constancias internas (RF12).
- * Solo el director de carrera, y únicamente sobre participación confirmada.
+ * Participaciones confirmadas (V5 §7.2).
+ *
+ * La primera función es consultar quién asistió a cada actividad interna: un
+ * registro que hizo su responsable en Afinia, no un certificado. Afinia ya no
+ * emite constancias (V5 §1.2, ND-01). Los documentos emitidos antes, y los
+ * que la institución entrega con su emisor real, se muestran aparte y se
+ * conservan con su historia.
  */
 export default function DirectorConstanciesPage() {
   const [activities, setActivities] = useCachedState<Activity[]>('actividades', []);
@@ -25,14 +32,8 @@ export default function DirectorConstanciesPage() {
   const [eligible, setEligible] = useState<EligibleParticipant[]>([]);
   const [issued, setIssued] = useState<InternalConstancy[]>([]);
   const [listBusy, setListBusy] = useState(false);
-  const [target, setTarget] = useState<EligibleParticipant | null>(null);
-  const [description, setDescription] = useState('');
-  const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const toast = useToast();
-  const confirm = useConfirm();
-
-  const notify = (t: string, detail?: string) => toast.success(t, detail);
 
   useEffect(() => {
     activityService
@@ -43,9 +44,11 @@ export default function DirectorConstanciesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // V5 §7.2: una oportunidad externa no es una actividad interna de la carrera.
+  const internas = useMemo(() => activities.filter((a) => (a.originType ?? 'internal') === 'internal'), [activities]);
+
   const loadActivity = async (activityId: string) => {
     setSelected(activityId);
-    setTarget(null);
     setQuery('');
     setEligible([]);
     setIssued([]);
@@ -65,87 +68,42 @@ export default function DirectorConstanciesPage() {
     }
   };
 
-  const startIssue = (p: EligibleParticipant) => {
-    const activity = activities.find((a) => a.id === selected);
-    setTarget(p);
-    setDescription(
-      activity ? `Participó en la actividad “${activity.title}” organizada por la carrera.` : '',
-    );
-  };
-
-  const issue = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // V3 §67: error debajo de cada campo, no el globo del navegador.
-    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
-    if (!target) return;
-    const who = target.studentName ?? 'el estudiante';
-    const ok = await confirm({
-      title: 'Emitir la constancia',
-      message: (
-        <>
-          Se emitirá la constancia interna de <strong>{who}</strong>. Solo puede emitirse una
-          vez por estudiante y actividad, y el estudiante la verá en sus evidencias.
-        </>
-      ),
-      confirmLabel: 'Emitir constancia',
-    });
-    if (!ok) return;
-    setSaving(true);
-    try {
-      await constancyService.create({
-        profileId: target.studentProfileId,
-        activityId: selected,
-        description,
-      });
-      notify('Constancia emitida.', `${who} ya puede verla en sus evidencias.`);
-      setTarget(null);
-      setDescription('');
-      await loadActivity(selected);
-    } catch (e2) {
-      toast.error(apiError(e2));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const needle = normalize(query.trim());
-  const match = (name: string | null | undefined) =>
-    !needle || normalize(name ?? '').includes(needle);
-
-  const allPending = eligible.filter((e) => !e.hasConstancy);
-  const pending = allPending.filter((e) => match(e.studentName));
-  const withConstancy = eligible.filter((e) => e.hasConstancy);
+  const shown = eligible.filter((e) => !needle || normalize(e.studentName ?? '').includes(needle));
+  const nombreDe = (c: InternalConstancy) => (c.studentProfile?.user
+    ? `${c.studentProfile.user.firstName} ${c.studentProfile.user.lastName}`
+    : eligible.find((e) => e.studentProfileId === c.studentProfileId)?.studentName || 'Estudiante');
 
   if (loading) return <Diferido><SkeletonCards count={2} /></Diferido>;
 
   return (
     <div>
       <PageHeader
-        title="Constancias internas"
+        title="Participaciones confirmadas"
         description={
           <>
-            Se emiten únicamente sobre participación <strong>confirmada</strong> y una sola vez
-            por estudiante y actividad. Es una constancia interna del sistema: no sustituye ni
-            equivale a un certificado oficial de la universidad.
+            Quién asistió a cada actividad interna, según lo registró su responsable en Afinia.
+            Es un registro de participación, <strong>no un certificado</strong>: Afinia no emite
+            documentos oficiales. Si la institución entrega un documento, se registra desde la
+            actividad con su emisor real.
           </>
         }
       />
 
       <Card title="Elegir actividad">
-        {activities.length === 0 ? (
+        {internas.length === 0 ? (
           <EmptyState
             icon={<FiCalendar size={22} />}
-            message="Todavía no gestiona ninguna actividad. Publique una desde “Actividades académicas”."
+            message="Todavía no gestiona ninguna actividad interna. Publique una desde “Actividades académicas”."
           />
         ) : (
           <div className="field">
             <label htmlFor="constancies-actividad">Actividad</label>
             <select id="constancies-actividad" value={selected} onChange={(e) => loadActivity(e.target.value)}>
               <option value="">Seleccione una actividad…</option>
-              {activities.map((a) => (
+              {internas.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.title} · {a.confirmedCount ?? 0} confirmado
-                  {(a.confirmedCount ?? 0) === 1 ? '' : 's'}
+                  {a.title} · {a.confirmedCount ?? 0} con lugar o asistencia
                 </option>
               ))}
             </select>
@@ -158,42 +116,26 @@ export default function DirectorConstanciesPage() {
       {selected && !listBusy && (
         <>
           <Card
-            title={`Participación confirmada sin constancia (${allPending.length})`}
+            title={`Asistencia confirmada (${eligible.length})`}
             actions={
-              allPending.length > 0 ? (
+              eligible.length > 0 ? (
                 <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
-                  <SearchInput
-                    value={query}
-                    onChange={setQuery}
-                    placeholder="Buscar estudiante…"
-                  />
-                  <ResultCount
-                    shown={pending.length}
-                    total={allPending.length}
-                    noun="estudiantes"
-                  />
+                  <SearchInput value={query} onChange={setQuery} placeholder="Buscar estudiante…" />
+                  <ResultCount shown={shown.length} total={eligible.length} noun="estudiantes" />
                 </div>
               ) : undefined
             }
           >
-            {allPending.length === 0 ? (
+            {eligible.length === 0 ? (
               <EmptyState
-                icon={<FiAward size={22} />}
-                message={
-                  eligible.length === 0
-                    ? 'Esta actividad todavía no tiene participación confirmada. Registre primero la asistencia desde “Actividades académicas”.'
-                    : 'Todos los participantes confirmados ya tienen su constancia.'
-                }
+                icon={<FiUsers size={22} />}
+                message="Esta actividad todavía no tiene asistencia registrada. La registra su responsable cuando el evento ya empezó."
               />
-            ) : pending.length === 0 ? (
+            ) : shown.length === 0 ? (
               <EmptyState
                 icon={<FiSearch size={22} />}
                 message={`Ningún estudiante coincide con “${query}”.`}
-                action={
-                  <Button variant="secondary" size="sm" onClick={() => setQuery('')}>
-                    Limpiar búsqueda
-                  </Button>
-                }
+                action={<Button variant="secondary" size="sm" onClick={() => setQuery('')}>Limpiar búsqueda</Button>}
               />
             ) : (
               <div className="scroll-x">
@@ -202,32 +144,16 @@ export default function DirectorConstanciesPage() {
                     <tr>
                       <th>Estudiante</th>
                       <th>Semestre</th>
-                      <th></th>
+                      <th>Registro</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pending.map((p) => (
-                      <tr
-                        key={p.studentProfileId}
-                        className={
-                          target?.studentProfileId === p.studentProfileId ? 'row-picked' : undefined
-                        }
-                      >
+                    {shown.map((p) => (
+                      <tr key={p.studentProfileId}>
                         <td>{p.studentName ?? 'Estudiante'}</td>
                         <td className="muted">{p.semester ? `${p.semester}º` : '—'}</td>
                         <td>
-                          <Button
-                            size="sm"
-                            variant={
-                              target?.studentProfileId === p.studentProfileId
-                                ? 'primary'
-                                : 'secondary'
-                            }
-                            onClick={() => startIssue(p)}
-                            icon={<FiAward size={14} />}
-                          >
-                            Emitir constancia
-                          </Button>
+                          <Badge tone="green"><FiCheck /> Asistencia registrada por el responsable</Badge>
                         </td>
                       </tr>
                     ))}
@@ -237,81 +163,42 @@ export default function DirectorConstanciesPage() {
             )}
           </Card>
 
-          {target && (
-            <Stagger index={0}>
-            <Card title={`Emitir constancia · ${target.studentName ?? 'Estudiante'}`}>
-              <form noValidate onSubmit={issue}>
-                <div className="field">
-                  <label htmlFor="constancies-texto-de-la-constancia">Texto de la constancia</label>
-                  <textarea id="constancies-texto-de-la-constancia"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    minLength={5}
-                    maxLength={300}
-                    required
-                    placeholder="Describa la participación que se hace constar."
-                  />
-                  <span className="muted" style={{ fontSize: '0.76rem' }}>
-                    {description.length}/300 caracteres
-                  </span>
-                </div>
-                <div className="flex" style={{ gap: '0.5rem' }}>
-                  <Button type="submit" loading={saving} icon={<FiAward size={15} />}>
-                    Emitir constancia
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setTarget(null)}
-                    icon={<FiX size={14} />}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </Card>
-            </Stagger>
-          )}
-
-          <Card title={`Constancias emitidas (${issued.length})`}>
+          <Card title={`Documentos registrados (${issued.length})`}>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              Documentos emitidos antes de este cambio y certificados que entregó la institución con su
+              emisor real. Se conservan como historia; Afinia no los vuelve a emitir.
+            </p>
             {issued.length === 0 ? (
-              <EmptyState
-                icon={<FiAward size={22} />}
-                message="Todavía no se emitió ninguna constancia para esta actividad."
-              />
+              <EmptyState icon={<FiAward size={22} />} message="Esta actividad no tiene documentos registrados." />
             ) : (
               <div className="scroll-x">
                 <table>
                   <thead>
                     <tr>
                       <th>Estudiante</th>
-                      <th>Texto</th>
+                      <th>Documento</th>
                       <th>Estado</th>
-                      <th>Emitida</th>
+                      <th>Fecha</th>
                     </tr>
                   </thead>
                   <tbody>
                     {issued.map((c) => (
                       <tr key={c.id}>
-                        <td>
-                          {c.studentProfile?.user
-                            ? `${c.studentProfile.user.firstName} ${c.studentProfile.user.lastName}`
-                            : withConstancy.find((e) => e.studentProfileId === c.studentProfileId)
-                                ?.studentName || 'Estudiante'}
-                        </td>
-                        <td className="muted">{c.description}</td>
-                        <td>
-                          <Badge tone="green">
-                            <FiCheck /> Autorizada
-                          </Badge>
-                        </td>
+                        <td>{nombreDe(c)}</td>
                         <td className="muted">
-                          {new Date(c.createdAt).toLocaleDateString('es-BO', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
+                          {c.kind === 'institution_certificate'
+                            ? `Certificado emitido por ${c.issuerName ?? 'la institución'}`
+                            : 'Constancia del sistema (histórica)'}
+                          <div className="small">{c.description}</div>
                         </td>
+                        <td>
+                          {c.status === 'authorized'
+                            ? <Badge tone="green"><FiCheck /> Vigente</Badge>
+                            : c.status === 'pending'
+                              ? <Badge tone="amber">Pendiente</Badge>
+                              : <Badge tone="gray">Revocada</Badge>}
+                        </td>
+                        <td className="muted">{fecha(c.createdAt)}</td>
                       </tr>
                     ))}
                   </tbody>
