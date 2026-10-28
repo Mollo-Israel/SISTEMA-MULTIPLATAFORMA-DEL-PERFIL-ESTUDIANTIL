@@ -85,6 +85,12 @@ export function estudiante(data) {
     check(http.get(`${BASE}/team-needs`, params(t, 'crud')), { 'necesidades 200': (r) => r.status === 200 });
     check(http.get(`${BASE}/trajectory-summary/items`, params(t, 'crud')), { 'items cv 200': (r) => r.status === 200 });
   });
+  // V5 §13.4 y §16: listados paginados nuevos (cards de 6, grids de 10).
+  group('V5', () => {
+    check(http.get(`${BASE}/projects/community?page=1`, params(t, 'crud')), { 'proyectos de la carrera 200': (r) => r.status === 200 });
+    check(http.get(`${BASE}/library?limit=12`, params(t, 'crud')), { 'biblioteca 200': (r) => r.status === 200 });
+    check(http.get(`${BASE}/activities/responsibles`, params(t, 'crud')), { 'responsables 200': (r) => r.status === 200 });
+  });
   // Una de cada diez vueltas vuelve a iniciar sesión: el login también se mide.
   if (Math.random() < 0.1) login(__ENV.EMAIL, __ENV.PASSWORD);
   sleep(1);

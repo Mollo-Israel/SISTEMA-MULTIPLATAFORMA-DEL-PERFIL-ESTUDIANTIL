@@ -1,0 +1,331 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: /scripts/carga-basica.js
+ web dashboard: http://127.0.0.1:5665
+        output: -
+
+     scenarios: (100.00%) 2 scenarios, 27 max VUs, 1m30s max duration (incl. graceful stop):
+              * direccion: 2 looping VUs for 1m0s (exec: direccion, gracefulStop: 30s)
+              * estudiantes: Up to 25 looping VUs for 1m0s over 3 stages (gracefulRampDown: 30s, exec: estudiante, gracefulStop: 30s)
+
+
+running (0m01.0s), 03/27 VUs, 0 complete and 0 interrupted iterations
+direccion     [   1% ] 2 VUs      0m00.7s/1m0s
+estudiantes   [   1% ] 01/25 VUs  0m00.7s/1m00.0s
+
+running (0m02.0s), 04/27 VUs, 1 complete and 0 interrupted iterations
+direccion     [   3% ] 2 VUs      0m01.7s/1m0s
+estudiantes   [   3% ] 02/25 VUs  0m01.7s/1m00.0s
+
+running (0m03.0s), 04/27 VUs, 3 complete and 0 interrupted iterations
+direccion     [   5% ] 2 VUs      0m02.7s/1m0s
+estudiantes   [   5% ] 02/25 VUs  0m02.7s/1m00.0s
+
+running (0m04.0s), 05/27 VUs, 5 complete and 0 interrupted iterations
+direccion     [   6% ] 2 VUs      0m03.7s/1m0s
+estudiantes   [   6% ] 03/25 VUs  0m03.7s/1m00.0s
+
+running (0m05.0s), 05/27 VUs, 10 complete and 0 interrupted iterations
+direccion     [   8% ] 2 VUs      0m04.7s/1m0s
+estudiantes   [   8% ] 03/25 VUs  0m04.7s/1m00.0s
+
+running (0m06.0s), 06/27 VUs, 12 complete and 0 interrupted iterations
+direccion     [  10% ] 2 VUs      0m05.7s/1m0s
+estudiantes   [  10% ] 04/25 VUs  0m05.7s/1m00.0s
+
+running (0m07.0s), 07/27 VUs, 18 complete and 0 interrupted iterations
+direccion     [  11% ] 2 VUs      0m06.7s/1m0s
+estudiantes   [  11% ] 05/25 VUs  0m06.7s/1m00.0s
+
+running (0m08.0s), 07/27 VUs, 20 complete and 0 interrupted iterations
+direccion     [  13% ] 2 VUs      0m07.7s/1m0s
+estudiantes   [  13% ] 05/25 VUs  0m07.7s/1m00.0s
+
+running (0m09.0s), 08/27 VUs, 27 complete and 0 interrupted iterations
+direccion     [  15% ] 2 VUs      0m08.7s/1m0s
+estudiantes   [  15% ] 06/25 VUs  0m08.7s/1m00.0s
+
+running (0m10.0s), 08/27 VUs, 32 complete and 0 interrupted iterations
+direccion     [  16% ] 2 VUs      0m09.7s/1m0s
+estudiantes   [  16% ] 06/25 VUs  0m09.7s/1m00.0s
+
+running (0m11.0s), 09/27 VUs, 38 complete and 0 interrupted iterations
+direccion     [  18% ] 2 VUs      0m10.7s/1m0s
+estudiantes   [  18% ] 07/25 VUs  0m10.7s/1m00.0s
+
+running (0m12.0s), 10/27 VUs, 44 complete and 0 interrupted iterations
+direccion     [  20% ] 2 VUs      0m11.7s/1m0s
+estudiantes   [  20% ] 08/25 VUs  0m11.7s/1m00.0s
+
+running (0m13.0s), 10/27 VUs, 51 complete and 0 interrupted iterations
+direccion     [  21% ] 2 VUs      0m12.7s/1m0s
+estudiantes   [  21% ] 08/25 VUs  0m12.7s/1m00.0s
+
+running (0m14.0s), 11/27 VUs, 59 complete and 0 interrupted iterations
+direccion     [  23% ] 2 VUs      0m13.7s/1m0s
+estudiantes   [  23% ] 09/25 VUs  0m13.7s/1m00.0s
+
+running (0m15.0s), 11/27 VUs, 68 complete and 0 interrupted iterations
+direccion     [  25% ] 2 VUs      0m14.7s/1m0s
+estudiantes   [  25% ] 09/25 VUs  0m14.7s/1m00.0s
+
+running (0m16.0s), 12/27 VUs, 74 complete and 0 interrupted iterations
+direccion     [  26% ] 2 VUs      0m15.7s/1m0s
+estudiantes   [  26% ] 10/25 VUs  0m15.7s/1m00.0s
+
+running (0m17.0s), 12/27 VUs, 83 complete and 0 interrupted iterations
+direccion     [  28% ] 2 VUs      0m16.7s/1m0s
+estudiantes   [  28% ] 10/25 VUs  0m16.7s/1m00.0s
+
+running (0m18.0s), 13/27 VUs, 93 complete and 0 interrupted iterations
+direccion     [  30% ] 2 VUs      0m17.7s/1m0s
+estudiantes   [  30% ] 11/25 VUs  0m17.7s/1m00.0s
+
+running (0m19.0s), 13/27 VUs, 104 complete and 0 interrupted iterations
+direccion     [  31% ] 2 VUs      0m18.7s/1m0s
+estudiantes   [  31% ] 11/25 VUs  0m18.7s/1m00.0s
+
+running (0m20.0s), 14/27 VUs, 109 complete and 0 interrupted iterations
+direccion     [  33% ] 2 VUs      0m19.7s/1m0s
+estudiantes   [  33% ] 12/25 VUs  0m19.7s/1m00.0s
+
+running (0m21.0s), 14/27 VUs, 123 complete and 0 interrupted iterations
+direccion     [  35% ] 2 VUs      0m20.7s/1m0s
+estudiantes   [  35% ] 12/25 VUs  0m20.7s/1m00.0s
+
+running (0m22.0s), 15/27 VUs, 132 complete and 0 interrupted iterations
+direccion     [  36% ] 2 VUs      0m21.7s/1m0s
+estudiantes   [  36% ] 13/25 VUs  0m21.7s/1m00.0s
+
+running (0m23.0s), 15/27 VUs, 137 complete and 0 interrupted iterations
+direccion     [  38% ] 2 VUs      0m22.7s/1m0s
+estudiantes   [  38% ] 13/25 VUs  0m22.7s/1m00.0s
+
+running (0m24.0s), 16/27 VUs, 151 complete and 0 interrupted iterations
+direccion     [  40% ] 2 VUs      0m23.7s/1m0s
+estudiantes   [  40% ] 14/25 VUs  0m23.7s/1m00.0s
+
+running (0m25.0s), 16/27 VUs, 165 complete and 0 interrupted iterations
+direccion     [  41% ] 2 VUs      0m24.7s/1m0s
+estudiantes   [  41% ] 14/25 VUs  0m24.7s/1m00.0s
+
+running (0m26.0s), 17/27 VUs, 169 complete and 0 interrupted iterations
+direccion     [  43% ] 2 VUs      0m25.7s/1m0s
+estudiantes   [  43% ] 15/25 VUs  0m25.7s/1m00.0s
+
+running (0m27.0s), 17/27 VUs, 182 complete and 0 interrupted iterations
+direccion     [  45% ] 2 VUs      0m26.7s/1m0s
+estudiantes   [  45% ] 15/25 VUs  0m26.7s/1m00.0s
+
+running (0m28.0s), 18/27 VUs, 191 complete and 0 interrupted iterations
+direccion     [  46% ] 2 VUs      0m27.7s/1m0s
+estudiantes   [  46% ] 16/25 VUs  0m27.7s/1m00.0s
+
+running (0m29.0s), 18/27 VUs, 206 complete and 0 interrupted iterations
+direccion     [  48% ] 2 VUs      0m28.7s/1m0s
+estudiantes   [  48% ] 16/25 VUs  0m28.7s/1m00.0s
+
+running (0m30.0s), 19/27 VUs, 217 complete and 0 interrupted iterations
+direccion     [  50% ] 2 VUs      0m29.7s/1m0s
+estudiantes   [  50% ] 17/25 VUs  0m29.7s/1m00.0s
+
+running (0m31.0s), 19/27 VUs, 228 complete and 0 interrupted iterations
+direccion     [  51% ] 2 VUs      0m30.7s/1m0s
+estudiantes   [  51% ] 17/25 VUs  0m30.7s/1m00.0s
+
+running (0m32.0s), 20/27 VUs, 243 complete and 0 interrupted iterations
+direccion     [  53% ] 2 VUs      0m31.7s/1m0s
+estudiantes   [  53% ] 18/25 VUs  0m31.7s/1m00.0s
+
+running (0m33.0s), 20/27 VUs, 256 complete and 0 interrupted iterations
+direccion     [  55% ] 2 VUs      0m32.7s/1m0s
+estudiantes   [  55% ] 18/25 VUs  0m32.7s/1m00.0s
+
+running (0m34.0s), 21/27 VUs, 267 complete and 0 interrupted iterations
+direccion     [  56% ] 2 VUs      0m33.7s/1m0s
+estudiantes   [  56% ] 19/25 VUs  0m33.7s/1m00.0s
+
+running (0m35.0s), 21/27 VUs, 279 complete and 0 interrupted iterations
+direccion     [  58% ] 2 VUs      0m34.7s/1m0s
+estudiantes   [  58% ] 19/25 VUs  0m34.7s/1m00.0s
+
+running (0m36.0s), 22/27 VUs, 297 complete and 0 interrupted iterations
+direccion     [  60% ] 2 VUs      0m35.7s/1m0s
+estudiantes   [  60% ] 20/25 VUs  0m35.7s/1m00.0s
+
+running (0m37.0s), 22/27 VUs, 308 complete and 0 interrupted iterations
+direccion     [  61% ] 2 VUs      0m36.7s/1m0s
+estudiantes   [  61% ] 20/25 VUs  0m36.7s/1m00.0s
+
+running (0m38.0s), 23/27 VUs, 319 complete and 0 interrupted iterations
+direccion     [  63% ] 2 VUs      0m37.7s/1m0s
+estudiantes   [  63% ] 21/25 VUs  0m37.7s/1m00.0s
+
+running (0m39.0s), 23/27 VUs, 337 complete and 0 interrupted iterations
+direccion     [  65% ] 2 VUs      0m38.7s/1m0s
+estudiantes   [  65% ] 21/25 VUs  0m38.7s/1m00.0s
+
+running (0m40.0s), 24/27 VUs, 352 complete and 0 interrupted iterations
+direccion     [  66% ] 2 VUs      0m39.7s/1m0s
+estudiantes   [  66% ] 22/25 VUs  0m39.7s/1m00.0s
+
+running (0m41.0s), 24/27 VUs, 364 complete and 0 interrupted iterations
+direccion     [  68% ] 2 VUs      0m40.7s/1m0s
+estudiantes   [  68% ] 22/25 VUs  0m40.7s/1m00.0s
+
+running (0m42.0s), 25/27 VUs, 375 complete and 0 interrupted iterations
+direccion     [  70% ] 2 VUs      0m41.7s/1m0s
+estudiantes   [  70% ] 23/25 VUs  0m41.7s/1m00.0s
+
+running (0m43.0s), 25/27 VUs, 398 complete and 0 interrupted iterations
+direccion     [  71% ] 2 VUs      0m42.7s/1m0s
+estudiantes   [  71% ] 23/25 VUs  0m42.7s/1m00.0s
+
+running (0m44.0s), 26/27 VUs, 406 complete and 0 interrupted iterations
+direccion     [  73% ] 2 VUs      0m43.7s/1m0s
+estudiantes   [  73% ] 24/25 VUs  0m43.7s/1m00.0s
+
+running (0m45.0s), 26/27 VUs, 428 complete and 0 interrupted iterations
+direccion     [  75% ] 2 VUs      0m44.7s/1m0s
+estudiantes   [  75% ] 24/25 VUs  0m44.7s/1m00.0s
+
+running (0m46.0s), 27/27 VUs, 441 complete and 0 interrupted iterations
+direccion     [  76% ] 2 VUs      0m45.7s/1m0s
+estudiantes   [  76% ] 25/25 VUs  0m45.7s/1m00.0s
+
+running (0m47.0s), 26/27 VUs, 453 complete and 0 interrupted iterations
+direccion     [  78% ] 2 VUs      0m46.7s/1m0s
+estudiantes   [  78% ] 24/25 VUs  0m46.7s/1m00.0s
+
+running (0m48.0s), 24/27 VUs, 471 complete and 0 interrupted iterations
+direccion     [  80% ] 2 VUs      0m47.7s/1m0s
+estudiantes   [  80% ] 22/25 VUs  0m47.7s/1m00.0s
+
+running (0m49.0s), 23/27 VUs, 484 complete and 0 interrupted iterations
+direccion     [  81% ] 2 VUs      0m48.7s/1m0s
+estudiantes   [  81% ] 21/25 VUs  0m48.7s/1m00.0s
+
+running (0m50.0s), 21/27 VUs, 503 complete and 0 interrupted iterations
+direccion     [  83% ] 2 VUs      0m49.7s/1m0s
+estudiantes   [  83% ] 19/25 VUs  0m49.7s/1m00.0s
+
+running (0m51.0s), 19/27 VUs, 516 complete and 0 interrupted iterations
+direccion     [  85% ] 2 VUs      0m50.7s/1m0s
+estudiantes   [  85% ] 17/25 VUs  0m50.7s/1m00.0s
+
+running (0m52.0s), 17/27 VUs, 532 complete and 0 interrupted iterations
+direccion     [  86% ] 2 VUs      0m51.7s/1m0s
+estudiantes   [  86% ] 15/25 VUs  0m51.7s/1m00.0s
+
+running (0m53.0s), 15/27 VUs, 545 complete and 0 interrupted iterations
+direccion     [  88% ] 2 VUs      0m52.7s/1m0s
+estudiantes   [  88% ] 13/25 VUs  0m52.7s/1m00.0s
+
+running (0m54.0s), 14/27 VUs, 555 complete and 0 interrupted iterations
+direccion     [  90% ] 2 VUs      0m53.7s/1m0s
+estudiantes   [  90% ] 12/25 VUs  0m53.7s/1m00.0s
+
+running (0m55.0s), 12/27 VUs, 566 complete and 0 interrupted iterations
+direccion     [  91% ] 2 VUs      0m54.7s/1m0s
+estudiantes   [  91% ] 10/25 VUs  0m54.7s/1m00.0s
+
+running (0m56.0s), 10/27 VUs, 576 complete and 0 interrupted iterations
+direccion     [  93% ] 2 VUs      0m55.7s/1m0s
+estudiantes   [  93% ] 08/25 VUs  0m55.7s/1m00.0s
+
+running (0m57.0s), 09/27 VUs, 582 complete and 0 interrupted iterations
+direccion     [  95% ] 2 VUs      0m56.7s/1m0s
+estudiantes   [  95% ] 07/25 VUs  0m56.7s/1m00.0s
+
+running (0m58.0s), 08/27 VUs, 589 complete and 0 interrupted iterations
+direccion     [  96% ] 2 VUs      0m57.7s/1m0s
+estudiantes   [  96% ] 06/25 VUs  0m57.7s/1m00.0s
+
+running (0m59.0s), 06/27 VUs, 597 complete and 0 interrupted iterations
+direccion     [  98% ] 2 VUs      0m58.7s/1m0s
+estudiantes   [  98% ] 04/25 VUs  0m58.7s/1m00.0s
+
+running (1m00.0s), 04/27 VUs, 599 complete and 0 interrupted iterations
+direccion     [ 100% ] 2 VUs      0m59.7s/1m0s
+estudiantes   [ 100% ] 02/25 VUs  0m59.7s/1m00.0s
+
+running (1m01.0s), 01/27 VUs, 603 complete and 0 interrupted iterations
+direccion   ✓ [ 100% ] 2 VUs      1m0s
+estudiantes ↓ [ 100% ] 01/25 VUs  1m0s
+
+
+  █ THRESHOLDS 
+
+    checks
+    ✓ 'rate>0.99' rate=100.00%
+
+    http_req_duration{tipo:crud}
+    ✓ 'p(95)<3000' p(95)=111.27ms
+
+    http_req_duration{tipo:login}
+    ✓ 'p(95)<3000' p(95)=115.08ms
+
+    http_req_duration{tipo:reporte}
+    ✓ 'p(95)<5000' p(95)=45.42ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 6830    111.570586/s
+    checks_succeeded...: 100.00% 6830 out of 6830
+    checks_failed......: 0.00%   0 out of 6830
+
+    ✓ login 200
+    ✓ panel 200
+    ✓ tendencias 200
+    ✓ resumen 200
+    ✓ mapa 200
+    ✓ pendientes 200
+    ✓ afinidad 200
+    ✓ actividades 200
+    ✓ proyectos 200
+    ✓ recomendaciones 200
+    ✓ avisos 200
+    ✓ trayectoria 200
+    ✓ necesidades 200
+    ✓ items cv 200
+    ✓ proyectos de la carrera 200
+    ✓ biblioteca 200
+    ✓ responsables 200
+
+    HTTP
+    http_req_duration..............: avg=37.18ms min=3.62ms  med=25.08ms max=361.54ms p(90)=82ms     p(95)=110.57ms
+      { expected_response:true }...: avg=37.18ms min=3.62ms  med=25.08ms max=361.54ms p(90)=82ms     p(95)=110.57ms
+      { tipo:crud }................: avg=37.4ms  min=3.62ms  med=25.52ms max=361.54ms p(90)=81.35ms  p(95)=111.27ms
+      { tipo:login }...............: avg=90.47ms min=77.42ms med=84.09ms max=177.72ms p(90)=105.98ms p(95)=115.08ms
+      { tipo:reporte }.............: avg=20.38ms min=4.72ms  med=16.19ms max=120.61ms p(90)=32.62ms  p(95)=45.42ms 
+    http_req_failed................: 0.00%  0 out of 6830
+    http_reqs......................: 6830   111.570586/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.51s   min=1.16s   med=1.45s   max=2.23s    p(90)=2.03s    p(95)=2.06s   
+    iterations.....................: 604    9.866564/s
+    vus............................: 1      min=1         max=27
+    vus_max........................: 27     min=27        max=27
+
+    NETWORK
+    data_received..................: 13 MB  217 kB/s
+    data_sent......................: 2.9 MB 47 kB/s
+
+
+
+
+running (1m01.2s), 00/27 VUs, 604 complete and 0 interrupted iterations
+direccion   ✓ [ 100% ] 2 VUs      1m0s
+estudiantes ✓ [ 100% ] 00/25 VUs  1m0s
+

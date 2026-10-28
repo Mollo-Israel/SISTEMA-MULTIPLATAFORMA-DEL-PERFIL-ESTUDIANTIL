@@ -64,6 +64,7 @@ export const TUTORIAL: Record<string, TutorialStep[]> = {
     { icon: 'target', title: 'Afinidad', text: 'Tu afinidad por área sale de lo que hiciste y está respaldado, no de lo que declaras. Siempre puedes ver de dónde sale cada punto.', to: '/student/affinity' },
     { icon: 'users', title: 'Colaboración', text: 'Acepta contactos y forma equipos con quien complemente lo que te falta. Tu enlace y tu QR se administran en Mi perfil → Visibilidad.', to: '/student/collaboration' },
     { icon: 'award', title: 'Mi progreso y resumen de trayectoria', text: 'Mira tus puntos y descarga un resumen informativo en PDF, eligiendo qué incluir y con la plantilla que prefieras.', to: '/student/progress' },
+    { icon: 'folder', title: 'Proyectos de la carrera', text: 'Mira los proyectos activos que tus compañeros compartieron con la comunidad, con sus imágenes. Nunca aparecen borradores, correos ni evidencias.', to: '/proyectos' },
   ],
   [RolNombre.TEACHER]: [
     { icon: 'home', title: 'Tu panel', text: 'Ves solo a los estudiantes de los semestres que la administración te habilitó.', to: '/teacher' },
@@ -77,6 +78,7 @@ export const TUTORIAL: Record<string, TutorialStep[]> = {
     { icon: 'calendar', title: 'Actividades académicas', text: 'Las que creas tú se publican directamente.', to: '/director/activities' },
     { icon: 'award', title: 'Participaciones confirmadas', text: 'Quién asistió a cada actividad, según lo registró su responsable. Afinia no emite certificados; los documentos anteriores se conservan.', to: '/director/constancies' },
     { icon: 'chart', title: 'Mapa y tendencias', text: 'Analítica descriptiva de la carrera. Los grupos muy pequeños no se desglosan para proteger a las personas.', to: '/director/analytics' },
+    { icon: 'shield', title: 'Autonomía docente', text: 'Por defecto lo que propone un docente pasa por revisión. Aquí concedes a un docente publicar recursos u otorgar puntos sin revisión, y ves lo que hizo con ese permiso.', to: '/director/autonomy' },
   ],
   [RolNombre.SCIENTIFIC_SOCIETY]: [
     { icon: 'calendar', title: 'Tus actividades', text: 'Crea actividades extracurriculares y envíalas a Dirección. Aprobadas, las publicas y confirmas a quienes participaron.', to: '/society/activities' },
@@ -97,6 +99,9 @@ export const HELP: Record<string, HelpEntry[]> = {
     { tema: 'actividades', question: '¿Cómo cuenta una actividad?', answer: 'Inscríbete en Actividades. Al terminar, quien la organiza confirma tu participación: solo entonces suma a tu trayectoria y a tu afinidad, en el área de la actividad. Puedes guardar una actividad que te interese aunque ya haya pasado.', to: '/student/activities', image: IMG.actividad },
     { tema: 'proyectos', question: '¿Cómo registro un proyecto para que cuente?', answer: 'Indica sus áreas y, en cada una, las tecnologías que usaste. Agrega evidencias (repositorio, demo, capturas). El proyecto suma cuando queda con respaldo, y cada tecnología suma en el área en la que la pusiste.', to: '/student/projects', image: IMG.proyecto },
     { tema: 'evidencias', question: '¿Qué diferencia hay entre una constancia y una credencial externa?', answer: 'Afinia no emite constancias: registra tu asistencia, y si la institución te entrega un documento propio, queda con su emisor real. La credencial externa (un curso, un certificado de otra entidad) la registras tú con sus áreas y tecnologías; suma cuando queda con respaldo.', to: '/student/evidences' },
+    { tema: 'proyectos', question: '¿Qué hace «Analizar repositorio»?', answer: 'Lee los lenguajes y las dependencias de tu repositorio público de GitHub y te sugiere tecnologías del catálogo, con de dónde salió cada una. Tú eliges cuáles incluir. Es opcional: el borrador se guarda igual, y si GitHub no responde no se borra nada de lo que elegiste. Lo detectado está en el repositorio; no dice quién lo usó.', to: '/student/projects' },
+    { tema: 'proyectos', question: '¿Quién ve las imágenes de mi proyecto?', answer: 'Las mismas personas que ven el proyecto: si es de la comunidad, cualquiera con sesión en Afinia; si es solo para docentes, los de tus semestres. Son capturas para mostrarlo (hasta 5, con una portada); no son evidencias, y las evidencias siguen siendo privadas.', to: '/student/projects' },
+    { tema: 'evidencias', question: '¿Afinia certifica mis credenciales?', answer: 'No. Afinia consulta la fuente del proveedor e informa el resultado y la fecha de esa consulta. Si el proveedor no responde, queda «sin poder concluir», no «falso».', to: '/student/evidences' },
     { tema: 'evidencias', question: '¿Qué significa «con respaldo»?', answer: 'Que hay algo que lo sostiene además de tu palabra: una evidencia, una confirmación del organizador o la revisión de un docente. «No se pudo comprobar» quiere decir que la verificación automática no encontró el recurso; no es una sanción.' },
     { tema: 'afinidad', question: '¿Por qué mi afinidad no sube si marqué que me interesa un área?', answer: 'Los intereses orientan tus recomendaciones, pero la afinidad solo cuenta lo que hiciste y está respaldado: actividades confirmadas, proyectos y credenciales con respaldo, cada uno en el área que se indicó.', to: '/student/affinity', image: IMG.afinidad },
     { tema: 'afinidad', question: '¿De dónde sale cada punto?', answer: 'En Áreas de afinidad abre un área: el desglose muestra cada actividad, proyecto o credencial que aporta y cuánto.', to: '/student/affinity' },
@@ -111,12 +116,16 @@ export const HELP: Record<string, HelpEntry[]> = {
     { tema: 'gestion', question: '¿Por qué no veo a un estudiante?', answer: 'Solo ves a quienes cursan los semestres que tienes habilitados. Si falta un semestre, pídelo a la administración.', to: '/teacher?tab=estudiantes' },
     { tema: 'proyectos', question: '¿Qué proyectos puedo ver?', answer: 'Los que los estudiantes de tus semestres abrieron a docentes. Puedes dejarles retroalimentación.', to: '/teacher?tab=proyectos', image: IMG.proyecto },
     { tema: 'privacidad', question: '¿Puedo ver datos que el estudiante ocultó?', answer: 'No. Ves lo que el estudiante permite a docentes, y solo de tus semestres.' },
+    { tema: 'gestion', question: '¿Puedo publicar recursos u otorgar puntos sin pasar por Dirección?', answer: 'Solo si Dirección te concedió autonomía en ese módulo. Entonces lo que publicas u otorgas se aplica al guardar y queda en un historial que Dirección ve. Las actividades siempre pasan por revisión.', to: '/teacher/points' },
+    { tema: 'afinidad', question: '¿Cómo llego a la fuente de la afinidad de un estudiante?', answer: 'En el desglose de cada área, cada fila nombra su actividad, proyecto o credencial y, si puedes abrirla, la enlaza. Los puntos, los recursos y los roles nunca son fuente de afinidad.', to: '/teacher' },
   ],
   [RolNombre.CAREER_DIRECTOR]: [
     ...CUENTA,
     { tema: 'actividades', question: '¿Qué apruebo junto con una actividad?', answer: 'Su contenido, si la institución entregará un certificado propio y cuántos puntos da por participar. Después de aprobarla puedes ajustar sus datos; cada cambio queda auditado.', to: '/director/approvals', image: IMG.actividad },
     { tema: 'evidencias', question: '¿Afinia emite constancias?', answer: 'No. La asistencia que registra el responsable queda en la trayectoria del estudiante. Las constancias emitidas antes se conservan como historia, y un documento de la institución se registra con su emisor real.', to: '/director/constancies' },
     { tema: 'afinidad', question: '¿Por qué una fila dice «sin desglose»?', answer: 'Porque el grupo es tan pequeño que el detalle identificaría a las personas. Se muestra el tamaño del grupo y no sus datos.', to: '/director/analytics' },
+    { tema: 'gestion', question: '¿Qué pasa si revoco la autonomía de un docente?', answer: 'Lo que proponga desde ese momento vuelve a la bandeja de Aprobaciones. Lo que ya publicó u otorgó no se deshace y queda en el historial de acciones directas.', to: '/director/autonomy' },
+    { tema: 'gestion', question: '¿Qué puntos existen?', answer: 'Tres familias: participación confirmada, reconocimiento de un docente sobre un proyecto, y recurso completado (un docente da fe con sustento). En Puntos de estudiantes, cada movimiento dice su criterio, su origen, quién lo otorgó y quién lo aprobó.', to: '/director/points' },
   ],
   [RolNombre.SCIENTIFIC_SOCIETY]: [
     ...CUENTA,

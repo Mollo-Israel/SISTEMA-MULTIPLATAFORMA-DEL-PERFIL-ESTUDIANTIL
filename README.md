@@ -129,12 +129,13 @@ Las suites hablan HTTP con la API en marcha y una base real.
 
 ```bash
 npm run api:dev          # en una terminal
-npm run test:all         # en otra: unitarias + 20 suites de API (incluidas V3, V3.2 y V4.1) + IA simulada + navegador
+npm run test:all         # en otra: unitarias + 21 suites de API (incluidas V3, V3.2, V4.1 y V5) + IA simulada + navegador
 ```
 
 | Script | Qué prueba |
 |--------|-----------|
 | `npm run test:unit` | Reglas puras (afinidad, recomendaciones 40/30/15/10/5, respaldo, credenciales, currículo, transiciones de estado, guard del correo, auditoría, respaldos de OCR y correo…) |
+| `npm run test:v5` | Los batches del cierre V5, cada comprobación con su escenario A01…I07 (`node scripts/e2e-v5.mjs batch7` corre uno) |
 | `npm run test:v41` | Los batches del cierre V4.1 (`node scripts/e2e-v4-1.mjs batch10` corre uno) |
 | `npm run test:v32` | Los batches del cierre V3.2 (`node scripts/e2e-v3-2.mjs batch15` corre uno) |
 | `npm run test:v3` | Los batches de la V3 (`node scripts/e2e-v3.mjs batch17` corre uno) |
@@ -145,19 +146,18 @@ npm run test:all         # en otra: unitarias + 20 suites de API (incluidas V3, 
 | `npm run test:load` | Carga con k6 en Docker (V3 RNF09) |
 | `npm run test:security` | OWASP ZAP en Docker: **escaneo activo**, solo contra una base de desarrollo respaldada |
 
-Última corrida completa (cierre V4.1, 18/10/2026): 22 suites, **2254 comprobaciones
-sin fallos**, y 141 unitarias. Qué se ejecutó y qué no, en
-[`docs/V4_1_QA.md`](docs/V4_1_QA.md) (la del cierre V3.2, en [`docs/V3_2_QA.md`](docs/V3_2_QA.md)); k6 y ZAP corresponden a la V3
-([`docs/V3_QA_HARDENING.md`](docs/V3_QA_HARDENING.md)) y no se repitieron en este cierre.
+Última corrida completa (cierre V5, 28/10/2026): 23 suites, **2390 comprobaciones sin
+fallos**; Jest 69/69; k6 sin fallos (p95 110 ms); ZAP activo 0 FAIL / 0 WARN. Qué se ejecutó y
+qué no, en [`docs/V5_QA.md`](docs/V5_QA.md) (la del cierre V4.1, en [`docs/V4_1_QA.md`](docs/V4_1_QA.md)).
 
 ## Flujo principal
 
 1. Administración provisiona la cuenta (o importa el padrón).
 2. El titular la activa desde el correo y elige su contraseña.
 3. El estudiante completa la bienvenida: confirma sus datos, declara intereses por área y tecnología, decide su disponibilidad y su privacidad.
-4. Docente o sociedad proponen una actividad; Dirección la aprueba y se publica.
-5. El estudiante ve «Para ti» (40/30/15/10/5, sin afinidad), se inscribe y recibe recordatorios; el responsable confirma su participación (y, si está habilitada, se emite la constancia).
-6. Registra un proyecto en borrador y lo activa con repositorio, evidencia e integrantes confirmados; GitHub corrobora tecnologías y la retroalimentación docente lo eleva a revisado.
+4. Docente o sociedad proponen una actividad; Dirección la aprueba y se publica. Los recursos y los puntos del docente también pasan por Dirección, salvo que esta le haya concedido autonomía en ese módulo.
+5. El estudiante ve «Para ti» (40/30/15/10/5, sin afinidad) y pide un lugar. El responsable lo admite y, desde que empieza el evento, registra su asistencia. Afinia no emite constancias: la participación queda como registro del responsable.
+6. Registra un proyecto en borrador y, si quiere, analiza su repositorio para que le sugiera tecnologías con su fuente. Lo activa con repositorio, evidencia e integrantes confirmados (cada uno declara solo tecnologías del proyecto). GitHub corrobora tecnologías, y la retroalimentación docente lo eleva a revisado. Los proyectos activos compartidos aparecen en «Proyectos de la carrera», con hasta 5 imágenes de muestra.
 7. Adjunta credenciales externas, que se validan por niveles (URL oficial, QR, Open Badge).
 8. El motor de afinidad V5 recalcula solo con lo corroborado, en el área del contexto explícito de cada experiencia, con desglose y respaldo aparte.
 9. Publica o postula a necesidades de equipo de su semestre; el responsable acepta o rechaza con motivo.
@@ -166,6 +166,10 @@ sin fallos**, y 141 unitarias. Qué se ejecutó y qué no, en
 
 ## Documentación
 
+- [`docs/V5_QA.md`](docs/V5_QA.md) — QA del cierre V5: regresión completa, Jest, k6 y ZAP, migraciones, adaptaciones de pruebas anteriores y decisiones.
+- [`docs/MATRIZ_TRAZABILIDAD_V5.md`](docs/MATRIZ_TRAZABILIDAD_V5.md) — V5-01 a V5-31 y escenarios A01…I07 → batch → código → pruebas → estado.
+- [`docs/CAMBIOS_DOCUMENTO_GRADO_V5.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V5.md) — qué ajustar en la tesis para la V5 (el `.docx` no se modificó).
+- [`AUDITORIA_GAP_AFINIA_V5.md`](AUDITORIA_GAP_AFINIA_V5.md) y [`PLAN_BATCHES_AFINIA_V5.md`](PLAN_BATCHES_AFINIA_V5.md) — la auditoría inicial de la V5, con sondas reales, y su plan.
 - [`docs/V4_1_REPORTE_BATCHES.md`](docs/V4_1_REPORTE_BATCHES.md) — el cierre V4.1 batch por batch (§25 del contrato): hallazgos, cambios, migraciones, pruebas, fallos y riesgos.
 - [`docs/V4_1_QA.md`](docs/V4_1_QA.md) — QA integral del cierre V4.1: compilación, pruebas, migraciones, seguridad y pendientes declarados.
 - [`docs/MATRIZ_TRAZABILIDAD_V4_1.md`](docs/MATRIZ_TRAZABILIDAD_V4_1.md) — A41-001 a A41-030 → batch → código → pruebas → estado.
@@ -195,7 +199,7 @@ descripción del sistema actual.
 ## Fuera del alcance, a propósito
 
 - Predecir rendimiento, abandono o éxito profesional.
-- Emitir certificados oficiales o acreditar competencias.
+- Emitir certificados, constancias o acreditar competencias (V5: Afinia registra la participación y consulta proveedores; no certifica).
 - Reemplazar al SIU o a Teams; chat interno; registro público.
 - Inferir el stack de un proyecto con OCR de capturas o recorriendo su demo (V3 §75); un puntaje de «dominio» por habilidad.
 - Que la IA decida algo: solo sugiere.
