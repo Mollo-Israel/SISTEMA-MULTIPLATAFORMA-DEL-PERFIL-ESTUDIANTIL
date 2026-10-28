@@ -855,6 +855,8 @@ async function pruebas(browser) {
   await entrar(p56, lider.email);
   await p56.goto(`${WEB}/student/projects`);
   await p56.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  // V5-28: el origen de los colaboradores se elige primero (Individual / Equipo / Contactos).
+  await p56.getByRole('radio', { name: 'De un equipo' }).click({ timeout: 8000 });
   await p56.locator('#pr-equipo-buscar').waitFor({ timeout: 8000 });
   await espera(1000);
   await p56.locator('#pr-equipo-buscar').fill(nombreEquipo);

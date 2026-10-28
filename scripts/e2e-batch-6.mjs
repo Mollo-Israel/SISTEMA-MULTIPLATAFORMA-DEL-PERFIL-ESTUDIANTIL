@@ -240,14 +240,15 @@ async function proyectos(ctx) {
   let sc = await resumen(ctx.companero.token);
   check(crudo(sc, areaProy.id) === 0 && crudo(sc, areaOtra.id) === 0,
     'B6.30 Aceptar no atribuye experiencia por sí solo: falta confirmar su contribución (§33)', JSON.stringify(sc?.areas));
-  await req('PUT', `/projects/${ctx.projectId}/my-contribution`, {
+  // V5-20: una tecnología que no es del proyecto se rechaza y no se guarda nada.
+  const ajena = await req('PUT', `/projects/${ctx.projectId}/my-contribution`, {
     token: ctx.companero.token, body: { role: 'Frontend', contribution: 'Interfaz', skillIds: [ctx.skillOtra.id] },
   });
   sc = await resumen(ctx.companero.token);
-  check(crudo(sc, areaOtra.id) === 0 && crudo(sc, areaProy.id) === 0,
-    'B6.31 V4 §35.3 Su tecnología no está corroborada en el proyecto: no suma, y no se le reparten las del proyecto', JSON.stringify(sc?.areas?.map((a) => [a.area, a.rawPoints])));
+  check(ajena.status === 400 && ajena.data?.code === 'SKILL_NOT_IN_PROJECT' && crudo(sc, areaOtra.id) === 0 && crudo(sc, areaProy.id) === 0,
+    'B6.31 V5-20 Una tecnología ajena al proyecto se rechaza: no suma, y no se le reparten las del proyecto', JSON.stringify({ s: ajena.status, c: ajena.data?.code, a: sc?.areas?.map((a) => [a.area, a.rawPoints]) }));
   await req('PUT', `/projects/${ctx.projectId}/my-contribution`, {
-    token: ctx.companero.token, body: { role: 'Frontend', contribution: 'Interfaz y pruebas', skillIds: [ctx.skillOtra.id, ctx.skillProy.id] },
+    token: ctx.companero.token, body: { role: 'Frontend', contribution: 'Interfaz y pruebas', skillIds: [ctx.skillProy.id] },
   });
   sc = await resumen(ctx.companero.token);
   check(crudo(sc, areaProy.id) === 18 && crudo(sc, areaOtra.id) === 0,

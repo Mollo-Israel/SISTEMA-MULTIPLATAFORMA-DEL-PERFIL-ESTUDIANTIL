@@ -695,6 +695,8 @@ export interface ProjectMemberDetailed {
   contributionConfirmed: boolean;
   contributionConfirmedAt: string | null;
   skillsUsed: { skillId: string; name: string | null }[];
+  /** V5-29: todos sus roles; el primero es el principal. */
+  roles?: string[];
   createdAt: string;
 }
 

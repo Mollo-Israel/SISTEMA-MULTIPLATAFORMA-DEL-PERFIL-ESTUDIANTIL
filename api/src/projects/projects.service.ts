@@ -1099,20 +1099,24 @@ export class ProjectsService {
   async confirmMyContribution(
     userId: string,
     projectId: string,
-    dto: { contribution?: string; role?: string; skillIds?: string[] },
+    dto: { contribution?: string; role?: string; roles?: string[]; skillIds?: string[] },
   ) {
     const member = await this.members.findOne({ where: { projectId, userId } });
     if (!member) {
       throw new NotFoundException('No eres integrante aceptado de este proyecto.');
     }
 
+    // V5-20: las tecnologías se validan ANTES de guardar nada; si alguna no es
+    // del proyecto, la confirmación no queda aplicada a medias.
+    if (dto.skillIds !== undefined) await this.assertSkillsDelProyecto(dto.skillIds ?? [], projectId);
+
     if (dto.contribution !== undefined) member.contribution = dto.contribution ?? null;
-    if (dto.role !== undefined) member.role = dto.role ?? null;
+    this.aplicarRoles(member, dto);
     member.contributionConfirmedAt = new Date();
     await this.members.save(member);
 
     if (dto.skillIds !== undefined) {
-      await this.replaceMemberSkills(member.id, dto.skillIds ?? []);
+      await this.replaceMemberSkills(member.id, dto.skillIds ?? [], projectId);
     }
 
     await this.events.record({
@@ -1141,7 +1145,7 @@ export class ProjectsService {
     user: AuthenticatedUser,
     projectId: string,
     memberId: string,
-    dto: { contribution?: string; role?: string },
+    dto: { contribution?: string; role?: string; roles?: string[] },
   ) {
     const project = await this.findOneOrFail(projectId);
     await this.assertIsOwner(user, project);
@@ -1155,7 +1159,7 @@ export class ProjectsService {
     }
 
     if (dto.contribution !== undefined) member.contribution = dto.contribution ?? null;
-    if (dto.role !== undefined) member.role = dto.role ?? null;
+    this.aplicarRoles(member, dto);
     member.contributionConfirmedAt = null;
     await this.members.save(member);
     await this.avisar({
@@ -1238,6 +1242,7 @@ export class ProjectsService {
       userId: m.userId,
       name: m.user ? `${m.user.firstName} ${m.user.lastName}` : null,
       role: m.role,
+      roles: m.roles ?? (m.role ? [m.role] : []),
       contribution: m.contribution,
       /** §33: mientras sea false, lo que hay lo escribió otra persona. */
       contributionConfirmed: m.contributionConfirmedAt !== null,
@@ -1250,23 +1255,63 @@ export class ProjectsService {
     }));
   }
 
-  private async replaceMemberSkills(projectMemberId: string, skillIds: string[]): Promise<void> {
-    const unicas = [...new Set(skillIds)];
-    if (unicas.length > 20) {
-      throw new BadRequestException('Máximo 20 tecnologías por integrante.');
+  /**
+   * V5-29 (G04): varios roles por integrante; el primero queda como rol
+   * principal (`role`) para quien solo lee uno. Un rol describe; no prueba nada.
+   */
+  private aplicarRoles(member: ProjectMember, dto: { role?: string; roles?: string[] }): void {
+    if (dto.roles !== undefined) {
+      member.roles = [...new Set(dto.roles ?? [])];
+      member.role = member.roles[0] ?? null;
+    } else if (dto.role !== undefined) {
+      member.role = dto.role ?? null;
+      member.roles = dto.role ? [dto.role, ...(member.roles ?? []).filter((r) => r !== dto.role)] : [];
     }
-    if (unicas.length > 0) {
-      const existen = await this.skills.count({ where: { id: In(unicas) } });
-      if (existen !== unicas.length) {
-        throw new BadRequestException('Alguna de las tecnologías indicadas no existe.');
-      }
-    }
+  }
+
+  /**
+   * V5-20 (§13.2, G01): lo que un integrante dice que usó sale de las
+   * tecnologías del proyecto, no del catálogo entero. Si el repositorio
+   * muestra algo nuevo, primero lo agrega el responsable al proyecto.
+   */
+  private async replaceMemberSkills(projectMemberId: string, skillIds: string[], projectId: string): Promise<void> {
+    const unicas = await this.assertSkillsDelProyecto(skillIds, projectId);
     await this.memberSkills.delete({ projectMemberId });
     if (unicas.length > 0) {
       await this.memberSkills.save(
         unicas.map((skillId) => this.memberSkills.create({ projectMemberId, skillId })),
       );
     }
+  }
+
+  /** Devuelve las tecnologías sin repetir, si todas son del proyecto. */
+  private async assertSkillsDelProyecto(skillIds: string[], projectId: string): Promise<string[]> {
+    const unicas = [...new Set(skillIds)];
+    if (unicas.length > 20) {
+      throw new BadRequestException('Máximo 20 tecnologías por integrante.');
+    }
+    if (unicas.length > 0) {
+      const delProyecto = new Set((await this.projectSkills.find({ where: { projectId } })).map((s) => s.skillId));
+      // Un proyecto anterior al catálogo declara sus tecnologías como texto
+      // (`technologies`): una tecnología del catálogo con ese nombre o alias
+      // también es del proyecto.
+      const texto = new Set(((await this.projects.findOne({ where: { id: projectId }, select: { id: true, technologies: true } }))?.technologies ?? [])
+        .map((t) => this.normSenal(t)));
+      if (texto.size) {
+        for (const s of await this.skills.find({ where: { id: In(unicas) } })) {
+          if (texto.has(this.normSenal(s.name)) || (s.aliases ?? []).some((a) => texto.has(this.normSenal(a)))) delProyecto.add(s.id);
+        }
+      }
+      const ajenas = unicas.filter((id) => !delProyecto.has(id));
+      if (ajenas.length > 0) {
+        const nombres = (await this.skills.find({ where: { id: In(ajenas) } })).map((s) => s.name);
+        const m = nombres.length
+          ? `${nombres.join(', ')} no ${nombres.length === 1 ? 'está' : 'están'} entre las tecnologías del proyecto: pide al responsable que ${nombres.length === 1 ? 'la agregue' : 'las agregue'} primero.`
+          : 'Alguna de las tecnologías indicadas no existe.';
+        throw new BadRequestException({ code: 'SKILL_NOT_IN_PROJECT', message: m, fields: { skillIds: [m] } });
+      }
+    }
+    return unicas;
   }
 
   private async memberView(memberId: string) {
@@ -1280,6 +1325,7 @@ export class ProjectsService {
       userId: m.userId,
       name: m.user ? `${m.user.firstName} ${m.user.lastName}` : null,
       role: m.role,
+      roles: m.roles ?? (m.role ? [m.role] : []),
       contribution: m.contribution,
       contributionConfirmed: m.contributionConfirmedAt !== null,
       contributionConfirmedAt: m.contributionConfirmedAt,

@@ -14,9 +14,10 @@ import { useCachedState, viewCache } from '../../hooks/viewCache';
 import { catalogService, projectDetailService, projectFeedbackService, projectService } from '../../services';
 import { SKILL_EVIDENCE_LABEL } from '../../services/types';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
+  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
   SkeletonCards, SkeletonTable, Stagger,
 } from '../../components/ui';
+import { FieldError } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUSES, lbl } from '../../constants';
 import type {
@@ -99,25 +100,34 @@ export default function TeacherStudentProjectsPage() {
 
   // V3 §29: tecnologías declaradas con su respaldo, para confirmarlas.
   const [detalle, setDetalle] = useState<Project | null>(null);
-  const confirmarTecnologia = async (skillId: string, nombre: string) => {
-    if (!selectedId) return;
-    const comentario = window.prompt(
-      `¿Qué comprobaste sobre ${nombre}? Quedará como retroalimentación visible para el equipo.`,
-      '',
-    );
-    if (comentario === null) return;
+  // V5-22 (I01): un modal propio con el comentario, en lugar de window.prompt.
+  const [confirmando, setConfirmando] = useState<{ skillId: string; nombre: string } | null>(null);
+  const [comentario, setComentario] = useState('');
+  const [errorComentario, setErrorComentario] = useState<string | null>(null);
+  const [guardandoTec, setGuardandoTec] = useState(false);
+  const confirmarTecnologia = (skillId: string, nombre: string) => {
+    setConfirmando({ skillId, nombre });
+    setComentario('');
+    setErrorComentario(null);
+  };
+  const guardarConfirmacion = async () => {
+    if (!selectedId || !confirmando) return;
     if (comentario.trim().length < 10) {
-      toast.error('Escribe una retroalimentación específica (al menos 10 caracteres).');
+      setErrorComentario('Escribe una retroalimentación específica (al menos 10 caracteres).');
       return;
     }
+    setGuardandoTec(true);
     try {
-      await projectDetailService.confirmSkill(selectedId, skillId, comentario.trim());
-      notify('Tecnología confirmada', `${nombre} · confirmada por revisión docente`);
+      await projectDetailService.confirmSkill(selectedId, confirmando.skillId, comentario.trim());
+      notify('Tecnología confirmada', `${confirmando.nombre} · confirmada por revisión docente`);
+      setConfirmando(null);
       const [f, d] = await Promise.all([projectFeedbackService.list(selectedId), projectService.get(selectedId)]);
       setFeedback(f);
       setDetalle(d);
     } catch (e) {
-      toast.error(apiError(e));
+      setErrorComentario(apiError(e));
+    } finally {
+      setGuardandoTec(false);
     }
   };
 
@@ -559,6 +569,22 @@ export default function TeacherStudentProjectsPage() {
           <FiFolder size={24} style={{ opacity: 0.4 }} />
           <p className="muted">Abra un proyecto para ver su detalle y registrar retroalimentación.</p>
         </div>
+      )}
+
+      {confirmando && (
+        <Modal title="Confirmar tecnología" subtitle={confirmando.nombre} onClose={() => setConfirmando(null)} width={520}>
+          <div className={`field ${errorComentario ? 'has-error' : ''}`}>
+            <label htmlFor="confirmar-tec-comentario">¿Qué comprobaste sobre {confirmando.nombre}?</label>
+            <textarea id="confirmar-tec-comentario" value={comentario} maxLength={1000}
+              onChange={(e) => { setComentario(e.target.value); setErrorComentario(null); }}
+              placeholder="Quedará como retroalimentación visible para el equipo." />
+            <FieldError message={errorComentario} />
+          </div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => setConfirmando(null)}>Volver</Button>
+            <Button loading={guardandoTec} onClick={() => void guardarConfirmacion()}>Confirmar tecnología</Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

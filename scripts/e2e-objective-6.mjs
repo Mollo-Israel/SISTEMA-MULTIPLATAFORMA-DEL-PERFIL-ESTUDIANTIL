@@ -272,6 +272,9 @@ async function rf17Calculo(ctx) {
   });
   check(proyecto.status === 201, '17.6 El estudiante registra un proyecto', msgOf(proyecto));
   ctx.proyectoId = proyecto.data?.id;
+  // V5-20: quien contribuye declara tecnologías del proyecto; primero se agregan
+  // al proyecto (sigue en borrador, así que todavía no suma nada).
+  await req('PATCH', `/projects/${ctx.proyectoId}`, { token: A.token, body: { skillIds: [skill.id] } });
   await req('PUT', `/projects/${ctx.proyectoId}/my-contribution`, {
     token: A.token, body: { role: 'Responsable', contribution: 'Diseño del orquestador', skillIds: [skill.id] },
   });

@@ -1,11 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiAlertCircle, FiCheck, FiCheckCircle, FiSave, FiSearch } from 'react-icons/fi';
 import { apiError } from '../api/client';
-import { catalogService, projectDetailService } from '../services';
+import { catalogService, projectDetailService, projectService } from '../services';
 import { useToast } from './feedback';
-import { Badge, Button, Card, EmptyState, SearchInput, SkeletonText } from './ui';
-import type { ProjectMemberDetailed, Skill } from '../services/types';
+import { FieldError } from './form';
+import { Badge, Button, Card, EmptyState, Modal, SearchInput, SkeletonText } from './ui';
+import type { ProjectMemberDetailed } from '../services/types';
 import { PROJECT_ROLES } from '../services/types';
+
+/**
+ * V5-29 (§4.4): qué áreas suele tocar cada rol. Solo ordena las tecnologías
+ * para encontrarlas antes; no prohíbe ninguna (G05: un rol Backend puede usar
+ * cualquier tecnología del proyecto) ni prueba nada.
+ */
+const AREAS_DEL_ROL: Record<string, RegExp> = {
+  Frontend: /web|interfa|front|dise/i,
+  Backend: /software|web|back|servid/i,
+  'Base de Datos': /datos|base/i,
+  Mobile: /m[oó]vil|mobile/i,
+  QA: /software|calidad|prueba/i,
+  'UX/UI': /dise|interfa|experiencia/i,
+  DevOps: /redes|infraestructura|nube|devops|sistemas/i,
+  'Datos/IA': /inteligencia|datos|ciencia/i,
+};
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -18,7 +35,8 @@ const normalize = (s: string) =>
  * aceptado no obtendría nada del proyecto: la contribución que otro escribió
  * no alimenta su perfil hasta que él la revisa y la hace suya.
  *
- * Las tecnologías que elige son **las suyas**, no las del proyecto (§34).
+ * Las tecnologías que elige son **las suyas**, no las del proyecto (§34), y
+ * salen de las tecnologías del proyecto (V5-20, §13.2): no del catálogo entero.
  */
 export default function ProjectContribution({
   projectId,
@@ -33,9 +51,16 @@ export default function ProjectContribution({
 }) {
   const toast = useToast();
   const [members, setMembers] = useState<ProjectMemberDetailed[] | null>(null);
-  const [skills, setSkills] = useState<Skill[]>([]);
+  // V5-20: solo las tecnologías del proyecto, con el área en la que se usan.
+  const [delProyecto, setDelProyecto] = useState<{ id: string; name: string; area: string }[]>([]);
+  // V5-22: excluir y pedir corrección con un modal propio, con motivo.
+  const [excluyendo, setExcluyendo] = useState<ProjectMemberDetailed | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [corrigiendo, setCorrigiendo] = useState(false);
+  const [nota, setNota] = useState('');
+  const [errorModal, setErrorModal] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [form, setForm] = useState({ contribution: '', role: '', skillIds: [] as string[] });
+  const [form, setForm] = useState({ contribution: '', roles: [] as string[], skillIds: [] as string[] });
   const [saving, setSaving] = useState(false);
 
   const mine = useMemo(
@@ -51,7 +76,7 @@ export default function ProjectContribution({
       if (propia) {
         setForm({
           contribution: propia.contribution ?? '',
-          role: propia.role ?? '',
+          roles: propia.roles?.length ? propia.roles : propia.role ? [propia.role] : [],
           skillIds: propia.skillsUsed.map((s) => s.skillId),
         });
       }
@@ -63,44 +88,68 @@ export default function ProjectContribution({
 
   useEffect(() => {
     void load();
-    catalogService.skills().then(setSkills).catch(() => {});
+    Promise.all([projectService.get(projectId), catalogService.areas(), catalogService.skills()])
+      .then(([p, areas, catalogo]) => {
+        const nombreArea = new Map(areas.map((a) => [a.id, a.name]));
+        const lista = (p.projectSkills ?? [])
+          .filter((s) => s.skill)
+          .map((s) => ({ id: s.skillId, name: s.skill!.name, area: (s.academicAreaId && nombreArea.get(s.academicAreaId)) || 'Sin área' }));
+        // Un proyecto anterior al catálogo declara sus tecnologías como texto.
+        const texto = new Set((p.technologies ?? []).map((t) => normalize(t.trim())));
+        for (const s of catalogo) {
+          if (lista.some((x) => x.id === s.id)) continue;
+          if (texto.has(normalize(s.name)) || (s.aliases ?? []).some((a) => texto.has(normalize(a)))) {
+            lista.push({ id: s.id, name: s.name, area: (s.academicAreaId && nombreArea.get(s.academicAreaId)) || 'Sin área' });
+          }
+        }
+        setDelProyecto(lista);
+      })
+      .catch(() => setDelProyecto([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   const visibles = useMemo(() => {
     const q = normalize(query.trim());
-    if (!q) return skills.slice(0, 40);
-    return skills.filter((s) => normalize(s.name).includes(q)).slice(0, 40);
-  }, [skills, query]);
+    return q ? delProyecto.filter((s) => normalize(s.name).includes(q)) : delProyecto;
+  }, [delProyecto, query]);
+  const porArea = useMemo(() => {
+    const m = new Map<string, typeof visibles>();
+    for (const s of visibles) m.set(s.area, [...(m.get(s.area) ?? []), s]);
+    // V5-29: primero las áreas que suelen tocar sus roles; el resto sigue disponible.
+    const afin = (area: string) => form.roles.some((r) => AREAS_DEL_ROL[r]?.test(area));
+    return [...m.entries()].sort(([a], [b]) => Number(afin(b)) - Number(afin(a)) || a.localeCompare(b, 'es'));
+  }, [visibles, form.roles]);
 
   // V4.1 A41-023: el responsable excluye a alguien de ESTE proyecto, con motivo; el equipo no cambia.
-  const excluir = async (m: ProjectMemberDetailed) => {
-    const motivo = window.prompt(`¿Por qué ${m.name ?? 'este integrante'} no forma parte de este proyecto? Queda en el historial; seguirá en tu equipo.`, '');
-    if (motivo === null) return;
+  // V5-22: modal propio con motivo obligatorio (no window.prompt).
+  const excluir = async () => {
+    if (!excluyendo) return;
+    if (motivo.trim().length < 5) { setErrorModal('Explica el motivo (al menos 5 caracteres): queda en el historial.'); return; }
+    setSaving(true);
     try {
-      await projectDetailService.removeMember(projectId, m.id, motivo.trim() || undefined);
+      await projectDetailService.removeMember(projectId, excluyendo.id, motivo.trim());
       toast.success('Integrante excluido del proyecto.', 'Su lugar en el equipo no cambia.');
+      setExcluyendo(null);
       await load();
       onChanged?.();
     } catch (e) {
-      toast.error(apiError(e));
+      setErrorModal(apiError(e));
+    } finally {
+      setSaving(false);
     }
   };
 
   // V3 §30: si lo que te propusieron no es lo que hiciste, pídele que lo corrija.
   const pedirCorreccion = async () => {
-    const nota = window.prompt('¿Qué hay que corregir de lo que te propusieron?', '');
-    if (!nota || nota.trim().length < 10) {
-      if (nota !== null) toast.error('Explica qué hay que corregir (al menos 10 caracteres).');
-      return;
-    }
+    if (nota.trim().length < 10) { setErrorModal('Explica qué hay que corregir (al menos 10 caracteres).'); return; }
     setSaving(true);
     try {
       await projectDetailService.requestCorrection(projectId, nota.trim());
       toast.success('Corrección pedida', 'El responsable recibirá tu nota.');
+      setCorrigiendo(false);
       await load();
     } catch (e) {
-      toast.error(apiError(e));
+      setErrorModal(apiError(e));
     } finally {
       setSaving(false);
     }
@@ -109,10 +158,11 @@ export default function ProjectContribution({
   const guardar = async () => {
     setSaving(true);
     try {
+      const validas = new Set(delProyecto.map((s) => s.id));
       await projectDetailService.confirmMyContribution(projectId, {
         contribution: form.contribution || undefined,
-        role: form.role || undefined,
-        skillIds: form.skillIds,
+        roles: form.roles,
+        skillIds: form.skillIds.filter((id) => validas.has(id)),
       });
       toast.success(
         'Contribución confirmada.',
@@ -168,16 +218,22 @@ export default function ProjectContribution({
           </div>
 
           <div className="field">
-            <label htmlFor={`rol-${projectId}`}>Tu rol</label>
-            <select
-              id={`rol-${projectId}`}
-              value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-            >
-              <option value="">Elige tu rol…</option>
-              {PROJECT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-            <span className="field-hint">El rol describe lo que hiciste; tu afinidad sale de las tecnologías que confirmas.</span>
+            <span className="field-label" id={`rol-${projectId}`}>Tus roles</span>
+            <div className="chip-row" role="group" aria-labelledby={`rol-${projectId}`}>
+              {PROJECT_ROLES.map((r) => {
+                const on = form.roles.includes(r);
+                return (
+                  <button key={r} type="button" className={`chip ${on ? 'on' : ''}`} aria-pressed={on}
+                    onClick={() => setForm({ ...form, roles: on ? form.roles.filter((x) => x !== r) : [...form.roles, r].slice(0, 4) })}>
+                    {on && <FiCheck size={12} />} {r}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="field-hint">
+              Puedes tener varios (hasta 4); el primero es el principal. Un rol describe lo que hiciste:
+              no prueba tecnologías ni cambia tu afinidad, que sale de lo que confirmas.
+            </span>
           </div>
 
           <div className="field">
@@ -191,18 +247,25 @@ export default function ProjectContribution({
               </div>
             </div>
             <p className="muted" style={{ marginTop: 0, fontSize: '0.78rem' }}>
-              Solo las que tocaste. Que el proyecto use cuatro tecnologías no significa que
-              las hayas usado todas.
+              Solo las que tocaste, entre las del proyecto. Que el proyecto use cuatro tecnologías
+              no significa que las hayas usado todas.
             </p>
 
-            {visibles.length === 0 ? (
+            {delProyecto.length === 0 ? (
               <EmptyState
                 icon={<FiSearch size={20} />}
-                message={`Ninguna tecnología coincide con “${query}”.`}
+                message="El proyecto todavía no tiene tecnologías. El responsable las agrega primero; después eliges las que usaste."
               />
-            ) : (
+            ) : visibles.length === 0 ? (
+              <EmptyState
+                icon={<FiSearch size={20} />}
+                message={`Ninguna tecnología del proyecto coincide con “${query}”.`}
+              />
+            ) : porArea.map(([area, lista]) => (
+              <div key={area} style={{ marginBottom: '0.5rem' }}>
+                <div className="muted small">{area}</div>
               <div className="chip-row">
-                {visibles.map((s) => {
+                {lista.map((s) => {
                   const on = form.skillIds.includes(s.id);
                   return (
                     <button
@@ -222,7 +285,8 @@ export default function ProjectContribution({
                   );
                 })}
               </div>
-            )}
+              </div>
+            ))}
           </div>
 
           <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -230,7 +294,7 @@ export default function ProjectContribution({
               {mine.contributionConfirmed ? 'Guardar y reconfirmar' : 'Confirmar mi contribución'}
             </Button>
             {!isOwner && (
-              <Button variant="secondary" onClick={pedirCorreccion} loading={saving}>
+              <Button variant="secondary" onClick={() => { setCorrigiendo(true); setNota(''); setErrorModal(null); }} loading={saving}>
                 Pedir corrección al responsable
               </Button>
             )}
@@ -283,7 +347,7 @@ export default function ProjectContribution({
                   {isOwner && (
                     <td>
                       {m.userId !== currentUserId && (
-                        <Button size="sm" variant="ghost" onClick={() => excluir(m)}>Excluir del proyecto</Button>
+                        <Button size="sm" variant="ghost" onClick={() => { setExcluyendo(m); setMotivo(''); setErrorModal(null); }}>Excluir del proyecto</Button>
                       )}
                     </td>
                   )}
@@ -293,6 +357,40 @@ export default function ProjectContribution({
           </table>
         </div>
       </Card>
+
+      {excluyendo && (
+        <Modal title="Excluir del proyecto" subtitle={excluyendo.name ?? 'Integrante'} onClose={() => setExcluyendo(null)} width={500}>
+          <p className="muted">
+            Deja de figurar en este proyecto y no se le atribuye su experiencia. Sigue en tu equipo de
+            colaboración, y la exclusión queda en el historial con tu motivo.
+          </p>
+          <div className={`field ${errorModal ? 'has-error' : ''}`}>
+            <label htmlFor="excluir-motivo">Motivo</label>
+            <textarea id="excluir-motivo" value={motivo} maxLength={300}
+              onChange={(e) => { setMotivo(e.target.value); setErrorModal(null); }}
+              placeholder="Por ejemplo: no participó en este proyecto, solo en el anterior." />
+            <FieldError message={errorModal} />
+          </div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => setExcluyendo(null)}>Volver</Button>
+            <Button variant="danger" loading={saving} onClick={() => void excluir()}>Excluir del proyecto</Button>
+          </div>
+        </Modal>
+      )}
+      {corrigiendo && (
+        <Modal title="Pedir una corrección" subtitle="A quien lleva el proyecto" onClose={() => setCorrigiendo(false)} width={500}>
+          <div className={`field ${errorModal ? 'has-error' : ''}`}>
+            <label htmlFor="correccion-nota">¿Qué hay que corregir de lo que te propusieron?</label>
+            <textarea id="correccion-nota" value={nota} maxLength={500}
+              onChange={(e) => { setNota(e.target.value); setErrorModal(null); }} />
+            <FieldError message={errorModal} />
+          </div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => setCorrigiendo(false)}>Volver</Button>
+            <Button loading={saving} onClick={() => void pedirCorreccion()}>Pedir corrección</Button>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

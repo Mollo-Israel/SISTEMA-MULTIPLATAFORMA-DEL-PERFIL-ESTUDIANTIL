@@ -284,6 +284,37 @@ async function batch10(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-12 — Contribuciones acotadas al proyecto y varios roles (G01, G04, G05)
+// ===========================================================================
+async function batch12(ctx) {
+  objective('BATCH V5-12 · Lo que dices que usaste sale del proyecto; varios roles que describen, no prueban');
+  const est = await provisionStudent(ctx.admin, { firstName: 'Hugo', lastName: `Contrib${L}`, email: correoEst('b12e1'), semester: 4 });
+  const skills = (await req('GET', '/skills', { token: est.token })).data ?? [];
+  const conArea = skills.filter((s) => s.isActive !== false && s.academicAreaId);
+  const propia = conArea[0];
+  const ajena = conArea.find((s) => s.id !== propia.id);
+  const p = await req('POST', '/projects', {
+    token: est.token,
+    body: { title: `Proyecto acotado ${L}`, areaIds: [propia.academicAreaId], skillIds: [propia.id], status: 'draft' },
+  });
+  const id = p.data?.id;
+  const fuera = await req('PUT', `/projects/${id}/my-contribution`, { token: est.token, body: { contribution: 'Hice la base.', skillIds: [ajena.id] } });
+  check(fuera.status === 400 && fuera.data?.code === 'SKILL_NOT_IN_PROJECT' && new RegExp(ajena.name).test(fuera.data?.message ?? ''),
+    'V5.12.1 G01 Una tecnología que el proyecto no tiene se rechaza, nombrándola', `${fuera.status} ${fuera.data?.code}`);
+  const dentro = await req('PUT', `/projects/${id}/my-contribution`, {
+    token: est.token, body: { contribution: 'Hice la base de datos y coordiné.', skillIds: [propia.id], roles: ['Responsable', 'Base de Datos'] },
+  });
+  const yo = (await req('GET', `/projects/${id}/members/detailed`, { token: est.token })).data?.find?.((m) => m.userId === est.userId)
+    ?? (dentro.data ?? null);
+  check(dentro.status === 200 && JSON.stringify(yo?.roles ?? []) === JSON.stringify(['Responsable', 'Base de Datos']) && yo?.role === 'Responsable',
+    'V5.12.2 G04 Varios roles (Responsable + Base de Datos); el primero queda como principal', json({ s: dentro.status, roles: yo?.roles, role: yo?.role }));
+  const rolRaro = await req('PUT', `/projects/${id}/my-contribution`, { token: est.token, body: { roles: ['Mago'] } });
+  check(rolRaro.status === 400, 'V5.12.3 Un rol fuera del catálogo controlado se rechaza', `${rolRaro.status}`);
+  const soloRol = await req('PUT', `/projects/${id}/my-contribution`, { token: est.token, body: { roles: ['Backend'], skillIds: [propia.id] } });
+  check(soloRol.status === 200, 'V5.12.4 G05 El rol no bloquea una tecnología del proyecto que de verdad usó', `${soloRol.status}`);
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -435,7 +466,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch10 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch10, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

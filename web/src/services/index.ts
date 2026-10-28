@@ -883,6 +883,9 @@ export const uploadService = {
 export const validationService = {
   forResource: (resourceType: string, resourceId: string) =>
     api
+  /** V5-28: invitar a un contacto; solo es integrante cuando acepta. */
+  invite: (projectId: string, invitedProfileId: string) =>
+    api.post(`/projects/${projectId}/invitations`, { invitedProfileId }).then((r) => r.data),
       .get<ValidationVerdict>(`/validation/${resourceType}/${resourceId}`)
       .then((r) => r.data),
   queue: () => api.get('/validation/queue').then((r) => r.data),
@@ -910,8 +913,6 @@ export interface SkillRequestItem {
   decisionNote: string | null;
   requestedByName: string | null;
   createdAt: string;
-  /** V5-25: cómo se agregó (otro nombre de una existente, o tecnología nueva). */
-  resolution?: 'alias' | 'new_skill' | null;
 }
 
 export const skillRequestService = {
@@ -944,7 +945,7 @@ export const projectDetailService = {
   /** §33: solo el propio integrante confirma lo que hizo. */
   confirmMyContribution: (
     projectId: string,
-    data: { contribution?: string; role?: string; skillIds?: string[] },
+    data: { contribution?: string; role?: string; roles?: string[]; skillIds?: string[] },
   ) => api
     .put<ProjectMemberDetailed>(`/projects/${projectId}/my-contribution`, data)
     .then((r) => r.data),
@@ -956,6 +957,8 @@ export const projectDetailService = {
   ) => api
     .patch<ProjectMemberDetailed>(`/projects/${projectId}/members/${memberId}/contribution`, data)
     .then((r) => r.data),
+  /** V5-25: cómo se agregó (otro nombre de una existente, o tecnología nueva). */
+  resolution?: 'alias' | 'new_skill' | null;
   checks: (projectId: string) =>
     api.get<ProjectChecks>(`/projects/${projectId}/checks`).then((r) => r.data),
   /** V3 §29: el docente confirma una tecnología declarada con retroalimentación específica. */

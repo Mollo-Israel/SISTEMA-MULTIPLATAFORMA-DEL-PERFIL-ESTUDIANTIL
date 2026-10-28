@@ -1,4 +1,4 @@
-import { validarFormulario } from '../../components/form';
+import { FieldError, validarFormulario } from '../../components/form';
 import { BotonArchivo } from '../../components/ArchivoProtegido';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { useEffect, useRef, useState } from 'react';
@@ -16,7 +16,7 @@ import {
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Loading, PageHeader, ResultCount,
+  AsyncView, Badge, Button, Card, EmptyState, Loading, Modal, PageHeader, ResultCount,
   SearchInput, SkeletonTable, Tabs,
 } from '../../components/ui';
 import { useSearchParams } from 'react-router-dom';
@@ -712,6 +712,9 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
   const [verdict, setVerdict] = useState<ValidationVerdict | null>(null);
   const [cargando, setCargando] = useState(true);
   const [pidiendo, setPidiendo] = useState(false);
+  // V5-22 (I01): modal propio en lugar de window.prompt / window.alert.
+  const [notaRevision, setNotaRevision] = useState<string | null>(null);
+  const [errorRevision, setErrorRevision] = useState<string | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -739,17 +742,14 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
   const revision = verdict.manualReview;
 
   const pedirRevision = async () => {
-    const nota = window.prompt(
-      'Cuéntale a Dirección cómo puede comprobar esta credencial (opcional):',
-      '',
-    );
-    if (nota === null) return;
+    if (notaRevision === null) return;
     setPidiendo(true);
     try {
-      await certificateService.requestManualReview(certificateId, nota.trim());
+      await certificateService.requestManualReview(certificateId, notaRevision.trim());
+      setNotaRevision(null);
       setVerdict(await validationService.forResource('external_certificate', certificateId));
     } catch (e) {
-      window.alert(apiError(e));
+      setErrorRevision(apiError(e));
     } finally {
       setPidiendo(false);
     }
@@ -787,9 +787,23 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
         <span className="respaldo-aviso">Dirección la rechazó: {revision.reason}</span>
       )}
       {revision?.canRequest && (
-        <button type="button" className="link-button" disabled={pidiendo} onClick={pedirRevision}>
+        <button type="button" className="link-button" disabled={pidiendo} onClick={() => { setNotaRevision(''); setErrorRevision(null); }}>
           {pidiendo ? 'Enviando…' : 'Pedir revisión excepcional'}
         </button>
+      )}
+      {notaRevision !== null && (
+        <Modal title="Pedir revisión excepcional" subtitle="La revisa Dirección" onClose={() => setNotaRevision(null)} width={500}>
+          <div className={`field ${errorRevision ? 'has-error' : ''}`}>
+            <label htmlFor="revision-nota">Cuéntale a Dirección cómo puede comprobar esta credencial (opcional)</label>
+            <textarea id="revision-nota" value={notaRevision} maxLength={500}
+              onChange={(e) => { setNotaRevision(e.target.value); setErrorRevision(null); }} />
+            <FieldError message={errorRevision} />
+          </div>
+          <div className="form-actions">
+            <Button variant="secondary" onClick={() => setNotaRevision(null)}>Volver</Button>
+            <Button loading={pidiendo} onClick={() => void pedirRevision()}>Pedir revisión</Button>
+          </div>
+        </Modal>
       )}
 
       {verdict.identityMatchStatus === 'mismatch' && (

@@ -41,8 +41,13 @@ export class ProjectMember {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  /** Rol principal (el primero de `roles`); se conserva para clientes anteriores. */
   @Column({ type: 'varchar', length: 80, nullable: true })
   role: string | null;
+
+  /** V5-29: 0..N roles del catálogo. Describen; no prueban tecnologías ni suman afinidad. */
+  @Column({ type: 'varchar', length: 40, array: true, default: () => "'{}'" })
+  roles: string[];
 
   /**
    * Fila del responsable del proyecto (V2 §34, §48): existe para que también

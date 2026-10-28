@@ -32,10 +32,19 @@ export class ConfirmContributionDto {
   @IsIn([...PROJECT_ROLES], { message: `El rol debe ser uno de: ${PROJECT_ROLES.join(', ')}.` })
   role?: string;
 
+  /** V5-29 (G04): varios roles; el primero es el principal. */
+  @ApiProperty({ required: false, type: [String], example: ['Responsable', 'Base de Datos'] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4, { message: 'Máximo 4 roles por integrante.' })
+  @ArrayUnique({ message: 'No repitas roles.' })
+  @IsIn([...PROJECT_ROLES], { each: true, message: `Cada rol debe ser uno de: ${PROJECT_ROLES.join(', ')}.` })
+  roles?: string[];
+
   @ApiProperty({
     required: false,
     type: [String],
-    description: 'Tecnologías que usted usó, del catálogo. No las del proyecto entero.',
+    description: 'Tecnologías que usted usó, de las del proyecto (V5-20). No las del proyecto entero.',
   })
   @IsOptional()
   @IsArray()
@@ -64,6 +73,14 @@ export class ProposeContributionDto {
   @Transform(cleanLine)
   @IsIn([...PROJECT_ROLES], { message: `El rol debe ser uno de: ${PROJECT_ROLES.join(', ')}.` })
   role?: string;
+
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4, { message: 'Máximo 4 roles por integrante.' })
+  @ArrayUnique({ message: 'No repitas roles.' })
+  @IsIn([...PROJECT_ROLES], { each: true, message: `Cada rol debe ser uno de: ${PROJECT_ROLES.join(', ')}.` })
+  roles?: string[];
 }
 
 /** V3 §30: el integrante pide corregir lo que le propusieron. */

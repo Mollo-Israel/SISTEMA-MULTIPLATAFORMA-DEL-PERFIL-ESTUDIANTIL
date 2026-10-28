@@ -76,6 +76,10 @@ const emptyForm = {
   repositoryUrl: '',
   demoUrl: '',
   visibility: 'profile' as ProjectVisibility,
+  /** V5-28 (§13.1): de dónde salen los colaboradores. Excluyentes como origen. */
+  origen: 'individual' as 'individual' | 'equipo' | 'contactos',
+  /** Perfiles de los contactos a invitar (cada uno acepta). */
+  contactos: [] as string[],
   teamId: '',
   inviteTeamMembers: true,
   /** V4.1 A41-023: integrantes del equipo que no entran a este proyecto, con su motivo. */
@@ -92,6 +96,7 @@ export default function StudentProjectsPage() {
   const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
   const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
   const [teams, setTeams] = useState<TeamView[]>([]);
+  const [misContactos, setMisContactos] = useState<{ profileId: string; name: string }[]>([]);
   const [buscarEquipo, setBuscarEquipo] = useState('');
   const [miPerfil, setMiPerfil] = useState<string | null>(null);
   const [loading, setLoading] = useState(() => !enMemoria('proyectos'));
@@ -143,6 +148,7 @@ export default function StudentProjectsPage() {
       .catch((e) => toast.error(apiError(e)))
       .finally(() => setLoading(false));
     collaborationService.myTeams().then(setTeams).catch(() => setTeams([]));
+    collaborationService.contacts().then((cs) => setMisContactos(cs.map((c) => ({ profileId: c.profileId, name: c.name })))).catch(() => setMisContactos([]));
     profileService.getMine().then((p) => setMiPerfil(p.id)).catch(() => setMiPerfil(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -233,7 +239,7 @@ export default function StudentProjectsPage() {
       return;
     }
     try {
-      await projectService.create({
+      const creado = await projectService.create({
         title: form.title,
         description: form.description || undefined,
         areaIds: form.areaIds,
@@ -244,16 +250,25 @@ export default function StudentProjectsPage() {
         repositoryUrl: form.repositoryUrl || undefined,
         demoUrl: form.demoUrl || undefined,
         visibility: form.visibility,
-        teamId: form.teamId || undefined,
-        inviteTeamMembers: form.teamId ? form.inviteTeamMembers : undefined,
-        excludedTeamMembers: form.teamId && form.inviteTeamMembers
+        teamId: form.origen === 'equipo' && form.teamId ? form.teamId : undefined,
+        inviteTeamMembers: form.origen === 'equipo' && form.teamId ? form.inviteTeamMembers : undefined,
+        excludedTeamMembers: form.origen === 'equipo' && form.teamId && form.inviteTeamMembers
           ? Object.entries(form.excluidos).map(([profileId, reason]) => ({ profileId, reason: reason.trim() }))
           : undefined,
         status: 'draft',
       });
+      // V5-28: los contactos elegidos reciben una invitación; ninguno es integrante hasta aceptar.
+      let invitados = 0;
+      if (form.origen === 'contactos') {
+        for (const profileId of form.contactos) {
+          try { await projectService.invite(creado.id, profileId); invitados += 1; } catch { /* se informa abajo */ }
+        }
+      }
       setForm(emptyForm);
       await load();
-      toast.success('Borrador guardado', 'Completa lo que falta en su tarjeta y actívalo.');
+      toast.success('Borrador guardado', form.origen === 'contactos' && form.contactos.length
+        ? `Se invitó a ${invitados} de ${form.contactos.length} contacto(s); cada uno acepta y confirma su contribución.`
+        : 'Completa lo que falta en su tarjeta y actívalo.');
     } catch (err) {
       toast.error(apiError(err));
     } finally {
@@ -394,7 +409,48 @@ export default function StudentProjectsPage() {
               />
             </div>
           </div>
-          {teams.length > 0 && !editando && (
+          {!editando && (
+            <div className="field">
+              <span className="field-label" id="pr-origen">Colaboradores</span>
+              <div className="chip-row" role="radiogroup" aria-labelledby="pr-origen">
+                {([
+                  ['individual', 'Individual'],
+                  ['equipo', 'De un equipo'],
+                  ['contactos', 'De mis contactos'],
+                ] as const).map(([k, etiqueta]) => (
+                  <button key={k} type="button" role="radio" aria-checked={form.origen === k}
+                    className={`chip ${form.origen === k ? 'on' : ''}`}
+                    onClick={() => setForm({ ...form, origen: k, teamId: k === 'equipo' ? form.teamId : '', excluidos: {}, contactos: k === 'contactos' ? form.contactos : [] })}>
+                    {etiqueta}
+                  </button>
+                ))}
+              </div>
+              <span className="field-hint">
+                Nadie entra solo: cada persona acepta la invitación y confirma su propia contribución.
+              </span>
+            </div>
+          )}
+          {!editando && form.origen === 'contactos' && (
+            <div className="field">
+              <span className="field-label">Contactos a invitar</span>
+              {misContactos.length === 0 ? (
+                <p className="muted small">Todavía no tienes contactos. Los agregas desde Colaboración → Contactos.</p>
+              ) : (
+                <ul className="plain-list" data-testid="contactos-proyecto">
+                  {misContactos.map((c) => (
+                    <li key={c.profileId}>
+                      <label className="check-line">
+                        <input type="checkbox" checked={form.contactos.includes(c.profileId)}
+                          onChange={(e) => setForm({ ...form, contactos: e.target.checked ? [...form.contactos, c.profileId] : form.contactos.filter((x) => x !== c.profileId) })} />
+                        {c.name}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {teams.length > 0 && !editando && form.origen === 'equipo' && (
             <div className="field">
               {/* V4.1 A41-022 (§13): equipo con búsqueda; sus miembros son candidatos, no integrantes garantizados. */}
               <label htmlFor="pr-equipo-buscar">Equipo de colaboración (opcional)</label>
