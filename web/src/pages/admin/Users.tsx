@@ -721,10 +721,10 @@ function EditUserDialog({
           </FormField>
         </div>
         {user.surnamesPending && (
-          <div className="inline-note" role="status">
+          <output className="inline-note">
             Apellido registrado: <strong>{user.lastName}</strong>. No se separó automáticamente para no
             confundir un apellido compuesto con dos; indica cuál es el primero y cuál el segundo.
-          </div>
+          </output>
         )}
         <FormField label="Correo institucional" required error={errores.errors.email}>
           <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />

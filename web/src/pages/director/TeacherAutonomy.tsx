@@ -69,8 +69,8 @@ export default function TeacherAutonomyPage() {
       setForm({ teacherUserId: '', module: form.module, justification: '' });
       errores.reset();
       politicas.reload();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
     } finally {
       setSaving(false);
     }
@@ -89,8 +89,8 @@ export default function TeacherAutonomyPage() {
       setRevocando(null);
       setMotivo('');
       politicas.reload();
-    } catch (e2) {
-      setErrorMotivo(apiError(e2));
+    } catch (error_) {
+      setErrorMotivo(apiError(error_));
     } finally {
       setSaving(false);
     }
@@ -150,7 +150,7 @@ export default function TeacherAutonomyPage() {
         actions={
           <label className="flex" style={{ gap: '0.4rem', fontSize: '0.82rem' }}>
             <input type="checkbox" checked={verRevocadas} onChange={(e) => setVerRevocadas(e.target.checked)} />
-            Ver también las revocadas
+            <span>Ver también las revocadas</span>
           </label>
         }
       >

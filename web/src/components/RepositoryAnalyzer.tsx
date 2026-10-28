@@ -21,14 +21,14 @@ export default function RepositoryAnalyzer({
   areasElegidas,
   maxAreas,
   onIncluir,
-}: {
+}: Readonly<{
   repositoryUrl: string;
   /** Tecnologías ya elegidas en el formulario (no se vuelven a ofrecer). */
   elegidas: string[];
   areasElegidas: string[];
   maxAreas: number;
   onIncluir: (s: { skillId: string; areaId: string; source: string }) => void;
-}) {
+}>) {
   const [analisis, setAnalisis] = useState<RepositoryAnalysis | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,10 +75,10 @@ export default function RepositoryAnalyzer({
       </div>
       {error && <span className="field-error" role="alert">{error}</span>}
       {analisis && analisis.status !== 'ANALYZED' && (
-        <p className="notice notice-warn small" role="status" data-testid="analisis-inconcluso">
+        <output className="notice notice-warn small" data-testid="analisis-inconcluso">
           {analisis.status === 'INCONCLUSIVE' && <strong>No se pudo concluir. </strong>}
           {analisis.message} Lo que ya elegiste se conserva.
-        </p>
+        </output>
       )}
       {analisis?.status === 'ANALYZED' && (
         <div className="stack" style={{ gap: '0.5rem', marginTop: '0.5rem' }}>

@@ -15,7 +15,7 @@ const MAX = 5;
  * es lo que el estudiante elige enseñar, y solo se ve donde el proyecto ya se
  * ve (comunidad, docentes, enlace público con sesión).
  */
-export default function ProjectImages({ projectId, editable }: { projectId: string; editable: boolean }) {
+export default function ProjectImages({ projectId, editable }: Readonly<{ projectId: string; editable: boolean }>) {
   const [imagenes, setImagenes] = useState<ProjectImageView[] | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const toast = useToast();

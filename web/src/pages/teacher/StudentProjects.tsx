@@ -1,4 +1,4 @@
-import { validarFormulario } from '../../components/form';
+import { FieldError, validarFormulario } from '../../components/form';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -19,7 +19,6 @@ import {
   AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
   SkeletonCards, SkeletonTable, Stagger,
 } from '../../components/ui';
-import { FieldError } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUSES, lbl } from '../../constants';
 import type {

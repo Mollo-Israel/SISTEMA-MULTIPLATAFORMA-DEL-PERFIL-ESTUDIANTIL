@@ -188,7 +188,7 @@ export default function TeacherActivitiesPage() {
           </div>
           <label className="flex" style={{ gap: '0.35rem', alignItems: 'center' }}>
             <input type="checkbox" checked={soloFavoritas} onChange={(e) => setSoloFavoritas(e.target.checked)} />
-            Solo favoritas
+            <span>Solo favoritas</span>
           </label>
           {hayFiltros && <Button variant="ghost" size="sm" onClick={limpiar}>Limpiar filtros</Button>}
           <ResultCount shown={items.length} total={total} noun="actividades" />

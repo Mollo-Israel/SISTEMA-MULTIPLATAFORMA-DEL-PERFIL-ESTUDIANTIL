@@ -116,7 +116,7 @@ export default function LibraryScreen() {
               {r.url ? <Button small icon="external-link" title="Abrir" onPress={() => Linking.openURL(r.url!)} /> : null}
               {r.fileUrl ? (
                 <Button small variant={r.url ? 'secondary' : 'primary'} icon="file-text" title="Ver material"
-                  onPress={() => abrirArchivo(r.fileUrl!, r.fileName ?? 'material').catch((x) => toast.error(x.message))} />
+                  onPress={() => abrirArchivo(r.fileUrl!, r.fileName ?? 'material').catch((error_) => toast.error(error_.message))} />
               ) : null}
               <Button
                 small

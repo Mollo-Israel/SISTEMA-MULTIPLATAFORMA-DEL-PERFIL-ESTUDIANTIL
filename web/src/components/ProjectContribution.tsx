@@ -219,7 +219,7 @@ export default function ProjectContribution({
 
           <div className="field">
             <span className="field-label" id={`rol-${projectId}`}>Tus roles</span>
-            <div className="chip-row" role="group" aria-labelledby={`rol-${projectId}`}>
+            <fieldset className="chip-row" aria-labelledby={`rol-${projectId}`}>
               {PROJECT_ROLES.map((r) => {
                 const on = form.roles.includes(r);
                 return (
@@ -229,7 +229,7 @@ export default function ProjectContribution({
                   </button>
                 );
               })}
-            </div>
+            </fieldset>
             <span className="field-hint">
               Puedes tener varios (hasta 4); el primero es el principal. Un rol describe lo que hiciste:
               no prueba tecnologías ni cambia tu afinidad, que sale de lo que confirmas.

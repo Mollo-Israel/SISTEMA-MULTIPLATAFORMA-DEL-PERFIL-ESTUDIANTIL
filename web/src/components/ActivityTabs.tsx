@@ -25,14 +25,14 @@ export default function ActivityTabs({
   vistas,
   soloSeguimiento = [],
   tipoDeExternas = 'academica',
-}: {
+}: Readonly<{
   /** Pestañas que ve el rol, en orden (§5.3). */
   vistas: VistaActividades[];
   /** Pestañas en las que el rol da seguimiento pero no crea (Dirección en extracurriculares). */
   soloSeguimiento?: VistaActividades[];
   /** Tipo con el que el rol crea sus oportunidades externas. */
   tipoDeExternas?: 'academica' | 'extracurricular';
-}) {
+}>) {
   const [params, setParams] = useSearchParams();
   const confirm = useConfirm();
   const abierto = useRef(false);

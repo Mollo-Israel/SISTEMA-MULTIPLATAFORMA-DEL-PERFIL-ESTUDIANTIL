@@ -210,7 +210,7 @@ const TIPO_FUENTE: Record<string, string> = { activity: 'Actividad', project: 'P
  * contribución, con un enlace solo si quien mira puede abrirla. Nunca lleva
  * a un archivo privado por ruta pública.
  */
-function Fuente({ c }: { c: AffinityBreakdown['contributions'][number] }) {
+function Fuente({ c }: Readonly<{ c: AffinityBreakdown['contributions'][number] }>) {
   const s = c.source;
   if (!s || s.type === 'declaration' || !s.title) return null;
   return (

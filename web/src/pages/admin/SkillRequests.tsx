@@ -52,6 +52,8 @@ export default function AdminSkillRequestsPage() {
 
   const de = (r: SkillRequestItem): Eleccion => eleccion[r.id]
     ?? { modo: 'new_skill', nombre: r.name, areaId: '', secundarias: [], skillId: '', misma: false, nota: '' };
+  const alternarSecundaria = (r: SkillRequestItem, e: Eleccion, areaId: string) =>
+    set(r, { secundarias: e.secundarias.includes(areaId) ? e.secundarias.filter((x) => x !== areaId) : [...e.secundarias, areaId] });
   const set = (r: SkillRequestItem, cambio: Partial<Eleccion>) =>
     setEleccion((x) => ({ ...x, [r.id]: { ...de(r), ...cambio } }));
 
@@ -157,7 +159,7 @@ export default function AdminSkillRequestsPage() {
                                         const on = e.secundarias.includes(a.id);
                                         return (
                                           <button key={a.id} type="button" className={`chip ${on ? 'on' : ''}`} aria-pressed={on}
-                                            onClick={() => set(r, { secundarias: on ? e.secundarias.filter((x) => x !== a.id) : [...e.secundarias, a.id] })}>
+                                            onClick={() => alternarSecundaria(r, e, a.id)}>
                                             {a.name}
                                           </button>
                                         );

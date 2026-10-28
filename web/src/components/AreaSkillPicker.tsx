@@ -245,11 +245,11 @@ export default function AreaSkillPicker({
               <div key={area.id} className="skill-group">
                 <div className="skill-group-title">{area.name}</div>
                 {sinTecnologias === area.id && (
-                  <p className="notice notice-warn small" role="status" data-testid="area-sin-tecnologias">
+                  <output className="notice notice-warn small" data-testid="area-sin-tecnologias">
                     «{area.name}» se quedó sin tecnologías. Puedes mantenerla o quitarla; no se quita sola.
                     {' '}<button type="button" className="link-button" onClick={() => void alternarArea(area.id)}>Quitar el área</button>
                     {' · '}<button type="button" className="link-button" onClick={() => setSinTecnologias(null)}>Mantenerla</button>
-                  </p>
+                  </output>
                 )}
                 {delArea.length === 0 && relacionadas.length === 0 ? (
                   <p className="muted small" style={{ margin: '0 0 0.4rem' }}>

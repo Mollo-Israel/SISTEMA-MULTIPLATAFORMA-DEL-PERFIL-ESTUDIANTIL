@@ -231,11 +231,11 @@ function PropuestasDocente() {
             <div role="radiogroup" aria-labelledby="reconoce" className="flex" style={{ gap: '1rem', flexWrap: 'wrap' }}>
               <label className="flex" style={{ gap: '0.35rem' }}>
                 <input type="radio" name="reconoce" checked={reconoce === 'project'} onChange={() => { setReconoce('project'); setForm(VACIO); errores.reset(); }} />
-                Un proyecto
+                <span>Un proyecto</span>
               </label>
               <label className="flex" style={{ gap: '0.35rem' }}>
                 <input type="radio" name="reconoce" checked={reconoce === 'resource'} onChange={() => { setReconoce('resource'); setForm(VACIO); errores.reset(); }} />
-                Un recurso completado
+                <span>Un recurso completado</span>
               </label>
             </div>
           </div>
@@ -321,7 +321,7 @@ const ESTADO_MOVIMIENTO: Record<'APPLIED' | 'REVERSED' | 'PENDING', { label: str
 const ORIGEN_LABEL = { activity: 'Actividad', project: 'Proyecto', resource: 'Recurso', other: 'Otro' } as const;
 
 /** V5 §10.3: de dónde salió cada punto, quién lo otorgó y quién lo aprobó. */
-function HistorialEstudiante({ profileId, onClose }: { profileId: string; onClose: () => void }) {
+function HistorialEstudiante({ profileId, onClose }: Readonly<{ profileId: string; onClose: () => void }>) {
   const h = useAsync(() => gamificationService.studentHistory(profileId), [profileId], { cache: false });
   return (
     <Modal title="Historial de puntos" subtitle={h.data ? `${h.data.student.name} · ${h.data.totalPoints} puntos` : undefined} onClose={onClose} width={860}>

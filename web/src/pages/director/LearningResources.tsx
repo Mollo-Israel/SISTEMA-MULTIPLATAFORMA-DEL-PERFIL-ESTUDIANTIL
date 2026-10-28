@@ -350,15 +350,15 @@ export default function DirectorLearningResourcesPage() {
               <div role="radiogroup" aria-labelledby="lr-alcance" className="flex" style={{ gap: '1rem', flexWrap: 'wrap' }}>
                 <label className="flex" style={{ gap: '0.35rem' }}>
                   <input type="radio" name="lr-alcance" checked={alcance === 'carrera'} onChange={() => setAlcance('carrera')} />
-                  Toda la carrera
+                  <span>Toda la carrera</span>
                 </label>
                 <label className="flex" style={{ gap: '0.35rem' }}>
                   <input type="radio" name="lr-alcance" checked={alcance === 'semestres'} onChange={() => setAlcance('semestres')} />
-                  Semestres específicos
+                  <span>Semestres específicos</span>
                 </label>
               </div>
               {alcance === 'semestres' && (
-                <div role="group" aria-label="Semestres" className="chip-row">
+                <fieldset aria-label="Semestres" className="chip-row">
                   {SEMESTRES_CARRERA.map((n) => {
                     const on = semestres.includes(n);
                     return (
@@ -368,7 +368,7 @@ export default function DirectorLearningResourcesPage() {
                       </button>
                     );
                   })}
-                </div>
+                </fieldset>
               )}
               <small className="muted">
                 {alcance === 'carrera' ? 'Lo ve todo estudiante de la carrera en la Biblioteca.' : 'Solo lo ven los estudiantes de los semestres marcados.'}

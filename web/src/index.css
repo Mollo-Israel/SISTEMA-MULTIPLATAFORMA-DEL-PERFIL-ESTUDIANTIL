@@ -1341,3 +1341,7 @@ button.chip { cursor: pointer; font-family: var(--font); }
 .career-project-carousel .icon-button { position: absolute; top: 50%; transform: translateY(-50%); }
 .career-project-carousel .prev { left: 8px; }
 .career-project-carousel .next { right: 8px; }
+
+/* <output> y <fieldset> en lugar de role="status" y role="group" (accesibilidad). */
+output.inline-note, output.notice { display: flex; }
+fieldset.chip-row { border: 0; padding: 0; margin: 0; min-width: 0; }

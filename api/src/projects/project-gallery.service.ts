@@ -43,7 +43,7 @@ export class ProjectGalleryService {
   async add(user: AuthenticatedUser, projectId: string, fileId: string) {
     await this.assertDueno(user, projectId);
     const archivo = await this.dataSource.getRepository(StoredFileRecord).findOne({ where: { id: fileId } });
-    if (!archivo || archivo.uploadedByUserId !== user.userId || !MIME_IMAGEN.test(archivo.mimeTypeDetected ?? '')) {
+    if (archivo?.uploadedByUserId !== user.userId || !MIME_IMAGEN.test(archivo?.mimeTypeDetected ?? '')) {
       const m = 'La imagen tiene que ser PNG, JPG o WEBP y haberla subido tú.';
       throw new BadRequestException({ message: m, fields: { fileId: [m] } });
     }
@@ -119,7 +119,7 @@ export class ProjectGalleryService {
       qb.andWhere('p.visibility IN (:...vis)', { vis: [...abiertas, ProjectVisibility.TEACHERS] });
     } else if (user.role === RolNombre.TEACHER) {
       const alcance = await this.scope.scopeFor(user);
-      if (alcance && alcance.length) {
+      if (alcance?.length) {
         qb.andWhere(`(p.visibility IN (:...vis) OR (p.visibility = :doc AND ${scopeSql('sp', 'alcance')}))`, {
           vis: abiertas, doc: ProjectVisibility.TEACHERS, alcance,
         });

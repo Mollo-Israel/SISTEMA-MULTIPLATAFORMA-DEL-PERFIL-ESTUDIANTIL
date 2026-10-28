@@ -111,7 +111,7 @@ export class GamificationService {
         ? activos.filter((c) => c.trigger === trigger && c.academicAreaId === areaId)
         : [];
       if (delArea.length > 0) {
-        const mayor = delArea.reduce((a, b) => (b.points > a.points ? b : a));
+        const mayor = delArea.reduce((a, b) => (b.points > a.points ? b : a), delArea[0]);
         return { points: mayor.points, criterionId: mayor.id };
       }
       const general = activos.find((c) => c.trigger === trigger && !c.academicAreaId && c.code === trigger);
