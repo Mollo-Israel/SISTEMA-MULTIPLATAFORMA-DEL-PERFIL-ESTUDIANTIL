@@ -834,6 +834,9 @@ export const projectService = {
   mine: () => api.get<Project[]>('/projects/my').then((r) => r.data),
   get: (id: string) => api.get<Project>(`/projects/${id}`).then((r) => r.data),
   create: (data: Record<string, unknown>) => api.post<Project>('/projects', data).then((r) => r.data),
+  /** V5-28: invitar a un contacto; solo es integrante cuando acepta. */
+  invite: (projectId: string, invitedProfileId: string) =>
+    api.post(`/projects/${projectId}/invitations`, { invitedProfileId }).then((r) => r.data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch<Project>(`/projects/${id}`, data).then((r) => r.data),
   /** V3 §22: requisitos pendientes para activar. */
@@ -883,9 +886,6 @@ export const uploadService = {
 export const validationService = {
   forResource: (resourceType: string, resourceId: string) =>
     api
-  /** V5-28: invitar a un contacto; solo es integrante cuando acepta. */
-  invite: (projectId: string, invitedProfileId: string) =>
-    api.post(`/projects/${projectId}/invitations`, { invitedProfileId }).then((r) => r.data),
       .get<ValidationVerdict>(`/validation/${resourceType}/${resourceId}`)
       .then((r) => r.data),
   queue: () => api.get('/validation/queue').then((r) => r.data),
@@ -910,6 +910,8 @@ export interface SkillRequestItem {
   name: string;
   source: string | null;
   status: 'pending' | 'added' | 'rejected';
+  /** V5-25: cómo se agregó (otro nombre de una existente, o tecnología nueva). */
+  resolution?: 'alias' | 'new_skill' | null;
   decisionNote: string | null;
   requestedByName: string | null;
   createdAt: string;
@@ -957,8 +959,6 @@ export const projectDetailService = {
   ) => api
     .patch<ProjectMemberDetailed>(`/projects/${projectId}/members/${memberId}/contribution`, data)
     .then((r) => r.data),
-  /** V5-25: cómo se agregó (otro nombre de una existente, o tecnología nueva). */
-  resolution?: 'alias' | 'new_skill' | null;
   checks: (projectId: string) =>
     api.get<ProjectChecks>(`/projects/${projectId}/checks`).then((r) => r.data),
   /** V3 §29: el docente confirma una tecnología declarada con retroalimentación específica. */

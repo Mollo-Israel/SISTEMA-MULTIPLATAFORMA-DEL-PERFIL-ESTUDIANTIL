@@ -690,13 +690,13 @@ export interface ProjectMemberDetailed {
   userId: string;
   name: string | null;
   role: string | null;
+  /** V5-29: todos sus roles; el primero es el principal. */
+  roles?: string[];
   contribution: string | null;
   /** Mientras sea false, lo que figura lo escribió otra persona (§33). */
   contributionConfirmed: boolean;
   contributionConfirmedAt: string | null;
   skillsUsed: { skillId: string; name: string | null }[];
-  /** V5-29: todos sus roles; el primero es el principal. */
-  roles?: string[];
   createdAt: string;
 }
 
