@@ -41,6 +41,7 @@ export const NAV: Record<string, NavGroup[]> = {
       items: [
         { to: '/student/activities', label: 'Actividades' },
         { to: '/student/library', label: 'Biblioteca' },
+        { to: '/proyectos', label: 'Proyectos de la carrera' },
       ],
     },
     {
@@ -78,6 +79,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/teacher?tab=equipos', label: 'Necesidades de equipo' },
         { to: '/teacher?tab=semestre', label: 'Reporte por semestre' },
         { to: '/teacher/resources', label: 'Proponer recursos' },
+        { to: '/proyectos', label: 'Proyectos de la carrera' },
         { to: '/teacher/points', label: 'Puntos de estudiantes' },
       ],
     },
@@ -103,6 +105,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/director/gamification', label: 'Criterios de puntos' },
         // V5 §9.2: excepciones de revisión por docente y módulo.
         { to: '/director/autonomy', label: 'Autonomía docente' },
+        { to: '/proyectos', label: 'Proyectos de la carrera' },
       ],
     },
     {
@@ -119,6 +122,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/society/activities', label: 'Mis actividades' },
         { to: '/society/participants', label: 'Participantes' },
         { to: '/society/metrics', label: 'Métricas' },
+        { to: '/proyectos', label: 'Proyectos de la carrera' },
       ],
     },
     {
@@ -143,6 +147,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/points', label: 'Puntos de estudiantes' },
         { to: '/admin/credential-reviews', label: 'Revisión de credenciales' },
         { to: '/admin/audit', label: 'Auditoría' },
+        { to: '/proyectos', label: 'Proyectos de la carrera' },
       ],
     },
     {

@@ -110,6 +110,9 @@ export class OrphanFilesService implements OnModuleInit, OnApplicationShutdown {
             SELECT 1 FROM activity_images ai WHERE ai.stored_file_id = f.id)
           AND NOT EXISTS (
             SELECT 1 FROM learning_resources lf WHERE lf.file_id = f.id)
+          -- V5 BATCH 13: las imágenes de muestra de un proyecto.
+          AND NOT EXISTS (
+            SELECT 1 FROM project_images pi WHERE pi.stored_file_id = f.id)
         ORDER BY f.created_at
         LIMIT $2`,
       [String(this.graceHours), this.batchSize],

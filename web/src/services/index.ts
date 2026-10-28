@@ -276,6 +276,37 @@ export interface LearningResource {
   criterionId?: string | null;
 }
 
+/** V5 §13.4: imagen de muestra de un proyecto. */
+export interface ProjectImageView {
+  id: string;
+  position: number;
+  isCover: boolean;
+  url: string;
+  fileName: string | null;
+}
+
+/** V5 §13.4: un proyecto en «Proyectos de la carrera» (sin correos ni evidencias). */
+export interface CommunityProject {
+  id: string;
+  title: string;
+  description: string | null;
+  owner: string | null;
+  areas: string[];
+  skills: string[];
+  confirmedMembers: number;
+  backingTier: string;
+  coverUrl: string | null;
+  images: string[];
+  updatedAt: string;
+}
+
+export interface CommunityProjectsPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  items: CommunityProject[];
+}
+
 /** V5 §11.1: lo que «Analizar repositorio» encontró, cotejado con el catálogo. */
 export interface RepositoryAnalysis {
   repositoryUrl: string;
@@ -923,6 +954,14 @@ export const projectService = {
   mine: () => api.get<Project[]>('/projects/my').then((r) => r.data),
   get: (id: string) => api.get<Project>(`/projects/${id}`).then((r) => r.data),
   create: (data: Record<string, unknown>) => api.post<Project>('/projects', data).then((r) => r.data),
+  /** V5 §13.4: imágenes de muestra (0 a 5) y «Proyectos de la carrera». */
+  images: (id: string) => api.get<ProjectImageView[]>(`/projects/${id}/images`).then((r) => r.data),
+  addImage: (id: string, fileId: string) => api.post<ProjectImageView[]>(`/projects/${id}/images`, { fileId }).then((r) => r.data),
+  updateImage: (id: string, imageId: string, data: { isCover?: boolean; position?: number }) =>
+    api.patch<ProjectImageView[]>(`/projects/${id}/images/${imageId}`, data).then((r) => r.data),
+  removeImage: (id: string, imageId: string) => api.delete<ProjectImageView[]>(`/projects/${id}/images/${imageId}`).then((r) => r.data),
+  community: (params: { q?: string; areaId?: string; skillId?: string; page?: number }) =>
+    api.get<CommunityProjectsPage>('/projects/community', { params }).then((r) => r.data),
   /** V5 §11.1: analizar un repositorio antes de guardar (no guarda nada). */
   analyzeRepository: (repositoryUrl: string) =>
     api.post<RepositoryAnalysis>('/projects/repository/analyze', { repositoryUrl }).then((r) => r.data),

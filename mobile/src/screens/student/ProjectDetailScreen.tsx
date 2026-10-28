@@ -34,11 +34,12 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const VISIBILITY_OPTIONS = [
-  { value: 'private', label: 'Privado', hint: 'Solo tú y tus integrantes lo ven.' },
-  { value: 'team', label: 'Mi equipo', hint: 'Además, tu equipo de colaboración.' },
-  { value: 'profile', label: 'En mi perfil', hint: 'Aparece en tu perfil dinámico.' },
-  { value: 'teachers', label: 'Visible a docentes', hint: 'Tus docentes pueden revisarlo y comentarlo.' },
-  { value: 'public_link', label: 'Enlace público', hint: 'Un resumen para quien tenga el enlace; nunca la bitácora.' },
+  // V5 §13.4: sin «Además»; cada opción dice a quién llega.
+  { value: 'private', label: 'Solo yo y los integrantes', hint: 'Nadie más lo ve en Afinia.' },
+  { value: 'team', label: 'También mi equipo', hint: 'Lo ve también tu equipo de colaboración.' },
+  { value: 'teachers', label: 'También docentes autorizados', hint: 'Los docentes de tus semestres pueden revisarlo y comentarlo.' },
+  { value: 'profile', label: 'Toda la comunidad Afinia', hint: 'Aparece en «Proyectos de la carrera» y en tu perfil.' },
+  { value: 'public_link', label: 'Público por enlace', hint: 'Un resumen para quien tenga el enlace; nunca la bitácora ni las evidencias.' },
 ];
 
 const INVITATION_LABEL: Record<string, string> = {

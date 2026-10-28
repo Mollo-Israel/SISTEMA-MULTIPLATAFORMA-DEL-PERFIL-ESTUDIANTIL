@@ -9,7 +9,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-v5.mjs [batch4 …]
  */
 import { execSync } from 'child_process';
-import { API, asegurarGithubSimulado, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
+import { API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -689,6 +689,87 @@ async function batch9(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-13 — Imágenes de muestra y «Proyectos de la carrera» (§13.4, G07…G09)
+// ===========================================================================
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+async function batch13(ctx) {
+  objective('BATCH V5-13 · Galería de la carrera: solo lo activo y visible; de 0 a 5 imágenes que no son evidencias');
+  const autor = await provisionStudent(ctx.admin, { firstName: 'Iker', lastName: `Galeria${L}`, email: correoEst('b13a'), semester: 4 });
+  const otro = await provisionStudent(ctx.admin, { firstName: 'Lia', lastName: `Galeria${L}`, email: correoEst('b13b'), semester: 7 });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ruth', lastName: `Galeria${L}`, email: correoStaff('b13doc'), role: 'TEACHER' });
+  const docenteAjeno = await provisionAndActivate(ctx.admin, { firstName: 'Saul', lastName: `Galeria${L}`, email: correoStaff('b13ajeno'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [4] } });
+  await req('PUT', `/users/${docenteAjeno.userId}/semesters`, { token: ctx.admin, body: { semesters: [2] } });
+  const titulo = (k) => `Galeria ${k} ${L}`;
+  const activo = async (k, visibility) => crearProyectoActivo(autor.token, {
+    title: titulo(k), description: 'Proyecto de la galería de la carrera.', visibility, repositoryUrl: repoDePrueba(`stack-galeria-${k}-${TS}`),
+  });
+  const comunidad = await activo('comunidad', 'profile');
+  const enlace = await activo('enlace', 'public_link');
+  const docentes = await activo('docentes', 'teachers');
+  const privado = await activo('privado', 'private');
+  const borrador = await req('POST', '/projects', { token: autor.token, body: { title: titulo('borrador'), status: 'draft', visibility: 'profile' } });
+  const idDe = (p) => p?.id ?? p?.data?.id;
+  const ver = async (token, extra = '') => (await req('GET', `/projects/community?q=${encodeURIComponent(L)}${extra}`, { token })).data;
+  const nuestros = (pagina) => (pagina?.items ?? []).filter((p) => p.title.endsWith(` ${L}`) && p.title.startsWith('Galeria ')).map((p) => p.title.split(' ')[1]).sort();
+
+  const deOtro = await ver(otro.token);
+  check(JSON.stringify(nuestros(deOtro)) === JSON.stringify(['comunidad', 'enlace']),
+    'V5.13.1 G07 Un estudiante ve solo los activos en la comunidad o con enlace: ni borradores, ni privados, ni los de docentes', json(nuestros(deOtro)));
+  const delDocente = await ver(docente.token);
+  const delAjeno = await ver(docenteAjeno.token);
+  check(JSON.stringify(nuestros(delDocente)) === JSON.stringify(['comunidad', 'docentes', 'enlace']) && JSON.stringify(nuestros(delAjeno)) === JSON.stringify(['comunidad', 'enlace']),
+    'V5.13.2 G07 El docente de su alcance ve además los visibles a docentes; otro docente no', json({ d: nuestros(delDocente), a: nuestros(delAjeno) }));
+  const crudo = JSON.stringify(deOtro ?? {});
+  check(!/@/.test(crudo) && !/evidence|evidencia/i.test(crudo) && (deOtro?.pageSize === 6),
+    'V5.13.3 G09 La galería no expone correos ni evidencias; 6 por página', `pageSize ${deOtro?.pageSize}`);
+
+  // --- Imágenes de muestra: 0 a 5, PNG/JPG/WEBP, del dueño, con portada
+  const pid = idDe(comunidad);
+  const subirPng = async (token = autor.token) => (await subirArchivo(token, PNG_1X1, 'captura.png', 'image/png')).data?.id;
+  const agregar = (fileId, token = autor.token) => req('POST', `/projects/${pid}/images`, { token, body: { fileId } });
+  const primera = await agregar(await subirPng());
+  check(primera.status === 201 && primera.data?.length === 1 && primera.data[0].isCover === true,
+    'V5.13.4 G08 La primera imagen queda como portada', json(primera.data));
+  const pdf = (await subirArchivo(autor.token, Buffer.from('%PDF-1.4\n%%EOF\n'.padEnd(64, ' '), 'latin1'), 'doc.pdf', 'application/pdf')).data?.id;
+  const conPdf = await agregar(pdf);
+  const ajenaId = await subirPng(otro.token);
+  const deOtroImg = await agregar(ajenaId, otro.token);
+  const archivoAjeno = await agregar(ajenaId);
+  check(conPdf.status === 400 && deOtroImg.status === 403 && archivoAjeno.status === 400,
+    'V5.13.5 G08 Solo PNG/JPG/WEBP subidas por el dueño; otra persona no agrega imágenes', `${conPdf.status} / ${deOtroImg.status} / ${archivoAjeno.status}`);
+  let ultima = primera;
+  for (let i = 0; i < 4; i += 1) ultima = await agregar(await subirPng());
+  const sexta = await agregar(await subirPng());
+  check(ultima.data?.length === 5 && sexta.status === 400 && sexta.data?.code === 'PROJECT_IMAGES_LIMIT',
+    'V5.13.6 G08 Hasta cinco imágenes: la sexta se rechaza', `${ultima.data?.length} / ${sexta.status} ${sexta.data?.code}`);
+  const lista = ultima.data ?? [];
+  const portada = await req('PATCH', `/projects/${pid}/images/${lista[2].id}`, { token: autor.token, body: { isCover: true } });
+  const movida = await req('PATCH', `/projects/${pid}/images/${lista[4].id}`, { token: autor.token, body: { position: 0 } });
+  const portadas = (movida.data ?? []).filter((i) => i.isCover);
+  check(portada.status === 200 && portadas.length === 1 && portadas[0].id === lista[2].id && movida.data?.[0]?.id === lista[4].id,
+    'V5.13.7 Una sola portada; mover cambia el orden', json((movida.data ?? []).map((i) => [i.position, i.isCover])));
+  const sinPortada = await req('DELETE', `/projects/${pid}/images/${lista[2].id}`, { token: autor.token });
+  check(sinPortada.status === 200 && sinPortada.data?.length === 4 && sinPortada.data.filter((i) => i.isCover).length === 1
+    && JSON.stringify(sinPortada.data.map((i) => i.position)) === '[0,1,2,3]',
+    'V5.13.8 Al quitar la portada, la primera pasa a serlo y el orden se compacta', json((sinPortada.data ?? []).map((i) => [i.position, i.isCover])));
+
+  // --- Quién abre las imágenes: donde el proyecto se ve, y nada más
+  const enGaleria = ((await ver(otro.token)).items ?? []).find((p) => p.id === pid);
+  const abrir = async (token, url) => (await fetch(`${API}${url.replace(/^\/api/, '')}`, { headers: { Authorization: `Bearer ${token}` } })).status;
+  const fotoPrivado = (await req('POST', `/projects/${idDe(privado)}/images`, { token: autor.token, body: { fileId: await subirPng() } })).data?.[0]?.url;
+  const fotoBorrador = (await req('POST', `/projects/${idDe(borrador)}/images`, { token: autor.token, body: { fileId: await subirPng() } })).data?.[0]?.url;
+  check(!!enGaleria?.coverUrl && await abrir(otro.token, enGaleria.coverUrl) === 200
+    && await abrir(otro.token, fotoPrivado ?? '/api/files/x') === 404 && await abrir(otro.token, fotoBorrador ?? '/api/files/x') === 404
+    && await abrir(autor.token, fotoPrivado ?? '/api/files/x') === 200,
+    'V5.13.9 G08 La portada de un proyecto de la comunidad la abre cualquiera con sesión; la de uno privado o en borrador, solo su dueño',
+    json({ c: !!enGaleria?.coverUrl }));
+  const filtrada = await ver(otro.token, `&skillId=00000000-0000-4000-8000-000000000000`);
+  check((filtrada?.items ?? []).length === 0, 'V5.13.10 Los filtros por tecnología se aplican', `${(filtrada?.items ?? []).length}`);
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -840,7 +921,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12, batch13 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

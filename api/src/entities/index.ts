@@ -56,3 +56,4 @@ export * from './activity-contact.entity';
 export * from './learning-resource-library.entity';
 export * from './skill-request.entity';
 export * from './approval-policy.entity';
+export * from './project-image.entity';

@@ -29,6 +29,9 @@ import { ProjectsService } from './projects.service';
 import { ProjectMembersService } from './project-members.service';
 import { ProjectsController } from './projects.controller';
 import { ProjectsAdminController } from './projects-admin.controller';
+import { ProjectImage } from '../entities/project-image.entity';
+import { ProjectGalleryService } from './project-gallery.service';
+import { ProjectGalleryController } from './project-gallery.controller';
 
 /**
  * Portafolio de proyectos (Objetivo 5).
@@ -56,15 +59,18 @@ import { ProjectsAdminController } from './projects-admin.controller';
       Team,
       TeamMember,
       GithubApiCache,
+      ProjectImage,
     ]),
     TrajectoryModule,
     AccessModule,
     CatalogsModule,
     StorageModule,
   ],
-  controllers: [ProjectsController, ProjectsAdminController],
+  // V5 BATCH 13: la galería va primero para que `community` no se lea como `:id`.
+  controllers: [ProjectGalleryController, ProjectsController, ProjectsAdminController],
   providers: [
     ProjectsService,
+    ProjectGalleryService,
     ProjectMembersService,
     ProjectEventsService,
     ProjectBackingService,

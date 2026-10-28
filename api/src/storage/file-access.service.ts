@@ -177,6 +177,30 @@ export class FileAccessService {
       if (gestiona) return { storageKey, downloadName: 'imagen-actividad', ownerProfileId: '' };
     }
 
+    // V5 BATCH 13 (§13.4, G08): imagen de muestra de un proyecto. Se ve donde
+    // el proyecto ya se ve: activo y en la comunidad o por enlace, cualquiera con
+    // sesión; visible a docentes, docentes y Administración; siempre, su dueño y
+    // sus integrantes. Un borrador, solo dueño e integrantes.
+    const deProyecto = await this.records.manager.query(
+      `SELECT p."status", p."visibility", sp."user_id" AS "owner_user_id", p."created_by_profile_id" AS "owner_profile_id",
+              EXISTS (SELECT 1 FROM "project_members" m WHERE m."project_id" = p."id" AND m."user_id" = $2) AS "es_integrante"
+         FROM "project_images" pi
+         JOIN "stored_files" f ON f."id" = pi."stored_file_id"
+         JOIN "projects" p ON p."id" = pi."project_id"
+         JOIN "student_profiles" sp ON sp."id" = p."created_by_profile_id"
+        WHERE f."storage_key" = $1`,
+      [storageKey, user.userId],
+    ) as { status: string; visibility: string; owner_user_id: string; owner_profile_id: string; es_integrante: boolean }[];
+    for (const p of deProyecto) {
+      const propio = p.owner_user_id === user.userId || p.es_integrante;
+      const activo = p.status === 'active';
+      const visible = propio || user.role === RolNombre.ADMIN
+        || (activo && (p.visibility === 'profile' || p.visibility === 'public_link'))
+        || (activo && p.visibility === 'teachers' && user.role === RolNombre.TEACHER
+          && await this.teacherScope.assertCanAccessProfile(user, p.owner_profile_id).then(() => true, () => false));
+      if (visible) return { storageKey, downloadName: 'imagen-proyecto', ownerProfileId: '' };
+    }
+
     // Mismo error para "no existe" y "no autorizado": distinguirlos permitiría
     // averiguar qué archivos hay probando claves.
     throw new NotFoundException('Archivo no encontrado.');

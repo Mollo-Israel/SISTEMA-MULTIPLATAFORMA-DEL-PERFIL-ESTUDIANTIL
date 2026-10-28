@@ -42,6 +42,7 @@ import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorAnalyticsPage from './pages/director/Analytics';
 import CredentialReviewsPage from './pages/director/CredentialReviews';
 import TeacherAutonomyPage from './pages/director/TeacherAutonomy';
+import CareerProjectsPage from './pages/CareerProjects';
 import StudentPointsPage from './pages/staff/StudentPoints';
 import SocietyMetricsPage from './pages/society/Metrics';
 import SocietyParticipantsPage from './pages/society/Participants';
@@ -222,6 +223,8 @@ export default function App() {
 
           {/* V2 §65: la ayuda es de todos los actores. */}
           <Route path="/ayuda" element={<HelpPage />} />
+          {/* V5 §13.4: «Proyectos de la carrera», para toda la comunidad con sesión. */}
+          <Route path="/proyectos" element={<CareerProjectsPage />} />
           {/* V3 §33: cada actor tiene su bandeja; la API solo devuelve las suyas. */}
           <Route path="/notificaciones" element={<NotificationsPage />} />
           </Route>

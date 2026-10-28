@@ -14,6 +14,7 @@ import {
   FiPlus,
   FiShield,
   FiUsers,
+  FiImage,
 } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
@@ -33,6 +34,7 @@ import ProjectReadiness from '../../components/ProjectReadiness';
 import ProjectTechnicalCheck from '../../components/ProjectTechnicalCheck';
 import { useAuth } from '../../auth/AuthContext';
 import ProjectContribution from '../../components/ProjectContribution';
+import ProjectImages from '../../components/ProjectImages';
 import AiAssist from '../../components/AiAssist';
 import {
   PROJECT_BACKING_HELP,
@@ -118,6 +120,8 @@ export default function StudentProjectsPage() {
   const [openContribution, setOpenContribution] = useState<string | null>(null);
   const [openTimeline, setOpenTimeline] = useState<string | null>(null);
   const [openCheck, setOpenCheck] = useState<string | null>(null);
+  // V5 §13.4: imágenes de muestra, en su propia sección.
+  const [openImages, setOpenImages] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<Record<string, ProjectEventItem[]>>({});
   const { user } = useAuth();
 
@@ -757,6 +761,25 @@ export default function StudentProjectsPage() {
                 {openCheck === p.id && (
                   <div className="feedback-list">
                     <ProjectTechnicalCheck projectId={p.id} canRecheck={p.isOwner === true} onChanged={load} />
+                  </div>
+                )}
+              </div>
+
+              {/* V5 §13.4: de 0 a 5 imágenes de muestra; las administra el dueño. No son evidencias. */}
+              <div className="mt feedback-block">
+                <button
+                  type="button"
+                  className="feedback-toggle"
+                  onClick={() => setOpenImages(openImages === p.id ? null : p.id)}
+                  aria-expanded={openImages === p.id}
+                >
+                  {openImages === p.id ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                  <FiImage size={14} />
+                  <span>Imágenes del proyecto</span>
+                </button>
+                {openImages === p.id && (
+                  <div className="feedback-list">
+                    <ProjectImages projectId={p.id} editable={p.isOwner === true} />
                   </div>
                 )}
               </div>

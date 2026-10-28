@@ -82,6 +82,7 @@ const ICONS: Record<string, IconType> = {
   '/director/points': FiGift,
   '/director/gamification': FiStar,
   '/director/autonomy': FiUnlock,
+  '/proyectos': FiFolder,
   '/admin/points': FiGift,
   '/student/collaboration?tab=equipos': FiUsers,
   '/student/collaboration?tab=contactos': FiUserPlus,

@@ -837,6 +837,27 @@ async function pruebas(browser) {
   check(fallos59.length === 0, 'WEB.59.2 Sin errores de JavaScript en el alta guiada', fallos59.join(' | '));
   await c59.close();
 
+  // ===== V5-13 · «Proyectos de la carrera» e imágenes de muestra (§13.4, G07/G08)
+  objective('V5-13 · La comunidad ve los proyectos activos compartidos; el dueño administra sus imágenes');
+  const fallos60 = [];
+  const c60 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p60 = await c60.newPage();
+  p60.on('pageerror', (e) => fallos60.push(e.message));
+  await entrar(p60, estProy.email);
+  await p60.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  const enMenu = await p60.locator('nav a[href="/proyectos"]').count();
+  await p60.goto(`${WEB}/proyectos`);
+  const titulo60 = await p60.getByRole('heading', { name: 'Proyectos de la carrera' }).first().waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+  check(enMenu > 0 && titulo60, 'WEB.60.1 V5 §13.4 «Proyectos de la carrera» está en el menú y abre su página', JSON.stringify({ enMenu, titulo60 }));
+  await p60.goto(`${WEB}/student/projects`);
+  await p60.getByRole('button', { name: 'Imágenes del proyecto' }).first().click({ timeout: 8000 }).catch(() => {});
+  const imagenes60 = await p60.getByTestId('imagenes-proyecto').first().waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+  const etiqueta = await p60.locator('#pr-visibilidad option[value="profile"]').innerText().catch(() => '');
+  check(imagenes60 && etiqueta === 'Toda la comunidad Afinia' && !(await p60.locator('#pr-visibilidad').innerText().catch(() => '')).includes('Además'),
+    'WEB.60.2 V5 §13.4 El dueño ve «Imágenes del proyecto» y la visibilidad se nombra sin «Además»', JSON.stringify({ imagenes60, etiqueta }));
+  check(fallos60.length === 0, 'WEB.60.3 Sin errores de JavaScript en V5-13', fallos60.join(' | '));
+  await c60.close();
+
   // ===== V4.1-10 · Sugerencias de GitHub con procedencia (A41-020, B34)
   objective('V4.1-10 · La validación técnica muestra señales como sugerencias, con por qué');
   const fallos55 = [];

@@ -831,10 +831,11 @@ export type ProjectVisibility = 'private' | 'team' | 'teachers' | 'profile' | 'p
 
 /** V4.1 A41-024 (§14): nombres claros de las cinco visibilidades reales. */
 export const PROJECT_VISIBILITY_LABEL: Record<ProjectVisibility, string> = {
-  private: 'Solo yo y los integrantes del proyecto',
-  team: 'Además, mi equipo de colaboración',
-  teachers: 'Además, docentes autorizados (de mi semestre)',
-  profile: 'En mi perfil (comunidad Afinia y mi perfil público, si lo publico)',
+  // V5 §13.4: sin «Además»; cada opción dice a quién llega. El valor y la ACL no cambian.
+  private: 'Solo yo y los integrantes',
+  team: 'También mi equipo de colaboración',
+  teachers: 'También docentes autorizados (de mi semestre)',
+  profile: 'Toda la comunidad Afinia',
   public_link: 'Público por enlace (sin iniciar sesión)',
 };
 
@@ -843,7 +844,7 @@ export const PROJECT_VISIBILITY_HELP: Record<ProjectVisibility, string> = {
   private: 'Nadie más lo ve en Afinia. Docentes y Dirección no lo consultan.',
   team: 'Lo ven tus integrantes y los miembros de tu equipo de colaboración.',
   teachers: 'Lo ven los docentes de tus semestres y pueden dejarte retroalimentación. No aparece en tu perfil público.',
-  profile: 'Aparece en tu perfil dentro de Afinia y, si publicaste tu perfil, en tu perfil público y su QR.',
+  profile: 'Aparece en «Proyectos de la carrera» y en tu perfil dentro de Afinia; si publicaste tu perfil, también en tu perfil público y su QR.',
   public_link: 'Cualquiera con el enlace ve un resumen, sin iniciar sesión. Un borrador no se ve hasta que lo actives.',
 };
 
