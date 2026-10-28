@@ -988,6 +988,442 @@
           ]
         }
       ]
+    },
+    {
+      "name": "05 · Cierre V5",
+      "item": [
+        {
+          "name": "Docente → autonomía propia (revisión por defecto)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_docente}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/approval-policies/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "approval-policies",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 y actividades siempre con revisión', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().ACTIVITY).to.eql('REQUIRE_REVIEW'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Docente → concederse autonomía → 403",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_docente}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teacherUserId\": \"00000000-0000-4000-8000-000000000000\",\n  \"module\": \"RESOURCE\",\n  \"justification\": \"Intento de concederse autonomía.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/approval-policies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "approval-policies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: la concede Dirección', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Administración → conceder autonomía → 403",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teacherUserId\": \"00000000-0000-4000-8000-000000000000\",\n  \"module\": \"RESOURCE\",\n  \"justification\": \"Administración no es autoridad académica.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/approval-policies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "approval-policies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: Administración no concede', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dirección → excepción en actividades → 400",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_director}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"teacherUserId\": \"00000000-0000-4000-8000-000000000000\",\n  \"module\": \"ACTIVITY\",\n  \"justification\": \"Las actividades siguen con revisión.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/approval-policies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "approval-policies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 ACTIVITY_OVERRIDE_NOT_ENABLED', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('ACTIVITY_OVERRIDE_NOT_ENABLED'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dirección → historial de acciones directas",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_director}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/approval-policies/direct-actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "approval-policies",
+                "direct-actions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estudiante → proyectos de la carrera (6 por página, sin correos)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/community?page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "community"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con páginas de 6', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().pageSize).to.eql(6); });",
+                  "pm.test('sin correos', () => pm.expect(pm.response.text()).to.not.include('@'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estudiante → analizar un enlace inválido → 400 en su campo",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"repositoryUrl\": \"esto no es un enlace\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/projects/repository/analyze",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "repository",
+                "analyze"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 en repositoryUrl', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().fields.repositoryUrl).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Docente → criterio con familia retirada → 403",
+          "request": {
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_docente}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"postman_colab\",\n  \"name\": \"Colaborar\",\n  \"trigger\": \"colaboracion_aceptada\",\n  \"points\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/gamification-criteria",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gamification-criteria"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: el docente no crea criterios', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estudiante → historial de puntos de otro → 403",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/gamification/students/00000000-0000-4000-8000-000000000000/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "gamification",
+                "students",
+                "00000000-0000-4000-8000-000000000000",
+                "history"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: no hay ranking ni consulta entre estudiantes', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resumen de trayectoria → aviso de fuentes (ND-02)",
+          "request": {
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token_estudiante}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/trajectory-summary/sections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "trajectory-summary",
+                "sections"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con el aviso y el descargo', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().notice).to.include('no las certifica'); pm.expect(pm.response.json().disclaimer).to.include('No constituye historial'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "event": [

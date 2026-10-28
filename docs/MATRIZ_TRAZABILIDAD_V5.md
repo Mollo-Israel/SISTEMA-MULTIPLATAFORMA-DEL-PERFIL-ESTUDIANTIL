@@ -10,7 +10,6 @@ Las pruebas `V5.N.x` están en `scripts/e2e-v5.mjs` (sección `batchN`). Las `WE
 
 **Estados:**
 - **CERRADO:** implementado y probado.
-- **CERRADO · sin prueba dedicada:** implementado; ninguna prueba ejercita ese caso límite.
 - **PRESERVADO:** ya cumplía; la regresión lo mantiene.
 
 ## 1. Ítems de la auditoría
@@ -26,9 +25,9 @@ Las pruebas `V5.N.x` están en `scripts/e2e-v5.mjs` (sección `batchN`). Las `WE
 | V5-07 | Fecha «ahora» rechazada | 2 · `572d569` | `registration.rules` (`ACTIVITY_START_TOLERANCE_MINUTES_DEFAULT`) | V5.2.1, V5.2.2 | CERRADO |
 | V5-08 | Responsables → semestres | 3 · `d229895` | aviso de cobertura en `ActivityManager`; la API valida la unión de alcances (V4.1) | V41.3.10–3.12 | CERRADO |
 | V5-09 | Edición visible que luego falla | 3 · `d229895` | `editable()` con `soloOpera` | V5.3.2 | CERRADO |
-| V5-10 | Interna ↔ externa contamina el formulario | 2 · `572d569` | `components/ActivityTabs.tsx` (confirmación al cambiar de pestaña) | WEB.43.4; el cambio de pestaña sin una prueba dedicada | CERRADO · sin prueba dedicada |
+| V5-10 | Interna ↔ externa contamina el formulario | 2 · `572d569` | `components/ActivityTabs.tsx` (confirmación al cambiar de pestaña) | WEB.61.1, WEB.43.4 | CERRADO |
 | V5-11 | Validación de externas por modalidad | 2 · `572d569` | `activities.service` (modalidad) | V5.2.3–2.6 | CERRADO |
-| V5-12 | Solicitar, admitir y asistir | 4 · `19fa387`, `cd18f7a` | `registration.rules`, `confirmParticipation` (cupo con bloqueo) | V5.4.1–4.17 | CERRADO |
+| V5-12 | Solicitar, admitir y asistir | 4 · `19fa387`, `cd18f7a` | `registration.rules`, `confirmParticipation` (cupo con bloqueo) | V5.4.1–4.21 | CERRADO |
 | V5-13 | Recurso por archivo | 6 · `6ec748f` | migración `V5ResourceFile`, `catalogs.service` (`assertResourceFile`) | V5.6.1–6.9, V5.6.13 | CERRADO |
 | V5-14 | «Curso externo» mezcla oportunidades | 6 · `6ec748f` | `LEARNING_RESOURCE_TYPE_LABEL` | V5.6.14 | CERRADO |
 | V5-15 | Exenciones de Dirección por docente | 7 · `6ee8230` | `approval_policies`, `access/approval-policies.*`, `director/TeacherAutonomy.tsx` | V5.7.1–7.15, `afinia-v5-gobernanza.spec` | CERRADO |
@@ -60,7 +59,7 @@ Fuera de la auditoría, la regresión encontró y se corrigió en `2a07ef2` un d
 | A03 | Plantilla CSV antigua sin desplazar columnas | V5.1.6, V5.1.7 | CERRADO |
 | A04 | Padrón con existentes, nuevos y conflictos | B1.2–1.4, B1.20, V32.1.2 | PRESERVADO |
 | A05 | Administración ve y separa apellidos | V5.1.5 | CERRADO |
-| B01 | Académica → Externa → Académica sin campos ajenos | WEB.43.4 (la interna no ofrece campos de externa); el ida y vuelta sin una prueba dedicada | CERRADO · sin prueba dedicada |
+| B01 | Académica → Externa → Académica sin campos ajenos | WEB.61.1 (pide confirmar; cada formulario con sus campos y sin restos) | CERRADO |
 | B02, B03 | Externa: lugar con palabras; virtual con enlace | V5.2.3–2.6 | CERRADO |
 | B04, B05 | Tolerancia de minuto; no publicar en el pasado | V5.2.1, V5.2.2 | CERRADO |
 | B06 | Duplicar FINISHED → borrador limpio | V5.2.11 | CERRADO |
@@ -74,7 +73,7 @@ Fuera de la auditoría, la regresión encontró y se corrigió en `2a07ef2` un d
 | C04 | Ausencia sin atribución | V5.4.14 | CERRADO |
 | C05 | Cupo 1 con admisiones concurrentes | V5.4.5, V5.4.6 | CERRADO |
 | C06 | Sin cupo: admisión inmediata, asistencia pendiente | V5.4.1, V5.4.2 | CERRADO |
-| C07 | Ventana de 7 días para regularizar | regla `bloqueoAsistencia` | CERRADO · sin prueba dedicada |
+| C07 | Ventana de 7 días para regularizar | V5.4.18–4.21 (dentro sí; fuera 409 `ATTENDANCE_WINDOW_CLOSED`; Dirección corrige con motivo y queda auditado), `inscripcion-admision-asistencia.spec` | CERRADO |
 | C08 | Rechazo con motivo, distinto de ausencia | V5.4.7–4.10 | CERRADO |
 | D01–D07 | Recursos: enlace o archivo, video por enlace, alcance, 403, favorito sin puntos | V5.6.1–6.15 | CERRADO |
 | D08 | Recurso completado solo con declaración docente auditada | V5.8.7, V5.8.8, V5.8.9 | CERRADO |
@@ -86,7 +85,7 @@ Fuera de la auditoría, la regresión encontró y se corrigió en `2a07ef2` un d
 | F01, F02, F05, F06, F12 | Análisis opcional, con fuente, idempotente, INCONCLUSIVE, sin atribuir | V5.9.1–9.7, WEB.59.1 | CERRADO |
 | F03, F04 | PyMongo → MongoDB; Python aceptado deja de sugerirse | V5.9.2, V5.10.1, V5.10.2 | CERRADO |
 | F07–F09 | FastAPI y Pytest como tecnologías nuevas; aviso fiel | V5.11.1–11.5 | CERRADO |
-| F10 | Quitar la última tecnología de un área avisa; quitar un área pide confirmación | `AreaSkillPicker` (`confirmarQuitar`) | CERRADO · sin prueba dedicada |
+| F10 | Quitar la última tecnología de un área avisa; quitar un área pide confirmación | WEB.62.1 | CERRADO |
 | F11 | Tecnología multiárea: elegir contexto | V32.4.7–4.11, selector de área en `RepositoryAnalyzer` | CERRADO |
 | G01, G04, G05 | Contribución acotada al proyecto; multirol | V5.12.1–12.4 | CERRADO |
 | G02, G03 | Equipo o contactos: invitados que deben aceptar | V41.11.3, V41.11.4 | PRESERVADO |

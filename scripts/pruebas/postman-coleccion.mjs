@@ -113,6 +113,46 @@ const coleccion = {
         }),
       ],
     },
+    {
+      // V5: solo lecturas y rechazos, para que la base de pruebas quede igual.
+      name: '05 · Cierre V5',
+      item: [
+        req('Docente → autonomía propia (revisión por defecto)', 'GET', '/approval-policies/me', { rol: 'docente', tests: [
+          "pm.test('200 y actividades siempre con revisión', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().ACTIVITY).to.eql('REQUIRE_REVIEW'); });",
+        ] }),
+        req('Docente → concederse autonomía → 403', 'POST', '/approval-policies', {
+          rol: 'docente', body: { teacherUserId: '00000000-0000-4000-8000-000000000000', module: 'RESOURCE', justification: 'Intento de concederse autonomía.' },
+          tests: ["pm.test('403: la concede Dirección', () => pm.response.to.have.status(403));"],
+        }),
+        req('Administración → conceder autonomía → 403', 'POST', '/approval-policies', {
+          rol: 'admin', body: { teacherUserId: '00000000-0000-4000-8000-000000000000', module: 'RESOURCE', justification: 'Administración no es autoridad académica.' },
+          tests: ["pm.test('403: Administración no concede', () => pm.response.to.have.status(403));"],
+        }),
+        req('Dirección → excepción en actividades → 400', 'POST', '/approval-policies', {
+          rol: 'director', body: { teacherUserId: '00000000-0000-4000-8000-000000000000', module: 'ACTIVITY', justification: 'Las actividades siguen con revisión.' },
+          tests: ["pm.test('400 ACTIVITY_OVERRIDE_NOT_ENABLED', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('ACTIVITY_OVERRIDE_NOT_ENABLED'); });"],
+        }),
+        req('Dirección → historial de acciones directas', 'GET', '/approval-policies/direct-actions', { rol: 'director', tests: ["pm.test('200', () => pm.response.to.have.status(200));"] }),
+        req('Estudiante → proyectos de la carrera (6 por página, sin correos)', 'GET', '/projects/community?page=1', { rol: 'estudiante', tests: [
+          "pm.test('200 con páginas de 6', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().pageSize).to.eql(6); });",
+          "pm.test('sin correos', () => pm.expect(pm.response.text()).to.not.include('@'));",
+        ] }),
+        req('Estudiante → analizar un enlace inválido → 400 en su campo', 'POST', '/projects/repository/analyze', {
+          rol: 'estudiante', body: { repositoryUrl: 'esto no es un enlace' },
+          tests: ["pm.test('400 en repositoryUrl', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().fields.repositoryUrl).to.be.an('array'); });"],
+        }),
+        req('Docente → criterio con familia retirada → 403', 'POST', '/gamification-criteria', {
+          rol: 'docente', body: { code: 'postman_colab', name: 'Colaborar', trigger: 'colaboracion_aceptada', points: 5 },
+          tests: ["pm.test('403: el docente no crea criterios', () => pm.response.to.have.status(403));"],
+        }),
+        req('Estudiante → historial de puntos de otro → 403', 'GET', '/gamification/students/00000000-0000-4000-8000-000000000000/history', {
+          rol: 'estudiante', tests: ["pm.test('403: no hay ranking ni consulta entre estudiantes', () => pm.response.to.have.status(403));"],
+        }),
+        req('Resumen de trayectoria → aviso de fuentes (ND-02)', 'GET', '/trajectory-summary/sections', { rol: 'estudiante', tests: [
+          "pm.test('200 con el aviso y el descargo', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().notice).to.include('no las certifica'); pm.expect(pm.response.json().disclaimer).to.include('No constituye historial'); });",
+        ] }),
+      ],
+    },
   ],
   event: [{ listen: 'test', script: { type: 'text/javascript', exec: [
     "pm.test('responde en menos de 2 s', () => pm.expect(pm.response.responseTime).to.be.below(2000));",

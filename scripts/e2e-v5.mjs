@@ -856,6 +856,53 @@ async function batch15(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-4 (C07) — Ventana de 7 días para regularizar la asistencia
+// ===========================================================================
+async function batch4v(ctx) {
+  objective('BATCH V5-4 · C07 Dentro de 7 días el responsable regulariza; después, solo Dirección con motivo');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Ventana${L}`, email: correoStaff('b4vdir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: `Ventana${L}`, email: correoStaff('b4vdoc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [3] } });
+  const [e1, e2] = await Promise.all(['b4ve1', 'b4ve2'].map((k, i) =>
+    provisionStudent(ctx.admin, { firstName: ['Ana', 'Beto'][i], lastName: `Ventana${L}`, email: correoEst(k), semester: 3 })));
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const charla = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const crear = (titulo) => req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${L}`, type: 'academica', categoryId: charla.id, semesterScope: [3], activityDate: en(48), endAt: en(50), status: 'open', responsibleUserIds: [docente.userId] },
+  });
+  const reciente = await crear('Charla de hace 5 dias');
+  const antigua = await crear('Charla de hace 10 dias');
+  for (const a of [reciente, antigua]) {
+    await req('POST', `/activities/${a.data?.id}/register`, { token: e1.token });
+    await req('POST', `/activities/${a.data?.id}/register`, { token: e2.token });
+  }
+  // El calendario no deja fechar en el pasado: se ubica el evento directamente en la base.
+  psql(`update activities set event_date = now() - interval '5 days 2 hours', end_at = now() - interval '5 days' where id = '${reciente.data?.id}'`);
+  psql(`update activities set event_date = now() - interval '10 days 2 hours', end_at = now() - interval '10 days' where id = '${antigua.data?.id}'`);
+
+  const dentro = await decidir(docente.token, reciente.data?.id, e1.profileId, 'confirmed');
+  check(dentro.status === 200 && dentro.data?.status === 'confirmed',
+    'V5.4.18 C07 A los 5 días del fin, el responsable todavía registra la asistencia', `${dentro.status} ${dentro.data?.code ?? dentro.data?.status}`);
+  const fuera = await decidir(docente.token, antigua.data?.id, e1.profileId, 'confirmed');
+  check(fuera.status === 409 && fuera.data?.code === 'ATTENDANCE_WINDOW_CLOSED',
+    'V5.4.19 C07 Pasados los 7 días, el responsable ya no la registra por la vía ordinaria', `${fuera.status} ${fuera.data?.code}`);
+  const corregir = (token, extra = {}) => req('POST', `/activities/${antigua.data?.id}/participation-correction`, {
+    token, body: { studentProfileId: e1.profileId, status: 'confirmed', reason: 'La lista firmada en papel muestra que asistió.', ...extra },
+  });
+  const delDocente = await corregir(docente.token);
+  const sinMotivo = await corregir(director.token, { reason: 'ok' });
+  const deDireccion = await corregir(director.token);
+  const estado = ((await req('GET', `/activities/${antigua.data?.id}/participants`, { token: director.token })).data ?? [])
+    .find((r) => r.studentProfileId === e1.profileId)?.status;
+  check(delDocente.status === 403 && sinMotivo.status === 400 && deDireccion.status >= 200 && deDireccion.status < 300 && estado === 'confirmed',
+    'V5.4.20 C07 Vencida la ventana, la corrige Dirección con un motivo (el docente no; sin motivo tampoco)',
+    json({ d: delDocente.status, s: sinMotivo.status, c: deDireccion.status, e: estado }));
+  const auditada = psql(`select count(*) from audit_events where event_type = 'PARTICIPATION_CORRECTED' and actor_user_id = '${director.userId}' and metadata->>'activityId' = '${antigua.data?.id}' and metadata->>'motivo' like '%papel%'`);
+  check(Number(auditada) >= 1, 'V5.4.21 C07 La corrección queda en la auditoría con su motivo', auditada);
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -1007,7 +1054,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12, batch13, batch14, batch15 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch4v, batch5, batch6, batch7, batch8, batch9, batch10, batch12, batch13, batch14, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">31.66% </span>
+                <span class="strong">33.33% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>19/60</span>
+                <span class='fraction'>20/60</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">15.38% </span>
+                <span class="strong">23.07% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>2/13</span>
+                <span class='fraction'>3/13</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">30.35% </span>
+                <span class="strong">32.14% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>17/56</span>
+                <span class='fraction'>18/56</span>
             </div>
         
             
@@ -282,15 +282,15 @@
 <a name='L217'></a><a href='#L217'>217</a>
 <a name='L218'></a><a href='#L218'>218</a>
 <a name='L219'></a><a href='#L219'>219</a>
-<a name='L220'></a><a href='#L220'>220</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<a name='L220'></a><a href='#L220'>220</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -317,11 +317,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">3x</span>
-<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -463,7 +463,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -671,7 +671,7 @@ export class AccountTokensService {
 &nbsp;
     const cooldownMs = identityConfig.resendCooldownSeconds(this.config) * 1000;
     const elapsed = Date.now() - last.createdAt.getTime();
-    return elapsed &gt;= cooldownMs ? <span class="branch-0 cbranch-no" title="branch not covered" >0 </span>: Math.ceil((cooldownMs - elapsed) / 1000);
+    return elapsed &gt;= cooldownMs ? 0 : <span class="branch-1 cbranch-no" title="branch not covered" >Math.ceil((cooldownMs - elapsed) / 1000);</span>
   }
 &nbsp;
   /**
@@ -681,8 +681,8 @@ export class AccountTokensService {
    * largo de un día bastan para que un proveedor marque el remitente como
    * spam, y entonces dejan de llegar también los correos legítimos.
    */
-<span class="fstat-no" title="function not covered" >  async </span>sentInLastDay(userId: string, purpose: AccountTokenPurpose): Promise&lt;number&gt; {
-<span class="cstat-no" title="statement not covered" >    return this.tokens.count({</span>
+  async sentInLastDay(userId: string, purpose: AccountTokenPurpose): Promise&lt;number&gt; {
+    return this.tokens.count({
       where: { userId, purpose, createdAt: MoreThan(new Date(Date.now() - 24 * 60 * 60 * 1000)) },
     });
   }
@@ -727,7 +727,7 @@ export class AccountTokensService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-22T01:26:38.805Z
+                at 2026-10-28T15:55:56.993Z
             </div>
         <script src="../prettify.js"></script>
         <script>

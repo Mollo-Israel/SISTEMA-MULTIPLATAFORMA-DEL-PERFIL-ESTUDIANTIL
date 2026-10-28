@@ -1,0 +1,736 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for access/approval-policies.service.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../prettify.css" />
+    <link rel="stylesheet" href="../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">access</a> approval-policies.service.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">26.59% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>25/94</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">23.21% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>13/56</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">22.72% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>5/22</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">27.5% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>22/80</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, In, IsNull, Repository } from 'typeorm';
+import { RolNombre } from '@perfil/shared';
+import { ApprovalModule, ApprovalPolicy } from '../entities/approval-policy.entity';
+import { User } from '../entities/user.entity';
+import { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { AuditEventType, AuditService } from '../audit/audit.service';
+&nbsp;
+/** Módulos en los que Dirección puede conceder una excepción hoy (§9.2). */
+export const MODULOS_CON_EXCEPCION: ApprovalModule[] = ['RESOURCE', 'GAMIFICATION'];
+&nbsp;
+const NOMBRE_MODULO: Record&lt;ApprovalModule, string&gt; = {
+  RESOURCE: 'recursos', GAMIFICATION: 'puntos', ACTIVITY: 'actividades',
+};
+&nbsp;
+/**
+ * Autonomía docente (V5 §9.2): REQUIRE_REVIEW por defecto y excepciones que
+ * concede Dirección, por docente y por módulo.
+ *
+ * - Solo Dirección concede y revoca: Administración ve, pero no es autoridad
+ *   académica (§10.2).
+ * - Solo para docentes. La sociedad científica no hereda excepciones (E08).
+ * - `ACTIVITY` queda en revisión obligatoria hasta la decisión institucional
+ *   (ND-03): la API la rechaza aunque el esquema la admita.
+ * - Revocar cierra la excepción para lo que venga; lo publicado u otorgado
+ *   con ella se conserva y sigue apuntando a la fila (E03).
+ */
+@Injectable()
+export class ApprovalPoliciesService {
+  constructor(
+    @InjectRepository(ApprovalPolicy) private readonly policies: Repository<span class="branch-1 cbranch-no" title="branch not covered" >&lt;ApprovalPolicy&gt;,</span>
+    @InjectRepository(User) private readonly users: Repository<span class="branch-1 cbranch-no" title="branch not covered" >&lt;User&gt;,</span>
+    private readonly audit: AuditService<span class="branch-1 cbranch-no" title="branch not covered" >,</span>
+  ) {}
+&nbsp;
+  /** La excepción vigente del usuario para el módulo, o null (REQUIRE_REVIEW). */
+<span class="fstat-no" title="function not covered" >  async </span>vigente(user: AuthenticatedUser | undefined, module: ApprovalModule, manager?: EntityManager): Promise&lt;ApprovalPolicy | null&gt; {
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!user || user.role !== RolNombre.TEACHER || !MODULOS_CON_EXCEPCION.includes(module)) <span class="cstat-no" title="statement not covered" >return null;</span></span>
+    const repo = <span class="cstat-no" title="statement not covered" >manager ? manager.getRepository(ApprovalPolicy) : this.policies;</span>
+<span class="cstat-no" title="statement not covered" >    return repo.findOne({ where: { teacherUserId: user.userId, module, revokedAt: IsNull() } });</span>
+  }
+&nbsp;
+  /** Lo que el docente puede hacer sin revisión, para que la interfaz lo diga. */
+  async mias(user: AuthenticatedUser) {
+    const filas = user.role === RolNombre.TEACHER
+      ? await this.policies.find({ where: { teacherUserId: user.userId, revokedAt: IsNull() } })
+      : <span class="branch-1 cbranch-no" title="branch not covered" >[];</span>
+    const directo = (m: ApprovalModule) =&gt; filas.some(<span class="fstat-no" title="function not covered" >(f</span>) =&gt; <span class="cstat-no" title="statement not covered" >f.module === m)</span>;
+    return {
+      RESOURCE: directo('RESOURCE') ? <span class="branch-0 cbranch-no" title="branch not covered" >'DIRECT_ALLOWED' </span>: 'REQUIRE_REVIEW',
+      GAMIFICATION: directo('GAMIFICATION') ? <span class="branch-0 cbranch-no" title="branch not covered" >'DIRECT_ALLOWED' </span>: 'REQUIRE_REVIEW',
+      ACTIVITY: 'REQUIRE_REVIEW',
+    } as const;
+  }
+&nbsp;
+  /** Docentes con cuenta activa y sus semestres, para elegir a quién conceder. */
+<span class="fstat-no" title="function not covered" >  async </span>docentes(user: AuthenticatedUser) {
+<span class="cstat-no" title="statement not covered" >    this.assertPuedeVer(user);</span>
+    const filas: { id: string; first_name: string; last_name: string; email: string; semesters: number[] | null }[] =
+<span class="cstat-no" title="statement not covered" >      await this.policies.manager.query(`</span>
+        SELECT u.id, u.first_name, u.last_name, u.email,
+               ARRAY(SELECT t.semester FROM teacher_semester_access t WHERE t.teacher_id = u.id ORDER BY t.semester) AS semesters
+          FROM users u JOIN roles r ON r.id = u.role_id
+         WHERE r.name = $1 AND u.status = 'active'
+         ORDER BY u.last_name, u.first_name
+         LIMIT 500`, [RolNombre.TEACHER]);
+<span class="cstat-no" title="statement not covered" >    return filas.map(<span class="fstat-no" title="function not covered" >(f</span>) =&gt; (<span class="cstat-no" title="statement not covered" >{ id: f.id, name: `${f.first_name} ${f.last_name}`, email: f.email, semesters: f.semesters ?? [] })</span>);</span>
+  }
+&nbsp;
+  /** Dirección y Administración: todas, vigentes primero. */
+<span class="fstat-no" title="function not covered" >  async </span>list(user: AuthenticatedUser, incluirRevocadas = <span class="branch-0 cbranch-no" title="branch not covered" >false)</span> {
+<span class="cstat-no" title="statement not covered" >    this.assertPuedeVer(user);</span>
+    const filas = <span class="cstat-no" title="statement not covered" >await this.policies.find({</span>
+      where: incluirRevocadas ? {} : { revokedAt: IsNull() },
+      relations: { teacher: true },
+      order: { grantedAt: 'DESC' },
+      take: 500,
+    });
+<span class="cstat-no" title="statement not covered" >    return this.vista(filas);</span>
+  }
+&nbsp;
+  async grant(user: AuthenticatedUser, dto: { teacherUserId: string; module: string; justification: string }) {
+    this.assertDireccion(user);
+    const modulo = dto.module as ApprovalModule;
+    if (modulo === 'ACTIVITY') {
+      const m = 'Las actividades siguen con revisión obligatoria: la excepción necesita una decisión institucional que todavía no está tomada.';
+      throw new BadRequestException({ code: 'ACTIVITY_OVERRIDE_NOT_ENABLED', message: m, fields: { module: [m] } });
+    }
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!MODULOS_CON_EXCEPCION.includes(modulo)) {</span>
+      const m = <span class="cstat-no" title="statement not covered" >'Módulo no válido.';</span>
+<span class="cstat-no" title="statement not covered" >      throw new BadRequestException({ message: m, fields: { module: [m] } });</span>
+    }
+    const motivo = <span class="cstat-no" title="statement not covered" >(dto.justification ?? '').trim();</span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (motivo.length &lt; 10) {</span>
+      const m = <span class="cstat-no" title="statement not covered" >'Explica por qué se concede (al menos 10 caracteres): queda en el historial.';</span>
+<span class="cstat-no" title="statement not covered" >      throw new BadRequestException({ message: m, fields: { justification: [m] } });</span>
+    }
+    const docente = <span class="cstat-no" title="statement not covered" >await this.users.findOne({ where: { id: dto.teacherUserId }, relations: { role: true } });</span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!docente) <span class="cstat-no" title="statement not covered" >throw new NotFoundException('Docente no encontrado.');</span></span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (docente.role?.name !== RolNombre.TEACHER) {</span>
+      const m = <span class="cstat-no" title="statement not covered" >'Las excepciones son solo para docentes: la sociedad científica y los demás roles siguen sus propias reglas.';</span>
+<span class="cstat-no" title="statement not covered" >      throw new BadRequestException({ code: 'POLICY_TEACHER_ONLY', message: m, fields: { teacherUserId: [m] } });</span>
+    }
+    const ya = <span class="cstat-no" title="statement not covered" >await this.policies.findOne({ where: { teacherUserId: docente.id, module: modulo, revokedAt: IsNull() } });</span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (ya) <span class="cstat-no" title="statement not covered" >throw new ConflictException(`${docente.firstName} ${docente.lastName} ya publica ${NOMBRE_MODULO[modulo]} sin revisión.`);</span></span>
+    const fila = <span class="cstat-no" title="statement not covered" >await this.policies.save(this.policies.create({</span>
+      module: modulo, teacherUserId: docente.id, decision: 'DIRECT_ALLOWED', justification: motivo, grantedBy: user.userId,
+    }));
+<span class="cstat-no" title="statement not covered" >    await this.audit.record({</span>
+      actorUserId: user.userId,
+      eventType: AuditEventType.APPROVAL_POLICY_GRANTED,
+      entityType: 'approval_policy',
+      entityId: fila.id,
+      metadata: { module: modulo, teacherUserId: docente.id, justification: motivo },
+    });
+<span class="cstat-no" title="statement not covered" >    return (await this.vista([{ ...fila, teacher: docente }]))[0];</span>
+  }
+&nbsp;
+<span class="fstat-no" title="function not covered" >  async </span>revoke(user: AuthenticatedUser, id: string, reason: string) {
+<span class="cstat-no" title="statement not covered" >    this.assertDireccion(user);</span>
+    const motivo = <span class="cstat-no" title="statement not covered" >(reason ?? '').trim();</span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (motivo.length &lt; 5) {</span>
+      const m = <span class="cstat-no" title="statement not covered" >'Explica por qué se revoca.';</span>
+<span class="cstat-no" title="statement not covered" >      throw new BadRequestException({ message: m, fields: { reason: [m] } });</span>
+    }
+    const fila = <span class="cstat-no" title="statement not covered" >await this.policies.findOne({ where: { id }, relations: { teacher: true } });</span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!fila) <span class="cstat-no" title="statement not covered" >throw new NotFoundException('Excepción no encontrada.');</span></span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (fila.revokedAt) <span class="cstat-no" title="statement not covered" >throw new ConflictException('Esa excepción ya estaba revocada.');</span></span>
+<span class="cstat-no" title="statement not covered" >    fila.revokedAt = new Date();</span>
+<span class="cstat-no" title="statement not covered" >    fila.revokedBy = user.userId;</span>
+<span class="cstat-no" title="statement not covered" >    fila.revokeReason = motivo;</span>
+<span class="cstat-no" title="statement not covered" >    await this.policies.save(fila);</span>
+<span class="cstat-no" title="statement not covered" >    await this.audit.record({</span>
+      actorUserId: user.userId,
+      eventType: AuditEventType.APPROVAL_POLICY_REVOKED,
+      entityType: 'approval_policy',
+      entityId: fila.id,
+      metadata: { module: fila.module, teacherUserId: fila.teacherUserId, reason: motivo },
+    });
+<span class="cstat-no" title="statement not covered" >    return (await this.vista([fila]))[0];</span>
+  }
+&nbsp;
+  /**
+   * Historial de acciones directas (§9.3, §9.4): lo que un docente publicó u
+   * otorgó con una excepción. Dirección lo ve sin tener que aprobarlo.
+   */
+<span class="fstat-no" title="function not covered" >  async </span>historialDirecto(user: AuthenticatedUser, teacherUserId?: string) {
+<span class="cstat-no" title="statement not covered" >    this.assertPuedeVer(user);</span>
+    const filtro = <span class="cstat-no" title="statement not covered" >teacherUserId ? 'AND p.teacher_user_id = $1' : '';</span>
+    const params = <span class="cstat-no" title="statement not covered" >teacherUserId ? [teacherUserId] : [];</span>
+    const m = <span class="cstat-no" title="statement not covered" >this.policies.manager;</span>
+    const [recursos, puntos] = <span class="cstat-no" title="statement not covered" >await Promise.all([</span>
+      m.query(
+        `SELECT r.id, r.title, r.created_at AS "at", p.id AS "policyId", p.teacher_user_id AS "teacherUserId",
+                u.first_name || ' ' || u.last_name AS "teacher"
+           FROM learning_resources r
+           JOIN approval_policies p ON p.id = r.policy_id
+           JOIN users u ON u.id = p.teacher_user_id
+          WHERE r.policy_id IS NOT NULL ${filtro}
+          ORDER BY r.created_at DESC LIMIT 200`,
+        params,
+      ),
+      m.query(
+        `SELECT g.id, c.name AS "criterion", c.points, g.reason, g.created_at AS "at", g.source_type AS "sourceType", g.source_id AS "sourceId",
+                p.id AS "policyId", p.teacher_user_id AS "teacherUserId", u.first_name || ' ' || u.last_name AS "teacher",
+                su.first_name || ' ' || su.last_name AS "student"
+           FROM gamification_proposals g
+           JOIN approval_policies p ON p.id = g.policy_id
+           JOIN users u ON u.id = p.teacher_user_id
+           JOIN gamification_criteria c ON c.id = g.criterion_id
+           JOIN student_profiles sp ON sp.id = g.student_profile_id
+           JOIN users su ON su.id = sp.user_id
+          WHERE g.policy_id IS NOT NULL ${filtro}
+          ORDER BY g.created_at DESC LIMIT 200`,
+        params,
+      ),
+    ]);
+<span class="cstat-no" title="statement not covered" >    return [</span>
+      ...(recursos as { at: string }[]).map(<span class="fstat-no" title="function not covered" >(r</span>) =&gt; (<span class="cstat-no" title="statement not covered" >{ module: 'RESOURCE' as const, ...r })</span>),
+      ...(puntos as { at: string }[]).map(<span class="fstat-no" title="function not covered" >(p</span>) =&gt; (<span class="cstat-no" title="statement not covered" >{ module: 'GAMIFICATION' as const, ...p })</span>),
+    ].sort(<span class="fstat-no" title="function not covered" >(a</span>, b) =&gt; <span class="cstat-no" title="statement not covered" >new Date(b.at).getTime() - new Date(a.at).getTime())</span>;
+  }
+&nbsp;
+  private assertDireccion(user: AuthenticatedUser) {
+    <span class="missing-if-branch" title="if path not taken" >I</span>if (user.role !== RolNombre.CAREER_DIRECTOR) {
+<span class="cstat-no" title="statement not covered" >      throw new ForbiddenException('Las excepciones de revisión las concede y revoca Dirección.');</span>
+    }
+  }
+&nbsp;
+  private <span class="fstat-no" title="function not covered" >assertPuedeVer(</span>user: AuthenticatedUser) {
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (user.role !== RolNombre.CAREER_DIRECTOR &amp;&amp; user.role !== RolNombre.ADMIN) {</span>
+<span class="cstat-no" title="statement not covered" >      throw new ForbiddenException('Su rol no consulta las excepciones de revisión.');</span>
+    }
+  }
+&nbsp;
+  private <span class="fstat-no" title="function not covered" >async </span>vista(filas: (ApprovalPolicy &amp; { teacher?: User })[]) {
+    const ids = <span class="cstat-no" title="statement not covered" >[...new Set(filas.flatMap(<span class="fstat-no" title="function not covered" >(f</span>) =&gt; <span class="cstat-no" title="statement not covered" >[f.grantedBy, f.revokedBy])</span>.filter(<span class="fstat-no" title="function not covered" >(x</span>): x is string =&gt; <span class="cstat-no" title="statement not covered" >!!x)</span>)];</span>
+    const quienes = <span class="cstat-no" title="statement not covered" >ids.length ? await this.users.find({ where: { id: In(ids) } }) : [];</span>
+    const nombre = <span class="cstat-no" title="statement not covered" ><span class="fstat-no" title="function not covered" >(i</span>d: string | null) =&gt; {</span>
+      const u = <span class="cstat-no" title="statement not covered" >quienes.find(<span class="fstat-no" title="function not covered" >(x</span>) =&gt; <span class="cstat-no" title="statement not covered" >x.id === id)</span>;</span>
+<span class="cstat-no" title="statement not covered" >      return u ? `${u.firstName} ${u.lastName}` : null;</span>
+    };
+<span class="cstat-no" title="statement not covered" >    return filas.map(<span class="fstat-no" title="function not covered" >(f</span>) =&gt; (<span class="cstat-no" title="statement not covered" >{</span></span>
+      id: f.id,
+      module: f.module,
+      decision: f.decision,
+      teacher: f.teacher ? { id: f.teacher.id, name: `${f.teacher.firstName} ${f.teacher.lastName}`, email: f.teacher.email } : { id: f.teacherUserId },
+      justification: f.justification,
+      grantedAt: f.grantedAt,
+      grantedBy: nombre(f.grantedBy),
+      revokedAt: f.revokedAt,
+      revokedBy: nombre(f.revokedBy),
+      revokeReason: f.revokeReason,
+    }));
+  }
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-10-28T15:55:56.993Z
+            </div>
+        <script src="../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../sorter.js"></script>
+        <script src="../block-navigation.js"></script>
+    </body>
+</html>
+    

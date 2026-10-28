@@ -858,6 +858,67 @@ async function pruebas(browser) {
   check(fallos60.length === 0, 'WEB.60.3 Sin errores de JavaScript en V5-13', fallos60.join(' | '));
   await c60.close();
 
+  // ===== V5-2 · B01: cambiar de pestaña no mezcla los formularios (§5.3)
+  objective('V5-2 · B01 Académica → Externa → Académica: cada formulario con sus campos y sin restos');
+  const fallos61 = [];
+  const c61 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p61 = await c61.newPage();
+  p61.on('pageerror', (e) => fallos61.push(e.message));
+  await entrar(p61, otros.director.email);
+  await p61.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p61.goto(`${WEB}/director/activities`);
+  await p61.getByRole('button', { name: /Nueva actividad/ }).first().click({ timeout: 45000 });
+  await p61.fill('#activity-manager-titulo', `Borrador sin guardar ${TS}`);
+  const academicaSinExternos = await p61.locator('#op-proveedor, #activity-manager-enlace-oficial').count() === 0;
+  await p61.getByRole('tab', { name: 'Externas' }).click();
+  const pideConfirmar = await p61.getByRole('button', { name: 'Descartar y cambiar' }).waitFor({ timeout: 4000 }).then(() => true).catch(() => false);
+  await p61.getByRole('button', { name: 'Descartar y cambiar' }).click().catch(() => {});
+  await espera(600);
+  await p61.getByRole('button', { name: /Nueva oportunidad externa/ }).first().click({ timeout: 45000 });
+  const externaConSusCampos = await p61.locator('#activity-manager-enlace-oficial').count() > 0;
+  await p61.getByRole('tab', { name: 'Académicas' }).click();
+  await p61.getByRole('button', { name: 'Descartar y cambiar' }).click({ timeout: 4000 }).catch(() => {});
+  await espera(600);
+  await p61.getByRole('button', { name: /Nueva actividad/ }).first().click({ timeout: 45000 });
+  const deVueltaSinExternos = await p61.locator('#op-proveedor, #activity-manager-enlace-oficial').count() === 0;
+  const tituloLimpio = (await p61.inputValue('#activity-manager-titulo').catch(() => 'x')) === '';
+  check(academicaSinExternos && pideConfirmar && externaConSusCampos && deVueltaSinExternos && tituloLimpio,
+    'WEB.61.1 V5 B01 Ir y volver entre Académica y Externa pide confirmar, y cada formulario tiene solo sus campos, sin restos',
+    JSON.stringify({ academicaSinExternos, pideConfirmar, externaConSusCampos, deVueltaSinExternos, tituloLimpio }));
+  check(fallos61.length === 0, 'WEB.61.2 Sin errores de JavaScript en B01', fallos61.join(' | '));
+  await c61.close();
+
+  // ===== V5-9 · F10: quitar un área o su última tecnología no borra por sorpresa (§11.2)
+  objective('V5-9 · F10 Quitar la última tecnología avisa; quitar un área con tecnologías pide confirmación');
+  const fallos62 = [];
+  const c62 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p62 = await c62.newPage();
+  p62.on('pageerror', (e) => fallos62.push(e.message));
+  await entrar(p62, estProy.email);
+  await p62.goto(`${WEB}/student/projects`);
+  await p62.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  const grupoAreas = p62.locator('.area-skill-picker [role="group"][aria-label="Áreas del proyecto"]');
+  const area = grupoAreas.locator('button.chip').first();
+  const nombreArea = (await area.innerText()).trim();
+  await area.click();
+  const grupo = p62.locator('.skill-group', { has: p62.locator('.skill-group-title', { hasText: nombreArea }) }).first();
+  const tecnologia = grupo.locator('button.chip').first();
+  await tecnologia.click();
+  await tecnologia.click();
+  const aviso = await p62.getByTestId('area-sin-tecnologias').isVisible().catch(() => false);
+  const areaSigue = (await area.getAttribute('aria-pressed')) === 'true';
+  await tecnologia.click();
+  await area.click();
+  const confirma = await p62.getByRole('button', { name: 'Quitar área y tecnologías' }).waitFor({ timeout: 4000 }).then(() => true).catch(() => false);
+  await p62.getByRole('button', { name: 'Cancelar' }).click().catch(() => {});
+  await espera(300);
+  const conservada = (await area.getAttribute('aria-pressed')) === 'true' && (await tecnologia.getAttribute('aria-pressed')) === 'true';
+  check(aviso && areaSigue && confirma && conservada,
+    'WEB.62.1 V5 F10 Al quitar la última tecnología el área avisa y se queda; quitar el área pide confirmación y cancelar no borra nada',
+    JSON.stringify({ aviso, areaSigue, confirma, conservada }));
+  check(fallos62.length === 0, 'WEB.62.2 Sin errores de JavaScript en F10', fallos62.join(' | '));
+  await c62.close();
+
   // ===== V4.1-10 · Sugerencias de GitHub con procedencia (A41-020, B34)
   objective('V4.1-10 · La validación técnica muestra señales como sugerencias, con por qué');
   const fallos55 = [];

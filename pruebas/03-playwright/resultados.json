@@ -132,12 +132,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2587,
+                      "duration": 2254,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:48:24.938Z",
+                      "startTime": "2026-10-28T15:45:41.649Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -172,12 +172,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2252,
+                      "duration": 2178,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:48:27.899Z",
+                      "startTime": "2026-10-28T15:45:45.272Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -212,12 +212,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3536,
+                      "duration": 3543,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:48:30.163Z",
+                      "startTime": "2026-10-28T15:45:47.462Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -257,12 +257,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4525,
+                      "duration": 2292,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:48:33.713Z",
+                      "startTime": "2026-10-28T15:45:51.015Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -297,12 +297,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 6059,
+                      "duration": 4819,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:50:49.175Z",
+                      "startTime": "2026-10-28T15:48:32.015Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -337,12 +337,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2518,
+                      "duration": 2329,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:50:58.672Z",
+                      "startTime": "2026-10-28T15:48:37.954Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -377,12 +377,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3927,
+                      "duration": 3737,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:51:01.204Z",
+                      "startTime": "2026-10-28T15:48:40.294Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -422,12 +422,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 2519,
+                      "duration": 2215,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:51:05.145Z",
+                      "startTime": "2026-10-28T15:48:44.041Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -462,12 +462,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3568,
+                      "duration": 4196,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:22.929Z",
+                      "startTime": "2026-10-28T15:51:39.409Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -502,12 +502,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3836,
+                      "duration": 3670,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:27.380Z",
+                      "startTime": "2026-10-28T15:51:43.873Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -542,12 +542,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4542,
+                      "duration": 4538,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:31.227Z",
+                      "startTime": "2026-10-28T15:51:47.553Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -587,12 +587,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3508,
+                      "duration": 3725,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:35.782Z",
+                      "startTime": "2026-10-28T15:51:52.100Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -644,12 +644,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 6588,
+                      "duration": 3290,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:48:38.254Z",
+                      "startTime": "2026-10-28T15:45:53.324Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -684,12 +684,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 48310,
+                      "duration": 48629,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:48:44.852Z",
+                      "startTime": "2026-10-28T15:45:56.624Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -784,12 +784,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4114,
+                      "duration": 3733,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:51:07.696Z",
+                      "startTime": "2026-10-28T15:48:46.272Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -824,12 +824,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 50504,
+                      "duration": 49990,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:51:11.821Z",
+                      "startTime": "2026-10-28T15:48:50.016Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -924,12 +924,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 5419,
+                      "duration": 5496,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:39.322Z",
+                      "startTime": "2026-10-28T15:51:55.839Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -964,12 +964,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 56087,
+                      "duration": 58036,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:44.766Z",
+                      "startTime": "2026-10-28T15:52:01.347Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1081,12 +1081,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 16208,
+                      "duration": 15992,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:49:33.180Z",
+                      "startTime": "2026-10-28T15:46:45.269Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1136,12 +1136,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 19935,
+                      "duration": 19759,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:49:49.400Z",
+                      "startTime": "2026-10-28T15:47:01.271Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1196,12 +1196,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 12118,
+                      "duration": 12297,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:50:09.352Z",
+                      "startTime": "2026-10-28T15:47:21.040Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1246,12 +1246,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 17117,
+                      "duration": 17080,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:50:21.478Z",
+                      "startTime": "2026-10-28T15:47:33.347Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1306,12 +1306,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 17398,
+                      "duration": 16931,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:52:02.708Z",
+                      "startTime": "2026-10-28T15:49:40.024Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1361,12 +1361,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 20967,
+                      "duration": 21160,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:52:20.128Z",
+                      "startTime": "2026-10-28T15:49:56.965Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1421,12 +1421,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 13210,
+                      "duration": 13182,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:52:41.107Z",
+                      "startTime": "2026-10-28T15:50:18.134Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1471,12 +1471,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 18467,
+                      "duration": 18680,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:52:54.326Z",
+                      "startTime": "2026-10-28T15:50:31.329Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1531,12 +1531,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 19066,
+                      "duration": 19242,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:54:40.875Z",
+                      "startTime": "2026-10-28T15:52:59.404Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1586,12 +1586,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 23022,
+                      "duration": 23261,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:54:59.953Z",
+                      "startTime": "2026-10-28T15:53:18.660Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1646,12 +1646,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 14152,
+                      "duration": 14495,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:55:22.985Z",
+                      "startTime": "2026-10-28T15:53:41.929Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1696,12 +1696,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 20769,
+                      "duration": 20901,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:55:37.147Z",
+                      "startTime": "2026-10-28T15:53:56.433Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1773,12 +1773,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1843,
+                      "duration": 1692,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:50:38.614Z",
+                      "startTime": "2026-10-28T15:47:50.442Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1813,12 +1813,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3506,
+                      "duration": 3104,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:50:40.469Z",
+                      "startTime": "2026-10-28T15:47:52.144Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1853,12 +1853,12 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3907,
+                      "duration": 2804,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:50:43.986Z",
+                      "startTime": "2026-10-28T15:47:55.256Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1893,12 +1893,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 1878,
+                      "duration": 2017,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:12.815Z",
+                      "startTime": "2026-10-28T15:50:50.027Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1933,12 +1933,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3335,
+                      "duration": 3978,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:14.703Z",
+                      "startTime": "2026-10-28T15:50:52.054Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -1973,12 +1973,12 @@
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3602,
+                      "duration": 3791,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:53:18.047Z",
+                      "startTime": "2026-10-28T15:50:56.044Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -2013,12 +2013,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 3178,
+                      "duration": 3214,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:55:57.934Z",
+                      "startTime": "2026-10-28T15:54:17.352Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -2053,12 +2053,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4867,
+                      "duration": 5182,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:56:01.122Z",
+                      "startTime": "2026-10-28T15:54:20.576Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -2093,12 +2093,12 @@
                       "workerIndex": 2,
                       "parallelIndex": 0,
                       "status": "passed",
-                      "duration": 4648,
+                      "duration": 4771,
                       "errors": [],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-10-22T00:56:05.999Z",
+                      "startTime": "2026-10-28T15:54:25.767Z",
                       "annotations": [],
                       "attachments": [
                         {
@@ -2120,13 +2120,705 @@
           ]
         }
       ]
+    },
+    {
+      "title": "05-v5.spec.ts",
+      "file": "05-v5.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "V5: pantallas nuevas y flujos que cambiaron",
+          "file": "05-v5.spec.ts",
+          "line": 9,
+          "column": 6,
+          "specs": [
+            {
+              "title": "estudiante: proyectos de la carrera, alta guiada por repositorio e imágenes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9517,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:47:58.075Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-01-estudiante-proyectos-carrera",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-chromium\\attachments\\05-01-estudiante-proyectos-carrera-45ea230d9797f97c9e1e61ed82fd351d4a0214c6.png"
+                        },
+                        {
+                          "name": "05-02-estudiante-analizar-repositorio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-chromium\\attachments\\05-02-estudiante-analizar-repositorio-adf646b63588e9e44ec3754a4929d2ce3559353f.png"
+                        },
+                        {
+                          "name": "05-03-estudiante-imagenes-proyecto",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-chromium\\attachments\\05-03-estudiante-imagenes-proyecto-f3f393b0a5f655fd922b6780236f4271ab4143a0.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-a7daa2aaf2381dde2781",
+              "file": "05-v5.spec.ts",
+              "line": 10,
+              "column": 7
+            },
+            {
+              "title": "estudiante: biblioteca con material y resumen con su aviso",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6840,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:48:07.600Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-04-estudiante-biblioteca",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--b81ba-rial-y-resumen-con-su-aviso-chromium\\attachments\\05-04-estudiante-biblioteca-3dadd3175ccfd26164b5423d5e30019570bc3375.png"
+                        },
+                        {
+                          "name": "05-05-estudiante-resumen-trayectoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--b81ba-rial-y-resumen-con-su-aviso-chromium\\attachments\\05-05-estudiante-resumen-trayectoria-7d8bf86d8f99a86b7291d7aa8d50d1a0453b2c6a.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-a03dec4c0b370968cd9c",
+              "file": "05-v5.spec.ts",
+              "line": 38,
+              "column": 7
+            },
+            {
+              "title": "docente: proponer puntos por proyecto o recurso completado",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6008,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:48:14.449Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-06-docente-recurso-completado",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--6b581-oyecto-o-recurso-completado-chromium\\attachments\\05-06-docente-recurso-completado-254c48935a9ea8450b9dd59a8428f510a90cc07c.png"
+                        },
+                        {
+                          "name": "05-07-docente-recursos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--6b581-oyecto-o-recurso-completado-chromium\\attachments\\05-07-docente-recursos-45c9f6847ed2c4368f420180a1a1ccad810273d8.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-8a93ead55479a5e1750b",
+              "file": "05-v5.spec.ts",
+              "line": 48,
+              "column": 7
+            },
+            {
+              "title": "dirección: autonomía docente, recursos por semestre e historial de puntos",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6171,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:48:20.465Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-08-direccion-autonomia",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--63790-estre-e-historial-de-puntos-chromium\\attachments\\05-08-direccion-autonomia-f8b3ebc531fdddade408b413b3f303b2c08b54a1.png"
+                        },
+                        {
+                          "name": "05-09-direccion-recurso-alcance",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--63790-estre-e-historial-de-puntos-chromium\\attachments\\05-09-direccion-recurso-alcance-bd9c9fa70a15fcd7653702749e05a37ebdecec9b.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-78680a66f9d5b99a4413",
+              "file": "05-v5.spec.ts",
+              "line": 60,
+              "column": 7
+            },
+            {
+              "title": "administración: la autonomía docente es de Dirección",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4703,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:48:26.645Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-11-admin-proyectos-carrera",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--77e99-mía-docente-es-de-Dirección-chromium\\attachments\\05-11-admin-proyectos-carrera-6b9200f835e02618e2b4b54d1822dccc0f311520.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-f395ecca55ecfac452f2",
+              "file": "05-v5.spec.ts",
+              "line": 83,
+              "column": 7
+            },
+            {
+              "title": "estudiante: proyectos de la carrera, alta guiada por repositorio e imágenes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10890,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:50:59.851Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-01-estudiante-proyectos-carrera",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-firefox\\attachments\\05-01-estudiante-proyectos-carrera-d6f6c63a05bb7250807d4036abd4afda8bfd9e0a.png"
+                        },
+                        {
+                          "name": "05-02-estudiante-analizar-repositorio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-firefox\\attachments\\05-02-estudiante-analizar-repositorio-ae9cfa8a06f1845fbe35bb083c0b0be3d432bb63.png"
+                        },
+                        {
+                          "name": "05-03-estudiante-imagenes-proyecto",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-firefox\\attachments\\05-03-estudiante-imagenes-proyecto-f62f77b9515604c5c23c094bbfe5812dc67ce7f7.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-2e9b9c025f2d01c93b4c",
+              "file": "05-v5.spec.ts",
+              "line": 10,
+              "column": 7
+            },
+            {
+              "title": "estudiante: biblioteca con material y resumen con su aviso",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8001,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:51:10.752Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-04-estudiante-biblioteca",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--b81ba-rial-y-resumen-con-su-aviso-firefox\\attachments\\05-04-estudiante-biblioteca-7b90eae896dee017f1c916b650721ba4652a4590.png"
+                        },
+                        {
+                          "name": "05-05-estudiante-resumen-trayectoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--b81ba-rial-y-resumen-con-su-aviso-firefox\\attachments\\05-05-estudiante-resumen-trayectoria-6792e5437c469a5f1dd1c7fe132a42b1dcde70bc.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-2159477873e5224fa04c",
+              "file": "05-v5.spec.ts",
+              "line": 38,
+              "column": 7
+            },
+            {
+              "title": "docente: proponer puntos por proyecto o recurso completado",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 7152,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:51:18.764Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-06-docente-recurso-completado",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--6b581-oyecto-o-recurso-completado-firefox\\attachments\\05-06-docente-recurso-completado-48e35d901c4e6409e0b04bc088b430d7b14c9c5b.png"
+                        },
+                        {
+                          "name": "05-07-docente-recursos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--6b581-oyecto-o-recurso-completado-firefox\\attachments\\05-07-docente-recursos-17089f7f2b676f0e7fc75e6df9eced7eff3a4cac.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-525a85af10ea210d9303",
+              "file": "05-v5.spec.ts",
+              "line": 48,
+              "column": 7
+            },
+            {
+              "title": "dirección: autonomía docente, recursos por semestre e historial de puntos",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 7190,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:51:25.927Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-08-direccion-autonomia",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--63790-estre-e-historial-de-puntos-firefox\\attachments\\05-08-direccion-autonomia-881de828fbfa1651f3feb4a6a01436326f0505cd.png"
+                        },
+                        {
+                          "name": "05-09-direccion-recurso-alcance",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--63790-estre-e-historial-de-puntos-firefox\\attachments\\05-09-direccion-recurso-alcance-ddfebaf067ffaab085edd92662f247363c294041.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-0e7004bce5e6eafae0d6",
+              "file": "05-v5.spec.ts",
+              "line": 60,
+              "column": 7
+            },
+            {
+              "title": "administración: la autonomía docente es de Dirección",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5407,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:51:33.127Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-11-admin-proyectos-carrera",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--77e99-mía-docente-es-de-Dirección-firefox\\attachments\\05-11-admin-proyectos-carrera-6757bfadc52b50ac7063f853f8a844bf2aa9bd11.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-c41051470f008718a0f1",
+              "file": "05-v5.spec.ts",
+              "line": 83,
+              "column": 7
+            },
+            {
+              "title": "estudiante: proyectos de la carrera, alta guiada por repositorio e imágenes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 16444,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:54:30.553Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-01-estudiante-proyectos-carrera",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-webkit\\attachments\\05-01-estudiante-proyectos-carrera-295ee27a17dcf05f68ff81158815a49c3909ccb2.png"
+                        },
+                        {
+                          "name": "05-02-estudiante-analizar-repositorio",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-webkit\\attachments\\05-02-estudiante-analizar-repositorio-a5b55a2a841a5724ed847f5998c81ac60fabbd0e.png"
+                        },
+                        {
+                          "name": "05-03-estudiante-imagenes-proyecto",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--988e3--por-repositorio-e-imágenes-webkit\\attachments\\05-03-estudiante-imagenes-proyecto-53c41085b387135e3102989ece80c2d14172b6a1.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-efeca5df5b8847f45853",
+              "file": "05-v5.spec.ts",
+              "line": 10,
+              "column": 7
+            },
+            {
+              "title": "estudiante: biblioteca con material y resumen con su aviso",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 9604,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:54:47.006Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-04-estudiante-biblioteca",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--b81ba-rial-y-resumen-con-su-aviso-webkit\\attachments\\05-04-estudiante-biblioteca-7c0dfeae6e97b56e0fc69d38b658ec579305dabf.png"
+                        },
+                        {
+                          "name": "05-05-estudiante-resumen-trayectoria",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--b81ba-rial-y-resumen-con-su-aviso-webkit\\attachments\\05-05-estudiante-resumen-trayectoria-fca017669a0b64af01433d4cb0d94238c95af1da.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-ab387163fa723d5d1be7",
+              "file": "05-v5.spec.ts",
+              "line": 38,
+              "column": 7
+            },
+            {
+              "title": "docente: proponer puntos por proyecto o recurso completado",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8734,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:54:56.619Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-06-docente-recurso-completado",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--6b581-oyecto-o-recurso-completado-webkit\\attachments\\05-06-docente-recurso-completado-ed45d59117a33ef04af2c59e6265e7d0dde190dd.png"
+                        },
+                        {
+                          "name": "05-07-docente-recursos",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--6b581-oyecto-o-recurso-completado-webkit\\attachments\\05-07-docente-recursos-8421c56e2eced0d4970e2eee1be8edc63345eef6.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-6d5eeb6106c4f862f7c5",
+              "file": "05-v5.spec.ts",
+              "line": 48,
+              "column": 7
+            },
+            {
+              "title": "dirección: autonomía docente, recursos por semestre e historial de puntos",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8652,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:55:05.363Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-08-direccion-autonomia",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--63790-estre-e-historial-de-puntos-webkit\\attachments\\05-08-direccion-autonomia-0441a16c1d76594462785d58826000f5972bde21.png"
+                        },
+                        {
+                          "name": "05-09-direccion-recurso-alcance",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--63790-estre-e-historial-de-puntos-webkit\\attachments\\05-09-direccion-recurso-alcance-4372f440e419e6d27e5722e2d559e0791065e8ec.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-763a579685188686668a",
+              "file": "05-v5.spec.ts",
+              "line": 60,
+              "column": 7
+            },
+            {
+              "title": "administración: la autonomía docente es de Dirección",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6360,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-28T15:55:14.026Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "05-11-admin-proyectos-carrera",
+                          "contentType": "image/png",
+                          "path": "C:\\Talleres I\\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\\pruebas\\03-playwright\\resultados\\05-v5-V5-pantallas-nuevas--77e99-mía-docente-es-de-Dirección-webkit\\attachments\\05-11-admin-proyectos-carrera-9cd40a5f0b8d6ddcbaac587cb973d26edacb22eb.png"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "89dbe8e4a8b0a5f205c6-2b237a89b1deda02b8c3",
+              "file": "05-v5.spec.ts",
+              "line": 83,
+              "column": 7
+            }
+          ]
+        }
+      ]
     }
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-10-22T00:48:24.384Z",
-    "duration": 466352.179,
-    "expected": 39,
+    "startTime": "2026-10-28T15:45:41.100Z",
+    "duration": 579460.2609999999,
+    "expected": 54,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0

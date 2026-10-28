@@ -1,25 +1,39 @@
 {
-  "qualityGate": "OK",
+  "qualityGate": "ERROR",
   "condiciones": [
     {
+      "status": "ERROR",
+      "metricKey": "new_coverage",
+      "comparator": "LT",
+      "errorThreshold": "80",
+      "actualValue": "19.7"
+    },
+    {
       "status": "OK",
+      "metricKey": "new_duplicated_lines_density",
+      "comparator": "GT",
+      "errorThreshold": "3",
+      "actualValue": "0.50272"
+    },
+    {
+      "status": "ERROR",
       "metricKey": "new_violations",
       "comparator": "GT",
       "errorThreshold": "0",
-      "actualValue": "0"
+      "actualValue": "69"
     }
   ],
   "metricas": {
-    "coverage": "28.3",
+    "coverage": "29.2",
     "bugs": "5",
     "reliability_rating": "4.0",
-    "code_smells": "794",
+    "code_smells": "845",
     "duplicated_lines_density": "1.4",
     "security_rating": "2.0",
-    "ncloc": "67639",
+    "ncloc": "70857",
     "vulnerabilities": "1",
     "security_hotspots": "0",
     "sqale_rating": "1.0"
   },
-  "fecha": "2026-10-22T01:19:13.232Z"
+  "fecha": "2026-10-28T16:03:11.509Z"
 }

@@ -9,19 +9,18 @@ Qué se cerró y dónde está cada cosa: `docs/MATRIZ_TRAZABILIDAD_V5.md`. Qué 
 | Prueba | Alcance | Resultado |
 |---|---|---|
 | Regresión completa | 23 suites contra la API de desarrollo: las 22 anteriores y `e2e-v5` | **2390 comprobaciones, 0 fallas** |
-| `e2e-v5` | Una sección por batch, cada comprobación con su escenario A01…I07 | **131 / 131** |
-| `e2e-web` (Playwright, Edge) | Incluye el alta guiada (WEB.59) y la galería (WEB.60) | **102 / 102** |
+| `e2e-v5` | Una sección por batch, cada comprobación con su escenario A01…I07; incluye C07 (V5.4.18–4.21) | **135 / 135** |
+| `e2e-web` (Playwright, Edge) | Incluye el alta guiada (WEB.59), la galería (WEB.60), B01 (WEB.61) y F10 (WEB.62) | **106 / 106** |
 | Jest + SuperTest | 8 archivos, sobre `afinia_test`; nuevo `afinia-v5-gobernanza.spec.ts` | **69 / 69** |
+| Playwright (`pruebas/03-playwright`) | Chromium, Firefox y WebKit; nuevo `pruebas-e2e/05-v5.spec.ts` (galería, alta guiada, recurso completado, autonomía, recursos por semestre, historial de puntos) | **54 / 54** |
+| Newman (`pruebas/04-postman-newman`) | Nueva carpeta «05 · Cierre V5» (solo lecturas y rechazos) | 34 peticiones, **70 / 70 aserciones** |
 | k6 | Escenario `carga-basica.js` con el grupo V5 (galería, biblioteca, responsables); 25 estudiantes y 2 de Dirección durante 1 min, sobre `afinia_test` | 6830 peticiones, **0 % de fallos**, p95 = **110 ms** (umbral ≤ 3 s) |
 | OWASP ZAP (API, pasivo y **activo**) | OpenAPI de la API de pruebas: 246 rutas, incluidas las 11 nuevas de V5; 802 URLs | **0 FAIL, 0 WARN, 119 PASS** |
 | Compilación | `tsc` de api, web, móvil y `shared` en cada batch; `vite build` de la web | Sin errores |
 
-La evidencia nueva va en carpetas propias, sin tocar las corridas anteriores:
+La evidencia de k6 y ZAP va en carpetas propias, sin tocar las corridas anteriores: `pruebas/05-k6/corrida-v5/` y `pruebas/06-zap/corrida-v5/`. En ninguno de esos archivos quedan tokens de sesión.
 
-- `pruebas/05-k6/corrida-v5/` (resumen, reporte HTML, consola);
-- `pruebas/06-zap/corrida-v5/` (reporte HTML y JSON, consola).
-
-En ninguno de esos archivos quedan tokens de sesión. Tras correr Jest se restauró `pruebas/02-jest-supertest/reporte/reporte-jest.html`, que es evidencia de la tesis.
+La evidencia de Jest, Playwright, Newman y SonarQube (`pruebas/02`, `03`, `04` y `07`) se regeneró con el estado final del cierre V5: es la que corresponde al sistema entregado.
 
 ## 2. Migraciones
 
@@ -60,12 +59,25 @@ Se adaptaron porque la V5 cambia la regla, no para que pasen. Ninguna se relajó
 - **El commit de V5-12** (`cd7664b`) aplicó dos fragmentos de los servicios web en el lugar equivocado al separar los cambios por batch. Se corrigió en `232c8e8`, y se comprobó que cada commit intermedio compila (API y web) en un worktree temporal.
 - **Las sugerencias de Python** seguían apareciendo después de aceptarlo (instantánea vieja), y `findEligible` exigía constancias. Ambos se corrigieron en sus batches.
 
-## 5. Lo que no se cubrió, dicho claro
+## 5. SonarQube y lo que queda como deuda, dicho claro
 
-- **C07** (regularizar asistencia vencida la ventana de 7 días): la regla está en `bloqueoAsistencia`, pero ninguna prueba ejercita el vencimiento.
-- **B01** (ida y vuelta Académica ↔ Externa en el formulario) y **F10** (aviso al dejar un área sin tecnologías): se implementaron en la web (`ActivityTabs`, `AreaSkillPicker`), sin una prueba de navegador dedicada.
-- **Playwright de `pruebas/03-playwright` y Newman** no se volvieron a correr para este cierre: su evidencia sigue siendo la de la etapa de QA. Los flujos V5 en navegador están en `e2e-web` (WEB.59, WEB.60).
-- **SonarQube** no se volvió a correr.
+SonarQube no es parte del plan V5-17, pero se volvió a correr para completar la evidencia (`pruebas/07-sonarqube/resumen.json`). El código de V5 es «código nuevo» para su Quality Gate. El primer análisis encontró:
+
+- **1 bug nuevo:** `reduce()` sin valor inicial en `gamification.service`. Inofensivo en la práctica (solo se llama con listas no vacías), pero se corrigió.
+- **24 incidencias mecánicas:** `role` → `<output>` y `<fieldset>` por accesibilidad, props de solo lectura, una importación duplicada, una función anidada de más, espacios ambiguos y nombres en `catch`. Se corrigieron.
+- **69 incidencias de estilo** que **quedan como deuda técnica documentada:** 43 ternarios anidados, 14 funciones con complejidad cognitiva alta y 12 plantillas de texto anidadas. Corregirlas exige reescribir funciones ya probadas, sin cambio de comportamiento; se prefirió no arriesgar regresiones al cierre.
+
+Análisis final, tras las correcciones: **5 bugs (todos anteriores a V5), 1 vulnerabilidad (anterior), 69 incidencias nuevas (solo de estilo)**, duplicación del código nuevo 0,5 %, cobertura total 29,2 %.
+
+La condición «cobertura ≥ 80 % del código nuevo» solo mide Jest. El código de V5 se prueba de extremo a extremo (`e2e-v5`, `e2e-web`, Playwright), y SonarQube no cuenta esas pruebas. Por eso el Quality Gate queda en ERROR por cobertura y por las incidencias de estilo, no por defectos.
+
+Los otros 5 bugs y la vulnerabilidad que reporta SonarQube son anteriores a V5:
+
+- comparaciones de orden en `society/Metrics.tsx`;
+- precedencia de expresiones regulares en `dependency-map.ts`;
+- un enlace `http` en una plantilla de `mail.service`.
+
+**Observación de rendimiento (anterior a V5):** la base de desarrollo acumula 12 436 actividades de las corridas de pruebas, y para Dirección y Administración `GET /activities/managed` devuelve la lista completa (unos 35 MB en unos 6 s). Con el volumen real de una carrera es mucho menor, pero se recomienda paginar en el servidor también para esos roles, como ya se hace para estudiantes y docentes.
 
 ## 6. Decisiones
 

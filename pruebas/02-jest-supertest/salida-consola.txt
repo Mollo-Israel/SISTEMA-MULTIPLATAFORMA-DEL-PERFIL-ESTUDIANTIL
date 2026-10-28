@@ -5,20 +5,24 @@
 📦 report is created on: C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\pruebas\02-jest-supertest\reporte\reporte-jest.html
 
 =============================== Coverage summary ===============================
-Statements   : 37.44% ( 5650/15089 )
-Branches     : 30.28% ( 3401/11231 )
-Functions    : 21.61% ( 585/2707 )
-Lines        : 39.32% ( 5150/13097 )
+Statements   : 38.86% ( 6151/15828 )
+Branches     : 30.97% ( 3702/11951 )
+Functions    : 23.76% ( 677/2849 )
+Lines        : 40.76% ( 5604/13747 )
 ================================================================================
 
-PASS test/jest/api/autorizacion-alcance.spec.ts
+PASS test/jest/api/afinia-v5-gobernanza.spec.ts (5.765 s)
 PASS test/jest/api/integridad-negocio.spec.ts
 PASS test/jest/api/autenticacion.spec.ts
+PASS test/jest/api/afinia-no-certifica.spec.ts
+PASS test/jest/api/autorizacion-alcance.spec.ts
 PASS test/jest/unit/reglas-negocio.spec.ts
+PASS test/jest/unit/inscripcion-admision-asistencia.spec.ts
+PASS test/jest/unit/apellidos.spec.ts
 
-Test Suites: 4 passed, 4 total
-Tests:       30 passed, 30 total
+Test Suites: 8 passed, 8 total
+Tests:       69 passed, 69 total
 Snapshots:   0 total
-Time:        9.805 s, estimated 36 s
+Time:        16.307 s, estimated 26 s
 Ran all test suites.
 Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
