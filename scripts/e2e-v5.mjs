@@ -315,6 +315,105 @@ async function batch12(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-6 — Recursos: enlace o archivo, tipos y alcance (§8, D01…D07)
+// ===========================================================================
+async function subirArchivo(token, bytes, nombre, tipo) {
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type: tipo }), nombre);
+  const res = await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  let data = null;
+  try { data = await res.json(); } catch { /* sin cuerpo */ }
+  return { status: res.status, data };
+}
+
+async function leerArchivo(token, ruta) {
+  const res = await fetch(`${API}${ruta.replace(/^\/api/, '')}`, { headers: { Authorization: `Bearer ${token}` } });
+  return { status: res.status, tipo: res.headers.get('content-type') ?? '', bytes: res.ok ? Buffer.from(await res.arrayBuffer()) : null };
+}
+
+async function batch6(ctx) {
+  objective('BATCH V5-6 · Un recurso tiene un enlace o un archivo; Dirección elige toda la carrera o semestres');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Material${L}`, email: correoStaff('b6dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: `Material${L}`, email: correoStaff('b6doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [2] } });
+  const est = {};
+  for (const n of [3, 4, 5]) {
+    est[n] = await provisionStudent(ctx.admin, { firstName: 'Eva', lastName: `Sem${'xabcdef'[n]}${L}`, email: correoEst(`b6e${n}`), semester: n });
+  }
+  const area = ((await req('GET', '/academic-areas', { token: director.token })).data ?? [])[0];
+  const base = (k) => ({ title: `Material ${k} ${L}`, provider: 'Carrera de Sistemas', resourceType: 'guide', academicAreaId: area.id, areaIds: [area.id] });
+  const enBiblioteca = async (token, titulo) => ((await req('GET', `/library?q=${encodeURIComponent(titulo)}`, { token })).data?.items ?? []).find((r) => r.title === titulo) ?? null;
+
+  const conEnlace = await req('POST', '/learning-resources', { token: director.token, body: { ...base('enlace'), url: `https://docs.example.org/v5b6/${TS}/enlace` } });
+  check(conEnlace.status === 201 && !conEnlace.data?.fileId, 'V5.6.1 D01 Con enlace y sin archivo: se publica', `${conEnlace.status}`);
+
+  const PDF = Buffer.from(`%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n% material ${TS}\n%%EOF\n`, 'latin1');
+  const subido = await subirArchivo(director.token, PDF, 'guia-redes.pdf', 'application/pdf');
+  const conArchivo = await req('POST', '/learning-resources', { token: director.token, body: { ...base('archivo'), fileId: subido.data?.id } });
+  check(subido.status === 201 && conArchivo.status === 201 && conArchivo.data?.url === null && !!conArchivo.data?.fileUrl,
+    'V5.6.2 D02 Con archivo y sin enlace: se publica', json({ up: subido.status, s: conArchivo.status, url: conArchivo.data?.url, f: conArchivo.data?.fileUrl }));
+  const visto = await enBiblioteca(est[4].token, base('archivo').title);
+  const leido = visto?.fileUrl ? await leerArchivo(est[4].token, visto.fileUrl) : { status: 0 };
+  check(!!visto && visto.url === null && leido.status === 200 && !!leido.bytes?.equals(PDF),
+    'V5.6.3 D02 En la Biblioteca se abre el material con la sesión; los bytes vienen del almacenamiento, no de PostgreSQL', json({ v: !!visto, s: leido.status, t: leido.tipo }));
+  const columnas = await req('GET', '/learning-resources', { token: director.token });
+  const fila = (columnas.data ?? []).find((r) => r.id === conArchivo.data?.id);
+  check(!!fila && !('fileBytes' in fila) && !('data' in fila) && fila.fileName === 'guia-redes.pdf',
+    'V5.6.4 D02 El recurso guarda solo la referencia y el nombre del archivo', json({ n: fila?.fileName }));
+  const sinSesion = await fetch(`${API}${(conArchivo.data?.fileUrl ?? '').replace(/^\/api/, '')}`);
+  check(sinSesion.status === 401, 'V5.6.5 El material no se abre por ruta pública, sin sesión', `${sinSesion.status}`);
+
+  const nada = await req('POST', '/learning-resources', { token: director.token, body: base('vacio') });
+  check(nada.status === 400 && !!nada.data?.fields?.url, 'V5.6.6 D03 Sin enlace ni archivo: error en el campo', json(nada.data?.fields));
+  const quitar = await req('PATCH', `/learning-resources/${conEnlace.data?.id}`, { token: director.token, body: { url: null } });
+  check(quitar.status === 400 && !!quitar.data?.fields?.url, 'V5.6.7 D03 Al editar tampoco se puede dejar sin enlace ni archivo', `${quitar.status}`);
+
+  const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypmp42\0\0\0\0mp42isom', 'latin1'), Buffer.alloc(2048)]);
+  const video = await subirArchivo(director.token, MP4, 'clase.mp4', 'video/mp4');
+  check(video.status >= 400 && video.status < 500 && !video.data?.id, 'V5.6.8 D04 Un video no se sube (se usa su enlace)', `${video.status} ${json(video.data?.message)}`);
+  const ajeno = await subirArchivo(est[3].token, PDF, 'mio.pdf', 'application/pdf');
+  const robado = await req('POST', '/learning-resources', { token: director.token, body: { ...base('ajeno'), fileId: ajeno.data?.id } });
+  check(robado.status === 400 && !!robado.data?.fields?.fileId, 'V5.6.9 No se publica como material un archivo que subió otra persona', `${robado.status}`);
+
+  const dirigido = await req('POST', '/learning-resources', {
+    token: director.token, body: { ...base('dirigido'), url: `https://docs.example.org/v5b6/${TS}/dirigido`, semesterScope: [3, 5] },
+  });
+  const ven = await Promise.all([3, 4, 5].map(async (n) => !!(await enBiblioteca(est[n].token, base('dirigido').title))));
+  check(dirigido.status === 201 && JSON.stringify(dirigido.data?.semesterScope) === '[3,5]' && JSON.stringify(ven) === '[true,false,true]',
+    'V5.6.10 D05 Dirección elige 3.º y 5.º: solo esos estudiantes lo ven', json({ s: dirigido.status, sc: dirigido.data?.semesterScope, ven }));
+  const aTodos = await req('PATCH', `/learning-resources/${dirigido.data?.id}`, { token: director.token, body: { semesterScope: [] } });
+  check(aTodos.status === 200 && (aTodos.data?.semesterScope ?? []).length === 0 && !!(await enBiblioteca(est[4].token, base('dirigido').title)),
+    'V5.6.11 D05 Y puede pasarlo a toda la carrera después', `${aTodos.status}`);
+
+  const fuera = await req('POST', '/learning-resources', {
+    token: docente.token, body: { ...base('fuera'), url: `https://docs.example.org/v5b6/${TS}/fuera`, semesterScope: [8] },
+  });
+  check(fuera.status === 403 && !!fuera.data?.fields?.semesterScope, 'V5.6.12 D06 Un docente de 2.º no publica para 8.º (403)', `${fuera.status}`);
+  const subidoDoc = await subirArchivo(docente.token, PDF, 'propuesta.pdf', 'application/pdf');
+  const propuesta = await req('POST', '/learning-resources', { token: docente.token, body: { ...base('propuesta'), fileId: subidoDoc.data?.id } });
+  const antesDeAprobar = propuesta.data?.fileUrl ? await leerArchivo(est[3].token, propuesta.data.fileUrl) : { status: 0 };
+  check(propuesta.status === 201 && propuesta.data?.reviewStatus === 'pending' && [403, 404].includes(antesDeAprobar.status),
+    'V5.6.13 El archivo de una propuesta que Dirección no aprobó no lo abre un estudiante', json({ s: propuesta.status, r: propuesta.data?.reviewStatus, l: antesDeAprobar.status }));
+
+  const curso = await req('POST', '/learning-resources', {
+    token: director.token, body: { ...base('curso'), resourceType: 'external_course', url: `https://docs.example.org/v5b6/${TS}/curso` },
+  });
+  const cursoVisto = await enBiblioteca(est[4].token, base('curso').title);
+  check(curso.status === 201 && cursoVisto?.resourceTypeLabel === 'Curso de autoaprendizaje (sin acreditación automática)',
+    'V5.6.14 §8 Un curso libre se rotula «Curso de autoaprendizaje (sin acreditación automática)»', json(cursoVisto?.resourceTypeLabel));
+
+  const puntos = async (token) => (await req('GET', '/gamification/me', { token })).data?.totalPoints ?? 0;
+  const afinidad = async (token) => ((await req('GET', '/affinity/me/summary', { token })).data?.areas ?? []).reduce((s, a) => s + (a.rawPoints ?? 0), 0);
+  const antes = [await puntos(est[4].token), await afinidad(est[4].token)];
+  const fav = await req('PUT', `/library/${conArchivo.data?.id}/favorite`, { token: est[4].token });
+  await leerArchivo(est[4].token, conArchivo.data?.fileUrl ?? '');
+  await req('POST', '/affinity/recalculate/me', { token: est[4].token });
+  const despues = [await puntos(est[4].token), await afinidad(est[4].token)];
+  check([200, 201, 204].includes(fav.status) && JSON.stringify(antes) === JSON.stringify(despues),
+    'V5.6.15 D07 Guardar en favoritos y abrir el material no da puntos ni afinidad', json({ fav: fav.status, antes, despues }));
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -466,7 +565,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch10, batch12 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch10, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

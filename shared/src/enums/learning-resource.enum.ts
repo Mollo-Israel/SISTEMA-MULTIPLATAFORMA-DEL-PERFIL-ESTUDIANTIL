@@ -50,7 +50,9 @@ export enum LearningResourceStatus {
 }
 
 export const LEARNING_RESOURCE_TYPE_LABEL: Record<LearningResourceType, string> = {
-  [LearningResourceType.EXTERNAL_COURSE]: 'Curso externo',
+  // V5 §8: un curso libre es material, no una credencial. El curso externo con
+  // credencial es una oportunidad externa, no un recurso de la Biblioteca.
+  [LearningResourceType.EXTERNAL_COURSE]: 'Curso de autoaprendizaje (sin acreditación automática)',
   [LearningResourceType.DOCUMENTATION]: 'Documentación',
   [LearningResourceType.GUIDE]: 'Guía o tutorial',
   [LearningResourceType.VIDEO]: 'Video',

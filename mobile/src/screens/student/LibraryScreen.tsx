@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
+import { abrirArchivo } from '../../archivos';
 import { libraryService, type LibraryPage, type LibraryResource } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
@@ -112,7 +113,11 @@ export default function LibraryScreen() {
             {r.areas.length > 0 && <Muted>Áreas: {r.areas.map((a) => a.name).join(', ')}</Muted>}
             {r.skills.length > 0 && <Muted>Habilidades: {r.skills.map((s) => s.name).join(', ')}</Muted>}
             <View style={[styles.fila, { marginTop: 10 }]}>
-              <Button small icon="external-link" title="Abrir" onPress={() => Linking.openURL(r.url)} />
+              {r.url ? <Button small icon="external-link" title="Abrir" onPress={() => Linking.openURL(r.url!)} /> : null}
+              {r.fileUrl ? (
+                <Button small variant={r.url ? 'secondary' : 'primary'} icon="file-text" title="Ver material"
+                  onPress={() => abrirArchivo(r.fileUrl!, r.fileName ?? 'material').catch((x) => toast.error(x.message))} />
+              ) : null}
               <Button
                 small
                 variant="secondary"

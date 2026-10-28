@@ -640,7 +640,9 @@ export class CatalogsService {
     const fuera = unicos.filter((s) => !suyos.includes(s));
     if (fuera.length) {
       const m = `Solo puedes proponer recursos para tus semestres (${suyos.map((s) => `${s}.º`).join(', ') || 'ninguno habilitado'}).`;
-      throw new BadRequestException({ message: m, fields: { semesterScope: [m] } });
+      // V5 D06: fuera de su alcance es un permiso que no tiene (403, como en
+      // las actividades), no un dato mal escrito.
+      throw new ForbiddenException({ message: m, fields: { semesterScope: [m] } });
     }
     return unicos;
   }
@@ -649,17 +651,25 @@ export class CatalogsService {
   private async conAreasEImagen(lista: LearningResource[]): Promise<LearningResource[]> {
     if (lista.length === 0) return lista;
     const ids = lista.map((r) => r.id);
-    const [areas, imagenes] = await Promise.all([
+    const [areas, imagenes, archivos] = await Promise.all([
       this.resourceAreas.find({ where: { learningResourceId: In(ids) } }),
       this.learningResources.manager.query(
         `SELECT r.id, f.storage_key FROM learning_resources r JOIN stored_files f ON f.id = r.image_file_id WHERE r.id = ANY($1::uuid[])`,
         [ids],
       ),
+      // V5-13: el archivo del material, si lo tiene.
+      this.learningResources.manager.query(
+        `SELECT r.id, f.storage_key, f.original_filename FROM learning_resources r JOIN stored_files f ON f.id = r.file_id WHERE r.id = ANY($1::uuid[])`,
+        [ids],
+      ),
     ]);
     const clave = new Map((imagenes as { id: string; storage_key: string }[]).map((i) => [i.id, i.storage_key]));
+    const archivo = new Map((archivos as { id: string; storage_key: string; original_filename: string | null }[]).map((a) => [a.id, a]));
     return lista.map((r) => Object.assign(r, {
       areaIds: [r.academicAreaId, ...areas.filter((a) => a.learningResourceId === r.id && a.academicAreaId !== r.academicAreaId).map((a) => a.academicAreaId)],
       imageUrl: clave.has(r.id) ? `/api/files/${clave.get(r.id)}` : null,
+      fileUrl: archivo.has(r.id) ? `/api/files/${archivo.get(r.id)!.storage_key}` : null,
+      fileName: archivo.get(r.id)?.original_filename ?? null,
     }));
   }
 
@@ -674,10 +684,16 @@ export class CatalogsService {
     await this.assertSkillsExist(dto.skillIds);
     const areas = await this.areasDelRecurso(dto.academicAreaId, dto.areaIds);
     await this.assertResourceImage(dto.imageFileId, createdBy);
+    // V5-13 (D03): un recurso tiene al menos una fuente real: enlace o archivo.
+    if (!dto.url && !dto.fileId) {
+      const m = 'Indica un enlace o sube un archivo (PDF o imagen). Para un video, usa el enlace.';
+      throw new BadRequestException({ message: m, fields: { url: [m] } });
+    }
+    await this.assertResourceFile(dto.fileId, createdBy);
 
     // Un mismo enlace dos veces en el catalogo solo genera recomendaciones
     // duplicadas para la misma persona.
-    const repetido = await this.learningResources.findOne({ where: { url: dto.url } });
+    const repetido = dto.url ? await this.learningResources.findOne({ where: { url: dto.url } }) : null;
     if (repetido) {
       throw new ConflictException('Ese enlace ya está en el catálogo.');
     }
@@ -686,7 +702,8 @@ export class CatalogsService {
       this.learningResources.create({
         title: dto.title,
         provider: dto.provider,
-        url: dto.url,
+        url: dto.url ?? null,
+        fileId: dto.fileId ?? null,
         description: dto.description ?? null,
         academicAreaId: dto.academicAreaId,
         resourceType: dto.resourceType,
@@ -733,13 +750,22 @@ export class CatalogsService {
     }
 
     if (dto.url !== undefined && dto.url !== recurso.url) {
-      const repetido = await this.learningResources.findOne({
+      const repetido = dto.url ? await this.learningResources.findOne({
         where: { url: dto.url, id: Not(id) },
-      });
+      }) : null;
       if (repetido) {
         throw new ConflictException('Ese enlace ya está en el catálogo.');
       }
-      recurso.url = dto.url;
+      recurso.url = dto.url ?? null;
+    }
+    if (dto.fileId !== undefined && dto.fileId !== recurso.fileId) {
+      await this.assertResourceFile(dto.fileId, user?.role === RolNombre.ADMIN ? null : user?.userId ?? null);
+      recurso.fileId = dto.fileId ?? null;
+    }
+    // V5-13: tras el cambio, sigue habiendo al menos un enlace o un archivo.
+    if (!recurso.url && !recurso.fileId) {
+      const m = 'Un recurso necesita un enlace o un archivo: deja al menos uno.';
+      throw new BadRequestException({ message: m, fields: { url: [m] } });
     }
     if (dto.academicAreaId !== undefined) {
       await this.assertAreaExists(dto.academicAreaId);
@@ -749,6 +775,8 @@ export class CatalogsService {
       await this.assertResourceImage(dto.imageFileId, null);
       recurso.imageFileId = dto.imageFileId ?? null;
     }
+    // V5-6 (§8.2): Dirección cambia el alcance; un docente, dentro de los suyos.
+    if (dto.semesterScope !== undefined) recurso.semesterScope = await this.semestresDelRecurso(user, dto.semesterScope);
     if (dto.title !== undefined) recurso.title = dto.title;
     if (dto.provider !== undefined) recurso.provider = dto.provider;
     if (dto.description !== undefined) recurso.description = dto.description ?? null;
@@ -790,6 +818,23 @@ export class CatalogsService {
         message: 'La imagen tiene que ser un PNG, JPG o WEBP subido por ti.',
         fields: { imageFileId: ['La imagen tiene que ser un PNG, JPG o WEBP subido por ti.'] },
       });
+    }
+  }
+
+  /**
+   * V5-13 (§8.1, D02, D04): el archivo de un recurso es un PDF o una imagen
+   * (el tipo se detecta por su contenido, no por su nombre) subido por quien
+   * crea el recurso. El almacenamiento ya limita el tamaño y no acepta video:
+   * un video se comparte por enlace.
+   */
+  private async assertResourceFile(fileId: string | null | undefined, uploader: string | null): Promise<void> {
+    if (!fileId) return;
+    const archivo = await this.learningResources.manager.getRepository(StoredFileRecord).findOne({ where: { id: fileId } });
+    const valido = !!archivo && /^(application\/pdf|image\/(png|jpeg|webp))$/.test(archivo.mimeTypeDetected ?? '')
+      && (uploader === null || archivo.uploadedByUserId === uploader);
+    if (!valido) {
+      const m = 'El archivo tiene que ser un PDF o una imagen (PNG, JPG o WEBP) subido por ti. Para un video, usa un enlace.';
+      throw new BadRequestException({ message: m, fields: { fileId: [m] } });
     }
   }
 

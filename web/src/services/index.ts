@@ -249,7 +249,11 @@ export interface LearningResource {
   id: string;
   title: string;
   provider: string;
-  url: string;
+  /** V5-6: enlace, archivo subido o ambos (al menos uno). */
+  url: string | null;
+  fileId?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
   description: string | null;
   academicAreaId: string;
   academicArea?: { id: string; name: string };

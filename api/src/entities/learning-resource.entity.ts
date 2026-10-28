@@ -40,8 +40,13 @@ export class LearningResource {
   @Column({ type: 'varchar', length: 160 })
   provider: string;
 
-  @Column({ type: 'varchar', length: 500 })
-  url: string;
+  /** V5-13: enlace del material; puede faltar si el recurso es un archivo. */
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  url: string | null;
+
+  /** V5-13: archivo del almacenamiento (PDF o imagen); los bytes no van a la base. */
+  @Column({ name: 'file_id', type: 'uuid', nullable: true })
+  fileId: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   description: string | null;

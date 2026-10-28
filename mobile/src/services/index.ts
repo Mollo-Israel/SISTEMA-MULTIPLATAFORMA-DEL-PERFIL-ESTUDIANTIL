@@ -159,7 +159,10 @@ export interface LibraryResource {
   title: string;
   description: string | null;
   provider: string | null;
-  url: string;
+  /** V5-6: el recurso tiene un enlace, un archivo o ambos. */
+  url: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
   resourceType: string;
   resourceTypeLabel: string;
   areas: { id: string; name: string }[];

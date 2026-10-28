@@ -483,7 +483,7 @@ async function batch5(ctx) {
 
   // ----- Propuesta del docente y revisión de Dirección
   const fuera = await req('POST', '/learning-resources', { token: docente.token, body: { ...base('fuera'), semesterScope: [7] } });
-  check(fuera.status === 400 && !!fuera.data?.fields?.semesterScope, 'V41.5.4 El docente solo propone para sus semestres', `status ${fuera.status}`);
+  check(fuera.status === 403 && !!fuera.data?.fields?.semesterScope, 'V41.5.4 V5 D06 El docente solo propone para sus semestres (403)', `status ${fuera.status}`);
   const propuesta = await req('POST', '/learning-resources', { token: docente.token, body: { ...base('propuesta'), semesterScope: [3] } });
   check(propuesta.status === 201 && propuesta.data?.reviewStatus === 'pending' && json(propuesta.data?.semesterScope) === json([3]),
     'V41.5.5 A41-014 El docente propone un recurso y queda pendiente de Dirección', json({ s: propuesta.status, r: propuesta.data?.reviewStatus }));

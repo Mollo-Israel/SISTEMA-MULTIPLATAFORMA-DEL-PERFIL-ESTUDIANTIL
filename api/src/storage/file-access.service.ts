@@ -120,6 +120,17 @@ export class FileAccessService {
     );
     if (deRecurso.length) return { storageKey, downloadName: 'imagen-recurso', ownerProfileId: '' };
 
+    // V5-13: el archivo de un recurso publicado (activo y aprobado o sin
+    // revisión) lo abre cualquiera con sesión. El de una propuesta pendiente no.
+    const materialRecurso = await this.records.manager.query(
+      `SELECT f."original_filename" FROM "learning_resources" r JOIN "stored_files" f ON f."id" = r."file_id"
+        WHERE f."storage_key" = $1 AND r."status" = 'active' AND r."review_status" IN ('approved', 'not_required') LIMIT 1`,
+      [storageKey],
+    );
+    if (materialRecurso.length) {
+      return { storageKey, downloadName: materialRecurso[0].original_filename ?? 'material', ownerProfileId: '' };
+    }
+
     // V3.2 §28.3: certificado institucional entregado. Lo descargan su
     // titular, quien lo entregó, Dirección y Administración.
     const certificado = await this.records.manager.query(

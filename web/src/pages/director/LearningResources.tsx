@@ -1,8 +1,8 @@
 import { validarFormulario } from '../../components/form';
-import { ImagenProtegida } from '../../components/ArchivoProtegido';
+import { BotonArchivo, ImagenProtegida } from '../../components/ArchivoProtegido';
 import { useEffect, useMemo, useState } from 'react';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
-import { FiBookOpen, FiExternalLink, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
+import { FiBookOpen, FiExternalLink, FiFileText, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { catalogService, learningResourceService, uploadService } from '../../services';
 import type { LearningResource } from '../../services';
@@ -20,7 +20,13 @@ const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 const TIPOS: { value: string; label: string; ayuda: string }[] = [
-  { value: 'external_course', label: 'Curso externo', ayuda: 'De una plataforma o institución externa.' },
+  // V5 §8: un curso libre es material; el que otorga una credencial es una
+  // oportunidad externa y no se registra aquí.
+  {
+    value: 'external_course',
+    label: 'Curso de autoaprendizaje (sin acreditación automática)',
+    ayuda: 'Curso libre para aprender por cuenta propia. Verlo no certifica nada; un curso con credencial es una oportunidad externa.',
+  },
   { value: 'practice', label: 'Práctica o reto', ayuda: 'Ejercicios o laboratorios para construir experiencia.' },
   { value: 'tool', label: 'Herramienta', ayuda: 'Entorno o utilidad con la que practicar.' },
   { value: 'guide', label: 'Guía o tutorial', ayuda: 'Material explicativo paso a paso.' },
@@ -30,6 +36,12 @@ const TIPOS: { value: string; label: string; ayuda: string }[] = [
 ];
 
 const TIPO_LABEL = Object.fromEntries(TIPOS.map((t) => [t.value, t.label]));
+
+/** V5-6 (§8.2): semestres de la carrera que Dirección puede elegir. */
+const SEMESTRES_CARRERA = [1, 2, 3, 4, 5, 6, 7, 8];
+
+/** V5-6 (§8.1): material que se puede subir. Un video va por enlace. */
+const ACEPTA_MATERIAL = 'application/pdf,image/png,image/jpeg,image/webp';
 
 /** V4.1 A41-014: estado de la revisión de una propuesta docente. */
 const REVISION_LABEL: Record<string, string> = {
@@ -43,6 +55,9 @@ const vacio = {
   title: '',
   provider: '',
   url: '',
+  /** V5-6 (§8.1): material subido; el recurso necesita enlace, archivo o ambos. */
+  fileId: '',
+  fileName: '',
   description: '',
   academicAreaId: '',
   resourceType: 'guide',
@@ -67,6 +82,9 @@ export default function DirectorLearningResourcesPage() {
   const esDocente = user?.role === 'TEACHER';
   const [semestresDocente, setSemestresDocente] = useState<number[]>([]);
   const [semestres, setSemestres] = useState<number[]>([]);
+  // V5-6 (§8.2): Dirección y Administración eligen toda la carrera o semestres.
+  const [alcance, setAlcance] = useState<'carrera' | 'semestres'>('carrera');
+  const [subiendo, setSubiendo] = useState(false);
   const pendientes = useAsync(() => (esDocente ? Promise.resolve([]) : learningResourceService.pending()), [esDocente]);
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -96,7 +114,7 @@ export default function DirectorLearningResourcesPage() {
     const rows = state.data ?? [];
     if (!q) return rows;
     return rows.filter((r) =>
-      [r.title, r.provider, r.academicArea?.name ?? '', r.url].some((f) =>
+      [r.title, r.provider, r.academicArea?.name ?? '', r.url ?? '', r.fileName ?? ''].some((f) =>
         normalize(f).includes(q),
       ),
     );
@@ -124,12 +142,17 @@ export default function DirectorLearningResourcesPage() {
       toast.error('Selecciona al menos un área para el recurso.');
       return;
     }
+    if (!esDocente && alcance === 'semestres' && semestres.length === 0) {
+      toast.error('Marca al menos un semestre, o elige «Toda la carrera».');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         title: form.title,
         provider: form.provider,
-        url: form.url,
+        url: form.url.trim() || (editing ? null : undefined),
+        fileId: form.fileId || (editing ? null : undefined),
         description: form.description || undefined,
         academicAreaId: form.areaIds[0] ?? form.academicAreaId,
         areaIds: form.areaIds,
@@ -137,6 +160,7 @@ export default function DirectorLearningResourcesPage() {
         skillIds: form.skillIds,
         imageFileId: form.imageFileId || (editing ? null : undefined),
         ...(esDocente && !editing ? { semesterScope: semestres } : {}),
+        ...(!esDocente ? { semesterScope: alcance === 'carrera' ? [] : semestres } : {}),
       };
       if (editing) {
         await learningResourceService.update(editing.id, payload);
@@ -150,6 +174,8 @@ export default function DirectorLearningResourcesPage() {
       }
       setForm(vacio);
       setEditing(null);
+      setAlcance('carrera');
+      setSemestres([]);
       state.reload();
     } catch (e2) {
       toast.error(apiError(e2));
@@ -163,7 +189,9 @@ export default function DirectorLearningResourcesPage() {
     setForm({
       title: r.title,
       provider: r.provider,
-      url: r.url,
+      url: r.url ?? '',
+      fileId: r.fileId ?? '',
+      fileName: r.fileName ?? (r.fileId ? 'Archivo adjunto' : ''),
       description: r.description ?? '',
       academicAreaId: r.academicAreaId,
       resourceType: r.resourceType,
@@ -172,6 +200,8 @@ export default function DirectorLearningResourcesPage() {
       imageFileId: r.imageFileId ?? '',
       imageUrl: r.imageUrl ?? '',
     });
+    setAlcance(r.semesterScope?.length ? 'semestres' : 'carrera');
+    setSemestres(r.semesterScope ?? []);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -234,7 +264,8 @@ export default function DirectorLearningResourcesPage() {
                   <strong>{r.title}</strong> <span className="muted small">· {r.provider} · {r.academicArea?.name ?? ''}</span>
                   <div className="muted small">
                     {r.semesterScope?.length ? `Para ${r.semesterScope.map((n) => `${n}.º`).join(', ')}` : 'Toda la carrera'}
-                    {' · '}<a href={r.url} target="_blank" rel="noreferrer noopener">Abrir enlace</a>
+                    {r.url && <>{' · '}<a href={r.url} target="_blank" rel="noreferrer noopener">Abrir enlace</a></>}
+                    {r.fileUrl && <>{' · '}<BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className="link-button">Ver archivo</BotonArchivo></>}
                   </div>
                 </div>
                 <input
@@ -302,17 +333,93 @@ export default function DirectorLearningResourcesPage() {
             </div>
           )}
 
-          <div className="field">
-            <label htmlFor="learning-resources-enlace">Enlace</label>
-            <input id="learning-resources-enlace"
-              value={form.url}
-              onChange={(e) => setForm({ ...form, url: e.target.value })}
-              placeholder="https://…"
-              maxLength={500}
-              required
-            />
-            <span className="field-hint">Solo http o https.</span>
-          </div>
+          {!esDocente && (
+            <div className="field">
+              <span className="field-label" id="lr-alcance">Para quién es</span>
+              <div role="radiogroup" aria-labelledby="lr-alcance" className="flex" style={{ gap: '1rem', flexWrap: 'wrap' }}>
+                <label className="flex" style={{ gap: '0.35rem' }}>
+                  <input type="radio" name="lr-alcance" checked={alcance === 'carrera'} onChange={() => setAlcance('carrera')} />
+                  Toda la carrera
+                </label>
+                <label className="flex" style={{ gap: '0.35rem' }}>
+                  <input type="radio" name="lr-alcance" checked={alcance === 'semestres'} onChange={() => setAlcance('semestres')} />
+                  Semestres específicos
+                </label>
+              </div>
+              {alcance === 'semestres' && (
+                <div role="group" aria-label="Semestres" className="chip-row">
+                  {SEMESTRES_CARRERA.map((n) => {
+                    const on = semestres.includes(n);
+                    return (
+                      <button type="button" key={n} className={`chip ${on ? 'on' : ''}`} aria-pressed={on}
+                        onClick={() => setSemestres(on ? semestres.filter((x) => x !== n) : [...semestres, n].sort((x, y) => x - y))}>
+                        {n}º
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <small className="muted">
+                {alcance === 'carrera' ? 'Lo ve todo estudiante de la carrera en la Biblioteca.' : 'Solo lo ven los estudiantes de los semestres marcados.'}
+              </small>
+            </div>
+          )}
+
+          {/* V5-6 (§8.1): un recurso tiene una fuente real: un enlace, un archivo o ambos. */}
+          <fieldset className="field">
+            <legend className="field-label">Material</legend>
+            <div className="field">
+              <label htmlFor="learning-resources-enlace">Enlace</label>
+              <input id="learning-resources-enlace"
+                value={form.url}
+                onChange={(e) => setForm({ ...form, url: e.target.value })}
+                placeholder="https://…"
+                maxLength={500}
+                required={!form.fileId}
+              />
+              <span className="field-hint">
+                {form.fileId ? 'Opcional: ya hay un archivo.' : 'Solo http o https. Si no hay enlace, sube el archivo.'}
+              </span>
+            </div>
+            <div className="field">
+              <label htmlFor="learning-resources-archivo">Archivo (PDF o imagen)</label>
+              {form.fileId ? (
+                <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }} data-testid="recurso-archivo">
+                  <FiFileText size={15} aria-hidden /> <span>{form.fileName || 'Archivo adjunto'}</span>
+                  <Button type="button" size="sm" variant="secondary" icon={<FiX size={13} />}
+                    onClick={() => setForm({ ...form, fileId: '', fileName: '' })}>
+                    Quitar archivo
+                  </Button>
+                </div>
+              ) : (
+                <input
+                  id="learning-resources-archivo"
+                  type="file"
+                  accept={ACEPTA_MATERIAL}
+                  disabled={subiendo}
+                  onChange={async (e) => {
+                    const archivo = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!archivo) return;
+                    if (archivo.type.startsWith('video/')) {
+                      toast.error('Los videos no se suben: pega el enlace donde está publicado (YouTube, Drive u otro).');
+                      return;
+                    }
+                    setSubiendo(true);
+                    try {
+                      const subido = await uploadService.upload(archivo);
+                      setForm((x) => ({ ...x, fileId: subido.id, fileName: archivo.name }));
+                    } catch (err) {
+                      toast.error(apiError(err), 'Para un video o un archivo grande, usa un enlace.');
+                    } finally {
+                      setSubiendo(false);
+                    }
+                  }}
+                />
+              )}
+              <span className="field-hint">PDF, PNG, JPG o WEBP, hasta 10 MB. Un video va por enlace.</span>
+            </div>
+          </fieldset>
 
           <div className="field">
             <label htmlFor="learning-resources-descripcion">Descripción</label>
@@ -379,7 +486,7 @@ export default function DirectorLearningResourcesPage() {
                 type="button"
                 variant="secondary"
                 icon={<FiX size={15} />}
-                onClick={() => { setEditing(null); setForm(vacio); }}
+                onClick={() => { setEditing(null); setForm(vacio); setAlcance('carrera'); setSemestres([]); }}
               >
                 Cancelar
               </Button>
@@ -441,15 +548,29 @@ export default function DirectorLearningResourcesPage() {
                           <div className="flex" style={{ gap: '0.4rem' }}>
                             <FiBookOpen size={13} /> {r.title}
                           </div>
-                          <a
-                            className="muted"
-                            href={r.url}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            style={{ fontSize: '0.78rem' }}
-                          >
-                            {r.provider} <FiExternalLink size={11} />
-                          </a>
+                          {r.url ? (
+                            <a
+                              className="muted"
+                              href={r.url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              style={{ fontSize: '0.78rem' }}
+                            >
+                              {r.provider} <FiExternalLink size={11} />
+                            </a>
+                          ) : (
+                            <span className="muted" style={{ fontSize: '0.78rem' }}>{r.provider}</span>
+                          )}
+                          {r.fileUrl && (
+                            <div>
+                              <BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className="link-button small">
+                                <FiFileText size={11} /> {r.fileName ?? 'Archivo'}
+                              </BotonArchivo>
+                            </div>
+                          )}
+                          <div className="muted small">
+                            {r.semesterScope?.length ? `Para ${r.semesterScope.map((n) => `${n}.º`).join(', ')}` : 'Toda la carrera'}
+                          </div>
                         </td>
                         <td className="muted">{r.academicArea?.name ?? '—'}</td>
                         <td className="muted">{TIPO_LABEL[r.resourceType] ?? r.resourceType}</td>

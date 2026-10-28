@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ImagenProtegida } from '../../components/ArchivoProtegido';
-import { FiBookOpen, FiExternalLink, FiHeart, FiSearch, FiX } from 'react-icons/fi';
+import { BotonArchivo, ImagenProtegida } from '../../components/ArchivoProtegido';
+import { FiBookOpen, FiExternalLink, FiFileText, FiHeart, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { libraryService } from '../../services';
 import type { LibraryPage, LibraryResource } from '../../services/types';
@@ -140,9 +140,17 @@ export default function StudentLibraryPage() {
                     {r.skills.length > 0 && <span title={r.skills.map((s) => s.name).join(', ')}>Habilidades: {resumen(r.skills.map((s) => s.name))}</span>}
                   </div>
                   <div className="activity-card-actions">
-                    <a className="btn btn-primary btn-sm" href={r.url} target="_blank" rel="noreferrer">
-                      <FiExternalLink size={14} /> Abrir
-                    </a>
+                    {r.url && (
+                      <a className="btn btn-primary btn-sm" href={r.url} target="_blank" rel="noreferrer">
+                        <FiExternalLink size={14} /> Abrir
+                      </a>
+                    )}
+                    {/* V5-6: el material subido se pide con la sesión, nunca por ruta pública. */}
+                    {r.fileUrl && (
+                      <BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className={`btn ${r.url ? 'btn-secondary' : 'btn-primary'} btn-sm`}>
+                        <FiFileText size={14} /> Ver material
+                      </BotonArchivo>
+                    )}
                     <Button
                       variant="secondary"
                       size="sm"

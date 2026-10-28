@@ -173,7 +173,7 @@ export class LibraryService {
     if (filas.length === 0) return [];
     const ids = filas.map((r) => r.id);
     const m = this.recursos.manager;
-    const [areas, skills, favs, imagenes] = await Promise.all([
+    const [areas, skills, favs, imagenes, archivos] = await Promise.all([
       m.query(
         `SELECT x.rid, ar.id, ar.name FROM (
            SELECT a.learning_resource_id AS rid, a.academic_area_id AS aid FROM learning_resource_areas a WHERE a.learning_resource_id = ANY($1::uuid[])
@@ -191,6 +191,8 @@ export class LibraryService {
         ? m.query(`SELECT learning_resource_id AS rid FROM learning_resource_favorites WHERE student_profile_id = $1 AND learning_resource_id = ANY($2::uuid[])`, [perfilId, ids])
         : Promise.resolve([]),
       m.query(`SELECT r.id AS rid, f.storage_key FROM learning_resources r JOIN stored_files f ON f.id = r.image_file_id WHERE r.id = ANY($1::uuid[])`, [ids]),
+      // V5-13: el archivo del material, si lo tiene.
+      m.query(`SELECT r.id AS rid, f.storage_key, f.original_filename FROM learning_resources r JOIN stored_files f ON f.id = r.file_id WHERE r.id = ANY($1::uuid[])`, [ids]),
     ]);
     const favSet = new Set((favs as { rid: string }[]).map((f) => f.rid));
     return filas.map((r) => ({
@@ -206,6 +208,10 @@ export class LibraryService {
       imageUrl: (() => {
         const img = (imagenes as { rid: string; storage_key: string }[]).find((i) => i.rid === r.id);
         return img ? `${FILES_ROUTE}/${img.storage_key}` : null;
+      })(),
+      ...(() => {
+        const f = (archivos as { rid: string; storage_key: string; original_filename: string | null }[]).find((a) => a.rid === r.id);
+        return { fileUrl: f ? `${FILES_ROUTE}/${f.storage_key}` : null, fileName: f?.original_filename ?? null };
       })(),
       isFavorite: favSet.has(r.id),
     }));

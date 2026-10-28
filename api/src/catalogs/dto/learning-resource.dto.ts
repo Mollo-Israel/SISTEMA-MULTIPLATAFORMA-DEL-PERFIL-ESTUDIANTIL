@@ -47,13 +47,22 @@ export class CreateLearningResourceDto {
   @IsMeaningfulText('Quién publica')
   provider: string;
 
-  @ApiProperty({ example: 'https://www.netacad.com/courses/networking' })
+  /** V5-13: enlace o archivo; al menos uno de los dos (lo exige el servicio). */
+  @ApiProperty({ example: 'https://www.netacad.com/courses/networking', required: false })
+  @IsOptional()
   @IsUrl(
     { protocols: ['http', 'https'], require_protocol: true },
     { message: 'El enlace debe ser una URL http o https válida.' },
   )
   @MaxLength(500, { message: 'El enlace no puede superar 500 caracteres.' })
-  url: string;
+  url?: string;
+
+  /** V5-13: archivo subido (PDF o imagen, hasta 10 MB). Para video, usa un enlace. */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: { fileId?: string | null }) => o.fileId !== null)
+  @IsUUID('4', { message: 'El archivo no es válido.' })
+  fileId?: string | null;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -130,14 +139,23 @@ export class UpdateLearningResourceDto {
   @IsMeaningfulText('Quién publica')
   provider?: string;
 
-  @ApiProperty({ required: false })
+  /** V5-13: null quita el enlace (si queda un archivo). */
+  @ApiProperty({ required: false, nullable: true })
   @IsOptional()
+  @ValidateIf((o: { url?: string | null }) => o.url !== null)
   @IsUrl(
     { protocols: ['http', 'https'], require_protocol: true },
     { message: 'El enlace debe ser una URL http o https válida.' },
   )
   @MaxLength(500)
-  url?: string;
+  url?: string | null;
+
+  /** V5-13: null quita el archivo (si queda un enlace). */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: { fileId?: string | null }) => o.fileId !== null)
+  @IsUUID('4', { message: 'El archivo no es válido.' })
+  fileId?: string | null;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -183,6 +201,16 @@ export class UpdateLearningResourceDto {
   @ValidateIf((o: { imageFileId?: string | null }) => o.imageFileId !== null)
   @IsUUID('4', { message: 'La imagen no es válida.' })
   imageFileId?: string | null;
+
+  /** V5-6 (§8.2): semestres a los que va dirigido; vacío = toda la carrera. */
+  @ApiProperty({ required: false, type: [Number] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsInt({ each: true, message: 'Semestre no válido.' })
+  @Min(1, { each: true })
+  @Max(10, { each: true })
+  semesterScope?: number[];
 }
 
 /** V4.1 A41-014 (§7, §9.4): decisión de Dirección sobre la propuesta de un docente. */
