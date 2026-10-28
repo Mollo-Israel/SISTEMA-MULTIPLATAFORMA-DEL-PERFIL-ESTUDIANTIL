@@ -768,9 +768,11 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
         <span className="muted">{verdict.providerSupport.provider}: {verdict.providerSupport.note}</span>
       )}
       {chequeo && (
-        <span className="muted">
-          Verificación: {CREDENTIAL_CHECK_LABEL[chequeo.status].toLowerCase()}
-          {chequeo.qr === 'qr_present' ? ' · QR leído' : ''}
+        <span className="muted" data-testid="consulta-proveedor">
+          {/* V5 §15.2: Afinia informa el resultado de la consulta en una fecha; no certifica. */}
+          Resultado de la consulta al proveedor{verdict.finishedAt ? ` el ${new Date(verdict.finishedAt).toLocaleDateString('es-BO')}` : ''}:{' '}
+          {CREDENTIAL_CHECK_LABEL[chequeo.status].toLowerCase()}
+          {chequeo.qr === 'qr_present' ? ' · QR leído (un QR que lleva a la página del curso no identifica al titular)' : ''}
         </span>
       )}
       {chequeo && chequeo.contradictions.length > 0 && (
@@ -779,7 +781,7 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
         </span>
       )}
       {revision?.status === 'requested' && <span className="muted">Revisión excepcional pedida a Dirección.</span>}
-      {revision?.status === 'corroborated' && <span className="muted">Verificada por Dirección con una prueba externa.</span>}
+      {revision?.status === 'corroborated' && <span className="muted">Dirección la revisó con una prueba externa (revisión administrativa, no una certificación de Afinia).</span>}
       {(revision?.status === 'not_corroborated' || revision?.status === 'inconclusive') && (
         <span className="muted">Dirección la revisó, pero no pudo verificarla con una fuente externa: {revision.reason}</span>
       )}

@@ -833,6 +833,29 @@ async function batch14(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-15/16 — Credenciales: se informa, no se certifica; resumen con aviso ND-02
+// ===========================================================================
+async function batch15(ctx) {
+  objective('BATCH V5-15/16 · El resumen explica qué es cada cosa; las credenciales se informan con su fecha de consulta');
+  const est = await provisionStudent(ctx.admin, { firstName: 'Ona', lastName: `Resumen${L}`, email: correoEst('b15e'), semester: 6 });
+  const secciones = (await req('GET', '/trajectory-summary/sections', { token: est.token })).data;
+  check(/asistencia registrada por el responsable/.test(secciones?.notice ?? '') && /no las certifica/.test(secciones?.notice ?? '')
+    && /No constituye historial académico oficial/.test(secciones?.disclaimer ?? ''),
+    'V5.15.1 ND-02 §15.2 El resumen trae un aviso: participaciones como registro del responsable y credenciales informadas, no certificadas (el descargo de §61.4 no cambia)',
+    json(secciones?.notice));
+  const vista = (await req('POST', '/trajectory-summary/preview', { token: est.token, body: { sections: ['bio'] } })).data;
+  check(vista?.notice === secciones?.notice, 'V5.15.2 La vista previa lleva el mismo aviso', json(vista?.notice));
+  const res = await fetch(`${API}/trajectory-summary/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${est.token}` },
+    body: JSON.stringify({ sections: ['bio'] }),
+  });
+  const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
+  check(res.status === 201 && /asistencia registrada/.test(pdf) && /consulta al proveedor/.test(pdf) && pdf.includes('No constituye historial'),
+    'V5.15.3 H04 El PDF lleva el aviso de fuentes y el descargo', `status ${res.status}`);
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -984,7 +1007,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12, batch13, batch14 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12, batch13, batch14, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

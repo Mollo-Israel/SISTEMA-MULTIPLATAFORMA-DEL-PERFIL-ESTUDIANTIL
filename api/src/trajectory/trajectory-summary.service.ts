@@ -17,6 +17,7 @@ import {
   ProjectStatus,
   RegistrationStatus,
   TRAJECTORY_DISCLAIMER,
+  TRAJECTORY_SOURCES_NOTICE,
   TRAJECTORY_LEVEL_LABEL,
   TRAJECTORY_SECTIONS,
   TRAJECTORY_SECTION_LABEL,
@@ -159,6 +160,8 @@ export class TrajectorySummaryService {
       /** V3 §43.1: el paso 1 del currículo, en su orden. */
       cvSections: CV_SECTIONS.map((s) => ({ ...s, hasItems: CV_ITEM_SECTIONS.includes(s.key) })),
       disclaimer: TRAJECTORY_DISCLAIMER,
+      /** V5 ND-02 y §15.2: cómo leer participaciones y credenciales. */
+      notice: TRAJECTORY_SOURCES_NOTICE,
       templates: CV_TEMPLATES,
     };
   }
@@ -369,6 +372,7 @@ export class TrajectorySummaryService {
     const salida: Record<string, unknown> = {
       generatedAt: new Date(),
       disclaimer: TRAJECTORY_DISCLAIMER,
+      notice: TRAJECTORY_SOURCES_NOTICE,
       template: opts.template ?? CvTemplate.CLASSIC,
       sections: [...incluye],
       student: {
@@ -474,6 +478,8 @@ export class TrajectorySummaryService {
         name: c.certificateName,
         issuer: c.issuer,
         issueDate: c.issueDate,
+        // V5 §15.2: la fecha de la consulta al proveedor que dio el resultado.
+        checkedAt: f.validacionDe.get(c.id)?.finishedAt ?? null,
       }));
     }
 
@@ -746,7 +752,8 @@ export class TrajectorySummaryService {
     if (Array.isArray(datos.certificates) && datos.certificates.length > 0) {
       pdf.section('Credenciales y cursos externos');
       for (const c of datos.certificates) {
-        pdf.bullet(`${c.name} — ${c.issuer}${c.issueDate ? ` (${this.fecha(c.issueDate)})` : ''}`);
+        pdf.bullet(`${c.name} — ${c.issuer}${c.issueDate ? ` (${this.fecha(c.issueDate)})` : ''}`
+          + (c.checkedAt ? ` · consulta al proveedor el ${this.fecha(c.checkedAt)}` : ''));
       }
     }
 
@@ -774,6 +781,7 @@ export class TrajectorySummaryService {
     }
 
     pdf.note(`Generado el ${this.fecha(datos.generatedAt)}.`);
+    pdf.note(TRAJECTORY_SOURCES_NOTICE);
     pdf.note(TRAJECTORY_DISCLAIMER);
 
     // V3 §65: qué se exportó, sin el contenido.

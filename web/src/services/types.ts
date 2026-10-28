@@ -965,7 +965,7 @@ export const BACKING_TIER_LABEL: Record<BackingTier, string> = {
 export const BACKING_TIER_HELP: Record<BackingTier, string> = {
   declared: 'Adjuntaste el documento, pero el sistema no pudo comprobar nada por sí mismo.',
   supported: 'El documento se leyó y coincide con lo declarado. Es un respaldo parcial: no prueba autenticidad.',
-  corroborated: 'Una fuente oficial del emisor identifica esta credencial y coincide contigo.',
+  corroborated: 'Al consultar la fuente oficial del emisor, identificó esta credencial y coincide contigo. Afinia informa ese resultado; no la certifica.',
   flagged: 'Algo no coincide. No se borró: corrige los datos o el archivo y se vuelve a comprobar.',
 };
 
@@ -975,7 +975,7 @@ export type CredentialCheckStatus =
   | 'inconclusive' | 'unreachable' | 'no_verifier';
 
 export const CREDENTIAL_CHECK_LABEL: Record<CredentialCheckStatus, string> = {
-  verified_match: 'Verificada en la fuente oficial',
+  verified_match: 'Encontrada en la fuente oficial del emisor',
   reachable_no_structured_proof: 'La fuente responde, sin prueba legible',
   mismatch: 'La verificación no coincide',
   inconclusive: 'Sin poder concluir',

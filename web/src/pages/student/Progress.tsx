@@ -343,6 +343,7 @@ function CvPreview({ d }: { d: Record<string, any> }) {
       {lista('Evidencias', (d.evidences ?? []).map((e: any) => (e.context ? `${e.description ?? 'Evidencia'} — ${e.context}` : e.description)))}
       {lista('Insignias de Afinia', (d.badges ?? []).map((b: any) => `${b.name} (${FECHA(b.awardedAt)})`))}
       {lista('Contacto', (d.contact ?? []).map((c: any) => `${c.label}: ${c.value}`))}
+      {d.notice && <p className="cv-disclaimer" data-testid="aviso-fuentes">{d.notice}</p>}
       <p className="cv-disclaimer">{d.disclaimer}</p>
     </article>
   );

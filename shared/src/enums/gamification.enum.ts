@@ -254,6 +254,15 @@ export const CV_SUMMARY_MAX = 1200;
  * circula solo, y quien lo reciba tiene que poder leer qué es y qué no es sin
  * haber visto nunca el sistema.
  */
+/**
+ * V5 ND-02 y §15.2: cómo leer lo que el resumen incluye. Va aparte del
+ * descargo, que es el texto exacto de la especificación (§61.4).
+ */
+export const TRAJECTORY_SOURCES_NOTICE =
+  'Las participaciones figuran como asistencia registrada por el responsable de cada actividad; '
+  + 'no son constancias emitidas por Afinia y se incluyen solo en este resumen informativo. '
+  + 'En las credenciales externas, Afinia informa el resultado de la consulta al proveedor en la fecha indicada; no las certifica.';
+
 export const TRAJECTORY_DISCLAIMER =
   'Documento generado a partir de información registrada y respaldada en Afinia. '
   + 'No constituye historial académico oficial, certificación institucional '
