@@ -629,6 +629,66 @@ async function batch8(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-9 — Alta guiada por GitHub, nunca obligatoria (§11, F01…F06, F12)
+// ===========================================================================
+async function batch9(ctx) {
+  objective('BATCH V5-9 · «Analizar repositorio» ofrece; el borrador nunca depende de GitHub');
+  await asegurarGithubSimulado();
+  const est = await provisionStudent(ctx.admin, { firstName: 'Gael', lastName: `Analisis${L}`, email: correoEst('b9e1'), semester: 5 });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Tea', lastName: `Analisis${L}`, email: correoStaff('b9doc'), role: 'TEACHER' });
+  const analizar = (url, token = est.token) => req('POST', '/projects/repository/analyze', { token, body: { repositoryUrl: url } });
+  const mios = async () => ((await req('GET', '/projects/my', { token: est.token })).data ?? []).length;
+
+  const borrador = await req('POST', '/projects', { token: est.token, body: { title: `Borrador sin repositorio ${L}`, status: 'draft' } });
+  check(borrador.status === 201 && borrador.data?.status === 'draft', 'V5.9.1 F01 Sin repositorio, el borrador se guarda igual', `${borrador.status}`);
+
+  const antes = await mios();
+  const url = repoDePrueba(`pymongo-alta-${TS}`);
+  const a1 = await analizar(url);
+  const mongo = (a1.data?.suggestions ?? []).find((s) => /mongo/i.test(s.skill?.name ?? ''));
+  check(a1.status === 200 && a1.data?.status === 'ANALYZED' && !!mongo && /requirements\.txt/.test(`${mongo.source ?? ''} ${mongo.why ?? ''}`) && (mongo.areas ?? []).length > 0,
+    'V5.9.2 F02/F03 Analizar un repositorio público sugiere tecnologías del catálogo con su fuente (PyMongo → MongoDB)',
+    json({ s: a1.data?.status, sug: (a1.data?.suggestions ?? []).map((x) => `${x.skill?.name}:${x.source}`) }));
+  check(await mios() === antes, 'V5.9.3 F12 Analizar no guarda nada ni agrega tecnologías por su cuenta', `${antes} → ${await mios()}`);
+  const a2 = await analizar(url);
+  const ids = (r) => (r.data?.suggestions ?? []).map((s) => s.skill.id).sort();
+  check(a2.status === 200 && JSON.stringify(ids(a1)) === JSON.stringify(ids(a2)) && new Set(ids(a2)).size === ids(a2).length,
+    'V5.9.4 F05 Volver a analizar el mismo repositorio no duplica sugerencias', json({ a: ids(a1).length, b: ids(a2).length }));
+
+  const area = mongo?.areas?.find((x) => x.primary) ?? mongo?.areas?.[0];
+  const conSugerida = await req('POST', '/projects', {
+    token: est.token,
+    body: {
+      title: `API con Mongo ${L}`, status: 'draft', repositoryUrl: url,
+      areaIds: [area?.id], skillIds: [mongo?.skill?.id], skillContexts: [{ skillId: mongo?.skill?.id, areaId: area?.id }],
+      skillSources: [{ skillId: mongo?.skill?.id, source: mongo?.why ?? 'requirements.txt' }],
+    },
+  });
+  const procedencia = psql(`select provenance from project_skills where project_id = '${conSugerida.data?.id}' and skill_id = '${mongo?.skill?.id}'`);
+  check(conSugerida.status === 201 && /^sugerida: /.test(procedencia),
+    'V5.9.5 §11.1 Lo que el estudiante aceptó del análisis queda con su procedencia («sugerida: …»)', `${conSugerida.status} ${procedencia}`);
+
+  const mala = await analizar('no es un enlace');
+  const otro = await analizar('https://gitlab.com/afinia-pruebas/proyecto');
+  const privado = await analizar(repoDePrueba(`privado-${TS}`));
+  const noExiste = await analizar(repoDePrueba(`inexistente-${TS}`));
+  const deDocente = await analizar(url, docente.token);
+  check(mala.status === 400 && !!mala.data?.fields?.repositoryUrl && otro.data?.status === 'NOT_GITHUB'
+    && privado.data?.status === 'UNAVAILABLE' && noExiste.data?.status === 'UNAVAILABLE' && deDocente.status === 403,
+    'V5.9.6 Enlace inválido en su campo; otro proveedor, privado o inexistente se explican sin inventar; solo estudiantes',
+    json({ m: mala.status, o: otro.data?.status, p: privado.data?.status, n: noExiste.data?.status, d: deDocente.status }));
+
+  // F06 al final: la cuota agotada abre una ventana corta en la que no se consulta GitHub.
+  const skillsAntes = psql(`select count(*) from project_skills where project_id = '${conSugerida.data?.id}'`);
+  const cuota = await analizar(repoDePrueba(`cuota-${TS}`));
+  const skillsDespues = psql(`select count(*) from project_skills where project_id = '${conSugerida.data?.id}'`);
+  check(cuota.status === 200 && cuota.data?.status === 'INCONCLUSIVE' && !!cuota.data?.message && skillsAntes === skillsDespues,
+    'V5.9.7 F06 Con la cuota de GitHub agotada el análisis es INCONCLUSIVE y no se borra nada de lo declarado',
+    json({ s: cuota.data?.status, m: cuota.data?.message, antes: skillsAntes, despues: skillsDespues }));
+  await new Promise((r) => setTimeout(r, 2500));
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -780,7 +840,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch10, batch12 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

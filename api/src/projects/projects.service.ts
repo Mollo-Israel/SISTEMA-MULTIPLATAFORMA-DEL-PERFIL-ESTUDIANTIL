@@ -18,6 +18,7 @@ import {
   ProjectVisibility,
   RolNombre,
   TechnologyStatus,
+  LinkCheckStatus,
   ValidationResourceType,
 } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
@@ -148,11 +149,19 @@ export class ProjectsService {
     const detectadas = (await this.senalesVigentes(project, vigente))
       .filter((t) => t.status === TechnologyStatus.DETECTED && !descartadas.has(this.normSenal(t.name)));
     if (!detectadas.length) return { repositoryUrl: project.repositoryUrl, suggestions: [], uncatalogued: [] };
+    return { repositoryUrl: project.repositoryUrl, ...(await this.cotejarConCatalogo(detectadas, user.userId)) };
+  }
+
+  /**
+   * Señales detectadas → tecnologías del catálogo (por nombre o alias) con sus
+   * áreas posibles, o «no catalogadas». No agrega nada: el estudiante decide.
+   */
+  private async cotejarConCatalogo(detectadas: { name: string; source: string | null }[], userId: string) {
     const catalogo = await this.skills.find({ where: { isActive: true } });
     const secundarias = await this.projects.manager.getRepository(SkillAreaRelation).find({ relations: { academicArea: true } });
     const areas = await this.areas.find();
     const nombreArea = new Map(areas.map((a) => [a.id, a.name]));
-    const pedidos = await this.projects.manager.getRepository(SkillRequest).find({ where: { requestedBy: user.userId, status: 'pending' } });
+    const pedidos = await this.projects.manager.getRepository(SkillRequest).find({ where: { requestedBy: userId, status: 'pending' } });
     const yaPedidas = new Set(pedidos.map((p) => this.normSenal(p.name)));
     const suggestions: unknown[] = [];
     const uncatalogued: unknown[] = [];
@@ -176,7 +185,47 @@ export class ProjectsService {
         areas: areasSkill,
       });
     }
-    return { repositoryUrl: project.repositoryUrl, suggestions, uncatalogued };
+    return { suggestions, uncatalogued };
+  }
+
+  /**
+   * V5 §11.1 (F02, F06, F12): «Analizar repositorio» antes de guardar. Es
+   * opcional y no guarda nada: devuelve lo detectado cotejado con el catálogo
+   * para que el estudiante elija. Si GitHub no responde o se agotó la cuota, el
+   * resultado es INCONCLUSIVE y el borrador se guarda igual. Lo detectado está
+   * en el repositorio; no dice quién lo usó.
+   */
+  async analyzeRepository(user: AuthenticatedUser, repositoryUrl: string) {
+    await this.requireProfile(user.userId);
+    const url = this.repoRaiz(repositoryUrl);
+    let valida = false;
+    try { valida = !!url && /^https?:$/.test(new URL(url).protocol); } catch { valida = false; }
+    if (!url || !valida) {
+      const m = 'Escribe el enlace completo del repositorio, por ejemplo https://github.com/usuario/proyecto.';
+      throw new BadRequestException({ message: m, fields: { repositoryUrl: [m] } });
+    }
+    const r = await this.repositoryInspector.inspect(url, []);
+    const analizadoEn = new Date().toISOString();
+    if (!r.metadata) {
+      return { repositoryUrl: url, status: 'NOT_GITHUB' as const, analyzedAt: analizadoEn,
+        message: 'Solo se analizan repositorios de GitHub. Puedes guardar el borrador y elegir las tecnologías a mano.', suggestions: [], uncatalogued: [] };
+    }
+    if (r.status === LinkCheckStatus.UNAVAILABLE || r.status === LinkCheckStatus.BLOCKED) {
+      return { repositoryUrl: url, status: 'UNAVAILABLE' as const, analyzedAt: analizadoEn,
+        message: r.metadata.error ?? 'El repositorio no está disponible públicamente.', suggestions: [], uncatalogued: [] };
+    }
+    if (r.status !== LinkCheckStatus.AVAILABLE) {
+      return { repositoryUrl: url, status: 'INCONCLUSIVE' as const, analyzedAt: analizadoEn,
+        message: r.metadata.error ?? 'No se pudo analizar ahora. Guarda el borrador y vuelve a intentarlo más tarde.', suggestions: [], uncatalogued: [] };
+    }
+    const detectadas = r.technologySignals.filter((t) => t.status === TechnologyStatus.DETECTED);
+    return {
+      repositoryUrl: url,
+      status: 'ANALYZED' as const,
+      analyzedAt: analizadoEn,
+      message: detectadas.length ? null : 'No se detectaron lenguajes ni dependencias reconocibles.',
+      ...(await this.cotejarConCatalogo(detectadas, user.userId)),
+    };
   }
 
   /**
@@ -400,7 +449,10 @@ export class ProjectsService {
     projectId: string,
     skillIds: string[],
     contextos: { skillId: string; areaId: string | null }[] = [],
+    /** V5 §11.1: de dónde salió cada tecnología nueva que el estudiante aceptó del análisis. */
+    fuentes: { skillId: string; source: string }[] = [],
   ): Promise<void> {
+    const fuenteDe = new Map(fuentes.map((f) => [f.skillId, f.source]));
     const actuales = await this.projectSkills.find({ where: { projectId } });
     const quitar = actuales.filter((a) => !skillIds.includes(a.skillId)).map((a) => a.skillId);
     if (quitar.length) await this.projectSkills.delete({ projectId, skillId: In(quitar) });
@@ -408,7 +460,10 @@ export class ProjectsService {
     const nuevas = skillIds.filter((id) => !actuales.some((a) => a.skillId === id));
     if (nuevas.length) {
       await this.projectSkills.save(nuevas.map((skillId) =>
-        this.projectSkills.create({ projectId, skillId, academicAreaId: areaDe.get(skillId) ?? null })));
+        this.projectSkills.create({
+          projectId, skillId, academicAreaId: areaDe.get(skillId) ?? null,
+          provenance: fuenteDe.has(skillId) ? `sugerida: ${fuenteDe.get(skillId)!.slice(0, 140)}` : null,
+        })));
     }
     // V3.2 §11.4: las que se quedan conservan su respaldo, pero actualizan su contexto.
     for (const a of actuales.filter((x) => skillIds.includes(x.skillId) && areaDe.has(x.skillId))) {
@@ -566,7 +621,7 @@ export class ProjectsService {
     this.sincronizarEnlacePublico(project);
     const saved = await this.projects.save(project);
     await this.replaceAreas(saved.id, areaIds);
-    await this.replaceSkills(saved.id, dto.skillIds ?? [], contextos);
+    await this.replaceSkills(saved.id, dto.skillIds ?? [], contextos, dto.skillSources);
 
     // V2 §34, §48: el responsable también es integrante, para confirmar las
     // tecnologías que usó. Su fila no cuenta como integrante aceptado (§36).
@@ -685,7 +740,7 @@ export class ProjectsService {
     await this.projects.save(project);
     if (areaIds !== undefined) await this.replaceAreas(project.id, areaIds);
     if (dto.skillIds === undefined && contextos !== undefined && skillsFinales !== undefined) {
-      await this.replaceSkills(project.id, skillsFinales, contextos);
+      await this.replaceSkills(project.id, skillsFinales, contextos, dto.skillSources);
     }
     // V4.1 §10.3: en un ACTIVE, quitar una tecnología que un integrante
     // confirmó como suya le pide reconfirmar; no se le atribuye en silencio.
@@ -693,7 +748,7 @@ export class ProjectsService {
       ? (await this.projectSkills.find({ where: { projectId: project.id } })).map((x) => x.skillId)
       : [];
     if (dto.skillIds !== undefined) {
-      await this.replaceSkills(project.id, dto.skillIds, contextos);
+      await this.replaceSkills(project.id, dto.skillIds, contextos, dto.skillSources);
       const nombres = (await this.skills.find({ where: { id: In(dto.skillIds.length ? dto.skillIds : ['00000000-0000-4000-8000-000000000000']) } })).map((s) => s.name);
       if (nombres.length) await this.projects.update(project.id, { technologies: nombres });
     }

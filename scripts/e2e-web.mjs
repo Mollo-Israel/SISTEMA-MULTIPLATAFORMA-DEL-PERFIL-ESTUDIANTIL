@@ -812,6 +812,31 @@ async function pruebas(browser) {
   check(fallos54.length === 0, 'WEB.48.2 Sin errores de JavaScript en V4.1-9', fallos54.join(' | '));
   await c54.close();
 
+  // ===== V5-9 · «Analizar repositorio» en el alta: ofrece, el estudiante incluye (§11.1, F02/F04)
+  objective('V5-9 · Analizar el repositorio antes de guardar: sugiere con su fuente y se incluye con un clic');
+  const fallos59 = [];
+  await asegurarGithubSimulado();
+  const c59 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p59 = await c59.newPage();
+  p59.on('pageerror', (e) => fallos59.push(e.message));
+  await entrar(p59, estProy.email);
+  await p59.goto(`${WEB}/student/projects`);
+  await p59.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
+  await p59.fill('#pr-titulo', `Alta guiada ${TS}`);
+  await p59.fill('#pr-repo', `https://github.com/afinia-pruebas/pymongo-web-${TS}`);
+  await p59.getByRole('button', { name: 'Analizar repositorio' }).click();
+  const lista59 = p59.getByTestId('sugerencias-analisis');
+  const sugiere = await lista59.getByText('MongoDB').first().waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+  const conFuente = sugiere && /requirements\.txt/.test(await lista59.innerText().catch(() => ''));
+  await lista59.locator('li', { hasText: 'MongoDB' }).getByRole('button', { name: 'Incluir' }).click().catch(() => {});
+  await espera(400);
+  const elegida = await p59.locator('.area-skill-picker button.chip.on', { hasText: 'MongoDB' }).count();
+  check(sugiere && conFuente && elegida > 0,
+    'WEB.59.1 V5 §11.1 «Analizar repositorio» sugiere MongoDB (requirements.txt) y al incluirla queda elegida con su área',
+    JSON.stringify({ sugiere, conFuente, elegida }));
+  check(fallos59.length === 0, 'WEB.59.2 Sin errores de JavaScript en el alta guiada', fallos59.join(' | '));
+  await c59.close();
+
   // ===== V4.1-10 · Sugerencias de GitHub con procedencia (A41-020, B34)
   objective('V4.1-10 · La validación técnica muestra señales como sugerencias, con por qué');
   const fallos55 = [];

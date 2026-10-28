@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { AcademicArea, Skill } from '../services/types';
+import { useConfirm } from './feedback';
 
 /** Normaliza para buscar sin tildes ni mayúsculas. */
 const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -40,6 +41,7 @@ export default function AreaSkillPicker({
   maxSkills = 15,
   areaError,
   skillError,
+  confirmarQuitar = false,
 }: {
   areas: AcademicArea[];
   skills: Skill[];
@@ -51,7 +53,14 @@ export default function AreaSkillPicker({
   maxSkills?: number;
   areaError?: string;
   skillError?: string;
+  /**
+   * V5 §11.2 (F10): pedir confirmación antes de quitar un área que se lleva
+   * tecnologías, y avisar cuando un área se queda sin ninguna (sin quitarla).
+   */
+  confirmarQuitar?: boolean;
 }) {
+  const confirm = useConfirm();
+  const [sinTecnologias, setSinTecnologias] = useState<string | null>(null);
   const [buscar, setBuscar] = useState('');
   const [buscarArea, setBuscarArea] = useState('');
   const activas = useMemo(() => areas.filter((a) => a.isActive !== false), [areas]);
@@ -88,13 +97,25 @@ export default function AreaSkillPicker({
       });
   }, [value.areaIds, activas, skills, buscar]);
 
-  const alternarArea = (id: string) => {
+  const alternarArea = async (id: string) => {
     if (value.areaIds.includes(id)) {
       const quedan = value.areaIds.filter((x) => x !== id);
       // Se queda solo lo que todavía pertenece (principal o secundaria) a un área elegida.
       const sigue = (s: Skill) =>
         (!!s.academicAreaId && quedan.includes(s.academicAreaId)) || (s.secondaryAreaIds ?? []).some((a) => quedan.includes(a));
       const vigentes = new Set(skills.filter(sigue).map((s) => s.id));
+      const seVan = value.skillIds.filter((s) => !vigentes.has(s));
+      if (confirmarQuitar && seVan.length > 0) {
+        const nombres = skills.filter((s) => seVan.includes(s.id)).map((s) => s.name);
+        const ok = await confirm({
+          title: `Quitar «${activas.find((a) => a.id === id)?.name ?? 'el área'}»`,
+          message: `También se quita${nombres.length === 1 ? '' : 'n'} ${nombres.join(', ')}, que solo ${nombres.length === 1 ? 'pertenece' : 'pertenecen'} a esta área.`,
+          confirmLabel: 'Quitar área y tecnologías',
+          tone: 'danger',
+        });
+        if (!ok) return;
+      }
+      if (sinTecnologias === id) setSinTecnologias(null);
       onChange({ areaIds: quedan, skillIds: value.skillIds.filter((s) => vigentes.has(s)) });
     } else if (value.areaIds.length < maxAreas) {
       onChange({ ...value, areaIds: [...value.areaIds, id] });
@@ -126,9 +147,16 @@ export default function AreaSkillPicker({
     }
     if (elegida) {
       delete contextos[id];
-      onChange({ ...value, skillIds: value.skillIds.filter((x) => x !== id), contexts: contextos });
+      const restantes = value.skillIds.filter((x) => x !== id);
+      // F10: el área se queda sin tecnologías; se avisa y no se quita sola.
+      if (confirmarQuitar && !restantes.some((x) => {
+        const otra = skills.find((k) => k.id === x);
+        return !!otra && contextoDe(otra) === areaId;
+      })) setSinTecnologias(areaId);
+      onChange({ ...value, skillIds: restantes, contexts: contextos });
     } else if (value.skillIds.length < maxSkills) {
       contextos[id] = areaId;
+      if (sinTecnologias === areaId) setSinTecnologias(null);
       onChange({ ...value, skillIds: [...value.skillIds, id], contexts: contextos });
     }
   };
@@ -178,7 +206,7 @@ export default function AreaSkillPicker({
                 key={a.id}
                 className={`chip ${on ? 'on' : ''}`}
                 aria-pressed={on}
-                onClick={() => alternarArea(a.id)}
+                onClick={() => void alternarArea(a.id)}
               >
                 {a.name}
               </button>
@@ -216,6 +244,13 @@ export default function AreaSkillPicker({
             {grupos.map(({ area, skills: delArea, relacionadas }) => (
               <div key={area.id} className="skill-group">
                 <div className="skill-group-title">{area.name}</div>
+                {sinTecnologias === area.id && (
+                  <p className="notice notice-warn small" role="status" data-testid="area-sin-tecnologias">
+                    «{area.name}» se quedó sin tecnologías. Puedes mantenerla o quitarla; no se quita sola.
+                    {' '}<button type="button" className="link-button" onClick={() => void alternarArea(area.id)}>Quitar el área</button>
+                    {' · '}<button type="button" className="link-button" onClick={() => setSinTecnologias(null)}>Mantenerla</button>
+                  </p>
+                )}
                 {delArea.length === 0 && relacionadas.length === 0 ? (
                   <p className="muted small" style={{ margin: '0 0 0.4rem' }}>
                     {buscar ? 'Ninguna coincide con la búsqueda.' : 'Esta área todavía no tiene habilidades en el catálogo.'}

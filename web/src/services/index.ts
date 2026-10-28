@@ -276,6 +276,22 @@ export interface LearningResource {
   criterionId?: string | null;
 }
 
+/** V5 §11.1: lo que «Analizar repositorio» encontró, cotejado con el catálogo. */
+export interface RepositoryAnalysis {
+  repositoryUrl: string;
+  status: 'ANALYZED' | 'INCONCLUSIVE' | 'UNAVAILABLE' | 'NOT_GITHUB';
+  analyzedAt: string;
+  message: string | null;
+  suggestions: {
+    signal: string;
+    source: string | null;
+    why: string;
+    skill: { id: string; name: string };
+    areas: { id: string; name: string | null; primary: boolean }[];
+  }[];
+  uncatalogued: { signal: string; source: string | null; requested: boolean }[];
+}
+
 /** V5 §10.3: un movimiento del historial de puntos de un estudiante. */
 export interface StudentPointsHistory {
   student: { profileId: string; name: string; semester: number | null };
@@ -907,6 +923,9 @@ export const projectService = {
   mine: () => api.get<Project[]>('/projects/my').then((r) => r.data),
   get: (id: string) => api.get<Project>(`/projects/${id}`).then((r) => r.data),
   create: (data: Record<string, unknown>) => api.post<Project>('/projects', data).then((r) => r.data),
+  /** V5 §11.1: analizar un repositorio antes de guardar (no guarda nada). */
+  analyzeRepository: (repositoryUrl: string) =>
+    api.post<RepositoryAnalysis>('/projects/repository/analyze', { repositoryUrl }).then((r) => r.data),
   /** V5-28: invitar a un contacto; solo es integrante cuando acepta. */
   invite: (projectId: string, invitedProfileId: string) =>
     api.post(`/projects/${projectId}/invitations`, { invitedProfileId }).then((r) => r.data),

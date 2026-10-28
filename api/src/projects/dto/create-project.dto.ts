@@ -19,6 +19,17 @@ import { ProjectStatus, ProjectVisibility } from '@perfil/shared';
 import { cleanLine, cleanText, trim, trimUniqueArray } from '../../common/validation';
 
 import { SkillContextDto } from '../../activities/dto/create-activity.dto';
+
+/** V5 §11.1: la señal del análisis que sugirió una tecnología aceptada. */
+export class SkillSourceDto {
+  @IsUUID('4', { message: 'Tecnología no válida.' })
+  skillId: string;
+
+  @Transform(cleanLine)
+  @IsString()
+  @MaxLength(140)
+  source: string;
+}
 /** V4.1 A41-023: integrante del equipo excluido de este proyecto, con motivo. */
 export class ExcludedTeamMemberDto {
   @IsUUID('4', { message: 'Integrante no válido.' })
@@ -81,6 +92,19 @@ export class CreateProjectDto {
   @ValidateNested({ each: true })
   @Type(() => SkillContextDto)
   skillContexts?: SkillContextDto[];
+
+  /**
+   * V5 §11.1: tecnologías que el estudiante aceptó de «Analizar repositorio»,
+   * con la señal que las sugirió (p. ej. «lenguaje del repositorio: Python»).
+   * Solo describe la procedencia: el respaldo lo deciden las señales reales.
+   */
+  @ApiProperty({ required: false, type: () => [SkillSourceDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => SkillSourceDto)
+  skillSources?: SkillSourceDto[];
 
   /**
    * V3 §31: «usar uno de mis equipos». Con `teamId`, invita a sus

@@ -28,6 +28,7 @@ import {
   type TeamView,
 } from '../../services';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
+import RepositoryAnalyzer from '../../components/RepositoryAnalyzer';
 import ProjectReadiness from '../../components/ProjectReadiness';
 import ProjectTechnicalCheck from '../../components/ProjectTechnicalCheck';
 import { useAuth } from '../../auth/AuthContext';
@@ -73,6 +74,8 @@ const emptyForm = {
   skillIds: [] as string[],
   /** V3.2 §11.4: área en la que se usó cada tecnología. */
   skillContexts: {} as Record<string, string>,
+  /** V5 §11.1: la señal del análisis que sugirió cada tecnología aceptada. */
+  skillSources: {} as Record<string, string>,
   repositoryUrl: '',
   demoUrl: '',
   visibility: 'profile' as ProjectVisibility,
@@ -204,6 +207,14 @@ export default function StudentProjectsPage() {
     setForm(emptyForm);
   };
 
+  /** V5 §11.1: solo las sugerencias aceptadas que siguen elegidas. */
+  const fuentesElegidas = () => {
+    const fuentes = form.skillIds
+      .filter((id) => form.skillSources[id])
+      .map((id) => ({ skillId: id, source: form.skillSources[id] }));
+    return fuentes.length ? fuentes : undefined;
+  };
+
   // V3 §21: se guarda como borrador aunque esté incompleto; se activa cuando
   // cumple los requisitos (§22), desde la tarjeta del proyecto.
   const create = async (e: React.FormEvent) => {
@@ -221,6 +232,7 @@ export default function StudentProjectsPage() {
           skillContexts: form.skillIds
             .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
             .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
+          skillSources: fuentesElegidas(),
           repositoryUrl: form.repositoryUrl || null,
           demoUrl: form.demoUrl || null,
           visibility: form.visibility,
@@ -247,6 +259,7 @@ export default function StudentProjectsPage() {
         skillContexts: form.skillIds
           .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
           .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
+        skillSources: fuentesElegidas(),
         repositoryUrl: form.repositoryUrl || undefined,
         demoUrl: form.demoUrl || undefined,
         visibility: form.visibility,
@@ -378,16 +391,6 @@ export default function StudentProjectsPage() {
               placeholder="Propósito del proyecto y qué resuelve…"
             />
           </div>
-          <AreaSkillPicker
-            areas={areas}
-            skills={skills}
-            value={{ areaIds: form.areaIds, skillIds: form.skillIds, contexts: form.skillContexts }}
-            onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds, skillContexts: v.contexts ?? {} })}
-            areaLabel="Áreas del proyecto"
-            skillLabel="Tecnologías que usa"
-            maxAreas={6}
-            maxSkills={20}
-          />
           <div className="row">
             <div className="field">
               <label htmlFor="pr-repo">Repositorio público</label>
@@ -409,6 +412,31 @@ export default function StudentProjectsPage() {
               />
             </div>
           </div>
+          {/* V5 §11.1: analizar es opcional; lo detectado se ofrece y el estudiante decide. */}
+          <RepositoryAnalyzer
+            repositoryUrl={form.repositoryUrl}
+            elegidas={form.skillIds}
+            areasElegidas={form.areaIds}
+            maxAreas={6}
+            onIncluir={({ skillId, areaId, source }) => setForm((f) => ({
+              ...f,
+              areaIds: f.areaIds.includes(areaId) ? f.areaIds : [...f.areaIds, areaId],
+              skillIds: f.skillIds.includes(skillId) ? f.skillIds : [...f.skillIds, skillId],
+              skillContexts: { ...f.skillContexts, [skillId]: areaId },
+              skillSources: { ...f.skillSources, [skillId]: source },
+            }))}
+          />
+          <AreaSkillPicker
+            areas={areas}
+            skills={skills}
+            value={{ areaIds: form.areaIds, skillIds: form.skillIds, contexts: form.skillContexts }}
+            onChange={(v) => setForm({ ...form, areaIds: v.areaIds, skillIds: v.skillIds, skillContexts: v.contexts ?? {} })}
+            confirmarQuitar
+            areaLabel="Áreas del proyecto"
+            skillLabel="Tecnologías que usa"
+            maxAreas={6}
+            maxSkills={20}
+          />
           {!editando && (
             <div className="field">
               <span className="field-label" id="pr-origen">Colaboradores</span>

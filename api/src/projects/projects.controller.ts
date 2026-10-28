@@ -40,6 +40,10 @@ class ExclusionReasonDto {
   @IsOptional() @IsString() @MaxLength(300) reason?: string;
 }
 
+class AnalyzeRepositoryDto {
+  @IsString() @MinLength(8, { message: 'Escribe el enlace del repositorio.' }) @MaxLength(300) repositoryUrl: string;
+}
+
 class SignalDto {
   @IsString() @MinLength(1) @MaxLength(80) signal: string;
 }
@@ -256,6 +260,14 @@ export class ProjectsController {
   }
 
   // ---------------- V4.1 A41-020 · Sugerencias de GitHub con procedencia ----------------
+
+  @Post('repository/analyze')
+  @Roles(RolNombre.STUDENT)
+  @HttpCode(200)
+  @ApiOperation({ summary: 'V5 §11.1: analizar un repositorio antes de guardar (opcional). No guarda nada; si GitHub no responde, INCONCLUSIVE.' })
+  analyzeRepository(@CurrentUser() user: AuthenticatedUser, @Body() dto: AnalyzeRepositoryDto) {
+    return this.projectsService.analyzeRepository(user, dto.repositoryUrl);
+  }
 
   @Get(':id/suggestions')
   @Roles(RolNombre.STUDENT)
