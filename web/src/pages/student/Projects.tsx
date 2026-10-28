@@ -1,5 +1,6 @@
 import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import {
   FiChevronDown,
@@ -98,6 +99,14 @@ const normalize = (s: string) =>
 export default function StudentProjectsPage() {
   // Con memoria de la sesión: al volver a «Proyectos» se pinta al instante.
   const [projects, setProjects] = useCachedState<Project[]>('proyectos', []);
+  // V5 BATCH 14: llegar desde la fuente de una afinidad lleva a ese proyecto.
+  const [params] = useSearchParams();
+  const proyectoPedido = params.get('proyecto');
+  useEffect(() => {
+    if (proyectoPedido && projects.some((p) => p.id === proyectoPedido)) {
+      document.getElementById(`proyecto-${proyectoPedido}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [proyectoPedido, projects]);
   const [areas, setAreas] = useCachedState<AcademicArea[]>('areas', []);
   const [skills, setSkills] = useCachedState<Skill[]>('skills', []);
   const [teams, setTeams] = useState<TeamView[]>([]);
@@ -598,6 +607,7 @@ export default function StudentProjectsPage() {
       ) : (
         visible.map((p, index) => (
           <Stagger key={p.id} index={index}>
+            <div id={`proyecto-${p.id}`} />
             <Card
               title={p.title}
               actions={<Badge tone="bordo">{lbl(PROJECT_STATUS_LABEL, p.status)}</Badge>}

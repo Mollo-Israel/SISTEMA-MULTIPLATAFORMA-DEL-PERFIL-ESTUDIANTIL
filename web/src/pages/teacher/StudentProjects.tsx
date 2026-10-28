@@ -1,5 +1,6 @@
 import { validarFormulario } from '../../components/form';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   FiFolder,
   FiInfo,
@@ -12,6 +13,7 @@ import {
 import { apiError } from '../../api/client';
 import { useCachedState, viewCache } from '../../hooks/viewCache';
 import { catalogService, projectDetailService, projectFeedbackService, projectService } from '../../services';
+import type { ProjectPointView } from '../../services';
 import { SKILL_EVIDENCE_LABEL } from '../../services/types';
 import {
   AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput,
@@ -131,7 +133,17 @@ export default function TeacherStudentProjectsPage() {
     }
   };
 
+  // V5 BATCH 14: llegar desde la fuente de una afinidad abre ese proyecto.
+  const [paramsUrl] = useSearchParams();
+  const proyectoPedido = paramsUrl.get('proyecto');
+  useEffect(() => {
+    if (proyectoPedido) void openProject(proyectoPedido);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proyectoPedido]);
+  const [puntos, setPuntos] = useState<ProjectPointView[]>([]);
+
   const openProject = async (id: string) => {
+    projectService.points(id).then(setPuntos).catch(() => setPuntos([]));
     setSelectedId(id);
     setDetailLoading(true);
     setComment('');
@@ -470,6 +482,23 @@ export default function TeacherStudentProjectsPage() {
               )}
             </div>
           </Card>
+
+          {/* V5 BATCH 14: los puntos que dio el proyecto, con su criterio y quién los otorgó. */}
+          {puntos.length > 0 && (
+            <Card title={`Puntos otorgados por este proyecto (${puntos.length})`}>
+              <p className="muted small" style={{ marginTop: 0 }}>Son un incentivo: no cambian el respaldo del proyecto ni la afinidad.</p>
+              <ul className="plain-list" data-testid="puntos-proyecto">
+                {puntos.map((x) => (
+                  <li key={x.id}>
+                    <strong>{x.points > 0 ? `+${x.points}` : x.points}</strong> · {x.criterion ?? 'Sin criterio registrado'} · {x.student ?? 'Estudiante'}
+                    <div className="muted small">
+                      Otorgó {x.awardedBy ?? 'no registrado'}{x.approvedBy ? ` · aprobó ${x.approvedBy}` : ''} · {new Date(x.at).toLocaleDateString('es-BO')}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           <Card title={`Retroalimentación (${feedback.length})`}>
             <p className="muted" style={{ marginBottom: '0.8rem' }}>

@@ -955,6 +955,34 @@ export class ProjectsService {
     throw new ForbiddenException('Su rol no puede consultar proyectos estudiantiles.');
   }
 
+  /**
+   * V5 BATCH 14: puntos que dio este proyecto, con el criterio, quién los
+   * otorgó y quién los aprobó, para quien ya puede ver el proyecto. Son
+   * incentivo: no cambian el respaldo ni la afinidad.
+   */
+  async pointsForProject(user: AuthenticatedUser, projectId: string) {
+    const project = await this.findOneOrFail(projectId);
+    await this.assertCanView(user, project);
+    const filas: { id: string; occurred_at: Date; points: number; reason: string; criterion: string | null;
+      awarded_by: string | null; approved_by: string | null; student: string | null }[] = await this.projects.manager.query(`
+      SELECT e.id, e.occurred_at, e.points, e.reason, c.name AS criterion,
+             ua.first_name || ' ' || ua.last_name AS awarded_by,
+             up.first_name || ' ' || up.last_name AS approved_by,
+             su.first_name || ' ' || su.last_name AS student
+        FROM gamification_events e
+        LEFT JOIN gamification_criteria c ON c.id = e.criterion_id
+        LEFT JOIN users ua ON ua.id = e.awarded_by
+        LEFT JOIN users up ON up.id = e.approved_by
+        LEFT JOIN student_profiles sp ON sp.id = e.student_profile_id
+        LEFT JOIN users su ON su.id = sp.user_id
+       WHERE e.source_entity_type = 'project' AND e.source_entity_id = $1
+       ORDER BY e.occurred_at DESC`, [projectId]);
+    return filas.map((f) => ({
+      id: f.id, at: f.occurred_at, points: f.points, reason: f.reason, criterion: f.criterion,
+      awardedBy: f.awarded_by, approvedBy: f.approved_by, student: f.student,
+    }));
+  }
+
   /** true si el usuario puede ver el proyecto, sin lanzar excepcion. */
   async canView(user: AuthenticatedUser, project: Project): Promise<boolean> {
     try {

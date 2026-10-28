@@ -70,6 +70,11 @@ export default function StudentActivitiesPage() {
   // V3 §34.2: [Para ti] [Todas] [Interesadas] [Inscritas] [Historial].
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') ?? 'para-ti';
+  // V5 BATCH 14: llegar desde la fuente de una afinidad abre esa actividad.
+  const actividadPedida = params.get('actividad');
+  useEffect(() => {
+    if (actividadPedida) activityService.get(actividadPedida).then(setDetalle).catch(() => {});
+  }, [actividadPedida]);
   const cambiarTab = (k: string) => setParams(k === 'para-ti' ? {} : { tab: k }, { replace: true });
   // Sus inscripciones: dan el historial y los contadores de las pestañas.
   const historial = useAsync(() => activityService.myRegistrations(), []);

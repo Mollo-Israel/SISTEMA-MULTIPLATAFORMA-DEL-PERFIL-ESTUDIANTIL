@@ -321,6 +321,13 @@ export class ProjectsController {
     return this.projectsService.recheckExternalSources(user, id);
   }
 
+  @Get(':id/points')
+  @Roles(RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.ADMIN)
+  @ApiOperation({ summary: 'V5: puntos que dio el proyecto (criterio, quién otorgó y aprobó). No cambian el respaldo ni la afinidad.' })
+  points(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.projectsService.pointsForProject(user, id);
+  }
+
   @Get(':id/timeline')
   @Roles(RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   @ApiOperation({

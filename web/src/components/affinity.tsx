@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { FiChevronDown, FiChevronRight, FiInfo, FiShield } from 'react-icons/fi';
 import { apiError } from '../api/client';
@@ -202,10 +203,28 @@ export function AffinityRanking({
  * casi nunca es «por que tengo 60»; es «por que no tengo mas», y sin esa lista
  * la unica respuesta posible era el silencio.
  */
+const TIPO_FUENTE: Record<string, string> = { activity: 'Actividad', project: 'Proyecto', credential: 'Credencial' };
+
+/**
+ * V5 BATCH 14 (H08, §16): de qué actividad, proyecto o credencial sale cada
+ * contribución, con un enlace solo si quien mira puede abrirla. Nunca lleva
+ * a un archivo privado por ruta pública.
+ */
+function Fuente({ c }: { c: AffinityBreakdown['contributions'][number] }) {
+  const s = c.source;
+  if (!s || s.type === 'declaration' || !s.title) return null;
+  return (
+    <div className="small" data-testid="fuente-afinidad">
+      <span className="muted">{TIPO_FUENTE[s.type] ?? s.type}: </span>
+      {s.link ? <Link to={s.link}>{s.title}</Link> : <span>{s.title}</span>}
+    </div>
+  );
+}
+
 function AffinityDetail({ detail }: { detail: AffinityBreakdown }) {
   const fila = (c: AffinityBreakdown['contributions'][number], i: number) => (
     <tr key={`${c.sourceId ?? 'x'}-${i}`}>
-      <td>{c.reason ?? c.sourceLabel}</td>
+      <td>{c.reason ?? c.sourceLabel}<Fuente c={c} /></td>
       <td className="muted">
         {lbl(FAMILY_LABEL, c.signalFamily)}
         <br />

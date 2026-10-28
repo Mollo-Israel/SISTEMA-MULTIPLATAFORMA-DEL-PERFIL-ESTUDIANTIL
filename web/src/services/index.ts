@@ -276,6 +276,18 @@ export interface LearningResource {
   criterionId?: string | null;
 }
 
+/** V5 BATCH 14: un punto otorgado por un proyecto. */
+export interface ProjectPointView {
+  id: string;
+  at: string;
+  points: number;
+  reason: string;
+  criterion: string | null;
+  awardedBy: string | null;
+  approvedBy: string | null;
+  student: string | null;
+}
+
 /** V5 §13.4: imagen de muestra de un proyecto. */
 export interface ProjectImageView {
   id: string;
@@ -962,6 +974,8 @@ export const projectService = {
   removeImage: (id: string, imageId: string) => api.delete<ProjectImageView[]>(`/projects/${id}/images/${imageId}`).then((r) => r.data),
   community: (params: { q?: string; areaId?: string; skillId?: string; page?: number }) =>
     api.get<CommunityProjectsPage>('/projects/community', { params }).then((r) => r.data),
+  /** V5 BATCH 14: puntos que dio el proyecto, con criterio y quién los otorgó. */
+  points: (id: string) => api.get<ProjectPointView[]>(`/projects/${id}/points`).then((r) => r.data),
   /** V5 §11.1: analizar un repositorio antes de guardar (no guarda nada). */
   analyzeRepository: (repositoryUrl: string) =>
     api.post<RepositoryAnalysis>('/projects/repository/analyze', { repositoryUrl }).then((r) => r.data),
@@ -1198,6 +1212,8 @@ export interface AffinitySummary {
 }
 
 export interface AffinityContributionRow {
+  /** V5 BATCH 14: la entidad real detrás de la contribución y, si quien mira puede abrirla, su enlace. */
+  source?: { type: 'activity' | 'project' | 'credential' | 'declaration'; id: string | null; title: string | null; link: string | null };
   signalFamily: string;
   signalType: string;
   weightCode: string;

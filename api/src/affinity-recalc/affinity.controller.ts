@@ -168,7 +168,8 @@ export class AffinityController {
     @Param('areaId', ParseUUIDPipe) areaId: string,
   ) {
     await this.teacherScope.assertCanAccessProfile(user, studentId);
-    return this.engine.getBreakdown(studentId, areaId);
+    // V5 BATCH 14: los enlaces a las fuentes dependen de lo que este rol puede abrir.
+    return this.engine.getBreakdown(studentId, areaId, user.role === RolNombre.TEACHER ? 'teacher' : 'staff');
   }
 
   // ------------------------------------------------------------------

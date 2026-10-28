@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FiSearch, FiStar } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { activityService, catalogService } from '../../services';
@@ -42,6 +43,12 @@ export default function TeacherActivitiesPage() {
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<Activity | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // V5 BATCH 14: llegar desde la fuente de una afinidad abre esa actividad.
+  const [params] = useSearchParams();
+  const actividadPedida = params.get('actividad');
+  useEffect(() => {
+    if (actividadPedida) activityService.get(actividadPedida).then(setDetalle).catch(() => {});
+  }, [actividadPedida]);
 
   useEffect(() => {
     catalogService.activityCategories().then(setCategories).catch(() => {});

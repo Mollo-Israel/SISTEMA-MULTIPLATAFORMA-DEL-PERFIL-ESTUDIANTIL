@@ -770,6 +770,69 @@ async function batch13(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-14 — Docente: enlaces a las fuentes de la afinidad (§16, H08)
+// ===========================================================================
+async function batch14(ctx) {
+  objective('BATCH V5-14 · Cada contribución de la afinidad lleva a su fuente real, si quien mira puede abrirla');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Fuentes${L}`, email: correoStaff('b14dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: `Fuentes${L}`, email: correoStaff('b14doc'), role: 'TEACHER' });
+  const ajeno = await provisionAndActivate(ctx.admin, { firstName: 'Iris', lastName: `Fuentes${L}`, email: correoStaff('b14ajeno'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [3] } });
+  await req('PUT', `/users/${ajeno.userId}/semesters`, { token: ctx.admin, body: { semesters: [8] } });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Eva', lastName: `Fuentes${L}`, email: correoEst('b14est'), semester: 3 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+
+  // Una actividad confirmada y un proyecto visible a docentes.
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const charla = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const proyecto = await crearProyectoActivo(est.token, {
+    title: `Proyecto con fuentes ${L}`, description: 'Proyecto que respalda la afinidad.', visibility: 'teachers',
+    repositoryUrl: repoDePrueba(`stack-fuentes-${TS}`),
+  });
+  const pid = proyecto?.id ?? proyecto?.data?.id;
+  const areaProyecto = (await req('GET', `/projects/${pid}`, { token: est.token })).data?.academicAreaId;
+  const act = await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `Charla con fuentes ${L}`, type: 'academica', categoryId: charla.id, areaIds: [areaProyecto], semesterScope: [3], activityDate: en(48), endAt: en(50), status: 'open' },
+  });
+  await req('POST', `/activities/${act.data?.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${act.data?.id}`, { token: director.token, body: { activityDate: en(-1), endAt: en(2) } });
+  await decidir(director.token, act.data?.id, est.profileId, 'confirmed');
+  await req('POST', '/affinity/recalculate/me', { token: est.token });
+
+  const delDocente = (await req('GET', `/affinity/student/${est.profileId}/areas/${areaProyecto}/breakdown`, { token: docente.token })).data;
+  const filas = delDocente?.contributions ?? [];
+  const deActividad = filas.find((c) => c.source?.type === 'activity' && c.source?.id === act.data?.id);
+  const deProyecto = filas.find((c) => c.source?.type === 'project' && c.source?.id === pid);
+  check(!!deActividad && deActividad.source.link === `/teacher?tab=actividades&actividad=${act.data?.id}` && deActividad.source.title === `Charla con fuentes ${L}`,
+    'V5.14.1 H08 La contribución de una actividad enlaza a esa actividad, en la vista del docente', json(deActividad?.source));
+  check(!!deProyecto && deProyecto.source.link === `/teacher?tab=proyectos&proyecto=${pid}`,
+    'V5.14.2 H08 La de un proyecto visible a docentes enlaza al proyecto', json(deProyecto?.source ?? filas.map((c) => c.sourceEntityType)));
+  const tipos = new Set(filas.map((c) => c.sourceEntityType));
+  check(!['learning_resource', 'gamification_event', 'gamification_proposal', 'project_member'].some((x) => tipos.has(x))
+    && filas.every((c) => ['activity', 'project', 'credential', 'declaration'].includes(c.source?.type)),
+    'V5.14.3 H08 Ni puntos, ni recursos, ni roles aparecen como fuente de afinidad', json([...tipos]));
+  const delEstudiante = (await req('GET', `/affinity/me/areas/${areaProyecto}/breakdown`, { token: est.token })).data;
+  const suya = (delEstudiante?.contributions ?? []).find((c) => c.source?.type === 'activity' && c.source?.id === act.data?.id);
+  check(suya?.source?.link === `/student/activities?actividad=${act.data?.id}`, 'V5.14.4 Al estudiante, el mismo enlace lo lleva a su vista', json(suya?.source));
+  const ajenoVe = await req('GET', `/affinity/student/${est.profileId}/areas/${areaProyecto}/breakdown`, { token: ajeno.token });
+  check(ajenoVe.status === 403, 'V5.14.5 Un docente sin el estudiante en su alcance no ve el desglose ni sus fuentes', `${ajenoVe.status}`);
+
+  // El proyecto muestra los puntos que dio, con criterio y quién los otorgó.
+  const criterio = ((await req('GET', '/gamification-criteria/available?trigger=proyecto_corroborado', { token: docente.token })).data ?? [])[0];
+  const propuesta = await req('POST', '/gamification/proposals', {
+    token: docente.token, body: { projectId: pid, studentProfileId: est.profileId, criterionId: criterio?.id, reason: 'Integró la API con pruebas propias.' },
+  });
+  await req('POST', `/gamification/proposals/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'approve' } });
+  const puntos = await req('GET', `/projects/${pid}/points`, { token: docente.token });
+  const fila = (puntos.data ?? [])[0];
+  check(puntos.status === 200 && fila?.criterion === criterio?.name && fila?.awardedBy === `Ciro Fuentes${L}` && fila?.approvedBy === `Dora Fuentes${L}`,
+    'V5.14.6 El proyecto muestra sus puntos con el criterio, quién los otorgó y quién los aprobó', json(fila));
+  const puntosAjeno = await req('GET', `/projects/${pid}/points`, { token: ajeno.token });
+  check(puntosAjeno.status === 403, 'V5.14.7 Un docente fuera de alcance no ve los puntos del proyecto', `${puntosAjeno.status}`);
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -921,7 +984,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12, batch13 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch12, batch13, batch14 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

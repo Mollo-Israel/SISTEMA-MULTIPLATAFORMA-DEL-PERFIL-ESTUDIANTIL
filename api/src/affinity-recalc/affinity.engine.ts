@@ -1058,7 +1058,79 @@ export class AffinityEngineService {
    * suele ser la que responde la pregunta real del estudiante, que casi nunca
    * es «por que tengo 60» sino «por que no tengo mas».
    */
-  async getBreakdown(studentProfileId: string, academicAreaId: string) {
+  /**
+   * V5 BATCH 14 (H08, §16): a qué entidad real apunta cada contribución y si
+   * quien mira puede abrirla. Solo actividades, proyectos y credenciales;
+   * las declaraciones (intereses, áreas a mejorar) no tienen enlace porque no
+   * son respaldo. Los puntos, los recursos y los roles nunca aparecen aquí:
+   * no son fuentes de afinidad.
+   */
+  private async fuentes(rows: AffinityContribution[], viewer: 'student' | 'teacher' | 'staff') {
+    const ids = (tipos: string[]) => [...new Set(rows.filter((r) => r.sourceId && tipos.includes(r.sourceEntityType ?? '')).map((r) => r.sourceId!))];
+    const m = this.contributions.manager;
+    const deRegistro = ids([AffinitySourceEntityType.ACTIVITY_REGISTRATION]);
+    const deConstancia = ids([AffinitySourceEntityType.INTERNAL_CONSTANCY]);
+    const deEvidencia = ids([AffinitySourceEntityType.ACTIVITY_EVIDENCE, AffinitySourceEntityType.PROJECT_EVIDENCE]);
+    const deFeedback = ids([AffinitySourceEntityType.PROJECT_FEEDBACK]);
+    const deProyecto = ids([AffinitySourceEntityType.PROJECT]);
+    const deCredencial = ids([AffinitySourceEntityType.EXTERNAL_CERTIFICATE]);
+    const q = async (sql: string, lista: string[]) => (lista.length ? (await m.query(sql, [lista])) as Record<string, string | null>[] : []);
+    const [registros, constancias, evidencias, feedback, proyectos, credenciales] = await Promise.all([
+      q(`SELECT r.id, a.id AS activity_id, a.title FROM activity_registrations r JOIN activities a ON a.id = r.activity_id WHERE r.id = ANY($1::uuid[])`, deRegistro),
+      q(`SELECT c.id, a.id AS activity_id, a.title FROM internal_constancies c JOIN activities a ON a.id = c.activity_id WHERE c.id = ANY($1::uuid[])`, deConstancia),
+      q(`SELECT e.id, e.activity_id, a.title AS activity_title, e.project_id, p.title AS project_title, p.visibility
+           FROM project_evidences e LEFT JOIN activities a ON a.id = e.activity_id LEFT JOIN projects p ON p.id = e.project_id
+          WHERE e.id = ANY($1::uuid[])`, deEvidencia),
+      q(`SELECT f.id, p.id AS project_id, p.title, p.visibility FROM project_feedback f JOIN projects p ON p.id = f.project_id WHERE f.id = ANY($1::uuid[])`, deFeedback),
+      q(`SELECT p.id AS project_id, p.title, p.visibility FROM projects p WHERE p.id = ANY($1::uuid[])`, deProyecto),
+      q(`SELECT c.id, c.certificate_name, c.issuer FROM external_certificates c WHERE c.id = ANY($1::uuid[])`, deCredencial),
+    ]);
+    type Fuente = { type: 'activity' | 'project' | 'credential' | 'declaration'; id: string | null; title: string | null; link: string | null };
+    const actividad = (id: string | null, title: string | null): Fuente => ({
+      type: 'activity', id, title,
+      link: id ? (viewer === 'student' ? `/student/activities?actividad=${id}` : viewer === 'teacher' ? `/teacher?tab=actividades&actividad=${id}` : null) : null,
+    });
+    const proyecto = (id: string | null, title: string | null, visibility: string | null): Fuente => ({
+      type: 'project', id, title,
+      // El docente solo abre lo que el estudiante habilitó para docentes.
+      link: id ? (viewer === 'student' ? `/student/projects?proyecto=${id}` : viewer === 'teacher' && visibility === 'teachers' ? `/teacher?tab=proyectos&proyecto=${id}` : null) : null,
+    });
+    return (r: AffinityContribution): Fuente => {
+      const t = r.sourceEntityType;
+      const id = r.sourceId;
+      if (t === AffinitySourceEntityType.ACTIVITY_REGISTRATION) {
+        const x = registros.find((y) => y.id === id);
+        return actividad(x?.activity_id ?? null, x?.title ?? null);
+      }
+      if (t === AffinitySourceEntityType.INTERNAL_CONSTANCY) {
+        const x = constancias.find((y) => y.id === id);
+        return actividad(x?.activity_id ?? null, x?.title ?? null);
+      }
+      if (t === AffinitySourceEntityType.ACTIVITY_EVIDENCE || t === AffinitySourceEntityType.PROJECT_EVIDENCE) {
+        const x = evidencias.find((y) => y.id === id);
+        if (x?.project_id) return proyecto(x.project_id, x.project_title ?? null, x.visibility ?? null);
+        return actividad(x?.activity_id ?? null, x?.activity_title ?? null);
+      }
+      if (t === AffinitySourceEntityType.PROJECT_FEEDBACK) {
+        const x = feedback.find((y) => y.id === id);
+        return proyecto(x?.project_id ?? null, x?.title ?? null, x?.visibility ?? null);
+      }
+      if (t === AffinitySourceEntityType.PROJECT) {
+        const x = proyectos.find((y) => y.project_id === id);
+        return proyecto(x?.project_id ?? null, x?.title ?? null, x?.visibility ?? null);
+      }
+      if (t === AffinitySourceEntityType.EXTERNAL_CERTIFICATE) {
+        const x = credenciales.find((y) => y.id === id);
+        // El archivo es privado: el estudiante lo abre en sus evidencias; el
+        // docente ve el nombre y el emisor en la ficha, no el documento.
+        return { type: 'credential', id: id ?? null, title: x ? `${x.certificate_name}${x.issuer ? ` · ${x.issuer}` : ''}` : null,
+          link: viewer === 'student' ? '/student/evidences?tab=certificados' : null };
+      }
+      return { type: 'declaration', id: null, title: null, link: null };
+    };
+  }
+
+  async getBreakdown(studentProfileId: string, academicAreaId: string, viewer: 'student' | 'teacher' | 'staff' = 'student') {
     const [area, result, rows] = await Promise.all([
       this.areas.findOne({ where: { id: academicAreaId } }),
       this.results.findOne({ where: { studentProfileId, academicAreaId } }),
@@ -1072,7 +1144,9 @@ export class AffinityEngineService {
       throw new NotFoundException('Area academica no encontrada.');
     }
 
+    const fuenteDe = await this.fuentes(rows, viewer);
     const mapear = (c: AffinityContribution) => ({
+      source: fuenteDe(c),
       signalFamily: c.signalFamily,
       signalType: c.signalType,
       weightCode: c.weightCode,
