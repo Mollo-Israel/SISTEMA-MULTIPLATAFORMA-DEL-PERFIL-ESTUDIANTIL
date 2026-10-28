@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { FiBookOpen, FiExternalLink, FiFileText, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { catalogService, learningResourceService, uploadService } from '../../services';
+import { catalogService, gamificationService, learningResourceService, uploadService } from '../../services';
 import type { LearningResource } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill } from '../../services/types';
@@ -66,6 +66,8 @@ const vacio = {
   areaIds: [] as string[],
   imageFileId: '',
   imageUrl: '',
+  /** V5 §8.3: criterio opcional de «recurso completado». */
+  criterionId: '',
 };
 
 /**
@@ -107,6 +109,7 @@ export default function DirectorLearningResourcesPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
+  const criteriosRecurso = useAsync(() => gamificationService.availableCriteria('recurso_completado_atestiguado'), []);
   useEffect(() => {
     catalogService.areas().then(setAreas).catch(() => {});
     catalogService.skills().then(setSkills).catch(() => {});
@@ -162,6 +165,7 @@ export default function DirectorLearningResourcesPage() {
         resourceType: form.resourceType,
         skillIds: form.skillIds,
         imageFileId: form.imageFileId || (editing ? null : undefined),
+        criterionId: form.criterionId || (editing ? null : undefined),
         ...(esDocente && !editing ? { semesterScope: semestres } : {}),
         ...(!esDocente ? { semesterScope: alcance === 'carrera' ? [] : semestres } : {}),
       };
@@ -203,6 +207,7 @@ export default function DirectorLearningResourcesPage() {
       areaIds: r.areaIds ?? [r.academicAreaId],
       imageFileId: r.imageFileId ?? '',
       imageUrl: r.imageUrl ?? '',
+      criterionId: r.criterionId ?? '',
     });
     setAlcance(r.semesterScope?.length ? 'semestres' : 'carrera');
     setSemestres(r.semesterScope ?? []);
@@ -449,6 +454,14 @@ export default function DirectorLearningResourcesPage() {
                 ))}
               </select>
               {tipoActual && <span className="field-hint">{tipoActual.ayuda}</span>}
+            </div>
+            <div className="field">
+              <label htmlFor="learning-resources-criterio">Puntos por completarlo (opcional)</label>
+              <select id="learning-resources-criterio" value={form.criterionId} onChange={(e) => setForm({ ...form, criterionId: e.target.value })}>
+                <option value="">Sin puntos</option>
+                {(criteriosRecurso.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name} · {c.points} puntos</option>)}
+              </select>
+              <span className="field-hint">Solo da puntos si un docente da fe de que el estudiante lo completó. Abrirlo o guardarlo no cuenta.</span>
             </div>
           </div>
 

@@ -731,7 +731,9 @@ async function pruebas(browser) {
   check(navDoc.some((e) => e.includes('Puntos de estudiantes')) && !navDoc.some((e) => /Retos y recompensas/.test(e)) && urlDoc === '/teacher/points',
     'WEB.46.1 A41-017 El docente ya no tiene «Retos y recompensas»: la ruta antigua lleva a «Puntos de estudiantes»', `${urlDoc} · ${navDoc.join(' | ')}`);
   await p50.getByRole('tab', { name: 'Mis propuestas' }).click();
-  const formProp = await p50.getByText('Proponer puntos por un proyecto').first().waitFor({ timeout: 6000 }).then(() => true).catch(() => false);
+  // V5 §10: la misma tarjeta propone por un proyecto o por un recurso completado.
+  const formProp = await p50.getByText('Proponer puntos').first().waitFor({ timeout: 6000 }).then(() => true).catch(() => false)
+    && await p50.getByRole('radio', { name: 'Un proyecto' }).isChecked().catch(() => false);
   check(formProp, 'WEB.46.2 §9.3 El docente propone puntos por un proyecto (no los otorga)');
   await c50.close();
 

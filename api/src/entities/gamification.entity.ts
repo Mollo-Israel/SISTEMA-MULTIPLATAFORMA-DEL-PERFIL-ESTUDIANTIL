@@ -68,6 +68,21 @@ export class GamificationEvent {
   @Column({ name: 'source_entity_id', type: 'uuid', nullable: true })
   sourceEntityId: string | null;
 
+  /**
+   * V5 §10.3: el criterio que fijó los puntos, quién los otorgó (el
+   * responsable que confirmó la asistencia, o el docente que reconoció) y quién
+   * los aprobó si hubo revisión. Nulos en lo anterior a V5 que no se pudo
+   * reconstruir con certeza.
+   */
+  @Column({ name: 'criterion_id', type: 'uuid', nullable: true })
+  criterionId: string | null;
+
+  @Column({ name: 'awarded_by', type: 'uuid', nullable: true })
+  awardedBy: string | null;
+
+  @Column({ name: 'approved_by', type: 'uuid', nullable: true })
+  approvedBy: string | null;
+
   @CreateDateColumn({ name: 'occurred_at' })
   occurredAt: Date;
 }

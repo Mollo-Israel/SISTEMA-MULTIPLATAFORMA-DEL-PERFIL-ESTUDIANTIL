@@ -21,8 +21,9 @@ export class GamificationProposal {
   @JoinColumn({ name: 'criterion_id' })
   criterion: GamificationCriterion;
 
+  /** V5 §10: un proyecto (reconocimiento) o un recurso (completado atestiguado). */
   @Column({ name: 'source_type', type: 'varchar', length: 20 })
-  sourceType: 'project';
+  sourceType: 'project' | 'resource';
 
   @Column({ name: 'source_id', type: 'uuid' })
   sourceId: string;

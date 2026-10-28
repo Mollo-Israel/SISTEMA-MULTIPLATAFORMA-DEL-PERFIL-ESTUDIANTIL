@@ -484,10 +484,13 @@ export class CatalogsService {
 
   /** V4.1 A41-016: criterios que una actividad puede elegir (participación, vigentes, no bonos). */
   async availableParticipationCriteria(trigger?: string) {
-    // Solo los dos hechos que una persona elige o propone: participación (actividad) y proyecto.
+    // V5 §10: las tres familias que una persona elige o propone: participación
+    // (actividad), reconocimiento de proyecto y recurso completado.
     const disparador = trigger === GamificationTrigger.PROYECTO_CORROBORADO
       ? GamificationTrigger.PROYECTO_CORROBORADO
-      : GamificationTrigger.PARTICIPACION_CONFIRMADA;
+      : trigger === GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO
+        ? GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO
+        : GamificationTrigger.PARTICIPACION_CONFIRMADA;
     const lista = await this.criteria.find({
       where: { isActive: true, isBonus: false, trigger: disparador },
       order: { points: 'ASC' },
@@ -694,6 +697,7 @@ export class CatalogsService {
       throw new BadRequestException({ message: m, fields: { url: [m] } });
     }
     await this.assertResourceFile(dto.fileId, createdBy);
+    await this.assertResourceCriterion(dto.criterionId);
 
     // Un mismo enlace dos veces en el catalogo solo genera recomendaciones
     // duplicadas para la misma persona.
@@ -714,6 +718,7 @@ export class CatalogsService {
         status: LearningResourceStatus.ACTIVE,
         createdBy,
         imageFileId: dto.imageFileId ?? null,
+        criterionId: dto.criterionId ?? null,
         // V4.1 A41-014 (§7): la propuesta de un docente espera a Dirección,
         // salvo que Dirección le haya concedido publicar sin revisión (V5 §9.2).
         reviewStatus: esDocente && !politica ? 'pending' : 'not_required',
@@ -782,6 +787,10 @@ export class CatalogsService {
       await this.assertAreaExists(dto.academicAreaId);
       recurso.academicAreaId = dto.academicAreaId;
     }
+    if (dto.criterionId !== undefined) {
+      await this.assertResourceCriterion(dto.criterionId);
+      recurso.criterionId = dto.criterionId ?? null;
+    }
     if (dto.imageFileId !== undefined) {
       await this.assertResourceImage(dto.imageFileId, null);
       recurso.imageFileId = dto.imageFileId ?? null;
@@ -846,6 +855,16 @@ export class CatalogsService {
     if (!valido) {
       const m = 'El archivo tiene que ser un PDF o una imagen (PNG, JPG o WEBP) subido por ti. Para un video, usa un enlace.';
       throw new BadRequestException({ message: m, fields: { fileId: [m] } });
+    }
+  }
+
+  /** V5 §8.3: el criterio de un recurso es de «recurso completado», vigente y no un extra. */
+  private async assertResourceCriterion(criterionId: string | null | undefined): Promise<void> {
+    if (!criterionId) return;
+    const c = await this.criteria.findOne({ where: { id: criterionId } });
+    if (!c || !c.isActive || c.isBonus || c.trigger !== GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO) {
+      const m = 'Elige un criterio vigente de «recurso completado».';
+      throw new BadRequestException({ message: m, fields: { criterionId: [m] } });
     }
   }
 

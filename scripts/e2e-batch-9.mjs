@@ -281,9 +281,10 @@ async function independencia(ctx) {
   const afinidadDespues = (await req('GET', '/affinity/me/summary', { token: ctx.est.token }))
     .data?.totalScore ?? 0;
 
+  // V5 §10: solo tres familias de puntos; sumarse a un equipo ya no da puntos.
   check(
-    puntosDespues > puntosAntes,
-    'B9.16 Una colaboración aceptada da puntos (§66)',
+    puntosDespues === puntosAntes,
+    'B9.16 V5 §10 Una colaboración aceptada ya no da puntos (familia retirada)',
     `${puntosAntes} -> ${puntosDespues}`,
   );
   check(

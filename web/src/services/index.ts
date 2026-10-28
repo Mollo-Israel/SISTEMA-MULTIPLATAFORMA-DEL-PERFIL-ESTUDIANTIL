@@ -272,6 +272,26 @@ export interface LearningResource {
   semesterScope?: number[];
   /** V5 §9.2: publicado por un docente con autonomía de Dirección. */
   policyId?: string | null;
+  /** V5 §8.3: criterio opcional de «recurso completado». */
+  criterionId?: string | null;
+}
+
+/** V5 §10.3: un movimiento del historial de puntos de un estudiante. */
+export interface StudentPointsHistory {
+  student: { profileId: string; name: string; semester: number | null };
+  totalPoints: number;
+  items: {
+    id: string;
+    at: string;
+    points: number;
+    criterion: string | null;
+    family: string | null;
+    origin: { type: 'activity' | 'project' | 'resource' | 'other'; id: string | null; title: string | null };
+    awardedBy: string | null;
+    approvedBy: string | null;
+    reason: string;
+    status: 'APPLIED' | 'REVERSED' | 'PENDING';
+  }[];
 }
 
 /** V5 §9.2: autonomía docente por módulo (REQUIRE_REVIEW por defecto). */
@@ -635,12 +655,15 @@ export const gamificationService = {
     api.get<ScopePoints>('/gamification/scope-points', { params: q ? { period, q } : { period } }).then((r) => r.data),
   // --- V4.1 A41-016: criterios configurados y propuestas docentes
   /** Criterios vigentes que se pueden elegir (participación en actividades o proyecto). */
-  availableCriteria: (trigger?: 'participacion_confirmada' | 'proyecto_corroborado') =>
+  availableCriteria: (trigger?: 'participacion_confirmada' | 'proyecto_corroborado' | 'recurso_completado_atestiguado') =>
     api.get<GamificationCriterion[]>('/gamification-criteria/available', { params: trigger ? { trigger } : {} }).then((r) => r.data),
   proposals: (status?: 'pending' | 'approved' | 'rejected') =>
     api.get<GamificationProposal[]>('/gamification/proposals', { params: status ? { status } : {} }).then((r) => r.data),
-  propose: (data: { projectId: string; studentProfileId: string; criterionId: string; reason: string }) =>
+  propose: (data: { projectId?: string; resourceId?: string; studentProfileId: string; criterionId: string; reason: string }) =>
     api.post<GamificationProposal>('/gamification/proposals', data).then((r) => r.data),
+  /** V5 §10.3: historial de un estudiante (docente: solo su alcance). */
+  studentHistory: (profileId: string) =>
+    api.get<StudentPointsHistory>(`/gamification/students/${profileId}/history`).then((r) => r.data),
   reviewProposal: (id: string, decision: 'approve' | 'reject', comment?: string) =>
     api.post<GamificationProposal>(`/gamification/proposals/${id}/review`, { decision, comment }).then((r) => r.data),
 };

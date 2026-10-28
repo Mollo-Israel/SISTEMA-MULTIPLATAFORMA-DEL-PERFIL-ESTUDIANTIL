@@ -99,6 +99,13 @@ export class LearningResource {
   @Column({ name: 'policy_id', type: 'uuid', nullable: true })
   policyId: string | null;
 
+  /**
+   * V5 §8.3: criterio opcional de «recurso completado». Solo habilita que un
+   * docente dé fe de que alguien lo completó; abrirlo no da puntos.
+   */
+  @Column({ name: 'criterion_id', type: 'uuid', nullable: true })
+  criterionId: string | null;
+
   /** Semestres a los que va dirigido; vacío = toda la carrera. */
   @Column({ name: 'semester_scope', type: 'smallint', array: true, default: () => "'{}'" })
   semesterScope: number[];

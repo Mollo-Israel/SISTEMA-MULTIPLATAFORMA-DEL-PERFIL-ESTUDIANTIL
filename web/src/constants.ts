@@ -56,14 +56,16 @@ export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
  * retirados se muestran en gris en los criterios antiguos que los usan.
  */
 export const GAMIFICATION_TRIGGERS = [
-  { value: 'participacion_confirmada', label: 'Participación confirmada', hint: 'El responsable confirma que el estudiante asistió a una actividad.' },
-  { value: 'primer_proyecto_respaldado', label: 'Primer proyecto respaldado', hint: 'V4.1: ya no se otorga solo. Los proyectos se premian por propuesta docente que aprueba Dirección.' },
-  { value: 'proyecto_corroborado', label: 'Proyecto corroborado', hint: 'Un docente lo propone sobre un proyecto con respaldo suficiente y Dirección lo aprueba.' },
-  { value: 'colaboracion_aceptada', label: 'Colaboración aceptada', hint: 'Se suma a un equipo o su contribución es aceptada.' },
-  { value: 'hito_trayectoria', label: 'Hito de trayectoria', hint: 'Su respaldo en un área cruza un umbral.' },
+  // V5 §10: solo tres familias. Los demás hechos quedaron retirados.
+  { value: 'participacion_confirmada', label: 'Participación confirmada', hint: 'El responsable confirma la asistencia (nunca por interés, solicitud ni admisión).' },
+  { value: 'proyecto_corroborado', label: 'Proyecto reconocido por un docente', hint: 'Reconocimiento motivado sobre un proyecto con respaldo suficiente; no cambia su respaldo.' },
+  { value: 'recurso_completado_atestiguado', label: 'Recurso completado (atestiguado)', hint: 'Un docente da fe, con sustento, de que lo completó. Abrirlo o guardarlo no cuenta.' },
 ];
 
 export const RETIRED_GAMIFICATION_TRIGGERS = [
+  { value: 'primer_proyecto_respaldado', label: 'Primer proyecto respaldado (retirado)' },
+  { value: 'colaboracion_aceptada', label: 'Colaboración aceptada (retirado)' },
+  { value: 'hito_trayectoria', label: 'Hito de trayectoria (retirado)' },
   { value: 'proyecto_registrado', label: 'Proyecto registrado (retirado)' },
   { value: 'evidencia_adjunta', label: 'Evidencia adjunta (retirado)' },
   { value: 'certificado_externo', label: 'Certificado externo (retirado)' },

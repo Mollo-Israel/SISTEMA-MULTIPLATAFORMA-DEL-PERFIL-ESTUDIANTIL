@@ -2086,7 +2086,9 @@ async function batch19(ctx) {
   const inv = await req('POST', `/teams/${eq.id}/invitations`, { token: amiga.token, body: { invitedProfileId: est.profileId } });
   await req('PATCH', `/teams/invitations/${inv.data.id}`, { token: est.token, body: { decision: 'accept' } });
   const pe = await progreso();
-  check(pe.totalPoints > tras && eventos(pe, 'colaboracion_aceptada').length === 1, 'V3.19.6 Una colaboración aceptada (equipo) sí se reconoce', `${tras} → ${pe.totalPoints}`);
+  // V5 §10: solo tres familias (participación confirmada, reconocimiento docente de
+  // proyecto y recurso completado atestiguado). Sumarse a un equipo ya no da puntos.
+  check(pe.totalPoints === tras && eventos(pe, 'colaboracion_aceptada').length === 0, 'V3.19.6 V5 §10 Una colaboración aceptada (equipo) ya no suma: es una familia retirada', `${tras} → ${pe.totalPoints}`);
   check(await afinidad() === afinidadAntes, 'V3.19.7 §57 Y los puntos no mueven la afinidad ni el respaldo');
   const desglose = JSON.stringify((await req('GET', '/affinity/me/summary', { token: est.token })).data ?? {});
   check(!/gamif|insignia|badge|puntos de/i.test(desglose), 'V3.19.8 §57 El desglose de afinidad no menciona puntos ni insignias');

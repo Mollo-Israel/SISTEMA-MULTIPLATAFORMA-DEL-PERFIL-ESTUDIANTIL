@@ -513,6 +513,122 @@ async function batch7(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-8 — Gamificación: tres familias e historial detallado (§10, E05…E07, D08)
+// ===========================================================================
+async function batch8(ctx) {
+  objective('BATCH V5-8 · Tres familias de puntos; cada punto dice criterio, origen, quién otorgó y quién aprobó');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Familias${L}`, email: correoStaff('b8dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: `Familias${L}`, email: correoStaff('b8doc'), role: 'TEACHER' });
+  const ajeno = await provisionAndActivate(ctx.admin, { firstName: 'Iris', lastName: `Familias${L}`, email: correoStaff('b8ajeno'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [6] } });
+  await req('PUT', `/users/${ajeno.userId}/semesters`, { token: ctx.admin, body: { semesters: [2] } });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Eva', lastName: `Familias${L}`, email: correoEst('b8est'), semester: 6 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const area = ((await req('GET', '/academic-areas', { token: director.token })).data ?? [])[0];
+  const puntos = async () => (await req('GET', '/gamification/me', { token: est.token })).data?.totalPoints ?? 0;
+  const historial = async (token = director.token) => req('GET', `/gamification/students/${est.profileId}/history`, { token });
+
+  // --- §10: los criterios nuevos solo usan las tres familias
+  const retirado = await req('POST', '/gamification-criteria', {
+    token: director.token, body: { code: `colab_${TS}`, name: 'Colaborar', trigger: 'colaboracion_aceptada', points: 5, academicAreaId: area.id },
+  });
+  const deRecurso = await req('POST', '/gamification-criteria', {
+    token: director.token, body: { code: `recurso_${TS}`, name: `Completó la guía ${L}`, trigger: 'recurso_completado_atestiguado', points: 12, academicAreaId: area.id },
+  });
+  check(retirado.status >= 400 && retirado.status < 500 && !!retirado.data?.fields?.trigger && deRecurso.status === 201,
+    'V5.8.1 §10 Un criterio nuevo solo usa las tres familias: «colaboración aceptada» está retirada; «recurso completado» sí', `${retirado.status} / ${deRecurso.status}`);
+  const disponibles = (await req('GET', '/gamification-criteria/available?trigger=recurso_completado_atestiguado', { token: docente.token })).data ?? [];
+  check(disponibles.some((c) => c.id === deRecurso.data?.id) && disponibles.every((c) => c.trigger === 'recurso_completado_atestiguado'),
+    'V5.8.2 El docente ve los criterios vigentes de recurso completado', json(disponibles.map((c) => c.code)));
+
+  // --- E05: confirmar dos veces la misma asistencia es un solo evento, con quién la confirmó
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const charla = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const act = await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `Charla con puntos ${L}`, type: 'academica', categoryId: charla.id, semesterScope: [6], activityDate: en(48), endAt: en(50), status: 'open' },
+  });
+  await req('POST', `/activities/${act.data?.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${act.data?.id}`, { token: director.token, body: { activityDate: en(-1), endAt: en(2) } });
+  const antesAsistir = await puntos();
+  const c1 = await decidir(director.token, act.data?.id, est.profileId, 'confirmed');
+  const c2 = await decidir(director.token, act.data?.id, est.profileId, 'confirmed');
+  const trasAsistir = await puntos();
+  const h1 = (await historial()).data;
+  const deAsistencia = (h1?.items ?? []).filter((i) => i.origin?.type === 'activity' && i.origin?.id === act.data?.id && i.points > 0);
+  check(c1.status === 200 && [200, 409].includes(c2.status) && deAsistencia.length === 1 && trasAsistir - antesAsistir === deAsistencia[0]?.points,
+    'V5.8.3 E05 Confirmar dos veces la misma asistencia da un solo evento de puntos', json({ c1: c1.status, c2: c2.status, n: deAsistencia.length, d: trasAsistir - antesAsistir }));
+  check(deAsistencia[0]?.awardedBy === `Dora Familias${L}` && !!deAsistencia[0]?.criterion && deAsistencia[0]?.status === 'APPLIED',
+    'V5.8.4 §10.3 El evento dice quién confirmó la asistencia, con qué criterio y que está aplicado', json(deAsistencia[0]));
+
+  // --- E07 / D08: un recurso completado solo suma cuando un docente da fe
+  const PDF = Buffer.from(`%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n% guia ${TS}\n%%EOF\n`, 'latin1');
+  const subido = await subirArchivo(director.token, PDF, 'guia-completar.pdf', 'application/pdf');
+  const malCriterio = await req('POST', '/learning-resources', {
+    token: director.token,
+    body: { title: `Guía mal criterio ${L}`, provider: 'Carrera', resourceType: 'practice', academicAreaId: area.id, areaIds: [area.id], fileId: subido.data?.id, criterionId: act.data?.id },
+  });
+  const recurso = await req('POST', '/learning-resources', {
+    token: director.token,
+    body: { title: `Guía para completar ${L}`, provider: 'Carrera', resourceType: 'practice', academicAreaId: area.id, areaIds: [area.id], fileId: subido.data?.id, criterionId: deRecurso.data?.id },
+  });
+  const sinCriterio = await req('POST', '/learning-resources', {
+    token: director.token,
+    body: { title: `Guía sin puntos ${L}`, provider: 'Carrera', resourceType: 'guide', academicAreaId: area.id, areaIds: [area.id], url: `https://docs.example.org/v5b8/${TS}/sin` },
+  });
+  check(malCriterio.status === 400 && !!malCriterio.data?.fields?.criterionId && recurso.status === 201 && recurso.data?.criterionId === deRecurso.data?.id,
+    'V5.8.5 §8.3 El recurso lleva un criterio opcional, y solo de «recurso completado»', `${malCriterio.status} / ${recurso.status}`);
+  const antesAbrir = await puntos();
+  await req('PUT', `/library/${recurso.data?.id}/favorite`, { token: est.token });
+  await leerArchivo(est.token, recurso.data?.fileUrl ?? '');
+  await req('GET', '/gamification/me', { token: est.token });
+  check(await puntos() === antesAbrir, 'V5.8.6 E07 Guardar en favoritos y descargar el recurso no lo da por completado', `${antesAbrir} → ${await puntos()}`);
+
+  const atestiguar = (quien, extra = {}) => req('POST', '/gamification/proposals', {
+    token: quien.token,
+    body: { resourceId: recurso.data?.id, studentProfileId: est.profileId, criterionId: deRecurso.data?.id, reason: 'Entregó la práctica resuelta en clase el martes.', ...extra },
+  });
+  const deEstudiante = await atestiguar(est);
+  const fueraDeAlcance = await atestiguar(ajeno);
+  const sinSustento = await atestiguar(docente, { reason: 'listo' });
+  const recursoSinCriterio = await atestiguar(docente, { resourceId: sinCriterio.data?.id });
+  const ambos = await req('POST', '/gamification/proposals', {
+    token: docente.token, body: { resourceId: recurso.data?.id, projectId: recurso.data?.id, studentProfileId: est.profileId, criterionId: deRecurso.data?.id, reason: 'Entregó la práctica resuelta.' },
+  });
+  check(deEstudiante.status === 403 && fueraDeAlcance.status === 404 && sinSustento.status === 400
+    && recursoSinCriterio.status === 400 && recursoSinCriterio.data?.code === 'RESOURCE_WITHOUT_CRITERION' && ambos.status === 400,
+    'V5.8.7 D08 Solo un docente con el estudiante en su alcance, con sustento y sobre un recurso con criterio',
+    `${deEstudiante.status} / ${fueraDeAlcance.status} / ${sinSustento.status} / ${recursoSinCriterio.status}:${recursoSinCriterio.data?.code} / ${ambos.status}`);
+
+  const propuesta = await atestiguar(docente);
+  const hPend = (await historial()).data;
+  const pendiente = (hPend?.items ?? []).find((i) => i.id === propuesta.data?.id);
+  check(propuesta.status === 201 && propuesta.data?.status === 'pending' && propuesta.data?.sourceType === 'resource'
+    && propuesta.data?.resource?.id === recurso.data?.id && pendiente?.status === 'PENDING' && await puntos() === antesAbrir,
+    'V5.8.8 D08 Sin autonomía, el docente propone: queda pendiente y figura como «pendiente» en el historial', json({ s: propuesta.status, st: propuesta.data?.status, h: pendiente?.status }));
+  const aprobada = await req('POST', `/gamification/proposals/${propuesta.data?.id}/review`, { token: director.token, body: { decision: 'approve' } });
+  const despues = await puntos();
+  const hFin = (await historial()).data;
+  const evento = (hFin?.items ?? []).find((i) => i.origin?.type === 'resource' && i.origin?.id === recurso.data?.id && i.status === 'APPLIED');
+  check(aprobada.status === 200 && despues - antesAbrir === 12 && evento?.points === 12 && evento?.criterion === `Completó la guía ${L}`
+    && evento?.awardedBy === `Ciro Familias${L}` && evento?.approvedBy === `Dora Familias${L}` && evento?.origin?.title === `Guía para completar ${L}`,
+    'V5.8.9 §10.3 Aprobado: suma una vez, y el historial dice criterio, recurso, quién dio fe y quién aprobó', json(evento));
+  const otraVez = await atestiguar(docente);
+  check(otraVez.status === 409, 'V5.8.10 §10.3 El mismo recurso no se premia dos veces al mismo estudiante', `${otraVez.status}`);
+
+  // --- Quién ve el historial
+  const delDocente = await historial(docente.token);
+  const delAjeno = await historial(ajeno.token);
+  const delEstudiante = await historial(est.token);
+  check(delDocente.status === 200 && delAjeno.status === 403 && delEstudiante.status === 403,
+    'V5.8.11 §10.3 El docente ve el historial de su alcance; otro docente y el propio estudiante no (sin ranking)',
+    `${delDocente.status} / ${delAjeno.status} / ${delEstudiante.status}`);
+  const vista = (await req('GET', '/gamification/me', { token: est.token })).data;
+  check((vista?.rules ?? []).every((r) => ['participacion_confirmada', 'proyecto_corroborado', 'recurso_completado_atestiguado'].includes(r.trigger)),
+    'V5.8.12 §10 Al estudiante se le explican solo las tres familias que dan puntos', json((vista?.rules ?? []).map((r) => r.trigger)));
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -664,7 +780,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch10, batch12 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch10, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

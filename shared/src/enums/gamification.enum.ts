@@ -34,6 +34,11 @@ export enum GamificationTrigger {
    * los fija el propio reto.
    */
   RECONOCIMIENTO_DOCENTE = 'reconocimiento_docente',
+  /**
+   * V5 §10: un docente da fe, con sustento, de que el estudiante completó un
+   * recurso. Abrirlo, descargarlo o guardarlo en favoritos no lo dispara.
+   */
+  RECURSO_COMPLETADO_ATESTIGUADO = 'recurso_completado_atestiguado',
 
   // ------------------------------------------------------------------
   // Disparadores del 40 % que §66 excluye. Se conservan porque hay
@@ -52,24 +57,33 @@ export enum GamificationTrigger {
   PERFIL_COMPLETO = 'perfil_completo',
 }
 
-/** Disparadores vigentes, los únicos que generan eventos nuevos (§66). */
+/**
+ * V5 §10: las tres familias que se premian. Son los únicos disparadores que
+ * generan eventos nuevos y los únicos que un criterio nuevo puede usar:
+ *
+ * - ACTIVITY_PARTICIPATION_CONFIRMED → `participacion_confirmada`, al confirmar
+ *   la asistencia (nunca por interés, solicitud ni admisión).
+ * - PROJECT_TEACHER_RECOGNITION → `proyecto_corroborado`, que desde V4.1 solo
+ *   llega por un reconocimiento docente motivado (no por el respaldo solo).
+ * - RESOURCE_COMPLETION_ATTESTED → `recurso_completado_atestiguado`.
+ *
+ * Los demás quedan retirados: sus eventos pasados se conservan.
+ */
+export const V5_GAMIFICATION_FAMILY: Record<string, 'ACTIVITY_PARTICIPATION_CONFIRMED' | 'PROJECT_TEACHER_RECOGNITION' | 'RESOURCE_COMPLETION_ATTESTED'> = {
+  participacion_confirmada: 'ACTIVITY_PARTICIPATION_CONFIRMED',
+  proyecto_corroborado: 'PROJECT_TEACHER_RECOGNITION',
+  recurso_completado_atestiguado: 'RESOURCE_COMPLETION_ATTESTED',
+};
+
+/** Disparadores vigentes, los únicos que generan eventos nuevos (V5 §10). */
 export const ACTIVE_GAMIFICATION_TRIGGERS: readonly GamificationTrigger[] = [
   GamificationTrigger.PARTICIPACION_CONFIRMADA,
-  GamificationTrigger.PRIMER_PROYECTO_RESPALDADO,
   GamificationTrigger.PROYECTO_CORROBORADO,
-  GamificationTrigger.COLABORACION_ACEPTADA,
-  GamificationTrigger.HITO_TRAYECTORIA,
-  GamificationTrigger.RECONOCIMIENTO_DOCENTE,
+  GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO,
 ];
 
-/** Hechos que el sistema detecta solo y que se puntúan con su criterio general. */
-export const SYSTEM_GAMIFICATION_TRIGGERS: readonly GamificationTrigger[] = [
-  GamificationTrigger.PARTICIPACION_CONFIRMADA,
-  GamificationTrigger.PRIMER_PROYECTO_RESPALDADO,
-  GamificationTrigger.PROYECTO_CORROBORADO,
-  GamificationTrigger.COLABORACION_ACEPTADA,
-  GamificationTrigger.HITO_TRAYECTORIA,
-];
+/** Hechos que un criterio puede premiar (V5 §10: solo las tres familias). */
+export const SYSTEM_GAMIFICATION_TRIGGERS: readonly GamificationTrigger[] = ACTIVE_GAMIFICATION_TRIGGERS;
 
 /** Puntos de cada acción. Son el reconocimiento, no una medida de nadie. */
 export const GAMIFICATION_POINTS: Record<string, number> = {
@@ -78,15 +92,17 @@ export const GAMIFICATION_POINTS: Record<string, number> = {
   [GamificationTrigger.PROYECTO_CORROBORADO]: 20,
   [GamificationTrigger.COLABORACION_ACEPTADA]: 8,
   [GamificationTrigger.HITO_TRAYECTORIA]: 15,
+  [GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO]: 10,
 };
 
 export const GAMIFICATION_TRIGGER_LABEL: Record<string, string> = {
   [GamificationTrigger.PARTICIPACION_CONFIRMADA]: 'Participación confirmada',
   [GamificationTrigger.PRIMER_PROYECTO_RESPALDADO]: 'Primer proyecto respaldado',
-  [GamificationTrigger.PROYECTO_CORROBORADO]: 'Proyecto corroborado',
+  [GamificationTrigger.PROYECTO_CORROBORADO]: 'Proyecto reconocido por un docente',
   [GamificationTrigger.COLABORACION_ACEPTADA]: 'Colaboración aceptada',
   [GamificationTrigger.HITO_TRAYECTORIA]: 'Hito de trayectoria',
   [GamificationTrigger.RECONOCIMIENTO_DOCENTE]: 'Reto reconocido por un docente',
+  [GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO]: 'Recurso completado (atestiguado por un docente)',
 };
 
 /**

@@ -135,9 +135,10 @@ class ResolveDto {
   note?: string;
 }
 
-/** V4.1 A41-016: propuesta de un docente. */
+/** V4.1 A41-016: propuesta de un docente. V5 §10: sobre un proyecto o un recurso. */
 class ProposeGamificationDto {
-  @IsUUID('4') projectId: string;
+  @IsOptional() @IsUUID('4') projectId?: string;
+  @IsOptional() @IsUUID('4') resourceId?: string;
   @IsUUID('4') studentProfileId: string;
   @IsUUID('4') criterionId: string;
   @IsString() @MinLength(10, { message: 'Explica por qué lo propones (al menos 10 caracteres).' }) @MaxLength(500) reason: string;
@@ -321,6 +322,13 @@ export class GamificationExtrasController {
   @ApiOperation({ summary: 'Propuestas de puntos: las mías (docente) o todas (Dirección y Administración).' })
   listProposals(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: string) {
     return this.proposals.list(user, status);
+  }
+
+  @Get('students/:profileId/history')
+  @Roles(...PERSONAL)
+  @ApiOperation({ summary: 'V5 §10.3: historial de puntos de un estudiante (criterio, origen, quién otorgó y aprobó, estado). Docente: solo su alcance.' })
+  history(@CurrentUser() user: AuthenticatedUser, @Param('profileId', ParseUUIDPipe) profileId: string) {
+    return this.proposals.historial(user, profileId);
   }
 
   @Post('proposals/:id/review')

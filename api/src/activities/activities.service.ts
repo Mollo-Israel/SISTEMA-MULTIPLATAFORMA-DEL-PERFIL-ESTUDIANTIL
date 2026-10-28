@@ -2211,6 +2211,8 @@ export class ActivitiesService {
         reason: `${ajuste < 0 ? 'Reverso' : 'Restitución'} por corrección de participación: ${motivo}`.slice(0, 300),
         sourceEntityType: 'activity_registration',
         sourceEntityId: reg.id,
+        // V5 §10.3: el movimiento conserva el criterio del evento que corrige.
+        criterionId: original.criterionId ?? null,
       });
       const fila = await m.getRepository(GamificationEvent)
         .createQueryBuilder('e')

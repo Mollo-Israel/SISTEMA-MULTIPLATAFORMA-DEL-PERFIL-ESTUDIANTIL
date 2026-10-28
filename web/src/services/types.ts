@@ -227,7 +227,10 @@ export interface GamificationProposal {
   createdAt: string;
   reviewedAt: string | null;
   criterion: { id: string; name: string; points: number } | null;
+  /** V5 §10: un proyecto (reconocimiento) o un recurso (completado atestiguado). */
+  sourceType?: 'project' | 'resource';
   project: { id: string; title: string; backingTier: string; repositoryUrl: string | null } | null;
+  resource?: { id: string; title: string } | null;
   student: { profileId: string; name: string; semester: number | null } | null;
   proposedBy: string | null;
   /** V5 §9.2: otorgado por el docente con autonomía de Dirección, sin revisión. */

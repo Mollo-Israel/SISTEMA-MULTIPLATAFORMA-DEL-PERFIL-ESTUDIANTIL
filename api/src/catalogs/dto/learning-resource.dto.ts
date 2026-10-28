@@ -103,6 +103,13 @@ export class CreateLearningResourceDto {
   @IsUUID('4', { message: 'La imagen no es válida.' })
   imageFileId?: string | null;
 
+  /** V5 §8.3: criterio opcional de «recurso completado». `null` lo quita. */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: { criterionId?: string | null }) => o.criterionId !== null)
+  @IsUUID('4', { message: 'El criterio no es válido.' })
+  criterionId?: string | null;
+
   /** V4.1 A41-014: semestres a los que va dirigido (vacío = toda la carrera; un docente, los suyos). */
   @ApiProperty({ required: false, type: [Number] })
   @IsOptional()
@@ -201,6 +208,13 @@ export class UpdateLearningResourceDto {
   @ValidateIf((o: { imageFileId?: string | null }) => o.imageFileId !== null)
   @IsUUID('4', { message: 'La imagen no es válida.' })
   imageFileId?: string | null;
+
+  /** V5 §8.3: criterio opcional de «recurso completado». `null` lo quita. */
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o: { criterionId?: string | null }) => o.criterionId !== null)
+  @IsUUID('4', { message: 'El criterio no es válido.' })
+  criterionId?: string | null;
 
   /** V5-6 (§8.2): semestres a los que va dirigido; vacío = toda la carrera. */
   @ApiProperty({ required: false, type: [Number] })

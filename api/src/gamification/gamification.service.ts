@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import {
   ActivityReviewStatus,
-  AffinityLevel,
   GAMIFICATION_TRIGGER_LABEL,
   SYSTEM_GAMIFICATION_TRIGGERS,
   GamificationTrigger,
@@ -39,6 +38,10 @@ interface Hecho {
   fixedPoints?: number;
   /** Insignia que la regla de la actividad otorga con el hecho. */
   badgeId?: string | null;
+  /** V5 §10.3: criterio elegido por la actividad, si eligió uno. */
+  criterionId?: string | null;
+  /** V5 §10.3: quién hizo que el hecho ocurra (p. ej. quien confirmó la asistencia). */
+  awardedBy?: string | null;
 }
 
 /**
@@ -95,15 +98,24 @@ export class GamificationService {
    * evento en el momento en que se reconoce.
    */
   async puntosPorHecho(): Promise<(trigger: GamificationTrigger, areaId?: string | null) => number> {
+    const valor = await this.criterioPorHecho();
+    return (trigger, areaId) => valor(trigger, areaId).points;
+  }
+
+  /** Lo mismo, con el criterio que fija los puntos (V5 §10.3: el historial lo guarda). */
+  private async criterioPorHecho(): Promise<(trigger: GamificationTrigger, areaId?: string | null) => { points: number; criterionId: string | null }> {
     // V4.1 A41-016: los extras de temporada no reemplazan el valor del hecho.
     const activos = (await this.criteria.find({ where: { isActive: true } })).filter((c) => !c.isBonus);
     return (trigger, areaId) => {
       const delArea = areaId
         ? activos.filter((c) => c.trigger === trigger && c.academicAreaId === areaId)
         : [];
-      if (delArea.length > 0) return Math.max(...delArea.map((c) => c.points));
+      if (delArea.length > 0) {
+        const mayor = delArea.reduce((a, b) => (b.points > a.points ? b : a));
+        return { points: mayor.points, criterionId: mayor.id };
+      }
       const general = activos.find((c) => c.trigger === trigger && !c.academicAreaId && c.code === trigger);
-      return general?.points ?? 0;
+      return { points: general?.points ?? 0, criterionId: general?.id ?? null };
     };
   }
 
@@ -114,7 +126,8 @@ export class GamificationService {
   async award(
     studentProfileId: string,
     hecho: { trigger: GamificationTrigger; dedupeKey: string; reason: string; points: number;
-      sourceEntityType: string | null; sourceEntityId: string | null },
+      sourceEntityType: string | null; sourceEntityId: string | null;
+      criterionId?: string | null; awardedBy?: string | null; approvedBy?: string | null },
   ): Promise<boolean> {
     const insertado = await this.dataSource.transaction(async (manager) => {
       const r = await manager
@@ -142,17 +155,17 @@ export class GamificationService {
     const perfil = await this.profiles.findOne({ where: { id: studentProfileId } });
     if (!perfil) return { nuevos: 0, total: 0 };
 
-    const hechos = [
-      ...(await this.participacionesConfirmadas(studentProfileId)),
-      // V4.1 A41-016 (§9.3): los proyectos ya no dan puntos solos. El docente
-      // propone un criterio y Dirección decide (GamificationProposalsService);
-      // lo ya otorgado se conserva en el historial.
-      ...(await this.colaboracionesAceptadas(studentProfileId, perfil.userId)),
-      ...(await this.hitosDeTrayectoria(studentProfileId)),
-    ];
-    const puntos = await this.puntosPorHecho();
+    // V5 §10: el motor solo reconoce la participación confirmada. Los proyectos
+    // (V4.1) y los recursos completados (V5) llegan por un docente que los
+    // reconoce; colaboraciones e hitos quedaron retirados. Lo ya otorgado por
+    // ellos se conserva en el historial.
+    const hechos = await this.participacionesConfirmadas(studentProfileId);
+    const valor = await this.criterioPorHecho();
     const valoradosBase = hechos
-      .map((h) => ({ ...h, points: h.fixedPoints ?? puntos(h.trigger, h.areaId) }))
+      .map((h) => {
+        const v = valor(h.trigger, h.areaId);
+        return { ...h, points: h.fixedPoints ?? v.points, criterionId: h.criterionId ?? v.criterionId };
+      })
       .filter((h) => h.points > 0);
     // V4.1 A41-016 (§9.3, A.10): extras de temporada vigentes hoy (Bolivia), por
     // hecho y área; cada uno se reconoce una vez por hecho (clave propia).
@@ -167,6 +180,7 @@ export class GamificationService {
         reason: `Bono de temporada «${b.name}»: ${h.reason}`,
         points: b.points,
         badgeId: null,
+        criterionId: b.id,
       })));
     const valorados = [...valoradosBase, ...extras];
     // Insignias que otorgan las reglas de las actividades (idempotente).
@@ -198,6 +212,8 @@ export class GamificationService {
             reason: h.reason.slice(0, 300),
             sourceEntityType: h.sourceEntityType,
             sourceEntityId: h.sourceEntityId,
+            criterionId: h.criterionId ?? null,
+            awardedBy: h.awardedBy ?? null,
           })),
         )
         .orIgnore()
@@ -248,85 +264,11 @@ export class GamificationService {
         areaId: r.activity?.academicAreaId ?? null,
         fixedPoints: regla?.points,
         badgeId: regla?.badgeId ?? null,
+        criterionId: regla?.criterionId ?? null,
+        // V5 §10.3: otorga quien confirmó la asistencia.
+        awardedBy: r.confirmedById ?? null,
       };
     });
-  }
-
-  /**
-   * Colaboraciones aceptadas (§66).
-   *
-   * Dos formas de la misma cosa: una pertenencia a un equipo y una
-   * contribución a un proyecto ajeno confirmada por su autor. En las dos,
-   * alguien más tuvo que decir que sí — que es lo que separa colaborar de
-   * declarar que uno colabora.
-   *
-   * V3 §32 / §57: un contacto ya no suma. Dos compañeros podían aceptarse
-   * mutuamente sin límite para acumular puntos (spam), y la cantidad de
-   * contactos no indica nada. Los puntos ya otorgados por contactos se
-   * conservan: no se destruyen datos.
-   */
-  private async colaboracionesAceptadas(
-    studentProfileId: string,
-    userId: string,
-  ): Promise<Hecho[]> {
-    const [equipos, contribuciones] = await Promise.all([
-      this.teamMembers.find({ where: { studentProfileId }, relations: { team: true } }),
-      this.members.find({ where: { userId }, relations: { project: true } }),
-    ]);
-
-    const hechos: Hecho[] = [];
-
-    equipos.forEach((m) =>
-      hechos.push({
-        trigger: GamificationTrigger.COLABORACION_ACEPTADA,
-        dedupeKey: `equipo:${m.id}`,
-        reason: `Formas parte del equipo «${m.team?.name ?? 'sin nombre'}»`,
-        sourceEntityType: 'team_member',
-        sourceEntityId: m.id,
-      }),
-    );
-
-    contribuciones
-      // La fila del responsable no es una colaboración (V2 §31: nada por autodeclararse).
-      .filter((m) => m.contributionConfirmedAt && !m.isOwner)
-      .forEach((m) =>
-        hechos.push({
-          trigger: GamificationTrigger.COLABORACION_ACEPTADA,
-          dedupeKey: `contribucion:${m.id}`,
-          reason: `Contribución confirmada en «${m.project?.title ?? 'un proyecto'}»`,
-          sourceEntityType: 'project_member',
-          sourceEntityId: m.id,
-        }),
-      );
-
-    return hechos;
-  }
-
-  /**
-   * Hitos de trayectoria (§66).
-   *
-   * El hito es que el **respaldo** de un área cruce un umbral de §54, no que
-   * suba la afinidad. Premiar la afinidad sería premiar lo que uno declara;
-   * premiar el respaldo es reconocer que lo que declaró se puede comprobar.
-   */
-  private async hitosDeTrayectoria(studentProfileId: string): Promise<Hecho[]> {
-    const filas = await this.affinities.find({
-      where: { studentProfileId },
-      relations: { academicArea: true },
-    });
-
-    return filas
-      .filter((r) => r.supportLevel === AffinityLevel.MEDIUM || r.supportLevel === AffinityLevel.HIGH)
-      .map((r) => ({
-        trigger: GamificationTrigger.HITO_TRAYECTORIA,
-        dedupeKey: `hito:${r.academicAreaId}:${r.supportLevel}`,
-        reason:
-          `Tu respaldo en ${r.academicArea?.name ?? 'un área'} alcanzó nivel `
-          + `${r.supportLevel === AffinityLevel.HIGH ? 'alto' : 'medio'}`,
-        sourceEntityType: 'academic_area',
-        sourceEntityId: r.academicAreaId,
-        areaId: r.academicAreaId,
-      }));
   }
 
   // =========================================================================
