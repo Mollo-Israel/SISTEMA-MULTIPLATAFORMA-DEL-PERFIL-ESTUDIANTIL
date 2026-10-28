@@ -41,6 +41,7 @@ import StudentLibraryPage from './pages/student/Library';
 import DirectorLearningResourcesPage from './pages/director/LearningResources';
 import DirectorAnalyticsPage from './pages/director/Analytics';
 import CredentialReviewsPage from './pages/director/CredentialReviews';
+import TeacherAutonomyPage from './pages/director/TeacherAutonomy';
 import StudentPointsPage from './pages/staff/StudentPoints';
 import SocietyMetricsPage from './pages/society/Metrics';
 import SocietyParticipantsPage from './pages/society/Participants';
@@ -188,6 +189,8 @@ export default function App() {
             <Route path="/director/recognitions" element={<Navigate to="/director/points" replace />} />
             {/* V4.1 A41-016 (§9.1): Dirección también configura los criterios. */}
             <Route path="/director/gamification" element={<AdminGamificationPage />} />
+            {/* V5 §9.2: Dirección concede y revoca autonomía docente. */}
+            <Route path="/director/autonomy" element={<TeacherAutonomyPage />} />
           </Route>
 
           <Route element={<RoleGate roles={[SC]}><Outlet /></RoleGate>}>

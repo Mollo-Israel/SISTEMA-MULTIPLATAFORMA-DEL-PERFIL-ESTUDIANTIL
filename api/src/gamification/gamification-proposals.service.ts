@@ -12,6 +12,7 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { User } from '../entities/user.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { TeacherScopeService } from '../access/teacher-scope.service';
+import { ApprovalPoliciesService } from '../access/approval-policies.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { GamificationService } from './gamification.service';
 
@@ -41,6 +42,7 @@ export class GamificationProposalsService {
     private readonly scope: TeacherScopeService,
     private readonly gamification: GamificationService,
     private readonly audit: AuditService,
+    private readonly approvals: ApprovalPoliciesService,
   ) {}
 
   private get repo() { return this.dataSource.getRepository(GamificationProposal); }
@@ -90,16 +92,33 @@ export class GamificationProposalsService {
       where: { studentProfileId: perfil.id, trigger: criterio.trigger, sourceEntityType: 'project', sourceEntityId: proyecto.id },
     });
     if (yaPremiado) throw new ConflictException('Ese proyecto ya recibió puntos por este hecho.');
+    // V5 §9.2: con una excepción de Dirección, el docente otorga sin revisión;
+    // queda en el historial de acciones directas, no en la bandeja (§9.4).
+    const politica = await this.approvals.vigente(user, 'GAMIFICATION');
     const guardada = await this.repo.save(this.repo.create({
       criterionId: criterio.id, sourceType: 'project', sourceId: proyecto.id,
-      studentProfileId: perfil.id, proposedBy: user.userId, reason: motivo, status: 'pending',
+      studentProfileId: perfil.id, proposedBy: user.userId, reason: motivo,
+      status: politica ? 'approved' : 'pending', policyId: politica?.id ?? null,
     }));
+    if (politica) {
+      await this.gamification.award(perfil.id, {
+        trigger: criterio.trigger,
+        dedupeKey: `criterio:${criterio.id}:project:${proyecto.id}`,
+        points: criterio.points,
+        reason: `${criterio.name} — «${proyecto.title}» (otorgado por docente con autonomía de Dirección)`,
+        sourceEntityType: 'project',
+        sourceEntityId: proyecto.id,
+      });
+    }
     await this.audit.record({
       actorUserId: user.userId,
-      eventType: AuditEventType.GAMIFICATION_PROPOSED,
+      eventType: politica ? AuditEventType.GAMIFICATION_AWARDED_DIRECT : AuditEventType.GAMIFICATION_PROPOSED,
       entityType: 'gamification_proposal',
       entityId: guardada.id,
-      metadata: { criterionId: criterio.id, projectId: proyecto.id, studentProfileId: perfil.id },
+      metadata: {
+        criterionId: criterio.id, projectId: proyecto.id, studentProfileId: perfil.id,
+        ...(politica ? { policyId: politica.id, points: criterio.points, reason: motivo } : {}),
+      },
     });
     return this.vista([guardada]).then((v) => v[0]);
   }
@@ -182,6 +201,8 @@ export class GamificationProposalsService {
         project: p ? { id: p.id, title: p.title, backingTier: p.backingTier, repositoryUrl: p.repositoryUrl ?? null } : null,
         student: e ? { profileId: e.id, name: `${e.user?.firstName ?? ''} ${e.user?.lastName ?? ''}`.trim(), semester: e.semester } : null,
         proposedBy: d ? `${d.firstName} ${d.lastName}` : null,
+        // V5 §9.2: otorgado por el docente con una excepción, sin revisión.
+        direct: !!f.policyId,
       };
     });
   }

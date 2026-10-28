@@ -270,7 +270,53 @@ export interface LearningResource {
   reviewStatus?: 'not_required' | 'pending' | 'observed' | 'approved' | 'rejected';
   reviewComment?: string | null;
   semesterScope?: number[];
+  /** V5 §9.2: publicado por un docente con autonomía de Dirección. */
+  policyId?: string | null;
 }
+
+/** V5 §9.2: autonomía docente por módulo (REQUIRE_REVIEW por defecto). */
+export type ApprovalModule = 'RESOURCE' | 'GAMIFICATION' | 'ACTIVITY';
+export type ApprovalDecision = 'REQUIRE_REVIEW' | 'DIRECT_ALLOWED';
+
+export interface ApprovalPolicyView {
+  id: string;
+  module: ApprovalModule;
+  decision: 'DIRECT_ALLOWED';
+  teacher: { id: string; name?: string; email?: string };
+  justification: string;
+  grantedAt: string;
+  grantedBy: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  revokeReason: string | null;
+}
+
+export interface DirectActionView {
+  module: 'RESOURCE' | 'GAMIFICATION';
+  id: string;
+  at: string;
+  teacher: string;
+  teacherUserId: string;
+  policyId: string;
+  title?: string;
+  criterion?: string;
+  points?: number;
+  reason?: string;
+  student?: string;
+}
+
+export const approvalPolicyService = {
+  mine: () => api.get<Record<ApprovalModule, ApprovalDecision>>('/approval-policies/me').then((r) => r.data),
+  list: (includeRevoked = false) =>
+    api.get<ApprovalPolicyView[]>('/approval-policies', { params: includeRevoked ? { includeRevoked: 'true' } : {} }).then((r) => r.data),
+  grant: (data: { teacherUserId: string; module: ApprovalModule; justification: string }) =>
+    api.post<ApprovalPolicyView>('/approval-policies', data).then((r) => r.data),
+  revoke: (id: string, reason: string) =>
+    api.post<ApprovalPolicyView>(`/approval-policies/${id}/revoke`, { reason }).then((r) => r.data),
+  teachers: () => api.get<{ id: string; name: string; email: string; semesters: number[] }[]>('/approval-policies/teachers').then((r) => r.data),
+  directActions: (teacherUserId?: string) =>
+    api.get<DirectActionView[]>('/approval-policies/direct-actions', { params: teacherUserId ? { teacherUserId } : {} }).then((r) => r.data),
+};
 
 export const learningResourceService = {
   /** V4.1 A41-014 (§9.4): bandeja de Dirección. */

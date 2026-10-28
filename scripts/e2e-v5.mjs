@@ -8,6 +8,7 @@
  * Uso:
  *   API_URL=http://localhost:3010/api node scripts/e2e-v5.mjs [batch4 …]
  */
+import { execSync } from 'child_process';
 import { API, asegurarGithubSimulado, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -414,6 +415,104 @@ async function batch6(ctx) {
 }
 
 // ===========================================================================
+//  BATCH V5-7 — Autonomía docente por módulo (§9.2, E01…E04, E08)
+// ===========================================================================
+const psql = (sql) => execSync(
+  `docker exec perfil_postgres psql -U ${process.env.POSTGRES_USER ?? 'perfil_user'} -d ${process.env.POSTGRES_DB ?? 'perfil_estudiantil'} -tAc "${sql.replace(/"/g, '\\"')}"`,
+  { encoding: 'utf8' },
+).trim();
+
+async function batch7(ctx) {
+  objective('BATCH V5-7 · REQUIRE_REVIEW por defecto; Dirección concede y revoca autonomía por docente y módulo');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Autonomia${L}`, email: correoStaff('b7dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(ctx.admin, { firstName: 'Ciro', lastName: `Autonomia${L}`, email: correoStaff('b7doc'), role: 'TEACHER' });
+  const sociedad = await provisionAndActivate(ctx.admin, { firstName: 'Sara', lastName: `Autonomia${L}`, email: correoStaff('b7soc'), role: 'SCIENTIFIC_SOCIETY' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [5] } });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Eva', lastName: `Autonomia${L}`, email: correoEst('b7est'), semester: 5 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const area = ((await req('GET', '/academic-areas', { token: director.token })).data ?? [])[0];
+  const recurso = (k) => ({
+    title: `Material autonomo ${k} ${L}`, provider: 'Carrera de Sistemas', resourceType: 'guide',
+    academicAreaId: area.id, areaIds: [area.id], url: `https://docs.example.org/v5b7/${TS}/${k}`,
+  });
+  const enBiblioteca = async (titulo) => ((await req('GET', `/library?q=${encodeURIComponent(titulo)}`, { token: est.token })).data?.items ?? []).some((r) => r.title === titulo);
+  const pendientesRecursos = async () => ((await req('GET', '/learning-resources/reviews/pending', { token: director.token })).data ?? []).map((r) => r.title);
+
+  const porDefecto = await req('GET', '/approval-policies/me', { token: docente.token });
+  const r1 = await req('POST', '/learning-resources', { token: docente.token, body: recurso('antes') });
+  check(porDefecto.data?.RESOURCE === 'REQUIRE_REVIEW' && porDefecto.data?.GAMIFICATION === 'REQUIRE_REVIEW' && porDefecto.data?.ACTIVITY === 'REQUIRE_REVIEW'
+    && r1.data?.reviewStatus === 'pending' && !(await enBiblioteca(recurso('antes').title)) && (await pendientesRecursos()).includes(recurso('antes').title),
+    'V5.7.1 E01 Sin excepción, el recurso del docente queda pendiente y va a la bandeja', json({ p: porDefecto.data, r: r1.data?.reviewStatus }));
+
+  const datos = { teacherUserId: docente.userId, module: 'RESOURCE', justification: 'Coordina la materia en los paralelos A, B y C.' };
+  const porAdmin = await req('POST', '/approval-policies', { token: ctx.admin, body: datos });
+  const porDocente = await req('POST', '/approval-policies', { token: docente.token, body: datos });
+  check(porAdmin.status === 403 && porDocente.status === 403, 'V5.7.2 §10.2 Solo Dirección concede: Administración y el propio docente no', `${porAdmin.status} / ${porDocente.status}`);
+  const actividad = await req('POST', '/approval-policies', { token: director.token, body: { ...datos, module: 'ACTIVITY' } });
+  check(actividad.status === 400 && actividad.data?.code === 'ACTIVITY_OVERRIDE_NOT_ENABLED',
+    'V5.7.3 §9.2 Las actividades siguen con revisión obligatoria: no se concede excepción', `${actividad.status} ${actividad.data?.code}`);
+  const aSociedad = await req('POST', '/approval-policies', { token: director.token, body: { ...datos, teacherUserId: sociedad.userId } });
+  check(aSociedad.status === 400 && aSociedad.data?.code === 'POLICY_TEACHER_ONLY', 'V5.7.4 E08 La sociedad científica no recibe ni hereda excepciones docentes', `${aSociedad.status} ${aSociedad.data?.code}`);
+  const sinMotivo = await req('POST', '/approval-policies', { token: director.token, body: { ...datos, justification: 'porque' } });
+  check(sinMotivo.status === 400 && !!sinMotivo.data?.fields?.justification, 'V5.7.5 La excepción exige un motivo, en su campo', `${sinMotivo.status}`);
+
+  const concedida = await req('POST', '/approval-policies', { token: director.token, body: datos });
+  const repetida = await req('POST', '/approval-policies', { token: director.token, body: datos });
+  check(concedida.status === 201 && concedida.data?.grantedBy && repetida.status === 409,
+    'V5.7.6 Dirección concede autonomía en recursos (con quién y cuándo); no se duplica', `${concedida.status} / ${repetida.status}`);
+  const ahora = await req('GET', '/approval-policies/me', { token: docente.token });
+  const r2 = await req('POST', '/learning-resources', { token: docente.token, body: recurso('directo') });
+  check(ahora.data?.RESOURCE === 'DIRECT_ALLOWED' && ahora.data?.GAMIFICATION === 'REQUIRE_REVIEW' && r2.status === 201 && r2.data?.reviewStatus === 'not_required'
+    && r2.data?.policyId === concedida.data?.id && (await enBiblioteca(recurso('directo').title)) && !(await pendientesRecursos()).includes(recurso('directo').title),
+    'V5.7.7 E02 Con la excepción publica directo: llega a la Biblioteca y no a la bandeja; puntos sigue con revisión', json({ m: ahora.data, r: r2.data?.reviewStatus }));
+  const historial = (await req('GET', '/approval-policies/direct-actions', { token: director.token })).data ?? [];
+  const accion = historial.find((a) => a.module === 'RESOURCE' && a.id === r2.data?.id);
+  const auditoria = psql(`select count(*) from audit_events where event_type = 'RESOURCE_PUBLISHED_DIRECT' and entity_id = '${r2.data?.id}' and actor_user_id = '${docente.userId}'`);
+  check(!!accion && accion.teacherUserId === docente.userId && accion.policyId === concedida.data?.id && auditoria === '1',
+    'V5.7.8 §9.3 Dirección ve la acción directa en su historial, auditada con actor y excepción', json({ a: !!accion, auditoria }));
+  const ajustada = await req('PATCH', `/learning-resources/${r2.data?.id}`, { token: docente.token, body: { description: 'Material revisado por el docente.' } });
+  check(ajustada.status === 200 && ajustada.data?.reviewStatus === 'not_required', 'V5.7.9 Ajusta lo que publicó con su autonomía sin volver a la bandeja', `${ajustada.status} ${ajustada.data?.reviewStatus}`);
+
+  const puntos = await req('POST', '/approval-policies', { token: director.token, body: { ...datos, module: 'GAMIFICATION', justification: 'Incentivos acordados para la materia de quinto.' } });
+  const proy = await req('POST', '/projects', {
+    token: est.token, body: { title: `Robot autonomo ${L}`, description: 'Robot que esquiva obstáculos con sensores ultrasónicos.', visibility: 'teachers', status: 'draft' },
+  });
+  psql(`update projects set backing_tier='supported' where id='${proy.data?.id}'`);
+  const criterio = ((await req('GET', '/gamification-criteria/available?trigger=proyecto_corroborado', { token: docente.token })).data ?? [])[0];
+  const antes = (await req('GET', '/gamification/me', { token: est.token })).data?.totalPoints ?? 0;
+  const otorgada = await req('POST', '/gamification/proposals', {
+    token: docente.token, body: { projectId: proy.data?.id, studentProfileId: est.profileId, criterionId: criterio?.id, reason: 'Integró sensores y control con evidencia propia.' },
+  });
+  const despues = (await req('GET', '/gamification/me', { token: est.token })).data?.totalPoints ?? 0;
+  const bandeja = ((await req('GET', '/gamification/proposals?status=pending', { token: director.token })).data ?? []).map((p) => p.id);
+  check(puntos.status === 201 && otorgada.status === 201 && otorgada.data?.status === 'approved' && otorgada.data?.direct === true
+    && despues - antes === criterio?.points && !bandeja.includes(otorgada.data?.id),
+    'V5.7.10 E02 Con autonomía en puntos, el docente otorga directo: entran una vez y no van a la bandeja', json({ s: otorgada.status, st: otorgada.data?.status, d: despues - antes, p: criterio?.points }));
+  const respaldo = psql(`select backing_tier from projects where id='${proy.data?.id}'`);
+  check(respaldo === 'supported', 'V5.7.11 E06 Otorgar puntos no cambia el respaldo del proyecto', respaldo);
+
+  const revocarSinMotivo = await req('POST', `/approval-policies/${concedida.data?.id}/revoke`, { token: director.token, body: { reason: '' } });
+  const revocada = await req('POST', `/approval-policies/${concedida.data?.id}/revoke`, { token: director.token, body: { reason: 'Cambio de coordinación de la materia.' } });
+  const r3 = await req('POST', '/learning-resources', { token: docente.token, body: recurso('despues') });
+  const sigue = await enBiblioteca(recurso('directo').title);
+  const politicas = (await req('GET', '/approval-policies?includeRevoked=true', { token: director.token })).data ?? [];
+  const fila = politicas.find((p) => p.id === concedida.data?.id);
+  check(revocarSinMotivo.status === 400 && revocada.status === 200 && r3.data?.reviewStatus === 'pending' && sigue && !!fila?.revokedAt && !!fila?.revokedBy,
+    'V5.7.12 E03 Al revocar, lo nuevo vuelve a revisión; lo ya publicado se conserva y la revocación queda registrada',
+    json({ rv: revocada.status, r3: r3.data?.reviewStatus, sigue, f: !!fila?.revokedAt }));
+  const reajuste = await req('PATCH', `/learning-resources/${r2.data?.id}`, { token: docente.token, body: { description: 'Otra versión del material.' } });
+  check(reajuste.status === 200 && reajuste.data?.reviewStatus === 'pending', 'V5.7.13 E03 Sin la excepción, ajustar lo publicado vuelve a pasar por Dirección', `${reajuste.status} ${reajuste.data?.reviewStatus}`);
+  const otraVez = await req('POST', `/approval-policies/${concedida.data?.id}/revoke`, { token: director.token, body: { reason: 'Otra vez.' } });
+  check(otraVez.status === 409, 'V5.7.14 Una excepción revocada no se revoca dos veces', `${otraVez.status}`);
+
+  const filtrado = (await req('GET', `/approval-policies/direct-actions?teacherUserId=${docente.userId}`, { token: director.token })).data ?? [];
+  const estudianteVe = await req('GET', '/approval-policies', { token: est.token });
+  check(filtrado.length >= 2 && filtrado.every((a) => a.teacherUserId === docente.userId) && filtrado.some((a) => a.module === 'GAMIFICATION' && a.student)
+    && estudianteVe.status === 403,
+    'V5.7.15 E04 Dirección filtra el historial por docente (recursos y puntos, con estudiante); un estudiante no lo ve', json({ n: filtrado.length, e: estudianteVe.status }));
+}
+
+// ===========================================================================
 //  BATCH V5-4 — Inscripción, admisión y asistencia (§6, C01…C08, E05)
 // ===========================================================================
 async function batch4(ctx) {
@@ -565,7 +664,7 @@ async function batch5(ctx) {
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch10, batch12 };
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch10, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V5 — verificación del contrato contra la API${C.r}`);

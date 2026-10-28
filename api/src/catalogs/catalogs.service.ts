@@ -1,4 +1,5 @@
 import { TeacherScopeService } from '../access/teacher-scope.service';
+import { ApprovalPoliciesService } from '../access/approval-policies.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -62,6 +63,7 @@ export class CatalogsService {
     private readonly learningResources: Repository<LearningResource>,
     @InjectRepository(LearningResourceSkill)
     private readonly resourceSkills: Repository<LearningResourceSkill>,
+    private readonly approvals: ApprovalPoliciesService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -679,6 +681,8 @@ export class CatalogsService {
     user?: AuthenticatedUser,
   ): Promise<LearningResource> {
     const esDocente = user?.role === RolNombre.TEACHER;
+    // V5 §9.2: sin excepción de Dirección, la propuesta del docente se revisa.
+    const politica = esDocente ? await this.approvals.vigente(user, 'RESOURCE') : null;
     const semestres = await this.semestresDelRecurso(user, dto.semesterScope);
     await this.assertAreaExists(dto.academicAreaId);
     await this.assertSkillsExist(dto.skillIds);
@@ -710,8 +714,10 @@ export class CatalogsService {
         status: LearningResourceStatus.ACTIVE,
         createdBy,
         imageFileId: dto.imageFileId ?? null,
-        // V4.1 A41-014 (§7): la propuesta de un docente espera a Dirección.
-        reviewStatus: esDocente ? 'pending' : 'not_required',
+        // V4.1 A41-014 (§7): la propuesta de un docente espera a Dirección,
+        // salvo que Dirección le haya concedido publicar sin revisión (V5 §9.2).
+        reviewStatus: esDocente && !politica ? 'pending' : 'not_required',
+        policyId: politica?.id ?? null,
         semesterScope: semestres,
       }),
     );
@@ -720,10 +726,10 @@ export class CatalogsService {
     if (esDocente) {
       await this.audit.record({
         actorUserId: createdBy,
-        eventType: AuditEventType.RESOURCE_PROPOSED,
+        eventType: politica ? AuditEventType.RESOURCE_PUBLISHED_DIRECT : AuditEventType.RESOURCE_PROPOSED,
         entityType: 'learning_resource',
         entityId: recurso.id,
-        metadata: { semesterScope: semestres },
+        metadata: { semesterScope: semestres, ...(politica ? { policyId: politica.id } : {}) },
       });
     }
     return this.findLearningResourceOrFail(recurso.id);
@@ -742,11 +748,16 @@ export class CatalogsService {
     // observada; corregir una observada la vuelve a enviar a Dirección.
     if (user && user.role === RolNombre.TEACHER) {
       if (recurso.createdBy !== user.userId) throw new NotFoundException('Recurso no encontrado.');
-      if (recurso.reviewStatus !== 'pending' && recurso.reviewStatus !== 'observed') {
+      // V5 §9.2: lo que publicó con una excepción lo sigue ajustando; si se le
+      // revocó, el ajuste vuelve a pasar por Dirección (E03).
+      const directo = !!recurso.policyId && recurso.reviewStatus === 'not_required';
+      if (!directo && recurso.reviewStatus !== 'pending' && recurso.reviewStatus !== 'observed') {
         throw new ConflictException('Ya fue revisado por Dirección: los ajustes los hace Dirección.');
       }
       if (dto.status !== undefined) throw new ForbiddenException('Retirar o reponer recursos lo decide Dirección.');
-      recurso.reviewStatus = 'pending';
+      const politica = await this.approvals.vigente(user, 'RESOURCE');
+      recurso.reviewStatus = politica ? 'not_required' : 'pending';
+      if (politica) recurso.policyId = politica.id;
     }
 
     if (dto.url !== undefined && dto.url !== recurso.url) {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FiAward, FiCheck, FiSend, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { gamificationService, projectService } from '../../services';
+import { approvalPolicyService, gamificationService, projectService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../auth/AuthContext';
 import type { GamificationProposal, ProjectBackingTier } from '../../services/types';
@@ -125,6 +125,9 @@ function PropuestasDocente() {
   const proyectos = useAsync(() => projectService.institutional(), []);
   const criterios = useAsync(() => gamificationService.availableCriteria('proyecto_corroborado'), []);
   const mias = useAsync(() => gamificationService.proposals(), []);
+  // V5 §9.2: con autonomía de Dirección, otorga sin revisión (y Dirección lo ve).
+  const politica = useAsync(() => approvalPolicyService.mine(), []);
+  const directo = politica.data?.GAMIFICATION === 'DIRECT_ALLOWED';
   const [form, setForm] = useState<Record<Campo, string>>({ projectId: '', studentProfileId: '', criterionId: '', reason: '' });
   const [saving, setSaving] = useState(false);
   const errores = useFormErrors(CAMPOS);
@@ -158,7 +161,8 @@ function PropuestasDocente() {
         criterionId: form.criterionId,
         reason: form.reason.trim(),
       });
-      toast.success('Propuesta enviada.', 'Dirección la revisará; verás aquí su decisión.');
+      if (directo) toast.success('Puntos otorgados.', 'Quedan en el historial del estudiante y Dirección los ve.');
+      else toast.success('Propuesta enviada.', 'Dirección la revisará; verás aquí su decisión.');
       setForm({ projectId: '', studentProfileId: '', criterionId: '', reason: '' });
       errores.reset();
       mias.reload();
@@ -171,10 +175,12 @@ function PropuestasDocente() {
 
   return (
     <>
-      <Card title="Proponer puntos por un proyecto">
+      <Card title={directo ? 'Otorgar puntos por un proyecto' : 'Proponer puntos por un proyecto'}>
         <p className="muted" style={{ marginTop: 0 }}>
           Solo proyectos de tus semestres, visibles para docentes y con respaldo suficiente (respaldado, corroborado o
-          revisado). Tú propones; Dirección aprueba o rechaza.
+          revisado). {directo
+            ? 'Dirección te concedió otorgar puntos sin revisión: se aplican al guardar, quedan registrados con tu nombre y el motivo, y Dirección los ve.'
+            : 'Tú propones; Dirección aprueba o rechaza.'}
         </p>
         <form onSubmit={enviar} noValidate>
           <FormAlert message={errores.general} />
@@ -198,10 +204,10 @@ function PropuestasDocente() {
               </select>
             </FormField>
           </div>
-          <FormField label="Por qué lo propones" required error={errores.errors.reason} hint="Dirección lo verá al decidir.">
+          <FormField label={directo ? 'Por qué lo otorgas' : 'Por qué lo propones'} required error={errores.errors.reason} hint={directo ? 'Queda en el historial; Dirección lo verá.' : 'Dirección lo verá al decidir.'}>
             <textarea value={form.reason} maxLength={500} onChange={(e) => set('reason', e.target.value)} placeholder="Qué logró el estudiante en este proyecto." />
           </FormField>
-          <Button type="submit" loading={saving} icon={<FiSend size={15} />}>Enviar propuesta</Button>
+          <Button type="submit" loading={saving} icon={<FiSend size={15} />}>{directo ? 'Otorgar puntos' : 'Enviar propuesta'}</Button>
         </form>
       </Card>
       <Card title="Tus propuestas">
@@ -251,7 +257,10 @@ function ListaPropuestas({
                     {p.proposedBy && <div className="muted">Propone {p.proposedBy}</div>}
                     {p.reviewComment && <div className="muted">Dirección: {p.reviewComment}</div>}
                   </td>
-                  <td><Badge tone={ESTADO[p.status].tone}>{ESTADO[p.status].label}</Badge></td>
+                  <td>
+                    <Badge tone={ESTADO[p.status].tone}>{ESTADO[p.status].label}</Badge>
+                    {p.direct && <div className="muted small">Directo, con autonomía docente</div>}
+                  </td>
                   {acciones && <td>{acciones(p)}</td>}
                 </tr>
               ))}

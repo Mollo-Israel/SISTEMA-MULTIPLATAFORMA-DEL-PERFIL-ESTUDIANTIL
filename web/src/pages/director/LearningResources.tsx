@@ -14,7 +14,7 @@ import {
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
 import { useAuth } from '../../auth/AuthContext';
-import { activityService } from '../../services';
+import { activityService, approvalPolicyService } from '../../services';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -87,8 +87,11 @@ export default function DirectorLearningResourcesPage() {
   const [subiendo, setSubiendo] = useState(false);
   const pendientes = useAsync(() => (esDocente ? Promise.resolve([]) : learningResourceService.pending()), [esDocente]);
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
+  // V5 §9.2: con autonomía de Dirección, el docente publica sin revisión.
+  const [directo, setDirecto] = useState(false);
   useEffect(() => {
     if (esDocente) activityService.myScope().then((r) => setSemestresDocente(r.semesters)).catch(() => {});
+    if (esDocente) approvalPolicyService.mine().then((p) => setDirecto(p.RESOURCE === 'DIRECT_ALLOWED')).catch(() => {});
   }, [esDocente]);
   const [verRetirados, setVerRetirados] = useState(false);
   const state = useAsync(
@@ -167,9 +170,10 @@ export default function DirectorLearningResourcesPage() {
         toast.success('Recurso actualizado.');
       } else {
         await learningResourceService.create(payload);
+        const propone = esDocente && !directo;
         toast.success(
-          esDocente ? 'Propuesta enviada a Dirección.' : 'Recurso incorporado al catálogo.',
-          esDocente ? 'Aparecerá en la Biblioteca cuando Dirección la apruebe.' : 'Desde ahora puede recomendarse a los estudiantes del área.',
+          propone ? 'Propuesta enviada a Dirección.' : 'Recurso incorporado al catálogo.',
+          propone ? 'Aparecerá en la Biblioteca cuando Dirección la apruebe.' : esDocente ? 'Ya está en la Biblioteca; Dirección lo ve en su historial.' : 'Desde ahora puede recomendarse a los estudiantes del área.',
         );
       }
       setForm(vacio);
@@ -249,9 +253,11 @@ export default function DirectorLearningResourcesPage() {
   return (
     <div>
       <PageHeader
-        title={esDocente ? 'Proponer recursos' : 'Catálogo de recursos y cursos'}
+        title={esDocente ? (directo ? 'Publicar recursos' : 'Proponer recursos') : 'Catálogo de recursos y cursos'}
         description={esDocente
-          ? 'Propón material para tus semestres. Dirección lo revisa antes de que llegue a la Biblioteca.'
+          ? directo
+            ? 'Dirección te concedió publicar material para tus semestres sin revisión. Queda registrado y Dirección lo ve.'
+            : 'Propón material para tus semestres. Dirección lo revisa antes de que llegue a la Biblioteca.'
           : 'Material que el motor puede recomendar. Solo se recomienda lo que está aquí: nunca enlaces recogidos automáticamente de Internet.'}
       />
 
@@ -286,7 +292,7 @@ export default function DirectorLearningResourcesPage() {
         </Card>
       )}
 
-      <Card title={editing ? `Editar “${editing.title}”` : esDocente ? 'Proponer un recurso' : 'Incorporar un recurso'}>
+      <Card title={editing ? `Editar “${editing.title}”` : esDocente && !directo ? 'Proponer un recurso' : esDocente ? 'Publicar un recurso' : 'Incorporar un recurso'}>
         <form noValidate onSubmit={submit}>
           <div className="grid-2">
             <div className="field">
@@ -479,7 +485,7 @@ export default function DirectorLearningResourcesPage() {
 
           <div className="flex" style={{ gap: '0.6rem' }}>
             <Button type="submit" loading={saving} icon={editing ? <FiSave size={15} /> : <FiPlus size={15} />}>
-              {editing ? 'Guardar cambios' : esDocente ? 'Enviar propuesta' : 'Incorporar al catálogo'}
+              {editing ? 'Guardar cambios' : esDocente && !directo ? 'Enviar propuesta' : esDocente ? 'Publicar' : 'Incorporar al catálogo'}
             </Button>
             {editing && (
               <Button
@@ -586,7 +592,7 @@ export default function DirectorLearningResourcesPage() {
                         <td>
                           <div className="flex" style={{ gap: '0.4rem' }}>
                             {/* V4.1 A41-014: el docente edita solo su propuesta pendiente u observada; retirar es de Dirección. */}
-                            {(!esDocente || (r.createdBy === user?.id && (r.reviewStatus === 'pending' || r.reviewStatus === 'observed'))) && (
+                            {(!esDocente || (r.createdBy === user?.id && (r.reviewStatus === 'pending' || r.reviewStatus === 'observed' || (!!r.policyId && r.reviewStatus === 'not_required')))) && (
                               <Button size="sm" variant="secondary" onClick={() => editar(r)}>
                                 Editar
                               </Button>

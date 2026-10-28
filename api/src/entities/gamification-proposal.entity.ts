@@ -48,6 +48,13 @@ export class GamificationProposal {
   @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
   reviewedAt: Date | null;
 
+  /**
+   * V5 §9.2: la excepción con la que el docente otorgó los puntos sin
+   * revisión. Null si los decidió Dirección.
+   */
+  @Column({ name: 'policy_id', type: 'uuid', nullable: true })
+  policyId: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

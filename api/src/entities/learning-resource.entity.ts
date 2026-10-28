@@ -92,6 +92,13 @@ export class LearningResource {
   @Column({ name: 'review_status', type: 'varchar', length: 16, default: 'not_required' })
   reviewStatus: 'not_required' | 'pending' | 'observed' | 'approved' | 'rejected';
 
+  /**
+   * V5 §9.2: la excepción de Dirección con la que un docente lo publicó sin
+   * revisión. Null si lo publicó Dirección o pasó por revisión.
+   */
+  @Column({ name: 'policy_id', type: 'uuid', nullable: true })
+  policyId: string | null;
+
   /** Semestres a los que va dirigido; vacío = toda la carrera. */
   @Column({ name: 'semester_scope', type: 'smallint', array: true, default: () => "'{}'" })
   semesterScope: number[];

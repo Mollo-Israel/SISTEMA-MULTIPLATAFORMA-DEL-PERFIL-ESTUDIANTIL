@@ -101,6 +101,8 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/director/analytics', label: 'Analítica' },
         { to: '/director/points', label: 'Puntos de estudiantes' },
         { to: '/director/gamification', label: 'Criterios de puntos' },
+        // V5 §9.2: excepciones de revisión por docente y módulo.
+        { to: '/director/autonomy', label: 'Autonomía docente' },
       ],
     },
     {
