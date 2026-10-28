@@ -104,6 +104,12 @@ export class OrphanFilesService implements OnModuleInit, OnApplicationShutdown {
             SELECT 1 FROM internal_constancies ic WHERE ic.stored_file_id = f.id)
           AND NOT EXISTS (
             SELECT 1 FROM learning_resources lr WHERE lr.image_file_id = f.id)
+          -- V5: la galería de una actividad (V4.1, con ON DELETE CASCADE: borrar el
+          -- archivo se llevaba la fila) y el material de un recurso (V5-13).
+          AND NOT EXISTS (
+            SELECT 1 FROM activity_images ai WHERE ai.stored_file_id = f.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM learning_resources lf WHERE lf.file_id = f.id)
         ORDER BY f.created_at
         LIMIT $2`,
       [String(this.graceHours), this.batchSize],
