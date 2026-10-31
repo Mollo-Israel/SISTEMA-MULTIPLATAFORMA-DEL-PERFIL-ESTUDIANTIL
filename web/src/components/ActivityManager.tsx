@@ -4,11 +4,11 @@ import PersonPicker from './PersonPicker';
 import { entradaAIso, formatearFechaHora, isoAEntrada } from '../lib/fechas';
 import { placeName } from '../lib/validators';
 import { ROLE_LABEL } from '../constants';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  FiAward, FiCalendar, FiCheck, FiCopy, FiEdit2, FiImage, FiLink, FiPlus, FiSave, FiSearch, FiSend, FiTrash2, FiUserX, FiUsers, FiX,
+  FiAward, FiCalendar, FiCheck, FiCopy, FiEdit2, FiEye, FiImage, FiLink, FiPlus, FiSave, FiSearch, FiSend, FiTrash2, FiUserX, FiUsers, FiX,
 } from 'react-icons/fi';
 import { useAuth } from '../auth/AuthContext';
 import { enMemoria, useCachedState } from '../hooks/viewCache';
@@ -582,7 +582,9 @@ export default function ActivityManager({
   const duplicar = async (a: Activity) => {
     try {
       const copia = await activityService.duplicate(a.id);
-      toast.success('Copia creada como borrador.', 'Revisa las fechas y publícala cuando esté lista.');
+      // V6 §3.5: si la copia no pudo conservar los semestres de la original, se dice cuáles.
+      if (copia.duplicateNotice) toast.info('Copia creada como borrador.', copia.duplicateNotice);
+      else toast.success('Copia creada como borrador.', 'Revisa las fechas y publícala cuando esté lista.');
       await load();
       startEdit(copia);
     } catch (err) {
@@ -735,6 +737,12 @@ export default function ActivityManager({
 
   /** V3.2 §28.3: entrega del certificado que emitió la institución. */
   const [entrega, setEntrega] = useState<{ ids: string[]; nombre: string } | null>(null);
+  /** V6 §3.6: detalle de solo lectura para quien opera una actividad que no edita. */
+  const [detalle, setDetalle] = useState<Activity | null>(null);
+  const verDetalles = (a: Activity) => {
+    setDetalle(a);
+    activityService.get(a.id).then(setDetalle).catch(() => {});
+  };
   /** V4.1 A41-011: corrección excepcional en curso. */
   const [correccion, setCorreccion] = useState<{ row: Participant; status: 'confirmed' | 'absent' } | null>(null);
   const [rechazo, setRechazo] = useState<Participant | null>(null);
@@ -1750,6 +1758,16 @@ export default function ActivityManager({
                               <FiEdit2 />
                             </button>
                           )}
+                          {!editable(a) && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => verDetalles(a)}
+                              title="Ver detalles"
+                              aria-label={`Ver detalles de ${a.title}`}
+                            >
+                              <FiEye /> Ver detalles
+                            </button>
+                          )}
                           {/* V5-06: solo un borrador propio que nunca se envió; lo publicado se cancela. */}
                           {a.status === 'draft' && !a.submittedAt && (a.creatorId === user?.id || esAdmin) && (
                             <button
@@ -2046,6 +2064,12 @@ export default function ActivityManager({
           </p>
         </div>
       )}
+      {detalle && (
+        <Modal title={detalle.title} subtitle="Detalles de la actividad (solo lectura)" onClose={() => setDetalle(null)} width={620}>
+          <DetalleActividad a={detalle} yo={user?.id} />
+        </Modal>
+      )}
+
       {entrega && (
         <Modal title="Entregar certificado" subtitle={`A ${entrega.nombre}`} onClose={() => setEntrega(null)} width={520}>
           <p className="muted">
@@ -2201,6 +2225,71 @@ function ParticipantGroup({
         <Paginacion {...pag} noun="participantes" />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * V6 §3.6: lo que necesita saber quien opera una actividad que no creó.
+ * Ver detalles no es editar: no hay acciones aquí.
+ */
+function DetalleActividad({ a, yo }: { a: Activity; yo?: string }) {
+  const sem = (lista?: number[] | null) => (lista?.length ? lista.map((n) => `${n}.º`).join(', ') : null);
+  const modalidad = ACTIVITY_MODALITIES.find((m) => m.value === a.modality)?.label ?? a.modality;
+  const areas = (a.activityAreas ?? []).map((x) => x.academicArea?.name).filter(Boolean);
+  const tecnologias = (a.activitySkills ?? []).map((x) => x.skill?.name).filter(Boolean);
+  const filas: [string, ReactNode][] = [
+    ['Estado', lbl(ACTIVITY_STATUS_LABEL, a.status)],
+    ['Inicio', a.eventDate ? formatearFechaHora(a.eventDate) : 'Por definir'],
+    ['Fin', a.endAt ? formatearFechaHora(a.endAt) : 'Por definir'],
+    ['Modalidad', modalidad],
+    ...(a.location ? [['Lugar', a.location] as [string, ReactNode]] : []),
+    ...(a.meetingUrl ? [['Enlace de la reunión', <a key="m" href={a.meetingUrl} target="_blank" rel="noreferrer noopener">{a.meetingUrl}</a>] as [string, ReactNode]] : []),
+    ['Áreas', areas.length ? areas.join(', ') : '—'],
+    ['Tecnologías', tecnologias.length ? tecnologias.join(', ') : '—'],
+    ['Semestres', sem(a.semesterScope) ?? 'Toda la carrera'],
+    ['Cupo', a.capacity ? `${a.capacity} lugares` : 'Sin límite'],
+    ['Admisión', a.registrationMode === 'approval' ? 'Por aprobación del responsable' : 'Abierta'],
+  ];
+  return (
+    <div className="detalle-actividad" data-testid="detalle-actividad">
+      <dl className="detalle-lista">
+        {filas.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <h4 style={{ margin: '0.8rem 0 0.3rem' }}>Responsables</h4>
+      <ul className="detalle-personas">
+        {(a.responsibles ?? []).map((p) => (
+          <li key={p.id}>
+            <strong>{p.firstName} {p.lastName}</strong>{p.id === yo ? ' (tú)' : ''}
+            <span className="muted small">
+              {' '}· {p.role === 'TEACHER'
+                ? `atiende ${sem(p.assignedSemesters) ?? 'los semestres de la actividad'}`
+                : 'atiende todo el público'}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {(a.contacts ?? []).length > 0 && (
+        <>
+          <h4 style={{ margin: '0.8rem 0 0.3rem' }}>Contacto</h4>
+          <ul className="detalle-personas">
+            {(a.contacts ?? []).map((p) => (
+              <li key={p.id}>
+                {p.firstName} {p.lastName}
+                {p.email && <span className="muted small"> · <a href={`mailto:${p.email}`}>{p.email}</a></span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="muted small" style={{ marginTop: '0.8rem' }}>
+        Puedes gestionar la participación de los estudiantes de tus semestres. El contenido lo edita quien creó la actividad.
+      </p>
     </div>
   );
 }

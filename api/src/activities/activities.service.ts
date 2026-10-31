@@ -755,9 +755,30 @@ export class ActivitiesService {
     });
   }
 
-  async duplicate(user: AuthenticatedUser, id: string): Promise<Activity> {
+  async duplicate(user: AuthenticatedUser, id: string): Promise<Activity & { duplicateNotice?: string }> {
     const origen = await this.findOne(id);
     await this.assertCanManage(user, origen);
+    // V6 §3.5: la copia no hereda semestres ajenos. Un docente parte de la
+    // intersección con los suyos; si no hay ninguno en común, la copia queda
+    // en borrador sin semestres y se le pide completarlos.
+    let semestresCopia = origen.semesterScope ?? undefined;
+    let aviso: string | undefined;
+    let sinSemestres = false;
+    if (user.role === RolNombre.TEACHER) {
+      const suyos = await this.teacherScope.allowedSemesters(user.userId);
+      const comunes = origen.semesterScope?.length ? origen.semesterScope.filter((s) => suyos.includes(s)) : suyos;
+      if (comunes.length === 0) {
+        sinSemestres = true;
+        semestresCopia = undefined;
+        aviso = 'La original iba a semestres que no tienes habilitados: la copia quedó sin semestres. Elígelos antes de enviarla a revisión.';
+      } else {
+        if (origen.semesterScope?.length && comunes.length < origen.semesterScope.length) {
+          const fuera = origen.semesterScope.filter((s) => !suyos.includes(s));
+          aviso = `La copia va solo a tus semestres (${comunes.map((s) => `${s}.º`).join(', ')}); se quitaron ${fuera.map((s) => `${s}.º`).join(', ')}.`;
+        }
+        semestresCopia = comunes;
+      }
+    }
     const contextos = (origen.activitySkills ?? []).map((s) => ({ skillId: s.skillId, areaId: s.academicAreaId ?? undefined }));
     const copia = await this.create(user, {
       title: `${origen.title} (copia)`.slice(0, 200),
@@ -777,7 +798,7 @@ export class ActivitiesService {
       meetingUrl: origen.meetingUrl ?? undefined,
       resourceLinks: origen.resourceLinks ?? [],
       capacity: origen.capacity ?? undefined,
-      semesterScope: origen.semesterScope ?? undefined,
+      semesterScope: semestresCopia,
       registrationMode: origen.registrationMode,
       requirements: origen.requirements ?? undefined,
       // V5 §7: una copia ya no emite constancias; la asistencia queda registrada.
@@ -792,9 +813,24 @@ export class ActivitiesService {
       eventType: AuditEventType.ACTIVITY_DUPLICATED,
       entityType: 'activity',
       entityId: copia.id,
-      metadata: { duplicatedFrom: origen.id },
+      metadata: { duplicatedFrom: origen.id, ...(aviso ? { notice: aviso } : {}) },
     });
-    return copia;
+    if (sinSemestres) {
+      await this.activities.update({ id: copia.id }, { semesterScope: null });
+      copia.semesterScope = null;
+      await this.activities.manager.getRepository(ActivityResponsible).update({ activityId: copia.id }, { semesters: [] });
+    }
+    return Object.assign(copia, aviso ? { duplicateNotice: aviso } : {});
+  }
+
+  /**
+   * V6 §3.5: un docente no envía a revisión ni publica una actividad sin
+   * semestres (sería «toda la carrera», que no le corresponde).
+   */
+  private assertSemestresDelDocente(user: AuthenticatedUser, activity: Activity): void {
+    if (user.role !== RolNombre.TEACHER || activity.semesterScope?.length) return;
+    const msg = 'Elige a qué semestres va: solo puedes dirigirla a tus semestres habilitados.';
+    throw new BadRequestException({ code: 'SEMESTERS_REQUIRED', message: msg, fields: { semesterScope: [msg] } });
   }
 
   /**
@@ -1020,6 +1056,7 @@ export class ActivitiesService {
     if (activity.reviewStatus === ActivityReviewStatus.REJECTED) {
       throw new ConflictException('Fue rechazada. No se reutiliza: crea una actividad nueva.');
     }
+    this.assertSemestresDelDocente(user, activity);
     activity.reviewStatus = ActivityReviewStatus.PENDING;
     activity.submittedAt = new Date();
     await this.activities.save(activity);
@@ -1869,6 +1906,7 @@ export class ActivitiesService {
         ?? await this.activities.manager.getRepository(ActivityResponsible).count({ where: { activityId: activity.id } });
       this.assertCompleta(activity, areasFinales, skillsFinales, responsablesFinales);
       if (publica) this.assertInicioFuturo(activity);
+      if (publica) this.assertSemestresDelDocente(user, activity);
     }
 
     // V6 §3.2: si cambian los responsables, sus asignaciones o la audiencia, se

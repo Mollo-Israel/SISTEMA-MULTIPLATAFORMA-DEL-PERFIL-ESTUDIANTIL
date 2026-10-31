@@ -545,6 +545,8 @@ export interface ResourceLink {
 }
 
 export interface Activity {
+  /** V6 §3.5: aviso de una copia que no pudo conservar los semestres de la original. */
+  duplicateNotice?: string;
   id: string;
   /** V3.2 §16: responsables (el primero es el principal) y contactos. */
   responsibles?: ActivityPerson[];

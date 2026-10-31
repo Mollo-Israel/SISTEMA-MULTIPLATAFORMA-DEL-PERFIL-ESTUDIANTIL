@@ -710,6 +710,12 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .cobertura-bloque { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 8px 12px; min-width: 0; }
 .cobertura-bloque .chip-row { margin-top: 6px; }
 
+/* V6 §3.6: detalle de solo lectura de una actividad. */
+.detalle-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; margin: 0; }
+.detalle-lista dt { font-size: 0.78rem; color: var(--gray-500); }
+.detalle-lista dd { margin: 0; overflow-wrap: anywhere; }
+.detalle-personas { margin: 0; padding-left: 1.1rem; }
+
 /* Aviso breve dentro de una tarjeta */
 .inline-note {
   display: flex; align-items: center; gap: 0.4rem; margin: 0.7rem 0 0;

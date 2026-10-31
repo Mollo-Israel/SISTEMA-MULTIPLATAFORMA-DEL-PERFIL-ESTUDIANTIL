@@ -173,7 +173,62 @@ async function batch1(ctx) {
   check(Number(auditado) >= 1, 'V6.1.15 La creación registra en la auditoría quién cubre qué', auditado);
 }
 
-const BATCHES = { batch1 };
+// ===========================================================================
+//  BATCH V6-3 — Duplicar sin elevar permisos (§3.5) y «Ver detalles» (§3.6)
+// ===========================================================================
+async function batch3(ctx) {
+  objective('BATCH V6-3 · La copia no hereda semestres ajenos ni la historia de la original');
+  const { director, carlos, maria, base } = await escenarioScopes(ctx, 'b3');
+  const est = await provisionStudent(ctx.admin, { firstName: 'Ana', lastName: `Copia${L}`, email: correoEst('b3e2'), semester: 2 });
+
+  const origen = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...base, title: `Original ${L}`, semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], responsibleUserIds: [carlos.userId, maria.userId], status: 'open' },
+  });
+  await req('POST', `/activities/${origen.data?.id}/register`, { token: est.token });
+
+  // V6-SCOPE-02: antes era 403 por los semestres heredados.
+  const copia = await req('POST', `/activities/${origen.data?.id}/duplicate`, { token: carlos.token });
+  const c = copia.data;
+  check(copia.status === 201 && c?.status === 'draft' && c?.creatorId === carlos.userId && json(c?.semesterScope) === '[1,2,3,4]',
+    'V6.3.1 V6-SCOPE-02 Carlos duplica: nuevo borrador suyo, solo con sus semestres (1.º–4.º)', json({ s: copia.status, st: c?.status, sem: c?.semesterScope, m: copia.data?.message }));
+  check(/5\.º, 6\.º, 7\.º, 8\.º/.test(c?.duplicateNotice ?? ''), 'V6.3.2 La copia avisa qué semestres se quitaron', c?.duplicateNotice);
+  const filasCopia = (await req('GET', `/activities/${c?.id}/participants`, { token: carlos.token })).data ?? [];
+  check(c?.id !== origen.data?.id && filasCopia.length === 0 && c?.reviewStatus !== 'approved'
+    && json((c?.responsibles ?? []).map((r) => r.id)) === json([carlos.userId]),
+  'V6.3.3 Sin inscripciones ni aprobación de la original; responsable = quien duplica (sin María)', json({ n: filasCopia.length, r: c?.reviewStatus, resp: (c?.responsibles ?? []).length }));
+
+  const deDireccion = await req('POST', `/activities/${origen.data?.id}/duplicate`, { token: director.token });
+  check(deDireccion.status === 201 && json(deDireccion.data?.semesterScope) === '[1,2,3,4,5,6,7,8]' && !deDireccion.data?.duplicateNotice,
+    'V6.3.4 Dirección duplica y conserva la audiencia (sin aviso)', json(deDireccion.data?.semesterScope));
+
+  // Intersección vacía: la original va al 6.º y Carlos solo cubre 1.º–4.º.
+  const ajena = await req('POST', '/activities', {
+    token: director.token,
+    body: { ...base, title: `Solo sexto ${L}`, semesterScope: [6], responsibleUserIds: [director.userId, carlos.userId], status: 'open' },
+  });
+  const vacia = await req('POST', `/activities/${ajena.data?.id}/duplicate`, { token: carlos.token });
+  check(vacia.status === 201 && vacia.data?.status === 'draft' && vacia.data?.semesterScope === null && /sin semestres/.test(vacia.data?.duplicateNotice ?? ''),
+    'V6.3.5 §3.5 Sin semestres en común: borrador sin semestres y mensaje para completarlos (no 400/403)', json({ s: vacia.status, sem: vacia.data?.semesterScope, n: vacia.data?.duplicateNotice }));
+  await req('PATCH', `/activities/${vacia.data?.id}`, { token: carlos.token, body: { activityDate: en(96), endAt: en(98) } });
+  const sinElegir = await req('POST', `/activities/${vacia.data?.id}/submit`, { token: carlos.token, body: {} });
+  check(sinElegir.status === 400 && sinElegir.data?.code === 'SEMESTERS_REQUIRED' && !!sinElegir.data?.fields?.semesterScope,
+    'V6.3.6 Sin elegir semestres no se envía a revisión (no sería «toda la carrera» de un docente)', `${sinElegir.status} ${sinElegir.data?.code}`);
+  await req('PATCH', `/activities/${vacia.data?.id}`, { token: carlos.token, body: { semesterScope: [2] } });
+  const elegida = await req('POST', `/activities/${vacia.data?.id}/submit`, { token: carlos.token, body: {} });
+  check([200, 201].includes(elegida.status), 'V6.3.7 Elegidos sus semestres, se envía a revisión', `${elegida.status} ${json(elegida.data?.message)}`);
+  const auditoria = psql(`select count(*) from audit_events where event_type = 'ACTIVITY_DUPLICATED' and entity_id = '${vacia.data?.id}' and metadata::text like '%notice%'`);
+  check(Number(auditoria) === 1, 'V6.3.8 La duplicación y su aviso quedan en la auditoría', auditoria);
+
+  // §3.6: el responsable que no creó la actividad tiene el detalle, sin edición.
+  const detalle = await req('GET', `/activities/${origen.data?.id}`, { token: carlos.token });
+  const yo = (detalle.data?.responsibles ?? []).find((r) => r.id === carlos.userId);
+  const editar = await req('PATCH', `/activities/${origen.data?.id}`, { token: carlos.token, body: { title: 'Cambio ajeno' } });
+  check(detalle.status === 200 && json(yo?.assignedSemesters) === '[1,2,3,4]' && editar.status === 403,
+    'V6.3.9 §3.6 El responsable ve el detalle con su semestre asignado y sigue sin poder editar (403)', json({ d: detalle.status, a: yo?.assignedSemesters, e: editar.status }));
+}
+
+const BATCHES = { batch1, batch3 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
