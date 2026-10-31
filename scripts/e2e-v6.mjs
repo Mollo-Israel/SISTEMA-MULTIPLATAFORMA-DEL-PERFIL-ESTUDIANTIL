@@ -56,7 +56,7 @@ async function escenarioScopes(ctx, k) {
   return { director, carlos, maria, base };
 }
 
-const asignacionDe = (actividad, userId) => (actividad?.responsibles ?? []).find((r) => r.id === userId)?.semesters;
+const asignacionDe = (actividad, userId) => (actividad?.responsibles ?? []).find((r) => r.id === userId)?.assignedSemesters;
 
 // ===========================================================================
 //  BATCH V6-1 — Responsable × semestre en la API (§3.2, ACT-01…06, ADM-06)
@@ -73,7 +73,7 @@ async function batch1(ctx) {
   });
   const a1 = ambos.data;
   check(ambos.status === 201 && json(asignacionDe(a1, carlos.userId)) === '[1,2,3,4]' && json(asignacionDe(a1, maria.userId)) === '[4,5,6,7,8]',
-    'V6.1.1 Caso B Carlos + María cubren 1..8; cada uno queda asignado solo a lo suyo', json(a1?.responsibles?.map((r) => r.semesters)));
+    'V6.1.1 Caso B Carlos + María cubren 1..8; cada uno queda asignado solo a lo suyo', json(a1?.responsibles?.map((r) => r.assignedSemesters)));
 
   // Caso C / ACT-02: quitar a María deja 5..8 sin responsable → no se guarda.
   const sinMaria = await req('PATCH', `/activities/${a1?.id}`, { token: ctx.admin, body: { responsibleUserIds: [carlos.userId] } });
@@ -125,7 +125,7 @@ async function batch1(ctx) {
     body: { ...base, title: `Con Direccion ${L}`, semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], responsibleUserIds: [director.userId, carlos.userId], status: 'open' },
   });
   check(conDir.status === 201 && json(asignacionDe(conDir.data, director.userId)) === '[]' && json(asignacionDe(conDir.data, carlos.userId)) === '[1,2,3,4]',
-    'V6.1.8 ACT-04 Con Dirección la audiencia puede ser 1..8, y Carlos sigue asignado solo a 1..4', json(conDir.data?.responsibles?.map((r) => r.semesters)));
+    'V6.1.8 ACT-04 Con Dirección la audiencia puede ser 1..8, y Carlos sigue asignado solo a 1..4', json(conDir.data?.responsibles?.map((r) => r.assignedSemesters)));
 
   // Asignación explícita más estrecha: Carlos solo el 2.º; María el resto.
   const estrecha = await req('POST', '/activities', {
@@ -136,7 +136,7 @@ async function batch1(ctx) {
     },
   });
   check(estrecha.status === 201 && json(asignacionDe(estrecha.data, carlos.userId)) === '[2]' && json(asignacionDe(estrecha.data, maria.userId)) === '[5]',
-    'V6.1.9 §3.4 La asignación por responsable se guarda tal cual y editar la recupera', json(estrecha.data?.responsibles?.map((r) => r.semesters)));
+    'V6.1.9 §3.4 La asignación por responsable se guarda tal cual y editar la recupera', json(estrecha.data?.responsibles?.map((r) => r.assignedSemesters)));
 
   // ACT-06 / ADM-06: cada docente opera solo a los estudiantes de sus semestres.
   const e3 = await provisionStudent(ctx.admin, { firstName: 'Ana', lastName: `Scope${L}`, email: correoEst('b1e3'), semester: 3 });

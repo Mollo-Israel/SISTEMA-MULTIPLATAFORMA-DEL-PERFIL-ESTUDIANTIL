@@ -1648,6 +1648,8 @@ export class ActivitiesService {
       ? await this.activities.manager.getRepository(StoredFileRecord).find({ where: { id: In(imagenes) }, select: { id: true, storageKey: true } })
       : [];
     const claveDe = new Map(archivos.map((f) => [f.id, f.storageKey]));
+    const docentes = [...new Set(resp.filter((r) => r.user?.role?.name === RolNombre.TEACHER).map((r) => r.userId))];
+    const alcances = await this.teacherScope.allowedSemestersMany(docentes);
     for (const a of lista) {
       const extra = a as Activity & {
         responsibles?: unknown[]; contacts?: unknown[]; imageUrl?: string | null;
@@ -1656,8 +1658,14 @@ export class ActivitiesService {
       const propios = resp.filter((r) => r.activityId === a.id && r.user);
       // El principal primero, aunque se haya agregado después.
       propios.sort((x, y) => Number(y.userId === a.responsibleUserId) - Number(x.userId === a.responsibleUserId));
-      // V6 §3.2: con sus semestres asignados, para que editar los recupere tal cual.
-      extra.responsibles = propios.map((r) => ({ ...resumen(r.user), semesters: r.semesters ?? [] }));
+      // V6 §3.2: los semestres asignados en esta actividad (editar los recupera
+      // tal cual) y, de un docente, los que tiene habilitados (lo que se le
+      // puede ofrecer). Vacío en Dirección o Sociedad = cubre toda la audiencia.
+      extra.responsibles = propios.map((r) => ({
+        ...resumen(r.user),
+        assignedSemesters: r.semesters ?? [],
+        ...(alcances.has(r.userId) ? { semesters: alcances.get(r.userId) } : {}),
+      }));
       extra.contacts = cont.filter((c) => c.activityId === a.id && c.user)
         .map((c) => ({ ...resumen(c.user), email: c.user.email }));
       // Pasa por /api/files, que autoriza: la imagen de un borrador no se sirve a cualquiera.

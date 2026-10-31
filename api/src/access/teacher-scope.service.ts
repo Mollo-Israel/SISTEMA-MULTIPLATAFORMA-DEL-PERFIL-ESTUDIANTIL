@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { RolNombre } from '@perfil/shared';
 import { TeacherSemesterAccess } from '../entities/teacher-semester-access.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -67,6 +67,15 @@ export class TeacherScopeService {
       order: { semester: 'ASC' },
     });
     return rows.map((r) => r.semester);
+  }
+
+  /** Semestres habilitados de varios docentes en una sola consulta. */
+  async allowedSemestersMany(teacherIds: string[]): Promise<Map<string, number[]>> {
+    const mapa = new Map<string, number[]>(teacherIds.map((id) => [id, []]));
+    if (teacherIds.length === 0) return mapa;
+    const rows = await this.access.find({ where: { teacherId: In(teacherIds) }, order: { semester: 'ASC' } });
+    for (const r of rows) mapa.get(r.teacherId)?.push(r.semester);
+    return mapa;
   }
 
   /**

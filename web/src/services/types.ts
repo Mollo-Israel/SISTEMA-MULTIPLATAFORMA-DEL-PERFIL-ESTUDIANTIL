@@ -534,6 +534,8 @@ export interface ActivityPerson {
   email?: string;
   /** V4.1 A41-009: semestres habilitados de un docente (en los candidatos). */
   semesters?: number[];
+  /** V6 §3.2: semestres que atiende en esta actividad (vacío = todo el público). */
+  assignedSemesters?: number[];
 }
 
 /** V3.2 §18.2: enlace de apoyo. */

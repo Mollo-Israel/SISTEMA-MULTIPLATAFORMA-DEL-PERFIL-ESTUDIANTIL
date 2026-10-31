@@ -3,6 +3,7 @@ import { ImagenProtegida } from './ArchivoProtegido';
 import PersonPicker from './PersonPicker';
 import { entradaAIso, formatearFechaHora, isoAEntrada } from '../lib/fechas';
 import { placeName } from '../lib/validators';
+import { ROLE_LABEL } from '../constants';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -76,9 +77,36 @@ const emptyForm = {
   registrationMode: 'open' as 'open' | 'approval',
   status: 'draft',
   semesterScope: [] as number[],
+  /** V6 §3.4: «Toda la carrera» o «Semestres específicos», explícito. */
+  audiencia: 'carrera' as 'carrera' | 'especificos',
+  /** V6 §3.2: semestres que atiende cada docente responsable (por id). */
+  asignaciones: {} as Record<string, number[]>,
   /** V4.1 A41-016: criterio de puntos configurado (sin puntos libres). */
   criterionId: '',
 };
+
+/** V6 §3.2: Dirección, la Sociedad o Administración cubren todo el público; un docente, solo lo suyo. */
+const esDocenteResponsable = (p: ActivityPerson) => p.role === 'TEACHER';
+
+/** V6 §3.4: semestres a los que va la actividad; vacío = toda la carrera. */
+function audienciaDe(f: typeof emptyForm, soloDocentes: boolean): number[] {
+  if (soloDocentes) {
+    return [...new Set(f.responsables.filter(esDocenteResponsable).flatMap((p) => f.asignaciones[p.id] ?? []))].sort((a, b) => a - b);
+  }
+  return f.audiencia === 'carrera' ? [] : f.semesterScope;
+}
+
+/** Semestres que estaban en el público y ya no (vacío = toda la carrera, 1.º–8.º). */
+function semestresPerdidos(antes: number[], despues: number[]): number[] {
+  if (despues.length === 0) return [];
+  const previos = antes.length ? antes : [1, 2, 3, 4, 5, 6, 7, 8];
+  return previos.filter((n) => !despues.includes(n));
+}
+
+/** La asignación guardada de cada docente responsable, para editar sin reconstruirla. */
+function asignacionesDe(responsables: ActivityPerson[]): Record<string, number[]> {
+  return Object.fromEntries(responsables.filter(esDocenteResponsable).map((p) => [p.id, p.assignedSemesters ?? []]));
+}
 
 /** Estado de revisión (V2 §27) en palabras y color. */
 function revision(a: Activity): { label: string; tone: string } {
@@ -102,7 +130,7 @@ const RESULTADOS: { value: OutcomePolicy; label: string; hint: string }[] = [
 const CAMPOS = [
   'title', 'categoryId', 'activityDate', 'endAt', 'location', 'meetingUrl', 'areaIds', 'skillIds', 'skillContexts',
   'provider', 'externalUrl', 'responsibleUserIds', 'responsibleUserId', 'contactUserIds', 'resourceLinks',
-  'imageFileIds', 'capacity', 'outcomePolicy', 'semesterScope', 'status', 'certificateIssuer', 'gamificationRules',
+  'imageFileIds', 'capacity', 'outcomePolicy', 'semesterScope', 'responsibleAssignments', 'status', 'certificateIssuer', 'gamificationRules',
 ] as const;
 
 const publicable = (a: Activity) =>
@@ -270,8 +298,15 @@ export default function ActivityManager({
         e.certificateIssuer = 'Indica quién emite el certificado: Afinia no se atribuye su autoría.';
       }
       if (form.areaIds.length === 0) e.areaIds = 'Selecciona al menos un área.';
-      if (cobertura && (form.semesterScope.length === 0 || form.semesterScope.some((n) => !cobertura.includes(n)))) {
-        e.semesterScope = 'Elige semestres que cubran los docentes responsables, o suma un responsable que cubra toda la carrera.';
+      if (!esDocente && !soloDocentes && form.audiencia === 'especificos' && form.semesterScope.length === 0) {
+        e.semesterScope = 'Elige al menos un semestre, o marca «Toda la carrera».';
+      }
+      if (soloDocentes && audienciaFinal.length === 0) {
+        e.semesterScope = 'Asigna al menos un semestre a un docente responsable. Para «Toda la carrera», suma a Dirección o a la Sociedad.';
+      }
+      const sinSemestres = form.responsables.filter((p) => !esDocente && esDocenteResponsable(p) && (form.asignaciones[p.id] ?? []).length === 0);
+      if (sinSemestres.length) {
+        e.responsibleAssignments = `${sinSemestres.map((p) => `${p.firstName} ${p.lastName}`).join(', ')} no tiene semestres asignados: asígnale al menos uno o quítalo de responsables.`;
       }
       // V4.1 V41-01: una charla general puede no tener una habilidad concreta.
       // V4.1 A41-007: el borrador puede guardarse sin responsable; se pide al publicar.
@@ -293,6 +328,24 @@ export default function ActivityManager({
    */
   const guardar = async (accion: 'draft' | 'publish' | 'review' | 'save') => {
     if (!validarLocal(accion !== 'draft')) return;
+    // V6 §3.2 (regla 5): una actividad publicada no pierde semestres en silencio.
+    if (editing && editing.status !== 'draft' && !esDocente) {
+      const perdidos = semestresPerdidos(editing.semesterScope ?? [], audienciaFinal);
+      if (perdidos.length) {
+        const ok = await confirm({
+          title: 'La actividad deja de dirigirse a algunos semestres',
+          message: (
+            <>
+              Ya está publicada. Con este cambio deja de dirigirse a <strong>{perdidos.map((n) => `${n}.º`).join(', ')}</strong>:
+              {' '}esos estudiantes dejan de verla en su oferta. Si no es lo que quieres, asigna esos semestres a otro responsable.
+            </>
+          ),
+          confirmLabel: 'Guardar de todas formas',
+          tone: 'danger',
+        });
+        if (!ok) return;
+      }
+    }
     setSaving(true);
     errores.reset();
     const payload: Record<string, unknown> = {
@@ -320,7 +373,13 @@ export default function ActivityManager({
         }
         : {}),
       ...(!esDocente && (esAdmin || form.responsables.length > 0)
-        ? { responsibleUserIds: form.responsables.map((p) => p.id) }
+        ? {
+          responsibleUserIds: form.responsables.map((p) => p.id),
+          // V6 §3.2: qué atiende cada docente; el servidor vuelve a validarlo.
+          responsibleAssignments: form.responsables
+            .filter(esDocenteResponsable)
+            .map((p) => ({ userId: p.id, semesters: (form.asignaciones[p.id] ?? []).filter((n) => audienciaFinal.length === 0 || audienciaFinal.includes(n)) })),
+        }
         : {}),
       contactUserIds: form.contactos.map((p) => p.id),
       activityDate: entradaAIso(form.activityDate),
@@ -334,7 +393,10 @@ export default function ActivityManager({
       imageFileIds: editing || form.imagenes.length ? form.imagenes.map((i) => i.fileId) : undefined,
       capacity: form.capacity ? Number(form.capacity) : undefined,
       ...(externa ? {} : { registrationMode: form.registrationMode }),
-      semesterScope: form.semesterScope.length ? form.semesterScope : undefined,
+      // V6 §3.4: al editar se envía siempre (vacío = toda la carrera).
+      semesterScope: esDocente
+        ? form.semesterScope.length ? form.semesterScope : undefined
+        : editing ? audienciaFinal : audienciaFinal.length ? audienciaFinal : undefined,
       gamificationRules: form.criterionId
         ? [{ trigger: 'participacion_confirmada', criterionId: form.criterionId }]
         : [],
@@ -413,14 +475,85 @@ export default function ActivityManager({
     });
 
   /**
-   * V4.1 A41-009 (§4.5): si todos los responsables son docentes, los semestres
-   * que pueden atender son la unión de sus alcances. `null` si no aplica.
+   * V6 §3.2–§3.4: cada docente responsable atiende solo los semestres que se
+   * le asignan, elegidos entre los que tiene habilitados (como Área →
+   * Tecnologías). Dirección, la Sociedad o Administración cubren todo el
+   * público. Si todos los responsables son docentes, el público es la suma
+   * de sus asignaciones: no se puede fingir «Toda la carrera».
    */
-  const cobertura = useMemo(() => {
-    if (!esAutoridad || activityType !== 'academica' || form.responsables.length === 0) return null;
-    if (!form.responsables.every((p) => p.role === 'TEACHER' && Array.isArray(p.semesters))) return null;
-    return [...new Set(form.responsables.flatMap((p) => p.semesters ?? []))].sort((x, y) => x - y);
-  }, [esAutoridad, activityType, form.responsables]);
+  const soloDocentes = !esDocente && form.responsables.length > 0 && form.responsables.every(esDocenteResponsable);
+  const audienciaFinal = useMemo(
+    () => audienciaDe(form, soloDocentes),
+    [form, soloDocentes],
+  );
+  /** Semestres que se le pueden asignar a un docente responsable. */
+  const ofrecidosA = (p: ActivityPerson): number[] => {
+    const habilitados = p.semesters ?? [];
+    if (soloDocentes || form.audiencia === 'carrera') return habilitados;
+    return habilitados.filter((n) => form.semesterScope.includes(n));
+  };
+
+  /** Cambia los responsables y avisa si algún semestre se queda sin quien lo atienda. */
+  const cambiarResponsables = (lista: ActivityPerson[]) => {
+    const antes = audienciaFinal;
+    const quedanSoloDocentes = lista.length > 0 && lista.every(esDocenteResponsable);
+    const eranSoloDocentes = soloDocentes || form.responsables.length === 0;
+    const asignaciones: Record<string, number[]> = {};
+    for (const p of lista) {
+      if (!esDocenteResponsable(p)) continue;
+      const previa = form.asignaciones[p.id];
+      if (previa) { asignaciones[p.id] = previa; continue; }
+      // Regla 4: solo sus semestres, nunca todos los del público.
+      const habilitados = p.semesters ?? [];
+      asignaciones[p.id] = quedanSoloDocentes && eranSoloDocentes
+        ? habilitados
+        : habilitados.filter((n) => form.audiencia === 'carrera' || form.semesterScope.includes(n));
+    }
+    const siguiente = {
+      ...form,
+      responsables: lista,
+      asignaciones,
+      // Al dejar de haber quien cubra toda la carrera, el público pasa a ser
+      // el de los docentes: se parte de lo que había para no perderlo en silencio.
+      ...(quedanSoloDocentes && !soloDocentes && form.audiencia === 'especificos' ? { semesterScope: form.semesterScope } : {}),
+    };
+    setForm(siguiente);
+    errores.clear('responsibleUserIds');
+    errores.clear('responsibleAssignments');
+    const despues = audienciaDe(siguiente, !esDocente && quedanSoloDocentes);
+    const perdidos = semestresPerdidos(antes, despues);
+    if (perdidos.length) {
+      const lista = perdidos.map((n) => `${n}.º`).join(', ');
+      toast.info(
+        `Quedan sin responsable: ${lista}.`,
+        editing && editing.status !== 'draft'
+          ? 'La actividad ya está publicada: al guardar se te pedirá confirmar que deja de dirigirse a esos semestres, o asígnalos a otro responsable.'
+          : 'Se quitaron del público porque ningún otro responsable los cubre.',
+      );
+    }
+  };
+
+  const alternarAsignacion = (p: ActivityPerson, n: number) => {
+    const actual = form.asignaciones[p.id] ?? [];
+    const on = actual.includes(n);
+    setForm({
+      ...form,
+      asignaciones: { ...form.asignaciones, [p.id]: on ? actual.filter((x) => x !== n) : [...actual, n].sort((a, b) => a - b) },
+    });
+    errores.clear('responsibleAssignments');
+    errores.clear('semesterScope');
+  };
+
+  const alternarSemestre = (n: number) => {
+    const on = form.semesterScope.includes(n);
+    const semesterScope = on ? form.semesterScope.filter((x) => x !== n) : [...form.semesterScope, n].sort((a, b) => a - b);
+    // Un semestre que sale del público sale también de cada docente.
+    const asignaciones = on
+      ? Object.fromEntries(Object.entries(form.asignaciones).map(([id, s]) => [id, s.filter((x) => x !== n)]))
+      : form.asignaciones;
+    setForm({ ...form, semesterScope, asignaciones });
+    errores.clear('semesterScope');
+  };
 
   /** V5-06 (B07): borrar un borrador propio sin historia; lo publicado se cancela. */
   const borrarBorrador = async (a: Activity) => {
@@ -492,6 +625,8 @@ export default function ActivityManager({
       registrationMode: a.registrationMode ?? 'open',
       status: a.status,
       semesterScope: a.semesterScope ?? [],
+      audiencia: a.semesterScope?.length ? 'especificos' : 'carrera',
+      asignaciones: asignacionesDe(a.responsibles ?? []),
       criterionId: a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.criterionId ?? '',
       expectedCourseName: '',
       credentialIdPattern: '',
@@ -513,6 +648,7 @@ export default function ActivityManager({
     activityService.get(a.id).then((d) => setForm((f) => ({
       ...f,
       responsables: d.responsibles ?? f.responsables,
+      ...(d.responsibles ? { asignaciones: asignacionesDe(d.responsibles) } : {}),
       contactos: d.contacts ?? f.contactos,
       imagenes: d.images?.length ? d.images : f.imagenes,
       ...(d.activitySkills ? {
@@ -1116,7 +1252,7 @@ export default function ActivityManager({
                     kind="responsible"
                     activityType={activityType}
                     value={form.responsables}
-                    onChange={(v) => { setForm({ ...form, responsables: v }); errores.clear('responsibleUserIds'); }}
+                    onChange={cambiarResponsables}
                     label={esAdmin ? 'Responsables *' : 'Responsables'}
                     hint={esAdmin
                       ? 'Administración puede publicarla, pero no es su emisor académico: el responsable confirma la asistencia.'
@@ -1272,51 +1408,104 @@ export default function ActivityManager({
               </div>
             </div>
 
-            {activityType === 'academica' && (
-              <div className="field">
-                <span className="field-label" id="activity-manager-semestres-a-los-que">Semestres a los que va dirigida</span>
-                <div role="group" aria-labelledby="activity-manager-semestres-a-los-que" className="chip-row">
+            {/* V6 §3.4: el público y quién atiende cada semestre, dependientes de los responsables. */}
+            <div className={`field ${errores.errors.semesterScope || errores.errors.responsibleAssignments ? 'has-error' : ''}`} data-campo="semesterScope">
+              <span className="field-label" id="activity-manager-semestres-a-los-que">Semestres a los que va dirigida</span>
+              {!esDocente && (
+                <div role="radiogroup" aria-label="Alcance del público" className="audiencia-modo" data-testid="audiencia-modo">
+                  <label className={soloDocentes ? 'muted' : undefined}>
+                    <input
+                      type="radio"
+                      name="audiencia"
+                      checked={!soloDocentes && form.audiencia === 'carrera'}
+                      disabled={soloDocentes}
+                      onChange={() => { setForm({ ...form, audiencia: 'carrera', semesterScope: [] }); errores.clear('semesterScope'); }}
+                    />
+                    {' '}Toda la carrera
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="audiencia"
+                      checked={soloDocentes || form.audiencia === 'especificos'}
+                      onChange={() => setForm({ ...form, audiencia: 'especificos' })}
+                    />
+                    {' '}Semestres específicos
+                  </label>
+                </div>
+              )}
+              {(esDocente || (!soloDocentes && form.audiencia === 'especificos')) && (
+                <div role="group" aria-labelledby="activity-manager-semestres-a-los-que" className="chip-row" data-testid="audiencia-semestres">
                   {semestresPermitidos.map((n) => {
                     const on = form.semesterScope.includes(n);
-                    // V5-08: un semestre que no cubre ningún docente responsable se marca y se explica.
-                    const fuera = !!cobertura && !cobertura.includes(n);
                     return (
-                      <button
-                        type="button"
-                        key={n}
-                        className={`chip ${on ? 'on' : ''} ${fuera ? 'chip-fuera' : ''}`}
-                        aria-pressed={on}
-                        title={fuera ? 'Ningún docente responsable cubre este semestre' : undefined}
-                        onClick={() =>
-                          setForm({
-                            ...form,
-                            semesterScope: on ? form.semesterScope.filter((x) => x !== n) : [...form.semesterScope, n].sort((a, b) => a - b),
-                          })}
-                      >
+                      <button type="button" key={n} className={`chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => alternarSemestre(n)}>
                         {n}º
                       </button>
                     );
                   })}
                 </div>
-                <small className="muted">
-                  {user?.role === 'TEACHER'
-                    ? 'Solo aparecen tus semestres habilitados. Sin marcar ninguno, va a todos ellos.'
-                    : 'Sin marcar ninguno, va a toda la carrera.'}
-                </small>
-                {cobertura && (
-                  <p className="field-hint" data-testid="cobertura">
-                    Los docentes responsables cubren: {cobertura.length ? cobertura.map((n) => `${n}.º`).join(', ') : 'ningún semestre'}.
-                    {' '}Para publicar, elige solo esos semestres o suma un responsable que cubra toda la carrera.
-                    {/* V5-08: qué cubre cada uno; la unión no amplía el alcance de nadie. */}
-                    <span className="block small">
-                      {form.responsables.map((p) => `${p.firstName} ${p.lastName}: ${(p.semesters ?? []).length ? (p.semesters ?? []).map((n) => `${n}.º`).join(', ') : 'sin semestres'}`).join(' · ')}.
-                      {' '}Cada docente gestiona solo a los estudiantes de sus semestres.
-                    </span>
-                  </p>
-                )}
-                <FieldError message={errores.errors.semesterScope} />
-              </div>
-            )}
+              )}
+              <small className="muted">
+                {esDocente
+                  ? 'Solo aparecen tus semestres habilitados. Sin marcar ninguno, va a todos ellos.'
+                  : soloDocentes
+                    ? 'Todos los responsables son docentes: el público es la suma de los semestres que le asignas a cada uno. Para «Toda la carrera», suma a Dirección o a la Sociedad.'
+                    : form.audiencia === 'carrera'
+                      ? 'Va a toda la carrera.'
+                      : 'Solo los semestres marcados.'}
+              </small>
+
+              {!esDocente && form.responsables.length > 0 && (
+                <div className="cobertura-bloques" data-campo="responsibleAssignments" data-testid="cobertura">
+                  {form.responsables.map((p) => {
+                    const nombre = `${p.firstName} ${p.lastName}`;
+                    if (!esDocenteResponsable(p)) {
+                      return (
+                        <div key={p.id} className="cobertura-bloque" data-testid={`cobertura-${p.id}`}>
+                          <strong>{nombre}</strong>
+                          <span className="muted small"> · {ROLE_LABEL[p.role ?? ''] ?? 'Responsable'} · atiende todo el público</span>
+                        </div>
+                      );
+                    }
+                    const ofrecidos = ofrecidosA(p);
+                    const asignados = form.asignaciones[p.id] ?? [];
+                    return (
+                      <div key={p.id} className="cobertura-bloque" data-testid={`cobertura-${p.id}`}>
+                        <strong id={`cobertura-${p.id}-nombre`}>{nombre}</strong>
+                        <span className="muted small">
+                          {' '}· Docente · habilitado en {(p.semesters ?? []).length ? (p.semesters ?? []).map((n) => `${n}.º`).join(', ') : 'ningún semestre'}
+                        </span>
+                        {ofrecidos.length ? (
+                          <div role="group" aria-labelledby={`cobertura-${p.id}-nombre`} className="chip-row">
+                            {ofrecidos.map((n) => {
+                              const on = asignados.includes(n);
+                              return (
+                                <button type="button" key={n} className={`chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => alternarAsignacion(p, n)}>
+                                  {n}º
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="muted small" style={{ margin: '4px 0 0' }}>
+                            No cubre ninguno de los semestres elegidos: quítalo de responsables o elige semestres que tenga habilitados.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {soloDocentes && (
+                    <p className="field-hint" data-testid="audiencia-final">
+                      Público final: {audienciaFinal.length ? audienciaFinal.map((n) => `${n}.º`).join(', ') : 'ningún semestre todavía'}.
+                      {' '}Cada docente gestiona solo a los estudiantes de los semestres que atiende.
+                    </p>
+                  )}
+                  <FieldError message={errores.errors.responsibleAssignments} />
+                </div>
+              )}
+              <FieldError message={errores.errors.semesterScope} />
+            </div>
 
             {/* V3.2 §28–§29: solo una interna elige su resultado. */}
             {externa ? (

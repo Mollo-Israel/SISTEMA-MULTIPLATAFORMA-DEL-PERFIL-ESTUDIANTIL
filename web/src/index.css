@@ -703,6 +703,13 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .chip.chip-fuera { border-style: dashed; opacity: 0.75; }
 .block { display: block; }
 
+/* V6 §3.4: público explícito y semestres que atiende cada responsable. */
+.audiencia-modo { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 4px 0 8px; }
+.audiencia-modo label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.cobertura-bloques { display: grid; gap: 8px; margin-top: 10px; }
+.cobertura-bloque { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 8px 12px; min-width: 0; }
+.cobertura-bloque .chip-row { margin-top: 6px; }
+
 /* Aviso breve dentro de una tarjeta */
 .inline-note {
   display: flex; align-items: center; gap: 0.4rem; margin: 0.7rem 0 0;
