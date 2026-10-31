@@ -833,6 +833,8 @@ async function batch7(ctx) {
   objective('BATCH 7 · Tarjeta y detalle: imagen, fechas, áreas, habilidades, personas y enlaces');
   const director = await provisionAndActivate(ctx.admin, { firstName: 'Nora', lastName: 'Saavedra', email: correoStaff('b7dir'), role: 'CAREER_DIRECTOR' });
   const docente = await provisionAndActivate(ctx.admin, { firstName: 'Omar', lastName: 'Taboada', email: correoStaff('b7doc'), role: 'TEACHER' });
+  // V6 §3.2 (regla 9): el docente opera a los estudiantes de sus semestres.
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: ctx.admin, body: { semesters: [2] } });
   const est = await provisionAndActivate(ctx.admin, { firstName: 'Pia', lastName: 'Ustariz', email: correoEst('b7est'), role: 'STUDENT', semester: 2 });
   await req('POST', '/profiles/me', { token: est.token, body: {} });
   const areas = (await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [];

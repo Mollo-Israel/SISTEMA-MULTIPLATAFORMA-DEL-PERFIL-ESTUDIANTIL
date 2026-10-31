@@ -169,6 +169,13 @@ function vistaEstudiante<T extends object>(actividad: T) {
   };
 }
 
+/** V6 §3.2: un responsable y los semestres de la audiencia que cubre. */
+interface Asignacion {
+  userId: string;
+  semesters: number[];
+  docente: boolean;
+}
+
 @Injectable()
 export class ActivitiesService {
   constructor(
@@ -343,11 +350,13 @@ export class ActivitiesService {
   private async resolverResponsables(
     user: AuthenticatedUser,
     type: ActivityType,
-    dto: { responsibleUserIds?: string[]; responsibleUserId?: string },
+    dto: { responsibleUserIds?: string[]; responsibleUserId?: string; responsibleAssignments?: { userId: string }[] },
     borrador = false,
   ): Promise<string[]> {
-    const pedidos = dto.responsibleUserIds ?? (dto.responsibleUserId ? [dto.responsibleUserId] : undefined);
-    const campo = dto.responsibleUserIds !== undefined ? 'responsibleUserIds' : 'responsibleUserId';
+    const pedidos = dto.responsibleUserIds
+      ?? dto.responsibleAssignments?.map((a) => a.userId)
+      ?? (dto.responsibleUserId ? [dto.responsibleUserId] : undefined);
+    const campo = dto.responsibleUserIds !== undefined || dto.responsibleAssignments !== undefined ? 'responsibleUserIds' : 'responsibleUserId';
     // V4.1 A41-007 (§4.2, A.4): un borrador de Administración puede guardarse
     // todavía sin responsable; se exige al publicar.
     if (user.role === RolNombre.ADMIN && !pedidos?.length && borrador) return [];
@@ -419,10 +428,122 @@ export class ActivitiesService {
     return unicos;
   }
 
-  private async replaceResponsables(activityId: string, ids: string[], m: EntityManager): Promise<void> {
+  private async replaceResponsables(activityId: string, asignaciones: Asignacion[], m: EntityManager): Promise<void> {
     const repo = m.getRepository(ActivityResponsible);
     await repo.delete({ activityId });
-    if (ids.length) await repo.insert(ids.map((userId) => ({ activityId, userId })));
+    if (asignaciones.length) {
+      await repo.insert(asignaciones.map((a) => ({ activityId, userId: a.userId, semesters: a.semesters })));
+    }
+  }
+
+  /**
+   * V6 §3.2: qué semestres de la audiencia cubre cada responsable.
+   *
+   * - Un docente, solo dentro de su alcance: pedirle un semestre ajeno es 403
+   *   (`RESPONSIBLE_SCOPE_EXCEEDED`), también si la petición se fabrica a mano.
+   * - Sin asignación explícita, el docente conserva la que tenía (recortada a
+   *   la audiencia) y suma los semestres nuevos de la audiencia que sí cubre;
+   *   si es nuevo, la intersección de su alcance y la audiencia.
+   * - Dirección, Sociedad o Administración: lista vacía = cubre toda la
+   *   audiencia. Compartir la actividad no extiende el alcance de un docente.
+   */
+  private async resolverAsignaciones(
+    responsables: string[],
+    audiencia: number[] | null,
+    pedidas?: { userId: string; semesters: number[] }[],
+    previas?: Map<string, number[]>,
+    audienciaAnterior?: number[] | null,
+  ): Promise<Asignacion[]> {
+    if (responsables.length === 0) return [];
+    const usuarios = await this.activities.manager.getRepository(User).find({
+      where: { id: In(responsables) }, relations: { role: true },
+    });
+    const enAudiencia = (s: number) => !audiencia?.length || audiencia.includes(s);
+    const salida: Asignacion[] = [];
+    for (const userId of responsables) {
+      const u = usuarios.find((x) => x.id === userId);
+      const docente = u?.role?.name === RolNombre.TEACHER;
+      const pedida = pedidas?.find((p) => p.userId === userId)?.semesters;
+      const nombre = u ? `${u.firstName} ${u.lastName}` : 'El responsable';
+      if (pedida) {
+        const limpia = [...new Set(pedida)].sort((a, b) => a - b);
+        const fueraDeAudiencia = limpia.filter((s) => !enAudiencia(s));
+        if (fueraDeAudiencia.length) {
+          const msg = `Asignaste a ${nombre} semestres que no están en la audiencia: ${fueraDeAudiencia.map((s) => `${s}.º`).join(', ')}.`;
+          throw new BadRequestException({ code: 'ASSIGNMENT_OUTSIDE_AUDIENCE', message: msg, fields: { responsibleAssignments: [msg] } });
+        }
+        if (docente) {
+          const alcance = await this.teacherScope.allowedSemesters(userId);
+          const fuera = limpia.filter((s) => !alcance.includes(s));
+          if (fuera.length) {
+            const msg = `${nombre} no cubre ${fuera.map((s) => `${s}.º`).join(', ')}: sus semestres son ${alcance.length ? alcance.map((s) => `${s}.º`).join(', ') : 'ninguno'}.`;
+            throw new ForbiddenException({ code: 'RESPONSIBLE_SCOPE_EXCEEDED', message: msg, fields: { responsibleAssignments: [msg] } });
+          }
+        }
+        salida.push({ userId, semesters: limpia, docente });
+        continue;
+      }
+      if (!docente) {
+        salida.push({ userId, semesters: [], docente });
+        continue;
+      }
+      const alcance = await this.teacherScope.allowedSemesters(userId);
+      const previa = previas?.get(userId);
+      let semesters: number[];
+      if (previa) {
+        const nuevos = (audiencia ?? []).filter((s) => !(audienciaAnterior ?? []).includes(s));
+        semesters = [...new Set([
+          ...previa.filter(enAudiencia),
+          ...alcance.filter((s) => nuevos.includes(s)),
+        ])];
+      } else {
+        semesters = alcance.filter(enAudiencia);
+      }
+      salida.push({ userId, semesters: semesters.sort((a, b) => a - b), docente });
+    }
+    return salida;
+  }
+
+  /**
+   * V6 §3.2 (regla 3): cada semestre de la audiencia tiene al menos un
+   * responsable asignado a ese semestre. Vale para académicas,
+   * extracurriculares y externas, al publicar y en cada cambio de una
+   * actividad que ya no es borrador. Una actividad «de toda la carrera» con
+   * solo docentes necesita a Dirección o a la Sociedad.
+   */
+  private assertCoberturaAsignada(activity: Activity, asignaciones: Asignacion[]): void {
+    if (asignaciones.length === 0) return;
+    if (asignaciones.some((a) => !a.docente && a.semesters.length === 0)) return;
+    const audiencia = activity.semesterScope ?? [];
+    const cubiertos = [...new Set(asignaciones.flatMap((a) => a.semesters))].sort((x, y) => x - y);
+    const lista = cubiertos.length ? cubiertos.map((s) => `${s}.º`).join(', ') : 'ninguno';
+    if (audiencia.length === 0) {
+      const msg = `Los docentes responsables cubren los semestres ${lista}: elige esos semestres o suma un responsable que cubra toda la carrera.`;
+      throw new BadRequestException({ message: msg, code: 'ACTIVITY_SCOPE_NOT_COVERED', fields: { semesterScope: [msg] } });
+    }
+    const huerfanos = audiencia.filter((s) => !cubiertos.includes(s));
+    if (huerfanos.length) {
+      const msg = `Los semestres ${huerfanos.map((s) => `${s}.º`).join(', ')} no los cubre ningún responsable (cubren ${lista}). Asígnalos a un responsable que los cubra o quítalos de la audiencia.`;
+      throw new BadRequestException({
+        message: msg, code: 'ACTIVITY_SCOPE_NOT_COVERED', details: { uncoveredSemesters: huerfanos },
+        fields: { semesterScope: [msg], responsibleAssignments: [msg] },
+      });
+    }
+  }
+
+  /**
+   * V6 §3.2 (regla 9): semestres de los estudiantes que un docente opera en
+   * esta actividad. `null` = sin límite (Dirección, Sociedad, Administración).
+   */
+  private async semestresQueOpera(user: AuthenticatedUser, activity: Activity): Promise<number[] | null> {
+    if (user.role !== RolNombre.TEACHER) return null;
+    const fila = await this.activities.manager.getRepository(ActivityResponsible).findOne({
+      where: { activityId: activity.id, userId: user.userId },
+    });
+    if (fila?.semesters?.length) return fila.semesters;
+    const alcance = await this.teacherScope.allowedSemesters(user.userId);
+    const audiencia = activity.semesterScope ?? [];
+    return audiencia.length ? alcance.filter((s) => audiencia.includes(s)) : alcance;
   }
 
   private async replaceContactos(activityId: string, ids: string[], m: EntityManager): Promise<void> {
@@ -583,34 +704,6 @@ export class ActivitiesService {
     }
   }
 
-  /**
-   * V4.1 A41-009 (§4.5, B13): si los responsables de una actividad creada por
-   * una autoridad son solo docentes, sus semestres tienen que estar cubiertos
-   * por la unión de los alcances de esos docentes. La unión no amplía el
-   * alcance de ninguno: cada docente sigue operando solo a sus estudiantes.
-   * Con un responsable de Dirección o de la Sociedad no hay límite (cubren
-   * toda la carrera). Se valida al publicar, no al guardar el borrador.
-   */
-  private async assertCobertura(user: AuthenticatedUser, activity: Activity, responsables: string[]): Promise<void> {
-    if (user.role !== RolNombre.ADMIN && user.role !== RolNombre.CAREER_DIRECTOR) return;
-    if (activity.type !== ActivityType.ACADEMICA || responsables.length === 0) return;
-    const usuarios = await this.activities.manager.getRepository(User).find({
-      where: { id: In(responsables) }, relations: { role: true },
-    });
-    if (usuarios.length === 0 || usuarios.some((u) => u.role?.name !== RolNombre.TEACHER)) return;
-    const union = new Set<number>();
-    for (const u of usuarios) for (const s of await this.teacherScope.allowedSemesters(u.id)) union.add(s);
-    const cubiertos = [...union].sort((a, b) => a - b);
-    const alcance = activity.semesterScope ?? [];
-    const fuera = alcance.length === 0 ? null : alcance.filter((s) => !union.has(s));
-    if (alcance.length === 0 || (fuera && fuera.length > 0)) {
-      const lista = cubiertos.length ? cubiertos.map((s) => `${s}.º`).join(', ') : 'ninguno';
-      const msg = alcance.length === 0
-        ? `Los docentes responsables cubren los semestres ${lista}: elige esos semestres o suma un responsable que cubra toda la carrera.`
-        : `Los semestres ${fuera!.map((s) => `${s}.º`).join(', ')} no los cubre ningún docente responsable (cubren ${lista}).`;
-      throw new BadRequestException({ message: msg, code: 'ACTIVITY_SCOPE_NOT_COVERED', fields: { semesterScope: [msg] } });
-    }
-  }
 
   /**
    * V4.1 A41-010 (§4.6, B16): repetir una actividad es duplicarla. La copia es
@@ -1254,10 +1347,12 @@ export class ActivitiesService {
     }
     this.normalizarModalidad(activity);
     // V3.2 §21.1–§22: guardar un borrador no publica; publicar exige lo mínimo.
+    // V6 §3.2: cada responsable con sus semestres; un docente, solo los suyos.
+    const asignaciones = await this.resolverAsignaciones(responsables, semesterScope, dto.responsibleAssignments);
     if (estadoInicial === ActivityStatus.PUBLISHED || estadoInicial === ActivityStatus.OPEN) {
       this.assertCompleta(activity, areas, contextos.map((c) => c.skillId), responsables.length);
       this.assertInicioFuturo(activity);
-      await this.assertCobertura(user, activity, responsables);
+      this.assertCoberturaAsignada(activity, asignaciones);
     }
     // V3.2 C6: la actividad, sus áreas, habilidades y reglas se escriben juntas
     // o no se escribe nada.
@@ -1265,7 +1360,7 @@ export class ActivitiesService {
       const fila = await m.getRepository(Activity).save(activity);
       await this.replaceAreas(fila.id, areas, m);
       if (contextos.length) await this.replaceSkills(fila.id, contextos, m);
-      await this.replaceResponsables(fila.id, responsables, m);
+      await this.replaceResponsables(fila.id, asignaciones, m);
       await this.replaceContactos(fila.id, contactos, m);
       if (imagenes.length) await this.replaceImagenes(fila.id, imagenes, m);
       await this.derivarPalabrasClave(fila.id, m);
@@ -1282,6 +1377,7 @@ export class ActivitiesService {
           semesterScope,
           responsibleUserId: responsable,
           responsibleUserIds: responsables,
+          responsibleAssignments: asignaciones.map((a) => ({ userId: a.userId, semesters: a.semesters })),
           contactUserIds: contactos,
           viaAdmin: user.role === RolNombre.ADMIN,
         },
@@ -1560,7 +1656,8 @@ export class ActivitiesService {
       const propios = resp.filter((r) => r.activityId === a.id && r.user);
       // El principal primero, aunque se haya agregado después.
       propios.sort((x, y) => Number(y.userId === a.responsibleUserId) - Number(x.userId === a.responsibleUserId));
-      extra.responsibles = propios.map((r) => resumen(r.user));
+      // V6 §3.2: con sus semestres asignados, para que editar los recupere tal cual.
+      extra.responsibles = propios.map((r) => ({ ...resumen(r.user), semesters: r.semesters ?? [] }));
       extra.contacts = cont.filter((c) => c.activityId === a.id && c.user)
         .map((c) => ({ ...resumen(c.user), email: c.user.email }));
       // Pasa por /api/files, que autoriza: la imagen de un borrador no se sirve a cualquiera.
@@ -1612,6 +1709,8 @@ export class ActivitiesService {
   async update(user: AuthenticatedUser, id: string, dto: UpdateActivityDto): Promise<Activity> {
     const activity = await this.findOne(id);
     await this.assertCanManage(user, activity);
+    // V6 §3.2: la audiencia antes del cambio, para saber qué semestres son nuevos.
+    const audienciaAnterior = activity.semesterScope ? [...activity.semesterScope] : null;
     await this.assertSoloOperacion(user, activity, dto);
 
     // V2 §27: lo que Dirección revisa no cambia a sus espaldas.
@@ -1680,7 +1779,7 @@ export class ActivitiesService {
     // V3.2 §17: reasignan responsables Administración, Dirección y Sociedad
     // (en lo suyo); el docente no: suma contactos.
     let responsablesNuevos: string[] | undefined;
-    if (dto.responsibleUserId !== undefined || dto.responsibleUserIds !== undefined) {
+    if (dto.responsibleUserId !== undefined || dto.responsibleUserIds !== undefined || dto.responsibleAssignments !== undefined) {
       if (user.role === RolNombre.TEACHER || user.role === RolNombre.STUDENT) {
         throw new ForbiddenException('Los responsables los reasignan Dirección o Administración.');
       }
@@ -1761,19 +1860,27 @@ export class ActivitiesService {
       const responsablesFinales = responsablesNuevos?.length
         ?? await this.activities.manager.getRepository(ActivityResponsible).count({ where: { activityId: activity.id } });
       this.assertCompleta(activity, areasFinales, skillsFinales, responsablesFinales);
-      if (publica) {
-        this.assertInicioFuturo(activity);
-        const ids = responsablesNuevos
-          ?? (await this.activities.manager.getRepository(ActivityResponsible).find({ where: { activityId: activity.id } })).map((r) => r.userId);
-        await this.assertCobertura(user, activity, ids);
-      }
+      if (publica) this.assertInicioFuturo(activity);
+    }
+
+    // V6 §3.2: si cambian los responsables, sus asignaciones o la audiencia, se
+    // recalcula quién cubre qué; y una actividad que no es borrador nunca queda
+    // con semestres sin responsable (también al publicarla).
+    const recalcula = responsablesNuevos !== undefined || dto.responsibleAssignments !== undefined || dto.semesterScope !== undefined;
+    let asignacionesNuevas: Asignacion[] | undefined;
+    if (recalcula || publica) {
+      const filas = await this.activities.manager.getRepository(ActivityResponsible).find({ where: { activityId: activity.id } });
+      const ids = responsablesNuevos ?? filas.map((r) => r.userId);
+      const previas = new Map(filas.map((r) => [r.userId, r.semesters ?? []]));
+      asignacionesNuevas = await this.resolverAsignaciones(ids, activity.semesterScope, dto.responsibleAssignments, previas, audienciaAnterior);
+      if (activity.status !== ActivityStatus.DRAFT) this.assertCoberturaAsignada(activity, asignacionesNuevas);
     }
 
     await this.activities.manager.transaction(async (m) => {
       await m.getRepository(Activity).save(this.soloFila(activity));
       if (areasNuevas !== undefined) await this.replaceAreas(activity.id, areasNuevas, m);
       if (contextos !== undefined) await this.replaceSkills(activity.id, contextos, m);
-      if (responsablesNuevos !== undefined) await this.replaceResponsables(activity.id, responsablesNuevos, m);
+      if (asignacionesNuevas !== undefined) await this.replaceResponsables(activity.id, asignacionesNuevas, m);
       if (contactosNuevos !== undefined) await this.replaceContactos(activity.id, contactosNuevos, m);
       if (imagenesNuevas !== undefined) await this.replaceImagenes(activity.id, imagenesNuevas, m);
       if (areasNuevas !== undefined || contextos !== undefined) await this.derivarPalabrasClave(activity.id, m);
@@ -1896,6 +2003,13 @@ export class ActivitiesService {
     }
     if (profile.userId === confirmer.userId) {
       throw new ForbiddenException('No puede confirmar su propia participación.');
+    }
+    // V6 §3.2 (regla 9, ADM-06): un docente responsable opera solo a los
+    // estudiantes de los semestres que tiene asignados en esta actividad.
+    const opera = await this.semestresQueOpera(confirmer, activity);
+    if (opera && !effectiveSemesters(profile).some((s) => opera.includes(s))) {
+      const m = `Este estudiante no es de los semestres que atiendes en esta actividad (${opera.map((s) => `${s}.º`).join(', ') || 'ninguno'}).`;
+      throw new ForbiddenException({ code: 'STUDENT_OUT_OF_RESPONSIBLE_SCOPE', message: m });
     }
 
     const registration = await this.registrations.findOne({
@@ -2234,11 +2348,16 @@ export class ActivitiesService {
       activity,
       'Solo el responsable de la actividad puede ver sus participantes.',
     );
-    const rows = await this.registrations.find({
+    const todas = await this.registrations.find({
       where: { activityId },
       relations: { studentProfile: { user: true } },
       order: { createdAt: 'ASC' },
     });
+    // V6 §3.2 (regla 9): cada docente ve solo a los estudiantes de sus semestres.
+    const opera = await this.semestresQueOpera(user, activity);
+    const rows = opera
+      ? todas.filter((r) => r.studentProfile && effectiveSemesters(r.studentProfile).some((s) => opera.includes(s)))
+      : todas;
     return rows.map((r) => ({
       id: r.id,
       studentProfileId: r.studentProfileId,

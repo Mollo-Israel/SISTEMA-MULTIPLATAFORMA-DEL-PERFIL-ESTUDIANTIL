@@ -40,6 +40,27 @@ const minusculas = ({ value }: { value: unknown }) =>
     : value;
 
 /** V3.2 §11.4: habilidad y área en la que se trabaja. */
+/**
+ * V6 §3.2: semestres de la audiencia que cubre un responsable. Un docente,
+ * solo dentro de su alcance. Vacío en Dirección, Sociedad o Administración =
+ * cubre toda la audiencia.
+ */
+export class ResponsibleAssignmentDto {
+  @ApiProperty()
+  @IsUUID('4', { message: 'Responsable no válido.' })
+  userId: string;
+
+  @ApiProperty({ type: [Number] })
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ArrayUnique({ message: 'No repitas semestres.' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: 'Semestre no válido.' })
+  @Min(1, { each: true })
+  @Max(12, { each: true })
+  semesters: number[];
+}
+
 export class SkillContextDto {
   @ApiProperty()
   @IsUUID('4', { message: 'Habilidad no válida.' })
@@ -237,6 +258,20 @@ export class CreateActivityDto {
   @ArrayUnique({ message: 'No repitas responsables.' })
   @IsUUID('4', { each: true, message: 'Responsable no válido.' })
   responsibleUserIds?: string[];
+
+  /**
+   * V6 §3.2: qué semestres cubre cada responsable. Opcional: sin ella, un
+   * docente queda con la intersección de su alcance y la audiencia. Si se
+   * envía, sus responsables son los de `responsibleUserIds` (o los indica ella
+   * misma, en ese orden).
+   */
+  @ApiProperty({ required: false, type: () => [ResponsibleAssignmentDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5, { message: 'Como máximo 5 responsables.' })
+  @ValidateNested({ each: true })
+  @Type(() => ResponsibleAssignmentDto)
+  responsibleAssignments?: ResponsibleAssignmentDto[];
 
   /** V3.2 §16: personas de contacto visibles para el estudiante (0..N). */
   @ApiProperty({ required: false, type: [String] })
