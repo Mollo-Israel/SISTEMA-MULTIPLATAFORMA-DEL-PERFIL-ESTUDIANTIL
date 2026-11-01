@@ -635,7 +635,74 @@ async function batch11(ctx) {
   check(quitada.status === 200 && f4.status === 404 && !('photoUrl' in p4), 'V6.11.6 Quitar la foto vuelve al avatar en todas partes', `${quitada.status} ${f4.status}`);
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11 };
+// ===========================================================================
+//  BATCH V6-12 — Recomendador sin «Me interesa / No me interesa» (§9)
+// ===========================================================================
+async function batch12(ctx) {
+  objective('BATCH V6-12 · El orden sale de lo declarado en el perfil; los clics no lo reescriben');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Recom${L}`, email: correoStaff('b12dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Ivo', lastName: `Recom${L}`, email: correoEst('b12est'), semester: 3 });
+  const cats = ((await req('GET', '/activity-categories', { token: director.token })).data ?? []).filter((c) => c.isActive !== false);
+  const taller = cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const area = async (n, tag) => (await req('POST', '/academic-areas', { token: ctx.admin, body: { name: `${n} ${L}`, tags: [`${tag}${L}`] } })).data;
+  // El motor puntúa por el área principal: «ambas» es un área que es interés y meta de mejora a la vez.
+  const [aInteres, aMejora, aAmbas] = [await area('Optica Cuantica', 'optica'), await area('Robotica Movil', 'robotica'), await area('Bioinformatica Basica', 'bioinfo')];
+  const crear = async (titulo, areaIds) => (await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${L}`, type: 'academica', categoryId: taller.id, areaIds, skillIds: [], semesterScope: [3], status: 'open' },
+  })).data;
+  const soloInteres = await crear('Taller de optica', [aInteres.id]);
+  const soloMejora = await crear('Taller de robotica', [aMejora.id]);
+  const ambos = await crear('Taller de bioinformatica', [aAmbas.id]);
+  const otra = await crear('Taller de optica II', [aInteres.id]);
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: aInteres.id, priority: 1 }, { academicAreaId: aAmbas.id, priority: 1 }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { improvementAreaIds: [aMejora.id, aAmbas.id] } });
+  const leer = async () => ((await req('GET', '/recommendations/me', { token: est.token })).data?.groups ?? []).flatMap((g) => g.items);
+  const de = (lista, id) => lista.find((i) => i.targetId === id);
+  const motivos = (i) => (i?.reasons ?? []).map((r) => r.label).join(' | ');
+
+  // §9.5: tres ejemplos contrastados.
+  let lista = await leer();
+  const [ri, rm, ra] = [de(lista, soloInteres.id), de(lista, soloMejora.id), de(lista, ambos.id)];
+  check(/Coincide con tus intereses/.test(motivos(ri)) && !/mejorar/.test(motivos(ri))
+      && /Coincide con lo que quieres mejorar/.test(motivos(rm)) && !/tus intereses/.test(motivos(rm))
+      && /tus intereses/.test(motivos(ra)) && /quieres mejorar/.test(motivos(ra)),
+  'V6.12.1 §9.5 Solo interés, solo mejora e interés + mejora se explican con palabras distintas', json([motivos(ri), motivos(rm), motivos(ra)]));
+  check(Number(ra?.score) > Number(ri?.score) && Number(ri?.score) > Number(rm?.score),
+    'V6.12.2 §9.2 El interés pesa más que la mejora, y ambas juntas más que cada una', json([ri?.score, rm?.score, ra?.score]));
+  check(lista.every((i) => (i.reasons ?? []).every((r) => !/Prioridad|\+\d+ puntos|100 %|validada/.test(r.label))),
+    'V6.12.3 §9.3 Los motivos no muestran prioridades, puntos ni certezas', json(lista.flatMap((i) => i.reasons.map((r) => r.label)).slice(0, 6)));
+
+  // §9.1, §9.5: diez «Guardar», «Me interesa» y descartar no cambian nada.
+  const base = Number(de(lista, otra.id)?.score);
+  const huella = async () => json({
+    a: ((await req('GET', '/affinity/me', { token: est.token })).data ?? []).map((x) => [x.academicAreaId, x.score]).sort(),
+    t: ((await req('GET', '/trajectory/me', { token: est.token })).data?.entries ?? []).filter((e) => e.cvEligible).map((e) => e.id).sort(),
+  });
+  const antesHuella = await huella();
+  for (let i = 0; i < 10; i++) {
+    await req(i % 2 === 0 ? 'PUT' : 'DELETE', `/activities/${soloInteres.id}/favorite`, { token: est.token });
+  }
+  await req('PUT', `/activities/${soloInteres.id}/favorite`, { token: est.token });
+  await req('POST', `/activities/${soloInteres.id}/register-interest`, { token: est.token });
+  const descarte = await req('PATCH', `/recommendations/me/${de(lista, ambos.id)?.id}`, { token: est.token, body: { status: 'dismissed' } });
+  lista = await leer();
+  const tras = de(lista, otra.id);
+  check(Math.abs(Number(tras?.score) - base) < 0.001 && !(tras?.reasons ?? []).some((r) => ['activity_interested', 'dismissed_similar', 'similar_saved'].includes(r.code)),
+    'V6.12.4 §9.5 Diez clics a «Guardar», un «Me interesa» y un descarte no cambian el puntaje de lo parecido', `${base} → ${tras?.score} ${json(tras?.reasons?.map((r) => r.code))}`);
+  const despuesHuella = await huella();
+  check(antesHuella === despuesHuella,
+  'V6.12.5 Ni la afinidad ni lo que cuenta en la trayectoria cambian por esos clics', `${antesHuella} → ${despuesHuella} (descarte ${descarte.status})`);
+  const guardadas = await req('GET', '/activities?limit=24&favorites=true', { token: est.token });
+  check((guardadas.data?.items ?? []).map((x) => x.id).includes(soloInteres.id), 'V6.12.6 «Guardadas» lista lo guardado (acceso rápido)', json((guardadas.data?.items ?? []).length));
+  const reglas = (await req('GET', '/recommendations/rules', { token: est.token })).data;
+  check(!(reglas?.ranking ?? []).some((p) => p.code === 'activity_interested') && !reglas?.dismissal && /no cambian el orden/.test(reglas?.sinEfecto ?? ''),
+    'V6.12.7 Las reglas publicadas ya no tienen «Me interesa» ni «No me interesa» y dicen qué no cuenta', json((reglas?.ranking ?? []).map((p) => [p.code, p.weight])));
+  const v1 = psql(`select rules_version from recommendations where student_profile_id = '${est.profileId}' order by generated_at desc limit 1`);
+  check(!!v1 && v1 === reglas?.rulesVersion, 'V6.12.8 Las recomendaciones guardan la versión nueva de las reglas (trazable)', `${v1} / ${reglas?.rulesVersion}`);
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);

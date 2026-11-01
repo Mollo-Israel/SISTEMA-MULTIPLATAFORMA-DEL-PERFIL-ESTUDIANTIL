@@ -194,7 +194,7 @@ export class RecommendationsService {
   getRules() {
     return {
       rulesVersion: RULES_VERSION,
-      /** V3 §34 · Reparto del ranking. Suma 100; la afinidad no es un factor. */
+      /** V3 §34 / V6 §9.2 · Reparto del ranking (solo lo declarado en el perfil); la afinidad no es un factor. */
       ranking: [
         {
           code: 'preferred_area',
@@ -220,20 +220,11 @@ export class RecommendationsService {
           weight: RULES.ranking.orientation,
           detail: 'Áreas que te sugirió el cuestionario y que tú decidiste sumar.',
         },
-        {
-          code: 'activity_interested',
-          label: '«Me interesa» en actividades',
-          weight: RULES.ranking.feedback,
-          detail: 'Áreas y tecnologías de actividades en las que marcaste «Me interesa». Guardar algo o marcarlo como favorito no cuenta.',
-        },
       ],
+      /** V6 §9.1–§9.2: lo que NO ordena las recomendaciones. */
+      sinEfecto: 'Guardar una actividad, inscribirte, abrirla o el antiguo «Me interesa» en actividades no cambian el orden: solo cuenta lo que declaras en tu perfil.',
       /** V3 §34 · Filtros duros antes de puntuar. */
       filters: 'Solo oportunidades visibles, aprobadas, abiertas, con fecha vigente, para tu semestre y con cupo. La afinidad no ordena la lista.',
-      /** V3 §34.1 · «No me interesa». */
-      dismissal: {
-        factor: RULES.dismissal.factor,
-        detail: 'Cada recomendación parecida que descartaste (misma área y tipo) multiplica la prioridad por este factor. No cambia tus intereses: eso se hace en Mi perfil → Intereses.',
-      },
       /** §62 · Prioridades para sugerir un compañero, en su orden. */
       teammate: [
         {

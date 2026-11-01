@@ -4,7 +4,7 @@ import {
   FiCalendar,
   FiCheckCircle,
   FiExternalLink,
-  FiHeart,
+  FiBookmark,
   FiMapPin,
   FiSearch,
   FiTag,
@@ -67,9 +67,11 @@ export default function StudentActivitiesPage() {
   /** V3.2 §37: el detalle completo, aparte de la tarjeta. */
   const [detalle, setDetalle] = useState<Activity | null>(null);
 
-  // V3 §34.2: [Para ti] [Todas] [Interesadas] [Inscritas] [Historial].
+  // V6 §9.1: [Para ti] [Todas] [Inscritas] [Guardadas] [Historial]. «Interesadas»
+  // se retiró; un marcador antiguo lleva a «Todas».
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') ?? 'para-ti';
+  const pedidaTab = params.get('tab') ?? 'para-ti';
+  const tab = pedidaTab === 'interesadas' ? 'todas' : pedidaTab;
   // V5 BATCH 14: llegar desde la fuente de una afinidad abre esa actividad.
   const actividadPedida = params.get('actividad');
   useEffect(() => {
@@ -86,8 +88,9 @@ export default function StudentActivitiesPage() {
    * filtraban aquí; con miles de filas, eso eran megas por pantalla.
    */
   const PASO = 24;
-  const lista = tab === 'todas' || tab === 'interesadas' || tab === 'inscritas';
-  const mine = tab === 'interesadas' ? 'interested' as const : tab === 'inscritas' ? 'enrolled' as const : undefined;
+  const lista = tab === 'todas' || tab === 'guardadas' || tab === 'inscritas';
+  const mine = tab === 'inscritas' ? 'enrolled' as const : undefined;
+  const favorites = tab === 'guardadas' ? 'true' as const : undefined;
   const [items, setItems] = useState<Activity[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -97,7 +100,7 @@ export default function StudentActivitiesPage() {
     setLoading(true);
     try {
       const r = await activityService.page({
-        limit: PASO, offset, q: buscado.trim() || undefined, mine, responsibleId: responsable?.id,
+        limit: PASO, offset, q: buscado.trim() || undefined, mine, favorites, responsibleId: responsable?.id,
         ...(type === 'externas' ? { originType: 'external' as const }
           : type === 'todas' ? {} : { type, originType: 'internal' as const }),
       });
@@ -110,7 +113,7 @@ export default function StudentActivitiesPage() {
       setLoading(false);
       setCargado(true);
     }
-  }, [buscado, type, mine, responsable]);
+  }, [buscado, type, mine, favorites, responsable]);
   useEffect(() => { if (lista) void pedir(0); }, [pedir, lista]);
   const reload = () => { void pedir(0); historial.reload(); };
   const data = cargado ? items : null;
@@ -129,8 +132,10 @@ export default function StudentActivitiesPage() {
     }
   };
 
-  const markInterest = (a: Activity) =>
-    run(() => activityService.registerInterest(a.id), a.id, 'Interés registrado', `“${a.title}” quedó marcada como de tu interés.`);
+  /** V6 §9.1: «Guardar» es acceso rápido; no cambia recomendaciones, puntos ni trayectoria. */
+  const alternarGuardada = (a: Activity) => (a.isFavorite
+    ? run(() => activityService.unfavorite(a.id), a.id, 'Quitada de guardadas')
+    : run(() => activityService.favorite(a.id), a.id, 'Guardada', 'La encuentras en «Guardadas». No cambia lo que te sugerimos.'));
 
   /*
    * V5 §6: pedir un lugar, tenerlo y asistir son tres cosas. Una interna
@@ -204,8 +209,8 @@ export default function StudentActivitiesPage() {
         items={[
           { key: 'para-ti', label: 'Para ti' },
           { key: 'todas', label: 'Todas' },
-          { key: 'interesadas', label: 'Interesadas', count: regs.filter((r) => r.status === 'interested').length },
           { key: 'inscritas', label: 'Inscritas', count: regs.filter((r) => ['registered', 'accepted', 'confirmed'].includes(r.status)).length },
+          { key: 'guardadas', label: 'Guardadas' },
           { key: 'historial', label: 'Historial' },
         ]}
       />
@@ -237,7 +242,7 @@ export default function StudentActivitiesPage() {
         </Card>
       )}
 
-      {(tab === 'todas' || tab === 'interesadas' || tab === 'inscritas') && (<>
+      {(tab === 'todas' || tab === 'guardadas' || tab === 'inscritas') && (<>
       <div className="filters">
         <SearchInput
           value={query}
@@ -305,7 +310,7 @@ export default function StudentActivitiesPage() {
       ) : items.length === 0 && !buscado && type === 'todas' ? (
         <EmptyState
           icon={<FiCalendar size={22} />}
-          message={tab === 'interesadas' ? 'Todavía no marcaste interés en ninguna actividad.'
+          message={tab === 'guardadas' ? 'Todavía no guardaste ninguna actividad.'
             : tab === 'inscritas' ? 'Todavía no te inscribiste en ninguna actividad.'
               : 'Todavía no hay actividades publicadas. Vuelve a consultar más adelante.'}
         />
@@ -363,15 +368,12 @@ export default function StudentActivitiesPage() {
                             variant="secondary"
                             size="sm"
                             loading={busy === a.id}
-                            disabled={a.myRegistration?.status === 'interested'}
-                            onClick={() => markInterest(a)}
-                            icon={<FiHeart size={14} />}
+                            onClick={() => alternarGuardada(a)}
+                            icon={<FiBookmark size={14} />}
+                            aria-pressed={a.isFavorite === true}
                           >
-                            {/* V4.1 A41-015 (A.9): «Me interesa» es la señal explícita, también en algo que ya pasó;
-                                «Guardar» (en «Para ti») es solo acceso rápido y no cambia recomendaciones. */}
-                            {a.myRegistration?.status === 'interested'
-                              ? 'Te interesa'
-                              : 'Me interesa'}
+                            {/* V6 §9.1: «Me interesa» se retiró de actividades; queda «Guardar». */}
+                            {a.isFavorite ? 'Quitar de guardadas' : 'Guardar'}
                           </Button>
                           {a.myRegistration?.status === 'accepted' && (
                             <span className="inline-note" style={{ margin: 0 }}>

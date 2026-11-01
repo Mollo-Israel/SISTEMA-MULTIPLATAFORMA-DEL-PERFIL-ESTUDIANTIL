@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useCachedState } from '../hooks/viewCache';
 import { Link } from 'react-router-dom';
-import { FiBookmark, FiCompass, FiThumbsDown } from 'react-icons/fi';
+import { FiBookmark, FiCompass } from 'react-icons/fi';
 import { apiError } from '../api/client';
-import { recommendationService, type RecommendationItem, type RecommendationsResponse } from '../services';
+import { activityService, recommendationService, type RecommendationItem, type RecommendationsResponse } from '../services';
 import { Badge, Button, Card, Diferido, EmptyState, SkeletonCards, Stagger } from './ui';
 import { useToast } from './feedback';
 
-/** Tipos que son oportunidades: los demás viven en «Más sugerencias». */
+/** Tipos que son oportunidades (actividades y cursos). */
 const DE_OPORTUNIDAD = ['activity', 'opportunity', 'external_course'];
 
 /**
@@ -15,7 +15,8 @@ const DE_OPORTUNIDAD = ['activity', 'opportunity', 'external_course'];
  *
  * Recomienda lo que el estudiante quiere explorar o mejorar, no lo que ya
  * sabe: la afinidad no es un factor. Cada tarjeta dice por qué aparece.
- * «No me interesa» baja lo parecido sin tocar sus intereses (§34.1).
+ * V6 §9.1: sin «No me interesa» ni «Descartadas»; «Guardar» es un favorito
+ * de acceso rápido que no cambia el orden.
  */
 export default function ParaTi({ onChanged }: { onChanged?: () => void }) {
   // Con memoria de la sesión: al volver a Actividades se pinta al instante
@@ -27,17 +28,14 @@ export default function ParaTi({ onChanged }: { onChanged?: () => void }) {
   const cargar = () => recommendationService.mine().then(setData).catch((e) => toast.error(apiError(e)));
   useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const decidir = async (r: RecommendationItem, status: 'saved' | 'dismissed') => {
+  const [guardadas, setGuardadas] = useState<Set<string>>(new Set());
+  const guardar = async (r: RecommendationItem) => {
     setBusy(r.id);
     try {
-      await recommendationService.decide(r.id, status);
-      toast.success(
-        status === 'saved' ? 'Guardada' : 'No volverá a aparecer',
-        status === 'saved'
-          ? 'Lo parecido sube un poco en tus sugerencias.'
-          : 'Lo parecido baja de prioridad. Tus intereses no cambian: eso se edita en Mi perfil → Intereses.',
-      );
-      await cargar();
+      const ya = guardadas.has(r.targetId);
+      await (ya ? activityService.unfavorite(r.targetId) : activityService.favorite(r.targetId));
+      setGuardadas((s) => { const n = new Set(s); if (ya) n.delete(r.targetId); else n.add(r.targetId); return n; });
+      toast.success(ya ? 'Quitada de guardadas' : 'Guardada', ya ? undefined : 'La encuentras en «Guardadas». No cambia lo que te sugerimos.');
       onChanged?.();
     } catch (e) {
       toast.error(apiError(e));
@@ -66,21 +64,16 @@ export default function ParaTi({ onChanged }: { onChanged?: () => void }) {
               <Card title={r.title} actions={<Badge tone="bordo">{r.typeLabel}</Badge>}>
                 {r.area && <p className="muted" style={{ marginTop: 0 }}>{r.area.name}</p>}
                 <ul className="plain-list">
-                  {r.reasons.filter((x) => x.points !== 0 || x.code === 'context_match').map((x) => (
-                    <li key={x.code + x.label} className="small">
-                      {x.label}
-                      {x.points !== 0 && <span className="muted"> · {x.points > 0 ? '+' : ''}{x.points}</span>}
-                    </li>
+                  {/* V6 §9.3: por qué, en palabras; sin puntos internos. */}
+                  {r.reasons.filter((x) => x.points > 0 || x.code === 'context_match').map((x) => (
+                    <li key={x.code + x.label} className="small">{x.label}</li>
                   ))}
                 </ul>
                 <div className="flex mt" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <Button size="sm" variant="secondary" loading={busy === r.id} disabled={r.status === 'saved'}
-                    onClick={() => decidir(r, 'saved')} icon={<FiBookmark size={13} />}>
-                    {r.status === 'saved' ? 'Guardada' : 'Guardar'}
-                  </Button>
+                  <Link className="btn btn-secondary btn-sm" to={`/student/activities?tab=todas&actividad=${r.targetId}`}>Ver detalles</Link>
                   <Button size="sm" variant="ghost" loading={busy === r.id}
-                    onClick={() => decidir(r, 'dismissed')} icon={<FiThumbsDown size={13} />}>
-                    No me interesa
+                    onClick={() => void guardar(r)} icon={<FiBookmark size={13} />} aria-pressed={guardadas.has(r.targetId)}>
+                    {guardadas.has(r.targetId) ? 'Quitar de guardadas' : 'Guardar'}
                   </Button>
                 </div>
               </Card>
@@ -88,10 +81,10 @@ export default function ParaTi({ onChanged }: { onChanged?: () => void }) {
           ))}
         </div>
       )}
-      <p className="muted small mt">
-        Se ordena por tus intereses (40 %), áreas a mejorar (30 %), tecnologías (15 %), orientación (10 %) y lo que
-        guardaste (5 %). Tu afinidad no decide qué ves. ¿Buscas recursos, áreas para fortalecer o compañeros?{' '}
-        <Link to="/student/recommendations">Más sugerencias</Link>.
+      <p className="muted small mt" data-testid="como-se-ordena">
+        Se ordena por lo que declaraste en tu perfil: lo que te interesa, lo que quieres mejorar, las tecnologías
+        que quieres explorar y tu orientación. Guardar, inscribirte o abrir una actividad no cambia el orden, y tu
+        afinidad no decide qué ves. Lo editas en <Link to="/student/profile?tab=intereses">Mi perfil → Intereses</Link>.
       </p>
     </div>
   );

@@ -260,7 +260,8 @@ export class RecommendationsEngine {
         preferredRows.filter((p) => p.source === InterestSource.ONBOARDING).map((p) => p.academicAreaId),
       ),
       dismissedSimilar,
-      interestedActivities: await this.actividadesConInteres(profileId),
+      // V6 §9.2: ya no se lee; el historial de «Me interesa» se conserva intacto.
+      interestedActivities: [],
       now: generatedAt,
     };
 
@@ -343,7 +344,7 @@ export class RecommendationsEngine {
       if (priority) {
         interes(
           RecommendationReasonCode.PREFERRED_AREA,
-          `Coincide con tus intereses: ${name} (prioridad ${priority})`,
+          `Coincide con tus intereses: ${name}`, // V6 §9.3: sin «prioridad N» a la vista
           RULES.interestByPriority[Math.min(Math.max(priority, 1), 5) - 1],
         );
       }
@@ -393,38 +394,13 @@ export class RecommendationsEngine {
     // Sin una señal de lo que el estudiante quiere, no hay recomendación.
     if (reasons.length === 0) return { score: 0, reasons: [] };
 
-    // ------------------------------- 5 % «Me interesa» en actividades
-    // V4.1 A41-015 (§8, A.9): señal explícita y secundaria. Nunca crea una
-    // recomendación por sí sola (arriba ya se exigió una señal declarada) y no
-    // cuenta la propia actividad. «Guardar» y favoritos no suman.
-    const otras = ctx.interestedActivities.filter((x) => x.activityId !== elementId);
-    const porArea = areaId && name ? otras.some((x) => x.areaIds.includes(areaId)) : false;
-    const porSkill = otras.find((x) => x.skillIds.some((sid) => suyas.has(sid)));
-    if (porArea || porSkill) {
-      acumulador(RULES.ranking.feedback)(
-        RecommendationReasonCode.ACTIVITY_INTERESTED,
-        porArea ? `Marcaste «Me interesa» en actividades de ${name}` : 'Marcaste «Me interesa» en actividades con esta tecnología',
-        1,
-      );
-    }
+    // V6 §9.1–§9.2: los clics en actividades («Me interesa», guardar,
+    // favoritos, inscribirse) ya no son fuente del ranking.
 
     // El contexto (fecha, semestre, modalidad, disponibilidad) ya filtró lo
     // que no corresponde; aquí solo explica, sin sumar (§34: filtros duros).
     if (contexto.factor > 0 && contexto.label) {
       reasons.push({ code: RecommendationReasonCode.CONTEXT_MATCH, label: contexto.label, points: 0 });
-    }
-
-    // ------------------------ §34.1 «No me interesa» baja lo parecido
-    const clave = `${areaId ?? '-'}|${type ?? ''}`;
-    const descartadas = type ? (ctx.dismissedSimilar.get(clave) ?? 0) : 0;
-    if (descartadas > 0) {
-      const antes = total();
-      const despues = this.redondear(antes * Math.pow(RULES.dismissal.factor, descartadas));
-      reasons.push({
-        code: RecommendationReasonCode.DISMISSED_SIMILAR,
-        label: `Descartaste ${descartadas} recomendación(es) parecida(s): baja su prioridad`,
-        points: this.redondear(despues - antes),
-      });
     }
 
     return { score: total(), reasons };
@@ -1120,25 +1096,5 @@ export class RecommendationsEngine {
 
   private formatDate(date: Date): string {
     return date.toLocaleDateString('es-BO', { day: 'numeric', month: 'long', year: 'numeric' });
-  }
-
-  /**
-   * V4.1 A41-015 (§8, A.9): actividades en las que el estudiante marcó «Me
-   * interesa» (estado actual), con las áreas y tecnologías que realmente
-   * tienen clasificadas. Quitar el interés quita la señal: no queda rastro.
-   */
-  private async actividadesConInteres(profileId: string): Promise<{ activityId: string; areaIds: string[]; skillIds: string[] }[]> {
-    const filas: { id: string; areas: string[] | null; skills: string[] | null }[] = await this.profiles.manager.query(
-      `SELECT r.activity_id AS id,
-              ARRAY(SELECT DISTINCT x FROM (
-                SELECT a.academic_area_id AS x FROM activity_areas a WHERE a.activity_id = r.activity_id
-                UNION SELECT ac.academic_area_id FROM activities ac WHERE ac.id = r.activity_id AND ac.academic_area_id IS NOT NULL
-              ) t) AS areas,
-              ARRAY(SELECT s.skill_id FROM activity_skills s WHERE s.activity_id = r.activity_id) AS skills
-         FROM activity_registrations r
-        WHERE r.student_profile_id = $1 AND r.status = 'interested'`,
-      [profileId],
-    );
-    return filas.map((f) => ({ activityId: f.id, areaIds: f.areas ?? [], skillIds: f.skills ?? [] }));
   }
 }

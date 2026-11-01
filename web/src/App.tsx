@@ -25,7 +25,6 @@ import StudentProgressPage from './pages/student/Progress';
 import StudentProjectsPage from './pages/student/Projects';
 import StudentActivitiesPage from './pages/student/Activities';
 import StudentAffinityPage from './pages/student/Affinity';
-import StudentRecommendationsPage from './pages/student/Recommendations';
 import StudentEvidencesPage from './pages/student/Evidences';
 
 import TeacherPanel from './pages/teacher/Panel';
@@ -158,7 +157,8 @@ export default function App() {
             <Route path="/student/library" element={<StudentLibraryPage />} />
             <Route path="/student/evidences" element={<StudentEvidencesPage />} />
             <Route path="/student/affinity" element={<StudentAffinityPage />} />
-            <Route path="/student/recommendations" element={<StudentRecommendationsPage />} />
+            {/* V6 §9.4: «Más sugerencias» duplicaba «Para ti»; el marcador antiguo lleva allí. */}
+            <Route path="/student/recommendations" element={<Navigate to="/student/activities" replace />} />
           </Route>
 
           <Route element={<RoleGate roles={[T]}><Outlet /></RoleGate>}>

@@ -35,18 +35,20 @@ export const RULES = {
     /** V3 §34 · 10 % orientación confirmada. */
     orientation: 10,
     /**
-     * V3 §34 · 5 %. V4.1 A41-015 (§8, A.9): lo ocupa «Me interesa» en
-     * actividades (ACTIVITY_INTERESTED). «Guardar» y favoritos no suman.
+     * V6 §9.1–§9.2: ya no hay señal por clics. «Me interesa» en actividades,
+     * «No me interesa», guardar, favoritos e inscribirse no cambian el orden
+     * de las recomendaciones. Lo que ordena es lo que el estudiante declaró
+     * en su perfil (intereses, mejora, tecnologías, orientación).
      */
-    feedback: 5,
+    feedback: 0,
   },
 
   /**
-   * V3 §34.1 · «No me interesa». Cada recomendación parecida descartada (misma
-   * área y mismo tipo) multiplica la prioridad por este factor. No modifica
-   * los intereses del perfil: eso se hace en Mi perfil → Intereses.
+   * V6 §9.1: «No me interesa» se retiró; descartar no baja lo parecido. Se
+   * conserva la clave (factor 1 = sin efecto) para que la huella de las
+   * reglas cambie de forma trazable.
    */
-  dismissal: { factor: 0.6 },
+  dismissal: { factor: 1 },
 
   /**
    * Cuanto cuenta un interes explicito segun la prioridad que le dio (§51.1).

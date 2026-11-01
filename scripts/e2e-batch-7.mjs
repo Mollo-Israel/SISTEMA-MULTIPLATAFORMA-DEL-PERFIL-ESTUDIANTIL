@@ -518,8 +518,9 @@ async function noAislado(ctx) {
 
   const pesos = reglas.data?.ranking ?? [];
   check(
-    pesos.reduce((a, r) => a + r.weight, 0) === 100,
-    'B7.52 El reparto publicado suma 100 (V2 §54)',
+    // V6 §9.2: sin el 5 % de clics, lo declarado suma 95 (40/30/15/10, sin recalibrar).
+    pesos.reduce((a, r) => a + r.weight, 0) === 95,
+    'B7.52 V6 §9.2 El reparto publicado es solo lo declarado (95: sin el 5 % de clics)',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
@@ -527,15 +528,15 @@ async function noAislado(ctx) {
       && pesos.find((r) => r.code === 'improvement_area')?.weight === 30
       && pesos.find((r) => r.code === 'skill_match')?.weight === 15
       && pesos.find((r) => r.code === 'orientation_confirmed')?.weight === 10
-      // V4.1 A41-015: el 5 % es «Me interesa» en actividades, no «Guardar».
-      && pesos.find((r) => r.code === 'activity_interested')?.weight === 5
+      // V6 §9.1–§9.2: «Me interesa» en actividades ya no es fuente del ranking.
+      && !pesos.some((r) => r.code === 'activity_interested')
       && !pesos.some((r) => r.code === 'affinity_area'),
-    'B7.53 V3 §34 Y es exactamente 40 / 30 / 15 / 10 / 5, sin afinidad',
+    'B7.53 V3 §34 / V6 §9.2 Es 40 / 30 / 15 / 10 de lo declarado en el perfil, sin clics ni afinidad',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    (reglas.data?.regimes ?? []).length === 0 && !!reglas.data?.dismissal,
-    'B7.54 V3 §34 Ya no hay refuerzo por afinidad; se publica el efecto de «No me interesa»',
+    (reglas.data?.regimes ?? []).length === 0 && !reglas.data?.dismissal && /no cambian el orden/.test(reglas.data?.sinEfecto ?? ''),
+    'B7.54 V3 §34 / V6 §9.1 Sin refuerzo por afinidad ni efecto de «No me interesa»; se publica qué no cambia el orden',
     JSON.stringify((reglas.data?.regimes ?? []).map((r) => r.code)),
   );
   check(

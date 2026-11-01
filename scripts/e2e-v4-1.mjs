@@ -569,8 +569,9 @@ async function batch6(ctx) {
   await req('POST', `/activities/${t1.id}/register-interest`, { token: est.token });
   lista = await leer();
   const r2 = de(lista, t2.id);
-  check(pts(r2, 'activity_interested') === 5 && Math.abs(Number(r2?.score) - base - 5) < 0.001,
-    'V41.6.2 B24 «Me interesa» en otra actividad del área suma el 5 %, una sola vez aunque se repita', json(r2?.reasons));
+  // V6 §9.1–§9.2 sustituye B24: «Me interesa» en actividades ya no es fuente del ranking.
+  check(!pts(r2, 'activity_interested') && Math.abs(Number(r2?.score) - base) < 0.001,
+    'V41.6.2 V6 §9.2 «Me interesa» en otra actividad del área ya no cambia el puntaje (sustituye B24)', json(r2?.reasons));
   check(!pts(de(lista, t1.id), 'activity_interested'), 'V41.6.3 La actividad marcada no se recomienda a sí misma por esa señal', json(de(lista, t1.id)?.reasons));
   await req('POST', `/activities/${t1.id}/cancel-registration`, { token: est.token });
   lista = await leer();
@@ -588,8 +589,8 @@ async function batch6(ctx) {
   // Pesos publicados y sin «100 %» por una sola coincidencia.
   const reglas = await req('GET', '/recommendations/rules', { token: est.token });
   const pesos = reglas.data?.ranking ?? reglas.data?.weights ?? [];
-  check(pesos.some((p) => p.code === 'activity_interested' && p.weight === 5) && !pesos.some((p) => p.code === 'similar_saved'),
-    'V41.6.7 El reparto publicado nombra «Me interesa» y ya no «Guardar»', json(pesos.map((p) => [p.code, p.weight])));
+  check(!pesos.some((p) => p.code === 'activity_interested') && !pesos.some((p) => p.code === 'similar_saved') && /no cambian el orden/.test(reglas.data?.sinEfecto ?? ''),
+    'V41.6.7 V6 §9.1 El reparto publicado ya no nombra «Me interesa» ni «Guardar» y dice que no cambian el orden', json(pesos.map((p) => [p.code, p.weight])));
   check(lista.every((i) => Number(i.score) < 100 || (i.reasons ?? []).length > 1),
     'V41.6.8 §8 Nadie llega a 100 por una sola coincidencia', json(lista.filter((i) => Number(i.score) >= 100).map((i) => i.reasons)));
 }

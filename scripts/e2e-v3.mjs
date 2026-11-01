@@ -1606,8 +1606,8 @@ async function batch15(ctx) {
   const pts = (item, code) => (item?.reasons ?? []).filter((r) => r.code === code).reduce((a, r) => a + r.points, 0);
 
   const reglas = (await req('GET', '/recommendations/rules', { token: est.token })).data;
-  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([40, 30, 15, 10, 5]),
-    'V3.15.1 §34 Reparto publicado: 40 / 30 / 15 / 10 / 5', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
+  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([40, 30, 15, 10]),
+    'V3.15.1 §34 / V6 §9.2 Reparto publicado: 40 / 30 / 15 / 10 (sin el 5 % de clics)', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
   check(pts(de(t1), 'preferred_area') === 40 && pts(de(t1), 'skill_match') === 15,
     'V3.15.2 §34 Interés explícito 40 y tecnología de interés 15', JSON.stringify(de(t1)?.reasons));
   check(pts(de(m1), 'improvement_area') === 30, 'V3.15.3 §34 Área de mejora 30', JSON.stringify(de(m1)?.reasons));
@@ -1633,8 +1633,9 @@ async function batch15(ctx) {
     'V3.15.8 §34.1 No modifica los intereses del perfil');
   items = await leer();
   check(!de(t3), 'V3.15.9 Lo descartado no vuelve a proponerse');
-  check(Number(de(t2)?.score) < antesT2 && pts(de(t2), 'dismissed_similar') < 0,
-    'V3.15.10 §34.1 Lo parecido (misma área y tipo) baja de prioridad y dice por qué', `${antesT2} → ${de(t2)?.score} ${JSON.stringify(de(t2)?.reasons)}`);
+  // V6 §9.1–§9.2 sustituye §34.1: descartar ya no reescribe el orden de lo parecido.
+  check(Number(de(t2)?.score) === antesT2 && !pts(de(t2), 'dismissed_similar'),
+    'V3.15.10 V6 §9.2 Descartar ya no baja lo parecido: el orden sale solo de lo declarado', `${antesT2} → ${de(t2)?.score} ${JSON.stringify(de(t2)?.reasons)}`);
   check(Number(de(m1)?.score) === 30 + 0 || !pts(de(m1), 'dismissed_similar'),
     'V3.15.11 Lo no parecido no se ve afectado', JSON.stringify(de(m1)?.reasons));
 

@@ -45,7 +45,6 @@ const ICONS: Record<string, IconType> = {
   '/student/projects': FiFolder,
   '/student/evidences': FiPaperclip,
   '/student/affinity': FiTarget,
-  '/student/recommendations': FiCompass,
   '/student/activities': FiCalendar,
   '/student/library': FiBookOpen,
   '/teacher': FiGrid,

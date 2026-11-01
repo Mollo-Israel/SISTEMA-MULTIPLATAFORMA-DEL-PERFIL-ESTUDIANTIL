@@ -635,14 +635,15 @@ async function rf18Validaciones(ctx) {
   check(reglas.status === 200 && !!reglas.data.rulesVersion, '18.56 Las reglas se consultan de solo lectura', reglas.status);
   const pesos = reglas.data?.ranking ?? [];
   check(
-    pesos.length === 5 && pesos.reduce((a, r) => a + r.weight, 0) === 100,
-    '18.57 El reparto publicado es el de V3 §34 (cinco componentes) y suma 100',
+    // V6 §9.2: sin el 5 % de «Me interesa» en actividades; los otros cuatro no cambian.
+    pesos.length === 4 && pesos.reduce((a, r) => a + r.weight, 0) === 95 && !pesos.some((r) => r.code === 'activity_interested'),
+    '18.57 V6 §9.2 El reparto publicado son los cuatro componentes declarados (40/30/15/10), sin clics',
     JSON.stringify(pesos.map((r) => [r.code, r.weight])),
   );
   check(
-    !!reglas.data?.dismissal && !!reglas.data?.filters
+    !!reglas.data?.sinEfecto && !!reglas.data?.filters
       && (reglas.data?.teammate ?? []).length >= 5,
-    '18.57b V3 §34 Se publican los filtros duros, el efecto de «No me interesa» y las prioridades de compañeros',
+    '18.57b V3 §34 / V6 §9.1 Se publican los filtros duros, qué no cambia el orden y las prioridades de compañeros',
     JSON.stringify([reglas.data?.regimes?.length, reglas.data?.teammate?.length]),
   );
   check(!!reglas.data.limits && !!reglas.data.minimumScore, '18.58 Tambien los limites y el puntaje minimo');

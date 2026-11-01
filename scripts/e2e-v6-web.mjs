@@ -501,7 +501,34 @@ async function batch11(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11 };
+// ===========================================================================
+//  BATCH V6-12 — Actividades sin «Me interesa / No me interesa» (§9.1, §9.4)
+// ===========================================================================
+async function batch12(ctx, browser) {
+  objective('BATCH V6-12 · Para ti / Todas / Inscritas / Guardadas / Historial; sin «Más sugerencias»');
+  const est = await estudianteListo(ctx.admin, 'Recom');
+  const { ctx: c1, page, errores } = await entrar(browser, est.email);
+  await page.goto(`${WEB}/student/activities`);
+  await page.getByRole('tab').first().waitFor({ timeout: 30000 }).catch(() => {});
+  const pestanas = (await page.getByRole('tab').allTextContents()).map((s) => s.replace(/\d+$/, '').trim());
+  check(['Para ti', 'Todas', 'Inscritas', 'Guardadas', 'Historial'].every((t) => pestanas.some((p) => p.startsWith(t))) && !pestanas.some((p) => /Interesadas/.test(p)),
+    'V6W.12.1 V6-REC-01 Las pestañas son Para ti, Todas, Inscritas, Guardadas e Historial (sin «Interesadas»)', pestanas.join(' | '));
+  await page.waitForTimeout(1500);
+  const texto = (await page.locator('main').textContent().catch(() => '')) ?? '';
+  check(!/No me interesa|Descartadas|Más sugerencias/.test(texto) && !/\+\d+\b/.test(texto),
+    'V6W.12.2 «Para ti» no ofrece «No me interesa» ni «Más sugerencias» y no muestra puntos', texto.slice(0, 120));
+  await page.getByRole('tab', { name: /^Todas/ }).click();
+  await page.waitForTimeout(1500);
+  check(await page.getByRole('button', { name: /^Me interesa$|^Te interesa$/ }).count() === 0,
+    'V6W.12.3 Las tarjetas ya no tienen «Me interesa»; queda «Guardar»');
+  await page.goto(`${WEB}/student/recommendations`);
+  await page.waitForURL((u) => u.pathname === '/student/activities', { timeout: 10000 }).catch(() => {});
+  check(new URL(page.url()).pathname === '/student/activities', 'V6W.12.4 V6-REC-02 «Más sugerencias» lleva a Actividades → Para ti', page.url());
+  check(errores.length === 0, 'V6W.12.5 Sin errores de JavaScript', errores.join(' | '));
+  await c1.close();
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);
