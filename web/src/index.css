@@ -722,6 +722,11 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .correo-dominio { display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--gray-300); border-left: 0; border-radius: 0 var(--radius) var(--radius) 0; background: var(--gray-50); color: var(--gray-700); white-space: nowrap; font-size: 0.9rem; }
 .correo-asistido input:has(+ .correo-dominio) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 
+/* V6 §8.2–§8.3: foto propia y vista previa del perfil compartido. */
+.foto-perfil { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex: none; }
+.foto-propia { display: grid; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200); justify-items: start; }
+.vista-previa { border: 1px dashed var(--gray-300); border-radius: var(--radius); padding: 0.75rem; background: var(--gray-50); display: grid; gap: 0.75rem; }
+
 /* Aviso breve dentro de una tarjeta */
 .inline-note {
   display: flex; align-items: center; gap: 0.4rem; margin: 0.7rem 0 0;

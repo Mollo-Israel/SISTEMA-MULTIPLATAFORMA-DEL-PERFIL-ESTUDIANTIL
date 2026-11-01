@@ -1,4 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import * as path from 'path';
+import { StoredFileRecord } from '../entities/stored-file.entity';
+import { LocalStorageDriver } from '../storage/local-storage.driver';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { StudentContactChannel } from '../entities/contact-channel.entity';
@@ -20,6 +23,10 @@ import { Project } from '../entities/project.entity';
 import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { encodeQr, qrToSvg } from './qr-encoder';
+
+/** V6 §8.3: tipos y tamaño de la foto opcional. */
+const FOTO_TIPOS = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const FOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Intentos antes de rendirse al sortear un identificador libre. */
 const MAX_INTENTOS_SLUG = 20;
@@ -51,7 +58,56 @@ export class PublicProfileService {
     private readonly backedSkills: BackedSkillsService,
       @InjectRepository(StudentContactChannel)
     private readonly channels: Repository<StudentContactChannel>,
+    @InjectRepository(StoredFileRecord) private readonly archivos: Repository<StoredFileRecord>,
   ) {}
+
+  // =========================================================================
+  // V6 §8.3 · Foto opcional
+  // =========================================================================
+
+  /** Pone como foto un archivo que subió el propio estudiante (PNG, JPG o WEBP, hasta 5 MiB). */
+  async setPhoto(userId: string, profileId: string, fileId: string): Promise<{ hasPhoto: true }> {
+    const archivo = await this.archivos.findOne({ where: { id: fileId } });
+    const campo = (m: string) => new BadRequestException({ code: 'PHOTO_INVALID', message: m, fields: { fileId: [m] } });
+    if (!archivo || archivo.uploadedByUserId !== userId) throw campo('Sube la foto desde este formulario: solo vale un archivo que subiste tú.');
+    if (!FOTO_TIPOS.has(archivo.mimeTypeDetected)) throw campo('La foto debe ser PNG, JPG o WEBP.');
+    if (archivo.sizeBytes > FOTO_MAX_BYTES) throw campo('La foto no puede superar 5 MB.');
+    await this.profiles.update({ id: profileId }, { photoFileId: archivo.id });
+    return { hasPhoto: true };
+  }
+
+  async removePhoto(profileId: string): Promise<{ hasPhoto: false }> {
+    await this.profiles.update({ id: profileId }, { photoFileId: null });
+    return { hasPhoto: false };
+  }
+
+  /** Archivo de la foto propia, para quien es su dueño. */
+  async ownPhoto(profileId: string): Promise<{ ruta: string; tipo: string }> {
+    const perfil = await this.profiles.findOne({ where: { id: profileId } });
+    return this.archivoDeFoto(perfil?.photoFileId ?? null);
+  }
+
+  /**
+   * Foto del perfil compartido: solo si el perfil está publicado y su dueño
+   * activó «Mi foto». En cualquier otro caso, 404 (no se revela si existe).
+   */
+  async publicPhoto(slug: string): Promise<{ ruta: string; tipo: string }> {
+    const perfil = await this.profiles.findOne({ where: { publicProfileSlug: slug } });
+    const visible = { ...DEFAULT_PUBLIC_VISIBILITY, ...(perfil?.publicVisibilityConfig ?? {}) };
+    if (!perfil || !perfil.publicProfileEnabled || !visible[PublicProfileField.PHOTO]) {
+      throw new NotFoundException('No hay foto que mostrar.');
+    }
+    return this.archivoDeFoto(perfil.photoFileId);
+  }
+
+  private async archivoDeFoto(fileId: string | null): Promise<{ ruta: string; tipo: string }> {
+    const archivo = fileId ? await this.archivos.findOne({ where: { id: fileId } }) : null;
+    if (!archivo || !FOTO_TIPOS.has(archivo.mimeTypeDetected)) throw new NotFoundException('No hay foto que mostrar.');
+    const raiz = path.resolve(LocalStorageDriver.resolveRoot(this.config));
+    const ruta = path.join(raiz, archivo.storageKey);
+    if (!ruta.startsWith(raiz + path.sep)) throw new NotFoundException('No hay foto que mostrar.');
+    return { ruta, tipo: archivo.mimeTypeDetected };
+  }
 
   /** Base pública desde la que se sirve la web, para componer el enlace. */
   private baseUrl(): string {
@@ -128,6 +184,8 @@ export class PublicProfileService {
     };
 
     if (visible[PublicProfileField.BIO]) salida.bio = perfil.bio;
+    // V6 §8.3: la foto, solo con su casilla activa (y si existe).
+    if (visible[PublicProfileField.PHOTO] && perfil.photoFileId) salida.photoUrl = `/api/public/profiles/${perfil.publicProfileSlug}/photo`;
 
     if (visible[PublicProfileField.AVAILABILITY]) {
       salida.availability = perfil.availability;

@@ -74,6 +74,8 @@ export enum PublicProfileField {
   SKILLS = 'skills',
   AVAILABILITY = 'availability',
   TRAJECTORY = 'trajectory',
+  /** V6 §8.3: la foto propia (si la subió). */
+  PHOTO = 'photo',
 }
 
 export const PUBLIC_PROFILE_FIELDS: readonly PublicProfileField[] = [
@@ -85,6 +87,7 @@ export const PUBLIC_PROFILE_FIELDS: readonly PublicProfileField[] = [
   PublicProfileField.SKILLS,
   PublicProfileField.AVAILABILITY,
   PublicProfileField.TRAJECTORY,
+  PublicProfileField.PHOTO,
 ];
 
 /**
@@ -104,4 +107,5 @@ export const DEFAULT_PUBLIC_VISIBILITY: Record<PublicProfileField, boolean> = {
   [PublicProfileField.SKILLS]: false,
   [PublicProfileField.AVAILABILITY]: false,
   [PublicProfileField.TRAJECTORY]: false,
+  [PublicProfileField.PHOTO]: false,
 };

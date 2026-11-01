@@ -12,8 +12,12 @@ import {
   Patch,
   Post,
   Put,
+  Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { createReadStream } from 'fs';
+import { IsUUID } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RolNombre } from '@perfil/shared';
@@ -52,6 +56,12 @@ import {
  * La única ruta abierta es el perfil compartible, y lo es porque un QR no sirve
  * de nada si hay que iniciar sesión para leerlo.
  */
+/** V6 §8.3: la foto es un archivo que el estudiante ya subió (POST /uploads). */
+class SetPhotoDto {
+  @IsUUID('4', { message: 'Archivo no válido.' })
+  fileId: string;
+}
+
 @ApiTags('collaboration')
 @Controller()
 export class CollaborationController {
@@ -114,6 +124,52 @@ export class CollaborationController {
   })
   async rotateSlug(@CurrentUser() user: AuthenticatedUser) {
     return this.publicProfiles.rotateSlug(await this.profileId(user));
+  }
+
+  // =========================================================================
+  // V6 §8.3 · Foto opcional
+  // =========================================================================
+
+  @ApiBearerAuth()
+  @Put('profiles/me/photo')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Poner o cambiar mi foto (un archivo que subí: PNG, JPG o WEBP, hasta 5 MB).' })
+  async setPhoto(@CurrentUser() user: AuthenticatedUser, @Body() dto: SetPhotoDto) {
+    return this.publicProfiles.setPhoto(user.userId, await this.profileId(user), dto.fileId);
+  }
+
+  @ApiBearerAuth()
+  @Delete('profiles/me/photo')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Quitar mi foto: vuelve el avatar.' })
+  async removePhoto(@CurrentUser() user: AuthenticatedUser) {
+    return this.publicProfiles.removePhoto(await this.profileId(user));
+  }
+
+  @ApiBearerAuth()
+  @Get('profiles/me/photo')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'Mi foto (solo para mí).' })
+  async myPhoto(@CurrentUser() user: AuthenticatedUser, @Res() res: Response) {
+    this.enviarFoto(res, await this.publicProfiles.ownPhoto(await this.profileId(user)));
+  }
+
+  /** Abierta como el perfil compartido, pero solo si su dueño activó «Mi foto». */
+  @Public()
+  @Get('public/profiles/:slug/photo')
+  @ApiOperation({ summary: 'Foto del perfil compartido, si su dueño la publicó (V6 §8.3).' })
+  async publicPhoto(@Param('slug') slug: string, @Res() res: Response) {
+    this.enviarFoto(res, await this.publicProfiles.publicPhoto(slug));
+  }
+
+  private enviarFoto(res: Response, foto: { ruta: string; tipo: string }) {
+    res.setHeader('Content-Type', foto.tipo);
+    res.setHeader('Content-Disposition', 'inline; filename="foto"');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    // Sin caché: si su dueño la retira, deja de verse al instante.
+    res.setHeader('Cache-Control', 'private, no-store');
+    createReadStream(foto.ruta).on('error', () => { if (!res.headersSent) res.status(404); res.end(); }).pipe(res);
   }
 
   // =========================================================================

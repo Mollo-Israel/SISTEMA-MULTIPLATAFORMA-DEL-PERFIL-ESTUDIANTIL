@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { FiAlertCircle, FiShield, FiUser } from 'react-icons/fi';
-import { collaborationService, type PublicProfileView } from '../services';
+import { collaborationService, uploadService, type PublicProfileView } from '../services';
 import { Badge, Card, Loading } from '../components/ui';
 
 const NIVEL: Record<string, string> = { high: 'alto', medium: 'medio', low: 'bajo' };
@@ -69,9 +69,27 @@ export default function PublicProfilePage() {
 
   return (
     <div className="public-page">
+      <PerfilPublicoVista perfil={perfil} />
+      <p className="muted" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
+        Afinia · Perfil compartible. Solo se muestra lo que su dueño decidió publicar.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * V6 §8.2: lo que ve un visitante. La usa también la vista previa de «Mi
+ * perfil → Visibilidad» con la misma respuesta pública: no hay una vista
+ * previa aparte que pueda mostrar de más.
+ */
+export function PerfilPublicoVista({ perfil }: { perfil: PublicProfileView }) {
+  return (
+    <>
       <Card>
         <div className="flex" style={{ gap: '0.8rem', alignItems: 'center' }}>
-          <FiUser size={26} />
+          {perfil.photoUrl
+            ? <img src={uploadService.fileUrl(perfil.photoUrl)} alt={`Foto de ${perfil.name}`} className="foto-perfil" data-testid="foto-publica" />
+            : <FiUser size={26} />}
           <div>
             <h1 style={{ margin: 0 }}>{perfil.name}</h1>
             {perfil.semester && (
@@ -158,9 +176,6 @@ export default function PublicProfilePage() {
         </Card>
       )}
 
-      <p className="muted" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
-        Afinia · Perfil compartible. Solo se muestra lo que su dueño decidió publicar.
-      </p>
-    </div>
+    </>
   );
 }

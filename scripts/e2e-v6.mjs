@@ -588,7 +588,54 @@ async function batch10(ctx) {
     'V6.10.6 §7.5 El enlace público tampoco entrega el repositorio', Object.keys(vista).join(','));
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10 };
+// ===========================================================================
+//  BATCH V6-11 — Foto opcional, privada por omisión (§8.2, §8.3)
+// ===========================================================================
+async function batch11(ctx) {
+  objective('BATCH V6-11 · La foto es opcional y solo sale en el perfil compartido si su dueño lo decide');
+  const [est, otro] = await Promise.all(['b11est', 'b11otro'].map((k, i) =>
+    provisionStudent(ctx.admin, { firstName: ['Lia', 'Max'][i], lastName: `Foto${L}`, email: correoEst(k), semester: 3 })));
+  const foto = Buffer.concat([PNG, Buffer.from(`foto-${TS}`)]);
+  const subida = await subir(est.token, foto, 'yo.png', 'image/png');
+  const puesta = await req('PUT', '/profiles/me/photo', { token: est.token, body: { fileId: subida.data?.id } });
+  const mia = await fetch(`${API}/profiles/me/photo`, { headers: { Authorization: `Bearer ${est.token}` } });
+  check(puesta.status === 200 && mia.status === 200 && mia.headers.get('content-type') === 'image/png' && Buffer.from(await mia.arrayBuffer()).equals(foto),
+    'V6.11.1 V6-PROFILE-02 El estudiante sube su foto y la ve (PNG, con su tipo)', `${puesta.status} ${mia.status}`);
+
+  const ajena = await subir(otro.token, Buffer.concat([PNG, Buffer.from(`ajena-${TS}`)]), 'otro.png', 'image/png');
+  const robada = await req('PUT', '/profiles/me/photo', { token: est.token, body: { fileId: ajena.data?.id } });
+  const PDF = Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n', 'latin1');
+  const doc = await subir(est.token, PDF, 'doc.pdf', 'application/pdf');
+  const noImagen = await req('PUT', '/profiles/me/photo', { token: est.token, body: { fileId: doc.data?.id } });
+  check(robada.status === 400 && robada.data?.code === 'PHOTO_INVALID' && noImagen.status === 400 && !!noImagen.data?.fields?.fileId,
+    'V6.11.2 No vale como foto un archivo de otra persona ni un PDF', `${robada.status} ${noImagen.status}`);
+
+  // Perfil compartido activo, pero «Mi foto» apagada (por omisión).
+  await req('PUT', '/profiles/me/visibility', { token: est.token, body: { publicProfileEnabled: true, fields: { bio: true } } });
+  const enlace = (await req('GET', '/profiles/me/public-link', { token: est.token })).data;
+  const publico = async () => (await fetch(`${API}/public/profiles/${enlace?.slug}`)).json();
+  const fotoPublica = () => fetch(`${API}/public/profiles/${enlace?.slug}/photo`);
+  const p1 = await publico();
+  const f1 = await fotoPublica();
+  check(!('photoUrl' in p1) && f1.status === 404, 'V6.11.3 §8.3 Por omisión la foto no es pública: ni figura en el perfil compartido ni se sirve (404)', `${f1.status}`);
+
+  await req('PUT', '/profiles/me/visibility', { token: est.token, body: { fields: { photo: true } } });
+  const p2 = await publico();
+  const f2 = await fotoPublica();
+  check(typeof p2.photoUrl === 'string' && f2.status === 200 && f2.headers.get('content-type') === 'image/png' && /no-store/.test(f2.headers.get('cache-control') ?? ''),
+    'V6.11.4 Con «Mi foto» activa, el perfil compartido la muestra (sin sesión, sin caché)', `${f2.status} ${p2.photoUrl}`);
+
+  await req('PUT', '/profiles/me/visibility', { token: est.token, body: { publicProfileEnabled: false } });
+  const f3 = await fotoPublica();
+  check(f3.status === 404, 'V6.11.5 Con el perfil compartido desactivado, la foto deja de servirse (no hay atajo por URL)', `${f3.status}`);
+  await req('PUT', '/profiles/me/visibility', { token: est.token, body: { publicProfileEnabled: true } });
+  const quitada = await req('DELETE', '/profiles/me/photo', { token: est.token });
+  const f4 = await fotoPublica();
+  const p4 = await publico();
+  check(quitada.status === 200 && f4.status === 404 && !('photoUrl' in p4), 'V6.11.6 Quitar la foto vuelve al avatar en todas partes', `${quitada.status} ${f4.status}`);
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);

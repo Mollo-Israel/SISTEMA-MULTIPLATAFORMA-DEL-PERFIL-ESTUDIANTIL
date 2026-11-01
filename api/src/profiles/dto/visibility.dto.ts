@@ -51,6 +51,12 @@ export class VisibilityFieldsDto {
   @IsOptional()
   @IsBoolean()
   [PublicProfileField.TRAJECTORY]?: boolean;
+
+  /** V6 §8.3: la foto propia en el perfil compartido. */
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  [PublicProfileField.PHOTO]?: boolean;
 }
 
 export class UpdateVisibilityDto {

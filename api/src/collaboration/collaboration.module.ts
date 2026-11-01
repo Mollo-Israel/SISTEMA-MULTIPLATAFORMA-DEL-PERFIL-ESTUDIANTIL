@@ -1,3 +1,4 @@
+import { StoredFileRecord } from '../entities/stored-file.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicArea } from '../entities/academic-area.entity';
@@ -37,6 +38,7 @@ import { AiModule } from '../ai/ai.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
+      StoredFileRecord,
       StudentProfile,
       StudentSkillInterest,
       AcademicArea,

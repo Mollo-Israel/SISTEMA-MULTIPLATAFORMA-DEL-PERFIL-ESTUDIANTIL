@@ -53,6 +53,14 @@ export class StudentProfile {
   @Column({ name: 'avatar_key', type: 'varchar', length: 40, nullable: true })
   avatarKey: string | null;
 
+  /**
+   * V6 §8.3: foto propia opcional (un archivo que subió el estudiante). Sin
+   * ella se usa el avatar. No es pública por defecto: el perfil compartido la
+   * muestra solo con la casilla «Mi foto» activa.
+   */
+  @Column({ name: 'photo_file_id', type: 'uuid', nullable: true })
+  photoFileId: string | null;
+
   /** Copia de `users.academic_scope_semesters` (V3 §8.1), para el alcance docente. */
   @Column({ name: 'academic_scope_semesters', type: 'smallint', array: true, default: () => "'{}'" })
   academicScopeSemesters: number[];

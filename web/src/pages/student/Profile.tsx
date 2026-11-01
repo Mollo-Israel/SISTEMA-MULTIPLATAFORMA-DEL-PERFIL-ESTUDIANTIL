@@ -4,7 +4,7 @@ import { enMemoria, useCachedState } from '../../hooks/viewCache';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FiCompass, FiLock, FiRefreshCw, FiSave } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { catalogService, gamificationService, onboardingService, profileService } from '../../services';
+import { catalogService, collaborationService, gamificationService, onboardingService, profileService, uploadService, type PublicProfileView } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
   AVAILABILITY_LABEL,
@@ -24,10 +24,12 @@ import type {
 } from '../../services/types';
 import { Badge, Button, Card, Diferido, PageHeader, ProgressBar, SkeletonCards, Tabs } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
-import { MiEnlace } from './Collaboration';
+import { MiEnlace, MisCanales } from './Collaboration';
+import { PerfilPublicoVista } from '../PublicProfile';
 import { AreaChooser, InterestChooser, SkillInterestChooser } from '../../components/Declarations';
 import QuestionnaireRunner from '../../components/QuestionnaireRunner';
 import Avatar, { AvatarChooser } from '../../components/Avatar';
+import { ImagenProtegida } from '../../components/ArchivoProtegido';
 import StudentPrivacyPage from './Privacy';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -148,9 +150,102 @@ export default function StudentProfilePage() {
         <>
           {/* V4.1 A41-026 (§16): el enlace y el QR viven aquí, junto a lo que decide qué se ve. */}
           <MiEnlace toast={toast} confirm={confirm} />
+          <MisCanales toast={toast} />
           <StudentPrivacyPage embedded />
+          <VistaPreviaPublica />
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * V6 §8.2: «Así verán mi perfil». Pide el perfil compartido a la misma
+ * dirección pública que usa un visitante (sin sesión de por medio), así que
+ * muestra exactamente lo que se publica, ni más ni menos.
+ */
+function VistaPreviaPublica() {
+  const [estado, setEstado] = useState<{ perfil: PublicProfileView | null; cargando: boolean }>({ perfil: null, cargando: true });
+  const cargar = () => {
+    setEstado((e) => ({ ...e, cargando: true }));
+    collaborationService.myPublicLink()
+      .then((l) => collaborationService.publicProfile(l.slug))
+      .then((perfil) => setEstado({ perfil, cargando: false }))
+      .catch(() => setEstado({ perfil: null, cargando: false }));
+  };
+  useEffect(cargar, []);
+  return (
+    <Card
+      title="Así verán mi perfil"
+      actions={<Button size="sm" variant="secondary" icon={<FiRefreshCw size={13} />} onClick={cargar}>Actualizar</Button>}
+    >
+      <div data-testid="vista-previa-publica">
+        {estado.cargando ? (
+          <p className="muted">Cargando…</p>
+        ) : estado.perfil ? (
+          <>
+            <p className="muted small" style={{ marginTop: 0 }}>Esto es lo que ve quien abre tu enlace o escanea tu QR, sin iniciar sesión.</p>
+            <div className="vista-previa">
+              <PerfilPublicoVista perfil={estado.perfil} />
+            </div>
+          </>
+        ) : (
+          <p className="muted" data-testid="perfil-no-publicado">
+            Tu perfil compartido está desactivado: quien abra tu enlace o tu QR no verá nada. Actívalo arriba para publicarlo.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** V6 §8.3: foto propia opcional; sin ella, el avatar. No es pública por defecto. */
+function FotoPropia({ profile, onChanged }: { profile: StudentProfile; onChanged: () => void }) {
+  const toast = useToast();
+  const [ocupado, setOcupado] = useState(false);
+  const [version, setVersion] = useState(0);
+  const subir = async (archivo: File) => {
+    if (!/^image\/(png|jpeg|webp)$/.test(archivo.type)) { toast.error('La foto debe ser PNG, JPG o WEBP.'); return; }
+    if (archivo.size > 5 * 1024 * 1024) { toast.error('La foto no puede superar 5 MB.'); return; }
+    setOcupado(true);
+    try {
+      const subido = await uploadService.upload(archivo);
+      await collaborationService.setPhoto(subido.id);
+      setVersion((v) => v + 1);
+      toast.success('Foto guardada.', 'Solo se ve en tu perfil compartido si activas «Mi foto» en Visibilidad.');
+      onChanged();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(false);
+    }
+  };
+  const quitar = async () => {
+    setOcupado(true);
+    try {
+      await collaborationService.removePhoto();
+      toast.success('Foto quitada.', 'Vuelve a verse tu avatar.');
+      onChanged();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setOcupado(false);
+    }
+  };
+  return (
+    <div className="foto-propia" data-testid="foto-propia">
+      {profile.photoFileId
+        ? <ImagenProtegida key={version} src={`/api/profiles/me/photo?v=${version}`} alt="Tu foto" className="foto-perfil" fallback={<span className="muted small">Sin vista previa</span>} />
+        : <span className="muted small">Sin foto: se usa tu avatar.</span>}
+      <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+        <label className={`btn btn-secondary btn-sm ${ocupado ? 'is-loading' : ''}`}>
+          {profile.photoFileId ? 'Cambiar foto' : 'Subir una foto (opcional)'}
+          <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={ocupado}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void subir(f); }} />
+        </label>
+        {profile.photoFileId && <Button type="button" size="sm" variant="ghost" onClick={() => void quitar()} loading={ocupado}>Quitar foto</Button>}
+      </div>
+      <p className="muted small" style={{ margin: 0 }}>PNG, JPG o WEBP, hasta 5 MB. Por omisión nadie más la ve: tu perfil compartido la muestra solo si activas «Mi foto» en Visibilidad.</p>
     </div>
   );
 }
@@ -192,9 +287,10 @@ function SobreMiTab({ profile, onSaved }: { profile: StudentProfile | null; onSa
     >
       <Card title="Tu avatar">
         <p className="muted" style={{ marginTop: 0 }}>
-          Elige una ilustración. No subimos fotos: así tu imagen no circula y nadie tiene que revisarla.
+          Elige una ilustración. Si prefieres, puedes subir además una foto tuya: es opcional y privada por omisión.
         </p>
         <AvatarChooser value={avatar} onChange={setAvatar} />
+        <FotoPropia profile={profile} onChanged={() => { void profileService.getMine().then(onSaved).catch(() => {}); }} />
       </Card>
       <Card title="Sobre ti">
         <div className="field">

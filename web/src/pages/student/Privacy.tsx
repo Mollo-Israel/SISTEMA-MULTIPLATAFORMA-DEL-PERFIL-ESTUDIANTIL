@@ -12,7 +12,7 @@ import {
 } from '../../services/types';
 
 const ORDEN: PublicProfileField[] = [
-  'bio', 'areas', 'affinities', 'support_level', 'projects', 'skills', 'availability', 'trajectory',
+  'bio', 'areas', 'affinities', 'support_level', 'projects', 'skills', 'availability', 'trajectory', 'photo',
 ];
 
 /**

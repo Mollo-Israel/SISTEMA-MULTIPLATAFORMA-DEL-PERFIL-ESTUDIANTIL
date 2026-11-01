@@ -428,6 +428,8 @@ export const learningResourceService = {
 export interface PublicProfileView {
   slug: string;
   name: string;
+  /** V6 §8.3: solo si su dueño publicó «Mi foto». */
+  photoUrl?: string;
   semester: number | null;
   bio?: string | null;
   availability?: string;
@@ -568,6 +570,9 @@ export const collaborationService = {
     api.get<PublicProfileView>(`/public/profiles/${slug}`).then((r) => r.data),
   myPublicLink: () =>
     api.get<PublicLinkView>('/profiles/me/public-link').then((r) => r.data),
+  /** V6 §8.3: foto propia opcional. */
+  setPhoto: (fileId: string) => api.put('/profiles/me/photo', { fileId }).then((r) => r.data),
+  removePhoto: () => api.delete('/profiles/me/photo').then((r) => r.data),
   rotatePublicLink: () =>
     api.post<PublicLinkView>('/profiles/me/public-link/rotate').then((r) => r.data),
 

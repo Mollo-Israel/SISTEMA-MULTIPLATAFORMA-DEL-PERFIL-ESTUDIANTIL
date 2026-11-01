@@ -998,12 +998,12 @@ async function pruebas(browser) {
     'WEB.51.1 A41-025 §15 Evidencias en tres pestañas sobre los mismos datos', pestanasEv.join(' | '));
   await p57.goto(`${WEB}/student/profile?tab=visibilidad`);
   const qrPerfil = await p57.locator('.qr-lienzo svg').first().waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
-  await p57.goto(`${WEB}/student/collaboration`);
-  const enlaceRapido = p57.locator('[data-testid="acceso-rapido-qr"] a[href="/student/profile?tab=visibilidad"]');
-  await enlaceRapido.first().waitFor({ timeout: 8000 }).catch(() => {});
-  const accesoRapido = await enlaceRapido.count();
+  // V6 §8.1: Colaboración ya no repite el enlace y QR; el marcador antiguo lleva a Visibilidad.
+  await p57.goto(`${WEB}/student/collaboration?tab=enlace`);
+  await p57.waitForURL((u) => u.pathname === '/student/profile', { timeout: 8000 }).catch(() => {});
+  const accesoRapido = new URL(p57.url()).pathname === '/student/profile' ? 1 : 0;
   check(qrPerfil && accesoRapido === 1 && navEst.some((t) => t.includes('Contactos')) && navEst.some((t) => t.includes('Equipos')),
-    'WEB.51.2 A41-026 §16 El QR vive en Mi perfil → Visibilidad; Colaboración da un acceso rápido; Contactos y Equipos agrupados', `${qrPerfil} · ${accesoRapido} · ${navEst.join(' | ')}`);
+    'WEB.51.2 A41-026 V6 §8.1 El QR vive solo en Mi perfil → Visibilidad (el enlace antiguo lleva allí); Contactos y Equipos agrupados', `${qrPerfil} · ${accesoRapido} · ${navEst.join(' | ')}`);
   await p57.goto(`${WEB}/student/projects`);
   const ayudaVis = await p57.locator('[data-testid="ayuda-visibilidad"]').innerText({ timeout: 8000 }).catch(() => '');
   check(/no tu repositorio/.test(ayudaVis) && /borrador nunca se publica/.test(ayudaVis),

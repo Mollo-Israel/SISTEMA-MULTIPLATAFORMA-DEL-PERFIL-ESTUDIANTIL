@@ -332,6 +332,8 @@ export interface CollaborationPreferences {
 export interface StudentProfile {
   /** Avatar de catálogo (V3 §11.2). */
   avatarKey?: string | null;
+  /** V6 §8.3: foto propia opcional (privada por omisión). */
+  photoFileId?: string | null;
   id: string;
   userId: string;
   /** Institucional: llega del padrón y el estudiante no lo edita (§17.1). */
@@ -432,7 +434,7 @@ export interface OnboardingRun {
 
 export type PublicProfileField =
   | 'bio' | 'areas' | 'affinities' | 'support_level'
-  | 'projects' | 'skills' | 'availability' | 'trajectory';
+  | 'projects' | 'skills' | 'availability' | 'trajectory' | 'photo';
 
 export const PUBLIC_FIELD_LABEL: Record<PublicProfileField, string> = {
   bio: 'Mi descripción',
@@ -443,6 +445,7 @@ export const PUBLIC_FIELD_LABEL: Record<PublicProfileField, string> = {
   skills: 'Mis tecnologías y experiencia',
   availability: 'Mi disponibilidad',
   trajectory: 'Mi resumen de trayectoria',
+  photo: 'Mi foto (si subiste una)',
 };
 
 export interface VisibilitySettings {

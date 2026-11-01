@@ -1,5 +1,5 @@
 import { validarFormulario } from '../../components/form';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useCachedState } from '../../hooks/viewCache';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
@@ -71,10 +71,14 @@ export default function StudentCollaborationPage() {
   // a «CV / Exportar» (V2 §77), y volver atrás deja donde estaba.
   const [params, setParams] = useSearchParams();
   const pedida = params.get('tab');
-  const tab: 'enlace' | 'contactos' | 'equipos' = (['enlace', 'contactos', 'equipos'] as string[]).includes(pedida ?? '') ? (pedida as 'enlace' | 'contactos' | 'equipos') : 'enlace';
-  const setTab = (k: 'enlace' | 'contactos' | 'equipos') => setParams(k === 'enlace' ? {} : { tab: k }, { replace: true });
+  const tab: 'contactos' | 'equipos' = pedida === 'equipos' ? 'equipos' : 'contactos';
+  const setTab = (k: 'contactos' | 'equipos') => setParams(k === 'contactos' ? {} : { tab: k }, { replace: true });
   const toast = useToast();
   const confirm = useConfirm();
+
+  // V6 §8.1: el enlace y el QR se movieron a Mi perfil → Visibilidad; un
+  // marcador antiguo (?tab=enlace) lleva allí sin mostrar nada en el camino.
+  if (pedida === 'enlace') return <Navigate to="/student/profile?tab=visibilidad" replace />;
 
   return (
     <div>
@@ -86,23 +90,11 @@ export default function StudentCollaborationPage() {
         value={tab}
         onChange={(k) => setTab(k as typeof tab)}
         items={[
-          { key: 'enlace', label: 'Mi enlace y QR' },
           { key: 'contactos', label: 'Contactos' },
           { key: 'equipos', label: 'Equipos' },
         ]}
       />
 
-      {tab === 'enlace' && (
-        <>
-          {/* V4.1 A41-026 (§16): el ajuste vive en Mi perfil → Visibilidad; aquí es un acceso rápido al mismo. */}
-          <p className="inline-note" data-testid="acceso-rapido-qr">
-            Tu enlace y tu QR se administran en <Link to="/student/profile?tab=visibilidad">Mi perfil → Visibilidad</Link>.
-            Esto es un acceso rápido al mismo ajuste: compartir el QR muestra tu perfil público permitido, no agrega contactos sin aceptación.
-          </p>
-          <MiEnlace toast={toast} confirm={confirm} />
-          <MisCanales toast={toast} />
-        </>
-      )}
       {tab === 'contactos' && <Contactos toast={toast} confirm={confirm} />}
       {tab === 'equipos' && <Equipos toast={toast} />}
     </div>
@@ -224,7 +216,7 @@ const CANALES: { channel: ContactChannelType; label: string; placeholder: string
   { channel: 'link', label: 'Otro enlace', placeholder: 'https://tu-portafolio.dev', help: 'Solo enlaces https.' },
 ];
 
-function MisCanales({ toast }: { toast: any }) {
+export function MisCanales({ toast }: { toast: any }) {
   const [valores, setValores] = useCachedState<Record<string, { value: string; isPublic: boolean }>>('canales', {});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);

@@ -466,7 +466,42 @@ async function batch7(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7 };
+// ===========================================================================
+//  BATCH V6-11 — QR solo en Mi perfil → Visibilidad, con vista previa real (§8.1, §8.2)
+// ===========================================================================
+async function batch11(ctx, browser) {
+  objective('BATCH V6-11 · El QR vive en Mi perfil → Visibilidad; la vista previa es la del visitante');
+  const est = await estudianteListo(ctx.admin, 'Vista');
+  await req('PATCH', '/profiles/me', { token: est.token, body: { bio: `Bio visible ${L}` } });
+  await req('PUT', '/profiles/me/visibility', { token: est.token, body: { publicProfileEnabled: true, fields: { bio: false } } });
+  const { ctx: c1, page, errores } = await entrar(browser, est.email);
+
+  await page.goto(`${WEB}/student/collaboration`);
+  await page.getByRole('tab').first().waitFor({ timeout: 30000 }).catch(() => {});
+  const pestanas = (await page.getByRole('tab').allTextContents()).map((s) => s.trim());
+  check(!pestanas.some((t) => /enlace|QR/i.test(t)) && pestanas.includes('Contactos') && pestanas.includes('Equipos'),
+    'V6W.11.1 V6-PROFILE-01 Colaboración ya no repite «Mi enlace y QR»: Contactos y Equipos', pestanas.join(' | '));
+  await page.goto(`${WEB}/student/collaboration?tab=enlace`);
+  await page.waitForURL((u) => u.pathname === '/student/profile', { timeout: 10000 }).catch(() => {});
+  check(new URL(page.url()).pathname === '/student/profile' && page.url().includes('tab=visibilidad'),
+    'V6W.11.2 §8.1 El marcador antiguo lleva a Mi perfil → Visibilidad', page.url());
+
+  const vista = page.locator('[data-testid="vista-previa-publica"]');
+  await vista.locator('.card, p').first().waitFor({ timeout: 20000 }).catch(() => {});
+  await page.waitForFunction(() => !document.querySelector('[data-testid="vista-previa-publica"]')?.textContent?.includes('Cargando'), null, { timeout: 15000 }).catch(() => {});
+  const qr = await page.locator('svg').count();
+  const sinBio = (await vista.textContent()) ?? '';
+  check(qr > 0 && sinBio.includes('Web Vista') && !sinBio.includes(`Bio visible ${L}`),
+    'V6W.11.3 §8.2 En Visibilidad están el QR y «Así verán mi perfil», sin la descripción que no publicó', sinBio.slice(0, 120));
+  await req('PUT', '/profiles/me/visibility', { token: est.token, body: { fields: { bio: true } } });
+  await page.getByRole('button', { name: 'Actualizar' }).click();
+  await page.getByText(`Bio visible ${L}`).waitFor({ timeout: 10000 }).catch(() => {});
+  check(((await vista.textContent()) ?? '').includes(`Bio visible ${L}`), 'V6W.11.4 Al publicarla, la vista previa la muestra: es la misma respuesta pública');
+  check(errores.length === 0, 'V6W.11.5 Sin errores de JavaScript', errores.join(' | '));
+  await c1.close();
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);
