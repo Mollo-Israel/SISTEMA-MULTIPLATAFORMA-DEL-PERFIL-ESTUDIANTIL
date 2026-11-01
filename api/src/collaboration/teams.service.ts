@@ -251,6 +251,45 @@ export class TeamsService {
     });
   }
 
+  /**
+   * V6 §8.5: «Equipos → Para ti». Necesidades abiertas a las que el
+   * estudiante puede sumarse (su semestre, con lugar, que no son suyas ni
+   * de un equipo donde ya está), ordenadas solo por lo que él declaró:
+   * intereses, áreas y tecnologías que quiere mejorar. Nunca usa datos
+   * privados de otros (sus metas de mejora no se miran). Cada una dice por
+   * qué, en palabras. Sugerir no inscribe: se postula y deciden.
+   */
+  async forMe(studentProfileId: string) {
+    const yo = await this.profiles.findOne({ where: { id: studentProfileId } });
+    const [intereses, tecnologias] = await Promise.all([
+      this.dataSource.query('SELECT academic_area_id AS id FROM student_interests WHERE student_profile_id = $1', [studentProfileId]) as Promise<{ id: string }[]>,
+      this.dataSource.query('SELECT skill_id AS id, kind FROM student_skill_interests WHERE student_profile_id = $1', [studentProfileId]) as Promise<{ id: string; kind: string }[]>,
+    ]);
+    const areasInteres = new Set(intereses.map((r) => r.id));
+    const areasMejora = new Set(yo?.improvementAreaIds ?? []);
+    const skillsInteres = new Set(tecnologias.filter((r) => r.kind === 'interest').map((r) => r.id));
+    const skillsMejora = new Set(tecnologias.filter((r) => r.kind === 'improve').map((r) => r.id));
+    const abiertas = (await this.openNeeds(studentProfileId))
+      .filter((n) => !n.isOwner && !n.isMember && n.openings > 0 && !n.myApplication);
+    const salida: (typeof abiertas[number] & { reasons: string[]; orden: number })[] = [];
+    for (const n of abiertas) {
+      const motivos: string[] = [];
+      let orden = 0;
+      for (const a of n.preferredAreas) {
+        if (areasInteres.has(a.academicAreaId)) { motivos.push(`Busca a alguien en ${a.name}, un área que te interesa.`); orden += 4; }
+        else if (areasMejora.has(a.academicAreaId)) { motivos.push(`Trabaja en ${a.name}, un área en la que quieres mejorar.`); orden += 3; }
+      }
+      for (const s of n.requiredSkills) {
+        if (skillsInteres.has(s.skillId)) { motivos.push(`Pide ${s.name}, una tecnología que te interesa.`); orden += 2; }
+        else if (skillsMejora.has(s.skillId)) { motivos.push(`Pide ${s.name}, una tecnología que quieres explorar.`); orden += 1; }
+      }
+      if (motivos.length) salida.push({ ...n, reasons: motivos, orden });
+    }
+    // Orden estable: coincidencia, luego lo más reciente, luego el id.
+    salida.sort((x, y) => y.orden - x.orden || +new Date(y.createdAt) - +new Date(x.createdAt) || x.id.localeCompare(y.id));
+    return salida.slice(0, 12).map(({ orden: _orden, ...resto }) => resto);
+  }
+
   async myNeeds(ownerProfileId: string) {
     const filas = await this.needs.find({
       where: { ownerProfileId },

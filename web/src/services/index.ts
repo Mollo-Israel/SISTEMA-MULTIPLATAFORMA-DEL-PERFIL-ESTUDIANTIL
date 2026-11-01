@@ -594,6 +594,11 @@ export const collaborationService = {
   createTeamNeed: (body: Record<string, unknown>) =>
     api.post<TeamNeedView>('/team-needs', body).then((r) => r.data),
   openNeeds: () => api.get<TeamNeedView[]>('/team-needs').then((r) => r.data),
+  /** V6 §8.5: «Equipos → Para ti», con el porqué de cada una. */
+  needsForMe: () => api.get<(TeamNeedView & { reasons: string[] })[]>('/team-needs/for-me').then((r) => r.data),
+  /** V6 §8.4: buscar entre quienes aceptaron ser encontrados (mínimo 3 letras, hasta 10). */
+  searchPeople: (q: string) =>
+    api.get<{ name: string; semester: number | null; slug: string; isContact: boolean; pending: boolean }[]>('/contacts/search', { params: { q } }).then((r) => r.data),
   myNeeds: () => api.get<TeamNeedView[]>('/team-needs/mine').then((r) => r.data),
   updateTeamNeed: (id: string, body: Record<string, unknown>) =>
     api.patch<TeamNeedView>(`/team-needs/${id}`, body).then((r) => r.data),

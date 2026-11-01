@@ -702,7 +702,66 @@ async function batch12(ctx) {
   check(!!v1 && v1 === reglas?.rulesVersion, 'V6.12.8 Las recomendaciones guardan la versión nueva de las reglas (trazable)', `${v1} / ${reglas?.rulesVersion}`);
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
+// ===========================================================================
+//  BATCH V6-13 — Equipos → Para ti y búsqueda de contactos (§8.4, §8.5)
+// ===========================================================================
+async function batch13(ctx) {
+  objective('BATCH V6-13 · Buscar solo entre quienes aceptaron; «Para ti» en Equipos con el porqué');
+  const apellido = `Busca${L}`;
+  const [yo, visible, oculto, privado] = await Promise.all(['b13yo', 'b13vis', 'b13ocu', 'b13pri'].map((k, i) =>
+    provisionStudent(ctx.admin, { firstName: ['Yago', 'Vera', 'Omar', 'Pia'][i], lastName: apellido, email: correoEst(k), semester: 4 })));
+  const abrir = async (est, descubrible, publico) => {
+    await req('PATCH', '/profiles/me', { token: est.token, body: { peerDiscoverable: descubrible } });
+    await req('PUT', '/profiles/me/visibility', { token: est.token, body: { publicProfileEnabled: publico } });
+  };
+  await abrir(visible, true, true);
+  await abrir(oculto, false, true);
+  await abrir(privado, true, false);
+  const buscar = (q) => req('GET', `/contacts/search?q=${encodeURIComponent(q)}`, { token: yo.token });
+  const r = await buscar(apellido);
+  const nombres = (r.data ?? []).map((p) => p.name);
+  check(r.status === 200 && nombres.some((n) => n.startsWith('Vera')) && !nombres.some((n) => /Omar|Pia|Yago/.test(n)),
+    'V6.13.1 CONTACT Solo aparecen quienes aceptaron ser encontrados y tienen perfil compartido; nunca uno mismo', json(nombres));
+  check((r.data ?? []).every((p) => !('email' in p) && !JSON.stringify(p).includes('@')), 'V6.13.2 La búsqueda no devuelve correos', json(r.data?.[0]));
+  const corta = await buscar('ab');
+  check(corta.status === 400 && corta.data?.code === 'SEARCH_TOO_SHORT', 'V6.13.3 Con menos de 3 letras no busca (no sirve para listar la carrera)', `${corta.status}`);
+  const amplia = await buscar('a e');
+  check(amplia.status === 200 && (amplia.data ?? []).length <= 10, 'V6.13.4 Como mucho 10 resultados', `${(amplia.data ?? []).length}`);
+  const vera = (r.data ?? []).find((p) => p.name.startsWith('Vera'));
+  const pedida = await req('POST', '/contacts/requests', { token: yo.token, body: { slug: vera?.slug, source: 'directory' } });
+  const tras = (await buscar(apellido)).data?.find((p) => p.name.startsWith('Vera'));
+  check(pedida.status === 201 && tras?.pending === true && tras?.isContact === false,
+    'V6.13.5 Desde la búsqueda se solicita contacto; queda pendiente, no se agrega solo', `${pedida.status} ${json(tras)}`);
+
+  // §8.5: «Equipos → Para ti».
+  const skills = ((await req('GET', '/skills', { token: yo.token })).data ?? []).filter((s) => s.isActive !== false && s.academicAreaId);
+  const sk = skills[0];
+  const otraSk = skills.find((s) => s.academicAreaId !== sk.academicAreaId);
+  const duena = await provisionStudent(ctx.admin, { firstName: 'Duna', lastName: apellido, email: correoEst('b13duena'), semester: 4 });
+  const necesidad = await req('POST', '/team-needs', {
+    token: duena.token,
+    body: { purpose: `Equipo para un prototipo ${L}`, preferredAreaIds: [sk.academicAreaId], requiredSkillIds: [sk.id], targetSemesters: [4], maxMembers: 3 },
+  });
+  await req('PUT', '/profiles/me/interests', { token: yo.token, body: { items: [{ academicAreaId: sk.academicAreaId, priority: 1 }] } });
+  await req('PUT', '/profiles/me/skill-interests', { token: yo.token, body: { items: [{ skillId: sk.id, kind: 'interest' }] } });
+  await req('PUT', '/profiles/me/interests', { token: oculto.token, body: { items: [{ academicAreaId: otraSk.academicAreaId, priority: 1 }] } });
+  const paraMi = (await req('GET', '/team-needs/for-me', { token: yo.token })).data ?? [];
+  const mia = paraMi.find((n) => n.id === necesidad.data?.id);
+  check(necesidad.status === 201 && !!mia && mia.reasons.some((x) => /un área que te interesa/.test(x)) && mia.reasons.some((x) => /una tecnología que te interesa/.test(x)),
+    'V6.13.6 TEAM-01 «Para ti» muestra la necesidad que encaja, diciendo por qué (área y tecnología que te interesan)', json(mia?.reasons));
+  check(!mia.reasons.some((x) => /\d+ ?(%|puntos)/.test(x)), 'V6.13.7 El porqué va en palabras, sin cifras internas', json(mia?.reasons));
+  const paraOtro = (await req('GET', '/team-needs/for-me', { token: oculto.token })).data ?? [];
+  const deDuena = (await req('GET', '/team-needs/for-me', { token: duena.token })).data ?? [];
+  check(!paraOtro.some((n) => n.id === necesidad.data?.id) && !deDuena.some((n) => n.id === necesidad.data?.id),
+    'V6.13.8 No se sugiere a quien no encaja ni a la dueña de la necesidad', json([paraOtro.length, deDuena.length]));
+  await req('POST', `/team-needs/${necesidad.data?.id}/applications`, { token: yo.token, body: { message: 'Me sumo.' } });
+  const despues = (await req('GET', '/team-needs/for-me', { token: yo.token })).data ?? [];
+  const equipos = (await req('GET', '/teams/mine', { token: yo.token })).data ?? [];
+  check(!despues.some((n) => n.id === necesidad.data?.id) && !equipos.some((e) => e.needId === necesidad.data?.id),
+    'V6.13.9 Postular la saca de «Para ti» y no te mete en el equipo: decide la dueña', json([despues.length, equipos.length]));
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);

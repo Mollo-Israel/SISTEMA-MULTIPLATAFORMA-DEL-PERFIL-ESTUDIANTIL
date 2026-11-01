@@ -12,6 +12,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -230,6 +231,17 @@ export class CollaborationController {
   }
 
   @ApiBearerAuth()
+  @Get('contacts/search')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'V6 §8.4: buscar por nombre o identificador entre quienes aceptaron ser encontrados.',
+    description: 'Mínimo 3 caracteres, hasta 10 resultados, sin correos. Encontrar no agrega: se solicita contacto.',
+  })
+  async searchContacts(@CurrentUser() user: AuthenticatedUser, @Query('q') q: string) {
+    return this.contacts.search(await this.profileId(user), q);
+  }
+
+  @ApiBearerAuth()
   @Get('contacts')
   @Roles(RolNombre.STUDENT)
   @ApiOperation({ summary: 'Contactos establecidos.' })
@@ -269,6 +281,14 @@ export class CollaborationController {
   @ApiOperation({ summary: 'Necesidades abiertas de la carrera.' })
   async openNeeds(@CurrentUser() user: AuthenticatedUser) {
     return this.teams.openNeeds(await this.profileId(user));
+  }
+
+  @ApiBearerAuth()
+  @Get('team-needs/for-me')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({ summary: 'V6 §8.5: «Equipos → Para ti», necesidades que encajan con lo que declaraste, con el porqué.' })
+  async needsForMe(@CurrentUser() user: AuthenticatedUser) {
+    return this.teams.forMe(await this.profileId(user));
   }
 
   @ApiBearerAuth()

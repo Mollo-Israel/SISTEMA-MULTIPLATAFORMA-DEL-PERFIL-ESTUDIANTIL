@@ -324,6 +324,49 @@ export class ContactsService {
     return { status: solicitud.status };
   }
 
+  /**
+   * V6 §8.4: buscar a alguien por nombre o por su identificador, solo entre
+   * quienes aceptaron ser encontrados (peerDiscoverable) y tienen su perfil
+   * compartido activo (sin él no se le puede solicitar contacto). Mínimo 3
+   * caracteres y como mucho 10 resultados: no sirve para listar la carrera.
+   * Nunca devuelve correos. Encontrar no agrega: se solicita y el otro acepta.
+   */
+  async search(studentProfileId: string, q: string) {
+    const texto = (q ?? '').trim().replace(/\s+/g, ' ');
+    if (texto.length < 3) {
+      const m = 'Escribe al menos 3 letras del nombre o el identificador de su perfil.';
+      throw new BadRequestException({ code: 'SEARCH_TOO_SHORT', message: m, fields: { q: [m] } });
+    }
+    const patron = `%${texto.slice(0, 60).replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+    const filas = await this.profiles.createQueryBuilder('p')
+      .innerJoin('p.user', 'u')
+      .select(['p.id', 'p.semester', 'p.publicProfileSlug'])
+      .addSelect(['u.firstName', 'u.lastName'])
+      .where('p.peer_discoverable = true AND p.public_profile_enabled = true')
+      .andWhere('p.id <> :yo', { yo: studentProfileId })
+      .andWhere("u.status = 'active'")
+      .andWhere("(CONCAT(u.first_name, ' ', u.last_name) ILIKE :t OR p.public_profile_slug = :exacto)", { t: patron, exacto: texto })
+      .orderBy('u.lastName', 'ASC')
+      .addOrderBy('u.firstName', 'ASC')
+      .take(10)
+      .getMany();
+    const ids = filas.map((p) => p.id);
+    const [contactos, pendientes] = ids.length ? await Promise.all([
+      this.contacts.find({ where: [{ profileAId: studentProfileId, profileBId: In(ids) }, { profileBId: studentProfileId, profileAId: In(ids) }] }),
+      this.requests.find({ where: [
+        { requesterProfileId: studentProfileId, targetProfileId: In(ids), status: ContactRequestStatus.PENDING },
+        { targetProfileId: studentProfileId, requesterProfileId: In(ids), status: ContactRequestStatus.PENDING },
+      ] }),
+    ]) : [[], []];
+    return filas.map((p) => ({
+      name: p.user ? `${p.user.firstName} ${p.user.lastName}` : 'Estudiante',
+      semester: p.semester,
+      slug: p.publicProfileSlug,
+      isContact: contactos.some((c) => c.profileAId === p.id || c.profileBId === p.id),
+      pending: pendientes.some((r) => r.requesterProfileId === p.id || r.targetProfileId === p.id),
+    }));
+  }
+
   /** Los contactos del estudiante, mirando los dos extremos de la pareja. */
   async list(studentProfileId: string) {
     const filas = await this.contacts.find({

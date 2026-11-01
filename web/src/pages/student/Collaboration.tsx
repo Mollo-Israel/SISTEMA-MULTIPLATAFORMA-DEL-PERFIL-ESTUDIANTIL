@@ -324,6 +324,32 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
   const [slug, setSlug] = useState('');
   const [mensaje, setMensaje] = useState('');
   const [enviando, setEnviando] = useState(false);
+  /** V6 §8.4: búsqueda entre perfiles que aceptaron ser encontrados. */
+  const [buscar, setBuscar] = useState('');
+  const [hallados, setHallados] = useState<Awaited<ReturnType<typeof collaborationService.searchPeople>> | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const buscarPersonas = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (buscar.trim().length < 3) { toast.error('Escribe al menos 3 letras.'); return; }
+    setBuscando(true);
+    try {
+      setHallados(await collaborationService.searchPeople(buscar.trim()));
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally {
+      setBuscando(false);
+    }
+  };
+  const solicitarA = async (persona: { slug: string; name: string }) => {
+    try {
+      await collaborationService.requestContact({ slug: persona.slug, source: 'directory' });
+      toast.success('Solicitud enviada.', `${persona.name} la verá para aceptarla o rechazarla.`);
+      setHallados((h) => (h ?? []).map((x) => (x.slug === persona.slug ? { ...x, pending: true } : x)));
+      await cargar();
+    } catch (err) {
+      toast.error(apiError(err));
+    }
+  };
 
   const cargar = async () => {
     try {
@@ -417,6 +443,32 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
 
   return (
     <>
+      {/* V6 §8.4: buscar entre quienes aceptaron ser encontrados; encontrar no agrega. */}
+      <Card title="Buscar a alguien">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Por nombre o por el identificador de su perfil. Solo aparecen quienes aceptaron ser encontrados
+          y tienen su perfil compartido activo. Nunca se muestran correos.
+        </p>
+        <form noValidate onSubmit={buscarPersonas} className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+          <input aria-label="Nombre o identificador" value={buscar} onChange={(e) => setBuscar(e.target.value)}
+            placeholder="Nombre o identificador (mínimo 3 letras)" style={{ flex: 1, minWidth: 0 }} />
+          <Button type="submit" loading={buscando}>Buscar</Button>
+        </form>
+        {hallados && (
+          <ul className="plain-list mt" data-testid="resultados-busqueda">
+            {hallados.length === 0 && <li className="muted">Nadie que aceptara ser encontrado coincide con esa búsqueda.</li>}
+            {hallados.map((p) => (
+              <li key={p.slug} className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span><strong>{p.name}</strong>{p.semester ? <span className="muted"> · {p.semester}.º semestre</span> : null}</span>
+                {p.isContact ? <Badge tone="green">Ya es tu contacto</Badge>
+                  : p.pending ? <Badge tone="amber">Solicitud pendiente</Badge>
+                    : <Button size="sm" onClick={() => void solicitarA(p)}>Solicitar contacto</Button>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       <Card title="Solicitar contacto">
         <p className="muted" style={{ marginTop: 0 }}>
           Escanear un QR te lleva al perfil, pero no establece contacto: eso lo decide la otra
@@ -591,6 +643,8 @@ function Equipos({ toast }: { toast: any }) {
     targetSemesters: [] as number[], availabilityRequirement: 'open_or_looking',
   });
   const [abiertas, setAbiertas] = useCachedState<TeamNeedView[] | null>('necesidades-abiertas', null);
+  /** V6 §8.5: «Para ti», ordenadas por lo que declaraste y con el porqué. */
+  const [paraTi, setParaTi] = useState<(TeamNeedView & { reasons: string[] })[] | null>(null);
   const [misPostulaciones, setMisPostulaciones] = useCachedState<TeamApplicationView[]>('mis-postulaciones', []);
   /** Necesidad ajena a la que se está postulando y su presentación. */
   const [postulando, setPostulando] = useState<{ needId: string; message: string } | null>(null);
@@ -613,6 +667,7 @@ function Equipos({ toast }: { toast: any }) {
         collaborationService.openNeeds(),
         collaborationService.myApplications(),
       ]);
+      collaborationService.needsForMe().then(setParaTi).catch(() => setParaTi([]));
       setNecesidades(n);
       setEquipos(t);
       setInvitaciones(i);
@@ -803,7 +858,41 @@ function Equipos({ toast }: { toast: any }) {
         </Card>
       )}
 
-      <Card title="Necesidades abiertas para ti">
+      {/* V6 §8.5: «Para ti» en Equipos; sugerir no inscribe, se postula y deciden. */}
+      <Card title="Para ti">
+        <div data-testid="equipos-para-ti">
+          <p className="muted" style={{ marginTop: 0 }}>
+            Necesidades que encajan con lo que declaraste en tu perfil (intereses, lo que quieres mejorar y las
+            tecnologías que te interesan). No usamos datos privados de nadie más.
+          </p>
+          {!paraTi && <Diferido><Loading /></Diferido>}
+          {paraTi && paraTi.length === 0 && (
+            <EmptyState message="Ahora mismo ninguna necesidad abierta coincide con tu perfil. Revisa todas las de tu semestre más abajo." />
+          )}
+          {(paraTi ?? []).map((n) => (
+            <div key={n.id} className="necesidad">
+              <div className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
+                <strong>{n.purpose}</strong>
+                <Badge tone="green">{`${n.openings} cupo(s)`}</Badge>
+              </div>
+              <span className="muted">{n.owner.name} · {semestresTexto(n.targetSemesters ?? [])}</span>
+              <ul className="plain-list">
+                {n.reasons.map((r) => <li key={r} className="small">{r}</li>)}
+              </ul>
+              <div>
+                <Button size="sm" icon={<FiUserPlus size={13} />} onClick={() => {
+                  setPostulando({ needId: n.id, message: '' });
+                  document.getElementById(`necesidad-${n.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}>
+                  Postular
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="Todas las necesidades abiertas de tu semestre">
         <p className="muted" style={{ marginTop: 0 }}>
           Equipos que buscan integrantes de tu semestre. Postula a los que te interesen; el responsable
           decide y te avisamos.
@@ -815,7 +904,7 @@ function Equipos({ toast }: { toast: any }) {
         {(abiertas ?? []).map((n) => {
           const mia = n.myApplication;
           return (
-            <div key={n.id} className="necesidad">
+            <div key={n.id} id={`necesidad-${n.id}`} className="necesidad">
               <div className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
                 <strong>{n.purpose}</strong>
                 <span className="flex" style={{ gap: '0.35rem' }}>

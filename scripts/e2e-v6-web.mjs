@@ -528,7 +528,34 @@ async function batch12(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch12 };
+// ===========================================================================
+//  BATCH V6-13 — Contactos: buscar; Equipos: «Para ti» (§8.4, §8.5)
+// ===========================================================================
+async function batch13(ctx, browser) {
+  objective('BATCH V6-13 · Buscar a alguien en Contactos y «Para ti» en Equipos');
+  const yo = await estudianteListo(ctx.admin, 'Yago');
+  const otra = await estudianteListo(ctx.admin, 'Vera');
+  await req('PUT', '/profiles/me/visibility', { token: otra.token, body: { publicProfileEnabled: true } });
+  const { ctx: c1, page, errores } = await entrar(browser, yo.email);
+  await page.goto(`${WEB}/student/collaboration`);
+  const caja = page.getByLabel('Nombre o identificador');
+  await caja.waitFor({ timeout: 30000 }).catch(() => {});
+  await caja.fill(`Vera${L}`);
+  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
+  const resultados = page.locator('[data-testid="resultados-busqueda"]');
+  await resultados.waitFor({ timeout: 10000 }).catch(() => {});
+  const texto = (await resultados.textContent().catch(() => '')) ?? '';
+  check(/Web Vera/.test(texto) && !texto.includes('@') && await resultados.getByRole('button', { name: 'Solicitar contacto' }).count() === 1,
+    'V6W.13.1 CONTACT En Contactos se busca por nombre y se ofrece «Solicitar contacto» (sin correos)', texto.slice(0, 120));
+  await page.getByRole('tab', { name: 'Equipos' }).click();
+  const paraTi = page.locator('[data-testid="equipos-para-ti"]');
+  await paraTi.waitFor({ timeout: 15000 }).catch(() => {});
+  check(await paraTi.count() === 1, 'V6W.13.2 TEAM-01 Equipos tiene su sección «Para ti»');
+  check(errores.length === 0, 'V6W.13.3 Sin errores de JavaScript', errores.join(' | '));
+  await c1.close();
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch12, batch13 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);
