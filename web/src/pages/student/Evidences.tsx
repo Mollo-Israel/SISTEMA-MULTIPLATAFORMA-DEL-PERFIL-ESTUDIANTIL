@@ -131,7 +131,7 @@ export default function StudentEvidencesPage() {
         items={[
           { key: 'proyectos', label: 'Evidencias de proyectos', count: evidences.data?.length },
           { key: 'credenciales', label: 'Credenciales externas', count: certificates.data?.length },
-          { key: 'constancias', label: 'Constancias y certificados institucionales recibidos', count: (constancies.data as unknown[] | undefined)?.length },
+          { key: 'constancias', label: 'Certificados institucionales recibidos', count: (constancies.data as unknown[] | undefined)?.length },
         ]}
         value={pestana}
         onChange={(k) => setParams(k === 'credenciales' ? {} : { tab: k }, { replace: true })}
@@ -249,7 +249,7 @@ export default function StudentEvidencesPage() {
       <p className="inline-note">
         Registra una credencial histórica (la obtuviste antes o fuera de Afinia) o acredita una oportunidad externa que ya terminó.
         Cada una muestra su estado de validación y qué se pudo verificar. Las constancias internas no se registran aquí: llegan solas
-        a «Constancias y certificados institucionales recibidos».
+        a «Certificados institucionales recibidos».
       </p>
       <CertificateForm
         areas={areas}
@@ -376,7 +376,7 @@ export default function StudentEvidencesPage() {
       </>)}
 
       {pestana === 'constancias' && (
-      <Card title="Constancias y certificados institucionales recibidos">
+      <Card title="Certificados institucionales recibidos">
         <p className="muted" style={{ marginBottom: '0.7rem' }}>
           Las constancias internas las emite Afinia cuando el responsable confirma tu participación.
           Los certificados de la institución los emite quien figura como emisor; el responsable te los entrega aquí.

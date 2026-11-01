@@ -184,7 +184,10 @@ export class GamificationService {
       })));
     const valorados = [...valoradosBase, ...extras];
     // Insignias que otorgan las reglas de las actividades (idempotente).
-    const insigniasDeReglas = [...new Set(hechos.map((h) => h.badgeId).filter((b): b is string => !!b))];
+    // V6 §10.3 (ADM-08): asistir no da insignia; los puntos sí siguen.
+    const insigniasDeReglas = [...new Set(hechos
+      .filter((h) => h.trigger !== GamificationTrigger.PARTICIPACION_CONFIRMADA)
+      .map((h) => h.badgeId).filter((b): b is string => !!b))];
     if (insigniasDeReglas.length) {
       await this.studentBadges
         .createQueryBuilder()
@@ -313,8 +316,9 @@ export class GamificationService {
       this.conteoPorDisparador(studentProfileId),
     ]);
 
+    // V6 §10.3 (ADM-08): ninguna insignia por asistir. Las ya obtenidas se conservan.
     const merecidas = catalogo.filter(
-      (b) => (conteos.get(b.trigger) ?? 0) >= b.threshold,
+      (b) => b.trigger !== GamificationTrigger.PARTICIPACION_CONFIRMADA && (conteos.get(b.trigger) ?? 0) >= b.threshold,
     );
     if (merecidas.length === 0) return;
 
@@ -388,7 +392,9 @@ export class GamificationService {
       note:
         'Los puntos reconocen lo que hiciste. No influyen en tu afinidad ni en tus '
         + 'recomendaciones, y no se comparan con los de nadie.',
-      badges: catalogo.map((b) => {
+      // V6 §10.3: las insignias por asistir ya no se ofrecen como meta; si
+      // alguien ya la tenía, se sigue mostrando como parte de su historia.
+      badges: catalogo.filter((b) => b.trigger !== GamificationTrigger.PARTICIPACION_CONFIRMADA || obtenidasPorBadge.has(b.id)).map((b) => {
         const conseguidas = conteos.get(b.trigger) ?? 0;
         return {
           code: b.code,

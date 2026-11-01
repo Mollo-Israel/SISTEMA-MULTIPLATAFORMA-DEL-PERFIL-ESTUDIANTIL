@@ -318,23 +318,24 @@ async function insignias(ctx) {
   objective('§66 · Insignias por hechos, no por acumular');
 
   const p = await progreso(ctx.est.token);
-  check((p.badges ?? []).length >= 7, 'B9.20 El catálogo de insignias está publicado',
+  // V6 §10.3 (ADM-08): asistir ya no da insignia (los puntos siguen).
+  check((p.badges ?? []).length >= 5, 'B9.20 El catálogo de insignias está publicado',
     String((p.badges ?? []).length));
 
   const primera = insignia(p, 'primera_participacion');
-  check(primera?.earned === true, 'B9.21 La primera participación se reconoce con insignia');
-  check(!!primera?.earnedAt, 'B9.22 Con la fecha en que se obtuvo');
+  check(!primera, 'B9.21 V6 §10.3 La primera participación ya no se premia con insignia (no se ofrece ni se otorga)', JSON.stringify(primera));
+  check((p.events ?? []).some((e) => e.trigger === 'participacion_confirmada' && e.points > 0), 'B9.22 V6 La participación confirmada sigue sumando sus puntos');
 
   const cinco = insignia(p, 'cinco_participaciones');
   check(
-    cinco?.earned === false && cinco?.threshold === 5,
-    'B9.23 La de cinco participaciones todavía no, y dice cuántas faltan',
-    JSON.stringify([cinco?.progress, cinco?.threshold]),
+    !cinco,
+    'B9.23 V6 §10.3 Tampoco hay insignia por cinco participaciones',
+    JSON.stringify(cinco),
   );
   check(
-    cinco?.progress === 1,
-    'B9.24 El progreso se mide en hechos, no en puntos (§66)',
-    String(cinco?.progress),
+    (p.badges ?? []).every((b) => b.trigger !== 'participacion_confirmada'),
+    'B9.24 V6 §10.3 Ninguna insignia del catálogo depende de asistir',
+    JSON.stringify((p.badges ?? []).map((b) => b.trigger)),
   );
 
   section('Cuatro participaciones más');
@@ -347,8 +348,8 @@ async function insignias(ctx) {
   }
   const conCinco = await progreso(ctx.est.token);
   check(
-    insignia(conCinco, 'cinco_participaciones')?.earned === true,
-    'B9.25 Al llegar a cinco, la insignia se otorga',
+    !insignia(conCinco, 'cinco_participaciones'),
+    'B9.25 V6 §10.3 Al llegar a cinco participaciones tampoco se otorga insignia',
   );
   check(
     eventosCon(conCinco, 'participacion_confirmada').length === 5,

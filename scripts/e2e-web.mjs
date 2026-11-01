@@ -994,7 +994,7 @@ async function pruebas(browser) {
   await p57.getByRole('tab', { name: /Credenciales externas/ }).first().waitFor({ timeout: 8000 }).catch(() => {});
   const pestanasEv = await p57.getByRole('tab').allInnerTexts();
   const tieneValidacion = await p57.getByText('Mis credenciales y su validación').first().isVisible().catch(() => false);
-  check(['Evidencias de proyectos', 'Credenciales externas', 'Constancias y certificados institucionales recibidos'].every((t) => pestanasEv.some((x) => x.includes(t))) && tieneValidacion,
+  check(['Evidencias de proyectos', 'Credenciales externas', 'Certificados institucionales recibidos'].every((t) => pestanasEv.some((x) => x.includes(t))) && tieneValidacion,
     'WEB.51.1 A41-025 §15 Evidencias en tres pestañas sobre los mismos datos', pestanasEv.join(' | '));
   await p57.goto(`${WEB}/student/profile?tab=visibilidad`);
   const qrPerfil = await p57.locator('.qr-lienzo svg').first().waitFor({ timeout: 8000 }).then(() => true).catch(() => false);

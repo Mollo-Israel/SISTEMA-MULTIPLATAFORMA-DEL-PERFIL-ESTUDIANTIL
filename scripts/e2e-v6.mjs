@@ -761,7 +761,33 @@ async function batch13(ctx) {
     'V6.13.9 Postular la saca de «Para ti» y no te mete en el equipo: decide la dueña', json([despues.length, equipos.length]));
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13 };
+// ===========================================================================
+//  BATCH V6-14 — Asistir no da insignia ni certificado (§10.3, ADM-07/08)
+// ===========================================================================
+async function batch14(ctx) {
+  objective('BATCH V6-14 · La asistencia queda en la trayectoria, sin insignia ni «certificado»');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Insignia${L}`, email: correoStaff('b14dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionStudent(ctx.admin, { firstName: 'Ema', lastName: `Insignia${L}`, email: correoEst('b14est'), semester: 3 });
+  const cats = ((await req('GET', '/activity-categories', { token: director.token })).data ?? []).filter((c) => c.isActive !== false);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const act = await req('POST', '/activities', {
+    token: director.token,
+    body: { title: `Charla sin insignia ${L}`, type: 'academica', categoryId: cat.id, semesterScope: [3], activityDate: en(48), endAt: en(50), status: 'open', outcomePolicy: 'participation_only' },
+  });
+  await req('POST', `/activities/${act.data?.id}/register`, { token: est.token });
+  const asistio = await req('PATCH', `/activities/${act.data?.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
+  const g = (await req('GET', '/gamification/me', { token: est.token })).data;
+  const insignias = Number(psql(`select count(*) from student_badges sb join badges b on b.id = sb.badge_id where sb.student_profile_id = '${est.profileId}' and b.trigger = 'participacion_confirmada'`));
+  check(asistio.status === 200 && insignias === 0 && !(g?.badges ?? []).some((b) => b.trigger === 'participacion_confirmada'),
+    'V6.14.1 ADM-08 Confirmar la asistencia no otorga «Primera participación» ni ofrece insignias por asistir', json((g?.badges ?? []).map((b) => b.code)));
+  check((g?.events ?? []).some((e) => e.trigger === 'participacion_confirmada' && e.points > 0), 'V6.14.2 Los puntos de la participación siguen', json((g?.events ?? []).map((e) => e.trigger)));
+  const tray = (await req('GET', '/trajectory/me', { token: est.token })).data;
+  check((tray?.entries ?? []).some((x) => x.id === act.data?.id), 'V6.14.3 La participación queda en la trayectoria (historial)', json((tray?.entries ?? []).length));
+  const constancias = (await req('GET', '/constancies/internal/my', { token: est.token })).data ?? [];
+  check(!constancias.some((c) => c.activityId === act.data?.id), 'V6.14.4 ADM-07 Y no aparece como certificado ni constancia recibida', json(constancias.length));
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
