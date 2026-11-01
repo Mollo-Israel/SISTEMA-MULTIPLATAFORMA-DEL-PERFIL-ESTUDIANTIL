@@ -103,6 +103,12 @@ export default function CareerProjectsPage() {
                     <Badge tone="gray">{PROJECT_BACKING_LABEL[p.backingTier as ProjectBackingTier] ?? p.backingTier}</Badge>
                   </div>
                   {p.owner && <span className="muted small">De {p.owner}{p.confirmedMembers > 0 ? ` y ${p.confirmedMembers} integrante${p.confirmedMembers === 1 ? '' : 's'}` : ''}</span>}
+                  {/* V6 §7.5: solo quienes aceptaron mostrarse, con sus roles. */}
+                  {(p.members ?? []).length > 0 && (
+                    <span className="small" data-testid="integrantes">
+                      {(p.members ?? []).map((m) => (m.roles.length ? `${m.name} (${m.roles.join(', ')})` : m.name)).join(' · ')}
+                    </span>
+                  )}
                   {p.description && <p className="activity-card-desc">{p.description}</p>}
                   <div className="activity-meta">
                     {p.areas.length > 0 && <span title={p.areas.join(', ')}>Áreas: {resumen(p.areas)}</span>}
@@ -146,6 +152,17 @@ export default function CareerProjectsPage() {
             {viendo.skills.length > 0 && <span>Tecnologías: {viendo.skills.join(', ')}</span>}
             <span><FiUsers size={12} /> {viendo.confirmedMembers + 1} persona{viendo.confirmedMembers === 0 ? '' : 's'} con su contribución confirmada</span>
           </div>
+          {(viendo.members ?? []).length > 0 && (
+            <div data-testid="integrantes-detalle">
+              <strong className="small">Integrantes</strong>
+              <ul className="detalle-personas">
+                {(viendo.members ?? []).map((m) => (
+                  <li key={m.name}>{m.name}{m.roles.length > 0 && <span className="muted small"> · {m.roles.join(', ')}</span>}</li>
+                ))}
+              </ul>
+              <p className="muted small" style={{ margin: 0 }}>Solo figuran quienes aceptaron mostrarse aquí.</p>
+            </div>
+          )}
           <p className="muted small">
             Respaldo: {PROJECT_BACKING_LABEL[viendo.backingTier as ProjectBackingTier] ?? viendo.backingTier}. Lo que figura es lo que el proyecto declara y su respaldo; no es una evaluación académica.
           </p>

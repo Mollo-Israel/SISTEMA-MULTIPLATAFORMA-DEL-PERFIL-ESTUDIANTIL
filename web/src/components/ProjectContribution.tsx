@@ -298,6 +298,22 @@ export default function ProjectContribution({
             ))}
           </div>
 
+          {/* V6 §7.5: cada integrante decide si se le nombra en la galería de la carrera. */}
+          <label className="flex small" style={{ gap: '0.4rem', alignItems: 'center', marginBottom: '0.6rem' }}>
+            <input
+              type="checkbox"
+              checked={mine.showInGallery === true}
+              data-testid="consentimiento-galeria"
+              onChange={(e) => {
+                const valor = e.target.checked;
+                projectDetailService.galleryConsent(projectId, valor)
+                  .then(() => { setMembers((rows) => (rows ?? []).map((m) => (m.userId === currentUserId ? { ...m, showInGallery: valor } : m))); })
+                  .catch((err) => toast.error(apiError(err)));
+              }}
+            />
+            Mostrar mi nombre y mis roles en «Proyectos de la carrera» (si el proyecto se comparte allí)
+          </label>
+
           <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
             <Button onClick={guardar} loading={saving} icon={<FiSave size={15} />}>
               {mine.contributionConfirmed ? 'Guardar y reconfirmar' : 'Confirmar mi contribución'}

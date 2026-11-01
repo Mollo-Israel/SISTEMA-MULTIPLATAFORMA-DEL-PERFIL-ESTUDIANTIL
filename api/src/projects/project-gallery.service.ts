@@ -151,9 +151,17 @@ export class ProjectGalleryService {
              ARRAY(SELECT a.name FROM project_areas pa JOIN academic_areas a ON a.id = pa.academic_area_id WHERE pa.project_id = p.id ORDER BY a.name) AS areas,
              ARRAY(SELECT s.name FROM project_skills ps JOIN skills s ON s.id = ps.skill_id WHERE ps.project_id = p.id ORDER BY s.name) AS skills,
              (SELECT COUNT(*) FROM project_members m WHERE m.project_id = p.id AND m.contribution_confirmed_at IS NOT NULL)::int AS confirmed_members,
+             -- V6 §7.5: solo quien aceptó mostrarse, con sus roles confirmados.
+             COALESCE((SELECT json_agg(json_build_object('name', u2.first_name || ' ' || u2.last_name, 'roles', m2.roles, 'owner', m2.is_owner)
+                                       ORDER BY m2.is_owner DESC, m2.created_at)
+                         FROM project_members m2 JOIN users u2 ON u2.id = m2.user_id
+                        WHERE m2.project_id = p.id AND m2.show_in_gallery AND m2.contribution_confirmed_at IS NOT NULL), '[]'::json) AS members,
              ARRAY(SELECT '/api/files/' || f.storage_key FROM project_images pi JOIN stored_files f ON f.id = pi.stored_file_id
                     WHERE pi.project_id = p.id ORDER BY pi.is_cover DESC, pi.position) AS images
-        FROM projects p WHERE p.id = ANY($1::uuid[])`, [ids]) as { id: string; areas: string[]; skills: string[]; confirmed_members: number; images: string[] }[] : [];
+        FROM projects p WHERE p.id = ANY($1::uuid[])`, [ids]) as {
+        id: string; areas: string[]; skills: string[]; confirmed_members: number; images: string[];
+        members: { name: string; roles: string[]; owner: boolean }[];
+      }[] : [];
     return {
       total,
       page: pagina,
@@ -168,6 +176,7 @@ export class ProjectGalleryService {
           areas: e?.areas ?? [],
           skills: e?.skills ?? [],
           confirmedMembers: e?.confirmed_members ?? 0,
+          members: e?.members ?? [],
           backingTier: p.backingTier,
           coverUrl: e?.images?.[0] ?? null,
           images: e?.images ?? [],

@@ -55,11 +55,6 @@ export default function PublicProjectPage() {
           </div>
         )}
         <div className="flex mt" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
-          {p.repositoryUrl && (
-            <a className="btn btn-secondary btn-sm" href={p.repositoryUrl} target="_blank" rel="noreferrer noopener">
-              <FiGithub /> Repositorio
-            </a>
-          )}
           {p.demoUrl && (
             <a className="btn btn-secondary btn-sm" href={p.demoUrl} target="_blank" rel="noreferrer noopener"
               title="Abre un sitio de terceros: Afinia no controla su contenido">

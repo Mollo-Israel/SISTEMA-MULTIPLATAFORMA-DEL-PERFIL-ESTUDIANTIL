@@ -306,6 +306,8 @@ export interface CommunityProject {
   areas: string[];
   skills: string[];
   confirmedMembers: number;
+  /** V6 §7.5: integrantes que aceptaron mostrarse, con sus roles. */
+  members?: { name: string; roles: string[]; owner: boolean }[];
   backingTier: string;
   coverUrl: string | null;
   images: string[];
@@ -1085,6 +1087,9 @@ export const projectDetailService = {
     api.post<ProjectSuggestions>(`/projects/${projectId}/suggestions/dismiss`, { signal }).then((r) => r.data),
   requestSkill: (projectId: string, body: { name: string; source?: string }) =>
     api.post(`/projects/${projectId}/suggestions/request-skill`, body).then((r) => r.data),
+  /** V6 §7.5: mostrar o no mi nombre y roles en la galería de la carrera. */
+  galleryConsent: (projectId: string, showInGallery: boolean) =>
+    api.put<{ showInGallery: boolean }>(`/projects/${projectId}/my-gallery-consent`, { showInGallery }).then((r) => r.data),
   membersDetailed: (projectId: string) =>
     api
       .get<ProjectMemberDetailed[]>(`/projects/${projectId}/members/detailed`)

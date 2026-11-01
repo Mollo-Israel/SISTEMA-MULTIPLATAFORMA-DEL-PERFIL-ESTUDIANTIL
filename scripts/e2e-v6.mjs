@@ -9,7 +9,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-v6.mjs [batch1 …]
  */
 import { execSync } from 'child_process';
-import { API, asegurarGithubSimulado, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
+import { API, asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -550,7 +550,45 @@ async function batch9(ctx) {
     'V6.9.6 §7.6 Hasta 8 enlaces de evidencia; el noveno se rechaza', enlaces.map((r) => r.status).join(','));
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9 };
+// ===========================================================================
+//  BATCH V6-10 — Galería con integrantes que aceptaron; sin repositorio (§7.5)
+// ===========================================================================
+async function batch10(ctx) {
+  objective('BATCH V6-10 · La galería nombra solo a quien aceptó, con sus roles; el enlace público no da el repositorio');
+  const [due, mia, ajeno] = await Promise.all(['b10due', 'b10mia', 'b10ajeno'].map((k, i) =>
+    provisionStudent(ctx.admin, { firstName: ['Rosa', 'Mia', 'Teo'][i], lastName: `Galeria${L}`, email: correoEst(k), semester: 4 })));
+  const p = await crearProyectoActivo(due.token, { title: `Galeria V6 ${L}`, visibility: 'profile' });
+  const id = p.data?.id;
+  await req('POST', `/projects/${id}/invitations`, { token: due.token, body: { invitedProfileId: mia.profileId, proposedRole: 'Frontend' } });
+  const inv = ((await req('GET', '/projects/invitations/mine', { token: mia.token })).data ?? []).find((i) => i.project?.id === id);
+  await req('PATCH', `/projects/invitations/${inv?.id}`, { token: mia.token, body: { decision: 'accept' } });
+  const skillId = p.data?.projectSkills?.[0]?.skillId ?? (await req('GET', `/projects/${id}`, { token: due.token })).data?.projectSkills?.[0]?.skillId;
+  await req('PUT', `/projects/${id}/my-contribution`, { token: mia.token, body: { contribution: 'Hice la interfaz.', roles: ['Frontend', 'UX/UI'], skillIds: skillId ? [skillId] : [] } });
+  const tarjeta = async () => ((await req('GET', `/projects/community?q=${encodeURIComponent(`Galeria V6 ${L}`)}`, { token: ajeno.token })).data?.items ?? [])[0];
+
+  const antes = await tarjeta();
+  check(!!antes && json(antes.members) === '[]' && !JSON.stringify(antes).includes('Mia'),
+    'V6.10.1 V6-PROJ-07 Sin aceptar, la integrante no aparece por nombre en la galería', json(antes?.members));
+  const acepta = await req('PUT', `/projects/${id}/my-gallery-consent`, { token: mia.token, body: { showInGallery: true } });
+  const despues = await tarjeta();
+  const ella = (despues?.members ?? []).find((m) => m.name.startsWith('Mia'));
+  check(acepta.status === 200 && json(ella?.roles) === '["Frontend","UX/UI"]',
+    'V6.10.2 Al aceptar, la galería muestra su nombre y sus roles confirmados (no solo «1 integrante»)', json(despues?.members));
+  const falso = await req('PUT', `/projects/${id}/my-gallery-consent`, { token: ajeno.token, body: { showInGallery: true } });
+  check(falso.status === 403, 'V6.10.3 Quien no integra el proyecto no decide sobre nombres ajenos (403)', `${falso.status}`);
+  const retira = await req('PUT', `/projects/${id}/my-gallery-consent`, { token: mia.token, body: { showInGallery: false } });
+  check(retira.status === 200 && !((await tarjeta())?.members ?? []).some((m) => m.name.startsWith('Mia')),
+    'V6.10.4 Retirar el permiso la quita de la galería al instante', `${retira.status}`);
+  check(!('repositoryUrl' in (despues ?? {})) && !JSON.stringify(despues ?? {}).includes('github.com'),
+    'V6.10.5 §7.5 La tarjeta de la galería no expone el repositorio', Object.keys(despues ?? {}).join(','));
+
+  const publico = await req('PATCH', `/projects/${id}`, { token: due.token, body: { visibility: 'public_link' } });
+  const vista = await (await fetch(`${API}/projects/public/${publico.data?.publicLinkToken}`)).json();
+  check(publico.status === 200 && vista.title?.startsWith('Galeria V6') && !('repositoryUrl' in vista) && !JSON.stringify(vista).includes('github.com'),
+    'V6.10.6 §7.5 El enlace público tampoco entrega el repositorio', Object.keys(vista).join(','));
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);

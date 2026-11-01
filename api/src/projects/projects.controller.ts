@@ -28,6 +28,7 @@ import {
   ProposeContributionDto, RequestCorrectionDto } from './dto/contribution.dto';
 import { QueryProjectsDto } from './dto/query-projects.dto';
 import { InviteMemberDto, RespondInvitationDto } from './dto/invite-member.dto';
+import { GalleryConsentDto } from './dto/gallery-consent.dto';
 
 class AcceptSuggestionDto {
   @IsUUID('4') skillId: string;
@@ -223,6 +224,20 @@ export class ProjectsController {
     @Body() dto: ConfirmContributionDto,
   ) {
     return this.projectsService.confirmMyContribution(user.userId, id, dto);
+  }
+
+  @Put(':id/my-gallery-consent')
+  @Roles(RolNombre.STUDENT)
+  @ApiOperation({
+    summary: 'V6 §7.5: mostrar o no mi nombre y mis roles en «Proyectos de la carrera».',
+    description: 'Solo el propio integrante, por su sesión. Por omisión, no se muestra.',
+  })
+  setMyGalleryConsent(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: GalleryConsentDto,
+  ) {
+    return this.projectsService.setMyGalleryConsent(user.userId, id, dto.showInGallery);
   }
 
   @Patch(':id/members/:memberId/contribution')

@@ -57,6 +57,13 @@ export class ProjectMember {
   @Column({ name: 'is_owner', type: 'boolean', default: false })
   isOwner: boolean;
 
+  /**
+   * V6 §7.5: el integrante acepta que su nombre y sus roles se vean en
+   * «Proyectos de la carrera». Por omisión, no.
+   */
+  @Column({ name: 'show_in_gallery', type: 'boolean', default: false })
+  showInGallery: boolean;
+
   @Column({ type: 'text', nullable: true })
   contribution: string | null;
 

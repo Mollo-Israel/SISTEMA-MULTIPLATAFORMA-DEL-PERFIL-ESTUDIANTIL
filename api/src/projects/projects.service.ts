@@ -1365,6 +1365,7 @@ export class ProjectsService {
       // formulario no lo reenvíe y la API no responda 400.
       roles: rolesDelCatalogo(m.roles?.length ? m.roles : [m.role]),
       rolAnterior: m.role && !(PROJECT_ROLES as readonly string[]).includes(m.role) ? m.role : null,
+      showInGallery: m.showInGallery,
       contribution: m.contribution,
       /** §33: mientras sea false, lo que hay lo escribió otra persona. */
       contributionConfirmed: m.contributionConfirmedAt !== null,
@@ -1452,6 +1453,7 @@ export class ProjectsService {
       // formulario no lo reenvíe y la API no responda 400.
       roles: rolesDelCatalogo(m.roles?.length ? m.roles : [m.role]),
       rolAnterior: m.role && !(PROJECT_ROLES as readonly string[]).includes(m.role) ? m.role : null,
+      showInGallery: m.showInGallery,
       contribution: m.contribution,
       contributionConfirmed: m.contributionConfirmedAt !== null,
       contributionConfirmedAt: m.contributionConfirmedAt,
@@ -1664,11 +1666,27 @@ export class ProjectsService {
       status: p.status,
       areas: (p.projectAreas ?? []).map((a) => a.academicArea?.name).filter(Boolean),
       skills: (p.projectSkills ?? []).map((s) => s.skill?.name).filter(Boolean),
-      repositoryUrl: p.repositoryUrl,
+      // V6 §7.5: el enlace público no muestra el repositorio (aunque sea
+      // público, no se invita a copiar el código). La demo, sí.
       demoUrl: p.demoUrl,
       backingTier: p.backingTier,
       updatedAt: p.updatedAt,
     };
+  }
+
+  /** V6 §7.5: el integrante decide, por su sesión, si se le nombra en la galería. */
+  async setMyGalleryConsent(userId: string, projectId: string, showInGallery: boolean): Promise<{ showInGallery: boolean }> {
+    const fila = await this.members.findOne({ where: { projectId, userId } });
+    if (!fila) throw new ForbiddenException('Solo un integrante del proyecto decide sobre su propio nombre.');
+    fila.showInGallery = showInGallery;
+    await this.members.save(fila);
+    await this.events.record({
+      projectId,
+      actorUserId: userId,
+      eventType: ProjectEventType.CONTRIBUTION_UPDATED,
+      metadata: { memberId: fila.id, showInGallery },
+    });
+    return { showInGallery };
   }
 
   private async requireProfile(userId: string): Promise<StudentProfile> {

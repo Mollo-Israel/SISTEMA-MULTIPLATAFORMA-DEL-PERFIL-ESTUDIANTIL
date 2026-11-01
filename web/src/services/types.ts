@@ -706,6 +706,8 @@ export interface ProjectMemberDetailed {
   roles?: string[];
   /** V6 §6.1: rol anterior en texto libre que no está en el catálogo (solo informativo). */
   rolAnterior?: string | null;
+  /** V6 §7.5: si aceptó mostrarse en «Proyectos de la carrera». */
+  showInGallery?: boolean;
   contribution: string | null;
   /** Mientras sea false, lo que figura lo escribió otra persona (§33). */
   contributionConfirmed: boolean;
