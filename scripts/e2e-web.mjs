@@ -367,8 +367,9 @@ async function pruebas(browser) {
     'WEB.22d V3.2 §60 «Correo (configuración técnica)» no está en el menú del producto', enlacesAdm.join(' | '));
   await pa.goto(`${WEB}/admin/mail`);
   await espera(900);
-  check(!pa.url().includes('/admin/mail') || await pa.getByText(/SMTP|Servidor de correo/).count() === 0,
-    'WEB.22e V3.2 §60 Ni escribiendo la ruta se llega a la pantalla técnica del correo', pa.url());
+  // V6 §12.1 sustituye V3.2 §60: fuera del menú, pero operativa para Administración por su URL.
+  check(pa.url().includes('/admin/mail') && fallosAdm.length === 0,
+    'WEB.22e V6 §12.1 Administración llega a la pantalla técnica del correo solo escribiendo la ruta', pa.url());
   await pa.goto(`${WEB}/admin/audit`);
   await pa.waitForSelector('table.tabla-apilable tbody tr', { timeout: 10000 }).catch(() => {});
   const columnas = await pa.locator('table.tabla-apilable thead th').allInnerTexts();

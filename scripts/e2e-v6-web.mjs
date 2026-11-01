@@ -583,7 +583,27 @@ async function batch15(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch12, batch13, batch15 };
+// ===========================================================================
+//  BATCH V6-16 — «Correo» fuera del menú; la ruta solo para Administración (§12.1)
+// ===========================================================================
+async function batch16(ctx, browser) {
+  objective('BATCH V6-16 · El menú no muestra «Correo»; la ruta la abre solo Administración');
+  const { ctx: c1, page, errores } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  const menu = await page.locator('nav a.nav-link').allInnerTexts();
+  check(!menu.some((x) => /Correo/.test(x)), 'V6W.16.1 El menú de Administración ya no tiene «Correo (configuración técnica)»', menu.join(' | '));
+  await page.goto(`${WEB}/admin/mail`);
+  await page.waitForTimeout(1200);
+  check(new URL(page.url()).pathname === '/admin/mail' && errores.length === 0, 'V6W.16.2 Administración la abre escribiendo la ruta', page.url());
+  await c1.close();
+  const est = await estudianteListo(ctx.admin, 'Correo');
+  const { ctx: c2, page: pe } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/admin/mail`);
+  await pe.waitForTimeout(1200);
+  check(new URL(pe.url()).pathname !== '/admin/mail', 'V6W.16.3 Un estudiante que escribe la ruta no llega a la pantalla', pe.url());
+  await c2.close();
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch12, batch13, batch15, batch16 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);

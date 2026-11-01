@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { RolNombre } from './constants';
-import { HOME_BY_ROLE, MODO_TECNICO } from './navigation';
+import { HOME_BY_ROLE } from './navigation';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Loading } from './components/ui';
@@ -208,7 +208,8 @@ export default function App() {
             <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="/admin/imports" element={<AdminImportsPage />} />
             <Route path="/admin/activities" element={<AdminActivitiesPage />} />
-            {MODO_TECNICO && <Route path="/admin/mail" element={<AdminMailPage />} />}
+            {/* V6 §12.1: fuera del menú, pero operativa para Administración por su URL. */}
+            <Route path="/admin/mail" element={<AdminMailPage />} />
             <Route path="/admin/areas" element={<AdminAreasSkillsPage />} />
             {/* V4.1 A41-020: tecnologías no catalogadas que piden los estudiantes. */}
             <Route path="/admin/skill-requests" element={<AdminSkillRequestsPage />} />

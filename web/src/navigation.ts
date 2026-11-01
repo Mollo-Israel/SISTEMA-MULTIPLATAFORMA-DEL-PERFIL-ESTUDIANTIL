@@ -165,6 +165,6 @@ export const HOME_BY_ROLE: Record<string, string> = {
   [RolNombre.ADMIN]: '/admin',
 };
 
-if (MODO_TECNICO) {
-  NAV[RolNombre.ADMIN][0].items.push({ to: '/admin/mail', label: 'Correo (configuración técnica)' });
-}
+// V6 §12.1: «Correo (configuración técnica)» ya no está en el menú, en ningún
+// modo. La pantalla sigue en /admin/mail, solo para Administración (RoleGate en
+// la web y @Roles(ADMIN) en la API); ocultar el enlace no es el control de acceso.

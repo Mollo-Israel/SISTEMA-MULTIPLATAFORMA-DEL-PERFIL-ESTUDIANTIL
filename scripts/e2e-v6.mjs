@@ -803,7 +803,33 @@ async function batch15(ctx) {
   check(s?.disclaimer === texto, 'V6.15.2 §10.4 El aviso del resumen es el texto del contrato', s?.disclaimer);
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15 };
+// ===========================================================================
+//  BATCH V6-16 — Correo fuera del menú; el control es el rol (§12.1)
+// ===========================================================================
+async function batch16(ctx) {
+  objective('BATCH V6-16 · Solo Administración consulta el correo, y nunca ve secretos');
+  const roles = [['STUDENT', correoEst('b16est')], ['TEACHER', correoStaff('b16doc')], ['CAREER_DIRECTOR', correoStaff('b16dir')], ['SCIENTIFIC_SOCIETY', correoStaff('b16soc')]];
+  const cuentas = [];
+  for (const [role, email] of roles) {
+    cuentas.push(role === 'STUDENT'
+      ? await provisionStudent(ctx.admin, { firstName: 'Ana', lastName: `Correo${L}`, email, semester: 2 })
+      : await provisionAndActivate(ctx.admin, { firstName: 'Ana', lastName: `Correo${L}`, email, role }));
+  }
+  const respuestas = [];
+  for (const c of cuentas) {
+    respuestas.push((await req('GET', '/mail/status', { token: c.token })).status);
+    // El límite de envíos de prueba (3/min) puede responder antes (429): también es «no».
+    const prueba = (await req('POST', '/mail/test', { token: c.token, body: {} })).status;
+    respuestas.push(prueba === 429 ? 403 : prueba);
+  }
+  check(respuestas.every((s) => s === 403), 'V6.16.1 §12.1 Estudiante, docente, Dirección y Sociedad reciben 403 en el correo (ver y probar)', respuestas.join(','));
+  const estado = await req('GET', '/mail/status', { token: ctx.admin });
+  const crudo = JSON.stringify(estado.data ?? {});
+  check(estado.status === 200 && !/"(pass|password|secret|clave)"\s*:/i.test(crudo),
+    'V6.16.2 Administración consulta el estado sin que se devuelva ninguna contraseña ni secreto', Object.keys(estado.data ?? {}).join(','));
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15, batch16 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
