@@ -13,7 +13,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
+import { ADMIN_CREDENTIALS, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = process.env.WEB_URL ?? 'http://localhost:5173';
@@ -60,14 +60,14 @@ async function navegador() {
   throw new Error('No hay Edge ni Chrome instalados para Playwright.');
 }
 
-async function entrar(browser, email) {
+async function entrar(browser, email, password = PWD) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   const errores = [];
   page.on('pageerror', (e) => errores.push(e.message));
   await page.goto(`${WEB}/login`);
   await page.fill('input[type=email]', email);
-  await page.fill('input[autocomplete=current-password]', PWD);
+  await page.fill('input[autocomplete=current-password]', password);
   await page.press('input[autocomplete=current-password]', 'Enter');
   await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 15000 });
   await page.getByRole('button', { name: 'Omitir' }).click({ timeout: 3000 }).catch(() => {});
@@ -279,7 +279,110 @@ async function batch4(ctx, browser) {
   await c2.close();
 }
 
-const BATCHES = { batch2, batch3, batch4 };
+// ===========================================================================
+//  BATCH V6-5 — Cambios sin guardar (§4.4) y listados vigentes (§5.1, §5.2)
+// ===========================================================================
+async function batch5(ctx, browser) {
+  objective('BATCH V6-5 · No se pierde lo escrito; los listados muestran lo vigente');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Guarda${L}`, email: correoStaff('b5dir'), role: 'CAREER_DIRECTOR' });
+  const { ctx: c1, page, errores } = await entrar(browser, director.email);
+  await page.goto(`${WEB}/director/activities`);
+  const nueva = page.getByRole('button', { name: /Nueva actividad/ }).first();
+  const dialogo = page.getByRole('dialog', { name: 'Tienes cambios sin guardar' });
+  const otroEnlace = page.locator('a[href^="/director"]:not([href^="/director/activities"])').first();
+
+  // Sin cambios: abrir y salir no pregunta.
+  await nueva.click({ timeout: 45000 });
+  await page.locator('#activity-manager-titulo, input[name="title"]').first().waitFor({ timeout: 8000 }).catch(() => {});
+  const destino = await otroEnlace.getAttribute('href');
+  await otroEnlace.click();
+  await page.waitForURL((u) => u.pathname === destino, { timeout: 8000 }).catch(() => {});
+  check(new URL(page.url()).pathname === destino && await dialogo.count() === 0,
+    'V6W.5.1 §4.4 Abrir el formulario y salir sin cambios no pregunta nada', page.url());
+
+  // Con cambios: el menú pregunta; «Continuar editando» conserva lo escrito.
+  await page.goto(`${WEB}/director/activities`);
+  await nueva.click({ timeout: 45000 });
+  const titulo = page.getByLabel(/Título/).first();
+  await titulo.fill(`Borrador sin guardar ${L}`);
+  await otroEnlace.click();
+  await dialogo.waitFor({ timeout: 5000 }).catch(() => {});
+  const botones = (await dialogo.getByRole('button').allTextContents()).map((s) => s.trim());
+  check(botones.includes('Continuar editando') && botones.includes('Descartar cambios y salir'),
+    'V6W.5.2 Con cambios, el menú pregunta con el diálogo propio: «Continuar editando» / «Descartar cambios y salir»', botones.join(' | '));
+  await dialogo.getByRole('button', { name: 'Continuar editando' }).click();
+  check(new URL(page.url()).pathname === '/director/activities' && await titulo.inputValue() === `Borrador sin guardar ${L}`,
+    'V6W.5.3 «Continuar editando» se queda en el formulario con lo escrito', page.url());
+
+  // Cambiar de pestaña también pregunta, y descartar limpia y cambia.
+  await page.getByRole('tab', { name: 'Externas' }).click();
+  await dialogo.waitFor({ timeout: 5000 }).catch(() => {});
+  check(await dialogo.count() === 1, 'V6W.5.4 Cambiar de pestaña con cambios pregunta');
+  await dialogo.getByRole('button', { name: 'Descartar cambios y salir' }).click();
+  await page.waitForURL((u) => u.search.includes('vista=externa'), { timeout: 5000 }).catch(() => {});
+  check(page.url().includes('vista=externa'), 'V6W.5.5 «Descartar cambios y salir» cambia de pestaña', page.url());
+  await page.getByRole('tab', { name: 'Académicas' }).click();
+  await nueva.click({ timeout: 45000 });
+  check(await page.getByLabel(/Título/).first().inputValue() === '', 'V6W.5.6 Tras descartar, el formulario vuelve vacío (no rehidrata lo descartado)');
+  check(errores.length === 0, 'V6W.5.7 Sin errores de JavaScript', errores.join(' | '));
+  await c1.close();
+
+  // §5.1: áreas, categorías y usuarios vigentes por omisión.
+  const area = await req('POST', '/academic-areas', { token: ctx.admin, body: { name: `Area de baja ${L}`, tags: [`baja${L}`] } });
+  await req('PATCH', `/academic-areas/${area.data?.id}`, { token: ctx.admin, body: { isActive: false } });
+  const codigo = `cat_baja_${L}`;
+  const cat = await req('POST', '/activity-categories', { token: ctx.admin, body: { code: codigo, name: `Categoria de baja ${L}`, appliesTo: 'academica' } });
+  await req('PATCH', `/activity-categories/${cat.data?.id}`, { token: ctx.admin, body: { isActive: false } });
+  const suspendido = await provisionAndActivate(ctx.admin, { firstName: 'Susi', lastName: `Pendida${L}`, email: correoStaff('b5susp'), role: 'TEACHER' });
+  await req('PATCH', `/users/${suspendido.userId}/status`, { token: ctx.admin, body: { status: 'suspended' } });
+
+  const { ctx: c2, page: pa, errores: e2 } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  const filaVisible = async (texto) => (await pa.locator('tbody tr', { hasText: texto }).count()) > 0;
+  const buscarEn = async (texto) => {
+    await pa.locator('.search-input input, input[type=search]').first().fill(texto).catch(() => {});
+    await espera(400);
+  };
+  await pa.goto(`${WEB}/admin/areas`);
+  await pa.locator('tbody tr').first().waitFor({ timeout: 30000 }).catch(() => {});
+  await buscarEn(`Area de baja ${L}`);
+  const sinBaja = await filaVisible(`Area de baja ${L}`);
+  await pa.getByLabel('Mostrar también las dadas de baja').first().check();
+  await espera(300);
+  check(area.status === 201 && !sinBaja && await filaVisible(`Area de baja ${L}`),
+    'V6W.5.8 §5.1 Áreas: la dada de baja no aparece por omisión; «Mostrar también las dadas de baja» la trae', json5({ s: area.status, sinBaja }));
+
+  await pa.goto(`${WEB}/admin/activity-categories`);
+  await pa.locator('tbody tr').first().waitFor({ timeout: 30000 }).catch(() => {});
+  await buscarEn(`Categoria de baja ${L}`);
+  const catOculta = !(await filaVisible(`Categoria de baja ${L}`));
+  await pa.getByLabel('Mostrar también las dadas de baja').first().check();
+  await espera(300);
+  check(cat.status === 201 && catOculta && await filaVisible(`Categoria de baja ${L}`),
+    'V6W.5.9 Categorías: igual, vigentes por omisión', json5({ s: cat.status, catOculta }));
+
+  await pa.goto(`${WEB}/admin/users`);
+  await pa.locator('tbody tr').first().waitFor({ timeout: 45000 }).catch(() => {});
+  // §5.2: «Apellidos por separar» solo si hay alguno (se mira sin búsqueda: cuenta lo listado).
+  const usuarios = (await req('GET', '/users', { token: ctx.admin })).data ?? [];
+  const pendientes = usuarios.filter((u) => u.surnamesPending).length;
+  const boton = await pa.locator('[data-testid="apellidos-por-separar"]').count();
+  check((pendientes > 0) === (boton === 1), `V6W.5.11 §5.2 «Apellidos por separar» se muestra solo si hay (hay ${pendientes})`, `botón=${boton}`);
+  await buscarEn(`Pendida${L}`);
+  await espera(1500);
+  const susOculto = !(await filaVisible(`Pendida${L}`));
+  await pa.getByLabel('Mostrar también las suspendidas').first().check();
+  await espera(300);
+  check(susOculto && await filaVisible(`Pendida${L}`), 'V6W.5.10 Usuarios: las suspendidas solo con «Mostrar también las suspendidas»', json5({ susOculto }));
+
+  const sinPendientes = await pa.locator('[data-testid="apellidos-por-separar"]').count();
+  check(sinPendientes === 0, 'V6W.5.11b Con una búsqueda sin apellidos por separar, el botón no aparece', `botón=${sinPendientes}`);
+  check(e2.length === 0, 'V6W.5.12 Sin errores de JavaScript en los listados', e2.join(' | '));
+  await c2.close();
+}
+
+const json5 = (x) => JSON.stringify(x);
+
+const BATCHES = { batch2, batch3, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);

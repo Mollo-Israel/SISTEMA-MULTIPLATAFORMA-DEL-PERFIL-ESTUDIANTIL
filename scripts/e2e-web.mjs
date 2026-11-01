@@ -871,13 +871,13 @@ async function pruebas(browser) {
   await p61.fill('#activity-manager-titulo', `Borrador sin guardar ${TS}`);
   const academicaSinExternos = await p61.locator('#op-proveedor, #activity-manager-enlace-oficial').count() === 0;
   await p61.getByRole('tab', { name: 'Externas' }).click();
-  const pideConfirmar = await p61.getByRole('button', { name: 'Descartar y cambiar' }).waitFor({ timeout: 4000 }).then(() => true).catch(() => false);
-  await p61.getByRole('button', { name: 'Descartar y cambiar' }).click().catch(() => {});
+  const pideConfirmar = await p61.getByRole('button', { name: 'Descartar cambios y salir' }).waitFor({ timeout: 4000 }).then(() => true).catch(() => false);
+  await p61.getByRole('button', { name: 'Descartar cambios y salir' }).click().catch(() => {});
   await espera(600);
   await p61.getByRole('button', { name: /Nueva oportunidad externa/ }).first().click({ timeout: 45000 });
   const externaConSusCampos = await p61.locator('#activity-manager-enlace-oficial').count() > 0;
   await p61.getByRole('tab', { name: 'Académicas' }).click();
-  await p61.getByRole('button', { name: 'Descartar y cambiar' }).click({ timeout: 4000 }).catch(() => {});
+  await p61.getByRole('button', { name: 'Descartar cambios y salir' }).click({ timeout: 4000 }).catch(() => {});
   await espera(600);
   await p61.getByRole('button', { name: /Nueva actividad/ }).first().click({ timeout: 45000 });
   const deVueltaSinExternos = await p61.locator('#op-proveedor, #activity-manager-enlace-oficial').count() === 0;

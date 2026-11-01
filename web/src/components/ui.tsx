@@ -734,3 +734,16 @@ export function Paginacion({
     </nav>
   );
 }
+
+/**
+ * V6 §5.1: los listados muestran por omisión solo lo vigente; esta casilla
+ * suma lo dado de baja o suspendido. Filtrar no borra nada.
+ */
+export function VerTambien({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
+  return (
+    <label className="flex ver-tambien" style={{ gap: '0.4rem', fontSize: '0.82rem', alignItems: 'center' }}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {children}
+    </label>
+  );
+}

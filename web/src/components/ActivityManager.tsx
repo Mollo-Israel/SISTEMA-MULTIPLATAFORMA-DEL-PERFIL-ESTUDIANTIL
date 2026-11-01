@@ -23,6 +23,7 @@ import {
   SkeletonTable, Stagger, ThOrden, useOrden, usePaginacion,
 } from './ui';
 import { useConfirm, useToast } from './feedback';
+import { useCambiosSinGuardar } from './CambiosSinGuardar';
 import { ACTIVITY_REVIEW_LABEL, ACTIVITY_TRANSITIONS } from '../services/types';
 import {
   ACTIVITY_MODALITIES,
@@ -140,15 +141,12 @@ export default function ActivityManager({
   activityType,
   filtroOrigen,
   puedeCrear = true,
-  onFormularioAbierto,
 }: {
   activityType: 'academica' | 'extracurricular';
   /** V3.2 §26: la vista «Externas» de Dirección muestra las externas de cualquier tipo. */
   filtroOrigen?: 'internal' | 'external';
   /** Dirección da seguimiento a lo extracurricular aprobado, pero no lo crea (§15). */
   puedeCrear?: boolean;
-  /** V5 §5.1: avisa si hay un formulario abierto, para confirmar antes de cambiar de pestaña. */
-  onFormularioAbierto?: (abierto: boolean) => void;
 }) {
   const { user } = useAuth();
   /** Docente y Sociedad proponen; Dirección decide. Dirección y Administración publican sin revisión (V3 §12.2). */
@@ -177,8 +175,19 @@ export default function ActivityManager({
   const [categories, setCategories] = useCachedState<ActivityCategoryItem[]>('categorias', []);
   const [editing, setEditing] = useState<Activity | null>(null);
   const [showForm, setShowForm] = useState(false);
-  useEffect(() => { onFormularioAbierto?.(showForm); }, [showForm, onFormularioAbierto]);
   const [form, setForm] = useState(emptyForm);
+  /*
+   * V6 §4.4: lo que se cargó al abrir el formulario. Hay cambios sin guardar
+   * solo si lo que se ve difiere de eso; abrirlo y cerrarlo sin tocar nada no
+   * pregunta. Lo que llega después del servidor (detalle, referencia) se
+   * aplica a las dos cosas para no contar como cambio de la persona.
+   */
+  const [base, setBase] = useState<string | null>(null);
+  const cargarForm = (f: typeof emptyForm) => { setForm(f); setBase(JSON.stringify(f)); };
+  const completarCarga = (fn: (f: typeof emptyForm) => typeof emptyForm) => {
+    setForm(fn);
+    setBase((b) => (b === null ? b : JSON.stringify(fn(JSON.parse(b) as typeof emptyForm))));
+  };
 
   const [selected, setSelected] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -248,10 +257,15 @@ export default function ActivityManager({
 
   const resetForm = () => {
     setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
+    setBase(null);
     setEditing(null);
     setShowForm(false);
     errores.reset();
   };
+  const sucio = showForm && base !== null && JSON.stringify(form) !== base;
+  const { confirmarSalida } = useCambiosSinGuardar(sucio, resetForm);
+  /** Cerrar el formulario o abrir otro pregunta antes si hay cambios sin guardar. */
+  const siPuedeSalir = (accion: () => void) => { void confirmarSalida().then((ok) => { if (ok) accion(); }); };
 
   const externa = form.originType === 'external';
   const presencial = form.modality === 'presencial' || form.modality === 'hibrida';
@@ -596,7 +610,7 @@ export default function ActivityManager({
   const startEdit = (a: Activity) => {
     setEditing(a);
     setShowForm(true);
-    setForm({
+    cargarForm({
       title: a.title,
       description: a.description ?? '',
       categoryId: a.categoryId,
@@ -637,7 +651,7 @@ export default function ActivityManager({
       sampleFileName: '',
     });
     if (a.originType === 'external' || a.outcomePolicy === 'external_credential_expected') {
-      validationReferenceService.get(a.id).then((r) => setForm((f) => ({
+      validationReferenceService.get(a.id).then((r) => completarCarga((f) => ({
         ...f,
         expectedCourseName: r.expectedCourseName ?? '',
         credentialIdPattern: r.credentialIdPattern ?? '',
@@ -648,7 +662,7 @@ export default function ActivityManager({
     errores.reset();
     // El detalle trae responsables, contactos, imágenes y (V4.1 A41-005) las
     // habilidades con su área: el formulario no abre con menos de lo guardado.
-    activityService.get(a.id).then((d) => setForm((f) => ({
+    activityService.get(a.id).then((d) => completarCarga((f) => ({
       ...f,
       responsables: d.responsibles ?? f.responsables,
       ...(d.responsibles ? { asignaciones: asignacionesDe(d.responsibles) } : {}),
@@ -910,7 +924,7 @@ export default function ActivityManager({
     if (!nuevo && !actividad) return;
     atendido.current = true;
     if (nuevo) {
-      setForm({
+      cargarForm({
         ...emptyForm,
         categoryId: usableCategories[0]?.id ?? '',
         ...(filtroOrigen === 'external' ? { originType: 'external' as const, outcomePolicy: 'external_credential_expected' as OutcomePolicy } : {}),
@@ -966,7 +980,7 @@ export default function ActivityManager({
       {!showForm && puedeCrear && (
         <Button
           onClick={() => {
-            setForm({
+            cargarForm({
               ...emptyForm,
               categoryId: usableCategories[0]?.id ?? '',
               ...(filtroOrigen === 'external' ? { originType: 'external' as const, outcomePolicy: 'external_credential_expected' as OutcomePolicy } : {}),
@@ -991,7 +1005,7 @@ export default function ActivityManager({
         <Card
           title={editing ? `Editar “${editing.title}”` : `Nueva actividad ${tipo}`}
           actions={
-            <Button variant="ghost" size="sm" onClick={resetForm} icon={<FiX size={14} />}>
+            <Button variant="ghost" size="sm" onClick={() => siPuedeSalir(resetForm)} icon={<FiX size={14} />}>
               Cancelar
             </Button>
           }
@@ -1758,7 +1772,7 @@ export default function ActivityManager({
                           {editable(a) && (
                             <button
                               className="btn btn-secondary btn-sm"
-                              onClick={() => startEdit(a)}
+                              onClick={() => siPuedeSalir(() => startEdit(a))}
                               title="Editar actividad"
                               aria-label={`Editar ${a.title}`}
                             >
@@ -1789,7 +1803,7 @@ export default function ActivityManager({
                           {/* V4.1 A41-010: repetir una actividad (también una finalizada) es duplicarla. */}
                           <button
                             className="btn btn-secondary btn-sm"
-                            onClick={() => duplicar(a)}
+                            onClick={() => siPuedeSalir(() => void duplicar(a))}
                             title="Duplicar como borrador nuevo"
                             aria-label={`Duplicar ${a.title}`}
                           >

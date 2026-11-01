@@ -6,7 +6,7 @@ import { adminService, catalogService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill, SkillClassification } from '../../services/types';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, Tabs, FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion,
+  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, Tabs, FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion, VerTambien,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import AiAssist from '../../components/AiAssist';
@@ -181,14 +181,16 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
   const toast = useToast();
   const confirm = useConfirm();
 
+  // V6 §5.1: por omisión, solo las vigentes.
+  const [verBajas, setVerBajas] = useState(false);
   const visible = useMemo(() => {
     const q = normalize(query.trim());
-    const rows = data ?? [];
+    const rows = (data ?? []).filter((a) => verBajas || a.isActive);
     if (!q) return rows;
     return rows.filter((a) =>
       [a.name, a.code, a.description ?? '', (a.tags ?? []).join(' ')].some((f) => normalize(f).includes(q)),
     );
-  }, [data, query]);
+  }, [data, query, verBajas]);
   // V3.2 §6.1: 10 filas por página, ordenables.
   const { ordenados, orden, alternar } = useOrden(visible, {
     nombre: (a) => a.name,
@@ -270,6 +272,7 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
         actions={
           (data ?? []).length > 0 ? (
             <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              <VerTambien checked={verBajas} onChange={setVerBajas}>Mostrar también las dadas de baja</VerTambien>
               <SearchInput value={query} onChange={setQuery} placeholder="Buscar nombre, código o etiqueta…" />
               <ResultCount shown={visible.length} total={(data ?? []).length} noun="áreas" />
             </div>
@@ -626,12 +629,14 @@ function SkillsPanel({
   const toast = useToast();
   const confirm = useConfirm();
 
+  // V6 §5.1: por omisión, solo las vigentes.
+  const [verBajas, setVerBajas] = useState(false);
   const visible = useMemo(() => {
     const q = normalize(query.trim());
-    const rows = data ?? [];
+    const rows = (data ?? []).filter((s) => verBajas || s.isActive);
     if (!q) return rows;
     return rows.filter((s) => [s.name, s.code, s.academicArea?.name ?? ''].some((f) => normalize(f).includes(q)));
-  }, [data, query]);
+  }, [data, query, verBajas]);
 
   const sinArea = (data ?? []).filter((s) => !s.academicAreaId).length;
   const nombreArea = useMemo(() => new Map(areas.map((a) => [a.id, a.name])), [areas]);
@@ -718,6 +723,7 @@ function SkillsPanel({
         actions={
           (data ?? []).length > 0 ? (
             <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              <VerTambien checked={verBajas} onChange={setVerBajas}>Mostrar también las dadas de baja</VerTambien>
               <SearchInput value={query} onChange={setQuery} placeholder="Buscar habilidad, código o área…" />
               <ResultCount shown={visible.length} total={(data ?? []).length} noun="habilidades" />
             </div>

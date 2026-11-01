@@ -9,6 +9,7 @@ import { adminService, mailService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import {
   AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion,
+  VerTambien,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
@@ -446,9 +447,13 @@ const TablaUsuarios = memo(function TablaUsuarios({
 }) {
   // V5-04 (A02): las cuentas con un apellido heredado que falta separar.
   const [soloPendientes, setSoloPendientes] = useState(false);
+  // V6 §5.1: por omisión, sin las cuentas suspendidas.
+  const [verSuspendidas, setVerSuspendidas] = useState(false);
+  const porSeparar = todos.filter((u) => u.surnamesPending).length;
   const users = useMemo(
-    () => todos.filter((u) => (!rol || u.role === rol) && (!soloPendientes || u.surnamesPending)),
-    [todos, rol, soloPendientes],
+    () => todos.filter((u) => (!rol || u.role === rol) && (!soloPendientes || u.surnamesPending)
+      && (verSuspendidas || u.status !== 'suspended')),
+    [todos, rol, soloPendientes, verSuspendidas],
   );
   // V3.2 §6.1: 10 filas por página, ordenables, con contador.
   const { ordenados, orden, alternar } = useOrden(users, {
@@ -458,7 +463,7 @@ const TablaUsuarios = memo(function TablaUsuarios({
     semestre: (u) => u.semester ?? null,
     estado: (u) => estadoCuenta(u).label,
   });
-  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [todos, rol, orden, soloPendientes]);
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [todos, rol, orden, soloPendientes, verSuspendidas]);
   return (
     <>
       <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -472,10 +477,15 @@ const TablaUsuarios = memo(function TablaUsuarios({
           <option value="">Todos los roles</option>
           {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        <label className="flex" style={{ gap: '0.35rem', alignItems: 'center' }}>
-          <input type="checkbox" checked={soloPendientes} onChange={(e) => setSoloPendientes(e.target.checked)} />
-          Apellidos por separar ({todos.filter((u) => u.surnamesPending).length})
-        </label>
+        <VerTambien checked={verSuspendidas} onChange={setVerSuspendidas}>Mostrar también las suspendidas</VerTambien>
+        {/* V6 §5.2 (V5-04): solo si quedan apellidos heredados por separar. La
+            corrección sigue disponible en cada cuenta que lo necesite. */}
+        {(porSeparar > 0 || soloPendientes) && (
+          <label className="flex" style={{ gap: '0.35rem', alignItems: 'center' }} data-testid="apellidos-por-separar">
+            <input type="checkbox" checked={soloPendientes} onChange={(e) => setSoloPendientes(e.target.checked)} />
+            Apellidos por separar ({porSeparar})
+          </label>
+        )}
         {rol === RolNombre.TEACHER && (
           <span className="muted small">Cada docente ve solo a los estudiantes de los semestres que tiene habilitados.</span>
         )}

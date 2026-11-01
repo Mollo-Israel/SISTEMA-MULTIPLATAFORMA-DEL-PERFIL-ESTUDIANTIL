@@ -1,7 +1,6 @@
-import { useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ActivityManager from './ActivityManager';
-import { useConfirm } from './feedback';
+import { useConfirmarSalida } from './CambiosSinGuardar';
 import { Tabs } from './ui';
 
 export type VistaActividades = 'academica' | 'extracurricular' | 'externa';
@@ -34,24 +33,14 @@ export default function ActivityTabs({
   tipoDeExternas?: 'academica' | 'extracurricular';
 }>) {
   const [params, setParams] = useSearchParams();
-  const confirm = useConfirm();
-  const abierto = useRef(false);
+  // V6 §4.4: solo se pregunta si el formulario tiene cambios reales.
+  const confirmarSalida = useConfirmarSalida();
   const pedida = params.get('vista') as VistaActividades | null;
   const vista: VistaActividades = pedida && vistas.includes(pedida) ? pedida : vistas[0];
-  const alAbrir = useCallback((v: boolean) => { abierto.current = v; }, []);
 
   const cambiar = async (k: string) => {
     if (k === vista) return;
-    if (abierto.current) {
-      const ok = await confirm({
-        title: 'Tienes un formulario abierto',
-        message: 'Si cambias de pestaña se descartan los cambios que no guardaste. Guárdalos como borrador si quieres conservarlos.',
-        confirmLabel: 'Descartar y cambiar',
-        tone: 'danger',
-      });
-      if (!ok) return;
-    }
-    abierto.current = false;
+    if (!(await confirmarSalida())) return;
     const resto = new URLSearchParams(params);
     if (k === vistas[0]) resto.delete('vista');
     else resto.set('vista', k);
@@ -68,7 +57,6 @@ export default function ActivityTabs({
         activityType={vista === 'externa' ? tipoDeExternas : vista}
         filtroOrigen={vista === 'externa' ? 'external' : 'internal'}
         puedeCrear={!soloSeguimiento.includes(vista)}
-        onFormularioAbierto={alAbrir}
       />
     </>
   );

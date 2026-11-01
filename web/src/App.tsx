@@ -1,3 +1,4 @@
+import { CambiosSinGuardarProvider } from './components/CambiosSinGuardar';
 import { MotionConfig } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
@@ -104,6 +105,7 @@ export default function App() {
       <ToastProvider>
         <ConfirmProvider>
           <BrowserRouter>
+          <CambiosSinGuardarProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<LandingPage />} />
@@ -231,6 +233,7 @@ export default function App() {
 
           <Route path="*" element={<RootRedirect />} />
         </Routes>
+          </CambiosSinGuardarProvider>
           </BrowserRouter>
         </ConfirmProvider>
       </ToastProvider>

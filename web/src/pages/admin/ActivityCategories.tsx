@@ -6,6 +6,7 @@ import { useAsync } from '../../hooks/useAsync';
 import {
   AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, Modal, PageHeader, Paginacion, ResultCount, SearchInput,
   SkeletonTable, ThOrden, useOrden, usePaginacion,
+  VerTambien,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
@@ -124,14 +125,16 @@ export default function AdminActivityCategoriesPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
+  // V6 §5.1: por omisión, solo las vigentes.
+  const [verBajas, setVerBajas] = useState(false);
   const visible = useMemo(() => {
     const q = suggestCode(query.trim()).replace(/_/g, ' ');
-    const rows = data ?? [];
+    const rows = (data ?? []).filter((c) => verBajas || c.isActive);
     if (!q) return rows;
     return rows.filter((c) =>
       [c.name, c.code, c.description ?? ''].some((f) => suggestCode(f).replace(/_/g, ' ').includes(q)),
     );
-  }, [data, query]);
+  }, [data, query, verBajas]);
   // V4.1 A41-003: orden por columna y 10 filas por página, como en Usuarios.
   const { ordenados, orden, alternar } = useOrden(visible, {
     nombre: (c) => c.name,
@@ -218,6 +221,7 @@ export default function AdminActivityCategoriesPage() {
         actions={
           (data ?? []).length > 0 ? (
             <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+              <VerTambien checked={verBajas} onChange={setVerBajas}>Mostrar también las dadas de baja</VerTambien>
               <SearchInput value={query} onChange={setQuery} placeholder="Buscar categoría o código…" />
               <ResultCount shown={visible.length} total={(data ?? []).length} noun="categorías" />
             </div>
