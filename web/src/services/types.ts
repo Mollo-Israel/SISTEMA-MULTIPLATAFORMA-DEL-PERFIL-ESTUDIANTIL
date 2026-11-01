@@ -704,6 +704,8 @@ export interface ProjectMemberDetailed {
   role: string | null;
   /** V5-29: todos sus roles; el primero es el principal. */
   roles?: string[];
+  /** V6 §6.1: rol anterior en texto libre que no está en el catálogo (solo informativo). */
+  rolAnterior?: string | null;
   contribution: string | null;
   /** Mientras sea false, lo que figura lo escribió otra persona (§33). */
   contributionConfirmed: boolean;

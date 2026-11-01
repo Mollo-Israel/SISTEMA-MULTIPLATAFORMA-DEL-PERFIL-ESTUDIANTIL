@@ -92,7 +92,7 @@ async function batch2(ctx, browser) {
   const maria = await provisionAndActivate(ctx.admin, { firstName: 'Maria', lastName: `Web${L}`, email: correoStaff('maria'), role: 'TEACHER' });
   await req('PUT', `/users/${carlos.userId}/semesters`, { token: ctx.admin, body: { semesters: [1, 2, 3, 4] } });
   await req('PUT', `/users/${maria.userId}/semesters`, { token: ctx.admin, body: { semesters: [5, 6, 7, 8] } });
-  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cats = ((await req('GET', '/activity-categories', { token: director.token })).data ?? []).filter((c) => c.isActive !== false);
   const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
   const titulo = `Ambos web ${L}`;
   const publicada = await req('POST', '/activities', {
@@ -189,7 +189,7 @@ async function batch3(ctx, browser) {
   const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Det${L}`, email: correoStaff('b3dir'), role: 'CAREER_DIRECTOR' });
   const carlos = await provisionAndActivate(ctx.admin, { firstName: 'Carlos', lastName: `Det${L}`, email: correoStaff('b3carlos'), role: 'TEACHER' });
   await req('PUT', `/users/${carlos.userId}/semesters`, { token: ctx.admin, body: { semesters: [1, 2, 3, 4] } });
-  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cats = ((await req('GET', '/activity-categories', { token: director.token })).data ?? []).filter((c) => c.isActive !== false);
   const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
   const titulo = `Ajena web ${L}`;
   await req('POST', '/activities', {
@@ -259,7 +259,7 @@ async function batch4(ctx, browser) {
   await c1.close();
 
   // La tarjeta del estudiante: plazas y regla de admisión, separadas.
-  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cats = ((await req('GET', '/activity-categories', { token: director.token })).data ?? []).filter((c) => c.isActive !== false);
   const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
   const titulo = `Taller abierto web ${L}`;
   await req('POST', '/activities', {
@@ -427,7 +427,46 @@ async function batch6(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch6 };
+// ===========================================================================
+//  BATCH V6-7 — «Mi contribución» con un rol anterior en texto libre (§6.1)
+// ===========================================================================
+async function batch7(ctx, browser) {
+  objective('BATCH V6-7 · Luis guarda su contribución aunque su rol venga de antes del catálogo');
+  const ana = await estudianteListo(ctx.admin, 'Ana');
+  const luis = await estudianteListo(ctx.admin, 'Luis');
+  const perfilLuis = (await req('GET', '/profiles/me', { token: luis.token })).data;
+  const skill = ((await req('GET', '/skills', { token: ana.token })).data ?? []).find((s) => s.isActive !== false && s.academicAreaId);
+  const titulo = `Proyecto de Luis ${L}`;
+  const p = await req('POST', '/projects', { token: ana.token, body: { title: titulo, areaIds: [skill.academicAreaId], skillIds: [skill.id], status: 'draft' } });
+  await req('POST', `/projects/${p.data?.id}/invitations`, { token: ana.token, body: { invitedProfileId: perfilLuis?.id, proposedRole: 'Backend' } });
+  const inv = ((await req('GET', '/projects/invitations/mine', { token: luis.token })).data ?? []).find((i) => i.project?.id === p.data?.id);
+  await req('PATCH', `/projects/invitations/${inv?.id}`, { token: luis.token, body: { decision: 'accept' } });
+  // Como los 28 integrantes del informe: rol libre heredado de una invitación anterior.
+  const { execSync } = await import('node:child_process');
+  execSync(`docker exec perfil_postgres psql -U ${process.env.POSTGRES_USER ?? 'perfil_user'} -d ${process.env.POSTGRES_DB ?? 'perfil_estudiantil'} -tAc "update project_members set role = 'Desarrollador Backend', roles = '{}' where project_id = '${p.data?.id}' and user_id = '${luis.userId}'"`);
+
+  const { ctx: c1, page, errores } = await entrar(browser, luis.email);
+  await page.goto(`${WEB}/student/projects`);
+  const tarjeta = page.locator('.card, article', { hasText: titulo }).first();
+  await tarjeta.waitFor({ timeout: 45000 }).catch(() => {});
+  await tarjeta.getByRole('button', { name: /Contribuciones del equipo/ }).click();
+  const aviso = page.locator('[data-testid="rol-anterior"]');
+  await aviso.waitFor({ timeout: 10000 }).catch(() => {});
+  const backend = page.locator('fieldset.chip-row button.chip', { hasText: 'Backend' }).first();
+  check(/Desarrollador Backend/.test((await aviso.textContent().catch(() => '')) ?? '') && await backend.getAttribute('aria-pressed') === 'true',
+    'V6W.7.1 V6-PROJ-01 El formulario avisa del rol anterior y lo marca con su equivalente del catálogo (Backend)');
+  await page.locator('#project-contribution-que-hiciste').fill('Implementé la API y sus pruebas.');
+  const respuesta = page.waitForResponse((r) => r.url().includes('/my-contribution') && r.request().method() === 'PUT', { timeout: 15000 }).catch(() => null);
+  await page.getByRole('button', { name: /Confirmar mi contribución/ }).click();
+  const r = await respuesta;
+  const luisVista = ((await req('GET', `/projects/${p.data?.id}/members/detailed`, { token: ana.token })).data ?? []).find((m) => m.userId === luis.userId);
+  check(r?.status() === 200 && luisVista?.contributionConfirmed === true && JSON.stringify(luisVista?.roles) === '["Backend"]',
+    'V6W.7.2 PRO-03 «Confirmar mi contribución» responde 200 (ya no 400 VALIDATION_ERROR) y queda Backend', JSON.stringify({ s: r?.status(), c: luisVista?.contributionConfirmed, roles: luisVista?.roles }));
+  check(errores.length === 0, 'V6W.7.3 Sin errores de JavaScript', errores.join(' | '));
+  await c1.close();
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);

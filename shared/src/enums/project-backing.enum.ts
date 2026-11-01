@@ -129,6 +129,38 @@ export const PROJECT_ROLES = [
 export type ProjectRole = (typeof PROJECT_ROLES)[number];
 
 /**
+ * V6 §6.1 (V6-PROJ-01): un rol anterior al catálogo («Desarrollador Backend»,
+ * «Tester», «Analista de datos»…) traducido al catálogo, o `null` si no
+ * corresponde a ninguno. Antes, el formulario reenviaba ese texto libre y la
+ * API respondía 400. No reescribe datos: se traduce al leer y al aceptar.
+ */
+export function rolDelCatalogo(texto: string | null | undefined): ProjectRole | null {
+  const t = (texto ?? '').trim();
+  if (!t) return null;
+  const exacto = PROJECT_ROLES.find((r) => r.toLowerCase() === t.toLowerCase());
+  if (exacto) return exacto;
+  const n = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const reglas: [RegExp, ProjectRole][] = [
+    [/base(s)? de datos|\bdba\b|\bbd\b/, 'Base de Datos'],
+    [/back.?end/, 'Backend'],
+    [/front.?end/, 'Frontend'],
+    [/movil|mobile|android|\bios\b/, 'Mobile'],
+    [/\bqa\b|tester|testing|pruebas|calidad/, 'QA'],
+    [/\bux\b|\bui\b|disen/, 'UX/UI'],
+    [/devops|infraestructura|despliegue/, 'DevOps'],
+    [/datos|data|\bia\b|inteligencia artificial|machine learning/, 'Datos/IA'],
+    [/document/, 'Documentación'],
+    [/responsable|lider|coordinador|jefe/, 'Responsable'],
+  ];
+  return reglas.find(([re]) => re.test(n))?.[1] ?? null;
+}
+
+/** Los roles en el catálogo, sin repetir; lo que no se puede traducir se deja fuera. */
+export function rolesDelCatalogo(textos: (string | null | undefined)[]): ProjectRole[] {
+  return [...new Set(textos.map(rolDelCatalogo).filter((r): r is ProjectRole => r !== null))];
+}
+
+/**
  * Respaldo de cada tecnología de un proyecto (V3 §24.4, §29).
  *
  * Lo que no se detecta queda DECLARED: no es falso ni resta. El repositorio

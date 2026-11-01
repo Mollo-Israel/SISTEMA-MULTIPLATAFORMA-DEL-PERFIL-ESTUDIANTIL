@@ -14,6 +14,7 @@ import {
   RolNombre,
   UserStatus,
   PROJECT_ROLES,
+  rolDelCatalogo,
 } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
@@ -406,15 +407,20 @@ export class ProjectMembersService {
     const existing = await this.members.findOne({
       where: { projectId: invitation.projectId, userId },
     });
+    // V6 §6.1: una invitación anterior al catálogo traía el rol en texto libre;
+    // el integrante nace con su equivalente del catálogo (o sin rol).
+    const rol = rolDelCatalogo(invitation.proposedRole);
     if (existing) {
-      existing.role = invitation.proposedRole;
+      existing.role = rol;
+      existing.roles = rol ? [rol] : [];
       await this.members.save(existing);
     } else {
       await this.members.save(
         this.members.create({
           projectId: invitation.projectId,
           userId,
-          role: invitation.proposedRole,
+          role: rol,
+          roles: rol ? [rol] : [],
         }),
       );
     }

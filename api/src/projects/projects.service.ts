@@ -20,6 +20,8 @@ import {
   TechnologyStatus,
   LinkCheckStatus,
   ValidationResourceType,
+  PROJECT_ROLES,
+  rolesDelCatalogo,
 } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
@@ -1325,7 +1327,11 @@ export class ProjectsService {
       userId: m.userId,
       name: m.user ? `${m.user.firstName} ${m.user.lastName}` : null,
       role: m.role,
-      roles: m.roles ?? (m.role ? [m.role] : []),
+      // V6 §6.1 (V6-PROJ-01): solo roles del catálogo. Uno anterior en texto
+      // libre se traduce (o se deja fuera) y se informa aparte, para que el
+      // formulario no lo reenvíe y la API no responda 400.
+      roles: rolesDelCatalogo(m.roles?.length ? m.roles : [m.role]),
+      rolAnterior: m.role && !(PROJECT_ROLES as readonly string[]).includes(m.role) ? m.role : null,
       contribution: m.contribution,
       /** §33: mientras sea false, lo que hay lo escribió otra persona. */
       contributionConfirmed: m.contributionConfirmedAt !== null,
@@ -1408,7 +1414,11 @@ export class ProjectsService {
       userId: m.userId,
       name: m.user ? `${m.user.firstName} ${m.user.lastName}` : null,
       role: m.role,
-      roles: m.roles ?? (m.role ? [m.role] : []),
+      // V6 §6.1 (V6-PROJ-01): solo roles del catálogo. Uno anterior en texto
+      // libre se traduce (o se deja fuera) y se informa aparte, para que el
+      // formulario no lo reenvíe y la API no responda 400.
+      roles: rolesDelCatalogo(m.roles?.length ? m.roles : [m.role]),
+      rolAnterior: m.role && !(PROJECT_ROLES as readonly string[]).includes(m.role) ? m.role : null,
       contribution: m.contribution,
       contributionConfirmed: m.contributionConfirmedAt !== null,
       contributionConfirmedAt: m.contributionConfirmedAt,

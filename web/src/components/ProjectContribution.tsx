@@ -76,7 +76,9 @@ export default function ProjectContribution({
       if (propia) {
         setForm({
           contribution: propia.contribution ?? '',
-          roles: propia.roles?.length ? propia.roles : propia.role ? [propia.role] : [],
+          // V6 §6.1 (V6-PROJ-01): solo roles del catálogo; un texto libre anterior
+          // no se reenvía (era el 400 VALIDATION_ERROR al guardar).
+          roles: (propia.roles ?? []).filter((r) => (PROJECT_ROLES as readonly string[]).includes(r)),
           skillIds: propia.skillsUsed.map((s) => s.skillId),
         });
       }
@@ -230,6 +232,13 @@ export default function ProjectContribution({
                 );
               })}
             </fieldset>
+            {mine?.rolAnterior && (
+              <p className="inline-note" data-testid="rol-anterior">
+                Tu rol anterior «{mine.rolAnterior}» no está en la lista de roles: {form.roles.length
+                  ? 'lo marcamos con su equivalente; revísalo.'
+                  : 'elige los que correspondan.'}
+              </p>
+            )}
             <span className="field-hint">
               Puedes tener varios (hasta 4); el primero es el principal. Un rol describe lo que hiciste:
               no prueba tecnologías ni cambia tu afinidad, que sale de lo que confirmas.

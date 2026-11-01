@@ -9,7 +9,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-v6.mjs [batch1 …]
  */
 import { execSync } from 'child_process';
-import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
+import { asegurarGithubSimulado, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -49,7 +49,7 @@ async function escenarioScopes(ctx, k) {
   const maria = await provisionAndActivate(ctx.admin, { firstName: 'Maria', lastName: `Scope${L}`, email: correoStaff(`${k}maria`), role: 'TEACHER' });
   await req('PUT', `/users/${carlos.userId}/semesters`, { token: ctx.admin, body: { semesters: [1, 2, 3, 4] } });
   await req('PUT', `/users/${maria.userId}/semesters`, { token: ctx.admin, body: { semesters: [4, 5, 6, 7, 8] } });
-  const cats = (await req('GET', '/activity-categories', { token: ctx.admin })).data ?? [];
+  const cats = ((await req('GET', '/activity-categories', { token: ctx.admin })).data ?? []).filter((c) => c.isActive !== false);
   const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
   const area = ((await req('GET', '/academic-areas', { token: ctx.admin })).data ?? [])[0];
   const base = { type: 'academica', categoryId: cat.id, areaIds: [area.id], activityDate: en(72), endAt: en(74), modality: 'presencial', location: 'Aula 301' };
@@ -236,7 +236,7 @@ async function batch4(ctx) {
   const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Cupo${L}`, email: correoStaff('b4dir'), role: 'CAREER_DIRECTOR' });
   const est = await Promise.all([0, 1, 2, 3].map((i) =>
     provisionStudent(ctx.admin, { firstName: ['Ana', 'Beto', 'Ciro', 'Dani'][i], lastName: `Cupo${L}`, email: correoEst(`b4e${i}`), semester: 3 })));
-  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cats = ((await req('GET', '/activity-categories', { token: director.token })).data ?? []).filter((c) => c.isActive !== false);
   const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
   const crear = (titulo, extra = {}) => req('POST', '/activities', {
     token: director.token,
@@ -340,7 +340,93 @@ async function batch6(ctx) {
     'V6.6.6 §5.4 Un correo repetido se rechaza (409) y no crea otra cuenta', `${repetido.status}`);
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6 };
+// ===========================================================================
+//  BATCH V6-7 — Contribución sin el 400 del rol heredado (§6, PRO-01…04)
+// ===========================================================================
+async function batch7(ctx) {
+  objective('BATCH V6-7 · Cada integrante confirma lo suyo; un rol anterior en texto libre ya no da 400');
+  const [ana, luis, carla] = await Promise.all(['b7ana', 'b7luis', 'b7carla'].map((k, i) =>
+    provisionStudent(ctx.admin, { firstName: ['Ana', 'Luis', 'Carla'][i], lastName: `Contrib${L}`, email: correoEst(k), semester: 5 })));
+  const skills = ((await req('GET', '/skills', { token: ana.token })).data ?? []).filter((s) => s.isActive !== false && s.academicAreaId);
+  // s3 comparte área con s1: quitarla no deja un área sin tecnología (eso lo impide otra regla).
+  const [s1] = skills;
+  const s3 = skills.find((s) => s.id !== s1.id && s.academicAreaId === s1.academicAreaId);
+  const s2 = skills.find((s) => ![s1.id, s3.id].includes(s.id));
+  const areas = [...new Set([s1, s2, s3].map((s) => s.academicAreaId))];
+  const p = await req('POST', '/projects', {
+    token: ana.token,
+    body: { title: `Proyecto contribuciones ${L}`, areaIds: areas, skillIds: [s1.id, s2.id, s3.id], repositoryUrl: repoDePrueba(`v6-contrib-${TS}`), status: 'draft' },
+  });
+  const id = p.data?.id;
+  const invitar = (perfil, rol) => req('POST', `/projects/${id}/invitations`, { token: ana.token, body: { invitedProfileId: perfil, proposedRole: rol } });
+  const aceptar = async (est) => {
+    const suya = ((await req('GET', '/projects/invitations/mine', { token: est.token })).data ?? []).find((i) => i.project?.id === id);
+    return req('PATCH', `/projects/invitations/${suya?.id}`, { token: est.token, body: { decision: 'accept' } });
+  };
+  await invitar(luis.profileId, 'Backend');
+  await aceptar(luis);
+  const detalle = async (token = ana.token) => (await req('GET', `/projects/${id}/members/detailed`, { token })).data ?? [];
+  const de = async (est) => (await detalle()).find((m) => m.userId === est.userId);
+  const contribuir = (est, body) => req('PUT', `/projects/${id}/my-contribution`, { token: est.token, body });
+
+  // PRO-01: reproducción del 400. Luis heredó un rol libre de una invitación anterior al catálogo.
+  psql(`update project_members set role = 'Desarrollador Backend', roles = '{}' where project_id = '${id}' and user_id = '${luis.userId}'`);
+  const crudo = await contribuir(luis, { contribution: 'Hice la API.', roles: ['Desarrollador Backend'], skillIds: [s1.id] });
+  check(crudo.status === 400 && !!crudo.data?.fields?.roles,
+    'V6.7.1 PRO-01 Reproducción: reenviar el rol libre «Desarrollador Backend» era el 400 VALIDATION_ERROR (error en el campo roles)', `${crudo.status} ${json(crudo.data?.fields)}`);
+  const visto = await de(luis);
+  check(json(visto?.roles) === '["Backend"]' && visto?.rolAnterior === 'Desarrollador Backend',
+    'V6.7.2 PRO-02 La API entrega el rol traducido al catálogo (Backend) y avisa del anterior', json({ r: visto?.roles, a: visto?.rolAnterior }));
+  const conLoQueMuestra = await contribuir(luis, { contribution: 'Hice la API y los modelos.', roles: visto?.roles, skillIds: [s1.id, s3.id] });
+  check(conLoQueMuestra.status === 200, 'V6.7.3 PRO-03 Con lo que muestra el formulario, Luis guarda su contribución (2xx)', `${conLoQueMuestra.status} ${json(conLoQueMuestra.data?.message)}`);
+
+  // A, B, C: varios roles; la misma tecnología para los dos; nadie pisa al otro.
+  const deAna = await contribuir(ana, { contribution: 'Coordiné y armé el backend.', roles: ['Backend', 'Responsable'], skillIds: [s1.id, s2.id] });
+  const anaVista = await de(ana);
+  const luisVista = await de(luis);
+  check(deAna.status === 200 && json(anaVista?.roles) === '["Backend","Responsable"]'
+    && json(anaVista?.skillsUsed.map((s) => s.skillId).sort()) === json([s1.id, s2.id].sort()),
+  'V6.7.4 A Ana: Backend + Responsable con dos tecnologías, persistido', json({ s: deAna.status, r: anaVista?.roles }));
+  check(json(luisVista?.skillsUsed.map((s) => s.skillId).sort()) === json([s1.id, s3.id].sort()) && luisVista?.contributionConfirmed === true,
+    'V6.7.5 B/C Luis conserva la suya (también con la misma tecnología que Ana): no son exclusivas', json(luisVista?.skillsUsed));
+
+  // E: tecnología que no es del proyecto.
+  const ajena = skills.find((s) => ![s1.id, s2.id, s3.id].includes(s.id));
+  const fuera = await contribuir(luis, { skillIds: [ajena.id] });
+  check(fuera.status === 400 && fuera.data?.code === 'SKILL_NOT_IN_PROJECT', 'V6.7.6 E Una tecnología que el proyecto no tiene se rechaza', `${fuera.status} ${fuera.data?.code}`);
+
+  // F: no se confirma por otra persona.
+  const falsa = await contribuir(luis, { userId: ana.userId, studentProfileId: ana.profileId, contribution: 'Ana no hizo nada.' });
+  const anaTras = await de(ana);
+  check([400, 403].includes(falsa.status) && anaTras?.contribution === 'Coordiné y armé el backend.',
+    'V6.7.7 F Intentar escribir la contribución de otra integrante se rechaza y no la toca', `${falsa.status}`);
+
+  // G: invitación pendiente → no hay contribución propia que confirmar.
+  await invitar(carla.profileId, 'Frontend');
+  const pendiente = await contribuir(carla, { contribution: 'Todavía no acepto.' });
+  check([403, 404].includes(pendiente.status), 'V6.7.8 G Con la invitación pendiente no se confirma contribución', `${pendiente.status}`);
+  // Una invitación anterior al catálogo («Tester») nace con su equivalente (QA).
+  psql(`update project_invitations set proposed_role = 'Tester' where project_id = '${id}' and invited_profile_id = '${carla.profileId}'`);
+  const aceptada = await aceptar(carla);
+  const carlaVista = await de(carla);
+  check(aceptada.status === 200 && carlaVista?.role === 'QA' && json(carlaVista?.roles) === '["QA"]',
+    'V6.7.9 PRO-04 Aceptar una invitación con rol libre anterior deja el rol del catálogo (Tester → QA)', json({ s: aceptada.status, r: carlaVista?.role }));
+
+  // H: tras recargar, lo mismo; D: quitar una tecnología usada pide reconfirmar.
+  const recarga = await de(luis);
+  check(json(recarga?.roles) === '["Backend"]' && recarga?.skillsUsed.length === 2, 'V6.7.10 H Al recargar, roles y tecnologías son los guardados', json({ r: recarga?.roles, n: recarga?.skillsUsed.length }));
+  // La reconfirmación aplica a un proyecto activo (en borrador nada está atribuido aún).
+  await asegurarGithubSimulado();
+  await contribuir(carla, { contribution: 'Probé la aplicación.', roles: ['QA'], skillIds: [s1.id] });
+  await req('POST', `/projects/${id}/evidences`, { token: ana.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${id}.png`, description: 'Captura.' } });
+  const activo = await req('PATCH', `/projects/${id}`, { token: ana.token, body: { status: 'active' } });
+  check(activo.status === 200, 'V6.7.11a El proyecto con las tres contribuciones confirmadas se activa', `${activo.status} ${json(activo.data?.message)}`);
+  await req('PATCH', `/projects/${id}`, { token: ana.token, body: { skillIds: [s1.id, s2.id] } });
+  const luisD = await de(luis);
+  check(luisD?.contributionConfirmed === false, 'V6.7.11 D Quitar del proyecto una tecnología que Luis confirmó le pide reconfirmar (con aviso)', json({ c: luisD?.contributionConfirmed }));
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
