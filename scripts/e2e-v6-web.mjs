@@ -382,7 +382,52 @@ async function batch5(ctx, browser) {
 
 const json5 = (x) => JSON.stringify(x);
 
-const BATCHES = { batch2, batch3, batch4, batch5 };
+// ===========================================================================
+//  BATCH V6-6 — Correo asistido y semestres del docente al crear (§5.3)
+// ===========================================================================
+async function batch6(ctx, browser) {
+  objective('BATCH V6-6 · Parte local + dominio del rol, con vista previa; docente con sus semestres');
+  const { ctx: c1, page, errores } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  await page.goto(`${WEB}/admin/users`);
+  const formulario = page.locator('form').first();
+  const rol = formulario.locator('select').first();
+  const correo = formulario.locator('.correo-asistido input');
+  const vista = page.locator('[data-testid="correo-vista-previa"]');
+  await correo.waitFor({ timeout: 30000 }).catch(() => {});
+
+  await rol.selectOption('STUDENT');
+  await correo.fill(`Ana.Quispe${L}`);
+  const dominioEst = (await page.locator('.correo-dominio').textContent().catch(() => '')) ?? '';
+  check(dominioEst === '@est.univalle.edu' && (await vista.textContent())?.includes(`ana.quispe${L}@est.univalle.edu`),
+    'V6W.6.1 V6-USER-02 Estudiante: se escribe la parte local y la vista previa muestra @est.univalle.edu (en minúsculas)', `${dominioEst} · ${await vista.textContent()}`);
+  await rol.selectOption('TEACHER');
+  check((await vista.textContent())?.includes(`ana.quispe${L}@univalle.edu`), 'V6W.6.2 Docente: el mismo nombre de usuario pasa a @univalle.edu', await vista.textContent());
+  await rol.selectOption('SCIENTIFIC_SOCIETY');
+  check(await page.locator('.correo-dominio').count() === 0, 'V6W.6.3 Sociedad: no se asume dominio; se escribe el correo completo');
+
+  // Docente creado desde el formulario con sus semestres.
+  await rol.selectOption('TEACHER');
+  await correo.fill(`v6w.alta.${TS}`);
+  await formulario.getByLabel(/^Nombres/).fill('Teo').catch(() => {});
+  await formulario.locator('input[placeholder="Carlos"]').fill('Teo');
+  await formulario.locator('input[placeholder="Pérez"]').fill(`Alta${L}`);
+  const codigo = formulario.locator('input[maxlength="11"]');
+  await codigo.fill(`DOC-${String(TS).slice(-7)}`);
+  for (const s of ['2º', '4º']) await page.locator('[data-testid="dicta"] button', { hasText: s }).click();
+  await formulario.getByRole('button', { name: /Crear cuenta/ }).click();
+  let creado = null;
+  for (let i = 0; i < 30 && !creado; i++) {
+    await espera(500);
+    creado = ((await req('GET', `/users?search=${encodeURIComponent(`v6w.alta.${TS}`)}`, { token: ctx.admin })).data ?? [])[0] ?? null;
+  }
+  const dicta = creado ? (await req('GET', `/users/${creado.id}/semesters`, { token: ctx.admin })).data : null;
+  check(creado?.email === `v6w.alta.${TS}@univalle.edu` && creado?.role === 'TEACHER' && JSON.stringify(dicta) === '[2,4]',
+    'V6W.6.4 V6-USER-03 El alta del docente guarda el correo de la vista previa y sus semestres (2.º y 4.º)', JSON.stringify({ e: creado?.email, d: dicta }));
+  check(errores.length === 0, 'V6W.6.5 Sin errores de JavaScript', errores.join(' | '));
+  await c1.close();
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch6 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);

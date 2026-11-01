@@ -716,6 +716,12 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .detalle-lista dd { margin: 0; overflow-wrap: anywhere; }
 .detalle-personas { margin: 0; padding-left: 1.1rem; }
 
+/* V6 §5.3: parte local del correo + dominio del rol. */
+.correo-asistido { display: flex; align-items: stretch; min-width: 0; }
+.correo-asistido input { flex: 1; min-width: 0; }
+.correo-dominio { display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--gray-300); border-left: 0; border-radius: 0 var(--radius) var(--radius) 0; background: var(--gray-50); color: var(--gray-700); white-space: nowrap; font-size: 0.9rem; }
+.correo-asistido input:has(+ .correo-dominio) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
 /* Aviso breve dentro de una tarjeta */
 .inline-note {
   display: flex; align-items: center; gap: 0.4rem; margin: 0.7rem 0 0;

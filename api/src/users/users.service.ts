@@ -49,6 +49,8 @@ interface CreateUserParams {
   semester?: number;
   universityCode?: string;
   academicScopeSemesters?: number[];
+  /** V6 §5.3: semestres que dicta (solo docentes). */
+  teacherSemesters?: number[];
 }
 
 interface UpdateUserParams {
@@ -112,6 +114,14 @@ export class UsersService {
         fields: { semester: ['Indique el semestre que cursa (1 a 8).'] },
       });
     }
+    // V6 §5.3: los semestres que dicta son solo de un docente.
+    if (params.teacherSemesters?.length && params.role !== RolNombre.TEACHER) {
+      const msg = 'Los semestres que dicta solo aplican a una cuenta de docente.';
+      throw new BadRequestException({ message: msg, fields: { teacherSemesters: [msg] } });
+    }
+    const dicta = params.role === RolNombre.TEACHER
+      ? [...new Set(params.teacherSemesters ?? [])].sort((a, b) => a - b)
+      : [];
     // Toda cuenta lleva su código universitario, con el prefijo de su rol.
     const universityCode = this.assertUniversityCodeFormat(params.universityCode, params.role);
     await this.assertUniversityCodeAvailable(universityCode);
@@ -152,6 +162,11 @@ export class UsersService {
           }),
         );
       }
+      // En la misma transacción: la cuenta y su alcance nacen juntos o no nacen.
+      if (dicta.length) {
+        const accesos = manager.getRepository(TeacherSemesterAccess);
+        await accesos.save(dicta.map((semester) => accesos.create({ teacherId: user.id, semester, grantedById: actorUserId ?? null })));
+      }
       return user;
     });
     saved.role = role;
@@ -161,10 +176,11 @@ export class UsersService {
       eventType: AuditEventType.USER_PROVISIONED,
       entityType: 'user',
       entityId: saved.id,
-      metadata: { email: saved.email, role: params.role, via: 'admin' },
+      metadata: { email: saved.email, role: params.role, via: 'admin', ...(dicta.length ? { teacherSemesters: dicta } : {}) },
     });
 
     const result = toPublicUser(saved);
+    if (params.role === RolNombre.TEACHER) result.semesters = dicta;
     // Una cuenta provisionada necesita su invitación para poder usarse. Se
     // espera unos segundos al envío para decirle al administrador en qué
     // quedó; nunca se le devuelve el enlace ni el código.

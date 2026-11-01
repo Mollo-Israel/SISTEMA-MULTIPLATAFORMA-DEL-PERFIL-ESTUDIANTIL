@@ -171,6 +171,22 @@ export class CreateUserDto {
   @Max(12, { each: true, message: 'El semestre máximo es 12.' })
   academicScopeSemesters?: number[];
 
+  /**
+   * V6 §5.3: semestres que dicta un docente, ya al crear su cuenta. Opcional:
+   * un docente sin carga queda pendiente de configuración y no gestiona
+   * ningún semestre. Solo para docentes (lo comprueba el servicio).
+   */
+  @ApiProperty({ required: false, type: [Number], example: [1, 2, 3, 4] })
+  @IsOptional()
+  @IsArray({ message: 'Los semestres que dicta deben ser una lista.' })
+  @ArrayMaxSize(8)
+  @ArrayUnique({ message: 'No se permiten semestres repetidos.' })
+  @Type(() => Number)
+  @IsInt({ each: true, message: 'Cada semestre debe ser un número entero.' })
+  @Min(1, { each: true, message: 'El semestre mínimo es 1.' })
+  @Max(8, { each: true, message: 'El semestre máximo es 8.' })
+  teacherSemesters?: number[];
+
   @ApiProperty({ example: 'EST-38DJ1HA', description: 'PREFIJO-XXXXXXX: EST, DOC, DIR o ADM según el rol.' })
   @Transform(({ value }) => (typeof value === 'string' ? normalizeUniversityCode(value) : value))
   @IsString({ message: 'El código universitario es obligatorio.' })

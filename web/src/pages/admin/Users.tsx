@@ -33,6 +33,8 @@ const STATUS_TONE: Record<UserStatus, string> = {
 
 // V5-04: primer apellido obligatorio y segundo opcional, en campos separados.
 const CAMPOS = ['firstName', 'firstSurname', 'secondSurname', 'email', 'role', 'semester', 'universityCode'] as const;
+/** V6 §5.3: además, los semestres que dicta un docente (solo al crear). */
+const CAMPOS_ALTA = [...CAMPOS, 'teacherSemesters'] as const;
 type Campo = (typeof CAMPOS)[number];
 
 // Sin contraseña a propósito (§12): la elige el titular al activar.
@@ -47,6 +49,24 @@ const emptyForm: Record<Campo, string> = {
 };
 
 /**
+ * V6 §5.3: dominio institucional que se agrega a la parte local según el rol.
+ * Para la Sociedad científica no se asume ninguno: se escribe el correo
+ * completo. Nunca se arma un correo a partir del nombre (hay homónimos).
+ */
+const DOMINIO_POR_ROL: Partial<Record<RolNombre, string>> = {
+  [RolNombre.STUDENT]: 'est.univalle.edu',
+  [RolNombre.TEACHER]: 'univalle.edu',
+  [RolNombre.CAREER_DIRECTOR]: 'univalle.edu',
+};
+
+/** El correo que se enviará: parte local + dominio del rol, o el completo escrito a mano. */
+function correoFinal(valor: string, rol: RolNombre, completo: boolean): string {
+  const limpio = valor.trim().toLowerCase().replace(/\s+/g, '');
+  const dominio = DOMINIO_POR_ROL[rol];
+  return !dominio || completo || limpio.includes('@') ? limpio : limpio ? `${limpio}@${dominio}` : '';
+}
+
+/**
  * Al cambiar de rol, el código toma el prefijo del rol nuevo si todavía no se
  * escribió nada más que un prefijo. Lo ya escrito no se toca.
  */
@@ -55,12 +75,18 @@ function codigoParaRol(actual: string, rol: RolNombre): string {
   return !limpio || /^[A-Z]{0,3}-?$/.test(limpio) ? `${UNIVERSITY_CODE_PREFIX[rol]}-` : actual;
 }
 
-function reglas(form: Record<Campo, string>) {
+function reglas(form: Record<Campo, string>, completo: boolean) {
   return validate(form, {
     firstName: personName('nombre'),
     firstSurname: personName('apellido'),
     secondSurname: (v) => (v.trim() ? personName('apellido')(v) : null),
-    email: institutionalEmail,
+    email: (v) => {
+      const local = v.trim().toLowerCase();
+      if (DOMINIO_POR_ROL[form.role as RolNombre] && !completo && local && !local.includes('@') && !/^[a-z0-9._%+-]+$/.test(local)) {
+        return 'Solo letras sin tilde, números, punto, guion o guion bajo, antes de la @.';
+      }
+      return institutionalEmail(correoFinal(v, form.role as RolNombre, completo));
+    },
     semester: (v) => (SEMESTER_ROLES.includes(form.role as RolNombre) && !v ? 'Elige el semestre que cursa.' : null),
     universityCode: universityCodeFor(form.role as RolNombre),
   });
@@ -96,8 +122,12 @@ export default function AdminUsersPage() {
   const correo = useAsync(() => mailService.status(), []);
 
   const [form, setForm] = useState(emptyForm);
+  /** V6 §5.3: escribir el correo completo en vez de la parte local. */
+  const [correoCompleto, setCorreoCompleto] = useState(false);
+  /** V6 §5.3: semestres que dicta un docente, desde la creación. */
+  const [dicta, setDicta] = useState<number[]>([]);
   const [creating, setCreating] = useState(false);
-  const errores = useFormErrors(CAMPOS);
+  const errores = useFormErrors(CAMPOS_ALTA);
   const [editing, setEditing] = useState<PublicUser | null>(null);
   const [semesterTarget, setSemesterTarget] = useState<PublicUser | null>(null);
   const toast = useToast();
@@ -105,6 +135,9 @@ export default function AdminUsersPage() {
 
   const rolElegido = form.role as RolNombre;
   const llevaSemestre = SEMESTER_ROLES.includes(rolElegido);
+  const dominio = DOMINIO_POR_ROL[rolElegido];
+  const conDominio = !!dominio && !correoCompleto;
+  const vistaPrevia = correoFinal(form.email, rolElegido, correoCompleto);
 
   const set = (campo: Campo, valor: string) => {
     setForm((f) =>
@@ -117,7 +150,7 @@ export default function AdminUsersPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    const locales = reglas(form);
+    const locales = reglas(form, correoCompleto);
     if (Object.keys(locales).length > 0) {
       errores.setErrors(locales);
       errores.setGeneral(null);
@@ -129,13 +162,15 @@ export default function AdminUsersPage() {
         firstName: form.firstName.trim(),
         firstSurname: form.firstSurname.trim(),
         ...(form.secondSurname.trim() ? { secondSurname: form.secondSurname.trim() } : {}),
-        email: form.email.trim().toLowerCase(),
+        email: vistaPrevia,
         role: form.role,
         universityCode: normalizeUniversityCode(form.universityCode),
       };
       if (llevaSemestre) body.semester = Number(form.semester);
+      if (rolElegido === RolNombre.TEACHER) body.teacherSemesters = dicta;
       const creado = await adminService.createUser(body);
       setForm({ ...emptyForm, role: form.role, universityCode: `${UNIVERSITY_CODE_PREFIX[rolElegido]}-` });
+      setDicta([]);
       errores.reset();
       const aviso = describirInvitacion(creado.invitation);
       const titulo = `Cuenta creada: ${creado.firstName} ${creado.lastName}`;
@@ -243,15 +278,36 @@ export default function AdminUsersPage() {
               label="Correo institucional"
               required
               error={errores.errors.email}
-              hint={rolElegido === RolNombre.STUDENT ? 'Termina en @est.univalle.edu' : 'Termina en @univalle.edu'}
+              hint={conDominio
+                ? 'Escribe lo que va antes de la @, tal como figura en el padrón; el dominio lo pone el rol.'
+                : dominio ? 'Escribe el correo institucional exacto.' : 'Escribe el correo institucional exacto: para este rol no se asume un dominio.'}
             >
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => set('email', e.target.value)}
-                placeholder={rolElegido === RolNombre.STUDENT ? 'ana.quispe@est.univalle.edu' : 'carlos.perez@univalle.edu'}
-                aria-invalid={!!errores.errors.email}
-              />
+              <div className="correo-asistido">
+                <input
+                  type={conDominio ? 'text' : 'email'}
+                  value={form.email}
+                  onChange={(e) => {
+                    // Si pega un correo completo, se respeta tal cual.
+                    if (conDominio && e.target.value.includes('@')) setCorreoCompleto(true);
+                    set('email', e.target.value);
+                  }}
+                  placeholder={conDominio ? 'nombre.apellido' : 'nombre.apellido@univalle.edu'}
+                  aria-invalid={!!errores.errors.email}
+                  aria-describedby="correo-vista-previa"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+                {conDominio && <span className="correo-dominio" aria-hidden>@{dominio}</span>}
+              </div>
+              <span id="correo-vista-previa" className="muted small" data-testid="correo-vista-previa">
+                {vistaPrevia ? <>Se invitará a <strong>{vistaPrevia}</strong></> : 'Aquí verás el correo completo antes de crear la cuenta.'}
+              </span>
+              {dominio && (
+                <label className="flex small" style={{ gap: '0.35rem', alignItems: 'center' }}>
+                  <input type="checkbox" checked={correoCompleto} onChange={(e) => { setCorreoCompleto(e.target.checked); errores.clear('email'); }} />
+                  Escribir el correo completo
+                </label>
+              )}
             </FormField>
           </div>
           <div className="row">
@@ -300,6 +356,31 @@ export default function AdminUsersPage() {
                     </option>
                   ))}
                 </select>
+              </FormField>
+            )}
+            {rolElegido === RolNombre.TEACHER && (
+              <FormField
+                label="Semestres que dicta"
+                error={errores.errors.teacherSemesters}
+                hint="Opcional. Sin semestres, la cuenta queda pendiente de configuración y no gestiona ningún semestre."
+              >
+                <div className="semester-grid" role="group" aria-label="Semestres que dicta" data-testid="dicta">
+                  {SEMESTERS.map((s) => {
+                    const on = dicta.includes(s);
+                    return (
+                      <button
+                        type="button"
+                        key={s}
+                        className={`semester-opt ${on ? 'on' : ''}`}
+                        aria-pressed={on}
+                        onClick={() => { setDicta(on ? dicta.filter((x) => x !== s) : [...dicta, s].sort((a, b) => a - b)); errores.clear('teacherSemesters'); }}
+                      >
+                        <span className="n">{s}º</span>
+                        <span className="chk">{on && <FiCheck size={12} />}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </FormField>
             )}
             <FormField
@@ -686,7 +767,7 @@ function EditUserDialog({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const locales = reglas(form);
+    const locales = reglas(form, true);
     if (Object.keys(locales).length > 0) {
       errores.setErrors(locales);
       return;

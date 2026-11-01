@@ -9,7 +9,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-v6.mjs [batch1 …]
  */
 import { execSync } from 'child_process';
-import { loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
+import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -311,7 +311,36 @@ async function batch4(ctx) {
     json({ s: externa.status, c: externa.data?.capacity, m: externa.data?.registrationMode, r: rExt.data?.status, a: rExtA.data?.status }));
 }
 
-const BATCHES = { batch1, batch3, batch4 };
+// ===========================================================================
+//  BATCH V6-6 — Alta de docente con sus semestres (§5.3, §5.4)
+// ===========================================================================
+async function batch6(ctx) {
+  objective('BATCH V6-6 · El docente nace con los semestres que dicta; el correo no se inventa');
+  const alta = (k, extra) => req('POST', '/users', {
+    token: ctx.admin,
+    body: { firstName: 'Teo', firstSurname: `Alta${L}`, email: correoStaff(k), universityCode: codigoUniversitario(extra.role), ...extra },
+  });
+  const docente = await alta('b6doc', { role: 'TEACHER', teacherSemesters: [3, 1, 2] });
+  const guardados = (await req('GET', `/users/${docente.data?.id}/semesters`, { token: ctx.admin })).data;
+  check(docente.status === 201 && json(guardados) === '[1,2,3]' && json(docente.data?.semesters) === '[1,2,3]',
+    'V6.6.1 V6-USER-03 Al crear un docente se guardan los semestres que dicta (ordenados)', json({ s: docente.status, g: guardados, m: docente.data?.message }));
+  const auditoria = psql(`select metadata->>'teacherSemesters' from audit_events where event_type = 'USER_PROVISIONED' and entity_id = '${docente.data?.id}'`);
+  check(auditoria === '[1, 2, 3]', 'V6.6.2 El alta registra en la auditoría los semestres asignados', auditoria);
+
+  const sinCarga = await alta('b6sincarga', { role: 'TEACHER' });
+  const vacios = (await req('GET', `/users/${sinCarga.data?.id}/semesters`, { token: ctx.admin })).data;
+  check(sinCarga.status === 201 && json(vacios) === '[]', 'V6.6.3 Un docente sin carga se crea igual, sin ningún semestre (pendiente de configuración)', json({ s: sinCarga.status, v: vacios }));
+
+  const director = await alta('b6dir', { role: 'CAREER_DIRECTOR', teacherSemesters: [1] });
+  check(director.status === 400 && !!director.data?.fields?.teacherSemesters, 'V6.6.4 Los semestres que dicta solo valen para un docente (400 en su campo)', `${director.status} ${json(director.data?.fields)}`);
+  const fuera = await alta('b6fuera', { role: 'TEACHER', teacherSemesters: [9] });
+  check(fuera.status === 400, 'V6.6.5 Un semestre fuera de 1..8 se rechaza', `${fuera.status}`);
+  const repetido = await alta('b6doc', { role: 'TEACHER', teacherSemesters: [1] });
+  check(repetido.status === 409 && (await req('GET', `/users?search=${encodeURIComponent(correoStaff('b6doc'))}`, { token: ctx.admin })).data?.length === 1,
+    'V6.6.6 §5.4 Un correo repetido se rechaza (409) y no crea otra cuenta', `${repetido.status}`);
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
