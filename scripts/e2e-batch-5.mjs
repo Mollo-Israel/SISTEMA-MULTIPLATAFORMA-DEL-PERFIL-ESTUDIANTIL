@@ -393,7 +393,8 @@ async function respaldo(ctx) {
     body: {
       title: `Demo interna ${TS}`,
       description: 'Apunta a una dirección que el sistema no debe consultar.',
-      demoUrl: 'http://127.0.0.1:3010/api/users',
+      // V6 §7.4: la demo exige https; el bucle local sigue bloqueado por el verificador.
+      demoUrl: 'https://127.0.0.1:3010/api/users',
       status: 'draft',
     },
   });

@@ -579,7 +579,7 @@ async function preparar() {
   console.log(`${C.bold}BATCH 4 — Actividades contra ${API}${C.r}`);
   const admin = await loginAdmin();
 
-  const categorias = (await req('GET', '/activity-categories', { token: admin })).data ?? [];
+  const categorias = ((await req('GET', '/activity-categories', { token: admin })).data ?? []).filter((c) => c.isActive !== false);
   const categoria = categorias.find((c) => c.appliesTo !== 'extracurricular') ?? categorias[0];
   const categoriaExtra = categorias.find((c) => c.appliesTo !== 'academica') ?? categorias[0];
 

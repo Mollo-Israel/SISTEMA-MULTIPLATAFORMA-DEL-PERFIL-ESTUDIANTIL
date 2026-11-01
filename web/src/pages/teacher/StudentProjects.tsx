@@ -453,8 +453,9 @@ export default function TeacherStudentProjectsPage() {
                     </a>
                   )}
                   {selected.demoUrl && (
-                    <a href={selected.demoUrl} target="_blank" rel="noreferrer">
-                      <FiExternalLink /> Demostración
+                    <a href={selected.demoUrl} target="_blank" rel="noreferrer noopener"
+                      title="Abre un sitio de terceros: Afinia no controla su contenido">
+                      <FiExternalLink /> Demostración (sitio de terceros)
                     </a>
                   )}
                   {!selected.repositoryUrl && !selected.demoUrl && (

@@ -61,8 +61,9 @@ export default function PublicProjectPage() {
             </a>
           )}
           {p.demoUrl && (
-            <a className="btn btn-secondary btn-sm" href={p.demoUrl} target="_blank" rel="noreferrer noopener">
-              <FiExternalLink /> Demo
+            <a className="btn btn-secondary btn-sm" href={p.demoUrl} target="_blank" rel="noreferrer noopener"
+              title="Abre un sitio de terceros: Afinia no controla su contenido">
+              <FiExternalLink /> Demo (sitio de terceros)
             </a>
           )}
           <Badge tone="gray">{PROJECT_BACKING_LABEL[p.backingTier as keyof typeof PROJECT_BACKING_LABEL] ?? p.backingTier}</Badge>

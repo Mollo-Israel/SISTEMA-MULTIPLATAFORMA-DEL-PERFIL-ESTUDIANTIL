@@ -85,6 +85,20 @@ export class LinkCheckerService {
     );
   }
 
+  /**
+   * ¿El enlace apunta a un origen de prueba configurado (solo fuera de
+   * producción)? Lo usan las reglas que exigen https para dejar probar con el
+   * verificador simulado local.
+   */
+  esOrigenDePrueba(url: string): boolean {
+    try {
+      const u = new URL(url);
+      return this.testOrigins.has(`${u.hostname}:${u.port || (u.protocol === 'https:' ? '443' : '80')}`.toLowerCase());
+    } catch {
+      return false;
+    }
+  }
+
   async check(url: string): Promise<LinkCheckResult> {
     return (await this.fetchPage(url)).result;
   }

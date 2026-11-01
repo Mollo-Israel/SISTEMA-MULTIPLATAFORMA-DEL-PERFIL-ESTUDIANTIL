@@ -359,7 +359,7 @@ async function preparar() {
 
   const areas = ((await req('GET', '/academic-areas', { token: admin })).data ?? []).filter((a) => a.isActive !== false);
   const skills = ((await req('GET', '/skills', { token: admin })).data ?? []).filter((s) => s.isActive !== false);
-  const categorias = (await req('GET', '/activity-categories', { token: admin })).data ?? [];
+  const categorias = ((await req('GET', '/activity-categories', { token: admin })).data ?? []).filter((c) => c.isActive !== false);
   const categoria = categorias.find((c) => c.appliesTo !== 'extracurricular') ?? categorias[0];
   const conSkill = areas.filter((a) => skills.some((s) => s.academicAreaId === a.id));
   if (areas.length < 5 || conSkill.length < 2) {

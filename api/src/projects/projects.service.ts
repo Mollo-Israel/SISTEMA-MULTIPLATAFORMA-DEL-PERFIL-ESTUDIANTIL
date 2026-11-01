@@ -615,7 +615,7 @@ export class ProjectsService {
         : (dto.technologies ?? null),
       status: quiereActivo ? ProjectStatus.DRAFT : (dto.status ?? ProjectStatus.DRAFT),
       repositoryUrl: this.repoRaiz(dto.repositoryUrl),
-      demoUrl: dto.demoUrl ?? null,
+      demoUrl: this.demoSegura(dto.demoUrl) ?? null,
       visibility: dto.visibility ?? ProjectVisibility.PROFILE,
       teamId: dto.teamId ?? null,
       createdByProfileId: profile.id,
@@ -735,7 +735,7 @@ export class ProjectsService {
       || (dto.demoUrl !== undefined && dto.demoUrl !== project.demoUrl);
 
     if (dto.repositoryUrl !== undefined) project.repositoryUrl = this.repoRaiz(dto.repositoryUrl);
-    if (dto.demoUrl !== undefined) project.demoUrl = dto.demoUrl;
+    if (dto.demoUrl !== undefined) project.demoUrl = this.demoSegura(dto.demoUrl) ?? null;
     if (dto.visibility !== undefined) project.visibility = dto.visibility;
     this.sincronizarEnlacePublico(project);
 
@@ -1072,9 +1072,42 @@ export class ProjectsService {
     };
   }
 
+  /**
+   * V6 §7.4: una demo se publica solo con https:// y sin credenciales en la
+   * URL. (La comprobación de red privada, redirecciones y tamaño la sigue
+   * haciendo el verificador de enlaces.) Fuera de producción se admite el
+   * verificador simulado local, configurado como origen de prueba.
+   */
+  private demoSegura(url: string | null | undefined): string | null | undefined {
+    if (!url) return url;
+    let u: URL;
+    try {
+      u = new URL(url);
+    } catch {
+      return url;
+    }
+    const campo = (m: string) => new BadRequestException({ code: 'DEMO_URL_UNSAFE', message: m, fields: { demoUrl: [m] } });
+    if (u.username || u.password) throw campo('La demo no puede llevar usuario ni contraseña en el enlace.');
+    if (u.protocol !== 'https:' && !this.linkChecker.esOrigenDePrueba(url)) {
+      throw campo('La demo debe usar https:// (un enlace http:// no protege a quien la visita).');
+    }
+    return url;
+  }
+
   async addEvidence(user: AuthenticatedUser, id: string, dto: AddEvidenceDto): Promise<ProjectEvidence> {
     const project = await this.findOneOrFail(id);
     await this.assertOwnerOrMember(user, project);
+
+    // V6 §7.6: hasta 5 archivos y 8 enlaces de evidencia por proyecto.
+    const LIMITE = { [EvidenceType.FILE]: 5, [EvidenceType.LINK]: 8 } as const;
+    const yaHay = await this.evidences.count({ where: { projectId: project.id, evidenceType: dto.evidenceType } });
+    if (yaHay >= LIMITE[dto.evidenceType]) {
+      const esArchivo = dto.evidenceType === EvidenceType.FILE;
+      const m = esArchivo
+        ? 'Ya hay 5 archivos de evidencia en este proyecto (el máximo). Quita uno para agregar otro.'
+        : 'Ya hay 8 enlaces de evidencia en este proyecto (el máximo). Quita uno para agregar otro.';
+      throw new BadRequestException({ code: 'EVIDENCE_LIMIT', message: m, fields: { [esArchivo ? 'storedFileId' : 'externalUrl']: [m] } });
+    }
 
     if (dto.evidenceType === EvidenceType.FILE && !dto.storedFileId) {
       throw new BadRequestException(

@@ -495,7 +495,62 @@ async function batch8(ctx) {
   }
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8 };
+// ===========================================================================
+//  BATCH V6-9 — Archivos con su tipo, demo https y límites (§7.4, §7.6, §7.7)
+// ===========================================================================
+async function batch9(ctx) {
+  objective('BATCH V6-9 · La imagen se abre como imagen; la demo pide https; evidencia acotada');
+  await asegurarGithubSimulado();
+  const [due, otro] = await Promise.all(['b9due', 'b9otro'].map((k, i) =>
+    provisionStudent(ctx.admin, { firstName: ['Iris', 'Omar'][i], lastName: `Archivo${L}`, email: correoEst(k), semester: 6 })));
+  const skill = ((await req('GET', '/skills', { token: due.token })).data ?? []).find((s) => s.isActive !== false && s.academicAreaId);
+  const p = await req('POST', '/projects', {
+    token: due.token,
+    body: { title: `Proyecto archivos ${L}`, areaIds: [skill.academicAreaId], skillIds: [skill.id], repositoryUrl: repoDePrueba(`v6-archivos-${TS}`), status: 'draft', visibility: 'private' },
+  });
+  const id = p.data?.id;
+
+  // §7.7 (V6-PROJ-06): la captura se entrega como imagen.
+  const subida = await subir(due.token, PNG, 'pantalla.png', 'image/png');
+  const ev = await req('POST', `/projects/${id}/evidences`, { token: due.token, body: { evidenceType: 'file', storedFileId: subida.data?.id, description: 'Pantalla.' } });
+  const ruta = (ev.data?.fileUrl ?? '').replace(/^\/api/, '');
+  const pedir = (token) => fetch(`${API}${ruta}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const propia = await pedir(due.token);
+  const bytes = Buffer.from(await propia.arrayBuffer());
+  check(propia.status === 200 && propia.headers.get('content-type') === 'image/png' && /^inline/.test(propia.headers.get('content-disposition') ?? '') && bytes.equals(PNG),
+    'V6.9.1 V6-PROJ-06 La imagen de evidencia llega con Content-Type image/png y en línea (ya no como archivo sin tipo)',
+    json({ s: propia.status, t: propia.headers.get('content-type'), d: propia.headers.get('content-disposition') }));
+  check(propia.headers.get('x-content-type-options') === 'nosniff' && /sandbox/.test(propia.headers.get('content-security-policy') ?? ''),
+    'V6.9.2 Con nosniff y CSP sandbox: el navegador no la reinterpreta ni ejecuta nada', propia.headers.get('content-security-policy'));
+  const ajeno = await pedir(otro.token);
+  const sinSesion = await pedir(null);
+  check([403, 404].includes(ajeno.status) && sinSesion.status === 401, 'V6.9.3 Otro estudiante no la obtiene (403/404) y sin sesión tampoco (401)', `${ajeno.status} / ${sinSesion.status}`);
+
+  // §7.4: demo solo https y sin credenciales.
+  const http = await req('PATCH', `/projects/${id}`, { token: due.token, body: { demoUrl: 'http://demo.afinia-pruebas.org/app' } });
+  const conClave = await req('PATCH', `/projects/${id}`, { token: due.token, body: { demoUrl: 'https://usuario:clave@demo.afinia-pruebas.org/app' } });
+  const segura = await req('PATCH', `/projects/${id}`, { token: due.token, body: { demoUrl: 'https://demo.afinia-pruebas.org/app' } });
+  check(http.status === 400 && http.data?.code === 'DEMO_URL_UNSAFE' && !!http.data?.fields?.demoUrl && conClave.status === 400 && segura.status === 200,
+    'V6.9.4 V6-PROJ-05 Una demo http:// o con usuario y contraseña se rechaza en su campo; https:// se acepta', `${http.status} ${conClave.status} ${segura.status}`);
+
+  // §7.6: hasta 5 archivos y 8 enlaces.
+  for (let i = 0; i < 4; i++) {
+    const s = await subir(due.token, Buffer.concat([PNG, Buffer.from(`v6-${TS}-${i}`)]), `extra${i}.png`, 'image/png');
+    await req('POST', `/projects/${id}/evidences`, { token: due.token, body: { evidenceType: 'file', storedFileId: s.data?.id, description: `Extra ${i}` } });
+  }
+  const sexto = await subir(due.token, Buffer.concat([PNG, Buffer.from(`v6-${TS}-sexto`)]), 'sexto.png', 'image/png');
+  const deMas = await req('POST', `/projects/${id}/evidences`, { token: due.token, body: { evidenceType: 'file', storedFileId: sexto.data?.id } });
+  check(deMas.status === 400 && deMas.data?.code === 'EVIDENCE_LIMIT' && !!deMas.data?.fields?.storedFileId,
+    'V6.9.5 §7.6 El sexto archivo de evidencia se rechaza (máximo 5)', `${deMas.status} ${deMas.data?.code}`);
+  const enlaces = [];
+  for (let i = 0; i < 9; i++) {
+    enlaces.push(await req('POST', `/projects/${id}/evidences`, { token: due.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${TS}-${i}.png` } }));
+  }
+  check(enlaces.slice(0, 8).every((r) => r.status === 201) && enlaces[8].status === 400 && enlaces[8].data?.code === 'EVIDENCE_LIMIT',
+    'V6.9.6 §7.6 Hasta 8 enlaces de evidencia; el noveno se rechaza', enlaces.map((r) => r.status).join(','));
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
