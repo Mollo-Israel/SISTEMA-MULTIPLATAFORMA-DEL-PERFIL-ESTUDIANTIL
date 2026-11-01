@@ -146,7 +146,9 @@ export const activityService = {
   /** Detalle: para el estudiante incluye su propio estado y si puede inscribirse. */
   get: (id: string) => api.get<any>(`/activities/${id}`).then((r) => r.data),
   myRegistrations: () => api.get<any[]>('/activities/my-registrations').then((r) => r.data),
-  registerInterest: (id: string) => api.post(`/activities/${id}/register-interest`).then((r) => r.data),
+  /** V6 §9.1: «Guardar» es un favorito de acceso rápido; no cambia recomendaciones. */
+  favorite: (id: string) => api.put(`/activities/${id}/favorite`).then((r) => r.data),
+  unfavorite: (id: string) => api.delete(`/activities/${id}/favorite`).then((r) => r.data),
   register: (id: string) => api.post(`/activities/${id}/register`).then((r) => r.data),
   /** Baja voluntaria, solo antes de que confirmen la participacion (§23). */
   cancelRegistration: (id: string) =>

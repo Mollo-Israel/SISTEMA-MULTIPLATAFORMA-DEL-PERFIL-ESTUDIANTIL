@@ -319,7 +319,7 @@ export default function EvidencesScreen() {
         )}
       </Card>
 
-      <Card title={`Constancias internas (${constancies.length})`}>
+      <Card title={`Certificados institucionales recibidos (${constancies.length})`}>
         <Muted>
           Las emite la dirección de carrera cuando tu participación queda confirmada. No sustituyen
           a un certificado oficial de la universidad.

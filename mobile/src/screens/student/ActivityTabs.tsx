@@ -10,24 +10,26 @@ import { REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
 import { colors, registrationColor } from '../../theme';
 
 /**
- * «Para ti» dentro de Actividades (V3 §34.2): las oportunidades sugeridas con
- * su motivo, «Guardar» y «No me interesa». Lo demás (recursos, áreas para
- * fortalecer, compañeros) queda en «Más sugerencias».
+ * «Para ti» dentro de Actividades: las oportunidades sugeridas con su motivo
+ * en palabras. V6 §9.1: sin «No me interesa» ni «Más sugerencias»; «Guardar»
+ * es un favorito que no cambia el orden.
  */
-export function ParaTi({ onMas }: { onMas: () => void }) {
+export function ParaTi() {
   const { data, loading, error, reload } = useAsync(() => recommendationService.mine(), []);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const toast = useToast();
   const items = (data?.groups ?? [])
     .flatMap((g) => g.items)
-    .filter((i: RecommendationItem) => (i.type === 'activity' || i.type === 'opportunity') && i.status !== 'dismissed');
+    .filter((i: RecommendationItem) => i.type === 'activity' || i.type === 'opportunity');
+  const [guardadas, setGuardadas] = useState<Set<string>>(new Set());
 
-  const decidir = async (i: RecommendationItem, status: 'saved' | 'dismissed') => {
+  const guardar = async (i: RecommendationItem) => {
     setOcupado(i.id);
     try {
-      await recommendationService.decide(i.id, status);
-      toast.success(status === 'saved' ? 'Guardada.' : 'Listo: verás menos de esto.', status === 'dismissed' ? 'Tus intereses no cambian.' : undefined);
-      reload();
+      const ya = guardadas.has(i.targetId);
+      await (ya ? activityService.unfavorite(i.targetId) : activityService.favorite(i.targetId));
+      setGuardadas((s) => { const n = new Set(s); if (ya) n.delete(i.targetId); else n.add(i.targetId); return n; });
+      toast.success(ya ? 'Quitada de guardadas.' : 'Guardada.', ya ? undefined : 'No cambia lo que te sugerimos.');
     } catch (e) {
       toast.error(apiError(e));
     } finally {
@@ -45,27 +47,23 @@ export function ParaTi({ onMas }: { onMas: () => void }) {
         <View key={i.id} style={styles.card}>
           <Text style={styles.titulo}>{i.title}</Text>
           {i.area && <Muted>{i.area.name}</Muted>}
-          {i.reasons.slice(0, 2).map((r, k) => <Text key={k} style={styles.motivo}>• {r.label}</Text>)}
+          {i.reasons.filter((r) => r.points > 0 || r.code === 'context_match').slice(0, 2).map((r, k) => <Text key={k} style={styles.motivo}>• {r.label}</Text>)}
           <View style={styles.fila}>
-            <Button small icon="bookmark" title={i.status === 'saved' ? 'Guardada' : 'Guardar'} disabled={i.status === 'saved'} loading={ocupado === i.id} onPress={() => decidir(i, 'saved')} />
-            <Button small variant="secondary" icon="x" title="No me interesa" onPress={() => decidir(i, 'dismissed')} />
+            <Button small icon="bookmark" title={guardadas.has(i.targetId) ? 'Quitar de guardadas' : 'Guardar'} loading={ocupado === i.id} onPress={() => void guardar(i)} />
           </View>
         </View>
       ))}
-      <View style={{ marginTop: 12 }}>
-        <Button variant="secondary" icon="compass" title="Más sugerencias" onPress={onMas} />
-      </View>
+      <Muted>Se ordena por lo que declaraste en tu perfil. Guardar o inscribirte no cambia el orden.</Muted>
     </View>
   );
 }
 
-const GRUPOS: Record<'interesadas' | 'inscritas' | 'historial', { estados: string[]; vacio: string }> = {
-  interesadas: { estados: ['interested'], vacio: 'No marcaste interés en ninguna actividad.' },
+const GRUPOS: Record<'inscritas' | 'historial', { estados: string[]; vacio: string }> = {
   inscritas: { estados: ['registered', 'accepted'], vacio: 'No tienes inscripciones pendientes.' },
   historial: { estados: ['confirmed', 'absent'], vacio: 'Todavía no hay participaciones confirmadas.' },
 };
 
-/** Interesadas, Inscritas e Historial (V3 §34.2), desde tus inscripciones. */
+/** Inscritas e Historial, desde tus inscripciones. */
 export function MisInscripciones({ grupo }: { grupo: keyof typeof GRUPOS }) {
   const { data, loading, error } = useAsync(() => activityService.myRegistrations(), []);
   const filas = (data ?? []).filter((r: any) => GRUPOS[grupo].estados.includes(r.status));

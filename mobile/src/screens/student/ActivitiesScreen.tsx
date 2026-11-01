@@ -64,8 +64,8 @@ const MODALITY_FILTERS = [
 const PESTANAS = [
   { key: 'parati', label: 'Para ti' },
   { key: 'todas', label: 'Todas' },
-  { key: 'interesadas', label: 'Interesadas' },
   { key: 'inscritas', label: 'Inscritas' },
+  { key: 'guardadas', label: 'Guardadas' },
   { key: 'historial', label: 'Historial' },
 ] as const;
 type Pestana = (typeof PESTANAS)[number]['key'];
@@ -90,8 +90,10 @@ export default function ActivitiesScreen({ navigation }: any) {
     if (modality) p.modality = modality;
     if (fromDate) p.fromDate = fromDate;
     if (toDate) p.toDate = toDate;
+    // V6 §9.1: «Guardadas» es la misma lista, solo con los favoritos.
+    if (pestana === 'guardadas') p.favorites = 'true';
     return p;
-  }, [type, categoryId, areaId, modality, fromDate, toDate, applied]);
+  }, [type, categoryId, areaId, modality, fromDate, toDate, applied, pestana]);
 
   // V3 B23: por páginas de 30, con lo más próximo primero.
   const PAGINA = 30;
@@ -228,10 +230,10 @@ export default function ActivitiesScreen({ navigation }: any) {
 
       <Button variant="secondary" icon="book-open" title="Biblioteca de recursos" small onPress={() => navigation.navigate('Biblioteca')} />
 
-      {pestana === 'parati' && <ParaTi onMas={() => navigation.navigate('MasSugerencias')} />}
-      {(pestana === 'interesadas' || pestana === 'inscritas' || pestana === 'historial') && <MisInscripciones grupo={pestana} />}
+      {pestana === 'parati' && <ParaTi />}
+      {(pestana === 'inscritas' || pestana === 'historial') && <MisInscripciones grupo={pestana} />}
 
-      {pestana === 'todas' && (<>
+      {(pestana === 'todas' || pestana === 'guardadas') && (<>
       <View style={{ marginTop: 12 }}>
         <SearchInput
           value={query}
@@ -497,18 +499,18 @@ export default function ActivitiesScreen({ navigation }: any) {
                 ) : (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <View style={{ flex: 1 }}>
+                      {/* V6 §9.1: «Me interesa» se retiró de actividades; queda «Guardar». */}
                       <Button
-                        title="Me interesa"
-                        icon="heart"
+                        title={a.isFavorite ? 'Quitar de guardadas' : 'Guardar'}
+                        icon="bookmark"
                         variant="secondary"
                         loading={busy === a.id}
-                        disabled={mine?.status === 'interested'}
                         onPress={() =>
                           act(
-                            () => activityService.registerInterest(a.id),
-                            'Interés registrado.',
+                            () => (a.isFavorite ? activityService.unfavorite(a.id) : activityService.favorite(a.id)),
+                            a.isFavorite ? 'Quitada de guardadas.' : 'Guardada.',
                             a.id,
-                            `“${a.title}” quedó marcada como de tu interés.`,
+                            'No cambia lo que te sugerimos.',
                           )
                         }
                       />

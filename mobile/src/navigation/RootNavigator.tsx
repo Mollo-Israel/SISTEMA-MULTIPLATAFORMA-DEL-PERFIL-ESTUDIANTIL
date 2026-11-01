@@ -22,7 +22,6 @@ import MyActivitiesScreen from '../screens/student/MyActivitiesScreen';
 import ProjectsScreen from '../screens/student/ProjectsScreen';
 import ProjectDetailScreen from '../screens/student/ProjectDetailScreen';
 import AffinityScreen from '../screens/student/AffinityScreen';
-import RecommendationsScreen from '../screens/student/RecommendationsScreen';
 import WelcomeScreen from '../screens/student/WelcomeScreen';
 import NotificationsScreen from '../screens/student/NotificationsScreen';
 import TrajectoryScreen from '../screens/student/TrajectoryScreen';
@@ -111,8 +110,7 @@ function ActividadesStack() {
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen name="ListaActividades" component={ActivitiesScreen} options={{ title: 'Actividades', ...withLogout }} />
       <Stack.Screen name="MisActividades" component={MyActivitiesScreen} options={{ title: 'Mis actividades' }} />
-      {/* V3 §34.2: lo que no es una actividad (recursos, áreas, compañeros). */}
-      <Stack.Screen name="MasSugerencias" component={RecommendationsScreen} options={{ title: 'Más sugerencias' }} />
+      {/* V6 §9.4: «Más sugerencias» se retiró; «Para ti» vive en Actividades. */}
       {/* V3.2 §35: la Biblioteca de recursos, como en la web. */}
       <Stack.Screen name="Biblioteca" component={LibraryScreen} options={{ title: 'Biblioteca' }} />
     </Stack.Navigator>
@@ -160,7 +158,7 @@ function StudentTabs() {
         options={{ title: 'Mis afinidades', tabBarIcon: tabIcon('Afinidad'), ...withLogout }}
       />
       {/* V3 §33: el centro de avisos. Las recomendaciones pasaron a «Para ti»
-          dentro de Actividades (§34.2), con «Más sugerencias» al lado. */}
+          dentro de Actividades (§34.2). */}
       <Tab.Screen
         name="Avisos"
         component={NotificationsScreen}
