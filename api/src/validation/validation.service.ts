@@ -247,6 +247,7 @@ export class ValidationService {
    */
   private async evaluate(record: ValidationRecord, ctx: ValidationContext): Promise<ValidationRecord> {
     if (ctx.credential) return this.evaluateCredential(record, ctx, ctx.credential);
+    if (ctx.sinOcr) return this.registrarEvidenciaDeProyecto(record, ctx);
     let extracted = null as ValidationRecord['extractedData'];
     let identity = IdentityMatchStatus.UNKNOWN;
     let duplicateOfId: string | null = null;
@@ -314,6 +315,34 @@ export class ValidationService {
       },
     });
 
+    return guardado;
+  }
+
+  /**
+   * V6 §7.1–§7.2: la evidencia de un proyecto es un registro privado de
+   * funcionamiento y procedencia, no un documento que se lea. Queda
+   * «declarada» (no se afirma que sea auténtica); si es un enlace, solo se
+   * comprueba que responde (con la misma protección SSRF de siempre).
+   */
+  private async registrarEvidenciaDeProyecto(record: ValidationRecord, ctx: ValidationContext): Promise<ValidationRecord> {
+    const linkCheck = ctx.declaredUrl ? await this.linkChecker.check(ctx.declaredUrl) : null;
+    const guardado = await this.finish(record, {
+      status: ValidationStatus.COMPLETED,
+      backingTier: BackingTier.DECLARED,
+      extractedData: null,
+      identityMatchStatus: IdentityMatchStatus.UNKNOWN,
+      linkCheck,
+      duplicateOfId: null,
+      errorCode: null,
+      errorDetail: null,
+    });
+    await this.audit.record({
+      actorUserId: null,
+      eventType: AuditEventType.VALIDATION_COMPLETED,
+      entityType: record.resourceType,
+      entityId: record.resourceId,
+      metadata: { status: ValidationStatus.COMPLETED, backingTier: BackingTier.DECLARED, linkStatus: linkCheck?.status ?? null, sinOcr: true },
+    });
     return guardado;
   }
 
@@ -912,6 +941,10 @@ export class ValidationService {
       relations: { studentProfile: { user: true } },
     });
     if (!evidencia) return null;
+    // V6 §7.1: la evidencia de un proyecto no pasa por OCR ni extracción. Ni la
+    // captura ni el documento deciden tecnologías, calidad o funcionamiento;
+    // por eso tampoco se leen sus bytes. El OCR sigue para credenciales.
+    const deProyecto = !!evidencia.projectId && !evidencia.activityId;
     return {
       holderName: this.nombreDe(evidencia.studentProfile),
       declaredIssuer: null,
@@ -919,7 +952,8 @@ export class ValidationService {
       declaredDate: null,
       declaredUrl: evidencia.externalUrl,
       studentProfileId: evidencia.studentProfileId,
-      file: await this.loadFile(evidencia.storedFileId),
+      file: deProyecto ? null : await this.loadFile(evidencia.storedFileId),
+      sinOcr: deProyecto,
     };
   }
 
@@ -1038,4 +1072,6 @@ interface ValidationContext {
   declaredUrl: string | null;
   studentProfileId: string;
   file: LoadedFile | null;
+  /** V6 §7.1: evidencia de proyecto; se registra sin OCR ni extracción. */
+  sinOcr?: boolean;
 }

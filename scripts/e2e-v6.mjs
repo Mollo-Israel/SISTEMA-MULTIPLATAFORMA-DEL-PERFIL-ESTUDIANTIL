@@ -9,7 +9,7 @@
  *   API_URL=http://localhost:3010/api node scripts/e2e-v6.mjs [batch1 …]
  */
 import { execSync } from 'child_process';
-import { asegurarGithubSimulado, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
+import { API, asegurarGithubSimulado, codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 const L = String.fromCharCode(...String(TS).slice(-6).split('').map((d) => 97 + Number(d)));
@@ -426,7 +426,76 @@ async function batch7(ctx) {
   check(luisD?.contributionConfirmed === false, 'V6.7.11 D Quitar del proyecto una tecnología que Luis confirmó le pide reconfirmar (con aviso)', json({ c: luisD?.contributionConfirmed }));
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7 };
+// ===========================================================================
+//  BATCH V6-8 — Proyectos sin OCR; mínimos de activación (§7.1–§7.3, PRO-05…08)
+// ===========================================================================
+async function subir(token, bytes, nombre, tipo) {
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type: tipo }), nombre);
+  const res = await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  let data = null;
+  try { data = await res.json(); } catch { /* sin cuerpo */ }
+  return { status: res.status, data };
+}
+// PNG mínimo válido (1×1).
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
+async function batch8(ctx) {
+  objective('BATCH V6-8 · La evidencia de un proyecto no pasa por OCR; activar pide evidencia o demo, no galería');
+  await asegurarGithubSimulado();
+  const est = await provisionStudent(ctx.admin, { firstName: 'Oto', lastName: `SinOcr${L}`, email: correoEst('b8e1'), semester: 6 });
+  const skill = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => s.isActive !== false && s.academicAreaId);
+  const nuevo = (titulo, extra = {}) => req('POST', '/projects', {
+    token: est.token,
+    body: { title: `${titulo} ${L}`, areaIds: [skill.academicAreaId], skillIds: [skill.id], repositoryUrl: repoDePrueba(`v6-${titulo.toLowerCase().replace(/[^a-z]+/g, '-')}-${TS}`), status: 'draft', ...extra },
+  });
+  const contribuir = (id) => req('PUT', `/projects/${id}/my-contribution`, { token: est.token, body: { contribution: 'Lo construí.', skillIds: [skill.id] } });
+  const activar = (id, extra = {}) => req('PATCH', `/projects/${id}`, { token: est.token, body: { status: 'active', ...extra } });
+
+  // PRO-06: solo galería → no activa (la imagen decorativa no acredita funcionamiento).
+  const conGaleria = await nuevo('Solo galeria');
+  await contribuir(conGaleria.data?.id);
+  const img = await subir(est.token, PNG, 'portada.png', 'image/png');
+  const puesta = await req('POST', `/projects/${conGaleria.data?.id}/images`, { token: est.token, body: { fileId: img.data?.id } });
+  const sinEvidencia = await activar(conGaleria.data?.id);
+  check(puesta.status === 201 && sinEvidencia.status === 400 && sinEvidencia.data?.code === 'PROJECT_NOT_READY'
+    && (sinEvidencia.data?.details?.missing ?? []).some((m) => m.code === 'evidence'),
+  'V6.8.1 PRO-06 Con solo imágenes de galería no se activa: falta evidencia o demo', json({ g: puesta.status, s: sinEvidencia.status, m: (sinEvidencia.data?.details?.missing ?? []).map((m) => m.code) }));
+
+  // PRO-05: la captura como evidencia privada se registra sin OCR.
+  const captura = await subir(est.token, PNG, 'funcionando.png', 'image/png');
+  const ev = await req('POST', `/projects/${conGaleria.data?.id}/evidences`, {
+    token: est.token, body: { evidenceType: 'file', storedFileId: captura.data?.id, description: 'Pantalla del sistema funcionando.' },
+  });
+  let fila = '';
+  for (let i = 0; i < 40; i++) {
+    fila = psql(`select status || '|' || coalesce(backing_tier::text,'') || '|' || (extracted_data is null) from validation_records where resource_id = '${ev.data?.id}'`);
+    if (fila && !fila.startsWith('pending') && !fila.startsWith('processing')) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  const sinOcr = psql(`select count(*) from audit_events where event_type = 'VALIDATION_COMPLETED' and entity_id = '${ev.data?.id}' and metadata->>'sinOcr' = 'true'`);
+  check(ev.status === 201 && fila === 'completed|declared|true' && Number(sinOcr) === 1,
+    'V6.8.2 PRO-05 V6-PROJ-03 La captura del proyecto queda registrada sin OCR ni extracción: «declarada», sin texto leído', `${ev.status} ${fila} audit=${sinOcr}`);
+
+  // PRO-07: con esa evidencia privada se activa (sin demo).
+  const conEvidencia = await activar(conGaleria.data?.id);
+  check(conEvidencia.status === 200 && conEvidencia.data?.status === 'active', 'V6.8.3 PRO-07 Con evidencia privada se activa; la demo es opcional', `${conEvidencia.status} ${json(conEvidencia.data?.message)}`);
+
+  // PRO-08: solo demo accesible → se activa sin captura.
+  const { createServer } = await import('node:http');
+  const demo = createServer((rq, rs) => { rs.writeHead(200, { 'content-type': 'text/html' }); rs.end('<html><head><title>Demo</title></head><body>ok</body></html>'); });
+  await new Promise((r) => demo.listen(3997, '127.0.0.1', r));
+  try {
+    const conDemo = await nuevo('Solo demo');
+    await contribuir(conDemo.data?.id);
+    const activa = await activar(conDemo.data?.id, { demoUrl: `http://verificador.afinia-pruebas.org:3997/demo-v6-${TS}` });
+    check(activa.status === 200 && activa.data?.status === 'active', 'V6.8.4 PRO-08 Con una demo accesible se activa sin captura privada', `${activa.status} ${json(activa.data?.message)}`);
+  } finally {
+    demo.close();
+  }
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
