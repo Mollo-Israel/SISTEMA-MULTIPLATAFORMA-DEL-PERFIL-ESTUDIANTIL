@@ -138,15 +138,18 @@ export default function StudentActivitiesPage() {
    * ningún caso cuenta en la trayectoria hasta que registren tu asistencia.
    */
   const requestSeat = async (a: Activity) => {
-    const auto = a.originType !== 'external' && (a.registrationMode ?? 'open') === 'open' && !a.capacity;
+    // V6 §4.1: abierta (con o sin cupo) admite sola; con cupo, por orden de solicitud.
+    const auto = a.originType !== 'external' && (a.registrationMode ?? 'open') === 'open';
     const ok = await confirm({
       title: 'Solicitar inscripción',
       message: (
         <>
           Vas a pedir un lugar en <strong>{a.title}</strong>.{' '}
-          {auto
-            ? 'Esta actividad es abierta: quedarás admitido al instante.'
-            : 'El responsable decide si te admite.'}
+          {!auto
+            ? 'Inscripción sujeta a aprobación: el responsable decide si te admite.'
+            : a.capacity
+              ? `Admisión abierta con ${a.capacity} plazas: se asignan por orden de solicitud; si quedan, tienes la tuya al instante.`
+              : 'Admisión abierta: quedarás admitido al instante.'}
           {' '}Cuenta en tu trayectoria cuando el responsable registre tu asistencia.
         </>
       ),

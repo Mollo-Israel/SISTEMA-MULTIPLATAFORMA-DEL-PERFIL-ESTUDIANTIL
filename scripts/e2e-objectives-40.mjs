@@ -837,6 +837,8 @@ async function objective3(ctx) {
       activityDate: future,
       location: 'Aula 301, Bloque B',
       capacity: 3,
+      // V6 §4.1: cupo y admisión son independientes; esta suite prueba la admisión por el responsable.
+      registrationMode: 'approval',
       tags: ['arquitectura', 'patrones'],
       status: 'draft',
       internalConstancyEnabled: true,

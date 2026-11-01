@@ -2592,7 +2592,24 @@ export class ActivitiesService {
     }
     registration.acceptedAt = admitida ? new Date() : null;
     registration.decisionReason = null;
-    const guardada = await this.registrations.save(registration);
+    const fila = registration;
+    const guardada = admitida && activity.capacity
+      // V6 §4.1: abierta con cupo = por orden de solicitud. Se bloquea la fila
+      // de la actividad para que dos solicitudes simultáneas no tomen la misma
+      // última plaza; agotado el cupo, la solicitud no se guarda.
+      ? await this.activities.manager.transaction(async (m) => {
+        await m.getRepository(Activity).createQueryBuilder('a')
+          .setLock('pessimistic_write').where('a.id = :id', { id: activity.id }).getOne();
+        const ocupados = await m.getRepository(ActivityRegistration).count({
+          where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
+        });
+        if (ocupados >= (activity.capacity ?? 0)) {
+          const msg = `Se agotó el cupo: las ${activity.capacity} plazas ya se asignaron por orden de solicitud.`;
+          throw new ConflictException({ code: 'ACTIVITY_FULL', message: msg });
+        }
+        return m.getRepository(ActivityRegistration).save(fila);
+      })
+      : await this.registrations.save(registration);
     if (target === RegistrationStatus.REGISTERED) {
       await this.audit.record({
         actorUserId: userId,

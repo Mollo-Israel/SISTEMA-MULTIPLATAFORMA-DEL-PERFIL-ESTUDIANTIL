@@ -20,14 +20,15 @@ const MINUTO = 60_000;
 const DIA = 86_400_000;
 
 /**
- * §6.1: una interna abierta y sin cupo admite sola. Con cupo o por aprobación
- * decide el responsable (la plaza se reserva de forma atómica). En una externa
- * la «aceptación» es del proveedor: nunca es automática.
+ * V6 §4.1: cupo y admisión son ejes independientes. Una interna abierta admite
+ * sola: sin cupo, a todos; con cupo, por orden de solicitud hasta llenarlo
+ * (la plaza se adjudica de forma atómica, sin sobrerreserva). Por aprobación
+ * decide el responsable. En una externa la «aceptación» es del proveedor:
+ * nunca es automática.
  */
 export function admisionAutomatica(a: ActividadMin): boolean {
   return (a.originType ?? ActivityOrigin.INTERNAL) === ActivityOrigin.INTERNAL
-    && (a.registrationMode ?? RegistrationMode.OPEN) === RegistrationMode.OPEN
-    && !a.capacity;
+    && (a.registrationMode ?? RegistrationMode.OPEN) === RegistrationMode.OPEN;
 }
 
 /**
@@ -88,12 +89,14 @@ export function bloqueoAsistencia(
 
 /**
  * ¿Desde este estado se puede registrar asistencia? Se necesita la admisión.
- * En una interna con admisión automática, una solicitud anterior a V5
- * (`registered`) cuenta como admitida: nadie tenía que admitirla.
+ * En una interna abierta y SIN cupo, una solicitud anterior a V5
+ * (`registered`) cuenta como admitida: nadie tenía que admitirla. Con cupo no
+ * (V6 §4.1): esa solicitud nunca recibió una plaza y contarla superaría el
+ * cupo; la sigue admitiendo el responsable.
  */
 export function admitidoParaAsistencia(a: ActividadMin, actual: RegistrationStatus): boolean {
   if (actual === RegistrationStatus.ACCEPTED || actual === RegistrationStatus.CONFIRMED || actual === RegistrationStatus.ABSENT) {
     return true;
   }
-  return actual === RegistrationStatus.REGISTERED && admisionAutomatica(a);
+  return actual === RegistrationStatus.REGISTERED && admisionAutomatica(a) && !a.capacity;
 }

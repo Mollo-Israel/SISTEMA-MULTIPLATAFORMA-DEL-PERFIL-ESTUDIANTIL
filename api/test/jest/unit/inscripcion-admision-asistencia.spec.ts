@@ -28,8 +28,8 @@ describe('V5 §6.1 · admisión automática', () => {
   it('una interna abierta y sin cupo admite sola (C06)', () => {
     expect(admisionAutomatica(interna())).toBe(true);
   });
-  it('con cupo decide el responsable, aunque sea abierta', () => {
-    expect(admisionAutomatica(interna({ capacity: 20 }))).toBe(false);
+  it('V6 §4.1: abierta con cupo también admite sola (por orden, hasta llenarlo)', () => {
+    expect(admisionAutomatica(interna({ capacity: 20 }))).toBe(true);
   });
   it('en modo por aprobación decide el responsable', () => {
     expect(admisionAutomatica(interna({ registrationMode: RegistrationMode.APPROVAL }))).toBe(false);

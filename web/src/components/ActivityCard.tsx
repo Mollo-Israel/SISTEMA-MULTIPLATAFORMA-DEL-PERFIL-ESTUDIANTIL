@@ -31,6 +31,20 @@ const areasDe = (a: Activity) => {
   const todas = (a.activityAreas ?? []).map((x) => x.academicArea?.name).filter((x): x is string => !!x);
   return todas.length ? todas : a.academicArea?.name ? [a.academicArea.name] : [];
 };
+
+/** V6 §4.1: la admisión en palabras; cupo y admisión son cosas distintas. */
+export function admisionDe(a: Activity): string {
+  if (a.originType === 'external') return a.registrationMode === 'approval' ? 'Inscripción sujeta a aprobación; la plaza la confirma el proveedor' : 'La plaza la confirma el proveedor';
+  if (a.registrationMode === 'approval') return 'Inscripción sujeta a aprobación';
+  return a.capacity ? 'Admisión abierta, por orden de solicitud' : 'Admisión abierta';
+}
+
+/** V6 §4.1: «X de Y plazas libres» o «Sin límite». */
+export function plazasDe(a: Activity): string {
+  if (a.capacity == null) return 'Sin límite de plazas';
+  return a.seatsLeft != null ? `${a.seatsLeft} de ${a.capacity} plazas libres` : `${a.capacity} plazas`;
+}
+
 const skillsDe = (a: Activity) => (a.activitySkills ?? []).map((s) => s.skill?.name).filter((x): x is string => !!x);
 
 function Rango({ a }: { a: Activity }) {
@@ -85,9 +99,7 @@ export function ActivityCard({
           {a.location && <span><FiMapPin size={13} /> {a.location}</span>}
           {areas.length > 0 && <span title={areas.join(', ')}>Áreas: {resumen(areas)}</span>}
           {skills.length > 0 && <span title={skills.join(', ')}>Habilidades: {resumen(skills)}</span>}
-          {a.capacity != null && (
-            <span><FiUsers size={13} /> {a.seatsLeft != null ? `${a.seatsLeft} de ${a.capacity} lugares` : `Cupo ${a.capacity}`}</span>
-          )}
+          <span data-testid="plazas"><FiUsers size={13} /> {plazasDe(a)} · {admisionDe(a)}</span>
           {a.meetingUrl && (
             <a href={a.meetingUrl} target="_blank" rel="noreferrer"><FiVideo size={13} /> Reunión</a>
           )}
@@ -140,7 +152,8 @@ export function ActivityDetail({ a, onClose, acciones }: { a: Activity; onClose:
             </dd>
           </>
         )}
-        {a.capacity != null && (<><dt>Cupo</dt><dd>{a.seatsLeft != null ? `${a.seatsLeft} de ${a.capacity} lugares libres` : a.capacity}</dd></>)}
+        <dt>Cupo</dt><dd>{plazasDe(a)}</dd>
+        <dt>Admisión</dt><dd>{admisionDe(a)}</dd>
         {a.provider && (<><dt>Proveedor</dt><dd>{a.provider}</dd></>)}
         {a.externalUrl && (<><dt>Enlace oficial</dt><dd><a href={a.externalUrl} target="_blank" rel="noreferrer"><FiExternalLink size={13} /> {a.externalUrl}</a></dd></>)}
         {a.outcomePolicy && (<><dt>Al terminar</dt><dd>{RESULTADO_LABEL[a.outcomePolicy] ?? a.outcomePolicy}</dd></>)}

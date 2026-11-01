@@ -228,7 +228,90 @@ async function batch3(ctx) {
     'V6.3.9 §3.6 El responsable ve el detalle con su semestre asignado y sigue sin poder editar (403)', json({ d: detalle.status, a: yo?.assignedSemesters, e: editar.status }));
 }
 
-const BATCHES = { batch1, batch3 };
+// ===========================================================================
+//  BATCH V6-4 — Cupo y admisión independientes (§4.1–§4.3, ADM-01…05)
+// ===========================================================================
+async function batch4(ctx) {
+  objective('BATCH V6-4 · Cuatro combinaciones de cupo × admisión; externas con la misma política');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Cupo${L}`, email: correoStaff('b4dir'), role: 'CAREER_DIRECTOR' });
+  const est = await Promise.all([0, 1, 2, 3].map((i) =>
+    provisionStudent(ctx.admin, { firstName: ['Ana', 'Beto', 'Ciro', 'Dani'][i], lastName: `Cupo${L}`, email: correoEst(`b4e${i}`), semester: 3 })));
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const crear = (titulo, extra = {}) => req('POST', '/activities', {
+    token: director.token,
+    body: { title: `${titulo} ${L}`, type: 'academica', categoryId: cat.id, semesterScope: [3], activityDate: en(48), endAt: en(50), status: 'open', ...extra },
+  });
+  const inscribir = (id, e) => req('POST', `/activities/${id}/register`, { token: e.token });
+  const ocupadas = (id) => Number(psql(`select count(*) from activity_registrations where activity_id = '${id}' and status in ('accepted','confirmed')`));
+
+  // Sin límite × abierta → admitida al instante (nunca asistencia).
+  const libre = await crear('Sin limite abierta');
+  const r0 = await inscribir(libre.data?.id, est[0]);
+  check(r0.status === 201 && r0.data?.status === 'accepted', 'V6.4.1 ADM-01 Sin límite y abierta: admitida al instante, no «presente»', `${r0.status} ${r0.data?.status}`);
+
+  // Sin límite × aprobación → pendiente.
+  const dirigida = await crear('Sin limite aprobacion', { registrationMode: 'approval' });
+  const r1 = await inscribir(dirigida.data?.id, est[0]);
+  check(r1.status === 201 && r1.data?.status === 'registered', 'V6.4.2 Sin límite y por aprobación: queda pendiente', `${r1.status} ${r1.data?.status}`);
+
+  // Con límite × abierta → por orden de solicitud, atómico (ADM-02: 3 simultáneas, cupo 2).
+  const taller = await crear('Taller abierto cupo 2', { capacity: 2 });
+  const tres = await Promise.all(est.slice(0, 3).map((e) => inscribir(taller.data?.id, e)));
+  const admitidas = tres.filter((r) => r.status === 201 && r.data?.status === 'accepted').length;
+  const llenas = tres.filter((r) => r.status === 409 && r.data?.code === 'ACTIVITY_FULL').length;
+  check(admitidas === 2 && llenas === 1 && ocupadas(taller.data?.id) === 2,
+    'V6.4.3 ADM-02 Cupo 2 y abierta con 3 solicitudes simultáneas: 2 admitidas por orden, 1 «cupo agotado», sin sobrerreserva',
+    tres.map((r) => `${r.status}:${r.data?.status ?? r.data?.code}`).join(' '));
+  const rechazada = tres.find((r) => r.status === 409);
+  check(/por orden de solicitud/.test(rechazada?.data?.message ?? ''), 'V6.4.4 El aviso explica la regla usada para el cupo', rechazada?.data?.message);
+  const vista = (await req('GET', `/activities/${taller.data?.id}`, { token: est[3].token })).data;
+  check(vista?.seatsLeft === 0 && vista?.capacity === 2 && vista?.registrationMode === 'open',
+    'V6.4.5 El estudiante ve «0 de 2 plazas» y que la admisión es abierta', json({ s: vista?.seatsLeft, c: vista?.capacity, m: vista?.registrationMode }));
+  // Una baja libera la plaza y la siguiente solicitud la toma sola.
+  const quien = tres.findIndex((r) => r.status === 201);
+  await req('POST', `/activities/${taller.data?.id}/cancel-registration`, { token: est[quien].token });
+  const r3 = await inscribir(taller.data?.id, est[3]);
+  check(r3.status === 201 && r3.data?.status === 'accepted' && ocupadas(taller.data?.id) === 2,
+    'V6.4.6 Al liberarse una plaza, la siguiente solicitud la toma por orden', `${r3.status} ${r3.data?.status}`);
+
+  // Con límite × aprobación → pendientes; el responsable admite hasta el cupo.
+  const seleccion = await crear('Taller por aprobacion cupo 1', { capacity: 1, registrationMode: 'approval' });
+  const [p0, p1] = [await inscribir(seleccion.data?.id, est[0]), await inscribir(seleccion.data?.id, est[1])];
+  const adm0 = await req('PATCH', `/activities/${seleccion.data?.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est[0].profileId, status: 'accepted' } });
+  const adm1 = await req('PATCH', `/activities/${seleccion.data?.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est[1].profileId, status: 'accepted' } });
+  check(p0.data?.status === 'registered' && p1.data?.status === 'registered' && adm0.status === 200 && adm1.status === 409 && adm1.data?.code === 'ACTIVITY_FULL',
+    'V6.4.7 Con límite y por aprobación: pendientes; el responsable admite hasta el cupo y no más', `${p0.data?.status}/${p1.data?.status} ${adm0.status} ${adm1.status}`);
+
+  // §4.2: admitir nunca confirma asistencia.
+  const tray = (await req('GET', '/trajectory/me', { token: est[0].token })).data;
+  check(!(tray?.entries ?? []).some((x) => [libre.data?.id, taller.data?.id, seleccion.data?.id].includes(x.id) && x.cvEligible === true),
+    'V6.4.8 §4.2 Ninguna admisión cuenta como asistencia en la trayectoria');
+
+  // §4.3 / V6-ACT-03: externa con cupo y aprobación; su aceptación nunca es automática.
+  const externa = await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      title: `Externa con cupo ${L}`, type: 'academica', categoryId: cat.id, semesterScope: [3], activityDate: en(48), endAt: en(50), status: 'open',
+      originType: 'external', provider: 'Proveedor de pruebas', externalUrl: 'https://cursos.afinia-pruebas.org/curso', modality: 'virtual',
+      capacity: 3, registrationMode: 'approval',
+    },
+  });
+  const rExt = await inscribir(externa.data?.id, est[0]);
+  const externaAbierta = await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      title: `Externa abierta ${L}`, type: 'academica', categoryId: cat.id, semesterScope: [3], activityDate: en(48), endAt: en(50), status: 'open',
+      originType: 'external', provider: 'Proveedor de pruebas', externalUrl: 'https://cursos.afinia-pruebas.org/abierto', modality: 'virtual',
+    },
+  });
+  const rExtA = await inscribir(externaAbierta.data?.id, est[1]);
+  check(externa.status === 201 && externa.data?.capacity === 3 && externa.data?.registrationMode === 'approval' && rExt.data?.status === 'registered' && rExtA.data?.status === 'registered',
+    'V6.4.9 V6-ACT-03 Una externa guarda cupo y admisión; su plaza la confirma el proveedor (nunca automática)',
+    json({ s: externa.status, c: externa.data?.capacity, m: externa.data?.registrationMode, r: rExt.data?.status, a: rExtA.data?.status }));
+}
+
+const BATCHES = { batch1, batch3, batch4 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);

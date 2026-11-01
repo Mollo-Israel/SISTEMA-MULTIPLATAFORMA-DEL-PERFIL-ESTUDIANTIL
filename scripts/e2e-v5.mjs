@@ -928,14 +928,15 @@ async function batch4(ctx) {
   const entrada = (tray?.entries ?? []).find((x) => x.id === abierta.data?.id);
   check(!entrada || entrada.cvEligible !== true, 'V5.4.2 C06 Admitido no es haber asistido: no entra al currículo', json(entrada));
 
-  // --- C01/C02: con cupo → solicitud pendiente; admitir no es asistir
-  const conCupo = await crear('Taller con cupo', { capacity: 1 });
+  // --- C01/C02: con cupo y por aprobación → solicitud pendiente; admitir no es asistir.
+  // V6 §4.1: cupo y admisión son independientes; abierta con cupo admite por orden (e2e-v6 batch4).
+  const conCupo = await crear('Taller con cupo', { capacity: 1, registrationMode: 'approval' });
   const id = conCupo.data?.id;
   const r1 = await req('POST', `/activities/${id}/register`, { token: e1.token });
   const r2 = await req('POST', `/activities/${id}/register`, { token: e2.token });
   const r3 = await req('POST', `/activities/${id}/register`, { token: e3.token });
   check([r1, r2, r3].every((r) => r.status === 201 && r.data?.status === 'registered'),
-    'V5.4.3 C01 Con cupo, cada solicitud queda pendiente (no ocupa plaza ni es asistencia)', [r1, r2, r3].map((r) => `${r.status}:${r.data?.status}`).join(' '));
+    'V5.4.3 C01 Con cupo y por aprobación, cada solicitud queda pendiente (no ocupa plaza ni es asistencia)', [r1, r2, r3].map((r) => `${r.status}:${r.data?.status}`).join(' '));
 
   // --- C03: no se registra asistencia antes del evento
   const antes = await decidir(director.token, id, e1.profileId, 'confirmed');
@@ -997,7 +998,7 @@ async function batch4(ctx) {
     'V5.4.15 §14.1 «Me interesa» no es una solicitud: no se admite ni reserva cupo', `${admitirInteres.status} ${admitirInteres.data?.code}`);
 
   // --- baja de una plaza admitida la libera
-  const libre = await crear('Taller para baja', { capacity: 1 });
+  const libre = await crear('Taller para baja', { capacity: 1, registrationMode: 'approval' });
   await req('POST', `/activities/${libre.data?.id}/register`, { token: e1.token });
   await decidir(director.token, libre.data?.id, e1.profileId, 'accepted');
   const baja = await req('POST', `/activities/${libre.data?.id}/cancel-registration`, { token: e1.token });

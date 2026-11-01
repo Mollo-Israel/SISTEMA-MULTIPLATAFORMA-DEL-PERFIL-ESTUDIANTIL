@@ -392,7 +392,8 @@ export default function ActivityManager({
         .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
       imageFileIds: editing || form.imagenes.length ? form.imagenes.map((i) => i.fileId) : undefined,
       capacity: form.capacity ? Number(form.capacity) : undefined,
-      ...(externa ? {} : { registrationMode: form.registrationMode }),
+      // V6 §4.3: las externas tienen la misma política de admisión y cupo.
+      registrationMode: form.registrationMode,
       // V6 §3.4: al editar se envía siempre (vacío = toda la carrera).
       semesterScope: esDocente
         ? form.semesterScope.length ? form.semesterScope : undefined
@@ -1385,21 +1386,27 @@ export default function ActivityManager({
                 />
                 <FieldError message={errores.errors.capacity} />
               </div>
-              {!externa && (
-                <div className="field">
-                  <label htmlFor="activity-manager-admision">Admisión</label>
-                  <select id="activity-manager-admision" value={form.registrationMode}
-                    onChange={(e) => setForm({ ...form, registrationMode: e.target.value as 'open' | 'approval' })}>
-                    <option value="open">Abierta</option>
-                    <option value="approval">Cada solicitud la admite el responsable</option>
-                  </select>
-                  <span className="field-hint">
-                    {form.registrationMode === 'open' && !form.capacity
-                      ? 'Sin cupo, quien se inscribe queda admitido. La asistencia se registra el día del evento.'
-                      : 'Las solicitudes quedan pendientes hasta que las admitas; así el cupo nunca se supera.'}
-                  </span>
-                </div>
-              )}
+              {/* V6 §4.1: cupo y admisión son independientes; las cuatro combinaciones valen. */}
+              <div className="field">
+                <label htmlFor="activity-manager-admision">Admisión</label>
+                <select id="activity-manager-admision" value={form.registrationMode}
+                  onChange={(e) => setForm({ ...form, registrationMode: e.target.value as 'open' | 'approval' })}>
+                  <option value="open">Abierta</option>
+                  <option value="approval">Sujeta a aprobación del responsable</option>
+                </select>
+                <span className="field-hint" data-testid="admision-regla">
+                  {externa
+                    ? form.registrationMode === 'open'
+                      ? 'La plaza la confirma el proveedor: cuando lo haga, marca al estudiante como «Aceptado por el proveedor».'
+                      : 'Antes de que el proveedor confirme, tú decides a quién admitir. El cupo nunca se supera.'
+                    : form.registrationMode === 'approval'
+                      ? 'Las solicitudes quedan pendientes hasta que las admitas; el cupo nunca se supera.'
+                      : form.capacity
+                        ? 'Las plazas se asignan solas por orden de solicitud hasta llenar el cupo; después ya no se admiten más.'
+                        : 'Sin cupo, quien se inscribe queda admitido.'}
+                  {' '}Admitir no es asistir: la asistencia se registra el día del evento.
+                </span>
+              </div>
               <div className="field">
                 <label htmlFor="activity-manager-puntos-por-participar-opcional">Criterio de puntos (opcional)</label>
                 <select id="activity-manager-puntos-por-participar-opcional"

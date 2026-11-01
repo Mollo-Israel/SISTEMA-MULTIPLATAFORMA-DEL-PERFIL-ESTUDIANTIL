@@ -220,7 +220,66 @@ async function batch3(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch2, batch3 };
+/** Estudiante con la bienvenida completa, para que entre directo. */
+async function estudianteListo(admin, k) {
+  const est = await provisionAndActivate(admin, { firstName: 'Web', lastName: `${k}${L}`, email: `v6w.${k}.${TS}@est.univalle.edu`, role: 'STUDENT', semester: 3 });
+  const t = est.token;
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: t, body: {} });
+  const skills = ((await req('GET', '/skills', { token: t })).data ?? []).filter((s) => s.isActive !== false);
+  await req('PUT', '/profiles/me/skill-interests', { token: t, body: { items: [{ skillId: skills[0].id, kind: 'interest' }] } });
+  await req('PATCH', '/profiles/me', { token: t, body: { availability: 'open' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: t, body: { peerDiscoverable: true, publicProfileEnabled: false } });
+  const fin = await req('POST', '/profiles/me/onboarding/complete', { token: t });
+  if (fin.status >= 300) throw new Error(`No se completó la bienvenida: ${JSON.stringify(fin.data)}`);
+  return est;
+}
+
+// ===========================================================================
+//  BATCH V6-4 — Admisión y cupo en el formulario y en la tarjeta (§4.1, §4.3)
+// ===========================================================================
+async function batch4(ctx, browser) {
+  objective('BATCH V6-4 · Externas con selector de admisión; la tarjeta dice la regla del cupo');
+  const director = await provisionAndActivate(ctx.admin, { firstName: 'Dora', lastName: `Cupo${L}`, email: correoStaff('b4dir'), role: 'CAREER_DIRECTOR' });
+  const { ctx: c1, page, errores } = await entrar(browser, director.email);
+  await page.goto(`${WEB}/director/activities?vista=externa`);
+  await page.getByRole('button', { name: /Nueva oportunidad externa/ }).first().click({ timeout: 45000 });
+  const admision = page.locator('#activity-manager-admision');
+  await admision.waitFor({ timeout: 8000 }).catch(() => {});
+  check(await admision.count() === 1, 'V6W.4.1 V6-ACT-03 El formulario de Externas tiene el selector de Admisión');
+  const regla = async () => ((await page.locator('[data-testid="admision-regla"]').textContent().catch(() => '')) ?? '');
+  check(/proveedor/.test(await regla()), 'V6W.4.2 En una externa se explica que la plaza la confirma el proveedor', await regla());
+
+  await page.goto(`${WEB}/director/activities`);
+  await page.getByRole('button', { name: /Nueva actividad/ }).first().click({ timeout: 45000 });
+  await page.locator('#activity-manager-cupo').fill('20');
+  check(/por orden de solicitud/.test(await regla()), 'V6W.4.3 Abierta con cupo: «por orden de solicitud hasta llenar el cupo»', await regla());
+  await page.locator('#activity-manager-admision').selectOption('approval');
+  check(/pendientes hasta que las admitas/.test(await regla()), 'V6W.4.4 Por aprobación: las solicitudes quedan pendientes', await regla());
+  check(errores.length === 0, 'V6W.4.5 Sin errores de JavaScript en el formulario', errores.join(' | '));
+  await c1.close();
+
+  // La tarjeta del estudiante: plazas y regla de admisión, separadas.
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats[0];
+  const titulo = `Taller abierto web ${L}`;
+  await req('POST', '/activities', {
+    token: director.token,
+    body: { title: titulo, type: 'academica', categoryId: cat.id, semesterScope: [3], activityDate: en(72), endAt: en(74), status: 'open', capacity: 20 },
+  });
+  const est = await estudianteListo(ctx.admin, 'cupo');
+  const { ctx: c2, page: pe, errores: e2 } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/student/activities?tab=todas`);
+  await pe.getByPlaceholder('Buscar por título, descripción o lugar…').fill(titulo, { timeout: 45000 }).catch(() => {});
+  const tarjeta = pe.locator('article', { hasText: titulo }).first();
+  await tarjeta.waitFor({ timeout: 45000 }).catch(() => {});
+  const plazas = (await tarjeta.locator('[data-testid="plazas"]').textContent().catch(() => '')) ?? '';
+  check(/20 de 20 plazas libres/.test(plazas) && /Admisión abierta, por orden de solicitud/.test(plazas),
+    'V6W.4.6 La tarjeta dice «20 de 20 plazas libres · Admisión abierta, por orden de solicitud»', plazas);
+  check(e2.length === 0, 'V6W.4.7 Sin errores de JavaScript en la oferta del estudiante', e2.join(' | '));
+  await c2.close();
+}
+
+const BATCHES = { batch2, batch3, batch4 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);
