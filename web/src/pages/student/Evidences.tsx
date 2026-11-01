@@ -1,3 +1,4 @@
+import EstadosDeRespaldo from '../../components/EstadosDeRespaldo';
 import { FieldError, validarFormulario } from '../../components/form';
 import { BotonArchivo } from '../../components/ArchivoProtegido';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
@@ -124,8 +125,10 @@ export default function StudentEvidencesPage() {
     <div>
       <PageHeader
         title="Evidencias y credenciales"
-        description="Tus credenciales externas y las constancias internas que recibiste. Afinia no las certifica: las valida por niveles y lo indica en cada una."
+        description="Tus credenciales externas y los certificados institucionales que recibiste. Afinia no las certifica: las valida por niveles y lo indica en cada una."
       />
+      {/* V6 §10.2: qué significa cada estado de respaldo. */}
+      <EstadosDeRespaldo />
 
       <Tabs
         items={[

@@ -361,8 +361,8 @@ async function batch10(ctx) {
   }
 
   const reglas = (await req('GET', '/recommendations/rules', { token: est.token })).data;
-  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([40, 30, 15, 10, 5]),
-    'V2.10.9 V3 §34 Las reglas publicadas son las de la especificación: 40/30/15/10/5', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
+  check(JSON.stringify((reglas?.ranking ?? []).map((r) => r.weight)) === JSON.stringify([40, 30, 15, 10]),
+    'V2.10.9 V3 §34 / V6 §9.2 Las reglas publicadas: 40/30/15/10 (sin el 5 % de clics)', JSON.stringify(reglas?.ranking?.map((r) => [r.code, r.weight])));
 }
 
 // ===========================================================================
@@ -826,7 +826,8 @@ async function batch12(ctx) {
   check((secciones.data?.templates ?? []).map((t) => t.key).join() === 'classic,modern,compact',
     'V2.12.2 §61.2 Hay tres plantillas estáticas', json(secciones.data?.templates));
   // V3 §43.6 actualiza el texto: «registrada y respaldada».
-  const DESCARGO = 'Documento generado a partir de información registrada y respaldada en Afinia. No constituye historial académico oficial, certificación institucional ni acreditación profesional de competencias.';
+  // V6 §10.4: el texto del resumen, tal cual.
+  const DESCARGO = 'Resumen de trayectoria estudiantil — selección de experiencias registradas en Afinia. La fuente y nivel de respaldo de cada entrada se muestran de forma individual. No constituye certificación institucional ni acreditación profesional.';
   check(secciones.data?.disclaimer === DESCARGO, 'V2.12.3 §61.4 / V3 §43.6 El descargo es el texto exacto de la especificación');
 
   const vista = await req('POST', '/trajectory-summary/preview', {
@@ -845,7 +846,7 @@ async function batch12(ctx) {
   }
   check(Object.values(pdfs).every((p) => p.status === 201 && p.type?.includes('application/pdf') && p.text.startsWith('%PDF-')),
     'V2.12.7 §61 Las tres plantillas generan un PDF', Object.values(pdfs).map((p) => p.status).join('/'));
-  check(Object.values(pdfs).every((p) => p.text.includes('No constituye historial acad')),
+  check(Object.values(pdfs).every((p) => p.text.includes('No constituye certificaci')),
     'V2.12.8 §61.4 El descargo va dentro del PDF en todas las plantillas');
   check(pdfs.compact.text.includes('/Times-Roman') && !pdfs.classic.text.includes('/Times-Roman')
     && / rg /.test(pdfs.modern.text) && !/ rg /.test(pdfs.classic.text),

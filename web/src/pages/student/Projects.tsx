@@ -1,3 +1,4 @@
+import EstadosDeRespaldo from '../../components/EstadosDeRespaldo';
 import { validarFormulario } from '../../components/form';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -361,6 +362,8 @@ export default function StudentProjectsPage() {
         title="Proyectos"
         description="Guarda tus proyectos como borrador y actívalos cuando cumplan lo mínimo: áreas, tecnologías, repositorio público, integrantes confirmados y una evidencia de funcionamiento. Las evidencias viven dentro de cada proyecto."
       />
+      {/* V6 §10.2: qué significa cada estado de respaldo. */}
+      <EstadosDeRespaldo />
 
       <Card title={editando ? `Editar «${editando.title}»` : 'Nuevo proyecto'}>
         {editando?.status === 'active' && (

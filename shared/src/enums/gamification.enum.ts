@@ -189,11 +189,12 @@ export const TRAJECTORY_SECTION_LABEL: Record<TrajectorySection, string> = {
  */
 export const CV_SECTIONS: readonly { key: TrajectorySection; label: string }[] = [
   { key: TrajectorySection.BIO, label: 'Perfil / resumen' },
-  { key: TrajectorySection.PROJECTS, label: 'Proyectos' },
-  { key: TrajectorySection.ACADEMIC_ACTIVITIES, label: 'Actividades académicas internas' },
-  { key: TrajectorySection.EXTRACURRICULAR_ACTIVITIES, label: 'Actividades extracurriculares internas' },
-  { key: TrajectorySection.CERTIFICATES, label: 'Credenciales / cursos externos' },
-  { key: TrajectorySection.CONSTANCIES, label: 'Constancias' },
+  // V6 §10.4: cada sección dice qué es; participar no es tener un documento.
+  { key: TrajectorySection.PROJECTS, label: 'Proyectos y aportes individuales (con nivel de respaldo)' },
+  { key: TrajectorySection.ACADEMIC_ACTIVITIES, label: 'Participaciones académicas registradas (sin documento emitido)' },
+  { key: TrajectorySection.EXTRACURRICULAR_ACTIVITIES, label: 'Participaciones extracurriculares registradas (sin documento emitido)' },
+  { key: TrajectorySection.CERTIFICATES, label: 'Credenciales externas (emisor y consulta oficial)' },
+  { key: TrajectorySection.CONSTANCIES, label: 'Certificados institucionales recibidos (emisor oficial)' },
   { key: TrajectorySection.TECHNOLOGIES, label: 'Habilidades respaldadas' },
   { key: TrajectorySection.BADGES, label: 'Insignias' },
   { key: TrajectorySection.CONTACT, label: 'Contacto' },
@@ -263,7 +264,21 @@ export const TRAJECTORY_SOURCES_NOTICE =
   + 'no son constancias emitidas por Afinia y se incluyen solo en este resumen informativo. '
   + 'En las credenciales externas, Afinia informa el resultado de la consulta al proveedor en la fecha indicada; no las certifica.';
 
+/** V6 §10.4: el texto del resumen, tal cual. */
 export const TRAJECTORY_DISCLAIMER =
-  'Documento generado a partir de información registrada y respaldada en Afinia. '
-  + 'No constituye historial académico oficial, certificación institucional '
-  + 'ni acreditación profesional de competencias.';
+  'Resumen de trayectoria estudiantil — selección de experiencias registradas en Afinia. '
+  + 'La fuente y nivel de respaldo de cada entrada se muestran de forma individual. '
+  + 'No constituye certificación institucional ni acreditación profesional.';
+
+/**
+ * V6 §10.2: qué significa cada estado de respaldo, en una sola lista que usan
+ * la trayectoria, los proyectos y las credenciales. Ninguno es un certificado.
+ */
+export const BACKING_STATES_EXPLAINED: readonly { state: string; label: string; meaning: string }[] = [
+  { state: 'declared', label: 'Declarado', meaning: 'Lo registraste; no tenemos una señal comprobable suficiente.' },
+  { state: 'supported', label: 'Con respaldo', meaning: 'Hay una fuente consultable, un documento o una señal parcial (por ejemplo, el documento se leyó y coincide, o el repositorio muestra la tecnología), sin una verificación individual concluyente. No es tener un certificado.' },
+  { state: 'corroborated', label: 'Corroborado', meaning: 'Se contrastó una señal concreta con una fuente según las reglas: el emisor oficial identificó la credencial, o el repositorio y la demo respondieron.' },
+  { state: 'reviewed', label: 'Revisado', meaning: 'Una persona identificada (un docente) lo revisó; se indica qué revisó. No es una certificación profesional.' },
+  { state: 'inconclusive', label: 'Inconcluso', meaning: 'No se pudo determinar más por falta o indisponibilidad de la prueba (por ejemplo, el emisor no respondió). No es una sospecha de fraude.' },
+  { state: 'flagged', label: 'Observado', meaning: 'Algo no coincide; tiene un motivo y se puede corregir para volver a comprobarlo.' },
+];

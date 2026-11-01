@@ -1369,3 +1369,10 @@ button.chip { cursor: pointer; font-family: var(--font); }
 /* <output> y <fieldset> en lugar de role="status" y role="group" (accesibilidad). */
 output.inline-note, output.notice { display: flex; }
 fieldset.chip-row { border: 0; padding: 0; margin: 0; min-width: 0; }
+
+/* V6 §10.2: explicación de los estados de respaldo. */
+.estados-respaldo { margin: 0 0 1rem; padding: 0.6rem 0.9rem; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50); }
+.estados-respaldo summary { cursor: pointer; font-weight: 600; }
+.estados-respaldo dl { display: grid; gap: 0.4rem; margin: 0.6rem 0; }
+.estados-respaldo dt { font-weight: 600; }
+.estados-respaldo dd { margin: 0; color: var(--gray-700); }

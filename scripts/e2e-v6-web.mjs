@@ -555,7 +555,35 @@ async function batch13(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch12, batch13 };
+// ===========================================================================
+//  BATCH V6-15 — «¿Qué significa cada estado de respaldo?» (§10.2, HIST-02)
+// ===========================================================================
+async function batch15(ctx, browser) {
+  objective('BATCH V6-15 · La misma explicación de los estados en trayectoria, proyectos y credenciales');
+  const est = await estudianteListo(ctx.admin, 'Respaldo');
+  const { ctx: c1, page, errores } = await entrar(browser, est.email);
+  const vistas = [];
+  for (const ruta of ['/student/progress', '/student/projects', '/student/evidences']) {
+    await page.goto(`${WEB}${ruta}`);
+    const caja = page.locator('[data-testid="estados-respaldo"]');
+    await caja.waitFor({ timeout: 20000 }).catch(() => {});
+    if (await caja.count()) {
+      await caja.locator('summary').click();
+      vistas.push((await caja.textContent()) ?? '');
+    } else vistas.push('');
+  }
+  check(vistas.every((v) => /Con respaldo/.test(v) && /No es tener un certificado/.test(v) && /Inconcluso/.test(v)),
+    'V6W.15.1 HIST-02 Trayectoria, proyectos y credenciales explican «Con respaldo» igual (y que no es un certificado)', vistas.map((v) => v.length).join(','));
+  await page.goto(`${WEB}/student/evidences`);
+  await page.getByRole('tab').first().waitFor({ timeout: 20000 }).catch(() => {});
+  const pestanas = (await page.getByRole('tab').allTextContents()).join(' | ');
+  check(/Certificados institucionales recibidos/.test(pestanas) && !/Constancias y certificados/.test(pestanas),
+    'V6W.15.2 V6-CERT-02 La pestaña se llama «Certificados institucionales recibidos»', pestanas);
+  check(errores.length === 0, 'V6W.15.3 Sin errores de JavaScript', errores.join(' | '));
+  await c1.close();
+}
+
+const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch12, batch13, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);

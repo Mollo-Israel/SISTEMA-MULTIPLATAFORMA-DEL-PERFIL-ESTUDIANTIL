@@ -1,3 +1,4 @@
+import EstadosDeRespaldo from '../../components/EstadosDeRespaldo';
 import { useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
@@ -48,6 +49,8 @@ export default function StudentProgressPage() {
         title="Mi progreso"
         description="Tu trayectoria completa, tus puntos y un resumen informativo que puedes descargar."
       />
+      {/* V6 §10.2: qué significa cada estado de respaldo. */}
+      <EstadosDeRespaldo />
       <Tabs
         value={tab}
         onChange={(k) => setTab(k as Pestana)}
@@ -336,10 +339,11 @@ function CvPreview({ d }: { d: Record<string, any> }) {
         <section><h4>Habilidades respaldadas</h4><p>{d.skills.map((x: any) => x.name).join(' · ')}</p></section>
       )}
       {lista('Actividades con asistencia registrada', (d.activities ?? []).map(actividadCv))}
-      {lista('Actividades académicas internas', (d.academicActivities ?? []).map(actividadCv))}
-      {lista('Actividades extracurriculares internas', (d.extracurricularActivities ?? []).map(actividadCv))}
-      {lista('Credenciales y cursos externos', (d.certificates ?? []).map((c: any) => `${c.name} — ${c.issuer}`))}
-      {lista('Documentos registrados', (d.constancies ?? []).map((c: any) => c.description))}
+      {/* V6 §10.4: participar no es tener un documento; cada sección dice qué es. */}
+      {lista('Participaciones académicas registradas (sin documento emitido)', (d.academicActivities ?? []).map(actividadCv))}
+      {lista('Participaciones extracurriculares registradas (sin documento emitido)', (d.extracurricularActivities ?? []).map(actividadCv))}
+      {lista('Credenciales externas (emisor y consulta oficial)', (d.certificates ?? []).map((c: any) => `${c.name} — ${c.issuer}`))}
+      {lista('Certificados institucionales recibidos (emisor oficial)', (d.constancies ?? []).map((c: any) => c.description))}
       {lista('Evidencias', (d.evidences ?? []).map((e: any) => (e.context ? `${e.description ?? 'Evidencia'} — ${e.context}` : e.description)))}
       {lista('Insignias de Afinia', (d.badges ?? []).map((b: any) => `${b.name} (${FECHA(b.awardedAt)})`))}
       {lista('Contacto', (d.contact ?? []).map((c: any) => `${c.label}: ${c.value}`))}

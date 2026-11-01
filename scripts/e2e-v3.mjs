@@ -1966,8 +1966,8 @@ async function batch18(ctx) {
   // ======================================================= §43 Ítems elegibles
   const secciones = await req('GET', '/trajectory-summary/sections', { token: est.token });
   check((secciones.data?.cvSections ?? []).map((s) => s.label).join('|')
-    === 'Perfil / resumen|Proyectos|Actividades académicas internas|Actividades extracurriculares internas|Credenciales / cursos externos|Constancias|Habilidades respaldadas|Insignias|Contacto',
-  'V3.18.10 §43.1 Paso 1: las nueve secciones, en orden');
+    === 'Perfil / resumen|Proyectos y aportes individuales (con nivel de respaldo)|Participaciones académicas registradas (sin documento emitido)|Participaciones extracurriculares registradas (sin documento emitido)|Credenciales externas (emisor y consulta oficial)|Certificados institucionales recibidos (emisor oficial)|Habilidades respaldadas|Insignias|Contacto',
+  'V3.18.10 §43.1 / V6 §10.4 Paso 1: las nueve secciones, en orden y con lo que es cada una');
   const items = await req('GET', '/trajectory-summary/items', { token: est.token });
   const sec = (k) => (items.data?.sections ?? []).find((s) => s.key === k);
   check(sec('projects')?.items.map((i) => i.id).join() === corroborado.id && sec('projects')?.excluded?.count === 1,
@@ -2014,8 +2014,8 @@ async function batch18(ctx) {
   const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
   check(res.status === 201 && pdf.startsWith('%PDF-') && pdf.includes('Asistencia registrada') && pdf.includes('Certificado emitido por'),
     'V3.18.25 §43.4 El PDF sale de la misma selección', `status ${res.status}`);
-  check(pdf.includes('registrada y respaldada en Afinia') && pdf.includes('No constituye historial'),
-    'V3.18.26 §43.6 Con el descargo exacto de V3');
+  check(pdf.includes('registradas en Afinia') && pdf.includes('No constituye certificaci'),
+    'V3.18.26 §43.6 / V6 §10.4 Con el aviso del resumen');
   check(!pdf.includes('Taller de pruebas'), 'V3.18.27 Y sin lo que no se marcó');
 }
 

@@ -966,11 +966,12 @@ export interface StoredFile {
 /** Niveles de respaldo de un documento (§30). */
 export type BackingTier = 'declared' | 'supported' | 'corroborated' | 'flagged';
 
+/** V6 §10.2: las mismas palabras en toda la aplicación. */
 export const BACKING_TIER_LABEL: Record<BackingTier, string> = {
-  declared: 'Aportado',
-  supported: 'Respaldado',
+  declared: 'Declarado',
+  supported: 'Con respaldo',
   corroborated: 'Corroborado',
-  flagged: 'Con inconsistencias',
+  flagged: 'Observado',
 };
 
 export const BACKING_TIER_HELP: Record<BackingTier, string> = {

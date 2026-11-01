@@ -840,8 +840,8 @@ async function batch15(ctx) {
   const est = await provisionStudent(ctx.admin, { firstName: 'Ona', lastName: `Resumen${L}`, email: correoEst('b15e'), semester: 6 });
   const secciones = (await req('GET', '/trajectory-summary/sections', { token: est.token })).data;
   check(/asistencia registrada por el responsable/.test(secciones?.notice ?? '') && /no las certifica/.test(secciones?.notice ?? '')
-    && /No constituye historial académico oficial/.test(secciones?.disclaimer ?? ''),
-    'V5.15.1 ND-02 §15.2 El resumen trae un aviso: participaciones como registro del responsable y credenciales informadas, no certificadas (el descargo de §61.4 no cambia)',
+    && /No constituye certificación institucional/.test(secciones?.disclaimer ?? ''),
+    'V5.15.1 ND-02 §15.2 El resumen trae un aviso: participaciones como registro del responsable y credenciales informadas, no certificadas (con el aviso de V6 §10.4)',
     json(secciones?.notice));
   const vista = (await req('POST', '/trajectory-summary/preview', { token: est.token, body: { sections: ['bio'] } })).data;
   check(vista?.notice === secciones?.notice, 'V5.15.2 La vista previa lleva el mismo aviso', json(vista?.notice));
@@ -851,7 +851,7 @@ async function batch15(ctx) {
     body: JSON.stringify({ sections: ['bio'] }),
   });
   const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
-  check(res.status === 201 && /asistencia registrada/.test(pdf) && /consulta al proveedor/.test(pdf) && pdf.includes('No constituye historial'),
+  check(res.status === 201 && /asistencia registrada/.test(pdf) && /consulta al proveedor/.test(pdf) && pdf.includes('No constituye certificaci'),
     'V5.15.3 H04 El PDF lleva el aviso de fuentes y el descargo', `status ${res.status}`);
 }
 
@@ -1051,7 +1051,7 @@ async function batch5(ctx) {
     body: JSON.stringify({ sections: ['academic_activities'], items: { academic_activities: [act.data?.id] } }),
   });
   const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
-  check(res.status === 201 && pdf.includes('borrador informativo') && pdf.includes('generado el') && pdf.includes('No constituye historial'),
+  check(res.status === 201 && pdf.includes('borrador informativo') && pdf.includes('generado el') && pdf.includes('No constituye certificaci'),
     'V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial', `status ${res.status}`);
 }
 

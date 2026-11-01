@@ -204,9 +204,9 @@ async function pruebas(browser) {
   check(await p3.getByText('Plantilla', { exact: true }).first().isVisible(), 'WEB.18 §61 Resumen de trayectoria abre el generador con plantillas');
   await p3.getByText('Paso 1 · Qué secciones incluir').first().waitFor({ timeout: 8000 }).catch(() => {});
   // Las casillas llegan con la respuesta de secciones: se esperan, no se suponen.
-  await p3.getByLabel('Credenciales / cursos externos').first().waitFor({ timeout: 8000 }).catch(() => {});
+  await p3.getByLabel('Credenciales externas (emisor y consulta oficial)').first().waitFor({ timeout: 8000 }).catch(() => {});
   check(await p3.getByText('Paso 1 · Qué secciones incluir').first().isVisible()
-    && await p3.getByLabel('Credenciales / cursos externos').first().isVisible(),
+    && await p3.getByLabel('Credenciales externas (emisor y consulta oficial)').first().isVisible(),
   'WEB.18b V3 §43 El currículo se elige en dos niveles, con casillas etiquetadas');
   await p3.click('nav a[href="/student/progress"]');
   await p3.getByText('Cómo leer tu trayectoria').first().waitFor({ timeout: 8000 }).catch(() => {});

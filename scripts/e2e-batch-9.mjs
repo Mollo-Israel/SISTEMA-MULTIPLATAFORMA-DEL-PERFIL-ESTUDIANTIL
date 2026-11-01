@@ -390,7 +390,7 @@ async function resumen(ctx) {
   );
   check(
     !!secciones.data?.disclaimer
-      && secciones.data.disclaimer.includes('No constituye historial académico oficial'),
+      && secciones.data.disclaimer.includes('No constituye certificación institucional'),
     'B9.31 Y la advertencia obligatoria viaja con ellas (§67)',
   );
 
@@ -490,7 +490,7 @@ async function pdf(ctx) {
     'B9.45 Y el nombre del estudiante',
   );
   check(
-    leido.text.includes('No constituye historial')
+    leido.text.includes('No constituye certificaci')
       && leido.text.includes('acreditaci'),
     'B9.46 La advertencia obligatoria va DENTRO del documento (§67)',
     leido.text.slice(-220),
@@ -504,7 +504,7 @@ async function pdf(ctx) {
     'B9.47 Un PDF de solo datos básicos no lleva los proyectos (§67)',
   );
   check(
-    textoBasico.includes('No constituye historial'),
+    textoBasico.includes('No constituye certificaci'),
     'B9.48 Pero la advertencia sí: no es opcional (§67)',
   );
 

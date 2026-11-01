@@ -787,7 +787,23 @@ async function batch14(ctx) {
   check(!constancias.some((c) => c.activityId === act.data?.id), 'V6.14.4 ADM-07 Y no aparece como certificado ni constancia recibida', json(constancias.length));
 }
 
-const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14 };
+// ===========================================================================
+//  BATCH V6-15 — Resumen con secciones que dicen qué es cada cosa (§10.4)
+// ===========================================================================
+async function batch15(ctx) {
+  objective('BATCH V6-15 · Participar no es un documento; el resumen lo separa y lo dice');
+  const est = await provisionStudent(ctx.admin, { firstName: 'Teo', lastName: `Resumen${L}`, email: correoEst('b15est'), semester: 5 });
+  const s = (await req('GET', '/trajectory-summary/sections', { token: est.token })).data;
+  const etiquetas = (s?.cvSections ?? []).map((x) => x.label);
+  check(['Participaciones académicas registradas (sin documento emitido)', 'Participaciones extracurriculares registradas (sin documento emitido)',
+    'Proyectos y aportes individuales (con nivel de respaldo)', 'Credenciales externas (emisor y consulta oficial)',
+    'Certificados institucionales recibidos (emisor oficial)'].every((x) => etiquetas.includes(x)),
+  'V6.15.1 V6-TRAJ-01 Las secciones separan participaciones (sin documento), proyectos, credenciales externas y certificados institucionales', json(etiquetas));
+  const texto = 'Resumen de trayectoria estudiantil — selección de experiencias registradas en Afinia. La fuente y nivel de respaldo de cada entrada se muestran de forma individual. No constituye certificación institucional ni acreditación profesional.';
+  check(s?.disclaimer === texto, 'V6.15.2 §10.4 El aviso del resumen es el texto del contrato', s?.disclaimer);
+}
+
+const BATCHES = { batch1, batch3, batch4, batch6, batch7, batch8, batch9, batch10, batch11, batch12, batch13, batch14, batch15 };
 
 async function main() {
   console.log(`${C.bold}Afinia V6 — verificación del contrato contra la API${C.r}`);
