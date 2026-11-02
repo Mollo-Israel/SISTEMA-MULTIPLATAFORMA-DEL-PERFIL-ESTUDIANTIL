@@ -134,7 +134,9 @@ npm run test:all         # en otra: unitarias + 21 suites de API (incluidas V3, 
 
 | Script | Qué prueba |
 |--------|-----------|
-| `npm run test:unit` | Reglas puras (afinidad, recomendaciones 40/30/15/10/5, respaldo, credenciales, currículo, transiciones de estado, guard del correo, auditoría, respaldos de OCR y correo…) |
+| `npm run test:unit` | Reglas puras (afinidad, recomendaciones 40/30/15/10, respaldo, credenciales, currículo, transiciones de estado, guard del correo, auditoría, respaldos de OCR y correo…) |
+| `npm run test:v6` | Los batches del cierre V6 contra la API, cada comprobación con su escenario del contrato (`node scripts/e2e-v6.mjs batch7` corre uno) |
+| `npm run test:v6-web` | El cierre V6 en la web con Playwright (necesita `npm --prefix web run build`; `node scripts/e2e-v6-web.mjs batch2` corre uno) |
 | `npm run test:v5` | Los batches del cierre V5, cada comprobación con su escenario A01…I07 (`node scripts/e2e-v5.mjs batch7` corre uno) |
 | `npm run test:v41` | Los batches del cierre V4.1 (`node scripts/e2e-v4-1.mjs batch10` corre uno) |
 | `npm run test:v32` | Los batches del cierre V3.2 (`node scripts/e2e-v3-2.mjs batch15` corre uno) |
@@ -146,26 +148,15 @@ npm run test:all         # en otra: unitarias + 21 suites de API (incluidas V3, 
 | `npm run test:load` | Carga con k6 en Docker (V3 RNF09) |
 | `npm run test:security` | OWASP ZAP en Docker: **escaneo activo**, solo contra una base de desarrollo respaldada |
 
-Última corrida completa (cierre V5, 28/10/2026): 23 suites, **2390 comprobaciones sin
-fallos**; Jest 69/69; k6 sin fallos (p95 110 ms); ZAP activo 0 FAIL / 0 WARN. Qué se ejecutó y
-qué no, en [`docs/V5_QA.md`](docs/V5_QA.md) (la del cierre V4.1, en [`docs/V4_1_QA.md`](docs/V4_1_QA.md)).
-
-## Flujo principal
-
-1. Administración provisiona la cuenta (o importa el padrón).
-2. El titular la activa desde el correo y elige su contraseña.
-3. El estudiante completa la bienvenida: confirma sus datos, declara intereses por área y tecnología, decide su disponibilidad y su privacidad.
-4. Docente o sociedad proponen una actividad; Dirección la aprueba y se publica. Los recursos y los puntos del docente también pasan por Dirección, salvo que esta le haya concedido autonomía en ese módulo.
-5. El estudiante ve «Para ti» (40/30/15/10/5, sin afinidad) y pide un lugar. El responsable lo admite y, desde que empieza el evento, registra su asistencia. Afinia no emite constancias: la participación queda como registro del responsable.
-6. Registra un proyecto en borrador y, si quiere, analiza su repositorio para que le sugiera tecnologías con su fuente. Lo activa con repositorio, evidencia e integrantes confirmados (cada uno declara solo tecnologías del proyecto). GitHub corrobora tecnologías, y la retroalimentación docente lo eleva a revisado. Los proyectos activos compartidos aparecen en «Proyectos de la carrera», con hasta 5 imágenes de muestra.
-7. Adjunta credenciales externas, que se validan por niveles (URL oficial, QR, Open Badge).
-8. El motor de afinidad V5 recalcula solo con lo corroborado, en el área del contexto explícito de cada experiencia, con desglose y respaldo aparte.
-9. Publica o postula a necesidades de equipo de su semestre; el responsable acepta o rechaza con motivo.
-10. Consulta su trayectoria con niveles y arma un currículo eligiendo ítems elegibles; descarga el PDF.
-11. Docente, Dirección, Sociedad y Administración consultan su Inicio y paneles descriptivos, con umbral de privacidad.
+Última corrida completa (cierre V6, 01/11/2026): 23 suites anteriores con **2398 comprobaciones
+sin fallos**, `e2e-v6` 98/98, `e2e-v6-web` 63/63, Jest 69/69 y Newman 70/70. Qué se ejecutó, qué falló
+en el camino y qué no se ejecutó, en [`QA_V6_REGRESION.md`](QA_V6_REGRESION.md) (la del cierre V5, en
+[`docs/V5_QA.md`](docs/V5_QA.md)).
 
 ## Documentación
 
+- [`QA_V6_REGRESION.md`](QA_V6_REGRESION.md) — QA del cierre V6: regresión completa, pruebas por batch, migraciones, matriz GAP final y lo que no se ejecutó.
+- [`AUDITORIA_GAP_AFINIA_V6.md`](AUDITORIA_GAP_AFINIA_V6.md) y [`PLAN_BATCHES_AFINIA_V6.md`](PLAN_BATCHES_AFINIA_V6.md) — la auditoría inicial de la V6, con sondas reales, y su plan.
 - [`docs/V5_QA.md`](docs/V5_QA.md) — QA del cierre V5: regresión completa, Jest, k6 y ZAP, migraciones, adaptaciones de pruebas anteriores y decisiones.
 - [`docs/MATRIZ_TRAZABILIDAD_V5.md`](docs/MATRIZ_TRAZABILIDAD_V5.md) — V5-01 a V5-31 y escenarios A01…I07 → batch → código → pruebas → estado.
 - [`docs/CAMBIOS_DOCUMENTO_GRADO_V5.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V5.md) — qué ajustar en la tesis para la V5 (el `.docx` no se modificó).

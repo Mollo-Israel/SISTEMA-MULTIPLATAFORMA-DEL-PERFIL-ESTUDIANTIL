@@ -47,6 +47,8 @@
     "test:v32": "node scripts/e2e-v3-2.mjs",
     "test:v41": "node scripts/e2e-v4-1.mjs",
     "test:v5": "node scripts/e2e-v5.mjs",
+    "test:v6": "node scripts/e2e-v6.mjs",
+    "test:v6-web": "node scripts/e2e-v6-web.mjs",
     "test:unit": "npm --prefix api run test:unit",
     "test:web": "npm --prefix web run build && node scripts/e2e-web.mjs",
     "test:ai": "npm --prefix api run build:e2e && node scripts/e2e-ai-provider.mjs",

@@ -149,7 +149,7 @@ const coleccion = {
           rol: 'estudiante', tests: ["pm.test('403: no hay ranking ni consulta entre estudiantes', () => pm.response.to.have.status(403));"],
         }),
         req('Resumen de trayectoria → aviso de fuentes (ND-02)', 'GET', '/trajectory-summary/sections', { rol: 'estudiante', tests: [
-          "pm.test('200 con el aviso y el descargo', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().notice).to.include('no las certifica'); pm.expect(pm.response.json().disclaimer).to.include('No constituye historial'); });",
+          "pm.test('200 con el aviso y el descargo', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().notice).to.include('no las certifica'); pm.expect(pm.response.json().disclaimer).to.include('No constituye certificación institucional'); });",
         ] }),
       ],
     },

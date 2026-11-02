@@ -20,10 +20,12 @@ test.describe('Estudiante: perfil, actividades, proyectos, evidencias, afinidad 
     await visitar(page, info, '/student/activities', /Actividades/, '02-03-actividades');
     await visitar(page, info, '/student/projects', /Proyectos/, '02-04-proyectos');
     await visitar(page, info, '/student/evidences', /Evidencias/, '02-05-evidencias-credenciales');
-    await page.getByRole('tab', { name: /Constancias/ }).first().click();
+    // V6 §11.1: la pestaña se llama «Certificados institucionales recibidos».
+    await page.getByRole('tab', { name: /Certificados institucionales/ }).first().click();
     await captura(page, info, '02-06-evidencias-constancias');
     await visitar(page, info, '/student/affinity', /afinidad/i, '02-07-afinidad');
-    await visitar(page, info, '/student/recommendations', /sugerencias/i, '02-08-recomendaciones');
+    // V6 §9.4: «Más sugerencias» se retiró; las recomendaciones son «Para ti» en Actividades.
+    await visitar(page, info, '/student/activities', /Actividades/, '02-08-recomendaciones');
     await visitar(page, info, '/student/library', /Biblioteca/, '02-09-biblioteca');
     await visitar(page, info, '/student/progress', /progreso/i, '02-10-trayectoria');
     await visitar(page, info, '/student/progress?tab=progreso', /progreso/i, '02-11-puntos');

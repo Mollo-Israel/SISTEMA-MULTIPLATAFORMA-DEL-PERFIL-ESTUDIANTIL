@@ -1417,7 +1417,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 con el aviso y el descargo', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().notice).to.include('no las certifica'); pm.expect(pm.response.json().disclaimer).to.include('No constituye historial'); });"
+                  "pm.test('200 con el aviso y el descargo', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().notice).to.include('no las certifica'); pm.expect(pm.response.json().disclaimer).to.include('No constituye certificación institucional'); });"
                 ]
               }
             }
