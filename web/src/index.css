@@ -1376,3 +1376,103 @@ fieldset.chip-row { border: 0; padding: 0; margin: 0; min-width: 0; }
 .estados-respaldo dl { display: grid; gap: 0.4rem; margin: 0.6rem 0; }
 .estados-respaldo dt { font-weight: 600; }
 .estados-respaldo dd { margin: 0; color: var(--gray-700); }
+
+
+/* =========================================================================
+   V7 · Vista amable para Estudiante, Docente, Dirección y Sociedad
+   (Administración conserva su panel). Solo presentación.
+   ========================================================================= */
+
+/* Saludo en el menú lateral */
+.sidebar-hola { display: flex; align-items: center; gap: 0.65rem; margin: 0.8rem 0.8rem 0.2rem; padding: 0.7rem 0.75rem; border-radius: 14px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.14); }
+.sidebar-hola .sh-avatar { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; color: var(--bordo); background: linear-gradient(135deg, #fff, #f6d9df); box-shadow: 0 6px 14px rgba(0,0,0,0.2); flex-shrink: 0; }
+.sidebar-hola .sh-meta { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.sidebar-hola .sh-meta b { color: #fff; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-hola .sh-meta span { font-size: 0.72rem; opacity: 0.8; }
+
+/* Menú: secciones con más aire y letra normal (no «de sistema») */
+.shell-amable .nav-section { text-transform: none; letter-spacing: 0; font-size: 0.76rem; font-weight: 700; opacity: 0.7; margin: 1rem 0.7rem 0.35rem; }
+.shell-amable .nav-link { padding: 0.62rem 0.75rem; font-size: 0.9rem; }
+.shell-amable .nav-link svg { width: 30px; height: 30px; padding: 7px; border-radius: 9px; background: rgba(255,255,255,0.1); transition: background 0.2s, transform 0.25s cubic-bezier(.34,1.56,.64,1); }
+.shell-amable .nav-link:hover svg { background: rgba(255,255,255,0.2); transform: scale(1.06); }
+.shell-amable .nav-link.active svg { background: var(--bordo-100); }
+.shell-amable .topbar { background: rgba(255,255,255,0.86); backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); }
+.shell-amable .topbar .page-title { font-weight: 700; font-size: 1rem; }
+.shell-amable .content { animation: none; }
+.shell-amable .main { background: radial-gradient(900px 420px at 100% -10%, #fbecef 0%, transparent 60%), var(--gray-50); }
+
+/* Barra inferior (solo teléfono) */
+.tabbar { display: none; }
+@media (max-width: 900px) {
+  .tabbar {
+    display: flex; position: fixed; left: 0.6rem; right: 0.6rem; bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px)); z-index: 30;
+    justify-content: space-around; align-items: stretch; gap: 0.15rem; padding: 0.35rem;
+    background: rgba(255,255,255,0.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid #f0dfe3; border-radius: 20px; box-shadow: 0 14px 36px rgba(107,18,32,0.18);
+  }
+  .tabbar-link {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.12rem;
+    padding: 0.35rem 0.2rem; border: 0; background: none; border-radius: 14px; cursor: pointer;
+    color: var(--gray-500); font-family: var(--font); font-size: 0.68rem; font-weight: 700; text-decoration: none;
+    -webkit-tap-highlight-color: transparent; transition: color 0.2s;
+  }
+  .tabbar-link .tb-ico { width: 40px; height: 28px; display: grid; place-items: center; border-radius: 999px; font-size: 1.1rem; transition: background 0.25s, transform 0.25s cubic-bezier(.34,1.56,.64,1); }
+  .tabbar-link .tb-lbl { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabbar-link.on { color: var(--bordo); }
+  .tabbar-link.on .tb-ico { background: var(--bordo-100); transform: translateY(-1px); }
+  .tabbar-link:active .tb-ico { transform: scale(0.92); }
+  /* El contenido no queda debajo de la barra. */
+  .con-tabbar .content { padding-bottom: 6.5rem; }
+  /* El menú completo («Más») se abre por encima de la barra. */
+  .con-tabbar .sidebar { z-index: 45; }
+  .con-tabbar .sidebar-backdrop { z-index: 44; }
+  .shell-amable .topbar .page-title { font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52vw; }
+}
+
+/* Inicio por rol: saludo y accesos con palabras simples */
+.rol-hero { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  padding: 1.6rem 1.8rem; margin-bottom: 1rem; border-radius: 22px; color: #fff;
+  background: linear-gradient(120deg, #6b1220 0%, #a52a3a 55%, #d24b60 100%); box-shadow: 0 18px 40px rgba(107,18,32,0.25); }
+.rol-hero::before { content: ""; position: absolute; width: 260px; height: 260px; border-radius: 50%; right: -70px; top: -90px; background: rgba(255,255,255,0.1); animation: rolOrb 12s ease-in-out infinite; }
+.rol-hero::after { content: ""; position: absolute; width: 160px; height: 160px; border-radius: 50%; right: 18%; bottom: -90px; background: rgba(255,255,255,0.08); animation: rolOrb 15s ease-in-out infinite reverse; }
+@keyframes rolOrb { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-24px, 16px); } }
+.rol-hero > * { position: relative; z-index: 1; }
+.rol-hero .rh-kicker { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85; }
+.rol-hero h1.rh-kicker { color: #fff; margin: 0; font-size: 0.72rem; font-weight: 700; }
+.rol-hero .rh-saludo { display: block; color: #fff; font-size: 1.85rem; font-weight: 800; line-height: 1.2; margin: 0.15rem 0 0.25rem; }
+.rol-hero p { margin: 0; opacity: 0.92; max-width: 560px; }
+.rol-hero .rh-acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.rol-hero .rh-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.62rem 1rem; border-radius: 12px; background: #fff; color: var(--bordo); font-weight: 700; box-shadow: 0 8px 20px rgba(0,0,0,0.15); transition: transform 0.15s; }
+.rol-hero .rh-btn.ghost { background: rgba(255,255,255,0.16); color: #fff; box-shadow: none; backdrop-filter: blur(4px); }
+.rol-hero .rh-btn:hover { transform: translateY(-2px); }
+.rol-atajos-t { font-size: 1.02rem; font-weight: 800; margin: 1.4rem 0 0.7rem; }
+.rol-atajos { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem; }
+.rol-atajo { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 0.35rem; padding: 1rem; border-radius: 16px; background: #fff; border: 1px solid var(--gray-200); color: var(--gray-900); text-decoration: none; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; }
+.rol-atajo:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(107,18,32,0.1); border-color: #e7c9cf; }
+.rol-atajo .ra-ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 1.15rem; color: #fff; margin-bottom: 0.2rem; transition: transform 0.3s cubic-bezier(.34,1.56,.64,1); }
+.rol-atajo:hover .ra-ico { transform: rotate(-8deg) scale(1.08); }
+.rol-atajo b { font-size: 0.92rem; }
+.rol-atajo span.ra-d { font-size: 0.78rem; color: var(--gray-500); }
+.rol-atajo .ra-go { position: absolute; right: 0.9rem; top: 1rem; color: var(--gray-300); transition: color 0.2s, transform 0.2s; }
+.rol-atajo:hover .ra-go { color: var(--bordo); transform: translateX(3px); }
+.rol-atajo.t0 .ra-ico { background: linear-gradient(135deg, #db2777, #f472b6); }
+.rol-atajo.t1 .ra-ico { background: linear-gradient(135deg, #2563eb, #7c3aed); }
+.rol-atajo.t2 .ra-ico { background: linear-gradient(135deg, #059669, #34d399); }
+.rol-atajo.t3 .ra-ico { background: linear-gradient(135deg, #d97706, #fbbf24); }
+.rol-atajo.t4 .ra-ico { background: linear-gradient(135deg, #6b1220, #d24b60); }
+.rol-atajo.t5 .ra-ico { background: linear-gradient(135deg, #0891b2, #22d3ee); }
+@media (max-width: 620px) {
+  .rol-hero { padding: 1.3rem 1.2rem; border-radius: 18px; }
+  .rol-hero .rh-saludo { font-size: 1.5rem; }
+  .rol-atajos { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .rol-atajo { padding: 0.85rem; }
+  .rol-atajo .ra-go { display: none; }
+}
+.rol-atajos > div > .rol-atajo { height: 100%; }
+
+/* V7: en el teléfono las cifras van de a dos, no una por fila. */
+@media (max-width: 900px) {
+  .shell-amable .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+  .shell-amable .grid.cols-4 > * { min-width: 0; }
+  .shell-amable .stat .value { font-size: 1.45rem; }
+}

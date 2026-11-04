@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiAward,
@@ -18,6 +18,7 @@ import {
   FiLayers,
   FiMail,
   FiMenu,
+  FiMoreHorizontal,
   FiPaperclip,
   FiShield,
   FiStar,
@@ -32,7 +33,8 @@ import {
 } from 'react-icons/fi';
 import type { IconType } from 'react-icons';
 import { useAuth } from '../auth/AuthContext';
-import { NAV } from '../navigation';
+import { NAV, TABBAR } from '../navigation';
+import { ROLE_LABEL, RolNombre } from '../constants';
 import { TopProgress } from './feedback';
 import UserMenu from './UserMenu';
 import NotificationBell from './NotificationBell';
@@ -150,9 +152,13 @@ export default function Layout() {
 
   if (!user) return null;
   const groups = NAV[user.role] ?? [];
+  // V7: Estudiante, Docente, Dirección y Sociedad usan la vista «amable»
+  // (saludo, pistas y barra inferior en el teléfono). Administración no.
+  const amable = user.role !== RolNombre.ADMIN;
+  const pestanas = TABBAR[user.role] ?? [];
 
   return (
-    <div className={`app-shell ${menuOpen ? 'menu-open' : ''}`}>
+    <div className={`app-shell ${menuOpen ? 'menu-open' : ''} ${amable ? 'shell-amable' : ''} ${pestanas.length ? 'con-tabbar' : ''}`}>
       <AnimatePresence>
         {menuOpen && (
           <motion.button
@@ -183,6 +189,15 @@ export default function Layout() {
             <FiX size={18} />
           </button>
         </div>
+        {amable && (
+          <div className="sidebar-hola">
+            <span className="sh-avatar" aria-hidden>{(user.firstName ?? '?').slice(0, 1).toUpperCase()}</span>
+            <span className="sh-meta">
+              <b>Hola{user.firstName ? `, ${user.firstName}` : ''}</b>
+              <span>{ROLE_LABEL[user.role] ?? ''}</span>
+            </span>
+          </div>
+        )}
         <nav>
           {groups.map((group) => (
             <div key={group.section}>
@@ -196,6 +211,7 @@ export default function Layout() {
                     key={item.to}
                     to={item.to}
                     end={esRaiz}
+                    title={item.hint}
                     className={({ isActive }) => {
                       const on = item.to.includes('?') || !esRaiz
                         ? activo(item.to, location.pathname, location.search, todos)
@@ -244,6 +260,27 @@ export default function Layout() {
         </PrimeraVisita.Provider>
         <Tutorial />
       </div>
+
+      {/* V7: en el teléfono, los accesos de uso diario abajo, como una app.
+          No es un <nav>: el menú completo sigue siendo el lateral («Más»). */}
+      {pestanas.length > 0 && (
+        <div className="tabbar" role="navigation" aria-label="Accesos rápidos">
+          {pestanas.map((p) => {
+            const Icon = ICONS[p.to] ?? FiClock;
+            const on = activo(p.to, location.pathname, location.search, pestanas.map((x) => x.to));
+            return (
+              <Link key={p.to} to={p.to} className={`tabbar-link ${on ? 'on' : ''}`} aria-current={on ? 'page' : undefined}>
+                <span className="tb-ico"><Icon /></span>
+                <span className="tb-lbl">{p.label}</span>
+              </Link>
+            );
+          })}
+          <button type="button" className={`tabbar-link ${menuOpen ? 'on' : ''}`} onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen}>
+            <span className="tb-ico"><FiMoreHorizontal /></span>
+            <span className="tb-lbl">Más</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

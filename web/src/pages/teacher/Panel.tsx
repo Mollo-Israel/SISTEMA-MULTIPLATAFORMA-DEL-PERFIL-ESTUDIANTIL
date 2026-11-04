@@ -4,6 +4,7 @@ import { useAsync } from '../../hooks/useAsync';
 import { reportService } from '../../services';
 import { CountBars } from '../../components/charts';
 import { AsyncView, Card, PageHeader, PanelEmbebido, SkeletonCards, Tabs } from '../../components/ui';
+import { AtajosRol, SaludoRol } from '../../components/InicioRol';
 import TeacherReportsPage from './Reports';
 import TeacherStudentsPage from './Students';
 import TeacherStudentProjectsPage from './StudentProjects';
@@ -37,10 +38,15 @@ export default function TeacherPanel() {
 
   return (
     <div>
-      <PageHeader
-        title="Panel académico"
-        description="Los estudiantes de tus semestres habilitados: resumen, detalle y lo que necesitan. Descriptivo; no es ranking ni evaluación."
-      />
+      {/* V7: en el resumen, un saludo; en las demás pestañas, el encabezado de siempre. */}
+      {tab === 'resumen' ? (
+        <SaludoRol />
+      ) : (
+        <PageHeader
+          title="Panel académico"
+          description="Los estudiantes de tus semestres habilitados: resumen, detalle y lo que necesitan. Descriptivo; no es ranking ni evaluación."
+        />
+      )}
       <Tabs value={tab} onChange={(k) => ir(k)} items={PESTANAS.map((p) => ({ key: p.key, label: p.label }))} />
       <PanelEmbebido.Provider value>
         {tab === 'resumen' && <Resumen ir={ir} />}
@@ -75,6 +81,7 @@ function Resumen({ ir }: { ir: (k: string, extra?: Record<string, string>) => vo
               <CountBars data={d.topTechnologies.map((t: any) => ({ label: t.technology, value: t.count }))} />
             </Card>
           </div>
+          <AtajosRol />
         </>
       )}
     </AsyncView>

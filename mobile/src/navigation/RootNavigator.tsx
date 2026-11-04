@@ -35,10 +35,25 @@ const Stack = createNativeStackNavigator();
 const screenOptions = {
   headerStyle: { backgroundColor: colors.bordo },
   headerTintColor: '#fff',
-  headerTitleStyle: { fontWeight: '700' as const },
+  headerTitleStyle: { fontWeight: '800' as const },
+  headerShadowVisible: false,
   tabBarActiveTintColor: colors.bordo,
   tabBarInactiveTintColor: colors.gray500,
-  tabBarLabelStyle: { fontSize: 11, fontWeight: '600' as const },
+  tabBarLabelStyle: { fontSize: 11, fontWeight: '700' as const },
+  // V7: barra inferior como la de la web en el teléfono: blanca, redondeada
+  // arriba y con sombra suave; la pestaña activa lleva una pastilla.
+  tabBarStyle: {
+    borderTopWidth: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    backgroundColor: colors.white,
+    paddingTop: 6,
+    shadowColor: colors.bordo,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
+  },
 };
 
 /**
@@ -47,8 +62,19 @@ const screenOptions = {
  */
 const tabIcon =
   (route: string) =>
-  ({ color, size }: { color: string; size: number }) => (
-    <Icon name={TAB_ICON[route] ?? 'circle'} size={size - 2} color={color} />
+  ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
+    <View
+      style={{
+        width: 46,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: focused ? colors.bordoBg : 'transparent',
+      }}
+    >
+      <Icon name={TAB_ICON[route] ?? 'circle'} size={size - 3} color={color} />
+    </View>
   );
 
 function LogoutButton() {
@@ -215,16 +241,50 @@ export default function RootNavigator() {
   return user.role === 'STUDENT' ? <StudentGate /> : <SoloEstudiantes />;
 }
 
+/**
+ * V7: lo que cada rol encuentra en la web, dicho en simple, para que quien
+ * entra con una sesión antigua sepa a dónde ir. La regla no cambia: la app es
+ * solo del Estudiante (V2 §67).
+ */
+const EN_LA_WEB: Record<string, { rol: string; cosas: string[] }> = {
+  TEACHER: { rol: 'Docente', cosas: ['Ver a los estudiantes de tus semestres', 'Revisar sus proyectos', 'Organizar actividades', 'Reporte por semestre'] },
+  CAREER_DIRECTOR: { rol: 'Dirección de carrera', cosas: ['Aprobar actividades', 'Revisar credenciales especiales', 'Ver la analítica de la carrera', 'Definir criterios de puntos'] },
+  SCIENTIFIC_SOCIETY: { rol: 'Sociedad científica', cosas: ['Crear talleres y eventos', 'Ver inscritos y asistencia', 'Medir el alcance'] },
+  ADMIN: { rol: 'Administración', cosas: ['Usuarios y padrón', 'Catálogos de áreas y categorías', 'Auditoría'] },
+};
+
 function SoloEstudiantes() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const info = EN_LA_WEB[user?.role ?? ''];
   return (
     <Screen>
+      <View style={{ backgroundColor: colors.bordo, borderRadius: 22, padding: 18, marginBottom: 14 }}>
+        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>
+          {(info?.rol ?? 'Tu rol').toUpperCase()}
+        </Text>
+        <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 2 }}>
+          ¡Hola{user?.firstName ? `, ${user.firstName}` : ''}!
+        </Text>
+        <Text style={{ color: 'rgba(255,255,255,0.9)', marginTop: 4 }}>
+          Esta app es para estudiantes. Lo tuyo te espera en la web, que también se adapta a tu celular.
+        </Text>
+      </View>
       <H1>App para estudiantes</H1>
       <Card title="Tu rol trabaja desde la web">
         <Muted>
           La aplicación móvil de Afinia es para estudiantes. Docentes, Dirección, sociedades
           científicas y Administración entran desde la versión web.
         </Muted>
+        {info ? (
+          <View style={{ marginTop: 10, gap: 6 }}>
+            {info.cosas.map((c) => (
+              <View key={c} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Icon name="check-circle" size={15} color={colors.green} />
+                <Text style={{ color: colors.gray700 }}>{c}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
         <Pressable onPress={logout} style={{ marginTop: 14 }} accessibilityRole="button">
           <Text style={{ color: colors.bordo, fontWeight: '700' }}>Cerrar sesión</Text>
         </Pressable>

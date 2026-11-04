@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
-import { FiBarChart2, FiPlus, FiUsers } from 'react-icons/fi';
+import { FiBarChart2, FiUsers } from 'react-icons/fi';
 import { analyticsService, type SocietyMetrics } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
-import { AsyncView, Badge, Card, EmptyState, PageHeader, SkeletonCards, Stat } from '../../components/ui';
+import { AsyncView, Badge, Card, EmptyState, SkeletonCards, Stat } from '../../components/ui';
+import { AtajosRol, SaludoRol } from '../../components/InicioRol';
 import { ACTIVITY_STATUS_LABEL, lbl } from '../../constants';
 
 const FECHA = (v: string | null | undefined) =>
@@ -17,15 +18,8 @@ export default function SocietyDashboard() {
   const state = useAsync(() => analyticsService.societyMetrics(), []);
   return (
     <div>
-      <PageHeader
-        title="Inicio"
-        description="Tus actividades extracurriculares de un vistazo."
-        actions={
-          <Link to="/society/activities?nuevo=1" className="btn btn-primary">
-            <FiPlus size={15} /> Crear actividad
-          </Link>
-        }
-      />
+      {/* V7: saludo con la acción más común («Crear actividad») a mano. */}
+      <SaludoRol />
       <AsyncView loading={state.loading} error={state.error} data={state.data} skeleton={<SkeletonCards count={3} />}>
         {(m: SocietyMetrics) => {
           const hoy = Date.now();
@@ -42,6 +36,7 @@ export default function SocietyDashboard() {
                 <Stat value={m.totals.confirmed} label="Participaciones confirmadas" />
                 <Stat value={enRevision} label="En borrador o en revisión" />
               </div>
+              <AtajosRol />
               <Card
                 title="Próximas"
                 actions={<Link to="/society/participants" className="btn btn-ghost btn-sm"><FiUsers size={13} /> Participantes</Link>}

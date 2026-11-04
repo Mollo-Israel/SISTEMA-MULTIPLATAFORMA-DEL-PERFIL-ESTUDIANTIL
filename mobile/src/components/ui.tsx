@@ -12,7 +12,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Icon, type IconName } from './icons';
-import { colors } from '../theme';
+import { colors, shadow } from '../theme';
 
 export function Screen({
   children,
@@ -408,32 +408,34 @@ export function Success({ message }: { message: string }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.gray50 },
   screenContent: { padding: 16, paddingBottom: 40 },
+  // V7: tarjetas más redondas y con sombra suave bordó, como en la web.
   card: {
     backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 15,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: colors.gray200,
+    borderColor: '#efe6e8',
+    ...shadow,
   },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: colors.gray900, marginBottom: 8 },
-  h1: { fontSize: 22, fontWeight: '700', color: colors.gray900, marginBottom: 4 },
+  cardTitle: { fontSize: 15.5, fontWeight: '800', color: colors.gray900, marginBottom: 8 },
+  h1: { fontSize: 24, fontWeight: '800', color: colors.gray900, marginBottom: 4 },
   muted: { color: colors.gray500, fontSize: 13 },
   label: { fontSize: 13, color: colors.gray700, marginBottom: 4, fontWeight: '500' },
   input: {
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.gray200,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontSize: 15,
     color: colors.gray900,
   },
-  btn: { borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginTop: 4 },
+  btn: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginTop: 4 },
   btnSmall: { paddingVertical: 8, paddingHorizontal: 12 },
   btnInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  btnPrimary: { backgroundColor: colors.bordo },
+  btnPrimary: { backgroundColor: colors.bordo, shadowColor: colors.bordo, shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
   btnDanger: { backgroundColor: colors.red },
   btnSecondary: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.gray200 },
   btnPrimaryText: { color: colors.white, fontWeight: '700' },
@@ -450,7 +452,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.gray200,
-    borderRadius: 10,
+    borderRadius: 14,
     paddingHorizontal: 12,
     marginBottom: 10,
   },

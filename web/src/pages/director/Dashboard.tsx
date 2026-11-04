@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom';
 import { FiArrowRight, FiBarChart2, FiCheckSquare, FiShield } from 'react-icons/fi';
 import { useAsync } from '../../hooks/useAsync';
 import { reportService, type DirectorPending } from '../../services';
-import { AsyncView, Card, PageHeader, SkeletonCards, Stat } from '../../components/ui';
+import { AsyncView, Card, SkeletonCards, Stat } from '../../components/ui';
+import { AtajosRol, SaludoRol } from '../../components/InicioRol';
 
 /**
  * Inicio de Dirección (V3 §52): lo que hay que atender y cuatro cifras. La
@@ -14,10 +15,8 @@ export default function DirectorDashboard() {
 
   return (
     <div>
-      <PageHeader
-        title="Inicio"
-        description="Lo que espera tu decisión y un vistazo a la carrera."
-      />
+      {/* V7: saludo con palabras simples en lugar del encabezado de panel. */}
+      <SaludoRol />
 
       <AsyncView loading={pendientes.loading} error={pendientes.error} data={pendientes.data} skeleton={<SkeletonCards count={3} />}>
         {(p: DirectorPending) => (
@@ -50,6 +49,8 @@ export default function DirectorDashboard() {
           </div>
         )}
       </AsyncView>
+
+      <AtajosRol />
 
       <Card title="Analítica" actions={<Link to="/director/analytics" className="btn btn-secondary btn-sm"><FiBarChart2 size={13} /> Abrir</Link>}>
         <div className="chip-row">
