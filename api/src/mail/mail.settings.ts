@@ -25,9 +25,11 @@ export interface SmtpSettings {
 }
 
 export interface MailSettings {
-  transport: 'smtp' | 'console';
+  transport: 'smtp' | 'brevo' | 'console';
   production: boolean;
   smtp: SmtpSettings | null;
+  /** API HTTPS de Brevo: sirve donde el hosting bloquea la salida SMTP. */
+  brevo: { apiKey: string; apiUrl: string } | null;
   from: { name: string; address: string };
   replyTo: string | null;
   /** Copia local de cada correo, solo fuera de producción. */
@@ -56,10 +58,14 @@ export function readMailSettings(config: ConfigService): MailSettings {
   const warnings: string[] = [];
 
   const host = get('SMTP_HOST');
+  const brevoKey = get('BREVO_API_KEY');
   const elegido = (get('MAIL_TRANSPORT') || 'auto').toLowerCase();
-  let transport: 'smtp' | 'console';
+  let transport: MailSettings['transport'];
   if (elegido === 'console') {
     transport = 'console';
+  } else if (elegido === 'brevo') {
+    transport = 'brevo';
+    if (!brevoKey) problems.push('MAIL_TRANSPORT=brevo pero BREVO_API_KEY está vacío.');
   } else if (elegido === 'smtp') {
     transport = 'smtp';
     if (!host) problems.push('MAIL_TRANSPORT=smtp pero SMTP_HOST está vacío.');
@@ -67,13 +73,13 @@ export function readMailSettings(config: ConfigService): MailSettings {
     if (elegido !== 'auto') {
       warnings.push(`MAIL_TRANSPORT="${elegido}" no se reconoce; se usa "auto".`);
     }
-    transport = host ? 'smtp' : 'console';
+    transport = host ? 'smtp' : brevoKey ? 'brevo' : 'console';
   }
 
   // ------------------------------------------------------------ remitente
   const user = get('SMTP_USER');
-  let fromName = get('SMTP_FROM_NAME') || 'Afinia';
-  let fromAddress = get('SMTP_FROM');
+  let fromName = get('MAIL_FROM_NAME') || get('SMTP_FROM_NAME') || 'Afinia';
+  let fromAddress = get('MAIL_FROM') || get('SMTP_FROM');
   const conNombre = /^(.*)<([^>]+)>\s*$/.exec(fromAddress);
   if (conNombre) {
     fromName = conNombre[1].trim().replace(/^"|"$/g, '') || fromName;
@@ -82,13 +88,15 @@ export function readMailSettings(config: ConfigService): MailSettings {
   if (!fromAddress && ADDRESS_RE.test(user)) fromAddress = user;
   if (!fromAddress) fromAddress = 'no-reply@afinia.local';
 
-  if (transport === 'smtp') {
+  if (transport === 'smtp' || transport === 'brevo') {
     if (!ADDRESS_RE.test(fromAddress) || fromAddress.endsWith('.local')) {
       problems.push(
-        'SMTP_FROM debe ser una dirección real desde la que el proveedor permita enviar '
-          + '(normalmente la misma cuenta de SMTP_USER).',
+        (transport === 'brevo' ? 'MAIL_FROM debe ser un remitente verificado en Brevo.'
+          : 'SMTP_FROM debe ser una dirección real desde la que el proveedor permita enviar '
+            + '(normalmente la misma cuenta de SMTP_USER).'),
       );
     } else if (
+      transport === 'smtp' &&
       user
       && ADDRESS_RE.test(user)
       && fromAddress.toLowerCase() !== user.toLowerCase()
@@ -177,6 +185,9 @@ export function readMailSettings(config: ConfigService): MailSettings {
     transport,
     production,
     smtp,
+    brevo: transport === 'brevo' && brevoKey
+      ? { apiKey: brevoKey, apiUrl: get('BREVO_API_URL') || 'https://api.brevo.com/v3/smtp/email' }
+      : null,
     from: { name: fromName, address: fromAddress },
     replyTo: replyTo && ADDRESS_RE.test(replyTo) ? replyTo : null,
     captureDir,

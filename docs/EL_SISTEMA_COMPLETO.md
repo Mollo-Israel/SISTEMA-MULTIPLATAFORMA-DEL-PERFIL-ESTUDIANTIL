@@ -55,10 +55,10 @@ está demostrado— y **recomendaciones** de qué hacer después.
 
 Los 25 requisitos funcionales y los 10 no funcionales de la V2 están
 implementados y verificados. La trazabilidad punto por punto está en
-[`MATRIZ_TRAZABILIDAD_V2.md`](MATRIZ_TRAZABILIDAD_V2.md); lo que se hizo en cada
+[`MATRIZ_TRAZABILIDAD_V2.md`](trazabilidad/MATRIZ_TRAZABILIDAD_V2.md); lo que se hizo en cada
 batch, con sus pruebas y resultados, en
-[`V2_REPORTE_BATCHES.md`](V2_REPORTE_BATCHES.md); la revisión de seguridad,
-rendimiento y calidad, en [`SEGURIDAD_V2.md`](SEGURIDAD_V2.md).
+[`V2_REPORTE_BATCHES.md`](versiones/V2_REPORTE_BATCHES.md); la revisión de seguridad,
+rendimiento y calidad, en [`SEGURIDAD_V2.md`](qa/SEGURIDAD_V2.md).
 
 ---
 

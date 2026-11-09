@@ -10,7 +10,7 @@ import { testMail } from './templates';
 
 /** Estado del correo, tal como lo ve el administrador. Sin secretos. */
 export interface MailStatus {
-  transport: 'smtp' | 'console';
+  transport: 'smtp' | 'brevo' | 'console';
   /** ¿Los correos llegan a buzones reales? */
   realDelivery: boolean;
   /** ¿Se pueden correr las pruebas automáticas sin mandar correo a direcciones inventadas? */
@@ -92,6 +92,16 @@ export function explainSmtpError(error: unknown, settings?: MailSettings): strin
   return (e?.message ?? String(error)).slice(0, 200);
 }
 
+/** Traduce una respuesta de Brevo a algo que el administrador pueda corregir. */
+export function explainBrevoError(status: number, cuerpo: string): string {
+  if (status === 401) return 'Brevo rechazó la llave: revise BREVO_API_KEY.';
+  if (status === 400 && /sender/i.test(cuerpo)) {
+    return 'Brevo rechazó el remitente: MAIL_FROM debe estar verificado en su cuenta.';
+  }
+  if (status === 429) return 'Brevo está limitando los envíos por ahora; se reintentará más tarde.';
+  return `Brevo respondió ${status}: ${cuerpo.slice(0, 160)}`;
+}
+
 /**
  * Salida de correo de Afinia.
  *
@@ -149,7 +159,7 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
       this.lastError = this.settings.problems.join(' ');
       return false;
     }
-    this.transporter ??= this.buildTransport();
+    if (this.settings.transport !== 'brevo') this.transporter ??= this.buildTransport();
     this.connection = 'checking';
     return true;
   }
@@ -197,6 +207,9 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
   /** Comprueba conexión y credenciales contra el servidor. */
   async verify(): Promise<boolean> {
     if (this.settings.transport === 'console') return true;
+    if (this.settings.transport === 'brevo') {
+      return this.verifyBrevo();
+    }
     if (!this.transporter) return false;
     try {
       await this.transporter.verify();
@@ -253,6 +266,8 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
       return { transport: 'console' };
     }
 
+    if (this.settings.transport === 'brevo' && this.settings.brevo) return this.sendBrevo(message, this.settings.brevo);
+
     if (!this.transporter) {
       const motivo = this.settings.problems.join(' ') || 'El correo no está configurado.';
       await this.capture?.write({
@@ -304,11 +319,74 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
     }
   }
 
+  /** Confirma que Brevo acepta la llave, sin enviar ningún correo. */
+  private async verifyBrevo(): Promise<boolean> {
+    const brevo = this.settings.brevo;
+    if (!brevo) return false;
+    try {
+      const respuesta = await fetch(new URL('/v3/account', brevo.apiUrl), {
+        headers: { 'api-key': brevo.apiKey, accept: 'application/json' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!respuesta.ok) throw new Error(explainBrevoError(respuesta.status, await respuesta.text().catch(() => '')));
+      this.connection = 'ok';
+      this.lastError = null;
+      this.logger.log(`Correo REAL por Brevo · remitente ${this.fromHeader()}`);
+      return true;
+    } catch (error) {
+      this.connection = 'error';
+      this.lastError = (error as Error).message.slice(0, 200);
+      this.logger.error(`No se pudo comprobar Brevo: ${this.lastError}`);
+      return false;
+    }
+  }
+
+  /** Envío por la API HTTPS de Brevo. Mismos encabezados y copia local que por SMTP. */
+  private async sendBrevo(message: MailMessage, brevo: { apiKey: string; apiUrl: string }): Promise<MailDelivery> {
+    const registrar = (delivered: boolean, error?: string) => this.capture?.write({
+      ...message,
+      capturedAt: new Date().toISOString(),
+      transport: 'brevo',
+      delivered,
+      ...(error ? { error } : {}),
+    });
+    try {
+      const { name, address } = this.settings.from;
+      const respuesta = await fetch(brevo.apiUrl, {
+        method: 'POST',
+        headers: { 'api-key': brevo.apiKey, 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+          sender: { name, email: address },
+          to: [{ email: message.to }],
+          ...(this.settings.replyTo ? { replyTo: { email: this.settings.replyTo } } : {}),
+          subject: message.subject,
+          textContent: message.text,
+          ...(message.html ? { htmlContent: message.html } : {}),
+          headers: { 'Auto-Submitted': 'auto-generated', 'X-Auto-Response-Suppress': 'All' },
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!respuesta.ok) throw new Error(explainBrevoError(respuesta.status, await respuesta.text().catch(() => '')));
+      const datos = (await respuesta.json().catch(() => ({}))) as { messageId?: string };
+      this.connection = 'ok';
+      this.lastError = null;
+      await registrar(true);
+      return { transport: 'brevo', messageId: datos.messageId };
+    } catch (error) {
+      const motivo = (error as Error).message.slice(0, 200);
+      this.connection = 'error';
+      this.lastError = motivo;
+      this.logger.error(`No se pudo enviar a ${maskEmail(message.to)}: ${motivo}`);
+      await registrar(false, motivo);
+      throw new Error(motivo);
+    }
+  }
+
   /** Envía el correo de prueba de configuración. */
   async sendTest(to: string): Promise<MailDelivery> {
     const smtp = this.settings.smtp;
     const mail = testMail({
-      host: smtp?.host ?? 'consola (simulado)',
+      host: smtp?.host ?? (this.settings.transport === 'brevo' ? 'api.brevo.com' : 'consola (simulado)'),
       port: smtp?.port ?? 0,
       from: this.fromHeader(),
       sentAt: new Date(),
@@ -324,7 +402,7 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
       smtp?.auth.type === 'login' || smtp?.auth.type === 'oauth2' ? smtp.auth.user : null;
     return {
       transport: s.transport,
-      realDelivery: s.transport === 'smtp' && !isLocalCatcher(s),
+      realDelivery: s.transport !== 'console' && !isLocalCatcher(s),
       safeForAutomatedTests: isLocalCatcher(s),
       host: smtp?.host ?? null,
       port: smtp?.port ?? null,

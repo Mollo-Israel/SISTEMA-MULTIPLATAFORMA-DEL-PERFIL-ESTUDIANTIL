@@ -28,7 +28,7 @@ export default function AdminMailPage() {
     setEnviando(true);
     try {
       const r = await mailService.test(destino.trim() || undefined);
-      if (r.transport === 'smtp') toast.success('Correo de prueba enviado', r.message);
+      if (r.transport !== 'console') toast.success('Correo de prueba enviado', r.message);
       else toast.info('Modo simulado', r.message);
       reload();
     } catch (e) {
@@ -130,7 +130,7 @@ function EstadoCard({
   onVerify: () => void;
   verifying: boolean;
 }) {
-  const real = s.transport === 'smtp';
+  const real = s.transport !== 'console';
   const conexion =
     s.connection === 'ok'
       ? { tono: 'green', icono: <FiCheckCircle />, texto: 'Conectado' }

@@ -19,8 +19,10 @@ export function assertEnvironment(config: ConfigService): void {
   const warnings: string[] = [];
 
   // Base de datos: sin esto no hay sistema, en ningún entorno.
-  for (const key of ['POSTGRES_HOST', 'POSTGRES_DB', 'POSTGRES_USER']) {
-    if (!config.get<string>(key)?.trim()) problems.push(`${key} no está definido.`);
+  if (!config.get<string>('DATABASE_URL')?.trim()) {
+    for (const key of ['POSTGRES_HOST', 'POSTGRES_DB', 'POSTGRES_USER']) {
+      if (!config.get<string>(key)?.trim()) problems.push(`${key} no está definido.`);
+    }
   }
 
   // Los secretos los validan resolveJwtSecret y resolveRefreshSecret, que se
@@ -35,14 +37,14 @@ export function assertEnvironment(config: ConfigService): void {
         'INSTITUTIONAL_EMAIL_DOMAINS no está definido: cualquier dominio podría provisionarse.',
       );
     }
-    if (!config.get<string>('SMTP_HOST')?.trim()) {
+    // Con el correo mal configurado, cada alta deja una cuenta que nadie podrá
+    // activar. Mejor no arrancar que descubrirlo con el primer estudiante.
+    const correo = readMailSettings(config);
+    if (correo.transport !== 'brevo' && !config.get<string>('SMTP_HOST')?.trim()) {
       problems.push(
         'SMTP_HOST no está definido: la activación y la recuperación no podrían enviarse.',
       );
     }
-    // Con el correo mal configurado, cada alta deja una cuenta que nadie podrá
-    // activar. Mejor no arrancar que descubrirlo con el primer estudiante.
-    const correo = readMailSettings(config);
     if (correo.transport === 'console') {
       problems.push('MAIL_TRANSPORT=console no es válido en producción: los correos no saldrían.');
     }
@@ -50,6 +52,12 @@ export function assertEnvironment(config: ConfigService): void {
     const web = config.get<string>('WEB_APP_URL')?.trim();
     if (web && !/^https:\/\//i.test(web)) {
       problems.push('WEB_APP_URL debe empezar por https:// en producción: es el enlace del correo.');
+    }
+    if ((config.get<string>('STORAGE_DRIVER') ?? 'local').trim().toLowerCase() === 'local') {
+      warnings.push(
+        'STORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, '
+          + 'los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.',
+      );
     }
   } else {
     if (!config.get<string>('INSTITUTIONAL_EMAIL_DOMAINS')?.trim()) {

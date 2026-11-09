@@ -78,10 +78,10 @@ describe('Afinidad V3 (§45–§47)', () => {
 });
 
 describe('Recomendaciones (§54, §60)', () => {
-  it('V3 §34: el reparto 40/30/15/10/5 suma 100 y no incluye la afinidad', () => {
+  it('V6 §9.1: el reparto es 40/30/15/10, sin señal por clics, y no incluye la afinidad', () => {
     const r = RULES.ranking;
-    assert.deepEqual([r.explicitInterest, r.improvementArea, r.skills, r.orientation, r.feedback], [40, 30, 15, 10, 5]);
-    assert.equal(Object.values(r).reduce((s, v) => s + v, 0), 100);
+    assert.deepEqual([r.explicitInterest, r.improvementArea, r.skills, r.orientation, r.feedback], [40, 30, 15, 10, 0]);
+    assert.equal(Object.values(r).reduce((s, v) => s + v, 0), 95);
     assert.equal('affinitySupport' in r, false);
   });
 

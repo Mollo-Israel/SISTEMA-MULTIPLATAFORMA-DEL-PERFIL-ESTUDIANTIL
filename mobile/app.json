@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.afinia.app",
       "adaptiveIcon": {
         "backgroundColor": "#6b1220"
       }

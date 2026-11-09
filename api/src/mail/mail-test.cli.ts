@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   const estado = mail.status();
 
   console.log('\nConfiguración de correo de Afinia');
-  console.log(`  Transporte : ${estado.transport === 'smtp' ? 'SMTP (real)' : 'consola (simulado)'}`);
+  console.log(`  Transporte : ${estado.transport === 'smtp' ? 'SMTP (real)' : estado.transport === 'brevo' ? 'Brevo (real)' : 'consola (simulado)'}`);
   if (estado.host) console.log(`  Servidor   : ${estado.host}:${estado.port} ${estado.secure ? '(TLS)' : '(STARTTLS)'}`);
   if (estado.user) console.log(`  Usuario    : ${estado.user}`);
   console.log(`  Remitente  : ${estado.from}`);

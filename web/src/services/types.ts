@@ -42,7 +42,7 @@ export interface InvitationView {
 
 /** Estado del envío de correo, para el panel de administración. */
 export interface MailStatus {
-  transport: 'smtp' | 'console';
+  transport: 'smtp' | 'brevo' | 'console';
   realDelivery: boolean;
   safeForAutomatedTests: boolean;
   host: string | null;

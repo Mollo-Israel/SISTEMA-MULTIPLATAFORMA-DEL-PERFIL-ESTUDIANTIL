@@ -8,6 +8,9 @@ Por eso, sin esta configuración, «no llega nada» al activar o recuperar.
 
 Esta guía deja el correo real funcionando en unos diez minutos.
 
+> **En producción con Railway**, usa Brevo por su API (`MAIL_TRANSPORT=brevo`, `BREVO_API_KEY` y `MAIL_FROM`):
+> Railway bloquea la salida SMTP en sus planes básicos. Pasos en [DESPLIEGUE.md](DESPLIEGUE.md).
+
 ---
 
 ## 1. Lo que ya está hecho

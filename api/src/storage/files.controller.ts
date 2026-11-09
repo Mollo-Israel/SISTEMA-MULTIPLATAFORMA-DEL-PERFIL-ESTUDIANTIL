@@ -1,21 +1,19 @@
 import {
   Controller,
   Get,
+  Inject,
   NotFoundException,
   Param,
   Res,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { createReadStream } from 'fs';
-import { stat } from 'fs/promises';
 import * as path from 'path';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
-import { LocalStorageDriver } from './local-storage.driver';
+import { STORAGE_PORT, StoragePort } from './storage.port';
 import { FileAccessService } from './file-access.service';
 import { StoredFileRecord } from '../entities/stored-file.entity';
 
@@ -44,7 +42,7 @@ const POR_EXTENSION: Record<string, string> = {
 export class FilesController {
   constructor(
     private readonly access: FileAccessService,
-    private readonly config: ConfigService,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     @InjectRepository(StoredFileRecord) private readonly archivos: Repository<StoredFileRecord>,
   ) {}
 
@@ -63,20 +61,9 @@ export class FilesController {
   ): Promise<void> {
     const resolved = await this.access.authorize(user, key);
 
-    const root = LocalStorageDriver.resolveRoot(this.config);
-    const absolute = path.join(root, resolved.storageKey);
-
-    // Defensa en profundidad: aunque la clave ya se validó, se confirma que la
-    // ruta resuelta sigue dentro de la carpeta de almacenamiento.
-    if (!absolute.startsWith(path.resolve(root) + path.sep)) {
-      throw new NotFoundException('Archivo no encontrado.');
-    }
-
-    try {
-      await stat(absolute);
-    } catch {
-      throw new NotFoundException('Archivo no encontrado.');
-    }
+    // El driver vuelve a validar la clave y responde null si el archivo no está.
+    const contenido = await this.storage.stream(resolved.storageKey);
+    if (!contenido) throw new NotFoundException('Archivo no encontrado.');
 
     // V6 §7.7: el tipo real, detectado por contenido al subirlo (no por el
     // nombre). Imágenes y PDF se ven en línea; lo demás se descarga. Un HTML o
@@ -89,7 +76,7 @@ export class FilesController {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, no-store');
 
-    createReadStream(absolute).pipe(res);
+    contenido.on('error', () => res.destroy()).pipe(res);
   }
 
   /** Tipo detectado al subir; un archivo anterior al registro de subidas, por su extensión. */

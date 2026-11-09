@@ -68,7 +68,8 @@ async function bootstrap() {
 
   // Necesario para que el rate limit y el registro de sesión vean la IP real
   // cuando la API está detrás de un proxy inverso.
-  app.set('trust proxy', 1);
+  // Son 2 saltos si además pasa por el proxy de Cloudflare (TRUST_PROXY_HOPS).
+  app.set('trust proxy', Number(config.get<string>('TRUST_PROXY_HOPS') ?? 1));
 
   // §110: Swagger deshabilitable en producción.
   const swaggerEnabled =
@@ -95,7 +96,11 @@ async function bootstrap() {
     logger.log('Swagger deshabilitado en este entorno.');
   }
 
-  const port = config.get<number>('API_PORT', 3000);
+  // Los hostings asignan el puerto en PORT; en local manda API_PORT.
+  const enProduccion = (config.get<string>('NODE_ENV') ?? 'development') === 'production';
+  const port = (enProduccion ? config.get('PORT') ?? config.get('API_PORT') : config.get('API_PORT')) ?? 3000;
+  // Al publicar, el hosting avisa con SIGTERM: los trabajos en curso cierran bien.
+  if (enProduccion) app.enableShutdownHooks();
   await app.listen(port);
   logger.log(`Afinia API escuchando en el puerto ${port}`);
 }

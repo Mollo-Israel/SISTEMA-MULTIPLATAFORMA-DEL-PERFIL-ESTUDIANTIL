@@ -654,9 +654,12 @@ async function pruebas(browser) {
     await corregirBtn.first().click();
     await p46.locator('#corr-motivo').fill('La lista firmada muestra que no asistió.');
     await p46.getByRole('button', { name: 'Aplicar corrección' }).click();
-    await espera(1500);
-    const filas = (await req('GET', `/activities/${actaAct.data?.id}/participants`, { token: otros.director.token })).data ?? [];
-    corrigio = (Array.isArray(filas) ? filas : filas.items ?? []).some((r) => r.status === 'absent');
+    // Se espera el resultado, no un tiempo fijo: con una base grande tarda más.
+    for (let i = 0; i < 24 && !corrigio; i++) {
+      await espera(500);
+      const filas = (await req('GET', `/activities/${actaAct.data?.id}/participants`, { token: otros.director.token })).data ?? [];
+      corrigio = (Array.isArray(filas) ? filas : filas.items ?? []).some((r) => r.status === 'absent');
+    }
   }
   check(corrigio, 'WEB.44.2 B18 A41-011 Dirección corrige la participación consolidada con un motivo');
   check(fallos45.length === 0, 'WEB.44.3 Sin errores de JavaScript en V4.1-4', fallos45.join(' | '));

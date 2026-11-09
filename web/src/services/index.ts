@@ -109,7 +109,7 @@ export const mailService = {
   verify: () => api.post<MailStatus>('/mail/verify').then((r) => r.data),
   test: (to?: string) =>
     api
-      .post<{ message: string; sentTo: string; transport: 'smtp' | 'console' }>('/mail/test', to ? { to } : {})
+      .post<{ message: string; sentTo: string; transport: 'smtp' | 'brevo' | 'console' }>('/mail/test', to ? { to } : {})
       .then((r) => r.data),
 };
 

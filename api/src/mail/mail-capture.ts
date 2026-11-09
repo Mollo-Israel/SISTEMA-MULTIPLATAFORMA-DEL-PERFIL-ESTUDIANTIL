@@ -9,7 +9,7 @@ const CONSERVAR = 400;
 
 export interface CapturedMail extends MailMessage {
   capturedAt: string;
-  transport: 'smtp' | 'console';
+  transport: 'smtp' | 'brevo' | 'console';
   delivered: boolean;
   error?: string;
 }

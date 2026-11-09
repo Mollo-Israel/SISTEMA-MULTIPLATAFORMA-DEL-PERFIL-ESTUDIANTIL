@@ -25,6 +25,7 @@ import { TeamApplicationsService } from './team-applications.service';
 import { ContactNote, StudentContactChannel } from '../entities/contact-channel.entity';
 import { CollaborationController } from './collaboration.controller';
 import { AiModule } from '../ai/ai.module';
+import { StorageModule } from '../storage/storage.module';
 
 /**
  * Colaboración entre estudiantes (§42 a §47, §133).
@@ -37,6 +38,7 @@ import { AiModule } from '../ai/ai.module';
  */
 @Module({
   imports: [
+    StorageModule,
     TypeOrmModule.forFeature([
       StoredFileRecord,
       StudentProfile,

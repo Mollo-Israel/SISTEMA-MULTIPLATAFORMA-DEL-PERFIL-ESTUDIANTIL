@@ -24,11 +24,10 @@ import { storageDriverFactory } from './storage-driver.factory';
 /**
  * Almacenamiento de archivos de evidencia.
  *
- * El driver concreto se resuelve aqui segun `STORAGE_DRIVER`. Hoy el unico es
- * `local` (disco), para que el sistema funcione completo sin depender de un
- * servicio externo. Un valor desconocido detiene el arranque: ignorarlo en
- * silencio guardaria los archivos donde nadie espera. Agregar un proveedor
- * remoto es sumar otra implementacion del mismo puerto en `storageDriverFactory`.
+ * El driver concreto se resuelve aqui segun `STORAGE_DRIVER`: `local` (disco),
+ * para que el sistema funcione completo sin depender de un servicio externo, o
+ * `r2` (Cloudflare R2) en produccion. Un valor desconocido detiene el arranque:
+ * ignorarlo en silencio guardaria los archivos donde nadie espera.
  *
  * Se usa memoryStorage porque el archivo se valida antes de escribirlo: multer
  * no toca el disco hasta que el driver decide donde y con que nombre guardarlo.

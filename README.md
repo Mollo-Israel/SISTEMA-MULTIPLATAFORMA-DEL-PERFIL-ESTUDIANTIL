@@ -24,6 +24,8 @@ que ya sabe.
 | Web (todos los roles) | React 18 + Vite |
 | Móvil (solo Estudiante) | React Native 0.81 + Expo SDK 54 |
 | Tipos compartidos | Paquete `shared/` |
+| Archivos | Disco local o Cloudflare R2 (`STORAGE_DRIVER`) |
+| Correo | SMTP o Brevo (`MAIL_TRANSPORT`) |
 | Autenticación | JWT corto + refresh rotatorio (cookie HttpOnly en la web) |
 | IA (opcional) | Puerto `none` / `openai_compatible` |
 
@@ -37,7 +39,7 @@ que ya sabe.
 ├── shared/   Tipos, enumeraciones y escalas compartidas
 ├── docker/   docker-compose de PostgreSQL (y Mailpit opcional)
 ├── scripts/  Suites de verificación, k6 y ZAP
-└── docs/     Documentación
+└── docs/     Documentación (índice en docs/README.md)
 ```
 
 ## Roles
@@ -150,42 +152,16 @@ npm run test:all         # en otra: unitarias + 21 suites de API (incluidas V3, 
 
 Última corrida completa (cierre V6, 01/11/2026): 23 suites anteriores con **2398 comprobaciones
 sin fallos**, `e2e-v6` 98/98, `e2e-v6-web` 63/63, Jest 69/69 y Newman 70/70. Qué se ejecutó, qué falló
-en el camino y qué no se ejecutó, en [`QA_V6_REGRESION.md`](QA_V6_REGRESION.md) (la del cierre V5, en
-[`docs/V5_QA.md`](docs/V5_QA.md)).
+en el camino y qué no se ejecutó, en [`QA_V6_REGRESION.md`](docs/qa/QA_V6_REGRESION.md) (la del cierre V5, en
+[`docs/qa/V5_QA.md`](docs/qa/V5_QA.md)).
 
 ## Documentación
 
-- [`QA_V6_REGRESION.md`](QA_V6_REGRESION.md) — QA del cierre V6: regresión completa, pruebas por batch, migraciones, matriz GAP final y lo que no se ejecutó.
-- [`AUDITORIA_GAP_AFINIA_V6.md`](AUDITORIA_GAP_AFINIA_V6.md) y [`PLAN_BATCHES_AFINIA_V6.md`](PLAN_BATCHES_AFINIA_V6.md) — la auditoría inicial de la V6, con sondas reales, y su plan.
-- [`docs/V5_QA.md`](docs/V5_QA.md) — QA del cierre V5: regresión completa, Jest, k6 y ZAP, migraciones, adaptaciones de pruebas anteriores y decisiones.
-- [`docs/MATRIZ_TRAZABILIDAD_V5.md`](docs/MATRIZ_TRAZABILIDAD_V5.md) — V5-01 a V5-31 y escenarios A01…I07 → batch → código → pruebas → estado.
-- [`docs/CAMBIOS_DOCUMENTO_GRADO_V5.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V5.md) — qué ajustar en la tesis para la V5 (el `.docx` no se modificó).
-- [`AUDITORIA_GAP_AFINIA_V5.md`](AUDITORIA_GAP_AFINIA_V5.md) y [`PLAN_BATCHES_AFINIA_V5.md`](PLAN_BATCHES_AFINIA_V5.md) — la auditoría inicial de la V5, con sondas reales, y su plan.
-- [`docs/V4_1_REPORTE_BATCHES.md`](docs/V4_1_REPORTE_BATCHES.md) — el cierre V4.1 batch por batch (§25 del contrato): hallazgos, cambios, migraciones, pruebas, fallos y riesgos.
-- [`docs/V4_1_QA.md`](docs/V4_1_QA.md) — QA integral del cierre V4.1: compilación, pruebas, migraciones, seguridad y pendientes declarados.
-- [`docs/MATRIZ_TRAZABILIDAD_V4_1.md`](docs/MATRIZ_TRAZABILIDAD_V4_1.md) — A41-001 a A41-030 → batch → código → pruebas → estado.
-- [`docs/V4_1_IMPACTO_MOVIL.md`](docs/V4_1_IMPACTO_MOVIL.md) — impacto de cada cambio V4.1 en la app móvil.
-- [`docs/CAMBIOS_DOCUMENTO_GRADO_V4_1.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V4_1.md) — qué ajustar en la tesis para la V4.1 (el `.docx` no se modificó).
-- [`docs/V3_2_REPORTE_BATCHES.md`](docs/V3_2_REPORTE_BATCHES.md) — el cierre V3.2 batch por batch: hallazgos, cambios, migraciones, pruebas y riesgos.
-- [`docs/V3_2_QA.md`](docs/V3_2_QA.md) — QA final del cierre: qué se ejecutó, con qué resultado, y qué no se ejecutó.
-- [`docs/MATRIZ_TRAZABILIDAD_V3_2.md`](docs/MATRIZ_TRAZABILIDAD_V3_2.md) — secciones del cierre → batch → API → pantallas → pruebas.
-- [`docs/DIAGRAMAS_V3_2.md`](docs/DIAGRAMAS_V3_2.md) — lo que cambió en la V3.2: ciclo de la actividad, afinidad por contexto, archivos protegidos, auditoría.
-- [`docs/CAMBIOS_DOCUMENTO_GRADO_V3_2.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V3_2.md) — qué ajustar en los capítulos II y III del documento de grado para la V3.2.
-- [`docs/DEMO_MULTIACTOR.md`](docs/DEMO_MULTIACTOR.md) — cómo hacer la demo con varios actores a la vez.
-- [`docs/EL_SISTEMA_COMPLETO.md`](docs/EL_SISTEMA_COMPLETO.md) — el sistema explicado con diagramas.
-- [`docs/AFINIA_FLUJO_COMPLETO_Y_MOTORES.md`](docs/AFINIA_FLUJO_COMPLETO_Y_MOTORES.md) — el flujo completo y, en detalle, cómo están construidos el motor de afinidad V3 y el asistente de IA.
-- [`docs/MATRIZ_TRAZABILIDAD_V3.md`](docs/MATRIZ_TRAZABILIDAD_V3.md) — RF01–RF30 y RNF01–RNF10 → módulo → rutas → pantallas → pruebas.
-- [`docs/V3_REPORTE_BATCHES.md`](docs/V3_REPORTE_BATCHES.md) — qué se hizo en cada batch de la V3, con pruebas y resultados.
-- [`docs/V3_QA_HARDENING.md`](docs/V3_QA_HARDENING.md) — pruebas, seguridad (ZAP), rendimiento (k6), dependencias, compatibilidad y protocolo SUS.
-- [`docs/DIAGRAMAS_V3.md`](docs/DIAGRAMAS_V3.md) — arquitectura, estados, secuencias y modelo de datos V3.
-- [`docs/CAMBIOS_DOCUMENTO_GRADO_V3.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V3.md) — qué cambiar en el documento de grado (capítulos 2 y 3) para que describa la V3; complementa la guía V2.
-- [`AUDITORIA_GAP_AFINIA_V3.md`](AUDITORIA_GAP_AFINIA_V3.md) y [`PLAN_BATCHES_V3.md`](PLAN_BATCHES_V3.md) — la auditoría inicial de la V3 y su plan.
-- [`docs/CAMBIOS_DOCUMENTO_GRADO_V2.md`](docs/CAMBIOS_DOCUMENTO_GRADO_V2.md), [`docs/MATRIZ_TRAZABILIDAD_V2.md`](docs/MATRIZ_TRAZABILIDAD_V2.md), [`docs/V2_REPORTE_BATCHES.md`](docs/V2_REPORTE_BATCHES.md), [`docs/SEGURIDAD_V2.md`](docs/SEGURIDAD_V2.md) — la V2, base de la V3.
-- [`docs/CORREO_REAL.md`](docs/CORREO_REAL.md) — envío real de correo y entregabilidad.
+Todo está en [`docs/`](docs/README.md), ordenado por carpetas. Lo principal:
 
-Los documentos `AVANCE_*`, `MATRIZ_TRAZABILIDAD_40…70`, `BATCH_*` y
-`CHECKLIST_FINAL_AFINIA_100.md` son el registro de etapas anteriores, no la
-descripción del sistema actual.
+- [`docs/AFINIA_PROYECTO_COMPLETO.md`](docs/AFINIA_PROYECTO_COMPLETO.md): el proyecto de principio a fin.
+- [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md): publicar y actualizar el sistema (Cloudflare, Railway, R2 y Brevo).
+- [`docs/qa/QA_V6_REGRESION.md`](docs/qa/QA_V6_REGRESION.md): la última regresión integral.
 
 ## Fuera del alcance, a propósito
 

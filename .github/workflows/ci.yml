@@ -1,0 +1,23 @@
+name: Comprobaciones
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+
+jobs:
+  compilar-y-probar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run shared:build
+      - run: npm run api:build
+      - run: npm run test:unit --workspace api
+      - run: npm ci --prefix web
+      - run: npx tsc --noEmit -p web
+      - run: npm run build --prefix web
+      - run: npm ci --prefix mobile
+      - run: npx tsc --noEmit -p mobile

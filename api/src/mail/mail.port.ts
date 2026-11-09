@@ -21,8 +21,8 @@ export interface MailMessage {
 
 /** Cómo salió un correo. */
 export interface MailDelivery {
-  /** `smtp` lo entregó a un servidor de correo; `console` solo lo escribió en el registro. */
-  transport: 'smtp' | 'console';
+  /** `smtp` y `brevo` lo entregaron a un proveedor; `console` solo lo escribió en el registro. */
+  transport: 'smtp' | 'brevo' | 'console';
   messageId?: string;
 }
 

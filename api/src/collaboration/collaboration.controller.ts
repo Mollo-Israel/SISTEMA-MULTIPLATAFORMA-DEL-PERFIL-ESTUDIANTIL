@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { createReadStream } from 'fs';
+import type { Readable } from 'stream';
 import { IsUUID } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -163,14 +163,14 @@ export class CollaborationController {
     this.enviarFoto(res, await this.publicProfiles.publicPhoto(slug));
   }
 
-  private enviarFoto(res: Response, foto: { ruta: string; tipo: string }) {
+  private enviarFoto(res: Response, foto: { contenido: Readable; tipo: string }) {
     res.setHeader('Content-Type', foto.tipo);
     res.setHeader('Content-Disposition', 'inline; filename="foto"');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     // Sin caché: si su dueño la retira, deja de verse al instante.
     res.setHeader('Cache-Control', 'private, no-store');
-    createReadStream(foto.ruta).on('error', () => { if (!res.headersSent) res.status(404); res.end(); }).pipe(res);
+    foto.contenido.on('error', () => { if (!res.headersSent) res.status(404); res.end(); }).pipe(res);
   }
 
   // =========================================================================

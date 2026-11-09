@@ -6,6 +6,8 @@
  * proveedor externo (por ejemplo Cloudinary) se agrega implementando esta misma
  * interfaz, sin tocar los modulos que la consumen.
  */
+import type { Readable } from 'node:stream';
+
 export const STORAGE_PORT = Symbol('STORAGE_PORT');
 
 export interface StoredFile {
@@ -39,4 +41,10 @@ export interface StoragePort {
    * cambiar a un bucket privado sin tocar el validador.
    */
   read(storageKey: string): Promise<Buffer | null>;
+
+  /**
+   * Abre el contenido para enviarlo por partes, o null si el archivo ya no
+   * esta. Las descargas lo usan para no cargar el archivo entero en memoria.
+   */
+  stream(storageKey: string): Promise<Readable | null>;
 }

@@ -1,7 +1,7 @@
-import * as path from 'path';
+import type { Readable } from 'stream';
 import { StoredFileRecord } from '../entities/stored-file.entity';
-import { LocalStorageDriver } from '../storage/local-storage.driver';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { STORAGE_PORT, StoragePort } from '../storage/storage.port';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { StudentContactChannel } from '../entities/contact-channel.entity';
@@ -59,6 +59,7 @@ export class PublicProfileService {
       @InjectRepository(StudentContactChannel)
     private readonly channels: Repository<StudentContactChannel>,
     @InjectRepository(StoredFileRecord) private readonly archivos: Repository<StoredFileRecord>,
+    @Inject(STORAGE_PORT) private readonly storage: StoragePort,
   ) {}
 
   // =========================================================================
@@ -82,7 +83,7 @@ export class PublicProfileService {
   }
 
   /** Archivo de la foto propia, para quien es su dueño. */
-  async ownPhoto(profileId: string): Promise<{ ruta: string; tipo: string }> {
+  async ownPhoto(profileId: string): Promise<{ contenido: Readable; tipo: string }> {
     const perfil = await this.profiles.findOne({ where: { id: profileId } });
     return this.archivoDeFoto(perfil?.photoFileId ?? null);
   }
@@ -91,7 +92,7 @@ export class PublicProfileService {
    * Foto del perfil compartido: solo si el perfil está publicado y su dueño
    * activó «Mi foto». En cualquier otro caso, 404 (no se revela si existe).
    */
-  async publicPhoto(slug: string): Promise<{ ruta: string; tipo: string }> {
+  async publicPhoto(slug: string): Promise<{ contenido: Readable; tipo: string }> {
     const perfil = await this.profiles.findOne({ where: { publicProfileSlug: slug } });
     const visible = { ...DEFAULT_PUBLIC_VISIBILITY, ...(perfil?.publicVisibilityConfig ?? {}) };
     if (!perfil || !perfil.publicProfileEnabled || !visible[PublicProfileField.PHOTO]) {
@@ -100,13 +101,12 @@ export class PublicProfileService {
     return this.archivoDeFoto(perfil.photoFileId);
   }
 
-  private async archivoDeFoto(fileId: string | null): Promise<{ ruta: string; tipo: string }> {
+  private async archivoDeFoto(fileId: string | null): Promise<{ contenido: Readable; tipo: string }> {
     const archivo = fileId ? await this.archivos.findOne({ where: { id: fileId } }) : null;
     if (!archivo || !FOTO_TIPOS.has(archivo.mimeTypeDetected)) throw new NotFoundException('No hay foto que mostrar.');
-    const raiz = path.resolve(LocalStorageDriver.resolveRoot(this.config));
-    const ruta = path.join(raiz, archivo.storageKey);
-    if (!ruta.startsWith(raiz + path.sep)) throw new NotFoundException('No hay foto que mostrar.');
-    return { ruta, tipo: archivo.mimeTypeDetected };
+    const contenido = await this.storage.stream(archivo.storageKey);
+    if (!contenido) throw new NotFoundException('No hay foto que mostrar.');
+    return { contenido, tipo: archivo.mimeTypeDetected };
   }
 
   /** Base pública desde la que se sirve la web, para componer el enlace. */

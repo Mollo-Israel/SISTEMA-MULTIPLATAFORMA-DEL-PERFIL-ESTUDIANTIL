@@ -90,7 +90,7 @@ export class MailController {
         sentTo: maskEmail(to),
         transport: entrega.transport,
         message:
-          entrega.transport === 'smtp'
+          entrega.transport !== 'console'
             ? `Correo de prueba enviado a ${to}. Revisa la bandeja de entrada y la de no deseado.`
             : 'El correo está en modo simulado: la prueba quedó escrita en el registro de la API, '
               + 'no salió a ningún buzón.',

@@ -14,7 +14,7 @@ sección está el archivo exacto donde vive, para que cualquier afirmación se
 pueda comprobar.
 
 > Para una visión general más corta, ver [`EL_SISTEMA_COMPLETO.md`](EL_SISTEMA_COMPLETO.md).
-> Para la trazabilidad de requisitos, [`MATRIZ_TRAZABILIDAD_V2.md`](MATRIZ_TRAZABILIDAD_V2.md).
+> Para la trazabilidad de requisitos, [`MATRIZ_TRAZABILIDAD_V2.md`](trazabilidad/MATRIZ_TRAZABILIDAD_V2.md).
 
 ---
 
