@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import type { Readable } from 'stream';
+import type { Readable } from 'node:stream';
 import { IsUUID } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -170,7 +170,12 @@ export class CollaborationController {
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     // Sin caché: si su dueño la retira, deja de verse al instante.
     res.setHeader('Cache-Control', 'private, no-store');
-    foto.contenido.on('error', () => { if (!res.headersSent) res.status(404); res.end(); }).pipe(res);
+    foto.contenido.on('error', () => {
+      if (!res.headersSent) {
+        res.status(404);
+      }
+      res.end();
+    }).pipe(res);
   }
 
   // =========================================================================

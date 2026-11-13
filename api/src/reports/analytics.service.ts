@@ -1,13 +1,7 @@
-import { AFFINITY_ENGINE_VERSION } from '@perfil/shared';
+import { AFFINITY_ENGINE_VERSION, AffinityLevel, ProjectBackingTier, RegistrationStatus, RolNombre } from '@perfil/shared';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import {
-  AffinityLevel,
-  ProjectBackingTier,
-  RegistrationStatus,
-  RolNombre,
-} from '@perfil/shared';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { AffinitySnapshotItem } from '../entities/affinity-snapshot-item.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';

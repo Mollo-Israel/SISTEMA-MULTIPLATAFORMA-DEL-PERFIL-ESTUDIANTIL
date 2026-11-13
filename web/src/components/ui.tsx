@@ -1,6 +1,6 @@
 import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { PrimeraVisita } from './primeraVisita';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { FiInbox, FiSearch, FiX } from 'react-icons/fi';
 
@@ -13,7 +13,7 @@ import { FiInbox, FiSearch, FiX } from 'react-icons/fi';
  * para que cada pantalla lo adopte sin reescribirse.
  */
 
-export function Card({ title, actions, children }: { title?: string; actions?: ReactNode; children: ReactNode }) {
+export function Card({ title, actions, children }: Readonly<{ title?: string; actions?: ReactNode; children: ReactNode }>) {
   return (
     <div className="card">
       {(title || actions) && (
@@ -27,7 +27,7 @@ export function Card({ title, actions, children }: { title?: string; actions?: R
   );
 }
 
-export function Stat({ value, label }: { value: ReactNode; label: string }) {
+export function Stat({ value, label }: Readonly<{ value: ReactNode; label: string }>) {
   return (
     <div className="card stat">
       <span className="value">{value}</span>
@@ -36,7 +36,7 @@ export function Stat({ value, label }: { value: ReactNode; label: string }) {
   );
 }
 
-export function Loading({ label = 'Cargando…' }: { label?: string }) {
+export function Loading({ label = 'Cargando…' }: Readonly<{ label?: string }>) {
   return (
     <div className="state">
       <div className="spinner" />
@@ -45,7 +45,7 @@ export function Loading({ label = 'Cargando…' }: { label?: string }) {
   );
 }
 
-export function ErrorState({ message }: { message: string }) {
+export function ErrorState({ message }: Readonly<{ message: string }>) {
   return <div className="state error">⚠ {message}</div>;
 }
 
@@ -57,11 +57,11 @@ export function EmptyState({
   message = 'Sin datos para mostrar.',
   icon,
   action,
-}: {
+}: Readonly<{
   message?: string;
   icon?: ReactNode;
   action?: ReactNode;
-}) {
+}>) {
   return (
     <div className="state empty-state">
       <div className="empty-icon">{icon ?? <FiInbox size={22} />}</div>
@@ -71,7 +71,7 @@ export function EmptyState({
   );
 }
 
-export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?: string }) {
+export function Badge({ children, tone = 'gray' }: Readonly<{ children: ReactNode; tone?: string }>) {
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
 
@@ -83,7 +83,7 @@ export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?:
  * Bloque gris con brillo que ocupa el sitio del contenido mientras llega.
  * Evita el salto de la pagina que produce un indicador centrado.
  */
-export function Skeleton({ width, height = 14, radius = 8 }: { width?: number | string; height?: number | string; radius?: number }) {
+export function Skeleton({ width, height = 14, radius = 8 }: Readonly<{ width?: number | string; height?: number | string; radius?: number }>) {
   return (
     <span
       className="skeleton"
@@ -93,23 +93,23 @@ export function Skeleton({ width, height = 14, radius = 8 }: { width?: number | 
   );
 }
 
-export function SkeletonText({ lines = 3 }: { lines?: number }) {
+export function SkeletonText({ lines = 3 }: Readonly<{ lines?: number }>) {
   return (
     <div className="skeleton-stack" aria-hidden="true">
-      {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton key={i} width={i === lines - 1 ? '60%' : '100%'} />
+      {Array.from({ length: lines }, (_, i) => i).map((n) => (
+        <Skeleton key={`linea-${n}`} width={n === lines - 1 ? '60%' : '100%'} />
       ))}
     </div>
   );
 }
 
-export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+export function SkeletonTable({ rows = 5, columns = 4 }: Readonly<{ rows?: number; columns?: number }>) {
   return (
     <div className="skeleton-table" aria-hidden="true">
-      {Array.from({ length: rows }).map((_, r) => (
-        <div className="skeleton-row" key={r}>
-          {Array.from({ length: columns }).map((__, c) => (
-            <Skeleton key={c} width={c === 0 ? '28%' : undefined} height={12} />
+      {Array.from({ length: rows }, (_, r) => r).map((fila) => (
+        <div className="skeleton-row" key={`fila-${fila}`}>
+          {Array.from({ length: columns }, (_, c) => c).map((col) => (
+            <Skeleton key={`col-${col}`} width={col === 0 ? '28%' : undefined} height={12} />
           ))}
         </div>
       ))}
@@ -117,11 +117,11 @@ export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; column
   );
 }
 
-export function SkeletonCards({ count = 3 }: { count?: number }) {
+export function SkeletonCards({ count = 3 }: Readonly<{ count?: number }>) {
   return (
     <div className="skeleton-cards" aria-hidden="true">
-      {Array.from({ length: count }).map((_, i) => (
-        <div className="skeleton-card" key={i}>
+      {Array.from({ length: count }, (_, i) => i).map((n) => (
+        <div className="skeleton-card" key={`tarjeta-${n}`}>
           <Skeleton width="45%" height={16} />
           <Skeleton width="85%" height={11} />
           <Skeleton width="65%" height={11} />
@@ -188,7 +188,7 @@ export function AsyncView<T>({
   emptyAction,
   empty,
   children,
-}: AsyncViewProps<T>) {
+}: Readonly<AsyncViewProps<T>>) {
   const nothing = empty ?? <EmptyState message={emptyMessage} action={emptyAction} />;
   // Al recargar con datos ya en pantalla se siguen mostrando: cambiar la
   // tabla por un esqueleto y volver a la tabla medio segundo después era el
@@ -198,7 +198,7 @@ export function AsyncView<T>({
   if (loading && !recargando) return mostrarEsqueleto ? <>{skeleton ?? <Loading />}</> : <div className="async-wait" />;
   if (error) return <ErrorState message={error} />;
   if (!data) return <>{nothing}</>;
-  if (isEmpty && isEmpty(data)) return <>{nothing}</>;
+  if (isEmpty?.(data)) return <>{nothing}</>;
   return <>{children(data)}</>;
 }
 
@@ -325,7 +325,7 @@ export function Modal({
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   // V3 B21: la etiqueta queda asociada a su campo (clic y lector de pantalla).
   const auto = `campo-${useId().replace(/:/g, '')}`;
   const hijo = isValidElement(children) ? (children as ReactElement<{ id?: string }>) : null;
@@ -365,7 +365,7 @@ export function Button({
   className = '',
   disabled,
   ...rest
-}: ButtonProps) {
+}: Readonly<ButtonProps>) {
   return (
     <button
       className={`btn btn-${variant} ${size === 'sm' ? 'btn-sm' : ''} ${loading ? 'is-loading' : ''} ${className}`.trim()}
@@ -396,7 +396,7 @@ export function SearchInput({
   delay = 350,
   autoFocus,
   id,
-}: {
+}: Readonly<{
   value: string;
   onChange: (value: string) => void;
   onDebouncedChange?: (value: string) => void;
@@ -405,7 +405,7 @@ export function SearchInput({
   autoFocus?: boolean;
   /** V3 B21: para asociarlo a una etiqueta visible con htmlFor. */
   id?: string;
-}) {
+}>) {
   const callback = useRef(onDebouncedChange);
   callback.current = onDebouncedChange;
 
@@ -437,7 +437,7 @@ export function SearchInput({
 }
 
 /** Cantidad de resultados tras filtrar. Da certeza de que el filtro se aplicó. */
-export function ResultCount({ shown, total, noun = 'resultados' }: { shown: number; total: number; noun?: string }) {
+export function ResultCount({ shown, total, noun = 'resultados' }: Readonly<{ shown: number; total: number; noun?: string }>) {
   if (shown === total) return <span className="result-count">{total} {noun}</span>;
   return (
     <span className="result-count">
@@ -461,11 +461,11 @@ export function PageHeader({
   title,
   description,
   actions,
-}: {
+}: Readonly<{
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
-}) {
+}>) {
   const embebido = useContext(PanelEmbebido);
   if (embebido) {
     return (description || actions) ? (
@@ -497,11 +497,11 @@ export function Tabs({
   items,
   value,
   onChange,
-}: {
+}: Readonly<{
   items: TabItem[];
   value: string;
   onChange: (key: string) => void;
-}) {
+}>) {
   const id = `tabs-${useId().replace(/:/g, '')}`;
   return (
     <div className="tabs" role="tablist">
@@ -537,11 +537,11 @@ export function ProgressBar({
   value,
   label,
   tone = 'bordo',
-}: {
+}: Readonly<{
   value: number;
   label?: string;
   tone?: 'bordo' | 'green' | 'amber';
-}) {
+}>) {
   const safe = Math.max(0, Math.min(100, Math.round(value)));
   const primera = useContext(PrimeraVisita);
   return (
@@ -550,7 +550,7 @@ export function ProgressBar({
         {label && <span>{label}</span>}
         <strong>{safe}%</strong>
       </div>
-      <div className="progress" role="progressbar" aria-valuenow={safe} aria-valuemin={0} aria-valuemax={100}>
+      <div className="progress" role="progressbar" aria-valuenow={safe} aria-valuemin={0} aria-valuemax={100}>{/* NOSONAR: la barra es animada y con estilo propio; <progress> no se puede animar igual. Lleva el ARIA completo. */}
         <motion.div
           className={`bar-${tone}`}
           initial={primera ? { width: 0 } : false}
@@ -563,7 +563,7 @@ export function ProgressBar({
 }
 
 /** Entrada escalonada para listas. Cada elemento aparece un poco después. */
-export function Stagger({ children, index = 0 }: { children: ReactNode; index?: number }) {
+export function Stagger({ children, index = 0 }: Readonly<{ children: ReactNode; index?: number }>) {
   // Solo en la primera visita de la vista; al volver, quieto (sin parpadeo).
   const primera = useContext(PrimeraVisita);
   return (
@@ -578,7 +578,7 @@ export function Stagger({ children, index = 0 }: { children: ReactNode; index?: 
 }
 
 /** Copia un texto al portapapeles y avisa en el propio botón. */
-export function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }) {
+export function CopyButton({ text, label = 'Copiar' }: Readonly<{ text: string; label?: string }>) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -654,7 +654,7 @@ export function useOrden<T>(
     });
   })();
   const alternar = (clave: string) =>
-    setOrden((o) => (o?.clave === clave ? { clave, dir: o.dir === 'asc' ? 'desc' : 'asc' } : { clave, dir: 'asc' }));
+    setOrden((o) => (o?.clave === clave ? { clave, dir: invertir(o.dir) } : { clave, dir: 'asc' }));
   return { ordenados, orden, alternar };
 }
 
@@ -664,18 +664,18 @@ export function ThOrden({
   orden,
   alternar,
   children,
-}: {
+}: Readonly<{
   clave: string;
   orden: { clave: string; dir: Direccion } | null;
   alternar: (clave: string) => void;
   children: ReactNode;
-}) {
+}>) {
   const activo = orden?.clave === clave;
   return (
-    <th aria-sort={activo ? (orden!.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th aria-sort={activo ? ARIA_SORT[orden!.dir] : 'none'}>
       <button type="button" className="th-orden" onClick={() => alternar(clave)}>
         {children}
-        <span aria-hidden className={`th-flecha ${activo ? 'on' : ''}`}>{activo ? (orden!.dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+        <span aria-hidden className={`th-flecha ${activo ? 'on' : ''}`}>{activo ? <>{(orden!.dir === 'asc' ? '▲' : '▼')}</> : '↕'}</span>
       </button>
     </th>
   );
@@ -690,7 +690,7 @@ export function Paginacion({
   hasta,
   ir,
   noun = 'registros',
-}: {
+}: Readonly<{
   pagina: number;
   paginas: number;
   total: number;
@@ -698,7 +698,7 @@ export function Paginacion({
   hasta: number;
   ir: (n: number) => void;
   noun?: string;
-}) {
+}>) {
   if (total === 0) return null;
   // Ventana corta de páginas alrededor de la actual, con la primera y la última.
   const numeros = [...new Set([1, pagina - 1, pagina, pagina + 1, paginas])]
@@ -739,7 +739,7 @@ export function Paginacion({
  * V6 §5.1: los listados muestran por omisión solo lo vigente; esta casilla
  * suma lo dado de baja o suspendido. Filtrar no borra nada.
  */
-export function VerTambien({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
+export function VerTambien({ checked, onChange, children }: Readonly<{ checked: boolean; onChange: (v: boolean) => void; children: ReactNode }>) {
   return (
     <label className="flex ver-tambien" style={{ gap: '0.4rem', fontSize: '0.82rem', alignItems: 'center' }}>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
@@ -747,3 +747,10 @@ export function VerTambien({ checked, onChange, children }: { checked: boolean; 
     </label>
   );
 }
+
+/** El sentido contrario de un orden. */
+function invertir(dir: 'asc' | 'desc'): 'asc' | 'desc' {
+  return dir === 'asc' ? 'desc' : 'asc';
+}
+
+const ARIA_SORT = { asc: 'ascending', desc: 'descending' } as const;

@@ -1,39 +1,144 @@
 {
-  "qualityGate": "ERROR",
+  "qualityGate": "OK",
   "condiciones": [
     {
-      "status": "ERROR",
+      "status": "OK",
       "metricKey": "new_coverage",
       "comparator": "LT",
       "errorThreshold": "80",
-      "actualValue": "19.7"
+      "actualValue": "80.0"
     },
     {
       "status": "OK",
       "metricKey": "new_duplicated_lines_density",
       "comparator": "GT",
       "errorThreshold": "3",
-      "actualValue": "0.50272"
+      "actualValue": "0.602"
     },
     {
-      "status": "ERROR",
+      "status": "OK",
       "metricKey": "new_violations",
       "comparator": "GT",
       "errorThreshold": "0",
-      "actualValue": "69"
+      "actualValue": "0"
     }
   ],
   "metricas": {
-    "coverage": "29.2",
-    "bugs": "5",
-    "reliability_rating": "4.0",
-    "code_smells": "845",
-    "duplicated_lines_density": "1.4",
-    "security_rating": "2.0",
-    "ncloc": "70857",
-    "vulnerabilities": "1",
+    "coverage": "76.0",
+    "bugs": "0",
+    "reliability_rating": "1.0",
+    "code_smells": "24",
+    "duplicated_lines_density": "1.1",
+    "security_rating": "1.0",
+    "ncloc": "73641",
+    "vulnerabilities": "0",
     "security_hotspots": "0",
     "sqale_rating": "1.0"
   },
-  "fecha": "2026-10-28T16:03:11.509Z"
+  "cobertura": {
+    "api/src": {
+      "coverage": "89.1",
+      "new_line_coverage": "94.5",
+      "lines_to_cover": "15516",
+      "branch_coverage": "84.4",
+      "uncovered_lines": "1122",
+      "new_coverage": "88.6",
+      "new_branch_coverage": "81.6",
+      "new_uncovered_lines": "152",
+      "line_coverage": "92.8",
+      "new_lines_to_cover": "2744"
+    },
+    "web/src": {
+      "coverage": "58.9",
+      "new_line_coverage": "78.1",
+      "lines_to_cover": "7996",
+      "branch_coverage": "53.8",
+      "uncovered_lines": "2947",
+      "new_coverage": "71.5",
+      "new_branch_coverage": "65.6",
+      "new_uncovered_lines": "407",
+      "line_coverage": "63.1",
+      "new_lines_to_cover": "1858"
+    },
+    "mobile/src": {
+      "coverage": "0.0",
+      "new_line_coverage": "0.0",
+      "lines_to_cover": "1390",
+      "uncovered_lines": "1390",
+      "new_coverage": "0.0",
+      "new_uncovered_lines": "109",
+      "line_coverage": "0.0",
+      "new_lines_to_cover": "109"
+    },
+    "shared/src": {
+      "coverage": "0.0",
+      "new_line_coverage": "0.0",
+      "lines_to_cover": "88",
+      "uncovered_lines": "88",
+      "new_coverage": "0.0",
+      "new_uncovered_lines": "15",
+      "line_coverage": "0.0",
+      "new_lines_to_cover": "15"
+    },
+    "total": {
+      "coverage": "76.0",
+      "new_line_coverage": "85.5",
+      "lines_to_cover": "24990",
+      "branch_coverage": "73.6",
+      "uncovered_lines": "5547",
+      "new_coverage": "80.0",
+      "new_branch_coverage": "74.1",
+      "new_uncovered_lines": "683",
+      "line_coverage": "77.8",
+      "new_lines_to_cover": "4726"
+    }
+  },
+  "incidencias": {
+    "todo": {
+      "total": 24,
+      "types": {
+        "CODE_SMELL": 24,
+        "BUG": 0,
+        "VULNERABILITY": 0
+      },
+      "impactSoftwareQualities": {
+        "MAINTAINABILITY": 24,
+        "SECURITY": 0,
+        "RELIABILITY": 0
+      },
+      "impactSeverities": {
+        "HIGH": 10,
+        "MEDIUM": 14,
+        "LOW": 0,
+        "INFO": 0,
+        "BLOCKER": 0
+      }
+    },
+    "codigoNuevo": {
+      "total": 0,
+      "types": {
+        "CODE_SMELL": 0,
+        "BUG": 0,
+        "VULNERABILITY": 0
+      },
+      "impactSoftwareQualities": {
+        "MAINTAINABILITY": 0,
+        "SECURITY": 0,
+        "RELIABILITY": 0
+      },
+      "impactSeverities": {
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0,
+        "INFO": 0,
+        "BLOCKER": 0
+      }
+    }
+  },
+  "informesDeCobertura": [
+    "pruebas/07-sonarqube/cobertura/api/lcov.info",
+    "pruebas/07-sonarqube/cobertura/web/lcov.info"
+  ],
+  "analisis": "2026-11-13T20:37:08+0000",
+  "fecha": "2026-11-13T20:44:11.627Z"
 }

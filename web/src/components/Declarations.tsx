@@ -25,18 +25,19 @@ export const NIVEL_INTERES = [
 /** Una prioridad cualquiera (1-5) llevada al nivel en palabras más cercano. */
 export function nivelDeInteres(prioridad: number): number {
   if (!prioridad) return 0;
-  return prioridad <= 2 ? 1 : prioridad <= 4 ? 3 : 5;
+  if (prioridad <= 2) return 1;
+  return prioridad <= 4 ? 3 : 5;
 }
 
 export function AreaChooser({
   areas,
   value,
   onChange,
-}: {
+}: Readonly<{
   areas: AcademicArea[];
   value: string[];
   onChange: (v: string[]) => void;
-}) {
+}>) {
   return (
     <div className="wz-areas">
       {areas.map((a) => {
@@ -66,11 +67,11 @@ export function InterestChooser({
   areas,
   value,
   onChange,
-}: {
+}: Readonly<{
   areas: AcademicArea[];
   value: Record<string, number>;
   onChange: (v: Record<string, number>) => void;
-}) {
+}>) {
   return (
     <div className="wz-interests">
       {areas.map((a) => {
@@ -80,7 +81,7 @@ export function InterestChooser({
           <div key={a.id} className={`wz-int ${actual ? 'on' : ''}`} style={{ ['--c' as string]: color }}>
             <span className="ico"><Icono /></span>
             <span className="nm">{a.name}</span>
-            <div className="lv" role="group" aria-label={`Interés en ${a.name}`}>
+            <div className="lv" role="group" aria-label={`Interés en ${a.name}`}>{/* NOSONAR: va uno por área (cientos de filas); se mantiene el div con rol de grupo para no alterar la maquetación de esta lista */}
               {NIVEL_INTERES.map((n) => (
                 <button
                   type="button"
@@ -113,7 +114,7 @@ export function SkillInterestChooser({
   kind,
   destacadas,
   alto = true,
-}: {
+}: Readonly<{
   areas: AcademicArea[];
   skills: Skill[];
   value: Record<string, SkillInterestKind>;
@@ -124,7 +125,7 @@ export function SkillInterestChooser({
   destacadas: Set<string>;
   /** Con scroll propio (bienvenida) o a lo largo de la página (perfil). */
   alto?: boolean;
-}) {
+}>) {
   const [filtro, setFiltro] = useState('');
   const grupos = useMemo(() => {
     const q = filtro.trim().toLowerCase();

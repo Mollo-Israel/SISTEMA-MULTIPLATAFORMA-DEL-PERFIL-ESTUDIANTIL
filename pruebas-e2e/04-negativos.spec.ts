@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { CUENTAS, captura, entrar } from './ayuda';
+import { captura, CUENTAS, entrar, expect, test } from './ayuda';
 
 test.describe('Casos negativos de acceso', () => {
   test('sin sesión, una ruta privada lleva al inicio de sesión', async ({ page }, info) => {

@@ -8,11 +8,10 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags, ApiProperty } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Response } from 'express';
 import { Repository } from 'typeorm';
-import { ApiProperty } from '@nestjs/swagger';
 import { ArrayUnique, IsArray, IsEnum, IsObject, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { CV_SUMMARY_MAX, CvTemplate, RolNombre, TrajectorySection } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';

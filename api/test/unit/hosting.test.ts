@@ -135,6 +135,70 @@ describe('Correo por Brevo', () => {
   });
 });
 
+describe('Correo por SMTP', () => {
+  // Sin servidor de verdad: se reemplaza la creación del transporte y se mira qué se pidió.
+  const nodemailer = require('nodemailer') as typeof import('nodemailer');
+  const original = nodemailer.createTransport;
+  let opciones: Record<string, any> = {};
+  let enviado: Record<string, any> | null = null;
+  let falla: Error | null = null;
+  const falso = (o: Record<string, any>) => {
+    opciones = o;
+    return {
+      verify: async () => { if (falla) throw falla; return true; },
+      sendMail: async (m: Record<string, any>) => { if (falla) throw falla; enviado = m; return { messageId: '<s1>' }; },
+      close: () => undefined,
+    };
+  };
+  afterEach(() => { (nodemailer as any).createTransport = original; opciones = {}; enviado = null; falla = null; });
+  const base = {
+    MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.ejemplo.org', SMTP_USER: 'cuenta@ejemplo.org', SMTP_PASSWORD: 'clave',
+    MAIL_FROM: 'Afinia <cuenta@ejemplo.org>', INSTITUTIONAL_EMAIL_DOMAINS: 'univalle.edu', NODE_ENV: 'production',
+  };
+  const servicio = (v: Record<string, string>) => {
+    (nodemailer as any).createTransport = falso;
+    const s = new MailService(new ConfigService(v));
+    assert.equal(s.prepare(), true);
+    return s;
+  };
+
+  it('con usuario y contraseña: login, STARTTLS en 587 y ritmo moderado', async () => {
+    const s = servicio(base);
+    assert.deepEqual(opciones.auth, { user: 'cuenta@ejemplo.org', pass: 'clave' });
+    assert.equal(opciones.port, 587);
+    assert.equal(opciones.secure, false);
+    assert.equal(opciones.requireTLS, true);
+    assert.equal(opciones.pool, true);
+    assert.equal(await s.verify(), true);
+    const r = await s.send({ to: 'ana@univalle.edu', subject: 'S', text: 'T', html: '<b>H</b>' });
+    assert.deepEqual(r, { transport: 'smtp', messageId: '<s1>' });
+    assert.equal(enviado?.from, '"Afinia" <cuenta@ejemplo.org>');
+    assert.equal(enviado?.headers['Auto-Submitted'], 'auto-generated');
+  });
+
+  it('con OAuth2 entrega las credenciales de la aplicación', () => {
+    servicio({
+      ...base, SMTP_AUTH: 'oauth2', SMTP_PASSWORD: '',
+      SMTP_OAUTH_CLIENT_ID: 'id', SMTP_OAUTH_CLIENT_SECRET: 'secreto', SMTP_OAUTH_REFRESH_TOKEN: 'renovar',
+    });
+    assert.deepEqual(opciones.auth, { type: 'OAuth2', user: 'cuenta@ejemplo.org', clientId: 'id', clientSecret: 'secreto', refreshToken: 'renovar' });
+  });
+
+  it('sin autenticación (servidor local) no exige STARTTLS ni manda credenciales', () => {
+    servicio({ ...base, SMTP_AUTH: 'none', SMTP_PORT: '465' });
+    assert.equal(opciones.auth, undefined);
+    assert.equal(opciones.secure, true);
+    assert.equal(opciones.requireTLS, false);
+  });
+
+  it('si el servidor rechaza, la verificación y el envío lo explican', async () => {
+    const s = servicio(base);
+    falla = Object.assign(new Error('Invalid login'), { code: 'EAUTH', responseCode: 535 });
+    assert.equal(await s.verify(), false);
+    await assert.rejects(s.send({ to: 'ana@univalle.edu', subject: 'S', text: 'T' }));
+  });
+});
+
 describe('Conexión a la base', () => {
   const de = (v: Record<string, string>) => databaseConnection((k) => v[k]);
   it('sin variables conserva los valores de siempre', () => {

@@ -24,7 +24,21 @@ mobile/
 ## Requisitos previos
 
 1. La API debe estar corriendo: `npm run db:up` y `npm run api:dev` (en la raíz).
-2. Node 18+ y la app **Expo Go** en el teléfono, o un emulador Android/iOS.
+2. Node 18+ y, en el teléfono, **Expo Go para SDK 54** o el APK de la app (ver más abajo).
+
+### Expo Go y la versión del proyecto
+
+Expo Go trae la parte nativa de **una sola versión** de Expo; al escanear el QR solo descarga el
+código JavaScript desde la PC. Por eso la versión de Expo Go debe ser la misma del proyecto, que
+está en **Expo SDK 54**. La Expo Go de las tiendas se actualiza a la versión más nueva de Expo y
+entonces muestra que el proyecto es incompatible.
+
+- **Android:** desinstala Expo Go e instala la versión oficial para SDK 54,
+  [Expo-Go-54.0.8.apk](https://github.com/expo/expo-go-releases/releases/download/Expo-Go-54.0.8/Expo-Go-54.0.8.apk)
+  (o elígela en [expo.dev/go](https://expo.dev/go)). Desactiva su actualización automática en Play Store.
+- **iPhone:** no se pueden instalar versiones anteriores de Expo Go, y la versión actual pide iniciar
+  sesión con la misma cuenta de Expo en la PC y en el teléfono. Allí conviene usar la versión web.
+- **Sin Expo Go:** genera el APK (sección siguiente).
 
 ## Configurar la URL de la API
 
@@ -54,6 +68,31 @@ npm run ios
 Credenciales (tras `npm run seed:populate`): administrador `admin@univalle.edu` / `Admin123*`;
 demás cuentas (docentes, director, sociedad y estudiantes `@est.univalle.edu`) con contraseña
 `Univalle2026*` (ej. `ana.quispe@est.univalle.edu`). Los estudiantes también pueden registrarse desde el login.
+
+## Generar el APK (Android, sin Expo Go)
+
+El APK lleva dentro la app completa: no necesita Expo Go ni el servidor de Expo, solo llegar a la API.
+
+```bash
+# Una sola vez: Java 17 y Android SDK en %LOCALAPPDATA%\Android (unos 4 GB, sin permisos de administrador)
+powershell -ExecutionPolicy Bypass -File scripts/movil/instalar-herramientas-android.ps1
+
+# Desde la raíz del proyecto
+npm run mobile:apk                                     # usa la API de esta PC: http://<IP de la red>:3010/api
+npm run mobile:apk -- https://api.TU-DOMINIO.com/api   # usa la API publicada
+```
+
+- El APK queda en `mobile/apk/Afinia.apk` (git lo ignora). La primera compilación tarda de 10 a 20
+  minutos; las siguientes, unos pocos.
+- Se compila en una copia de `mobile/` en `C:\afinia-apk`: en Windows, la compilación nativa falla con
+  rutas largas o con espacios, como la de este proyecto. Ahí mismo se habilita HTTP para la API local
+  (Android lo bloquea en una versión release) y se fija el tema claro de `app.json`.
+- **Instalarlo:** pasa el archivo al teléfono (cable, Drive o WhatsApp como documento), ábrelo y permite
+  «instalar apps de origen desconocido». Android puede avisar que la app es de un desarrollador
+  desconocido: está firmada con la clave de pruebas, no con una de Play Store.
+- **Con la API de esta PC:** el teléfono debe estar en la misma red, con la API encendida. Si la IP de la
+  PC cambia (otra red, otro lugar), vuelve a generar el APK. Si el teléfono no conecta, revisa que el
+  firewall de Windows permita a Node.js recibir conexiones, sobre todo si la red figura como «Pública».
 
 ## Alcance (30%)
 

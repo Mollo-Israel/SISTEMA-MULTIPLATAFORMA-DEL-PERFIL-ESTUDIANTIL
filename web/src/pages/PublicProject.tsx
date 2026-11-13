@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FiAlertCircle, FiExternalLink, FiFolder, FiGithub } from 'react-icons/fi';
+import { FiAlertCircle, FiExternalLink, FiFolder } from 'react-icons/fi';
 import { projectService } from '../services';
 import type { PublicProjectView } from '../services/types';
 import { PROJECT_BACKING_LABEL } from '../services/types';

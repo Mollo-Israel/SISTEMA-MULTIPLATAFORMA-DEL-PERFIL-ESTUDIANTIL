@@ -105,7 +105,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && onUnauthorized) {
       onUnauthorized();
     }
-    return Promise.reject(error);
+    throw error;
   },
 );
 

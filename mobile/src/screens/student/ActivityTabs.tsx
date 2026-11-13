@@ -15,7 +15,7 @@ import { colors, registrationColor } from '../../theme';
  * es un favorito que no cambia el orden.
  */
 export function ParaTi() {
-  const { data, loading, error, reload } = useAsync(() => recommendationService.mine(), []);
+  const { data, loading, error } = useAsync(() => recommendationService.mine(), []);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const toast = useToast();
   const items = (data?.groups ?? [])
@@ -28,7 +28,15 @@ export function ParaTi() {
     try {
       const ya = guardadas.has(i.targetId);
       await (ya ? activityService.unfavorite(i.targetId) : activityService.favorite(i.targetId));
-      setGuardadas((s) => { const n = new Set(s); if (ya) n.delete(i.targetId); else n.add(i.targetId); return n; });
+      setGuardadas((s) => {
+        const n = new Set(s);
+        if (ya) {
+          n.delete(i.targetId);
+        } else {
+          n.add(i.targetId);
+        }
+        return n;
+      });
       toast.success(ya ? 'Quitada de guardadas.' : 'Guardada.', ya ? undefined : 'No cambia lo que te sugerimos.');
     } catch (e) {
       toast.error(apiError(e));
@@ -47,7 +55,7 @@ export function ParaTi() {
         <View key={i.id} style={styles.card}>
           <Text style={styles.titulo}>{i.title}</Text>
           {i.area && <Muted>{i.area.name}</Muted>}
-          {i.reasons.filter((r) => r.points > 0 || r.code === 'context_match').slice(0, 2).map((r, k) => <Text key={k} style={styles.motivo}>• {r.label}</Text>)}
+          {i.reasons.filter((r) => r.points > 0 || r.code === 'context_match').slice(0, 2).map((r) => <Text key={`${r.code}:${r.label}`} style={styles.motivo}>• {r.label}</Text>)}
           <View style={styles.fila}>
             <Button small icon="bookmark" title={guardadas.has(i.targetId) ? 'Quitar de guardadas' : 'Guardar'} loading={ocupado === i.id} onPress={() => void guardar(i)} />
           </View>
@@ -64,7 +72,7 @@ const GRUPOS: Record<'inscritas' | 'historial', { estados: string[]; vacio: stri
 };
 
 /** Inscritas e Historial, desde tus inscripciones. */
-export function MisInscripciones({ grupo }: { grupo: keyof typeof GRUPOS }) {
+export function MisInscripciones({ grupo }: Readonly<{ grupo: keyof typeof GRUPOS }>) {
   const { data, loading, error } = useAsync(() => activityService.myRegistrations(), []);
   const filas = (data ?? []).filter((r: any) => GRUPOS[grupo].estados.includes(r.status));
   return (

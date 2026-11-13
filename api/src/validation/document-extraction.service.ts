@@ -11,7 +11,7 @@ export interface FullExtraction {
   /** Texto normalizado del documento. No se persiste. */
   text: string;
   /** Insignia Open Badges horneada en un PNG, si la había (V3 §18.3). */
-  bakedBadge: { json: unknown | null; url: string | null } | null;
+  bakedBadge: { json: unknown; url: string | null } | null;
 }
 
 /**

@@ -18,64 +18,91 @@ export function assertEnvironment(config: ConfigService): void {
   const problems: string[] = [];
   const warnings: string[] = [];
 
+  revisarBaseDeDatos(config, problems);
+  // Los secretos los validan resolveJwtSecret y resolveRefreshSecret, que se
+  // ejecutan al construir el módulo de autenticación.
+  if (isProduction) revisarProduccion(config, problems, warnings);
+  else revisarDesarrollo(config, warnings);
+  revisarSubidas(config, problems);
+  revisarIa(config, isProduction, problems, warnings);
+  revisarVideo(config, warnings);
+
+  for (const warning of warnings) logger.warn(warning);
+
+  if (problems.length > 0) {
+    throw new Error(
+      `Configuración de entorno incompleta:\n  - ${problems.join('\n  - ')}\n`
+        + 'Revise .env.example y complete las variables antes de iniciar.',
+    );
+  }
+}
+
+type Lista = string[];
+
+function revisarBaseDeDatos(config: ConfigService, problems: Lista): void {
   // Base de datos: sin esto no hay sistema, en ningún entorno.
   if (!config.get<string>('DATABASE_URL')?.trim()) {
     for (const key of ['POSTGRES_HOST', 'POSTGRES_DB', 'POSTGRES_USER']) {
       if (!config.get<string>(key)?.trim()) problems.push(`${key} no está definido.`);
     }
   }
+}
 
-  // Los secretos los validan resolveJwtSecret y resolveRefreshSecret, que se
-  // ejecutan al construir el módulo de autenticación.
-
-  if (isProduction) {
-    if (!config.get<string>('WEB_ORIGINS')?.trim()) {
-      problems.push('WEB_ORIGINS no está definido: CORS quedaría sin lista explícita.');
-    }
-    if (!config.get<string>('INSTITUTIONAL_EMAIL_DOMAINS')?.trim()) {
-      problems.push(
-        'INSTITUTIONAL_EMAIL_DOMAINS no está definido: cualquier dominio podría provisionarse.',
-      );
-    }
-    // Con el correo mal configurado, cada alta deja una cuenta que nadie podrá
-    // activar. Mejor no arrancar que descubrirlo con el primer estudiante.
-    const correo = readMailSettings(config);
-    if (correo.transport !== 'brevo' && !config.get<string>('SMTP_HOST')?.trim()) {
-      problems.push(
-        'SMTP_HOST no está definido: la activación y la recuperación no podrían enviarse.',
-      );
-    }
-    if (correo.transport === 'console') {
-      problems.push('MAIL_TRANSPORT=console no es válido en producción: los correos no saldrían.');
-    }
-    problems.push(...correo.problems);
-    const web = config.get<string>('WEB_APP_URL')?.trim();
-    if (web && !/^https:\/\//i.test(web)) {
-      problems.push('WEB_APP_URL debe empezar por https:// en producción: es el enlace del correo.');
-    }
-    if ((config.get<string>('STORAGE_DRIVER') ?? 'local').trim().toLowerCase() === 'local') {
-      warnings.push(
-        'STORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, '
-          + 'los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.',
-      );
-    }
-  } else {
-    if (!config.get<string>('INSTITUTIONAL_EMAIL_DOMAINS')?.trim()) {
-      warnings.push('INSTITUTIONAL_EMAIL_DOMAINS sin definir: no se restringe el dominio.');
-    }
-    if (!config.get<string>('SMTP_HOST')?.trim()) {
-      warnings.push(
-        'SMTP_HOST sin definir: los correos se SIMULAN (van al registro y a api/.mail-outbox). '
-          + 'Para enviarlos de verdad, ver docs/CORREO_REAL.md.',
-      );
-    }
+/** En producción, lo que falte detiene el arranque. */
+function revisarProduccion(config: ConfigService, problems: Lista, warnings: Lista): void {
+  if (!config.get<string>('WEB_ORIGINS')?.trim()) {
+    problems.push('WEB_ORIGINS no está definido: CORS quedaría sin lista explícita.');
   }
+  if (!config.get<string>('INSTITUTIONAL_EMAIL_DOMAINS')?.trim()) {
+    problems.push(
+      'INSTITUTIONAL_EMAIL_DOMAINS no está definido: cualquier dominio podría provisionarse.',
+    );
+  }
+  // Con el correo mal configurado, cada alta deja una cuenta que nadie podrá
+  // activar. Mejor no arrancar que descubrirlo con el primer estudiante.
+  const correo = readMailSettings(config);
+  if (correo.transport !== 'brevo' && !config.get<string>('SMTP_HOST')?.trim()) {
+    problems.push(
+      'SMTP_HOST no está definido: la activación y la recuperación no podrían enviarse.',
+    );
+  }
+  if (correo.transport === 'console') {
+    problems.push('MAIL_TRANSPORT=console no es válido en producción: los correos no saldrían.');
+  }
+  problems.push(...correo.problems);
+  const web = config.get<string>('WEB_APP_URL')?.trim();
+  if (web && !/^https:\/\//i.test(web)) {
+    problems.push('WEB_APP_URL debe empezar por https:// en producción: es el enlace del correo.');
+  }
+  if ((config.get<string>('STORAGE_DRIVER') ?? 'local').trim().toLowerCase() === 'local') {
+    warnings.push(
+      'STORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, '
+        + 'los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.',
+    );
+  }
+}
 
+/** En desarrollo solo se avisa. */
+function revisarDesarrollo(config: ConfigService, warnings: Lista): void {
+  if (!config.get<string>('INSTITUTIONAL_EMAIL_DOMAINS')?.trim()) {
+    warnings.push('INSTITUTIONAL_EMAIL_DOMAINS sin definir: no se restringe el dominio.');
+  }
+  if (!config.get<string>('SMTP_HOST')?.trim()) {
+    warnings.push(
+      'SMTP_HOST sin definir: los correos se SIMULAN (van al registro y a api/.mail-outbox). '
+        + 'Para enviarlos de verdad, ver docs/CORREO_REAL.md.',
+    );
+  }
+}
+
+function revisarSubidas(config: ConfigService, problems: Lista): void {
   const maxUpload = Number(config.get<string>('MAX_UPLOAD_MB') ?? 10);
   if (!Number.isFinite(maxUpload) || maxUpload <= 0 || maxUpload > 100) {
     problems.push('MAX_UPLOAD_MB debe ser un número entre 1 y 100.');
   }
+}
 
+function revisarIa(config: ConfigService, isProduction: boolean, problems: Lista, warnings: Lista): void {
   // Asistente de IA (V2 §43): opcional. Mal configurado no debe tumbar nada
   // en desarrollo —el sistema sigue con AI_PROVIDER=none—, pero en producción
   // una configuración a medias es un error que hay que ver al arrancar.
@@ -93,19 +120,12 @@ export function assertEnvironment(config: ConfigService): void {
       }
     }
   }
+}
 
+function revisarVideo(config: ConfigService, warnings: Lista): void {
   // Centro de ayuda (V2 §65): un video mal escrito no rompe nada; se avisa.
   const video = config.get<string>('HELP_VIDEO_URL')?.trim();
   if (video && !helpVideo(video)) {
     warnings.push('HELP_VIDEO_URL no es un enlace https válido: el centro de ayuda se mostrará sin video.');
-  }
-
-  for (const warning of warnings) logger.warn(warning);
-
-  if (problems.length > 0) {
-    throw new Error(
-      `Configuración de entorno incompleta:\n  - ${problems.join('\n  - ')}\n`
-        + 'Revise .env.example y complete las variables antes de iniciar.',
-    );
   }
 }

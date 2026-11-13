@@ -66,7 +66,7 @@ export default function MyActivitiesScreen() {
         </>
       )}
 
-      {data && data.length === 0 && (
+      {data?.length === 0 && (
         <EmptyState
           icon="calendar"
           message="Todavía no te has inscrito ni has marcado interés en ninguna actividad."

@@ -11,6 +11,98 @@ import {
 } from '../components/ui';
 import { resumen } from '../components/ActivityCard';
 
+type EstadoDelListado = 'cargando' | 'error' | 'vacio' | 'lista';
+
+/** Qué mostrar: el esqueleto la primera vez, el error si no hay datos, el vacío o la lista. */
+function estadoDelListado(cargando: boolean, error: string | null, hayDatos: boolean, cantidad: number): EstadoDelListado {
+  if (cargando && !hayDatos) return 'cargando';
+  if (error && !hayDatos) return 'error';
+  return cantidad === 0 ? 'vacio' : 'lista';
+}
+
+/** «De Ana» o «De Ana y 2 integrantes». */
+function autoria(dueno: string, integrantes: number): string {
+  if (integrantes <= 0) return `De ${dueno}`;
+  const plural = integrantes === 1 ? '' : 's';
+  return `De ${dueno} y ${integrantes} integrante${plural}`;
+}
+
+/** Tarjeta de un proyecto de la comunidad. */
+function TarjetaProyecto({ p, onVer }: Readonly<{ p: CommunityProject; onVer: () => void }>) {
+  return (
+    <article className="activity-card">
+      <div className="activity-card-img" aria-hidden>
+        {p.coverUrl ? <ImagenProtegida src={p.coverUrl} loading="lazy" fallback={<FiFolder size={28} />} /> : <FiFolder size={28} />}
+      </div>
+      <div className="activity-card-body">
+        <div className="activity-card-head">
+          <h3 title={p.title}>{p.title}</h3>
+          <Badge tone="gray">{PROJECT_BACKING_LABEL[p.backingTier as ProjectBackingTier] ?? p.backingTier}</Badge>
+        </div>
+        {p.owner && <span className="muted small">{autoria(p.owner, p.confirmedMembers)}</span>}
+        {/* V6 §7.5: solo quienes aceptaron mostrarse, con sus roles. */}
+        {(p.members ?? []).length > 0 && (
+          <span className="small" data-testid="integrantes">
+            {(p.members ?? []).map((m) => (m.roles.length ? `${m.name} (${m.roles.join(', ')})` : m.name)).join(' · ')}
+          </span>
+        )}
+        {p.description && <p className="activity-card-desc">{p.description}</p>}
+        <div className="activity-meta">
+          {p.areas.length > 0 && <span title={p.areas.join(', ')}>Áreas: {resumen(p.areas)}</span>}
+          {p.skills.length > 0 && <span title={p.skills.join(', ')}>Tecnologías: {resumen(p.skills)}</span>}
+        </div>
+        <div className="activity-card-actions">
+          <Button size="sm" variant="secondary" onClick={onVer}>Ver más</Button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/** Detalle de un proyecto: imágenes, descripción, integrantes y respaldo. */
+function DetalleProyecto({ viendo, foto, setFoto, onClose }: Readonly<{
+  viendo: CommunityProject;
+  foto: number;
+  setFoto: (n: number) => void;
+  onClose: () => void;
+}>) {
+  return (
+    <Modal title={viendo.title} subtitle={viendo.owner ? `De ${viendo.owner}` : undefined} onClose={onClose} width={760}>
+      {viendo.images.length > 0 && (
+        <div className="career-project-carousel" data-testid="carrusel-proyecto">
+          <ImagenProtegida src={viendo.images[foto]} alt={`Imagen ${foto + 1} de ${viendo.images.length}`} fallback={<FiFolder size={32} />} />
+          {viendo.images.length > 1 && (
+            <>
+              <button type="button" className="icon-button prev" aria-label="Imagen anterior" onClick={() => setFoto((foto + viendo.images.length - 1) % viendo.images.length)}><FiChevronLeft size={16} /></button>
+              <button type="button" className="icon-button next" aria-label="Imagen siguiente" onClick={() => setFoto((foto + 1) % viendo.images.length)}><FiChevronRight size={16} /></button>
+            </>
+          )}
+        </div>
+      )}
+      {viendo.description && <p>{viendo.description}</p>}
+      <div className="activity-meta">
+        {viendo.areas.length > 0 && <span>Áreas: {viendo.areas.join(', ')}</span>}
+        {viendo.skills.length > 0 && <span>Tecnologías: {viendo.skills.join(', ')}</span>}
+        <span><FiUsers size={12} /> {viendo.confirmedMembers + 1} persona{viendo.confirmedMembers === 0 ? '' : 's'} con su contribución confirmada</span>
+      </div>
+      {(viendo.members ?? []).length > 0 && (
+        <div data-testid="integrantes-detalle">
+          <strong className="small">Integrantes</strong>
+          <ul className="detalle-personas">
+            {(viendo.members ?? []).map((m) => (
+              <li key={m.name}>{m.name}{m.roles.length > 0 && <span className="muted small"> · {m.roles.join(', ')}</span>}</li>
+            ))}
+          </ul>
+          <p className="muted small" style={{ margin: 0 }}>Solo figuran quienes aceptaron mostrarse aquí.</p>
+        </div>
+      )}
+      <p className="muted small">
+        Respaldo: {PROJECT_BACKING_LABEL[viendo.backingTier as ProjectBackingTier] ?? viendo.backingTier}. Lo que figura es lo que el proyecto declara y su respaldo; no es una evaluación académica.
+      </p>
+    </Modal>
+  );
+}
+
 /**
  * «Proyectos de la carrera» (V5 §13.4, G07).
  *
@@ -54,11 +146,13 @@ export default function CareerProjectsPage() {
 
   const limpiar = () => { setQuery(''); setBuscado(''); setAreaId(''); setSkillId(''); };
   const hayFiltros = !!(buscado || areaId || skillId);
+  const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const porPagina = data?.pageSize ?? 6;
   const paginas = Math.max(1, Math.ceil(total / porPagina));
   const desde = total === 0 ? 0 : (pagina - 1) * porPagina + 1;
   const skillsDelArea = skills.filter((s) => s.isActive !== false && (!areaId || s.academicAreaId === areaId));
+  const estado = estadoDelListado(loading, error, !!data, items.length);
 
   return (
     <div>
@@ -79,46 +173,20 @@ export default function CareerProjectsPage() {
         <Button variant="ghost" size="sm" icon={<FiX size={14} />} disabled={!hayFiltros} onClick={limpiar}>Limpiar</Button>
       </div>
 
-      {loading && !data ? (
-        <Diferido><SkeletonCards count={6} /></Diferido>
-      ) : error && !data ? (
-        <div className="alert alert-error">{error}</div>
-      ) : (data?.items ?? []).length === 0 ? (
+      {estado === 'cargando' && <Diferido><SkeletonCards count={6} /></Diferido>}
+      {estado === 'error' && <div className="alert alert-error">{error}</div>}
+      {estado === 'vacio' && (
         <EmptyState
           icon={hayFiltros ? <FiSearch size={22} /> : <FiFolder size={22} />}
           message={hayFiltros ? 'Ningún proyecto coincide con los filtros.' : 'Todavía no hay proyectos activos compartidos con la comunidad.'}
           action={hayFiltros ? <Button variant="secondary" size="sm" onClick={limpiar}>Quitar filtros</Button> : undefined}
         />
-      ) : (
+      )}
+      {estado === 'lista' && (
         <>
           <div className="activity-grid" data-testid="proyectos-carrera">
-            {(data?.items ?? []).map((p) => (
-              <article key={p.id} className="activity-card">
-                <div className="activity-card-img" aria-hidden>
-                  {p.coverUrl ? <ImagenProtegida src={p.coverUrl} loading="lazy" fallback={<FiFolder size={28} />} /> : <FiFolder size={28} />}
-                </div>
-                <div className="activity-card-body">
-                  <div className="activity-card-head">
-                    <h3 title={p.title}>{p.title}</h3>
-                    <Badge tone="gray">{PROJECT_BACKING_LABEL[p.backingTier as ProjectBackingTier] ?? p.backingTier}</Badge>
-                  </div>
-                  {p.owner && <span className="muted small">De {p.owner}{p.confirmedMembers > 0 ? ` y ${p.confirmedMembers} integrante${p.confirmedMembers === 1 ? '' : 's'}` : ''}</span>}
-                  {/* V6 §7.5: solo quienes aceptaron mostrarse, con sus roles. */}
-                  {(p.members ?? []).length > 0 && (
-                    <span className="small" data-testid="integrantes">
-                      {(p.members ?? []).map((m) => (m.roles.length ? `${m.name} (${m.roles.join(', ')})` : m.name)).join(' · ')}
-                    </span>
-                  )}
-                  {p.description && <p className="activity-card-desc">{p.description}</p>}
-                  <div className="activity-meta">
-                    {p.areas.length > 0 && <span title={p.areas.join(', ')}>Áreas: {resumen(p.areas)}</span>}
-                    {p.skills.length > 0 && <span title={p.skills.join(', ')}>Tecnologías: {resumen(p.skills)}</span>}
-                  </div>
-                  <div className="activity-card-actions">
-                    <Button size="sm" variant="secondary" onClick={() => { setViendo(p); setFoto(0); }}>Ver más</Button>
-                  </div>
-                </div>
-              </article>
+            {items.map((p) => (
+              <TarjetaProyecto key={p.id} p={p} onVer={() => { setViendo(p); setFoto(0); }} />
             ))}
           </div>
           <Paginacion
@@ -133,41 +201,7 @@ export default function CareerProjectsPage() {
         </>
       )}
 
-      {viendo && (
-        <Modal title={viendo.title} subtitle={viendo.owner ? `De ${viendo.owner}` : undefined} onClose={() => setViendo(null)} width={760}>
-          {viendo.images.length > 0 && (
-            <div className="career-project-carousel" data-testid="carrusel-proyecto">
-              <ImagenProtegida src={viendo.images[foto]} alt={`Imagen ${foto + 1} de ${viendo.images.length}`} fallback={<FiFolder size={32} />} />
-              {viendo.images.length > 1 && (
-                <>
-                  <button type="button" className="icon-button prev" aria-label="Imagen anterior" onClick={() => setFoto((foto + viendo.images.length - 1) % viendo.images.length)}><FiChevronLeft size={16} /></button>
-                  <button type="button" className="icon-button next" aria-label="Imagen siguiente" onClick={() => setFoto((foto + 1) % viendo.images.length)}><FiChevronRight size={16} /></button>
-                </>
-              )}
-            </div>
-          )}
-          {viendo.description && <p>{viendo.description}</p>}
-          <div className="activity-meta">
-            {viendo.areas.length > 0 && <span>Áreas: {viendo.areas.join(', ')}</span>}
-            {viendo.skills.length > 0 && <span>Tecnologías: {viendo.skills.join(', ')}</span>}
-            <span><FiUsers size={12} /> {viendo.confirmedMembers + 1} persona{viendo.confirmedMembers === 0 ? '' : 's'} con su contribución confirmada</span>
-          </div>
-          {(viendo.members ?? []).length > 0 && (
-            <div data-testid="integrantes-detalle">
-              <strong className="small">Integrantes</strong>
-              <ul className="detalle-personas">
-                {(viendo.members ?? []).map((m) => (
-                  <li key={m.name}>{m.name}{m.roles.length > 0 && <span className="muted small"> · {m.roles.join(', ')}</span>}</li>
-                ))}
-              </ul>
-              <p className="muted small" style={{ margin: 0 }}>Solo figuran quienes aceptaron mostrarse aquí.</p>
-            </div>
-          )}
-          <p className="muted small">
-            Respaldo: {PROJECT_BACKING_LABEL[viendo.backingTier as ProjectBackingTier] ?? viendo.backingTier}. Lo que figura es lo que el proyecto declara y su respaldo; no es una evaluación académica.
-          </p>
-        </Modal>
-      )}
+      {viendo && <DetalleProyecto viendo={viendo} foto={foto} setFoto={setFoto} onClose={() => setViendo(null)} />}
     </div>
   );
 }

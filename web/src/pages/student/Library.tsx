@@ -103,67 +103,19 @@ export default function StudentLibraryPage() {
 
       {loading && !data ? (
         <Diferido><SkeletonCards count={4} /></Diferido>
-      ) : error && !data ? (
+      ) : <>{error && !data ? (
         <div className="alert alert-error">{error}</div>
-      ) : (data?.items ?? []).length === 0 ? (
+      ) : <>{(data?.items ?? []).length === 0 ? (
         <EmptyState
           icon={hayFiltros ? <FiSearch size={22} /> : <FiBookOpen size={22} />}
-          message={tab === 'favoritos' && !hayFiltros
-            ? 'Todavía no guardaste ningún recurso. Usa el corazón para tenerlos a mano.'
-            : tab === 'parati' && !hayFiltros
-              ? 'Todavía no hay recursos que coincidan con tus intereses o con lo que quieres mejorar. Puedes completarlos en Mi perfil.'
-            : hayFiltros ? 'Ningún recurso coincide con los filtros.' : 'Todavía no hay recursos en la biblioteca.'}
+          message={mensajeSinRecursos(tab, hayFiltros)}
           action={hayFiltros ? <Button variant="secondary" size="sm" onClick={limpiar}>Quitar filtros</Button> : undefined}
         />
       ) : (
         <>
           <div className="activity-grid">
             {(data?.items ?? []).map((r) => (
-              <article key={r.id} className="activity-card resource-card">
-                <div className="activity-card-img" aria-hidden>
-                  {r.imageUrl ? <ImagenProtegida src={r.imageUrl} loading="lazy" fallback={<FiBookOpen size={28} />} /> : <FiBookOpen size={28} />}
-                </div>
-                <div className="activity-card-body">
-                  <div className="activity-card-head">
-                    <h3 title={r.title}>{r.title}</h3>
-                    <Badge tone="bordo">{r.resourceTypeLabel}</Badge>
-                  </div>
-                  {r.provider && <span className="muted small">Fuente: {r.provider}</span>}
-                  {r.description && <p className="activity-card-desc">{r.description}</p>}
-                  {tab === 'parati' && (r.reasons ?? []).length > 0 && (
-                    <ul className="reasons" aria-label="Por qué te lo sugerimos">
-                      {(r.reasons ?? []).slice(0, 3).map((m) => <li key={m}>{m}</li>)}
-                    </ul>
-                  )}
-                  <div className="activity-meta">
-                    {r.areas.length > 0 && <span title={r.areas.map((a) => a.name).join(', ')}>Áreas: {resumen(r.areas.map((a) => a.name))}</span>}
-                    {r.skills.length > 0 && <span title={r.skills.map((s) => s.name).join(', ')}>Habilidades: {resumen(r.skills.map((s) => s.name))}</span>}
-                  </div>
-                  <div className="activity-card-actions">
-                    {r.url && (
-                      <a className="btn btn-primary btn-sm" href={r.url} target="_blank" rel="noreferrer">
-                        <FiExternalLink size={14} /> Abrir
-                      </a>
-                    )}
-                    {/* V5-6: el material subido se pide con la sesión, nunca por ruta pública. */}
-                    {r.fileUrl && (
-                      <BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className={`btn ${r.url ? 'btn-secondary' : 'btn-primary'} btn-sm`}>
-                        <FiFileText size={14} /> Ver material
-                      </BotonArchivo>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      loading={ocupado === r.id}
-                      icon={<FiHeart size={14} />}
-                      aria-pressed={r.isFavorite}
-                      onClick={() => void alternarFavorito(r)}
-                    >
-                      {r.isFavorite ? 'En favoritos' : 'Guardar'}
-                    </Button>
-                  </div>
-                </div>
-              </article>
+              <TarjetaDeRecurso key={r.id} r={r} paraTi={tab === 'parati'} ocupado={ocupado === r.id} onFavorito={() => void alternarFavorito(r)} />
             ))}
           </div>
           <Paginacion
@@ -176,7 +128,73 @@ export default function StudentLibraryPage() {
             noun="recursos"
           />
         </>
-      )}
+      )}</>}</>}
     </div>
+  );
+}
+
+/** Por qué no hay recursos: filtros, sin favoritos, nada para ti o biblioteca vacía. */
+function mensajeSinRecursos(tab: string, hayFiltros: boolean): string {
+  if (hayFiltros) return 'Ningún recurso coincide con los filtros.';
+  if (tab === 'favoritos') return 'Todavía no guardaste ningún recurso. Usa el corazón para tenerlos a mano.';
+  if (tab === 'parati') {
+    return 'Todavía no hay recursos que coincidan con tus intereses o con lo que quieres mejorar. Puedes completarlos en Mi perfil.';
+  }
+  return 'Todavía no hay recursos en la biblioteca.';
+}
+
+/** Un recurso de la biblioteca: qué es, por qué se sugiere, cómo abrirlo y guardarlo. */
+function TarjetaDeRecurso({ r, paraTi, ocupado, onFavorito }: Readonly<{
+  r: LibraryResource;
+  paraTi: boolean;
+  ocupado: boolean;
+  onFavorito: () => void;
+}>) {
+  return (
+    <article className="activity-card resource-card">
+      <div className="activity-card-img" aria-hidden>
+        {r.imageUrl ? <ImagenProtegida src={r.imageUrl} loading="lazy" fallback={<FiBookOpen size={28} />} /> : <FiBookOpen size={28} />}
+      </div>
+      <div className="activity-card-body">
+        <div className="activity-card-head">
+          <h3 title={r.title}>{r.title}</h3>
+          <Badge tone="bordo">{r.resourceTypeLabel}</Badge>
+        </div>
+        {r.provider && <span className="muted small">Fuente: {r.provider}</span>}
+        {r.description && <p className="activity-card-desc">{r.description}</p>}
+        {paraTi && (r.reasons ?? []).length > 0 && (
+          <ul className="reasons" aria-label="Por qué te lo sugerimos">
+            {(r.reasons ?? []).slice(0, 3).map((m) => <li key={m}>{m}</li>)}
+          </ul>
+        )}
+        <div className="activity-meta">
+          {r.areas.length > 0 && <span title={r.areas.map((a) => a.name).join(', ')}>Áreas: {resumen(r.areas.map((a) => a.name))}</span>}
+          {r.skills.length > 0 && <span title={r.skills.map((s) => s.name).join(', ')}>Habilidades: {resumen(r.skills.map((s) => s.name))}</span>}
+        </div>
+        <div className="activity-card-actions">
+          {r.url && (
+            <a className="btn btn-primary btn-sm" href={r.url} target="_blank" rel="noreferrer">
+              <FiExternalLink size={14} /> Abrir
+            </a>
+          )}
+          {/* V5-6: el material subido se pide con la sesión, nunca por ruta pública. */}
+          {r.fileUrl && (
+            <BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className={`btn ${r.url ? 'btn-secondary' : 'btn-primary'} btn-sm`}>
+              <FiFileText size={14} /> Ver material
+            </BotonArchivo>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={ocupado}
+            icon={<FiHeart size={14} />}
+            aria-pressed={r.isFavorite}
+            onClick={onFavorito}
+          >
+            {r.isFavorite ? 'En favoritos' : 'Guardar'}
+          </Button>
+        </div>
+      </div>
+    </article>
   );
 }

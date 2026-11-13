@@ -199,7 +199,6 @@ export class GamificationExtrasController {
   @ApiOperation({ summary: 'Canjear puntos por una recompensa.' })
   async redeem(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     // V4.1 A41-017: retirado.
-    void user; void id;
     throw new GoneException('Retos y recompensas se retiraron: los puntos se otorgan por criterios configurados y propuestas revisadas por Dirección. Los históricos se conservan.');
   }
 
@@ -243,7 +242,6 @@ export class GamificationExtrasController {
     @Body() dto: AwardDto,
   ) {
     // V4.1 A41-017: retirado.
-    void user; void id;
     throw new GoneException('Retos y recompensas se retiraron: los puntos se otorgan por criterios configurados y propuestas revisadas por Dirección. Los históricos se conservan.');
   }
 

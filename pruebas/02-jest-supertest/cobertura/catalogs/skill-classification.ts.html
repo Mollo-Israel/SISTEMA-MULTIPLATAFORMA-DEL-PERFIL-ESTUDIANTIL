@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">4.83% </span>
+                <span class="strong">5.6% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>6/124</span>
+                <span class='fraction'>7/125</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">7.05% </span>
+                <span class="strong">8.13% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>6/85</span>
+                <span class='fraction'>7/86</span>
             </div>
         
             
@@ -314,7 +314,8 @@
 <a name='L249'></a><a href='#L249'>249</a>
 <a name='L250'></a><a href='#L250'>250</a>
 <a name='L251'></a><a href='#L251'>251</a>
-<a name='L252'></a><a href='#L252'>252</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -367,7 +368,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -378,10 +380,10 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -390,7 +392,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -431,7 +433,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -465,7 +467,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -565,7 +567,8 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { entreComillas } from '../common/texto';
+/**
  * Sugeridor de área para una habilidad nueva (V3.2 §10.5).
  *
  * Analiza el catálogo vigente —no una tabla fija en el código— con una
@@ -745,7 +748,7 @@ export function <span class="fstat-no" title="function not covered" >classifySki
 <span class="cstat-no" title="statement not covered" >    [s.name, ...(s.aliases ?? [])].some(<span class="fstat-no" title="function not covered" >(n</span>) =&gt; <span class="cstat-no" title="statement not covered" >terminos.includes(normalizeTerm(n)))</span>)</span>;
 <span class="cstat-no" title="statement not covered" >  <span class="missing-if-branch" title="if path not taken" >I</span>if (exactas.length &gt; 0) {</span>
     const r = <span class="cstat-no" title="statement not covered" >resultado('exact_skill', 'high', exactas.map(<span class="fstat-no" title="function not covered" >(s</span>) =&gt; <span class="cstat-no" title="statement not covered" >s.academicAreaId!)</span>, <span class="fstat-no" title="function not covered" >(a</span>reasTxt) =&gt;</span>
-<span class="cstat-no" title="statement not covered" >      `«${name}» coincide con la habilidad ${exactas.map(<span class="fstat-no" title="function not covered" >(s</span>) =&gt; <span class="cstat-no" title="statement not covered" >`«${s.name}»`)</span>.join(', ')} del catálogo, que está en ${areasTxt}.`)</span>;
+<span class="cstat-no" title="statement not covered" >      `«${name}» coincide con la habilidad ${exactas.map(<span class="fstat-no" title="function not covered" >(s</span>) =&gt; <span class="cstat-no" title="statement not covered" >entreComillas(s.name))</span>.join(', ')} del catálogo, que está en ${areasTxt}.`)</span>;
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (r.rule !== 'none') <span class="cstat-no" title="statement not covered" >return r;</span></span>
   }
 &nbsp;
@@ -788,7 +791,7 @@ export function <span class="fstat-no" title="function not covered" >classifySki
 <span class="cstat-no" title="statement not covered" >      for (const a of areasDe(s).slice(0, 1)) <span class="cstat-no" title="statement not covered" >porArea.set(a, [...(porArea.get(a) ?? []), s.name]);</span></span>
     }
 <span class="cstat-no" title="statement not covered" >    return resultado('related_skill', 'medium', [...porArea.keys()], <span class="fstat-no" title="function not covered" >(a</span>reasTxt) =&gt;</span>
-<span class="cstat-no" title="statement not covered" >      `«${name}» se relaciona con ${[...porArea.values()].flat().slice(0, 3).map(<span class="fstat-no" title="function not covered" >(n</span>) =&gt; <span class="cstat-no" title="statement not covered" >`«${n}»`)</span>.join(', ')}, de ${areasTxt}.`)</span>;
+<span class="cstat-no" title="statement not covered" >      `«${name}» se relaciona con ${[...porArea.values()].flat().slice(0, 3).map(<span class="fstat-no" title="function not covered" >(n</span>) =&gt; <span class="cstat-no" title="statement not covered" >entreComillas(n))</span>.join(', ')}, de ${areasTxt}.`)</span>;
   }
 &nbsp;
   // 4 · Coincidencia semántica débil: una palabra significativa en común.
@@ -823,7 +826,7 @@ export function <span class="fstat-no" title="function not covered" >classifySki
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-28T15:55:56.993Z
+                at 2026-11-12T06:56:13.243Z
             </div>
         <script src="../prettify.js"></script>
         <script>

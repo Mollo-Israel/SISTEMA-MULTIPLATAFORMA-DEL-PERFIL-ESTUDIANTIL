@@ -21,7 +21,7 @@ const FIN = '\x1b[0m';
 
 async function main(): Promise<void> {
   const destino = process.argv[2]?.trim();
-  if (!destino || !destino.includes('@')) {
+  if (!destino?.includes('@')) {
     console.error('Uso: npm run mail:test -- tu.correo@dominio.com');
     process.exitCode = 2;
     return;
@@ -33,7 +33,8 @@ async function main(): Promise<void> {
   const estado = mail.status();
 
   console.log('\nConfiguración de correo de Afinia');
-  console.log(`  Transporte : ${estado.transport === 'smtp' ? 'SMTP (real)' : estado.transport === 'brevo' ? 'Brevo (real)' : 'consola (simulado)'}`);
+  const transportes: Record<string, string> = { smtp: 'SMTP (real)', brevo: 'Brevo (real)' };
+  console.log(`  Transporte : ${transportes[estado.transport] ?? 'consola (simulado)'}`);
   if (estado.host) console.log(`  Servidor   : ${estado.host}:${estado.port} ${estado.secure ? '(TLS)' : '(STARTTLS)'}`);
   if (estado.user) console.log(`  Usuario    : ${estado.user}`);
   console.log(`  Remitente  : ${estado.from}`);

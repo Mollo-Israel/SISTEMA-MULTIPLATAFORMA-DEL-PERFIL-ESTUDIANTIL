@@ -158,34 +158,8 @@ export class CertificatesService {
       certificate.academicAreaId = dto.academicAreaId ?? null;
     }
     if (dto.credentialId !== undefined) certificate.credentialId = dto.credentialId ?? null;
-    if (dto.areaIds !== undefined) {
-      const areasCert = await this.areasDeCredencial(dto.academicAreaId ?? certificate.academicAreaId, dto.areaIds);
-      certificate.academicAreaId = areasCert[0] ?? null;
-      await this.replaceAreas(certificate.id, areasCert);
-    }
-    if (dto.skillIds !== undefined || dto.areaIds !== undefined || dto.skillContexts !== undefined) {
-      const skillIds = dto.skillIds ?? (await this.certificateSkills.find({ where: { certificateId: certificate.id } })).map((x) => x.skillId);
-      await this.assertSkillsExist(skillIds);
-      const areasFinales = (await this.areasCert.find({ where: { certificateId: certificate.id } })).map((x) => x.academicAreaId);
-      const areas = areasFinales.length ? areasFinales : [certificate.academicAreaId].filter((x): x is string => !!x);
-      if (dto.areaIds !== undefined) await assertSkillsBelongToAreas(this.certificates.manager, skillIds, areas);
-      const contextos = await resolveSkillContexts(this.certificates.manager, skillIds, areas, dto.skillContexts);
-      await this.replaceSkills(certificate.id, skillIds, contextos);
-    }
-
-    let reemplazado: string | null = null;
-    if (dto.storedFileId !== undefined) {
-      const anterior = certificate.storedFileId;
-      const archivo = dto.storedFileId
-        ? await this.uploads.requireOwned(userId, dto.storedFileId)
-        : null;
-      certificate.storedFileId = archivo?.id ?? null;
-      certificate.fileUrl = archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null;
-      certificate.fileName = archivo?.originalFilename ?? null;
-      certificate.mimeType = archivo?.mimeTypeDetected ?? null;
-      certificate.fileSize = archivo?.sizeBytes ?? null;
-      reemplazado = anterior && anterior !== certificate.storedFileId ? anterior : null;
-    }
+    await this.actualizarAreasYTecnologias(certificate, dto);
+    const reemplazado = dto.storedFileId === undefined ? null : await this.cambiarArchivo(userId, certificate, dto.storedFileId);
 
     const saved = await this.certificates.save(certificate);
 
@@ -203,6 +177,35 @@ export class CertificatesService {
 
     await this.trajectory.requestRecalculation(certificate.studentProfileId);
     return saved;
+  }
+
+  /** Áreas (si vienen) y, si cambia algo de eso, las tecnologías con su contexto. */
+  private async actualizarAreasYTecnologias(certificate: ExternalCertificate, dto: UpdateExternalCertificateDto): Promise<void> {
+    if (dto.areaIds !== undefined) {
+      const areasCert = await this.areasDeCredencial(dto.academicAreaId ?? certificate.academicAreaId, dto.areaIds);
+      certificate.academicAreaId = areasCert[0] ?? null;
+      await this.replaceAreas(certificate.id, areasCert);
+    }
+    if (dto.skillIds === undefined && dto.areaIds === undefined && dto.skillContexts === undefined) return;
+    const skillIds = dto.skillIds ?? (await this.certificateSkills.find({ where: { certificateId: certificate.id } })).map((x) => x.skillId);
+    await this.assertSkillsExist(skillIds);
+    const areasFinales = (await this.areasCert.find({ where: { certificateId: certificate.id } })).map((x) => x.academicAreaId);
+    const areas = areasFinales.length ? areasFinales : [certificate.academicAreaId].filter((x): x is string => !!x);
+    if (dto.areaIds !== undefined) await assertSkillsBelongToAreas(this.certificates.manager, skillIds, areas);
+    const contextos = await resolveSkillContexts(this.certificates.manager, skillIds, areas, dto.skillContexts);
+    await this.replaceSkills(certificate.id, skillIds, contextos);
+  }
+
+  /** Pone el archivo nuevo (o ninguno) y devuelve el anterior si hay que borrarlo. */
+  private async cambiarArchivo(userId: string, certificate: ExternalCertificate, storedFileId: string | null): Promise<string | null> {
+    const anterior = certificate.storedFileId;
+    const archivo = storedFileId ? await this.uploads.requireOwned(userId, storedFileId) : null;
+    certificate.storedFileId = archivo?.id ?? null;
+    certificate.fileUrl = archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null;
+    certificate.fileName = archivo?.originalFilename ?? null;
+    certificate.mimeType = archivo?.mimeTypeDetected ?? null;
+    certificate.fileSize = archivo?.sizeBytes ?? null;
+    return anterior && anterior !== certificate.storedFileId ? anterior : null;
   }
 
   /** V3 §16: pide la revisión manual excepcional de una histórica. */

@@ -25,6 +25,9 @@ export const ACTIVITY_STATUS_LABEL: Record<string, string> = {
 export const REGISTRATION_STATUS_LABEL: Record<string, string> = {
   interested: 'Interesado',
   registered: 'Inscrito',
+  // Admisión automática con cupo (V6): mismas palabras que la web.
+  accepted: 'Admitido',
+  rejected: 'No admitido',
   confirmed: 'Participación confirmada',
   absent: 'Ausente',
   cancelled: 'Baja',

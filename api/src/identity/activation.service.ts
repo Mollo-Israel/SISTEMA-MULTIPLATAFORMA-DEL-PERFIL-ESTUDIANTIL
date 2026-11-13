@@ -19,6 +19,7 @@ import {
 } from '../config/identity.config';
 import { formatearFecha } from '../mail/templates';
 import { maskEmail } from '../mail/mail.service';
+import { siHay } from '../common/texto';
 
 /**
  * Respuesta deliberadamente idéntica exista o no la cuenta (§12).
@@ -66,7 +67,7 @@ function explicarEstado(state: TokenState | 'invalid', purpose: AccountTokenPurp
         ? 'Este enlace ya se usó y tu cuenta ya está activa. Inicia sesión con tu contraseña.'
         : 'Este enlace ya se usó. Si necesitas cambiar la contraseña otra vez, pide uno nuevo.';
     case 'expired':
-      return `Este enlace venció${vence ? ` el ${vence}` : ''}. Pide uno nuevo y te llegará otro correo.`;
+      return `Este enlace venció${siHay(vence, ' el ')}. Pide uno nuevo y te llegará otro correo.`;
     case 'replaced':
       return 'Pediste un enlace más reciente y este quedó anulado. Usa el del último correo que recibiste.';
     case 'locked':
@@ -153,7 +154,7 @@ export class ActivationService {
     if (!isInstitutionalEmail(email, dominios)) {
       const lista = dominios.map((d) => `@${d}`).join(' o ');
       throw new BadRequestException(
-        `Usa tu correo institucional${lista ? ` (${lista})` : ''}. A otros correos no enviamos nada.`,
+        `Usa tu correo institucional${siHay(lista, ' (', ')')}. A otros correos no enviamos nada.`,
       );
     }
   }

@@ -53,13 +53,13 @@ function CategoriaForm({
   errors,
   onFieldTouched,
   sugerirCodigo,
-}: {
+}: Readonly<{
   value: Record<Campo, string>;
   onChange: (v: Record<Campo, string>) => void;
   errors: Partial<Record<Campo, string>>;
   onFieldTouched: (c: Campo) => void;
   sugerirCodigo: boolean;
-}) {
+}>) {
   const set = (campo: Campo, v: string) => {
     const next = { ...value, [campo]: v };
     if (campo === 'name' && sugerirCodigo) next.code = suggestCode(v);
@@ -159,8 +159,8 @@ export default function AdminActivityCategoriesPage() {
       setCodigoTocado(false);
       errores.reset();
       reload();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
     } finally {
       setSaving(false);
     }
@@ -172,7 +172,7 @@ export default function AdminActivityCategoriesPage() {
         const usage = await adminService.activityCategoryUsage(c.id);
         const aviso =
           usage.activities > 0
-            ? `${usage.activities} actividad${usage.activities === 1 ? '' : 'es'} usa${usage.activities === 1 ? '' : 'n'} esta categoría. Dejará de ofrecerse para nuevas actividades, pero las existentes la conservan.`
+            ? `${cuantasLaUsan(usage.activities)} esta categoría. Dejará de ofrecerse para nuevas actividades, pero las existentes la conservan.`
             : 'Dejará de ofrecerse al publicar nuevas actividades. Puede reactivarla cuando quiera.';
         const ok = await confirm({
           title: `Dar de baja “${c.name}”`,
@@ -185,8 +185,8 @@ export default function AdminActivityCategoriesPage() {
       await adminService.updateActivityCategory(c.id, { isActive: !c.isActive });
       toast.success(c.isActive ? 'Categoría dada de baja.' : 'Categoría reactivada.');
       reload();
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     }
   };
 
@@ -309,11 +309,11 @@ function EditCategoriaDialog({
   categoria,
   onClose,
   onSaved,
-}: {
+}: Readonly<{
   categoria: ActivityCategoryItem;
   onClose: () => void;
   onSaved: () => void;
-}) {
+}>) {
   const [form, setForm] = useState<Record<Campo, string>>({
     name: categoria.name,
     code: categoria.code,
@@ -334,8 +334,8 @@ function EditCategoriaDialog({
     try {
       await adminService.updateActivityCategory(categoria.id, aPayload(form));
       onSaved();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
       setSaving(false);
     }
   };
@@ -358,4 +358,9 @@ function EditCategoriaDialog({
       </form>
     </Modal>
   );
+}
+
+/** «1 actividad usa» o «3 actividades usan». */
+function cuantasLaUsan(n: number): string {
+  return n === 1 ? '1 actividad usa' : `${n} actividades usan`;
 }

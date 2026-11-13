@@ -26,7 +26,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], opciones
     ? opciones.key ?? `${window.location.pathname}|${fn.toString()}|${claveDeps(deps)}`
     : null;
 
-  const [data, setDataState] = useState<T | null>(() => (clave ? viewCache.get<T>(clave) ?? null : null));
+  const [data, setData] = useState<T | null>(() => (clave ? viewCache.get<T>(clave) ?? null : null));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const turno = useRef(0);
@@ -38,13 +38,13 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], opciones
     const k = claveRef.current;
     // Si cambiaron las dependencias y ya hay memoria para las nuevas, se
     // muestran al instante; si no, se conserva lo que había mientras carga.
-    if (k && viewCache.has(k)) setDataState(viewCache.get<T>(k) ?? null);
+    if (k && viewCache.has(k)) setData(viewCache.get<T>(k) ?? null);
     setLoading(true);
     setError(null);
     fn()
       .then((d) => {
         if (mio !== turno.current) return;
-        setDataState(d);
+        setData(d);
         if (k) viewCache.set(k, d);
       })
       .catch((e) => {
@@ -66,8 +66,8 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], opciones
   }, [run]);
 
   /** Actualización local (optimista) que también queda en la memoria. */
-  const setData = useCallback((valor: T | null | ((prev: T | null) => T | null)) => {
-    setDataState((prev) => {
+  const guardarData = useCallback((valor: T | null | ((prev: T | null) => T | null)) => {
+    setData((prev) => {
       const nuevo = typeof valor === 'function' ? (valor as (p: T | null) => T | null)(prev) : valor;
       const k = claveRef.current;
       if (k && nuevo != null) viewCache.set(k, nuevo);
@@ -75,5 +75,5 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], opciones
     });
   }, []);
 
-  return { data, loading, error, reload: run, setData };
+  return { data, loading, error, reload: run, setData: guardarData };
 }

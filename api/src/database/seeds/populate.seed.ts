@@ -566,7 +566,7 @@ async function run() {
         studentProfileId: p.id,
         activityId: reg.activityId,
         activityRegistrationId: reg.id,
-        description: `Participo en la actividad "${reg.activity.title}" organizada por la carrera.`,
+        description: `Participó en la actividad "${reg.activity.title}" organizada por la carrera.`,
         status: ConstancyStatus.AUTHORIZED,
         authorizedById: director.id,
       }));

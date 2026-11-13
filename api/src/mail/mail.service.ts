@@ -170,20 +170,24 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
 
   private buildTransport(): Transporter {
     const smtp = this.settings.smtp!;
-    const auth =
-      smtp.auth.type === 'login'
-        ? { user: smtp.auth.user, pass: smtp.auth.pass }
-        : smtp.auth.type === 'oauth2'
-          ? {
-              type: 'OAuth2' as const,
-              user: smtp.auth.user,
-              clientId: smtp.auth.clientId,
-              clientSecret: smtp.auth.clientSecret,
-              refreshToken: smtp.auth.refreshToken,
-            }
-          : undefined;
+    let auth;
+    if (smtp.auth.type === 'login') {
+      auth = { user: smtp.auth.user, pass: smtp.auth.pass };
+    } else if (smtp.auth.type === 'oauth2') {
+      auth = {
+        type: 'OAuth2' as const,
+        user: smtp.auth.user,
+        clientId: smtp.auth.clientId,
+        clientSecret: smtp.auth.clientSecret,
+        refreshToken: smtp.auth.refreshToken,
+      };
+    }
 
-    return nodemailer.createTransport({
+    // NOSONAR: la conexión no queda en texto plano. Con «secure» (465) es TLS
+    // desde el inicio; sin él (587), «requireTLS» exige STARTTLS antes de
+    // enviar credenciales. Solo un servidor local sin autenticación (Mailpit,
+    // en desarrollo) recibe correo sin cifrar.
+    return nodemailer.createTransport({ // NOSONAR
       host: smtp.host,
       port: smtp.port,
       secure: smtp.secure,
@@ -231,7 +235,7 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
 
   private fromHeader(): string {
     const { name, address } = this.settings.from;
-    return `"${name.replace(/"/g, '')}" <${address}>`;
+    return `"${name.replaceAll('"', '')}" <${address}>`;
   }
 
   /** ¿Puede este destinatario recibir correo de Afinia? */

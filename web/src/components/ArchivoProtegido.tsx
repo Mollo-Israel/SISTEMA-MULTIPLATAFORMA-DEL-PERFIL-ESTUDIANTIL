@@ -22,7 +22,7 @@ async function pedir(src: string): Promise<Blob> {
 /** Imagen de una actividad o un recurso, pedida con la sesión. */
 export function ImagenProtegida({
   src, alt = '', className, loading, fallback = null,
-}: { src: string; alt?: string; className?: string; loading?: 'lazy' | 'eager'; fallback?: ReactNode }) {
+}: Readonly<{ src: string; alt?: string; className?: string; loading?: 'lazy' | 'eager'; fallback?: ReactNode }>) {
   const [url, setUrl] = useState<string | null>(yaLocal(src) ? src : null);
   const [fallo, setFallo] = useState(false);
 
@@ -59,7 +59,7 @@ export function ImagenProtegida({
  */
 export function BotonArchivo({
   src, nombre = 'documento', className = 'btn btn-secondary btn-sm', children,
-}: { src: string; nombre?: string; className?: string; children: ReactNode }) {
+}: Readonly<{ src: string; nombre?: string; className?: string; children: ReactNode }>) {
   const toast = useToast();
   const [ocupado, setOcupado] = useState(false);
 

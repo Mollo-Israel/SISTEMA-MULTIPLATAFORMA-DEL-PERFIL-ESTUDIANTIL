@@ -29,6 +29,7 @@ import { Skill } from '../entities/skill.entity';
 import { AI_ASSISTANCE_PORT, AiAssistancePort, AiUnavailableError } from './ai-assistance.port';
 import { PROMPTS, VALIDATE, inputFingerprint, parseJsonLoose, sanitizeForAi } from './ai-text';
 import { AiSuggestionDto } from './dto/ai-suggestion.dto';
+import { siHay } from '../common/texto';
 
 /** Quién puede pedir cada tarea. La moderación es interna: nadie la pide. */
 const TASK_ROLES: Record<AiTaskType, RolNombre[]> = {
@@ -125,7 +126,7 @@ export class AiService {
   /** §43.3: aceptar deja constancia de quién adoptó la sugerencia. No aplica nada. */
   async accept(user: AuthenticatedUser, runId: string) {
     const run = await this.runs.findOne({ where: { id: runId } });
-    if (!run || run.requestedById !== user.userId) {
+    if (run?.requestedById !== user.userId) {
       throw new NotFoundException('Sugerencia no encontrada.');
     }
     if (run.status !== AiRunStatus.COMPLETED) {
@@ -246,7 +247,7 @@ export class AiService {
         const lista = p.evidences.map((e) => {
           let host = '';
           try { host = e.externalUrl ? new URL(e.externalUrl).host : ''; } catch { host = ''; }
-          return `- ${e.evidenceType}: ${e.description ?? 'sin descripción'}${e.fileName ? ` (archivo ${e.fileName})` : ''}${host ? ` (enlace en ${host})` : ''}`;
+          return `- ${e.evidenceType}: ${e.description ?? 'sin descripción'}${siHay(e.fileName, ' (archivo ', ')')}${siHay(host, ' (enlace en ', ')')}`;
         }).join('\n');
         const input = s(`Proyecto: ${p.title}\n${lista}`);
         return {
@@ -257,7 +258,8 @@ export class AiService {
       }
       case AiTaskType.INCONSISTENCY_EXPLANATION: {
         const p = await this.proyecto(user, dto);
-        const input = s(`Proyecto: ${p.title}\nObservaciones:\n${(p.backingReasons ?? []).map((r) => `- ${r}`).join('\n')}`);
+        const observaciones = (p.backingReasons ?? []).map((r) => `- ${r}`).join('\n');
+        const input = s(`Proyecto: ${p.title}\nObservaciones:\n${observaciones}`);
         return {
           task: dto.task, input, targetType: 'project', targetId: p.id,
           prompt: PROMPTS.inconsistency(input),
@@ -276,9 +278,11 @@ export class AiService {
       }
       case AiTaskType.ANALYTICS_NARRATIVE: {
         // Las cifras salen de consultas deterministas (§63, §64); la IA solo las redacta.
-        const lineas = (titulo: string, filas: unknown, campos: [string, string]) =>
-          `${titulo}:\n${(Array.isArray(filas) ? filas : []).slice(0, 6)
-            .map((f: Record<string, unknown>) => `- ${f[campos[0]]}: ${f[campos[1]]}`).join('\n')}`;
+        const lineas = (titulo: string, filas: unknown, campos: [string, string]) => {
+          const items = (Array.isArray(filas) ? filas : []).slice(0, 6)
+            .map((f: Record<string, unknown>) => `- ${f[campos[0]]}: ${f[campos[1]]}`).join('\n');
+          return `${titulo}:\n${items}`;
+        };
         let cifras: string;
         if (user.role === RolNombre.SCIENTIFIC_SOCIETY) {
           // Solo sus actividades: es lo único que §64 le deja ver.

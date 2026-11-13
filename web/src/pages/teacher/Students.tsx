@@ -259,8 +259,8 @@ export default function TeacherStudentsPage() {
               </strong>
               {view.projects?.length ? (
                 <ul className="plain-list">
-                  {view.projects.map((p: any, i: number) => (
-                    <li key={i}>
+                  {view.projects.map((p: any) => (
+                    <li key={p.id ?? p.title}>
                       {p.title} <span className="muted">· {p.technologies?.join(', ') || 'sin tecnologías'}</span>
                     </li>
                   ))}
@@ -275,8 +275,8 @@ export default function TeacherStudentsPage() {
               </strong>
               {view.activities?.length ? (
                 <ul className="plain-list">
-                  {view.activities.map((a: any, i: number) => (
-                    <li key={i}>
+                  {view.activities.map((a: any) => (
+                    <li key={a.id ?? a.title}>
                       {a.title} <span className="muted">· {a.status}</span>
                     </li>
                   ))}
@@ -293,8 +293,8 @@ export default function TeacherStudentsPage() {
             </strong>
             {view.externalCertificates?.length ? (
               <ul className="plain-list">
-                {view.externalCertificates.map((c: any, i: number) => (
-                  <li key={i}>
+                {view.externalCertificates.map((c: any) => (
+                  <li key={c.id ?? c.certificateName}>
                     {c.certificateName} <span className="muted">· {c.issuer}</span>
                   </li>
                 ))}
@@ -317,7 +317,7 @@ export default function TeacherStudentsPage() {
 
             {!affinity ? (
               <p className="muted">Todavía no hay afinidades calculadas para este estudiante.</p>
-            ) : affinity.status === 'insufficient_data' ? (
+            ) : <>{affinity.status === 'insufficient_data' ? (
               <AffinityInsufficient message={affinity.message} forTeacher />
             ) : (
               <>
@@ -330,7 +330,7 @@ export default function TeacherStudentsPage() {
                   loadBreakdown={(areaId) => affinityService.studentBreakdown(selected!, areaId)}
                 />
               </>
-            )}
+            )}</>}
           </div>
         </Card>
         </Stagger>

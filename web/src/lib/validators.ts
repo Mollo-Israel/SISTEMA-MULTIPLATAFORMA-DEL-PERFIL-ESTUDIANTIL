@@ -1,4 +1,5 @@
 import { RolNombre, UNIVERSITY_CODE_PREFIX, universityCodeExample } from '../constants';
+import { recortarExtremos, tieneFormatoDeCorreo } from './texto';
 /**
  * Validaciones de formulario, copia de las del servidor.
  *
@@ -12,7 +13,7 @@ import { RolNombre, UNIVERSITY_CODE_PREFIX, universityCodeExample } from '../con
 const LETRA = 'A-Za-zÀ-ÖØ-öø-ÿ';
 const LETRAS_RE = new RegExp(`[${LETRA}]`, 'g');
 
-const contarLetras = (v: string) => (v.match(LETRAS_RE) ?? []).length;
+const contarLetras = (v: string) => [...v.matchAll(LETRAS_RE)].length;
 
 export type Validator = (value: string) => string | null;
 
@@ -27,7 +28,7 @@ export const PERSON_NAME_RE = new RegExp(`^[${LETRA}]+(?:[ '-][${LETRA}]+)*$`);
  * Embebidos», «Gestión de Proyectos (PMI)»). Rechaza «#!@#!@#» y «123213».
  */
 export const CATALOG_NAME_RE = new RegExp(
-  `^[${LETRA}]+(?:[ .,/&'()-]+[${LETRA}0-9]+)*\\)?$`,
+  String.raw`^[${LETRA}]+(?:[ .,/&'()-]+[${LETRA}0-9]+)*\)?$`,
 );
 
 /**
@@ -38,7 +39,7 @@ export const CATALOG_NAME_RE = new RegExp(
  * letra y que los signos vayan entre palabras, no sueltos.
  */
 export const SKILL_NAME_RE = new RegExp(
-  `^\\.?[${LETRA}0-9]+(?:[ ./&'()-]+[${LETRA}0-9]+)*\\)?(?:\\+\\+|#)?$`,
+  String.raw`^\.?[${LETRA}0-9]+(?:[ ./&'()-]+[${LETRA}0-9]+)*\)?(?:\+\+|#)?$`,
 );
 
 /** Etiqueta de un área (metadata para sugerir, V3.2 §10): minúsculas, números y signos simples. */
@@ -76,7 +77,7 @@ export function personName(campo: 'nombre' | 'apellido'): Validator {
 export const institutionalEmail: Validator = (v) => {
   const t = (v ?? '').trim().toLowerCase();
   if (!t) return 'Escribe el correo institucional.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return 'El correo no tiene un formato válido.';
+  if (!tieneFormatoDeCorreo(t)) return 'El correo no tiene un formato válido.';
   if (!INSTITUTIONAL_EMAIL_RE.test(t)) return 'Debe terminar en @univalle.edu o @est.univalle.edu.';
   return null;
 };
@@ -150,7 +151,7 @@ export const placeName: Validator = (v) => {
   const t = (v ?? '').trim();
   if (!t) return null;
   if (!/\p{L}/u.test(t)) return PLACE_MSG;
-  if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:;#°º'"()\/&-]*$/u.test(t)) return PLACE_MSG;
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:;#°º'"()/&-]*$/u.test(t)) return PLACE_MSG;
   return null;
 };
 
@@ -193,12 +194,12 @@ export const universityCodeFor = (role: RolNombre): Validator => (v) => {
 
 /** Sugiere un código a partir de un nombre: «Bases de Datos» → «bases_de_datos». */
 export function suggestCode(nombre: string): string {
-  return nombre
+  const base = nombre
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
+    .replace(/[^a-z0-9]+/g, '_');
+  return recortarExtremos(base, '_')
     .replace(/^(\d)/, 'c_$1')
     .slice(0, 60);
 }

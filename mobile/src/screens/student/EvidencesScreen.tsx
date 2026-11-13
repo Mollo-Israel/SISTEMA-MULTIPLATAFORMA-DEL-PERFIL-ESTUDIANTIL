@@ -186,9 +186,10 @@ export default function EvidencesScreen() {
             noun="evidencias"
           />
         )}
-        {evidences.length === 0 ? (
+        {evidences.length === 0 && (
           <EmptyState icon="file-text" message="Todavía no registras evidencias." />
-        ) : visibleEvidences.length === 0 ? (
+        )}
+        {evidences.length > 0 && visibleEvidences.length === 0 && (
           <EmptyState
             icon="search"
             message={`Ninguna evidencia coincide con “${query}”.`}
@@ -202,8 +203,8 @@ export default function EvidencesScreen() {
               />
             }
           />
-        ) : (
-          visibleEvidences.map((e, index) => (
+        )}
+        {visibleEvidences.map((e, index) => (
             <FadeIn key={e.id} index={index}>
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
@@ -224,7 +225,7 @@ export default function EvidencesScreen() {
                       variant="secondary"
                       onPress={() =>
                         e.evidenceType === 'file'
-                          ? abrirArchivo(e.fileUrl, 'evidencia').catch((x) => toast.error(x.message))
+                          ? abrirArchivo(e.fileUrl, 'evidencia').catch((error_) => toast.error(error_.message))
                           : Linking.openURL(e.externalUrl)
                       }
                     />
@@ -242,8 +243,7 @@ export default function EvidencesScreen() {
               </View>
             </View>
             </FadeIn>
-          ))
-        )}
+          ))}
       </Card>
 
       <Card title={`Certificados externos (${certificates.length})`}>
@@ -254,9 +254,10 @@ export default function EvidencesScreen() {
             noun="certificados"
           />
         )}
-        {certificates.length === 0 ? (
+        {certificates.length === 0 && (
           <EmptyState icon="award" message="Todavía no registras certificados externos." />
-        ) : visibleCertificates.length === 0 ? (
+        )}
+        {certificates.length > 0 && visibleCertificates.length === 0 && (
           <EmptyState
             icon="search"
             message={`Ningún certificado coincide con “${query}”.`}
@@ -270,8 +271,8 @@ export default function EvidencesScreen() {
               />
             }
           />
-        ) : (
-          visibleCertificates.map((c, index) => (
+        )}
+        {visibleCertificates.map((c, index) => (
             <FadeIn key={c.id} index={index}>
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
@@ -296,7 +297,7 @@ export default function EvidencesScreen() {
                         variant="secondary"
                         onPress={() =>
                           c.fileUrl
-                            ? abrirArchivo(c.fileUrl, 'certificado').catch((x) => toast.error(x.message))
+                            ? abrirArchivo(c.fileUrl, 'certificado').catch((error_) => toast.error(error_.message))
                             : Linking.openURL(c.certificateUrl)
                         }
                       />
@@ -315,8 +316,7 @@ export default function EvidencesScreen() {
               </View>
             </View>
             </FadeIn>
-          ))
-        )}
+          ))}
       </Card>
 
       <Card title={`Certificados institucionales recibidos (${constancies.length})`}>
@@ -399,13 +399,13 @@ function Picker({
   value,
   onChange,
   emptyLabel,
-}: {
+}: Readonly<{
   label: string;
   options: { id: string; label: string }[];
   value: string;
   onChange: (v: string) => void;
   emptyLabel: string;
-}) {
+}>) {
   if (options.length === 0) return null;
   return (
     <View style={{ marginBottom: 12 }}>
@@ -432,11 +432,11 @@ function CertificateForm({
   areas,
   onSaved,
   onError,
-}: {
+}: Readonly<{
   areas: any[];
   onSaved: () => void;
   onError: (m: string) => void;
-}) {
+}>) {
   const [form, setForm] = useState({
     certificateName: '',
     issuer: '',
@@ -536,7 +536,7 @@ function CertificateForm({
       <View style={{ marginBottom: 12 }}>
         <Text style={styles.label}>Archivo del certificado (opcional)</Text>
         <Button
-          title={busy ? 'Subiendo…' : file ? 'Cambiar archivo' : 'Adjuntar archivo'}
+          title={tituloDeAdjunto(busy, !!file)}
           variant="secondary"
           onPress={pick}
           disabled={busy}
@@ -590,3 +590,9 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 14.5, fontWeight: '600', color: colors.gray900 },
   rowMeta: { fontSize: 12.5, color: colors.gray500, marginTop: 2 },
 });
+
+/** El botón de adjuntar: subiendo, cambiar el que ya hay o adjuntar uno. */
+function tituloDeAdjunto(subiendo: boolean, hayArchivo: boolean): string {
+  if (subiendo) return 'Subiendo…';
+  return hayArchivo ? 'Cambiar archivo' : 'Adjuntar archivo';
+}

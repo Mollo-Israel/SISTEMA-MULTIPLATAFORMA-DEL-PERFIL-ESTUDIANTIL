@@ -29,6 +29,12 @@ interface Eleccion {
   nota: string;
 }
 
+/** Texto del botón según la decisión elegida. */
+function textoDeDecision(modo: string): string {
+  if (modo === 'new_skill') return 'Agregar al catálogo';
+  return modo === 'alias' ? 'Registrar como alias' : 'Rechazar';
+}
+
 /**
  * V4.1 A41-020 y V5-25 (§4.3, §12.4) · Pedidos de tecnologías no catalogadas.
  *
@@ -84,9 +90,11 @@ export default function AdminSkillRequestsPage() {
     }
   };
 
-  const listo = (e: Eleccion) => (e.modo === 'new_skill' ? !!e.areaId
-    : e.modo === 'alias' ? !!e.skillId && e.misma
-      : e.nota.trim().length > 0);
+  const listo = (e: Eleccion) => {
+    if (e.modo === 'new_skill') return !!e.areaId;
+    if (e.modo === 'alias') return !!e.skillId && e.misma;
+    return e.nota.trim().length > 0;
+  };
 
   return (
     <div>
@@ -195,7 +203,7 @@ export default function AdminSkillRequestsPage() {
                                 <Button size="sm" variant={e.modo === 'rejected' ? 'secondary' : 'primary'}
                                   icon={e.modo === 'rejected' ? <FiX size={13} /> : <FiCheck size={13} />}
                                   loading={busy === r.id} disabled={!listo(e)} onClick={() => void decidir(r)}>
-                                  {e.modo === 'new_skill' ? 'Agregar al catálogo' : e.modo === 'alias' ? 'Registrar como alias' : 'Rechazar'}
+                                  {textoDeDecision(e.modo)}
                                 </Button>
                               </div>
                             </div>

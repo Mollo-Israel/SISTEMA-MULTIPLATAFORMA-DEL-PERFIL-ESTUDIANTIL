@@ -104,11 +104,13 @@ export default function StudentPrivacyPage({ embedded = false }: { embedded?: bo
             checked={settings.publicProfileEnabled}
             disabled={guardando === 'perfil'}
             onChange={(e) => activarPerfil(e.target.checked)}
+            aria-label="Permitir que mi perfil se vea al compartirlo"
+            aria-describedby="priv-perfil-ayuda"
           />
           <span className="track"><span className="thumb" /></span>
           <span>
             <strong>Permitir que mi perfil se vea al compartirlo</strong>
-            <span className="muted">
+            <span className="muted" id="priv-perfil-ayuda">
               Mientras esté desactivado, ninguna de las opciones de abajo surte efecto.
             </span>
           </span>

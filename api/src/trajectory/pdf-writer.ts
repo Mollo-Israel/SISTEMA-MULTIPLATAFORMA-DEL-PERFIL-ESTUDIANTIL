@@ -1,3 +1,4 @@
+import { siHay } from '../common/texto';
 /**
  * Escritor de PDF mínimo (especificación §67, «Exportable a PDF»).
  *
@@ -87,6 +88,23 @@ interface Bloque {
   sangria: number;
 }
 
+/** El estilo del bloque con tamaños y espacios escalados por el tema. */
+function estiloEscalado(nombre: keyof typeof ESTILOS, k: number) {
+  const base = ESTILOS[nombre];
+  return {
+    ...base,
+    size: +(base.size * k).toFixed(2),
+    spaceBefore: base.spaceBefore * k,
+    spaceAfter: base.spaceAfter * k,
+  };
+}
+
+/** Línea fina bajo un título de sección, del ancho útil. */
+function reglaBajoTitulo(acento: string | null, margen: number, yl: number): string {
+  return `${acento ?? '0.6 0.6 0.6'} RG 0.6 w ${margen.toFixed(2)} ${yl.toFixed(2)} m `
+    + `${(ANCHO - margen).toFixed(2)} ${yl.toFixed(2)} l S 0 0 0 RG`;
+}
+
 /**
  * Compone un documento por bloques y lo serializa.
  *
@@ -153,13 +171,12 @@ export class PdfWriter {
     const idsPagina = paginas.map((_, i) => primeraPagina + i * 2);
     const idsContenido = paginas.map((_, i) => primeraPagina + i * 2 + 1);
 
-    objetos.push('<< /Type /Catalog /Pages 2 0 R >>');
+    const kids = idsPagina.map((id) => `${id} 0 R`).join(' ');
     objetos.push(
-      `<< /Type /Pages /Kids [${idsPagina.map((id) => `${id} 0 R`).join(' ')}] `
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      `<< /Type /Pages /Kids [${kids}] `
       + `/Count ${paginas.length} >>`,
-    );
-    objetos.push(`<< /Type /Font /Subtype /Type1 /BaseFont /${this.tema.regular} /Encoding /WinAnsiEncoding >>`);
-    objetos.push(
+      `<< /Type /Font /Subtype /Type1 /BaseFont /${this.tema.regular} /Encoding /WinAnsiEncoding >>`,
       `<< /Type /Font /Subtype /Type1 /BaseFont /${this.tema.bold} /Encoding /WinAnsiEncoding >>`,
     );
 
@@ -168,8 +185,8 @@ export class PdfWriter {
         `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${ANCHO.toFixed(2)} ${ALTO.toFixed(2)}] `
         + `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> `
         + `/Contents ${idsContenido[i]} 0 R >>`,
+        `<< /Length ${Buffer.byteLength(contenido, 'latin1')} >>\nstream\n${contenido}\nendstream`,
       );
-      objetos.push(`<< /Length ${Buffer.byteLength(contenido, 'latin1')} >>\nstream\n${contenido}\nendstream`);
     });
 
     return this.ensamblar(objetos);
@@ -180,6 +197,13 @@ export class PdfWriter {
   // =========================================================================
 
   /** Reparte los bloques en páginas y produce el flujo de dibujo de cada una. */
+  /** Operadores PDF de una línea de texto; `acento` la pinta del color del tema. */
+  private lineaDeTexto(linea: string, estilo: { bold?: boolean; size: number }, x: number, y: number, acento: string | null): string {
+    return `BT ${siHay(acento, '', ' rg ')}/${estilo.bold ? 'F2' : 'F1'} ${estilo.size} Tf `
+      + `${x.toFixed(2)} ${y.toFixed(2)} Td `
+      + `(${this.escapar(linea)}) Tj ${acento ? '0 0 0 rg ' : ''}ET`;
+  }
+
   private paginar(): string[] {
     const paginas: string[] = [];
     let actual: string[] = [];
@@ -195,13 +219,7 @@ export class PdfWriter {
     };
 
     for (const bloque of this.bloques) {
-      const base = ESTILOS[bloque.estilo];
-      const estilo = {
-        ...base,
-        size: +(base.size * k).toFixed(2),
-        spaceBefore: base.spaceBefore * k,
-        spaceAfter: base.spaceAfter * k,
-      };
+      const estilo = estiloEscalado(bloque.estilo, k);
       const alto = estilo.size * 1.35;
       const anchoUtil = ANCHO - MARGEN * 2 - bloque.sangria;
       const lineas = this.partir(bloque.texto, estilo.size, anchoUtil);
@@ -214,21 +232,10 @@ export class PdfWriter {
 
       for (const linea of lineas) {
         if (y - alto < MARGEN) cerrar();
-        actual.push(
-          `BT ${coloreado ? `${acento} rg ` : ''}/${estilo.bold ? 'F2' : 'F1'} ${estilo.size} Tf `
-          + `${(MARGEN + bloque.sangria).toFixed(2)} ${y.toFixed(2)} Td `
-          + `(${this.escapar(linea)}) Tj ${coloreado ? '0 0 0 rg ' : ''}ET`,
-        );
+        actual.push(this.lineaDeTexto(linea, estilo, MARGEN + bloque.sangria, y, coloreado ? acento : null));
         y -= alto;
       }
-      if (bloque.estilo === 'seccion' && this.tema.sectionRule) {
-        // Línea fina bajo el título, del ancho útil.
-        const yl = y + alto * 0.55;
-        actual.push(
-          `${acento ?? '0.6 0.6 0.6'} RG 0.6 w ${MARGEN.toFixed(2)} ${yl.toFixed(2)} m `
-          + `${(ANCHO - MARGEN).toFixed(2)} ${yl.toFixed(2)} l S 0 0 0 RG`,
-        );
-      }
+      if (bloque.estilo === 'seccion' && this.tema.sectionRule) actual.push(reglaBajoTitulo(acento, MARGEN, y + alto * 0.55));
       y -= estilo.spaceAfter;
     }
 
@@ -278,9 +285,9 @@ export class PdfWriter {
   /** Escapa lo que el formato trata como sintaxis dentro de una cadena. */
   private escapar(texto: string): string {
     return texto
-      .replace(/\\/g, '\\\\')
-      .replace(/\(/g, '\\(')
-      .replace(/\)/g, '\\)');
+      .replaceAll('\\', '\\\\')
+      .replaceAll('(', String.raw`\(`)
+      .replaceAll(')', String.raw`\)`);
   }
 
   /** Cabecera, objetos, tabla de referencias cruzadas y tráiler. */
@@ -299,8 +306,8 @@ export class PdfWriter {
     const xref = offset;
     const filas = ['xref', `0 ${objetos.length + 1}`, '0000000000 65535 f '];
     posiciones.forEach((p) => filas.push(`${String(p).padStart(10, '0')} 00000 n `));
-    partes.push(`${filas.join('\n')}\n`);
     partes.push(
+      `${filas.join('\n')}\n`,
       `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R `
       + `/Info << /Title (${this.escapar(this.titulo)}) /Producer (Afinia) >> >>\n`
       + `startxref\n${xref}\n%%EOF\n`,

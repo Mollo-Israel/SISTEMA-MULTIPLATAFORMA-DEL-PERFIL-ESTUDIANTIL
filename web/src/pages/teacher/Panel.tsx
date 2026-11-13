@@ -61,7 +61,7 @@ export default function TeacherPanel() {
 }
 
 /** Tarjetas que llevan al detalle: el resumen no es un callejón sin salida. */
-function Resumen({ ir }: { ir: (k: string, extra?: Record<string, string>) => void }) {
+function Resumen({ ir }: Readonly<{ ir: (k: string, extra?: Record<string, string>) => void }>) {
   const { data, loading, error } = useAsync(() => reportService.teacherOverview(), []);
   return (
     <AsyncView loading={loading} error={error} data={data} skeleton={<SkeletonCards count={4} />}>
@@ -88,7 +88,7 @@ function Resumen({ ir }: { ir: (k: string, extra?: Record<string, string>) => vo
   );
 }
 
-function Tarjeta({ valor, etiqueta, accion, onClick }: { valor: number; etiqueta: string; accion: string; onClick: () => void }) {
+function Tarjeta({ valor, etiqueta, accion, onClick }: Readonly<{ valor: number; etiqueta: string; accion: string; onClick: () => void }>) {
   return (
     <button type="button" className="card stat stat-link" onClick={onClick}>
       <span className="value">{valor}</span>

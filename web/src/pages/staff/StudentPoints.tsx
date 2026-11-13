@@ -5,7 +5,8 @@ import { apiError } from '../../api/client';
 import { approvalPolicyService, gamificationService, learningResourceService, projectService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import { useAuth } from '../../auth/AuthContext';
-import type { GamificationProposal, ProjectBackingTier } from '../../services/types';
+import type { GamificationProposal, InstitutionalPortfolio, ProjectBackingTier } from '../../services/types';
+import type { LearningResource } from '../../services';
 import { PROJECT_BACKING_LABEL } from '../../services/types';
 import {
   AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, SkeletonTable, Tabs,
@@ -21,7 +22,7 @@ const ESTADO: Record<GamificationProposal['status'], { label: string; tone: stri
   rejected: { label: 'Rechazada', tone: 'gray' },
 };
 /** Respaldo mínimo para proponer (lo mismo que exige la API). */
-const RESPALDO_SUFICIENTE = ['supported', 'corroborated', 'reviewed'];
+const RESPALDO_SUFICIENTE = new Set(['supported', 'corroborated', 'reviewed']);
 
 /**
  * V4.1 A41-016 (§9, A.10) · Puntos de estudiantes.
@@ -52,7 +53,7 @@ export default function StudentPointsPage() {
         value={tab}
         onChange={(k) => setParams(k === 'puntos' ? {} : { tab: k }, { replace: true })}
       />
-      {tab === 'puntos' ? <PuntosTab /> : esDocente ? <PropuestasDocente /> : <BandejaDireccion />}
+      {tab === 'puntos' ? <PuntosTab /> : <>{esDocente ? <PropuestasDocente /> : <BandejaDireccion />}</>}
     </div>
   );
 }
@@ -133,6 +134,107 @@ type Campo = (typeof CAMPOS)[number];
 type Reconoce = 'project' | 'resource';
 const VACIO: Record<Campo, string> = { projectId: '', resourceId: '', studentProfileId: '', criterionId: '', reason: '' };
 
+type Errores = Partial<Record<Campo, string>>;
+type Criterio = Awaited<ReturnType<typeof gamificationService.availableCriteria>>[number];
+type EstudianteDelAlcance = Awaited<ReturnType<typeof gamificationService.scopePoints>>['students'][number];
+
+/** Lo que falta en el formulario, campo por campo. */
+function erroresDePropuesta(reconoce: Reconoce, form: Record<Campo, string>): Errores {
+  const locales: Errores = {};
+  if (reconoce === 'project') {
+    if (!form.projectId) locales.projectId = 'Elige el proyecto.';
+    if (!form.criterionId) locales.criterionId = 'Elige el criterio.';
+  } else {
+    if (!form.resourceId) locales.resourceId = 'Elige el recurso.';
+    if (!form.studentProfileId) locales.studentProfileId = 'Elige el estudiante.';
+  }
+  if (form.reason.trim().length < 10) {
+    locales.reason = reconoce === 'resource'
+      ? 'Explica cómo sabes que lo completó (al menos 10 caracteres).'
+      : 'Explica por qué lo propones (al menos 10 caracteres).';
+  }
+  return locales;
+}
+
+/** Etiqueta del motivo: completar un recurso, otorgar con autonomía o proponer. */
+function etiquetaDelMotivo(reconoce: Reconoce, directo: boolean): string {
+  if (reconoce === 'resource') return 'Cómo sabes que lo completó';
+  return directo ? 'Por qué lo otorgas' : 'Por qué lo propones';
+}
+
+/** Campos para reconocer un proyecto. */
+function CamposProyecto({ form, set, errores, elegibles, criterios }: Readonly<{
+  form: Record<Campo, string>;
+  set: (c: Campo, v: string) => void;
+  errores: Errores;
+  elegibles: InstitutionalPortfolio['projects'];
+  criterios: Criterio[];
+}>) {
+  return (
+    <>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Solo proyectos de tus semestres, visibles para docentes y con respaldo suficiente (respaldado, corroborado o revisado).
+      </p>
+      <div className="row">
+        <FormField label="Proyecto" required error={errores.projectId ?? errores.studentProfileId}>
+          <select value={form.projectId} onChange={(e) => set('projectId', e.target.value)}>
+            <option value="">{elegibles.length ? 'Elige un proyecto' : 'No hay proyectos con respaldo suficiente'}</option>
+            {elegibles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title} — {p.student ?? 'Estudiante'} ({PROJECT_BACKING_LABEL[p.backingTier as ProjectBackingTier] ?? p.backingTier})
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Criterio" required error={errores.criterionId}>
+          <select value={form.criterionId} onChange={(e) => set('criterionId', e.target.value)}>
+            <option value="">{criterios.length ? 'Elige un criterio' : 'No hay criterios de proyecto vigentes'}</option>
+            {criterios.map((c) => (
+              <option key={c.id} value={c.id}>{c.name} · {c.points} puntos</option>
+            ))}
+          </select>
+        </FormField>
+      </div>
+    </>
+  );
+}
+
+/** Campos para dar fe de un recurso completado por un estudiante del alcance. */
+function CamposRecurso({ form, set, errores, conCriterio, criterioDelRecurso, estudiantes }: Readonly<{
+  form: Record<Campo, string>;
+  set: (c: Campo, v: string) => void;
+  errores: Errores;
+  conCriterio: LearningResource[];
+  criterioDelRecurso?: Criterio;
+  estudiantes: EstudianteDelAlcance[];
+}>) {
+  return (
+    <>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Das fe de que el estudiante completó el recurso (por ejemplo, entregó el ejercicio o lo presentó en clase).
+        Abrirlo, descargarlo o guardarlo en favoritos no cuenta. Solo aparecen recursos con criterio de «completado».
+      </p>
+      <div className="row">
+        <FormField label="Recurso" required error={errores.resourceId ?? errores.criterionId}
+          hint={criterioDelRecurso ? `${criterioDelRecurso.name} · ${criterioDelRecurso.points} puntos` : undefined}>
+          <select value={form.resourceId} onChange={(e) => set('resourceId', e.target.value)}>
+            <option value="">{conCriterio.length ? 'Elige un recurso' : 'No hay recursos con criterio de completado'}</option>
+            {conCriterio.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Estudiante" required error={errores.studentProfileId}>
+          <select value={form.studentProfileId} onChange={(e) => set('studentProfileId', e.target.value)}>
+            <option value="">{estudiantes.length ? 'Elige un estudiante' : 'No hay estudiantes en tu alcance'}</option>
+            {estudiantes.map((s) => (
+              <option key={s.profileId} value={s.profileId}>{s.name}{s.semester ? ` · ${s.semester}º` : ''}</option>
+            ))}
+          </select>
+        </FormField>
+      </div>
+    </>
+  );
+}
+
 function PropuestasDocente() {
   const proyectos = useAsync(() => projectService.institutional(), []);
   const criterios = useAsync(() => gamificationService.availableCriteria('proyecto_corroborado'), []);
@@ -151,7 +253,7 @@ function PropuestasDocente() {
   const toast = useToast();
 
   const elegibles = useMemo(
-    () => (proyectos.data?.projects ?? []).filter((p) => p.studentProfileId && RESPALDO_SUFICIENTE.includes(p.backingTier ?? '')),
+    () => (proyectos.data?.projects ?? []).filter((p) => p.studentProfileId && RESPALDO_SUFICIENTE.has(p.backingTier ?? '')),
     [proyectos.data],
   );
   const conCriterio = useMemo(
@@ -168,48 +270,33 @@ function PropuestasDocente() {
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
-    const locales: Partial<Record<Campo, string>> = {};
-    if (reconoce === 'project') {
-      if (!form.projectId) locales.projectId = 'Elige el proyecto.';
-      if (!form.criterionId) locales.criterionId = 'Elige el criterio.';
-    } else {
-      if (!form.resourceId) locales.resourceId = 'Elige el recurso.';
-      if (!form.studentProfileId) locales.studentProfileId = 'Elige el estudiante.';
-    }
-    if (form.reason.trim().length < 10) {
-      locales.reason = reconoce === 'resource'
-        ? 'Explica cómo sabes que lo completó (al menos 10 caracteres).'
-        : 'Explica por qué lo propones (al menos 10 caracteres).';
-    }
+    const locales = erroresDePropuesta(reconoce, form);
     if (Object.keys(locales).length) {
       errores.setErrors(locales);
       return;
     }
     setSaving(true);
     try {
-      if (reconoce === 'project') {
-        const proyecto = elegibles.find((p) => p.id === form.projectId);
-        await gamificationService.propose({
+      await gamificationService.propose(reconoce === 'project'
+        ? {
           projectId: form.projectId,
-          studentProfileId: proyecto?.studentProfileId ?? '',
+          studentProfileId: elegibles.find((p) => p.id === form.projectId)?.studentProfileId ?? '',
           criterionId: form.criterionId,
           reason: form.reason.trim(),
-        });
-      } else {
-        await gamificationService.propose({
+        }
+        : {
           resourceId: form.resourceId,
           studentProfileId: form.studentProfileId,
           criterionId: recurso?.criterionId ?? '',
           reason: form.reason.trim(),
         });
-      }
       if (directo) toast.success('Puntos otorgados.', 'Quedan en el historial del estudiante y Dirección los ve.');
       else toast.success('Propuesta enviada.', 'Dirección la revisará; verás aquí su decisión.');
       setForm(VACIO);
       errores.reset();
       mias.reload();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
     } finally {
       setSaving(false);
     }
@@ -240,58 +327,19 @@ function PropuestasDocente() {
             </div>
           </div>
           {reconoce === 'project' ? (
-            <>
-              <p className="muted small" style={{ marginTop: 0 }}>
-                Solo proyectos de tus semestres, visibles para docentes y con respaldo suficiente (respaldado, corroborado o revisado).
-              </p>
-              <div className="row">
-                <FormField label="Proyecto" required error={errores.errors.projectId ?? errores.errors.studentProfileId}>
-                  <select value={form.projectId} onChange={(e) => set('projectId', e.target.value)}>
-                    <option value="">{elegibles.length ? 'Elige un proyecto' : 'No hay proyectos con respaldo suficiente'}</option>
-                    {elegibles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title} — {p.student ?? 'Estudiante'} ({PROJECT_BACKING_LABEL[p.backingTier as ProjectBackingTier] ?? p.backingTier})
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-                <FormField label="Criterio" required error={errores.errors.criterionId}>
-                  <select value={form.criterionId} onChange={(e) => set('criterionId', e.target.value)}>
-                    <option value="">{(criterios.data ?? []).length ? 'Elige un criterio' : 'No hay criterios de proyecto vigentes'}</option>
-                    {(criterios.data ?? []).map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} · {c.points} puntos</option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
-            </>
+            <CamposProyecto form={form} set={set} errores={errores.errors} elegibles={elegibles} criterios={criterios.data ?? []} />
           ) : (
-            <>
-              <p className="muted small" style={{ marginTop: 0 }}>
-                Das fe de que el estudiante completó el recurso (por ejemplo, entregó el ejercicio o lo presentó en clase).
-                Abrirlo, descargarlo o guardarlo en favoritos no cuenta. Solo aparecen recursos con criterio de «completado».
-              </p>
-              <div className="row">
-                <FormField label="Recurso" required error={errores.errors.resourceId ?? errores.errors.criterionId}
-                  hint={criterioDelRecurso ? `${criterioDelRecurso.name} · ${criterioDelRecurso.points} puntos` : undefined}>
-                  <select value={form.resourceId} onChange={(e) => set('resourceId', e.target.value)}>
-                    <option value="">{conCriterio.length ? 'Elige un recurso' : 'No hay recursos con criterio de completado'}</option>
-                    {conCriterio.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Estudiante" required error={errores.errors.studentProfileId}>
-                  <select value={form.studentProfileId} onChange={(e) => set('studentProfileId', e.target.value)}>
-                    <option value="">{(estudiantes.data?.students ?? []).length ? 'Elige un estudiante' : 'No hay estudiantes en tu alcance'}</option>
-                    {(estudiantes.data?.students ?? []).map((s) => (
-                      <option key={s.profileId} value={s.profileId}>{s.name}{s.semester ? ` · ${s.semester}º` : ''}</option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
-            </>
+            <CamposRecurso
+              form={form}
+              set={set}
+              errores={errores.errors}
+              conCriterio={conCriterio}
+              criterioDelRecurso={criterioDelRecurso}
+              estudiantes={estudiantes.data?.students ?? []}
+            />
           )}
           <FormField
-            label={reconoce === 'resource' ? 'Cómo sabes que lo completó' : directo ? 'Por qué lo otorgas' : 'Por qué lo propones'}
+            label={etiquetaDelMotivo(reconoce, directo)}
             required
             error={errores.errors.reason}
             hint={directo ? 'Queda en el historial; Dirección lo verá.' : 'Dirección lo verá al decidir.'}
@@ -365,11 +413,11 @@ function HistorialEstudiante({ profileId, onClose }: Readonly<{ profileId: strin
 
 function ListaPropuestas({
   estado,
-  acciones,
-}: {
+  renderAcciones,
+}: Readonly<{
   estado: ReturnType<typeof useAsync<GamificationProposal[]>>;
-  acciones?: (p: GamificationProposal) => React.ReactNode;
-}) {
+  renderAcciones?: (p: GamificationProposal) => React.ReactNode;
+}>) {
   return (
     <AsyncView
       loading={estado.loading}
@@ -383,7 +431,7 @@ function ListaPropuestas({
         <div className="table-scroll">
           <table>
             <thead>
-              <tr><th>Origen</th><th>Estudiante</th><th>Criterio</th><th>Motivo</th><th>Estado</th>{acciones && <th></th>}</tr>
+              <tr><th>Origen</th><th>Estudiante</th><th>Criterio</th><th>Motivo</th><th>Estado</th>{renderAcciones && <th></th>}</tr>
             </thead>
             <tbody>
               {lista.map((p) => (
@@ -407,7 +455,7 @@ function ListaPropuestas({
                     <Badge tone={ESTADO[p.status].tone}>{ESTADO[p.status].label}</Badge>
                     {p.direct && <div className="muted small">Directo, con autonomía docente</div>}
                   </td>
-                  {acciones && <td>{acciones(p)}</td>}
+                  {renderAcciones && <td>{renderAcciones(p)}</td>}
                 </tr>
               ))}
             </tbody>
@@ -459,7 +507,7 @@ export function BandejaDireccion() {
       </p>
       <ListaPropuestas
         estado={lista}
-        acciones={estado === 'pending' ? (p) => (
+        renderAcciones={estado === 'pending' ? (p) => (
           <div className="stack" style={{ gap: '0.35rem', minWidth: 180 }}>
             <input
               aria-label="Comentario"

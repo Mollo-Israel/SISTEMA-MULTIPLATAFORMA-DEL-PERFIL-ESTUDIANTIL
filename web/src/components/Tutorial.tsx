@@ -90,7 +90,7 @@ export default function Tutorial() {
         )}
       </div>
       <div className="tutorial-dots" aria-hidden="true">
-        {pasos.map((_, i) => <span key={i} className={i === paso ? 'on' : ''} />)}
+        {pasos.map((p, i) => <span key={p.title} className={i === paso ? 'on' : ''} />)}
       </div>
       <div className="flex between" style={{ marginTop: '1rem', gap: '0.5rem' }}>
         <Button variant="ghost" size="sm" onClick={cerrar}>Omitir</Button>

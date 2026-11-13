@@ -204,13 +204,13 @@ api.interceptors.response.use(
         return api.request(original);
       }
       // Un fallo pasajero no cierra la sesion: la peticion falla y nada mas.
-      if (intento.estado === 'fallo') return Promise.reject(error);
+      if (intento.estado === 'fallo') throw error;
     }
 
     if (error.response?.status === 401 && onUnauthorized) {
       onUnauthorized();
     }
-    return Promise.reject(error);
+    throw error;
   },
 );
 
@@ -264,6 +264,15 @@ export function formErrors(
   return { general, fields };
 }
 
+/** El campo del formulario de acceso del que habla un mensaje del servidor ('' si de ninguno). */
+function campoDelMensaje(low: string): string {
+  if (low.includes('apellido')) return 'lastName';
+  if (low.includes('nombre')) return 'firstName';
+  if (low.includes('correo') || low.includes('email')) return 'email';
+  if (low.includes('contraseña') || low.includes('password')) return 'password';
+  return '';
+}
+
 // Mapea los mensajes de validación del backend a errores por campo (auth).
 export function authFieldErrors(error: unknown): { message: string | null; fields: Record<string, string> } {
   const fields: Record<string, string> = {};
@@ -272,15 +281,11 @@ export function authFieldErrors(error: unknown): { message: string | null; field
     return { message: 'No se pudo conectar con el servidor. Verifica que la API esté activa.', fields };
   }
   const raw = error.response.data?.message;
-  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
+  const comoTexto = typeof raw === 'string' ? [raw] : [];
+  const list = Array.isArray(raw) ? raw : comoTexto;
   let banner: string | null = null;
   for (const msg of list) {
-    const low = String(msg).toLowerCase();
-    let key = '';
-    if (low.includes('apellido')) key = 'lastName';
-    else if (low.includes('nombre')) key = 'firstName';
-    else if (low.includes('correo') || low.includes('email')) key = 'email';
-    else if (low.includes('contraseña') || low.includes('password')) key = 'password';
+    const key = campoDelMensaje(String(msg).toLowerCase());
     if (key) {
       if (!fields[key]) fields[key] = msg;
     } else {

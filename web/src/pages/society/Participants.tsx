@@ -32,9 +32,9 @@ export default function SocietyParticipantsPage() {
   );
 }
 
-function Lista({ m, q, setQ, soloPendientes, setSoloPendientes }: {
+function Lista({ m, q, setQ, soloPendientes, setSoloPendientes }: Readonly<{
   m: SocietyMetrics; q: string; setQ: (v: string) => void; soloPendientes: boolean; setSoloPendientes: (v: boolean) => void;
-}) {
+}>) {
   const filas = useMemo(() => m.activities
     .filter((a) => !q || (a.title ?? '').toLowerCase().includes(q.toLowerCase()))
     .filter((a) => !soloPendientes || ((a.registrations ?? 0) - (a.confirmed ?? 0) - (a.absent ?? 0)) > 0), [m, q, soloPendientes]);
@@ -46,7 +46,7 @@ function Lista({ m, q, setQ, soloPendientes, setSoloPendientes }: {
           <SearchInput value={q} onChange={setQ} placeholder="Buscar actividad…" />
           <label className="flex" style={{ gap: '0.35rem', alignItems: 'center' }}>
             <input type="checkbox" checked={soloPendientes} onChange={(e) => setSoloPendientes(e.target.checked)} />
-            Con asistencia por confirmar
+            <span>Con asistencia por confirmar</span>
           </label>
         </div>
       }

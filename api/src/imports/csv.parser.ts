@@ -1,3 +1,4 @@
+import { recortarExtremos } from '../common/texto';
 /**
  * Lector de CSV (especificación §10).
  *
@@ -102,13 +103,15 @@ function splitLine(line: string, delimiter: string): string[] {
 
 /** Normaliza un encabezado: minúsculas, sin acentos, con guion bajo. */
 function normalizeHeader(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+  return recortarExtremos(
+    raw
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_'),
+    '_',
+  );
 }
 
 export function parseCsv(content: string): ParsedCsv {

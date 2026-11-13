@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Not, Repository } from 'typeorm';
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 import {
   AccountTokenPurpose,
@@ -72,6 +72,20 @@ export interface AuthContext {
   email: string;
   role: RolNombre;
   status: UserStatus;
+}
+
+/** V5-04: los dos apellidos mandan; un apellido completo solo se separa si no es ambiguo. */
+function aplicarApellidos(user: User, params: UpdateUserParams): void {
+  if (params.firstSurname !== undefined || params.lastName !== undefined) {
+    const nuevos = resolverApellidos({
+      firstSurname: params.firstSurname,
+      secondSurname: params.secondSurname ?? (params.firstSurname === undefined ? null : user.secondSurname),
+      lastName: params.lastName,
+    });
+    if (nuevos) Object.assign(user, nuevos);
+  } else if (params.secondSurname !== undefined && user.firstSurname) {
+    Object.assign(user, resolverApellidos({ firstSurname: user.firstSurname, secondSurname: params.secondSurname }));
+  }
 }
 
 @Injectable()
@@ -253,43 +267,49 @@ export class UsersService {
     }
     const users = await qb.getMany();
     const result = users.map(toPublicUser);
+    await this.agregarSemestresDocentes(result);
+    await this.agregarEstadoDeInvitacion(result);
+    return result;
+  }
 
-    // Los semestres habilitados se resuelven en lote (sin consultas dentro del bucle).
+  /** Los semestres habilitados se resuelven en lote (sin consultas dentro del bucle). */
+  private async agregarSemestresDocentes(result: PublicUser[]): Promise<void> {
     const teacherIds = result.filter((u) => u.role === RolNombre.TEACHER).map((u) => u.id);
-    if (teacherIds.length > 0) {
-      const byTeacher = await this.getSemestersForTeachers(teacherIds);
-      for (const user of result) {
-        if (user.role === RolNombre.TEACHER) user.semesters = byTeacher.get(user.id) ?? [];
-      }
+    if (teacherIds.length === 0) return;
+    const byTeacher = await this.getSemestersForTeachers(teacherIds);
+    for (const user of result) {
+      if (user.role === RolNombre.TEACHER) user.semesters = byTeacher.get(user.id) ?? [];
     }
+  }
 
-    // Para las cuentas sin activar, en qué quedó su invitación: es lo que el
-    // administrador necesita saber cuando alguien dice «no me llegó».
+  /**
+   * Para las cuentas sin activar, en qué quedó su invitación: es lo que el
+   * administrador necesita saber cuando alguien dice «no me llegó».
+   */
+  private async agregarEstadoDeInvitacion(result: PublicUser[]): Promise<void> {
     const pendientes = result
       .filter((u) => u.status === UserStatus.PENDING_ACTIVATION)
       .map((u) => u.id);
-    if (pendientes.length > 0) {
-      const ultimos = await this.accountMail.latestFor(pendientes);
-      const vencimientos = await this.activationExpiries(pendientes);
-      const simulated = this.mail.settings.transport === 'console';
-      const ahora = Date.now();
-      for (const user of result) {
-        const job = ultimos.get(user.id);
-        if (!job) continue;
-        const expiresAt = vencimientos.get(user.id) ?? null;
-        user.invitation = {
-          expiresAt,
-          expired: expiresAt ? expiresAt.getTime() <= ahora : false,
-          status: job.status === 'pending' || job.status === 'sending' ? 'queued' : job.status,
-          deliveryState: deliveryStateOf(job.status),
-          sentTo: maskEmail(user.email),
-          simulated,
-          error: job.lastError,
-          at: job.sentAt ?? job.updatedAt,
-        };
-      }
+    if (pendientes.length === 0) return;
+    const ultimos = await this.accountMail.latestFor(pendientes);
+    const vencimientos = await this.activationExpiries(pendientes);
+    const simulated = this.mail.settings.transport === 'console';
+    const ahora = Date.now();
+    for (const user of result) {
+      const job = ultimos.get(user.id);
+      if (!job) continue;
+      const expiresAt = vencimientos.get(user.id) ?? null;
+      user.invitation = {
+        expiresAt,
+        expired: expiresAt ? expiresAt.getTime() <= ahora : false,
+        status: job.status === 'pending' || job.status === 'sending' ? 'queued' : job.status,
+        deliveryState: deliveryStateOf(job.status),
+        sentTo: maskEmail(user.email),
+        simulated,
+        error: job.lastError,
+        at: job.sentAt ?? job.updatedAt,
+      };
     }
-    return result;
   }
 
   /**
@@ -320,57 +340,35 @@ export class UsersService {
       where: { id },
       relations: { role: true },
     });
-    if (!user || !user.role) return null;
+    if (!user?.role) return null;
     return { id: user.id, email: user.email, role: user.role.name, status: user.status };
   }
 
-  async update(id: string, params: UpdateUserParams, actorUserId?: string): Promise<PublicUser> {
-    const user = await this.findEntityOrFail(id);
+  private async cambiarRol(user: User, nuevo: RolNombre | undefined): Promise<void> {
+    if (nuevo === undefined || nuevo === user.role.name) return;
+    const role = await this.rolesService.findByName(nuevo);
+    user.roleId = role.id;
+    user.role = role;
+    // Los semestres habilitados solo aplican al rol docente.
+    if (nuevo !== RolNombre.TEACHER) {
+      await this.semesterAccess.delete({ teacherId: user.id });
+    }
+  }
 
-    if (params.email && params.email.toLowerCase().trim() !== user.email) {
-      const email = params.email.toLowerCase().trim();
-      await this.assertEmailAvailable(email);
-      user.email = email;
-    }
-    if (params.firstName !== undefined) user.firstName = params.firstName;
-    // V5-04: los dos apellidos mandan; un apellido completo solo se separa si no es ambiguo.
-    if (params.firstSurname !== undefined || params.lastName !== undefined) {
-      const nuevos = resolverApellidos({
-        firstSurname: params.firstSurname,
-        secondSurname: params.secondSurname ?? (params.firstSurname === undefined ? null : user.secondSurname),
-        lastName: params.lastName,
-      });
-      if (nuevos) Object.assign(user, nuevos);
-    } else if (params.secondSurname !== undefined && user.firstSurname) {
-      Object.assign(user, resolverApellidos({ firstSurname: user.firstSurname, secondSurname: params.secondSurname }));
-    }
-    if (params.status !== undefined) user.status = params.status;
-    const antes = {
-      semester: user.semester,
-      universityCode: user.universityCode,
-      academicScopeSemesters: user.academicScopeSemesters ?? [],
-    };
-    if (params.role !== undefined && params.role !== user.role.name) {
-      const role = await this.rolesService.findByName(params.role);
-      user.roleId = role.id;
-      user.role = role;
-      // Los semestres habilitados solo aplican al rol docente.
-      if (params.role !== RolNombre.TEACHER) {
-        await this.semesterAccess.delete({ teacherId: user.id });
-      }
-    }
-    const rol = user.role.name;
-
-    // El código se puede corregir, nunca dejar vacío, y debe llevar el prefijo
-    // del rol: si el rol cambia, el código anterior deja de servir.
+  /**
+   * El código se puede corregir, nunca dejar vacío, y debe llevar el prefijo
+   * del rol: si el rol cambia, el código anterior deja de servir.
+   */
+  private async ajustarCodigo(user: User, pedido: string | undefined, rol: RolNombre): Promise<void> {
     const codigoNoEncaja = universityCodeProblem(user.universityCode, rol) !== null;
-    if (params.universityCode !== undefined || codigoNoEncaja) {
-      const codigo = this.assertUniversityCodeFormat(params.universityCode ?? user.universityCode, rol);
-      if (codigo !== user.universityCode) await this.assertUniversityCodeAvailable(codigo, user.id);
-      user.universityCode = codigo;
-    }
+    if (pedido === undefined && !codigoNoEncaja) return;
+    const codigo = this.assertUniversityCodeFormat(pedido ?? user.universityCode, rol);
+    if (codigo !== user.universityCode) await this.assertUniversityCodeAvailable(codigo, user.id);
+    user.universityCode = codigo;
+  }
 
-    // Semestre: solo en los roles que lo cursan, y obligatorio en ellos.
+  /** Semestre (solo y obligatorio en los roles que lo cursan) y arrastre o repetición (solo estudiantes). */
+  private ajustarSemestreYAlcance(user: User, params: UpdateUserParams, rol: RolNombre): void {
     if (SEMESTER_ROLES.includes(rol)) {
       if (params.semester !== undefined) user.semester = params.semester;
       if (!user.semester) {
@@ -384,31 +382,52 @@ export class UsersService {
     }
 
     // Arrastre o repetición (V3 §8.1): solo estudiantes.
-    if (rol === RolNombre.STUDENT) {
-      if (params.academicScopeSemesters !== undefined || params.semester !== undefined) {
-        user.academicScopeSemesters = this.alcanceAdicional(
-          params.academicScopeSemesters ?? user.academicScopeSemesters,
-          user.semester,
-        );
-      }
-    } else {
+    if (rol !== RolNombre.STUDENT) {
       user.academicScopeSemesters = [];
+    } else if (params.academicScopeSemesters !== undefined || params.semester !== undefined) {
+      user.academicScopeSemesters = this.alcanceAdicional(
+        params.academicScopeSemesters ?? user.academicScopeSemesters,
+        user.semester,
+      );
     }
+  }
+
+  /** El perfil del estudiante guarda una copia de su semestre y su código. */
+  private async sincronizarPerfil(saved: User): Promise<void> {
+    const perfiles = this.dataSource.getRepository(StudentProfile);
+    const perfil = (await perfiles.findOne({ where: { userId: saved.id } })) ?? perfiles.create({ userId: saved.id });
+    const mismoAlcance = (perfil.academicScopeSemesters ?? []).join() === (saved.academicScopeSemesters ?? []).join();
+    if (perfil.semester !== saved.semester || perfil.universityCode !== saved.universityCode || !mismoAlcance) {
+      perfil.semester = saved.semester;
+      perfil.universityCode = saved.universityCode;
+      perfil.academicScopeSemesters = saved.academicScopeSemesters ?? [];
+      await perfiles.save(perfil);
+    }
+  }
+
+  async update(id: string, params: UpdateUserParams, actorUserId?: string): Promise<PublicUser> {
+    const user = await this.findEntityOrFail(id);
+
+    if (params.email && params.email.toLowerCase().trim() !== user.email) {
+      const email = params.email.toLowerCase().trim();
+      await this.assertEmailAvailable(email);
+      user.email = email;
+    }
+    if (params.firstName !== undefined) user.firstName = params.firstName;
+    aplicarApellidos(user, params);
+    if (params.status !== undefined) user.status = params.status;
+    const antes = {
+      semester: user.semester,
+      universityCode: user.universityCode,
+      academicScopeSemesters: user.academicScopeSemesters ?? [],
+    };
+    await this.cambiarRol(user, params.role);
+    const rol = user.role.name;
+    await this.ajustarCodigo(user, params.universityCode, rol);
+    this.ajustarSemestreYAlcance(user, params, rol);
 
     const saved = await this.usersRepository.save(user);
-
-    // El perfil del estudiante guarda una copia de su semestre y su código.
-    if (rol === RolNombre.STUDENT) {
-      const perfiles = this.dataSource.getRepository(StudentProfile);
-      const perfil = (await perfiles.findOne({ where: { userId: saved.id } })) ?? perfiles.create({ userId: saved.id });
-      const mismoAlcance = (perfil.academicScopeSemesters ?? []).join() === (saved.academicScopeSemesters ?? []).join();
-      if (perfil.semester !== saved.semester || perfil.universityCode !== saved.universityCode || !mismoAlcance) {
-        perfil.semester = saved.semester;
-        perfil.universityCode = saved.universityCode;
-        perfil.academicScopeSemesters = saved.academicScopeSemesters ?? [];
-        await perfiles.save(perfil);
-      }
-    }
+    if (rol === RolNombre.STUDENT) await this.sincronizarPerfil(saved);
 
     // Cambiar el semestre mueve a la persona dentro o fuera del alcance de un
     // docente: queda registrado quién lo hizo, igual que el código.
@@ -495,13 +514,13 @@ export class UsersService {
 
     const puede = await this.accountMail.check(user.id, 'account_activation');
     if (!puede.allowed) {
-      const mensaje =
-        puede.reason === 'already_queued'
-          ? 'Ya hay un envío en curso para esta cuenta. Espere unos segundos y actualice la lista.'
-          : puede.reason === 'daily_limit'
-            ? 'Esta cuenta ya recibió el máximo de invitaciones de hoy. Así se evita que el '
-              + 'proveedor marque los correos de Afinia como spam. Inténtelo mañana.'
-            : `Se envió una invitación hace muy poco. Podrá reenviarla en ${puede.retryAfterSeconds} s.`;
+      let mensaje = `Se envió una invitación hace muy poco. Podrá reenviarla en ${puede.retryAfterSeconds} s.`;
+      if (puede.reason === 'already_queued') {
+        mensaje = 'Ya hay un envío en curso para esta cuenta. Espere unos segundos y actualice la lista.';
+      } else if (puede.reason === 'daily_limit') {
+        mensaje = 'Esta cuenta ya recibió el máximo de invitaciones de hoy. Así se evita que el '
+          + 'proveedor marque los correos de Afinia como spam. Inténtelo mañana.';
+      }
       throw new HttpException(
         { message: mensaje, retryAfterSeconds: puede.retryAfterSeconds },
         HttpStatus.TOO_MANY_REQUESTS,
@@ -517,12 +536,12 @@ export class UsersService {
       metadata: { via: 'admin' },
     });
     const invitation = await this.invitationOutcome(jobId, user.email);
-    const message =
-      invitation.status === 'failed'
-        ? `No se pudo enviar la invitación: ${invitation.error ?? 'error del servidor de correo'}`
-        : invitation.simulated
-          ? 'Invitación generada en modo simulado: no salió a ningún buzón (ver docs/CORREO_REAL.md).'
-          : `Invitación enviada a ${invitation.sentTo}.`;
+    let message = `Invitación enviada a ${invitation.sentTo}.`;
+    if (invitation.status === 'failed') {
+      message = `No se pudo enviar la invitación: ${invitation.error ?? 'error del servidor de correo'}`;
+    } else if (invitation.simulated) {
+      message = 'Invitación generada en modo simulado: no salió a ningún buzón (ver docs/CORREO_REAL.md).';
+    }
     return { message, invitation };
   }
 

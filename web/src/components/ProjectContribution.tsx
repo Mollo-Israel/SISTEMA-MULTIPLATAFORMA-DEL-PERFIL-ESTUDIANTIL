@@ -43,12 +43,12 @@ export default function ProjectContribution({
   currentUserId,
   isOwner,
   onChanged,
-}: {
+}: Readonly<{
   projectId: string;
   currentUserId: string;
   isOwner: boolean;
   onChanged?: () => void;
-}) {
+}>) {
   const toast = useToast();
   const [members, setMembers] = useState<ProjectMemberDetailed[] | null>(null);
   // V5-20: solo las tecnologías del proyecto, con el área en la que se usan.
@@ -247,7 +247,7 @@ export default function ProjectContribution({
 
           <div className="field">
             <div className="flex between" style={{ marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.6rem' }}>
-              <label style={{ margin: 0 }}>Tecnologías que usaste tú</label>
+              <span className="field-label" style={{ margin: 0 }}>Tecnologías que usaste tú</span>
               <div className="flex" style={{ gap: '0.6rem' }}>
                 <Badge tone={form.skillIds.length ? 'bordo' : 'gray'}>
                   {form.skillIds.length} seleccionada{form.skillIds.length === 1 ? '' : 's'}
@@ -260,17 +260,19 @@ export default function ProjectContribution({
               no significa que las hayas usado todas.
             </p>
 
-            {delProyecto.length === 0 ? (
+            {delProyecto.length === 0 && (
               <EmptyState
                 icon={<FiSearch size={20} />}
                 message="El proyecto todavía no tiene tecnologías. El responsable las agrega primero; después eliges las que usaste."
               />
-            ) : visibles.length === 0 ? (
+            )}
+            {delProyecto.length > 0 && visibles.length === 0 && (
               <EmptyState
                 icon={<FiSearch size={20} />}
                 message={`Ninguna tecnología del proyecto coincide con “${query}”.`}
               />
-            ) : porArea.map(([area, lista]) => (
+            )}
+            {visibles.length > 0 && porArea.map(([area, lista]) => (
               <div key={area} style={{ marginBottom: '0.5rem' }}>
                 <div className="muted small">{area}</div>
               <div className="chip-row">
@@ -311,7 +313,7 @@ export default function ProjectContribution({
                   .catch((err) => toast.error(apiError(err)));
               }}
             />
-            Mostrar mi nombre y mis roles en «Proyectos de la carrera» (si el proyecto se comparte allí)
+            <span>Mostrar mi nombre y mis roles en «Proyectos de la carrera» (si el proyecto se comparte allí)</span>
           </label>
 
           <div className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>

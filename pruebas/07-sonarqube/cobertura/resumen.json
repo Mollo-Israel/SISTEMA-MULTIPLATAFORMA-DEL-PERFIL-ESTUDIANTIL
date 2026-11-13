@@ -1,0 +1,47 @@
+{
+  "api": {
+    "guiones": 830,
+    "archivos": 295,
+    "lineas": {
+      "total": 14603,
+      "covered": 13519,
+      "skipped": 0,
+      "pct": 92.57
+    },
+    "ramas": {
+      "total": 12256,
+      "covered": 10346,
+      "skipped": 0,
+      "pct": 84.41
+    },
+    "sentencias": {
+      "total": 16909,
+      "covered": 15380,
+      "skipped": 0,
+      "pct": 90.95
+    }
+  },
+  "web": {
+    "guiones": 414,
+    "archivos": 99,
+    "lineas": {
+      "total": 6428,
+      "covered": 3900,
+      "skipped": 0,
+      "pct": 60.67
+    },
+    "ramas": {
+      "total": 6730,
+      "covered": 3621,
+      "skipped": 0,
+      "pct": 53.8
+    },
+    "sentencias": {
+      "total": 7771,
+      "covered": 4598,
+      "skipped": 0,
+      "pct": 59.16
+    }
+  },
+  "fecha": "2026-11-12T07:23:03.960Z"
+}

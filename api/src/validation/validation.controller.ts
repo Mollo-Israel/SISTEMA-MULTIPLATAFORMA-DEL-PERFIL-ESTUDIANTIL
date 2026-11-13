@@ -175,7 +175,7 @@ export class ValidationController {
   }
 
   private parseType(valor: string): ValidationResourceType {
-    const normalizado = valor.toLowerCase().replace(/-/g, '_');
+    const normalizado = valor.toLowerCase().replaceAll('-', '_');
     const tipos = Object.values(ValidationResourceType) as string[];
     if (!tipos.includes(normalizado)) {
       throw new NotFoundException('Tipo de recurso no reconocido.');

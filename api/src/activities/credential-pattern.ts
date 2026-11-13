@@ -13,7 +13,7 @@ export function credentialPatternToRegExp(pattern: string): RegExp {
     if (ch === '#') out += '[0-9]';
     else if (ch === '@') out += '[A-Za-z]';
     else if (ch === '*') out += '[A-Za-z0-9]{0,40}';
-    else out += ch.replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+    else out += ch.replace(/[.*+?^${}()|[\]\\/-]/g, String.raw`\$&`);
   }
   return new RegExp(`^${out}$`, 'i');
 }

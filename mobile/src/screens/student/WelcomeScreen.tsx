@@ -25,7 +25,7 @@ const DISPONIBILIDAD = [
  * decidir la disponibilidad y revisar la privacidad. Las tecnologías de
  * interés y la orientación (opcionales) se completan después desde «Perfil».
  */
-export default function WelcomeScreen({ onDone }: { onDone: () => void }) {
+export default function WelcomeScreen({ onDone }: Readonly<{ onDone: () => void }>) {
   const { user, logout } = useAuth();
   const toast = useToast();
   const [paso, setPaso] = useState<Paso>('welcome');
@@ -261,7 +261,7 @@ export default function WelcomeScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <View style={styles.fact}>
       <Text style={styles.factLabel}>{label}</Text>

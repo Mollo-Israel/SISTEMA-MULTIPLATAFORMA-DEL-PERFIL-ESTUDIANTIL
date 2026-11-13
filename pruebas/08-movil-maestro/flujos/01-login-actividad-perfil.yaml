@@ -1,14 +1,12 @@
 # Flujo representativo del estudiante (Investigación §3.4):
-# abrir Afinia → iniciar sesión → consultar una actividad → inscribirse →
-# abrir el perfil → verificar afinidad y recomendación.
+# abrir Afinia → iniciar sesión → consultar una actividad → solicitar la
+# inscripción → abrir el perfil → verificar afinidad y recomendaciones.
 #
-# Requiere Android Emulator con Expo Go o un Expo Development Build, y la
-# app apuntando a la API de pruebas:
-#   EXPO_PUBLIC_API_URL=http://10.0.2.2:3020/api npx expo start --android
-# Ejecutar:
-#   maestro test pruebas/08-movil-maestro/flujos/01-login-actividad-perfil.yaml \
-#     --test-output-dir pruebas/08-movil-maestro/capturas
-appId: host.exp.exponent
+# Requiere el APK de pruebas instalado en el emulador y la API de pruebas en
+# :3020 (ver COMO_EJECUTAR.md). Corre después de 00-bienvenida.
+# Ejecutar la batería completa:
+#   maestro test pruebas/08-movil-maestro/flujos --test-output-dir pruebas/08-movil-maestro/capturas
+appId: com.afinia.app
 env:
   EMAIL: ana.quispe@est.univalle.edu
   PASSWORD: Univalle2026*
@@ -27,38 +25,69 @@ env:
 - inputText: ${PASSWORD}
 - hideKeyboard
 - tapOn: "Ingresar"
+# Inicio con el saludo y la barra de pestañas.
 - extendedWaitUntil:
-    visible: "Inicio"
+    visible: ".*Hola, Ana.*"
     timeout: 30000
+- assertVisible: "Avance de tu perfil"
 - takeScreenshot: 02-inicio
-- tapOn: "Actividades"
+# Actividades: la vista «Todas» con sus filtros y el detalle de una actividad.
+- tapOn: ".*, Actividades"
+- tapOn: "Todas"
 - extendedWaitUntil:
-    visible: "Actividades"
+    visible: ".*actividades"
     timeout: 20000
 - takeScreenshot: 03-actividades
+- scrollUntilVisible:
+    element: "Ver detalle"
+    direction: DOWN
+    timeout: 20000
+    visibilityPercentage: 50
+- tapOn: "Ver detalle"
 - scrollUntilVisible:
     element: "Inscribirme"
     direction: DOWN
     timeout: 20000
-    optional: true
+    centerElement: true
+- tapOn: "Inscribirme"
+# Inscribirse compromete un lugar: la app pide confirmar la solicitud.
+- extendedWaitUntil:
+    visible: "Cancelar"
+    timeout: 10000
 - tapOn:
-    text: "Inscribirme"
-    optional: true
+    text: "Solicitar inscripción"
+    index: 1
+# Actividad interna abierta: admite al instante (V6 §4.1) y el aviso lo dice.
+- extendedWaitUntil:
+    visible: "Inscripción admitida.*"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Darme de baja"
+    timeout: 20000
 - takeScreenshot: 04-inscripcion
-- tapOn: "Perfil"
+# Perfil: avance y datos institucionales (no editables).
+- tapOn: ".*, Perfil"
+- extendedWaitUntil:
+    visible: "Completar perfil"
+    timeout: 20000
+- assertVisible: "DATOS INSTITUCIONALES"
 - takeScreenshot: 05-perfil
-- tapOn: "Afinidad"
+# Afinidad: el detalle por área.
+- tapOn: ".*, Mis afinidades"
 - extendedWaitUntil:
     visible: "Mis afinidades"
     timeout: 20000
 - takeScreenshot: 06-afinidad
-- tapOn: "Inicio"
+# Recomendaciones: cada sugerencia explica su motivo.
+- tapOn: ".*, Inicio"
+- tapOn: "Ver sugerencias"
+# Abre Actividades con el último filtro y desplazamiento: se vuelve arriba y se elige «Para ti».
 - scrollUntilVisible:
-    element: "Más sugerencias"
-    direction: DOWN
+    element: "Para ti"
+    direction: UP
     timeout: 20000
-    optional: true
-- tapOn:
-    text: "Más sugerencias"
-    optional: true
+- tapOn: "Para ti"
+- extendedWaitUntil:
+    visible: ".*Coincide con.*"
+    timeout: 20000
 - takeScreenshot: 07-recomendaciones

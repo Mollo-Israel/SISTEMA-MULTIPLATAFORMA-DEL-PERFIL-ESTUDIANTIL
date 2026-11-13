@@ -20,14 +20,13 @@
   --font: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--gray-300) transparent; }
 html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: var(--font);
   color: var(--gray-900);
-  background: var(--gray-50);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.5; background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed;
 }
 a { color: var(--bordo-600); text-decoration: none; }
 h1, h2, h3, h4 { margin: 0 0 0.4rem; color: var(--gray-900); font-weight: 600; }
@@ -36,39 +35,37 @@ h2 { font-size: 1.2rem; }
 h3 { font-size: 1.02rem; }
 
 /* Layout */
-.app-shell { display: flex; min-height: 100vh; }
-.sidebar {
-  width: 248px; background: var(--bordo); color: #f6e9eb;
+.app-shell { display: flex; min-height: 100vh; align-items: flex-start; }
+.sidebar { color: #f6e9eb;
   display: flex; flex-direction: column; flex-shrink: 0;
+  width: 256px;
+  background: linear-gradient(180deg, #5a0f1b 0%, #6b1220 60%, #7d1626 100%);
 }
-.sidebar .brand { padding: 1.1rem 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.12); }
-.sidebar .brand strong { display: block; font-size: 0.98rem; color: #fff; }
+.sidebar .brand { border-bottom: 1px solid rgba(255,255,255,0.12); padding: 1.2rem 1.2rem; position: relative; }
+.sidebar .brand strong { color: #fff; display: flex; align-items: center; font-size: 1.1rem; gap: 0.55rem; }
 .sidebar .brand span { font-size: 0.72rem; opacity: 0.8; }
-.sidebar nav { padding: 0.6rem; overflow-y: auto; flex: 1; }
+.sidebar nav { padding: 0.6rem; flex: 1; min-height: 0; overflow-y: auto; }
 .nav-section { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin: 0.8rem 0.6rem 0.3rem; }
 .nav-link {
-  display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.7rem;
-  border-radius: 8px; color: #f0dfe2; font-size: 0.88rem; cursor: pointer;
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.7rem; color: #f0dfe2; cursor: pointer; font-size: 0.88rem; border-radius: 10px; transition: background 0.15s, color 0.15s, transform 0.1s;
 }
-.nav-link:hover { background: rgba(255,255,255,0.08); }
-.nav-link.active { background: var(--white); color: var(--bordo); font-weight: 600; }
+.nav-link:hover { background: rgba(255,255,255,0.08); transform: translateX(2px); }
+.nav-link.active { background: var(--white); color: var(--bordo); font-weight: 600; box-shadow: 0 6px 16px rgba(0,0,0,0.18); }
 .nav-link.disabled { opacity: 0.5; cursor: not-allowed; }
 .sidebar .user-box { padding: 0.9rem 1.1rem; border-top: 1px solid rgba(255,255,255,0.12); font-size: 0.8rem; }
 .sidebar .user-box .role { opacity: 0.75; font-size: 0.72rem; text-transform: capitalize; }
 
-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.main { display: flex; flex-direction: column; position: relative; flex: 1 1 auto; min-width: 0; min-height: 100vh; }
 .topbar { height: 56px; background: var(--white); border-bottom: 1px solid var(--gray-200);
-  display: flex; align-items: center; justify-content: space-between; padding: 0 1.4rem; }
+  display: flex; align-items: center; justify-content: space-between; padding: 0 1.4rem; box-shadow: 0 1px 0 rgba(20,20,30,0.04); position: sticky; top: 0; z-index: 25; }
 .topbar .page-title { font-weight: 600; }
 .content { padding: 1.4rem; max-width: 1180px; width: 100%; }
 
 /* Cards */
-.card { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 1.1rem 1.2rem; }
+.card { background: var(--white); border: 1px solid var(--gray-200); padding: 1.1rem 1.2rem; border-radius: 14px; box-shadow: 0 1px 2px rgba(20,20,30,0.04), 0 6px 22px rgba(107,18,32,0.05); transition: box-shadow 0.2s, transform 0.2s; border-color: #f0e6e9; }
 .card + .card { margin-top: 1rem; }
-.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; gap: 0.6rem; flex-wrap: wrap; }
 /* V3 B21: en pantallas angostas las acciones de una tarjeta bajan de línea en vez de desbordar. */
-.card-header { gap: 0.6rem; flex-wrap: wrap; }
 .card-header > .flex, .card-header > form { flex-wrap: wrap; min-width: 0; max-width: 100%; }
 .grid { display: grid; gap: 1rem; }
 /* En una grilla el espacio lo pone `gap`: el margen entre tarjetas seguidas las desalineaba. */
@@ -78,14 +75,14 @@ h3 { font-size: 1.02rem; }
 .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 900px) { .grid.cols-2, .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; } }
 
-.stat { display: flex; flex-direction: column; gap: 0.2rem; }
-.stat .value { font-size: 1.7rem; font-weight: 700; color: var(--bordo); }
+.stat { display: flex; flex-direction: column; gap: 0.2rem; position: relative; overflow: hidden; }
+.stat .value { font-size: 1.7rem; font-weight: 700; background: linear-gradient(120deg, var(--bordo), #c0392f); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .stat .label { color: var(--gray-500); font-size: 0.8rem; }
 
 /* Table */
-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.86rem; border-radius: 10px; overflow: hidden; }
 th, td { text-align: left; padding: 0.6rem 0.7rem; border-bottom: 1px solid var(--gray-200); }
-th { color: var(--gray-500); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; }
+th { color: var(--gray-500); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.03em; background: var(--gray-50); }
 tbody tr:hover { background: var(--gray-50); }
 
 /* Forms */
@@ -102,9 +99,9 @@ textarea { min-height: 80px; resize: vertical; }
 
 /* Buttons */
 .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 0.95rem; border-radius: 8px;
-  border: 1px solid transparent; font-size: 0.86rem; font-weight: 600; cursor: pointer; font-family: var(--font); }
-.btn-primary { background: var(--bordo); color: #fff; }
-.btn-primary:hover { background: var(--bordo-700); }
+  border: 1px solid transparent; font-size: 0.86rem; font-weight: 600; cursor: pointer; font-family: var(--font); transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease; }
+.btn-primary { color: #fff; background: linear-gradient(120deg, var(--bordo), #a52a3a); box-shadow: 0 6px 18px rgba(107,18,32,0.22); }
+.btn-primary:hover { background: linear-gradient(120deg, var(--bordo-700), #8f1d2f); }
 .btn-secondary { background: var(--white); color: var(--gray-700); border-color: var(--gray-300); }
 .btn-secondary:hover { background: var(--gray-50); }
 .btn-ghost { background: transparent; color: var(--bordo-600); }
@@ -150,19 +147,9 @@ textarea { min-height: 80px; resize: vertical; }
 .section-title { display:flex; align-items:center; justify-content:space-between; margin: 1.4rem 0 0.6rem; }
 
 /* ===== Dashboard premium (overrides) ===== */
-.sidebar {
-  width: 256px;
-  background: linear-gradient(180deg, #5a0f1b 0%, #6b1220 60%, #7d1626 100%);
-}
-.sidebar .brand { padding: 1.2rem 1.2rem; }
 .sidebar .brand .logo-dot { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,0.16); display: inline-grid; place-items: center; margin-right: 0.5rem; vertical-align: middle; }
-.nav-link { font-size: 0.88rem; border-radius: 10px; transition: background 0.15s, color 0.15s, transform 0.1s; }
 .nav-link svg { width: 17px; height: 17px; opacity: 0.95; flex-shrink: 0; }
-.nav-link:hover { transform: translateX(2px); }
-.nav-link.active { box-shadow: 0 6px 16px rgba(0,0,0,0.18); }
 .nav-link.active svg { color: var(--bordo); }
-
-.topbar { box-shadow: 0 1px 0 rgba(20,20,30,0.04); }
 .topbar .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--bordo), #d24b60); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 0.8rem; }
 .topbar .user-mini { display: flex; align-items: center; gap: 0.6rem; }
 .topbar .user-mini .meta { text-align: right; line-height: 1.1; }
@@ -173,17 +160,7 @@ textarea { min-height: 80px; resize: vertical; }
    además una animación CSS sobre el mismo elemento: las dos peleaban por la
    opacidad y la página parpadeaba al cambiar de pantalla. */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-.card { border-radius: 14px; box-shadow: 0 1px 2px rgba(20,20,30,0.04), 0 6px 22px rgba(107,18,32,0.05); transition: box-shadow 0.2s, transform 0.2s; }
-.stat { position: relative; overflow: hidden; }
 .stat::after { content: ''; position: absolute; right: -18px; top: -18px; width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle, rgba(165,42,58,0.12), transparent 70%); }
-.stat .value { background: linear-gradient(120deg, var(--bordo), #c0392f); -webkit-background-clip: text; background-clip: text; color: transparent; }
-
-.btn-primary { background: linear-gradient(120deg, var(--bordo), #a52a3a); box-shadow: 0 6px 18px rgba(107,18,32,0.22); }
-.btn-primary:hover { background: linear-gradient(120deg, var(--bordo-700), #8f1d2f); }
-
-th { background: var(--gray-50); }
-table { border-radius: 10px; overflow: hidden; }
 
 .chart-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: 14px; padding: 1.1rem 1.2rem; box-shadow: 0 6px 22px rgba(107,18,32,0.05); }
 .chart-card h3 { margin-bottom: 0.8rem; }
@@ -219,12 +196,9 @@ table { border-radius: 10px; overflow: hidden; }
 .help-banner .grow { flex: 1; }
 
 /* Logo Afinia en sidebar */
-.sidebar .brand strong { display: flex; align-items: center; gap: 0.5rem; }
-.sidebar .brand .brand-logo { height: 30px; width: auto; border-radius: 7px; background: #fff; padding: 3px; }
+.sidebar .brand .brand-logo { height: 42px; width: auto; background: none; padding: 0; border-radius: 0; }
 
 /* Logo Afinia (fondo oscuro) en el sidebar: más grande y sin recuadro */
-.sidebar .brand strong { font-size: 1.1rem; gap: 0.55rem; }
-.sidebar .brand .brand-logo { height: 42px; width: auto; background: none; padding: 0; border-radius: 0; }
 
 /* ===== Selector de áreas a mejorar (con iconos) ===== */
 .area-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.6rem; }
@@ -387,7 +361,6 @@ input[type="file"] { padding: 0.45rem; background: var(--gray-50); }
 .btn:focus-visible { outline-offset: 3px; }
 
 /* --- Barra de progreso superior (peticiones en curso) --- */
-.main { position: relative; }
 .top-progress { position: absolute; top: 0; left: 0; right: 0; height: 3px; overflow: hidden; z-index: 30; }
 .top-progress span {
   display: block; height: 100%; width: 40%;
@@ -533,7 +506,6 @@ input[type="file"] { padding: 0.45rem; background: var(--gray-50); }
   border-radius: 9px; padding: 0.4rem 0.5rem; cursor: pointer; color: var(--gray-700);
 }
 .menu-toggle:hover { background: var(--gray-50); }
-.sidebar .brand { position: relative; }
 .sidebar-close {
   display: none; position: absolute; top: 1rem; right: 0.9rem; border: 0;
   background: rgba(255,255,255,0.14); color: #fff; border-radius: 8px; padding: 0.3rem; cursor: pointer;
@@ -559,10 +531,9 @@ input[type="file"] { padding: 0.45rem; background: var(--gray-50); }
 }
 
 /* --- Tarjetas: elevacion al pasar el cursor --- */
-.card:hover { box-shadow: 0 2px 4px rgba(20,20,30,0.05), 0 10px 30px rgba(107,18,32,0.07); }
+.card:hover { box-shadow: 0 1px 2px rgba(20,20,30,0.04), 0 12px 30px rgba(107,18,32,0.08); }
 
 /* --- Barras de desplazamiento discretas --- */
-* { scrollbar-width: thin; scrollbar-color: var(--gray-300) transparent; }
 *::-webkit-scrollbar { width: 9px; height: 9px; }
 *::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 8px; }
 *::-webkit-scrollbar-thumb:hover { background: var(--gray-500); }
@@ -584,17 +555,12 @@ input[type="file"] { padding: 0.45rem; background: var(--gray-50); }
 
 /* El menu ya no se desplaza con el contenido: queda anclado y, si no entra,
    se desplaza solo por dentro. */
-.app-shell { align-items: flex-start; }
 /* Solo en escritorio. Sin el media query, este `sticky` pisaba el `fixed`
    del menú móvil (definido antes): el menú oculto seguía ocupando sus 256 px
    en el flujo y en un teléfono el contenido quedaba con ~120 px (V2 §66). */
 @media (min-width: 901px) {
   .sidebar { position: sticky; top: 0; height: 100vh; align-self: flex-start; }
 }
-.main { flex: 1 1 auto; min-width: 0; }
-.sidebar nav { flex: 1; min-height: 0; overflow-y: auto; }
-.main { min-height: 100vh; }
-.topbar { position: sticky; top: 0; z-index: 25; }
 
 /* --- Menu de usuario --- */
 .user-menu { position: relative; }
@@ -694,8 +660,7 @@ tr.row-picked td:first-child { box-shadow: inset 3px 0 0 var(--bordo); }
 .chip {
   border: 1px solid var(--gray-300); background: var(--white); cursor: pointer;
   border-radius: 999px; padding: 0.42rem 0.85rem; font-family: var(--font);
-  font-size: 0.8rem; font-weight: 600; color: var(--gray-700);
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+  font-size: 0.8rem; font-weight: 600; color: var(--gray-700); transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s;
 }
 .chip:hover { border-color: #e7c9cf; transform: translateY(-1px); }
 .chip.on { background: var(--bordo); border-color: var(--bordo); color: #fff; }
@@ -1015,14 +980,9 @@ td .tag-preview { margin: 0; }
    Fondo cálido, tarjetas con profundidad, acentos de color por sección y
    botones con respuesta al tocarlos. Las pantallas del estudiante dejan de
    parecer un panel de administración. */
-body { background: linear-gradient(180deg, #fbf7f8 0%, #f5f1f3 100%) fixed; }
 .page-header h1, .content > div > h1 { letter-spacing: -0.01em; }
-.card { border-color: #f0e6e9; }
-.card:hover { box-shadow: 0 1px 2px rgba(20,20,30,0.04), 0 12px 30px rgba(107,18,32,0.08); }
-.btn { transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease; }
 .btn:active:not(:disabled) { transform: scale(0.97); }
 .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(107,18,32,0.28); }
-.chip { transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.15s; }
 .chip:active { transform: scale(0.96); }
 
 .home-hero {
@@ -1369,6 +1329,10 @@ button.chip { cursor: pointer; font-family: var(--font); }
 /* <output> y <fieldset> en lugar de role="status" y role="group" (accesibilidad). */
 output.inline-note, output.notice { display: flex; }
 fieldset.chip-row { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.semester-grid { border: 0; padding: 0; margin: 0; min-width: 0; }
+/* Sin el marco ni los márgenes del navegador: el aspecto lo pone la clase de cada uno. */
+:where(fieldset) { border: 0; padding: 0; margin: 0; min-width: 0; }
+output.ai-assist-card { display: block; }
 
 /* V6 §10.2: explicación de los estados de respaldo. */
 .estados-respaldo { margin: 0 0 1rem; padding: 0.6rem 0.9rem; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50); }
@@ -1443,7 +1407,8 @@ fieldset.chip-row { border: 0; padding: 0; margin: 0; min-width: 0; }
 .rol-hero p { margin: 0; opacity: 0.92; max-width: 560px; }
 .rol-hero .rh-acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .rol-hero .rh-btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.62rem 1rem; border-radius: 12px; background: #fff; color: var(--bordo); font-weight: 700; box-shadow: 0 8px 20px rgba(0,0,0,0.15); transition: transform 0.15s; }
-.rol-hero .rh-btn.ghost { background: rgba(255,255,255,0.16); color: #fff; box-shadow: none; backdrop-filter: blur(4px); }
+/* Fondo sólido: el texto blanco necesita contraste suficiente (WCAG AA) en cualquier punto del degradado. */
+.rol-hero .rh-btn.ghost { background: #b23a4f; color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
 .rol-hero .rh-btn:hover { transform: translateY(-2px); }
 .rol-atajos-t { font-size: 1.02rem; font-weight: 800; margin: 1.4rem 0 0.7rem; }
 .rol-atajos { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem; }

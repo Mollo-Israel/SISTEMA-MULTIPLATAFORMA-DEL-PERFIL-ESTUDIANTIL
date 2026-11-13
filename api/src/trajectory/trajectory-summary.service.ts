@@ -50,6 +50,7 @@ import {
   projectLevel,
   registrationLevel,
 } from './cv-eligibility.rules';
+import { siHay } from '../common/texto';
 
 /** Opciones del CV (V2 §61, V3 §43): plantilla, presentación propia e ítems. */
 export interface CvOptions {
@@ -103,6 +104,115 @@ export interface TrajectoryEntry {
  * La advertencia va en el documento y no solo en la pantalla: el PDF circula
  * solo, y quien lo reciba tiene que poder leer qué es y qué no es.
  */
+/** Descripción de un documento institucional en el resumen de trayectoria. */
+function detalleDeDocumento(kind: string, emisor: string | null | undefined, actividad: string | null | undefined): string {
+  if (kind === 'institution_certificate') {
+    const por = actividad ? ` por «${actividad}»` : '';
+    return `Certificado emitido por ${emisor ?? 'la institución'}${por}.`;
+  }
+  return actividad ? `Constancia histórica del sistema por «${actividad}».` : 'Constancia histórica del sistema.';
+}
+
+/** Lo que venga como lista; cualquier otra cosa cuenta como vacía. */
+const lista = (x: unknown): any[] => (Array.isArray(x) ? x : []);
+
+/** Escribe la sección con una viñeta por elemento, solo si hay elementos. */
+function seccionConVinetas(pdf: PdfWriter, titulo: string, items: unknown, texto: (x: any) => string): void {
+  const todos = lista(items);
+  if (todos.length === 0) return;
+  pdf.section(titulo);
+  for (const x of todos) pdf.bullet(texto(x));
+}
+
+/** Un área: nombre, afinidad y respaldo, lo que haya. */
+function describirArea(a: any): string {
+  const partes: string[] = [a.area ?? 'Área'];
+  if (a.score !== undefined) partes.push(`afinidad ${a.score}/100`);
+  if (a.supportLevel !== undefined) partes.push(`respaldo ${NIVEL[a.supportLevel as AffinityLevel]} (${a.supportScore}/100)`);
+  return partes.join(' · ');
+}
+
+const etiquetaDeNivel = (l: TrajectoryLevel | null) => (l ? TRAJECTORY_LEVEL_LABEL[l].label : null);
+const fechaEnMs = (d: Date | string | null | undefined) => (d ? new Date(d).getTime() : 0);
+
+type FuentesDeTrayectoria = Awaited<ReturnType<TrajectorySummaryService['fuentes']>>;
+
+/** Un proyecto del portafolio, con su nivel de respaldo. */
+function entradaDeProyecto(p: FuentesDeTrayectoria['proyectos'][number]): TrajectoryEntry {
+  const l = projectLevel(p.project.status, p.project.backingTier);
+  const archivado = p.project.status === ProjectStatus.ARCHIVED ? ' Archivado.' : '';
+  return {
+    kind: 'project',
+    id: p.project.id,
+    title: p.project.title,
+    date: p.project.createdAt,
+    level: l,
+    levelLabel: etiquetaDeNivel(l),
+    detail: `${p.role}. ${TRAJECTORY_LEVEL_LABEL[l].explain}${archivado}`,
+    cvEligible: projectCvEligible(p.project.status, p.project.backingTier),
+  };
+}
+
+/** Una inscripción, en palabras del estado en que quedó; `null` si no cuenta en la trayectoria. */
+function entradaDeInscripcion(r: FuentesDeTrayectoria['inscripciones'][number]): TrajectoryEntry | null {
+  const l = registrationLevel(r.status);
+  if (!l) return null;
+  const externa = r.activity?.originType === ActivityOrigin.EXTERNAL;
+  const detalle: Record<string, string> = {
+    [RegistrationStatus.CONFIRMED]: 'El responsable confirmó tu participación.',
+    [RegistrationStatus.REGISTERED]: 'Solicitaste inscripción: falta que el responsable la admita.',
+    [RegistrationStatus.ACCEPTED]: externa
+      ? 'El proveedor te aceptó: al terminar podrás adjuntar tu credencial.'
+      : 'Tienes un lugar: la asistencia la registra el responsable el día del evento.',
+    [RegistrationStatus.INTERESTED]: 'Te interesa: todavía no te inscribiste.',
+  };
+  const nivelFinal = externa && l === TrajectoryLevel.CORROBORATED ? TrajectoryLevel.SUPPORTED : l;
+  return {
+    kind: externa ? 'external_opportunity' : 'activity',
+    id: r.activityId,
+    title: r.activity?.title ?? 'Actividad',
+    date: r.activity?.eventDate ?? r.createdAt,
+    // §45: en una oportunidad externa, lo que prueba haberla terminado es la credencial.
+    level: nivelFinal,
+    levelLabel: etiquetaDeNivel(nivelFinal),
+    detail: externa && r.status === RegistrationStatus.CONFIRMED
+      ? 'Participación registrada. Para afirmar que completaste el curso, adjunta tu credencial.'
+      : detalle[r.status] ?? '',
+    cvEligible: activityCvEligible(r.status, r.activity?.originType),
+  };
+}
+
+/** Un documento registrado por la carrera: corroborado por definición. */
+function entradaDeConstancia(c: FuentesDeTrayectoria['constancias'][number]): TrajectoryEntry {
+  return {
+    kind: 'constancy',
+    id: c.id,
+    title: c.description,
+    date: c.createdAt,
+    level: TrajectoryLevel.CORROBORATED,
+    levelLabel: etiquetaDeNivel(TrajectoryLevel.CORROBORATED),
+    detail: detalleDeDocumento(c.kind, c.issuerName, c.activity?.title),
+    cvEligible: true,
+  };
+}
+
+/** El historial con el conteo por nivel y la evolución actual por área. */
+function armarHistorial(entradas: TrajectoryEntry[], areas: AffinityResult[]) {
+  const conteo = Object.fromEntries(
+    Object.values(TrajectoryLevel).map((l) => [l, entradas.filter((e) => e.level === l).length]),
+  ) as Record<TrajectoryLevel, number>;
+  return {
+    levels: Object.values(TrajectoryLevel).map((l) => ({ key: l, ...TRAJECTORY_LEVEL_LABEL[l], count: conteo[l] })),
+    entries: entradas,
+    evolution: areas.map((a) => ({
+      area: a.academicArea?.name ?? null,
+      score: Number(a.score),
+      supportScore: a.supportScore === null || a.supportScore === undefined ? null : Number(a.supportScore),
+      supportLevel: a.supportLevel ?? null,
+    })),
+  };
+}
+
 @Injectable()
 export class TrajectorySummaryService {
   constructor(
@@ -296,7 +406,7 @@ export class TrajectorySummaryService {
             id: c.id,
             title: c.description,
             detail: c.kind === 'institution_certificate'
-              ? `Emitido por ${c.issuerName ?? 'la institución'}${c.activity?.title ? ` · ${c.activity.title}` : ''}`
+              ? `Emitido por ${c.issuerName ?? 'la institución'}${siHay(c.activity?.title, ' · ')}`
               : c.activity?.title ?? null,
           })),
         ),
@@ -542,64 +652,15 @@ export class TrajectorySummaryService {
   async history(studentProfileId: string) {
     const f = await this.fuentes(studentProfileId);
     const entradas: TrajectoryEntry[] = [];
-    const nivel = (l: TrajectoryLevel | null) => (l ? TRAJECTORY_LEVEL_LABEL[l].label : null);
 
-    for (const p of f.proyectos) {
-      const l = projectLevel(p.project.status, p.project.backingTier);
-      const archivado = p.project.status === ProjectStatus.ARCHIVED ? ' Archivado.' : '';
-      entradas.push({
-        kind: 'project',
-        id: p.project.id,
-        title: p.project.title,
-        date: p.project.createdAt,
-        level: l,
-        levelLabel: nivel(l),
-        detail: `${p.role}. ${TRAJECTORY_LEVEL_LABEL[l].explain}${archivado}`,
-        cvEligible: projectCvEligible(p.project.status, p.project.backingTier),
-      });
-    }
+    for (const p of f.proyectos) entradas.push(entradaDeProyecto(p));
 
     for (const r of f.inscripciones) {
-      const l = registrationLevel(r.status);
-      if (!l) continue;
-      const externa = r.activity?.originType === ActivityOrigin.EXTERNAL;
-      const detalle: Record<string, string> = {
-        [RegistrationStatus.CONFIRMED]: 'El responsable confirmó tu participación.',
-        [RegistrationStatus.REGISTERED]: 'Solicitaste inscripción: falta que el responsable la admita.',
-        [RegistrationStatus.ACCEPTED]: externa
-          ? 'El proveedor te aceptó: al terminar podrás adjuntar tu credencial.'
-          : 'Tienes un lugar: la asistencia la registra el responsable el día del evento.',
-        [RegistrationStatus.INTERESTED]: 'Te interesa: todavía no te inscribiste.',
-      };
-      entradas.push({
-        kind: externa ? 'external_opportunity' : 'activity',
-        id: r.activityId,
-        title: r.activity?.title ?? 'Actividad',
-        date: r.activity?.eventDate ?? r.createdAt,
-        // §45: en una oportunidad externa, lo que prueba haberla terminado es la credencial.
-        level: externa && l === TrajectoryLevel.CORROBORATED ? TrajectoryLevel.SUPPORTED : l,
-        levelLabel: nivel(externa && l === TrajectoryLevel.CORROBORATED ? TrajectoryLevel.SUPPORTED : l),
-        detail: externa && r.status === RegistrationStatus.CONFIRMED
-          ? 'Participación registrada. Para afirmar que completaste el curso, adjunta tu credencial.'
-          : detalle[r.status] ?? '',
-        cvEligible: activityCvEligible(r.status, r.activity?.originType),
-      });
+      const entrada = entradaDeInscripcion(r);
+      if (entrada) entradas.push(entrada);
     }
 
-    for (const c of f.constancias) {
-      entradas.push({
-        kind: 'constancy',
-        id: c.id,
-        title: c.description,
-        date: c.createdAt,
-        level: TrajectoryLevel.CORROBORATED,
-        levelLabel: nivel(TrajectoryLevel.CORROBORATED),
-        detail: c.kind === 'institution_certificate'
-          ? `Certificado emitido por ${c.issuerName ?? 'la institución'}${c.activity?.title ? ` por «${c.activity.title}»` : ''}.`
-          : c.activity?.title ? `Constancia histórica del sistema por «${c.activity.title}».` : 'Constancia histórica del sistema.',
-        cvEligible: true,
-      });
-    }
+    for (const c of f.constancias) entradas.push(entradaDeConstancia(c));
 
     for (const c of f.certs) {
       const v = f.validacionDe.get(c.id);
@@ -610,7 +671,7 @@ export class TrajectorySummaryService {
         title: c.certificateName,
         date: c.issueDate ? new Date(c.issueDate) : c.createdAt,
         level: l,
-        levelLabel: nivel(l),
+        levelLabel: etiquetaDeNivel(l),
         detail: `${c.issuer}. ${TRAJECTORY_LEVEL_LABEL[l].explain}`,
         cvEligible: certificateCvEligible(f.tierDe(c.id)),
       });
@@ -642,13 +703,13 @@ export class TrajectorySummaryService {
         title: `Retroalimentación docente en «${fb.project?.title ?? 'proyecto'}»`,
         date: fb.createdAt,
         level: TrajectoryLevel.REVIEWED,
-        levelLabel: nivel(TrajectoryLevel.REVIEWED),
+        levelLabel: etiquetaDeNivel(TrajectoryLevel.REVIEWED),
         detail: 'Orientación de un docente; no es una nota.',
         cvEligible: false,
       });
     }
 
-    entradas.sort((a, b) => (b.date ? new Date(b.date).getTime() : 0) - (a.date ? new Date(a.date).getTime() : 0));
+    entradas.sort((a, b) => fechaEnMs(b.date) - fechaEnMs(a.date));
 
     // Evolución: afinidad y respaldo actuales por área (el historial está en «Afinidad»).
     const areas = await this.affinities.find({
@@ -657,21 +718,67 @@ export class TrajectorySummaryService {
       order: { score: 'DESC' },
       take: 6,
     });
+    return armarHistorial(entradas, areas);
+  }
 
-    const conteo = Object.fromEntries(
-      Object.values(TrajectoryLevel).map((l) => [l, entradas.filter((e) => e.level === l).length]),
-    ) as Record<TrajectoryLevel, number>;
-
-    return {
-      levels: Object.values(TrajectoryLevel).map((l) => ({ key: l, ...TRAJECTORY_LEVEL_LABEL[l], count: conteo[l] })),
-      entries: entradas,
-      evolution: areas.map((a) => ({
-        area: a.academicArea?.name ?? null,
-        score: Number(a.score),
-        supportScore: a.supportScore === null || a.supportScore === undefined ? null : Number(a.supportScore),
-        supportLevel: a.supportLevel ?? null,
-      })),
+  /** El contenido del currículo, sección por sección; las vacías no se escriben. */
+  private escribirCurriculo(pdf: PdfWriter, datos: any): void {
+    this.escribirEncabezado(pdf, datos);
+    seccionConVinetas(pdf, 'Áreas principales', datos.areas, describirArea);
+    this.escribirProyectos(pdf, datos.projects);
+    if (lista(datos.skills).length > 0) {
+      pdf.section('Habilidades respaldadas');
+      pdf.paragraph(datos.skills.map((s: any) => s.name).join(' · '));
+    }
+    const actividad = (a: any) => {
+      const fecha = a.date ? ` (${this.fecha(a.date)})` : '';
+      const respaldo = a.constancyLabel ?? (a.constancy ? 'Documento registrado' : null);
+      return `Asistencia registrada por el responsable en ${a.title}${fecha}${siHay(respaldo, ' · ')}`;
     };
+    seccionConVinetas(pdf, 'Actividades con asistencia registrada', datos.activities, actividad);
+    seccionConVinetas(pdf, 'Actividades académicas internas', datos.academicActivities, actividad);
+    seccionConVinetas(pdf, 'Actividades extracurriculares internas', datos.extracurricularActivities, actividad);
+    seccionConVinetas(pdf, 'Credenciales y cursos externos', datos.certificates, (c: any) => {
+      const emitida = c.issueDate ? ` (${this.fecha(c.issueDate)})` : '';
+      const consultada = c.checkedAt ? ` · consulta al proveedor el ${this.fecha(c.checkedAt)}` : '';
+      return `${c.name} — ${c.issuer}${emitida}${consultada}`;
+    });
+    seccionConVinetas(pdf, 'Documentos registrados', datos.constancies, (c: any) => c.description);
+    seccionConVinetas(pdf, 'Evidencias', datos.evidences, (e: any) =>
+      (e.context ? `${e.description ?? 'Evidencia'} — ${e.context}` : e.description));
+    if (lista(datos.badges).length > 0) {
+      seccionConVinetas(pdf, 'Insignias de Afinia', datos.badges, (x: any) => `${x.name} (${this.fecha(x.awardedAt)})`);
+      pdf.paragraph('Reconocimientos internos de participación; no tienen valor académico.');
+    }
+    seccionConVinetas(pdf, 'Contacto', datos.contact, (c: any) => `${c.label}: ${c.value}`);
+
+    pdf.note(`Generado el ${this.fecha(datos.generatedAt)}.`);
+    pdf.note(TRAJECTORY_SOURCES_NOTICE);
+    pdf.note(TRAJECTORY_DISCLAIMER);
+  }
+
+  private escribirEncabezado(pdf: PdfWriter, datos: any): void {
+    pdf.title('Resumen de Trayectoria Académica Complementaria');
+    pdf.subtitle(`${datos.student.name}${siHay(datos.student.semester, ' · ', '.º semestre')} · ${datos.student.career}`);
+    // V5 §1.1 y H04: currículo estudiantil como borrador informativo, con su
+    // fecha de generación. No es un documento oficial ni un certificado.
+    pdf.subtitle(`Currículo estudiantil (borrador informativo) · generado el ${this.fecha(new Date())}`);
+    if (datos.bio) {
+      pdf.section('Presentación');
+      pdf.paragraph(datos.bio);
+    }
+  }
+
+  private escribirProyectos(pdf: PdfWriter, proyectos: unknown): void {
+    const todos = lista(proyectos);
+    if (todos.length === 0) return;
+    pdf.section('Proyectos');
+    for (const p of todos) {
+      pdf.bullet(`${p.title} — ${p.role}${siHay(p.level?.toLowerCase(), ' (', ')')}`);
+      if (p.description) pdf.paragraph(`     ${p.description}`);
+      if (p.contribution) pdf.paragraph(`     Contribución: ${p.contribution}`);
+      if ((p.technologies ?? []).length > 0) pdf.paragraph(`     Tecnologías: ${p.technologies.join(', ')}`);
+    }
   }
 
   /**
@@ -692,97 +799,7 @@ export class TrajectorySummaryService {
       PDF_THEMES[(opts.template ?? CvTemplate.CLASSIC) as CvTemplate] ?? PDF_THEMES.classic,
     );
 
-    pdf.title('Resumen de Trayectoria Académica Complementaria');
-    pdf.subtitle(
-      `${datos.student.name}`
-      + (datos.student.semester ? ` · ${datos.student.semester}.º semestre` : '')
-      + ` · ${datos.student.career}`,
-    );
-    // V5 §1.1 y H04: currículo estudiantil como borrador informativo, con su
-    // fecha de generación. No es un documento oficial ni un certificado.
-    pdf.subtitle(`Currículo estudiantil (borrador informativo) · generado el ${this.fecha(new Date())}`);
-
-    if (datos.bio) {
-      pdf.section('Presentación');
-      pdf.paragraph(datos.bio);
-    }
-
-    if (Array.isArray(datos.areas) && datos.areas.length > 0) {
-      pdf.section('Áreas principales');
-      for (const a of datos.areas) {
-        const partes: string[] = [a.area ?? 'Área'];
-        if (a.score !== undefined) partes.push(`afinidad ${a.score}/100`);
-        if (a.supportLevel !== undefined) {
-          partes.push(`respaldo ${NIVEL[a.supportLevel as AffinityLevel]} (${a.supportScore}/100)`);
-        }
-        pdf.bullet(partes.join(' · '));
-      }
-    }
-
-    if (Array.isArray(datos.projects) && datos.projects.length > 0) {
-      pdf.section('Proyectos');
-      for (const p of datos.projects) {
-        pdf.bullet(`${p.title} — ${p.role}${p.level ? ` (${p.level.toLowerCase()})` : ''}`);
-        if (p.description) pdf.paragraph(`     ${p.description}`);
-        if (p.contribution) pdf.paragraph(`     Contribución: ${p.contribution}`);
-        if ((p.technologies ?? []).length > 0) {
-          pdf.paragraph(`     Tecnologías: ${p.technologies.join(', ')}`);
-        }
-      }
-    }
-
-    if (Array.isArray(datos.skills) && datos.skills.length > 0) {
-      pdf.section('Habilidades respaldadas');
-      pdf.paragraph(datos.skills.map((s: any) => s.name).join(' · '));
-    }
-
-    const actividades = (titulo: string, lista: any[] | undefined) => {
-      if (!Array.isArray(lista) || lista.length === 0) return;
-      pdf.section(titulo);
-      for (const a of lista) {
-        const fecha = a.date ? ` (${this.fecha(a.date)})` : '';
-        const respaldo = a.constancyLabel ?? (a.constancy ? 'Documento registrado' : null);
-        pdf.bullet(`Asistencia registrada por el responsable en ${a.title}${fecha}${respaldo ? ` · ${respaldo}` : ''}`);
-      }
-    };
-    actividades('Actividades con asistencia registrada', datos.activities);
-    actividades('Actividades académicas internas', datos.academicActivities);
-    actividades('Actividades extracurriculares internas', datos.extracurricularActivities);
-
-    if (Array.isArray(datos.certificates) && datos.certificates.length > 0) {
-      pdf.section('Credenciales y cursos externos');
-      for (const c of datos.certificates) {
-        pdf.bullet(`${c.name} — ${c.issuer}${c.issueDate ? ` (${this.fecha(c.issueDate)})` : ''}`
-          + (c.checkedAt ? ` · consulta al proveedor el ${this.fecha(c.checkedAt)}` : ''));
-      }
-    }
-
-    if (Array.isArray(datos.constancies) && datos.constancies.length > 0) {
-      pdf.section('Documentos registrados');
-      for (const c of datos.constancies) pdf.bullet(c.description);
-    }
-
-    if (Array.isArray(datos.evidences) && datos.evidences.length > 0) {
-      pdf.section('Evidencias');
-      for (const e of datos.evidences) {
-        pdf.bullet(e.context ? `${e.description ?? 'Evidencia'} — ${e.context}` : e.description);
-      }
-    }
-
-    if (Array.isArray(datos.badges) && datos.badges.length > 0) {
-      pdf.section('Insignias de Afinia');
-      for (const b of datos.badges) pdf.bullet(`${b.name} (${this.fecha(b.awardedAt)})`);
-      pdf.paragraph('Reconocimientos internos de participación; no tienen valor académico.');
-    }
-
-    if (Array.isArray(datos.contact) && datos.contact.length > 0) {
-      pdf.section('Contacto');
-      for (const c of datos.contact) pdf.bullet(`${c.label}: ${c.value}`);
-    }
-
-    pdf.note(`Generado el ${this.fecha(datos.generatedAt)}.`);
-    pdf.note(TRAJECTORY_SOURCES_NOTICE);
-    pdf.note(TRAJECTORY_DISCLAIMER);
+    this.escribirCurriculo(pdf, datos);
 
     // V3 §65: qué se exportó, sin el contenido.
     await this.audit.record({

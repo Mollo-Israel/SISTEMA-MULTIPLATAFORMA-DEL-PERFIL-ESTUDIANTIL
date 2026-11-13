@@ -21,7 +21,7 @@ export interface VerifyInput {
   /** URL de verificación encontrada en el texto o en los enlaces del PDF. */
   documentUrl: string | null;
   /** Insignia horneada en un PNG, si la había. */
-  bakedBadge: { json: unknown | null; url: string | null } | null;
+  bakedBadge: { json: unknown; url: string | null } | null;
   issuer: string | null;
   /** Dominios oficiales esperados por la oportunidad (§12, §17). */
   expectedDomains: string[];
@@ -37,6 +37,56 @@ export interface VerifyOutput {
 }
 
 const esHttp = (s: string) => /^https?:\/\//i.test(s.trim());
+
+/** Dónde se puede comprobar, por orden de preferencia: lo declarado, el QR, el documento y la insignia. */
+function candidatosDeVerificacion(i: VerifyInput): { url: string; source: CredentialCheckResult['urlSource'] }[] {
+  const candidatos: { url: string; source: CredentialCheckResult['urlSource'] }[] = [];
+  if (i.declaredUrl && esHttp(i.declaredUrl)) candidatos.push({ url: i.declaredUrl, source: 'declared' });
+  for (const q of i.qrPayloads) if (esHttp(q)) candidatos.push({ url: q.trim(), source: 'qr' });
+  if (i.documentUrl && esHttp(i.documentUrl)) candidatos.push({ url: i.documentUrl, source: 'document' });
+  if (i.bakedBadge?.url && esHttp(i.bakedBadge.url)) candidatos.push({ url: i.bakedBadge.url, source: 'badge' });
+  return candidatos;
+}
+
+/**
+ * Lo que dice la página: una insignia en JSON (que reemplaza a la del archivo)
+ * o, si no la hay, la comparación de su texto con lo declarado.
+ */
+function leerCuerpo(
+  cuerpo: string,
+  contentType: string | null,
+  urlConsultada: string,
+  i: VerifyInput,
+  previa: OpenBadgeResult | null,
+): { openBadge: OpenBadgeResult | null; page: PageComparison | null } {
+  let openBadge = previa;
+  const pareceJson = /json/.test(contentType ?? '') || /^\s*[[{]/.test(cuerpo);
+  if (pareceJson) {
+    try {
+      const badge = parseOpenBadge(JSON.parse(cuerpo), { fetchedUrl: urlConsultada, emails: i.emails, holderName: i.holderName });
+      if (badge) openBadge = badge;
+    } catch {
+      // JSON ilegible: se compara como texto.
+    }
+  }
+  const page = !pareceJson || !openBadge
+    ? comparePage(htmlToText(cuerpo), { holderName: i.holderName, credentialId: i.credentialId, course: i.course, issuer: i.issuer })
+    : null;
+  return { openBadge, page };
+}
+
+/** Lo que se guarda de la insignia en el resultado. */
+function resumenDeInsignia(ob: OpenBadgeResult | null) {
+  if (!ob) return null;
+  return {
+    format: ob.format,
+    recipientMatch: ob.recipientMatch,
+    revoked: ob.revoked,
+    hosted: ob.hosted,
+    proofPresent: ob.proofPresent,
+    proofVerified: ob.proofVerified,
+  };
+}
 
 /**
  * Verificación contra la fuente oficial (V3 §18.2, §18.3).
@@ -55,11 +105,7 @@ export class CredentialVerifierService {
   constructor(private readonly links: LinkCheckerService) {}
 
   async verify(i: VerifyInput): Promise<VerifyOutput> {
-    const candidatos: { url: string; source: CredentialCheckResult['urlSource'] }[] = [];
-    if (i.declaredUrl && esHttp(i.declaredUrl)) candidatos.push({ url: i.declaredUrl, source: 'declared' });
-    for (const q of i.qrPayloads) if (esHttp(q)) candidatos.push({ url: q.trim(), source: 'qr' });
-    if (i.documentUrl && esHttp(i.documentUrl)) candidatos.push({ url: i.documentUrl, source: 'document' });
-    if (i.bakedBadge?.url && esHttp(i.bakedBadge.url)) candidatos.push({ url: i.bakedBadge.url, source: 'badge' });
+    const candidatos = candidatosDeVerificacion(i);
 
     const official = officialDomainsFor(i.issuer, i.expectedDomains);
     const qr = i.qrPayloads.length > 0 ? QrPresence.QR_PRESENT : QrPresence.QR_ABSENT;
@@ -82,22 +128,9 @@ export class CredentialVerifierService {
 
       const cuerpo = consultado.body;
       if (cuerpo && link.status === LinkCheckStatus.AVAILABLE) {
-        const pareceJson = /json/.test(consultado.contentType ?? '') || /^\s*[[{]/.test(cuerpo);
-        if (pareceJson) {
-          try {
-            const badge = parseOpenBadge(JSON.parse(cuerpo), {
-              fetchedUrl: link.finalUrl ?? elegido.url, emails: i.emails, holderName: i.holderName,
-            });
-            if (badge) openBadge = badge;
-          } catch {
-            // JSON ilegible: se compara como texto.
-          }
-        }
-        if (!pareceJson || !openBadge) {
-          page = comparePage(htmlToText(cuerpo), {
-            holderName: i.holderName, credentialId: i.credentialId, course: i.course, issuer: i.issuer,
-          });
-        }
+        const leido = leerCuerpo(cuerpo, consultado.contentType, link.finalUrl ?? elegido.url, i, openBadge);
+        openBadge = leido.openBadge;
+        page = leido.page;
       }
     }
 
@@ -113,16 +146,7 @@ export class CredentialVerifierService {
         officialDomains: official ? official.slice(0, 20) : null,
         qr,
         page,
-        openBadge: openBadge
-          ? {
-            format: openBadge.format,
-            recipientMatch: openBadge.recipientMatch,
-            revoked: openBadge.revoked,
-            hosted: openBadge.hosted,
-            proofPresent: openBadge.proofPresent,
-            proofVerified: openBadge.proofVerified,
-          }
-          : null,
+        openBadge: resumenDeInsignia(openBadge),
         checkedAt: new Date().toISOString(),
       },
     };

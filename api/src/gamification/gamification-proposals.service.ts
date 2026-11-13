@@ -20,16 +20,19 @@ import { GamificationService } from './gamification.service';
 /** Criterios que admiten una propuesta docente sobre un proyecto (§9.3). */
 const TRIGGERS_DE_PROYECTO: GamificationTrigger[] = [GamificationTrigger.PROYECTO_CORROBORADO];
 /** Respaldo mínimo: el proyecto tiene que poder sostener lo que se premia. */
-const RESPALDOS: ProjectBackingTier[] = [
+const RESPALDOS = new Set<ProjectBackingTier>([
   ProjectBackingTier.SUPPORTED, ProjectBackingTier.CORROBORATED, ProjectBackingTier.REVIEWED,
-];
+]);
 /** Visibilidades que un docente puede ver (no «privado» ni «equipo»). */
-const VISIBLES: ProjectVisibility[] = [ProjectVisibility.TEACHERS, ProjectVisibility.PROFILE, ProjectVisibility.PUBLIC_LINK];
+const VISIBLES = new Set<ProjectVisibility>([ProjectVisibility.TEACHERS, ProjectVisibility.PROFILE, ProjectVisibility.PUBLIC_LINK]);
 
 /** Tipo del origen en el historial de puntos (`gamification_events.source_entity_type`). */
 const ORIGEN_EN_HISTORIAL = { project: 'project', resource: 'learning_resource' } as const;
 
 type Origen = { tipo: 'project'; proyecto: Project } | { tipo: 'resource'; recurso: LearningResource };
+
+/** Propuesta de puntos de un docente: sobre un proyecto o sobre un recurso completado. */
+type PropuestaDePuntos = { projectId?: string; resourceId?: string; studentProfileId: string; criterionId: string; reason: string };
 
 /**
  * V4.1 A41-016 (§9.3, §9.4, A.10) y V5 §10: el docente propone y Dirección decide.
@@ -60,26 +63,9 @@ export class GamificationProposalsService {
 
   async propose(
     user: AuthenticatedUser,
-    dto: { projectId?: string; resourceId?: string; studentProfileId: string; criterionId: string; reason: string },
+    dto: PropuestaDePuntos,
   ) {
-    if (user.role !== RolNombre.TEACHER) throw new ForbiddenException('Las propuestas de puntos las hacen los docentes.');
-    if (!!dto.projectId === !!dto.resourceId) {
-      const m = 'Indica un proyecto o un recurso (uno de los dos).';
-      throw new BadRequestException({ message: m, fields: { projectId: [m] } });
-    }
-    const motivo = (dto.reason ?? '').trim();
-    if (motivo.length < 10) {
-      const m = dto.resourceId
-        ? 'Explica cómo sabes que lo completó (al menos 10 caracteres): queda como sustento.'
-        : 'Explica por qué lo propones (al menos 10 caracteres): Dirección lo verá.';
-      throw new BadRequestException({ message: m, fields: { reason: [m] } });
-    }
-    const criterio = await this.dataSource.getRepository(GamificationCriterion).findOne({ where: { id: dto.criterionId } });
-    const disparador = dto.resourceId ? GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO : TRIGGERS_DE_PROYECTO[0];
-    if (!criterio || !criterio.isActive || criterio.isBonus || criterio.trigger !== disparador) {
-      const m = dto.resourceId ? 'Elige un criterio vigente de recurso completado.' : 'Elige un criterio vigente para proyectos.';
-      throw new BadRequestException({ message: m, fields: { criterionId: [m] } });
-    }
+    const { motivo, criterio } = await this.validarPropuesta(user, dto);
     // El alcance del docente: el estudiante tiene que ser de sus semestres.
     const perfil = await this.scope.assertCanAccessProfile(user, dto.studentProfileId).catch(() => null);
     const origen = dto.projectId
@@ -90,16 +76,7 @@ export class GamificationProposalsService {
     const sourceId = origen.tipo === 'project' ? origen.proyecto.id : origen.recurso.id;
     const titulo = origen.tipo === 'project' ? origen.proyecto.title : origen.recurso.title;
 
-    const vigente = await this.repo.findOne({
-      where: { criterionId: criterio.id, sourceType, sourceId, studentProfileId: perfil.id, status: In(['pending', 'approved']) },
-    });
-    if (vigente) throw new ConflictException('Ya hay una propuesta igual pendiente o aprobada.');
-    // §9.6: una recompensa por hecho. Antes de V4.1 el proyecto corroborado
-    // daba puntos solo; si ya los dio, no se vuelve a premiar el mismo hecho.
-    const yaPremiado = await this.dataSource.getRepository(GamificationEvent).findOne({
-      where: { studentProfileId: perfil.id, trigger: criterio.trigger, sourceEntityType: ORIGEN_EN_HISTORIAL[sourceType], sourceEntityId: sourceId },
-    });
-    if (yaPremiado) throw new ConflictException(`${sourceType === 'project' ? 'Ese proyecto' : 'Ese recurso'} ya dio puntos a este estudiante por este hecho.`);
+    await this.assertNoPremiado(criterio, sourceType, sourceId, perfil.id);
     // V5 §9.2: con una excepción de Dirección, el docente otorga sin revisión;
     // queda en el historial de acciones directas, no en la bandeja (§9.4).
     const politica = await this.approvals.vigente(user, 'GAMIFICATION');
@@ -135,9 +112,55 @@ export class GamificationProposalsService {
     return this.vista([guardada]).then((v) => v[0]);
   }
 
+  /** Quién propone, con qué sustento y con qué criterio. Devuelve el motivo limpio y el criterio. */
+  private async validarPropuesta(user: AuthenticatedUser, dto: PropuestaDePuntos) {
+    if (user.role !== RolNombre.TEACHER) throw new ForbiddenException('Las propuestas de puntos las hacen los docentes.');
+    if (!!dto.projectId === !!dto.resourceId) {
+      const m = 'Indica un proyecto o un recurso (uno de los dos).';
+      throw new BadRequestException({ message: m, fields: { projectId: [m] } });
+    }
+    const motivo = (dto.reason ?? '').trim();
+    if (motivo.length < 10) {
+      const m = dto.resourceId
+        ? 'Explica cómo sabes que lo completó (al menos 10 caracteres): queda como sustento.'
+        : 'Explica por qué lo propones (al menos 10 caracteres): Dirección lo verá.';
+      throw new BadRequestException({ message: m, fields: { reason: [m] } });
+    }
+    const criterio = await this.dataSource.getRepository(GamificationCriterion).findOne({ where: { id: dto.criterionId } });
+    const disparador = dto.resourceId ? GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO : TRIGGERS_DE_PROYECTO[0];
+    if (!criterio || !criterio.isActive || criterio.isBonus || criterio.trigger !== disparador) {
+      const m = dto.resourceId ? 'Elige un criterio vigente de recurso completado.' : 'Elige un criterio vigente para proyectos.';
+      throw new BadRequestException({ message: m, fields: { criterionId: [m] } });
+    }
+    return { motivo, criterio };
+  }
+
+  /**
+   * Una propuesta por hecho. §9.6: antes de V4.1 el proyecto corroborado daba
+   * puntos solo; si ya los dio, no se vuelve a premiar el mismo hecho.
+   */
+  private async assertNoPremiado(
+    criterio: GamificationCriterion,
+    sourceType: Origen['tipo'],
+    sourceId: string,
+    studentProfileId: string,
+  ): Promise<void> {
+    const vigente = await this.repo.findOne({
+      where: { criterionId: criterio.id, sourceType, sourceId, studentProfileId, status: In(['pending', 'approved']) },
+    });
+    if (vigente) throw new ConflictException('Ya hay una propuesta igual pendiente o aprobada.');
+    const yaPremiado = await this.dataSource.getRepository(GamificationEvent).findOne({
+      where: { studentProfileId, trigger: criterio.trigger, sourceEntityType: ORIGEN_EN_HISTORIAL[sourceType], sourceEntityId: sourceId },
+    });
+    if (yaPremiado) {
+      const que = sourceType === 'project' ? 'Ese proyecto' : 'Ese recurso';
+      throw new ConflictException(`${que} ya dio puntos a este estudiante por este hecho.`);
+    }
+  }
+
   private async origenProyecto(projectId: string, perfil: StudentProfile | null): Promise<Origen> {
     const proyecto = await this.dataSource.getRepository(Project).findOne({ where: { id: projectId } });
-    if (!proyecto || !VISIBLES.includes(proyecto.visibility) || !perfil) throw new NotFoundException('Proyecto no encontrado.');
+    if (!proyecto || !VISIBLES.has(proyecto.visibility) || !perfil) throw new NotFoundException('Proyecto no encontrado.');
     const esDueno = proyecto.createdByProfileId === perfil.id;
     const esIntegrante = !esDueno && !!(await this.dataSource.getRepository(ProjectMember).findOne({
       where: { projectId: proyecto.id, userId: perfil.userId },
@@ -146,7 +169,7 @@ export class GamificationProposalsService {
       const m = 'El estudiante no figura en ese proyecto con su contribución confirmada.';
       throw new BadRequestException({ message: m, fields: { studentProfileId: [m] } });
     }
-    if (!RESPALDOS.includes(proyecto.backingTier)) {
+    if (!RESPALDOS.has(proyecto.backingTier)) {
       const m = 'El proyecto todavía no tiene respaldo suficiente para premiarse.';
       throw new BadRequestException({ code: 'PROJECT_BACKING_INSUFFICIENT', message: m });
     }
@@ -267,6 +290,11 @@ export class GamificationProposalsService {
       if (e.source_entity_type === 'learning_resource') return { type: 'resource' as const, id: e.source_entity_id, title: e.resource_title };
       return { type: 'other' as const, id: e.source_entity_id, title: null };
     };
+    const origenPendiente = (p: (typeof vistaPendientes)[number]) => {
+      if (p.project) return { type: 'project' as const, id: p.project.id, title: p.project.title };
+      if (p.resource) return { type: 'resource' as const, id: p.resource.id, title: p.resource.title };
+      return { type: 'other' as const, id: null, title: null };
+    };
     const total = eventos.reduce((s, e) => s + e.points, 0);
     if (user.role === RolNombre.TEACHER) {
       await this.audit.record({
@@ -287,9 +315,7 @@ export class GamificationProposalsService {
           points: p.criterion?.points ?? 0,
           criterion: p.criterion?.name ?? null,
           family: null as string | null,
-          origin: p.project
-            ? { type: 'project' as const, id: p.project.id, title: p.project.title }
-            : p.resource ? { type: 'resource' as const, id: p.resource.id, title: p.resource.title } : { type: 'other' as const, id: null, title: null },
+          origin: origenPendiente(p),
           awardedBy: p.proposedBy,
           approvedBy: null as string | null,
           reason: p.reason,

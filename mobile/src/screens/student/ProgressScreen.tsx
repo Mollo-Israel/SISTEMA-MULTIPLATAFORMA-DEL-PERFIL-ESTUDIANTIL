@@ -35,7 +35,7 @@ export default function ProgressScreen() {
     return (
       <ScrollView contentContainerStyle={styles.contenido}>
         <Card>
-          <EmptyState message="Todavia no hay nada que mostrar." />
+          <EmptyState message="Todavía no hay nada que mostrar." />
         </Card>
       </ScrollView>
     );
@@ -108,7 +108,7 @@ export default function ProgressScreen() {
 
       <Card title="Historial">
         {p.events.length === 0 && (
-          <EmptyState message="Todavia no hay nada reconocido. Participa en una actividad o consigue respaldo para un proyecto." />
+          <EmptyState message="Todavía no hay nada reconocido. Participa en una actividad o consigue respaldo para un proyecto." />
         )}
         {p.events.map((e) => (
           <View key={e.id} style={styles.evento}>

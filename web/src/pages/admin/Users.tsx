@@ -59,11 +59,18 @@ const DOMINIO_POR_ROL: Partial<Record<RolNombre, string>> = {
   [RolNombre.CAREER_DIRECTOR]: 'univalle.edu',
 };
 
+/** Ayuda del campo de correo según el rol tenga o no un dominio propio. */
+function ayudaDelCorreo(conDominio: boolean, dominio?: string | null): string {
+  if (conDominio) return 'Escribe lo que va antes de la @, tal como figura en el padrón; el dominio lo pone el rol.';
+  return dominio ? 'Escribe el correo institucional exacto.' : 'Escribe el correo institucional exacto: para este rol no se asume un dominio.';
+}
+
 /** El correo que se enviará: parte local + dominio del rol, o el completo escrito a mano. */
 function correoFinal(valor: string, rol: RolNombre, completo: boolean): string {
   const limpio = valor.trim().toLowerCase().replace(/\s+/g, '');
   const dominio = DOMINIO_POR_ROL[rol];
-  return !dominio || completo || limpio.includes('@') ? limpio : limpio ? `${limpio}@${dominio}` : '';
+  if (!dominio || completo || limpio.includes('@')) return limpio;
+  return limpio ? `${limpio}@${dominio}` : '';
 }
 
 /**
@@ -178,8 +185,8 @@ export default function AdminUsersPage() {
       else if (aviso.tono === 'warn') toast.info(titulo, aviso.texto);
       else toast.success(titulo, aviso.texto);
       reload();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
     } finally {
       setCreating(false);
     }
@@ -211,8 +218,8 @@ export default function AdminUsersPage() {
         `${user.firstName} ${user.lastName}`,
       );
       reload();
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     }
   };
 
@@ -224,9 +231,9 @@ export default function AdminUsersPage() {
       else if (aviso.tono === 'warn') toast.info('Invitación generada', aviso.texto);
       else toast.success('Invitación reenviada', aviso.texto);
       reload();
-    } catch (e2) {
+    } catch (error_) {
       // 429: el reenvío está en pausa antispam; el mensaje dice cuánto falta.
-      toast.info('Todavía no', apiError(e2));
+      toast.info('Todavía no', apiError(error_));
     }
   };
 
@@ -278,9 +285,7 @@ export default function AdminUsersPage() {
               label="Correo institucional"
               required
               error={errores.errors.email}
-              hint={conDominio
-                ? 'Escribe lo que va antes de la @, tal como figura en el padrón; el dominio lo pone el rol.'
-                : dominio ? 'Escribe el correo institucional exacto.' : 'Escribe el correo institucional exacto: para este rol no se asume un dominio.'}
+              hint={ayudaDelCorreo(conDominio, dominio)}
             >
               <div className="correo-asistido">
                 <input
@@ -305,7 +310,7 @@ export default function AdminUsersPage() {
               {dominio && (
                 <label className="flex small" style={{ gap: '0.35rem', alignItems: 'center' }}>
                   <input type="checkbox" checked={correoCompleto} onChange={(e) => { setCorreoCompleto(e.target.checked); errores.clear('email'); }} />
-                  Escribir el correo completo
+                  <span>Escribir el correo completo</span>
                 </label>
               )}
             </FormField>
@@ -364,7 +369,7 @@ export default function AdminUsersPage() {
                 error={errores.errors.teacherSemesters}
                 hint="Opcional. Sin semestres, la cuenta queda pendiente de configuración y no gestiona ningún semestre."
               >
-                <div className="semester-grid" role="group" aria-label="Semestres que dicta" data-testid="dicta">
+                <fieldset className="semester-grid" aria-label="Semestres que dicta" data-testid="dicta">
                   {SEMESTERS.map((s) => {
                     const on = dicta.includes(s);
                     return (
@@ -380,7 +385,7 @@ export default function AdminUsersPage() {
                       </button>
                     );
                   })}
-                </div>
+                </fieldset>
               </FormField>
             )}
             <FormField
@@ -641,11 +646,11 @@ function SemestreCelda({
   user,
   onTeacher,
   onStudent,
-}: {
+}: Readonly<{
   user: PublicUser;
   onTeacher: () => void;
   onStudent: () => void;
-}) {
+}>) {
   if (user.role === RolNombre.TEACHER) {
     return (
       <div className="flex" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -694,7 +699,7 @@ function estadoCuenta(u: PublicUser): { label: string; tone: string } {
   return { label: USER_STATUS_LABEL[u.status] ?? u.status, tone: STATUS_TONE[u.status] ?? 'gray' };
 }
 
-function InvitacionLinea({ inv }: { inv?: InvitationView }) {
+function InvitacionLinea({ inv }: Readonly<{ inv?: InvitationView }>) {
   if (!inv) return <div className="inv-line muted">Sin invitación enviada</div>;
   const cuando = inv.at ? new Date(inv.at).toLocaleString('es-BO', { dateStyle: 'short', timeStyle: 'short' }) : '';
   if (inv.status === 'failed') {
@@ -739,11 +744,11 @@ function EditUserDialog({
   user,
   onClose,
   onSaved,
-}: {
+}: Readonly<{
   user: PublicUser;
   onClose: () => void;
   onSaved: () => void;
-}) {
+}>) {
   const [form, setForm] = useState<Record<Campo, string>>({
     firstName: user.firstName,
     // V5-04 (A02): un apellido heredado sin separar se muestra aparte y se separa aquí.
@@ -788,8 +793,8 @@ function EditUserDialog({
       }
       await adminService.updateUser(user.id, body);
       onSaved();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
       setSaving(false);
     }
   };
@@ -912,12 +917,12 @@ function SemesterDialog({
   onClose,
   onSaved,
   onError,
-}: {
+}: Readonly<{
   teacher: PublicUser;
   onClose: () => void;
   onSaved: (count: number) => void;
   onError: (msg: string) => void;
-}) {
+}>) {
   const [selected, setSelected] = useState<number[]>(teacher.semesters ?? []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

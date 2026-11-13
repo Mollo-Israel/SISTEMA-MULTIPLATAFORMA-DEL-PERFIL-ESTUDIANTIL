@@ -81,14 +81,14 @@ function RootRedirect() {
  * V3 §51/§52: una ruta que ahora es pestaña de otra pantalla. Conserva lo que
  * traía en la consulta (por ejemplo, un filtro) y le agrega la pestaña.
  */
-function APestana({ to, tab }: { to: string; tab: string }) {
+function APestana({ to, tab }: Readonly<{ to: string; tab: string }>) {
   const { search } = useLocation();
   const params = new URLSearchParams(search);
   params.set('tab', tab);
   return <Navigate to={`${to}?${params.toString()}`} replace />;
 }
 
-function RoleGate({ roles, children }: { roles: string[]; children: ReactNode }) {
+function RoleGate({ roles, children }: Readonly<{ roles: string[]; children: ReactNode }>) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (!roles.includes(user.role)) return <Navigate to={HOME_BY_ROLE[user.role] ?? '/login'} replace />;

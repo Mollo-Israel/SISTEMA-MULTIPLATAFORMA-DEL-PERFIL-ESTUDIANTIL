@@ -120,7 +120,7 @@ export interface AuditInput {
 }
 
 /** Claves que nunca deben acabar en la bitacora (§70). */
-const FORBIDDEN_KEYS = [
+const FORBIDDEN_KEYS = new Set([
   'password',
   'passwordhash',
   'token',
@@ -129,7 +129,7 @@ const FORBIDDEN_KEYS = [
   'accesstoken',
   'refreshtoken',
   'authorization',
-];
+]);
 
 @Injectable()
 export class AuditService {
@@ -218,7 +218,8 @@ export class AuditService {
     const limit = Math.min(Math.max(params.limit ?? 10, 1), 100);
     const offset = Math.max(params.offset ?? 0, 0);
     const qb = this.events.createQueryBuilder('e').leftJoinAndSelect('e.actor', 'a').leftJoinAndSelect('a.role', 'r');
-    const tipos = params.eventType ? [params.eventType] : params.modulo ? eventTypesOf(params.modulo) : null;
+    const delModulo = params.modulo ? eventTypesOf(params.modulo) : null;
+    const tipos = params.eventType ? [params.eventType] : delModulo;
     if (tipos) qb.andWhere('e.eventType IN (:...tipos)', { tipos: tipos.length ? tipos : ['-'] });
     if (params.resultado) {
       const conResultado = eventTypesWithResult(params.resultado);
@@ -276,7 +277,7 @@ export class AuditService {
   private sanitize(metadata: Record<string, unknown>): Record<string, unknown> {
     const safe: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(metadata)) {
-      if (FORBIDDEN_KEYS.includes(key.toLowerCase().replace(/[_-]/g, ''))) continue;
+      if (FORBIDDEN_KEYS.has(key.toLowerCase().replace(/[_-]/g, ''))) continue;
       if (typeof value === 'string') {
         safe[key] = value.length > 300 ? `${value.slice(0, 300)}…` : value;
       } else if (

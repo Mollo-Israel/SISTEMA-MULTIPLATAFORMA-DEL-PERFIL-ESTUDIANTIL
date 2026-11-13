@@ -1,4 +1,4 @@
-import type { Readable } from 'stream';
+import type { Readable } from 'node:stream';
 import { StoredFileRecord } from '../entities/stored-file.entity';
 import { STORAGE_PORT, StoragePort } from '../storage/storage.port';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { StudentContactChannel } from '../entities/contact-channel.entity';
 import { channelView } from './contacts.service';
-import { randomInt } from 'crypto';
+import { randomInt } from 'node:crypto';
 import { Not, Repository } from 'typeorm';
 import {
   ProjectStatus,
@@ -23,6 +23,7 @@ import { Project } from '../entities/project.entity';
 import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { encodeQr, qrToSvg } from './qr-encoder';
+import { quitarBarrasFinales } from '../common/texto';
 
 /** V6 §8.3: tipos y tamaño de la foto opcional. */
 const FOTO_TIPOS = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -70,7 +71,7 @@ export class PublicProfileService {
   async setPhoto(userId: string, profileId: string, fileId: string): Promise<{ hasPhoto: true }> {
     const archivo = await this.archivos.findOne({ where: { id: fileId } });
     const campo = (m: string) => new BadRequestException({ code: 'PHOTO_INVALID', message: m, fields: { fileId: [m] } });
-    if (!archivo || archivo.uploadedByUserId !== userId) throw campo('Sube la foto desde este formulario: solo vale un archivo que subiste tú.');
+    if (archivo?.uploadedByUserId !== userId) throw campo('Sube la foto desde este formulario: solo vale un archivo que subiste tú.');
     if (!FOTO_TIPOS.has(archivo.mimeTypeDetected)) throw campo('La foto debe ser PNG, JPG o WEBP.');
     if (archivo.sizeBytes > FOTO_MAX_BYTES) throw campo('La foto no puede superar 5 MB.');
     await this.profiles.update({ id: profileId }, { photoFileId: archivo.id });
@@ -94,7 +95,7 @@ export class PublicProfileService {
    */
   async publicPhoto(slug: string): Promise<{ contenido: Readable; tipo: string }> {
     const perfil = await this.profiles.findOne({ where: { publicProfileSlug: slug } });
-    const visible = { ...DEFAULT_PUBLIC_VISIBILITY, ...(perfil?.publicVisibilityConfig ?? {}) };
+    const visible = { ...DEFAULT_PUBLIC_VISIBILITY, ...perfil?.publicVisibilityConfig };
     if (!perfil || !perfil.publicProfileEnabled || !visible[PublicProfileField.PHOTO]) {
       throw new NotFoundException('No hay foto que mostrar.');
     }
@@ -112,8 +113,8 @@ export class PublicProfileService {
   /** Base pública desde la que se sirve la web, para componer el enlace. */
   private baseUrl(): string {
     const origenes = (this.config.get<string>('WEB_ORIGINS') ?? '').split(',');
-    const primero = origenes.map((o) => o.trim()).filter(Boolean)[0];
-    return (primero ?? 'http://localhost:5173').replace(/\/+$/, '');
+    const primero = origenes.map((o) => o.trim()).find(Boolean);
+    return quitarBarrasFinales(primero ?? 'http://localhost:5173');
   }
 
   private enlaceDe(slug: string): string {
@@ -166,13 +167,13 @@ export class PublicProfileService {
       where: { publicProfileSlug: slug },
       relations: { user: true },
     });
-    if (!perfil || !perfil.publicProfileEnabled) {
+    if (!perfil?.publicProfileEnabled) {
       throw new NotFoundException('No existe un perfil compartible con ese enlace.');
     }
 
     const visible: Record<PublicProfileField, boolean> = {
       ...DEFAULT_PUBLIC_VISIBILITY,
-      ...(perfil.publicVisibilityConfig ?? {}),
+      ...perfil.publicVisibilityConfig,
     };
 
     // El nombre es lo único que se muestra siempre: un perfil compartible sin

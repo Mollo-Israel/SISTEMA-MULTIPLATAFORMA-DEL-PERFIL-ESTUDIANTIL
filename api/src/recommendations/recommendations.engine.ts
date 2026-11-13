@@ -30,19 +30,7 @@ import { LearningResource } from '../entities/learning-resource.entity';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { Recommendation, RecommendationReason } from '../entities/recommendation.entity';
-import {
-  CATALOGUED_AS_RESOURCE_CATEGORIES,
-  LEVEL_LABEL,
-  RULES,
-  RULES_VERSION,
-  RecommendationRegime,
-  SUPPORT_LABEL,
-  fitsRegime,
-  matchesDeclaredTerm,
-  normalize,
-  typeForCategory,
-  typeForResource,
-} from './recommendation.rules';
+import { CATALOGUED_AS_RESOURCE_CATEGORIES, RULES, RULES_VERSION, RecommendationRegime, SUPPORT_LABEL, matchesDeclaredTerm, normalize, typeForCategory, typeForResource } from './recommendation.rules';
 
 /** Estados de actividad que admiten inscripcion, igual que en ActivitiesService. */
 const REGISTRABLE_STATUSES = [ActivityStatus.PUBLISHED, ActivityStatus.OPEN];
@@ -127,6 +115,95 @@ interface Contexto {
  * calculos: el motor actualiza el contenido de una recomendacion existente,
  * nunca su estado (RN-16).
  */
+type TecnologiaUtil = { skillId: string; name: string; academicAreaId: string | null };
+
+type MotivosDeCompanero = {
+  reasons: RecommendationReason[];
+  faltantes: TecnologiaUtil[];
+  shared: AffinityResult[];
+  complementary: AffinityResult[];
+};
+
+type Companero = { profileId: string; semester: number | null; availability: AvailabilityStatus; userId: string; name: string };
+
+/** Las áreas más fuertes de cada compañero (las primeras `topAreas` por puntaje). */
+function areasFuertesPorCompanero(filas: AffinityResult[]): Map<string, AffinityResult[]> {
+  const byPeer = new Map<string, AffinityResult[]>();
+  for (const row of filas) {
+    const list = byPeer.get(row.studentProfileId) ?? [];
+    list.push(row);
+    byPeer.set(row.studentProfileId, list);
+  }
+  for (const [id, lista] of byPeer) {
+    byPeer.set(id, [...lista].sort((a, b) => Number(b.score) - Number(a.score)).slice(0, RULES.teammate.topAreas));
+  }
+  return byPeer;
+}
+
+/** Tecnologías respaldadas del compañero en áreas que le importan al estudiante y que él no tiene. */
+function tecnologiasUtiles(
+  porCompanero: Map<string, TecnologiaUtil[]>,
+  areasQueImportan: Set<string>,
+  yaTengo: Set<string>,
+): Map<string, TecnologiaUtil[]> {
+  const salida = new Map<string, TecnologiaUtil[]>();
+  for (const [peerId, lista] of porCompanero) {
+    const utiles = lista.filter(
+      (s) => s.academicAreaId && areasQueImportan.has(s.academicAreaId) && !yaTengo.has(s.skillId),
+    );
+    if (utiles.length) salida.set(peerId, utiles);
+  }
+  return salida;
+}
+
+/** 4. Disponibilidad declarada: suma solo si busca equipo o escucha propuestas. */
+function motivoDeDisponibilidad(disponibilidad: AvailabilityStatus): RecommendationReason | null {
+  if (disponibilidad !== AvailabilityStatus.LOOKING && disponibilidad !== AvailabilityStatus.OPEN) return null;
+  return {
+    code: RecommendationReasonCode.AVAILABILITY,
+    label: disponibilidad === AvailabilityStatus.LOOKING ? 'Declaró que busca sumarse a algo' : 'Declaró que escucha propuestas',
+    points: RULES.teammate.availabilityPoints,
+  };
+}
+
+/** La tarjeta del compañero sugerido, ordenada por cercanía de semestre y nombre. */
+function tarjetaDeCompanero(ctx: Contexto, peer: Companero, m: MotivosDeCompanero, score: number): Produced {
+  const semester = peer.semester === null ? null : Number(peer.semester);
+  const distance = semester && ctx.profile.semester ? Math.abs(semester - ctx.profile.semester) : 9;
+  return {
+    type: RecommendationType.TEAMMATE,
+    targetId: peer.profileId,
+    academicAreaId: (m.complementary[0] ?? m.shared[0])?.academicAreaId ?? m.faltantes[0]?.academicAreaId ?? null,
+    title: peer.name,
+    description: semester ? `Estudiante de ${semester}.º semestre` : 'Estudiante de la carrera',
+    targetLink: null,
+    reasons: m.reasons,
+    score,
+    sortKey: `${distance}|${peer.name}`,
+  };
+}
+
+/** «Hay N actividades… disponibles» o que no hay, para la tarjeta de un área por fortalecer. */
+function descripcionDisponibles(count: number): string {
+  if (count === 0) return 'Por ahora no hay actividades publicadas en esta área.';
+  const que = count === 1 ? 'actividad, curso o recurso disponible' : 'actividades, cursos o recursos disponibles';
+  return `Hay ${count} ${que} en esta área.`;
+}
+
+/**
+ * Sin plazas confirmables no tiene sentido recomendarla. La API cuenta el cupo
+ * sobre participaciones confirmadas, y aquí se usa el mismo criterio.
+ */
+function hayCupo(a: Activity, confirmadas: Map<string, number>): boolean {
+  return !a.capacity || (confirmadas.get(a.id) ?? 0) < a.capacity;
+}
+
+/** V2 §54 · filtro duro de semestre: una actividad dirigida a otros semestres no se recomienda. */
+function esDeSuSemestre(a: Activity, semestre: number | null | undefined): boolean {
+  const alcance = a.semesterScope ?? [];
+  return alcance.length === 0 || !semestre || alcance.includes(semestre);
+}
+
 @Injectable()
 export class RecommendationsEngine {
   constructor(
@@ -338,21 +415,7 @@ export class RecommendationsEngine {
     const total = () => this.redondear(reasons.reduce((a, r) => a + r.points, 0));
 
     // ------------------------------------------- 40 % intereses explícitos
-    const interes = acumulador(RULES.ranking.explicitInterest);
-    if (areaId && name) {
-      const priority = ctx.preferredByArea.get(areaId);
-      if (priority) {
-        interes(
-          RecommendationReasonCode.PREFERRED_AREA,
-          `Coincide con tus intereses: ${name}`, // V6 §9.3: sin «prioridad N» a la vista
-          RULES.interestByPriority[Math.min(Math.max(priority, 1), 5) - 1],
-        );
-      }
-    }
-    const libre = ctx.freeInterestNames.find((n) => matchesDeclaredTerm(haystack, n, 4));
-    if (libre) {
-      interes(RecommendationReasonCode.FREE_INTEREST_MATCH, `Coincide con tus intereses: «${libre}»`, RULES.freeInterestFactor);
-    }
+    this.puntuarIntereses(ctx, areaId, name, haystack, acumulador(RULES.ranking.explicitInterest));
 
     // --------------------------------------------- 30 % áreas de mejora
     if (areaId && name && ctx.improvementIds.has(areaId)) {
@@ -362,25 +425,7 @@ export class RecommendationsEngine {
     }
 
     // ------------------------------ 15 % tecnologías de interés o mejora
-    const tecnologia = acumulador(RULES.ranking.skills);
-    const techInteres = ctx.interestSkills.find((t) => suyas.has(t.id))
-      ?? ctx.interestSkills.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
-    if (techInteres) {
-      tecnologia(
-        RecommendationReasonCode.SKILL_MATCH,
-        `Coincide con tus intereses: trabaja ${techInteres.name}`,
-        suyas.has(techInteres.id) ? 1 : RULES.skillMatchFactor,
-      );
-    }
-    const techMejora = ctx.improveSkills.find((t) => suyas.has(t.id))
-      ?? ctx.improveSkills.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
-    if (techMejora) {
-      tecnologia(
-        RecommendationReasonCode.IMPROVE_SKILL_MATCH,
-        `Coincide con lo que quieres mejorar: trabaja ${techMejora.name}`,
-        suyas.has(techMejora.id) ? 1 : RULES.skillMatchFactor,
-      );
-    }
+    this.puntuarTecnologias(ctx, haystack, suyas, acumulador(RULES.ranking.skills));
 
     // ---------------------------------- 10 % orientación confirmada
     if (areaId && name && ctx.orientationAreas.has(areaId)) {
@@ -404,6 +449,48 @@ export class RecommendationsEngine {
     }
 
     return { score: total(), reasons };
+  }
+
+  /** 40 %: el área preferida (según su prioridad) y los intereses escritos con palabras propias. */
+  private puntuarIntereses(
+    ctx: Contexto,
+    areaId: string | null,
+    name: string | undefined,
+    haystack: string,
+    interes: (code: RecommendationReasonCode, label: string, factor: number) => void,
+  ): void {
+    const priority = areaId && name ? ctx.preferredByArea.get(areaId) : undefined;
+    if (priority) {
+      interes(
+        RecommendationReasonCode.PREFERRED_AREA,
+        `Coincide con tus intereses: ${name}`, // V6 §9.3: sin «prioridad N» a la vista
+        RULES.interestByPriority[Math.min(Math.max(priority, 1), 5) - 1],
+      );
+    }
+    const libre = ctx.freeInterestNames.find((n) => matchesDeclaredTerm(haystack, n, 4));
+    if (libre) {
+      interes(RecommendationReasonCode.FREE_INTEREST_MATCH, `Coincide con tus intereses: «${libre}»`, RULES.freeInterestFactor);
+    }
+  }
+
+  /** 15 %: tecnologías de interés y de mejora, por id del elemento o por nombre en su texto. */
+  private puntuarTecnologias(
+    ctx: Contexto,
+    haystack: string,
+    suyas: Set<string>,
+    tecnologia: (code: RecommendationReasonCode, label: string, factor: number) => void,
+  ): void {
+    const buscar = (lista: { id: string; name: string }[]) =>
+      lista.find((t) => suyas.has(t.id)) ?? lista.find((t) => matchesDeclaredTerm(haystack, t.name, 3));
+    const factor = (t: { id: string }) => (suyas.has(t.id) ? 1 : RULES.skillMatchFactor);
+    const techInteres = buscar(ctx.interestSkills);
+    if (techInteres) {
+      tecnologia(RecommendationReasonCode.SKILL_MATCH, `Coincide con tus intereses: trabaja ${techInteres.name}`, factor(techInteres));
+    }
+    const techMejora = buscar(ctx.improveSkills);
+    if (techMejora) {
+      tecnologia(RecommendationReasonCode.IMPROVE_SKILL_MATCH, `Coincide con lo que quieres mejorar: trabaja ${techMejora.name}`, factor(techMejora));
+    }
   }
 
   /**
@@ -430,6 +517,29 @@ export class RecommendationsEngine {
   // =========================================================================
   // Actividades y oportunidades
   // =========================================================================
+
+  /**
+   * V3 §12.1: una oportunidad puede tocar varias áreas; cuenta la que mejor
+   * encaja con el estudiante (la primera, si empatan).
+   */
+  private mejorAreaDeActividad(
+    ctx: Contexto,
+    a: Activity,
+    haystack: string,
+    contexto: { factor: number; label: string | null },
+    type: RecommendationType,
+  ): { score: number; reasons: RecommendationReason[]; areaId: string | null } {
+    const areasDeActividad = [...new Set([
+      ...(a.academicAreaId ? [a.academicAreaId] : []),
+      ...(a.activityAreas ?? []).map((x) => x.academicAreaId),
+    ])];
+    let mejor = { score: 0, reasons: [] as RecommendationReason[], areaId: a.academicAreaId as string | null };
+    for (const areaId of areasDeActividad.length ? areasDeActividad : [null]) {
+      const r = this.scoreElement(ctx, areaId, haystack, contexto, (a.activitySkills ?? []).map((s) => s.skillId), type, a.id);
+      if (r.score > mejor.score) mejor = { ...r, areaId };
+    }
+    return mejor;
+  }
 
   private async activityCandidates(
     profileId: string,
@@ -461,15 +571,9 @@ export class RecommendationsEngine {
     // cupo sobre participaciones confirmadas, y aqui se usa el mismo criterio.
     const confirmedByActivity = await this.confirmedCounts(open.map((a) => a.id));
 
-    const available = open.filter((a) => {
-      if (alreadyInvolved.has(a.id)) return false;
-      if (a.capacity && (confirmedByActivity.get(a.id) ?? 0) >= a.capacity) return false;
-      // V2 §54 · filtro duro de semestre: una actividad dirigida a otros
-      // semestres no se le recomienda.
-      const alcance = a.semesterScope ?? [];
-      if (alcance.length > 0 && ctx.profile.semester && !alcance.includes(ctx.profile.semester)) return false;
-      return true;
-    });
+    const available = open.filter((a) => !alreadyInvolved.has(a.id)
+      && hayCupo(a, confirmedByActivity)
+      && esDeSuSemestre(a, ctx.profile.semester));
 
     const availableByArea = new Map<string, number>();
     for (const a of available) {
@@ -486,17 +590,7 @@ export class RecommendationsEngine {
       );
       const contexto = this.activityContext(ctx, a);
       const type = typeForCategory(a.category?.code);
-      // V3 §12.1: una oportunidad puede tocar varias áreas; cuenta la que
-      // mejor encaja con el estudiante.
-      const areasDeActividad = [...new Set([
-        ...(a.academicAreaId ? [a.academicAreaId] : []),
-        ...(a.activityAreas ?? []).map((x) => x.academicAreaId),
-      ])];
-      let mejor = { score: 0, reasons: [] as RecommendationReason[], areaId: a.academicAreaId as string | null };
-      for (const areaId of areasDeActividad.length ? areasDeActividad : [null]) {
-        const r = this.scoreElement(ctx, areaId, haystack, contexto, (a.activitySkills ?? []).map((s) => s.skillId), type, a.id);
-        if (r.score > mejor.score) mejor = { ...r, areaId };
-      }
+      const mejor = this.mejorAreaDeActividad(ctx, a, haystack, contexto, type);
       const { score, reasons } = mejor;
       if (reasons.length === 0) continue;
 
@@ -606,13 +700,10 @@ export class RecommendationsEngine {
       // una coincidencia mas firme que cualquier parecido de texto.
       const porHabilidad = (r.resourceSkills ?? []).some((s) => ctx.skillIds.has(s.skillId));
 
+      const aSuRitmo = ctx.profile.availability === AvailabilityStatus.LOOKING ? 'Puedes avanzarlo a tu ritmo' : null;
       const contexto = {
         factor: this.resourceContextFactor(ctx, r, porHabilidad),
-        label: porHabilidad
-          ? 'Trabaja una tecnología que marcaste'
-          : ctx.profile.availability === AvailabilityStatus.LOOKING
-            ? 'Puedes avanzarlo a tu ritmo'
-            : null,
+        label: porHabilidad ? 'Trabaja una tecnología que marcaste' : aSuRitmo,
       };
 
       const type = typeForResource(r.resourceType);
@@ -670,6 +761,60 @@ export class RecommendationsEngine {
   // Areas de fortalecimiento
   // =========================================================================
 
+  /** Por qué conviene fortalecer el área: lo declarado, la poca trayectoria y el respaldo bajo. */
+  private motivosParaFortalecer(
+    ctx: Contexto,
+    areaId: string,
+    name: string,
+    info: Contexto['affinityByArea'] extends Map<string, infer V> ? V | undefined : never,
+    respaldoBajo: boolean,
+  ): RecommendationReason[] {
+    const reasons: RecommendationReason[] = [];
+    if (ctx.improvementIds.has(areaId)) {
+      reasons.push({
+        code: RecommendationReasonCode.IMPROVEMENT_AREA,
+        label: `Declaraste que quieres mejorar en ${name}`,
+        points: RULES.strengthening.improvementPoints,
+      });
+    }
+    const priority = ctx.preferredByArea.get(areaId);
+    if (priority) {
+      reasons.push({
+        code: RecommendationReasonCode.PREFERRED_AREA,
+        label: `${name} es un área de tu preferencia`,
+        points: priority,
+      });
+    }
+
+    if (!info) {
+      reasons.push({
+        code: RecommendationReasonCode.LOW_TRAJECTORY,
+        label: `Todavía no tienes trayectoria registrada en ${name}`,
+        points: RULES.strengthening.noTrajectoryPoints,
+      });
+    } else if (info.level === AffinityLevel.LOW) {
+      reasons.push({
+        code: RecommendationReasonCode.LOW_TRAJECTORY,
+        label: `Tu afinidad con ${name} todavía es baja (${info.score}/100)`,
+        points: RULES.strengthening.lowTrajectoryPoints,
+      });
+    }
+
+    // §59: el respaldo bajo es una razon por si sola, aunque la afinidad se
+    // vea bien. Es la diferencia entre decir que algo te interesa y poder
+    // demostrar que lo hiciste.
+    if (info && respaldoBajo) {
+      reasons.push({
+        code: RecommendationReasonCode.LOW_SUPPORT,
+        label:
+          `Tu respaldo en ${name} es ${SUPPORT_LABEL[info.supportLevel]} `
+          + `(${info.supportScore}/100): falta con qué demostrarlo`,
+        points: RULES.strengthening.lowSupportPoints,
+      });
+    }
+    return reasons;
+  }
+
   /**
    * Un area se recomienda para fortalecer cuando al estudiante le importa -la
    * declaro como area de mejora o de preferencia- y todavia no tiene
@@ -695,50 +840,7 @@ export class RecommendationsEngine {
       // Si ya tiene afinidad alta Y respaldo, no hay nada que fortalecer.
       if (info && info.level !== AffinityLevel.LOW && !respaldoBajo) continue;
 
-      const reasons: RecommendationReason[] = [];
-      if (ctx.improvementIds.has(areaId)) {
-        reasons.push({
-          code: RecommendationReasonCode.IMPROVEMENT_AREA,
-          label: `Declaraste que quieres mejorar en ${name}`,
-          points: RULES.strengthening.improvementPoints,
-        });
-      }
-      const priority = ctx.preferredByArea.get(areaId);
-      if (priority) {
-        reasons.push({
-          code: RecommendationReasonCode.PREFERRED_AREA,
-          label: `${name} es un área de tu preferencia`,
-          points: priority,
-        });
-      }
-
-      if (!info) {
-        reasons.push({
-          code: RecommendationReasonCode.LOW_TRAJECTORY,
-          label: `Todavía no tienes trayectoria registrada en ${name}`,
-          points: RULES.strengthening.noTrajectoryPoints,
-        });
-      } else if (info.level === AffinityLevel.LOW) {
-        reasons.push({
-          code: RecommendationReasonCode.LOW_TRAJECTORY,
-          label: `Tu afinidad con ${name} todavía es baja (${info.score}/100)`,
-          points: RULES.strengthening.lowTrajectoryPoints,
-        });
-      }
-
-      // §59: el respaldo bajo es una razon por si sola, aunque la afinidad se
-      // vea bien. Es la diferencia entre decir que algo te interesa y poder
-      // demostrar que lo hiciste.
-      if (info && respaldoBajo) {
-        reasons.push({
-          code: RecommendationReasonCode.LOW_SUPPORT,
-          label:
-            `Tu respaldo en ${name} es ${SUPPORT_LABEL[info.supportLevel]} `
-            + `(${info.supportScore}/100): falta con qué demostrarlo`,
-          points: RULES.strengthening.lowSupportPoints,
-        });
-      }
-
+      const reasons = this.motivosParaFortalecer(ctx, areaId, name, info, respaldoBajo);
       if (reasons.length === 0) continue;
 
       const count = availableByArea.get(areaId) ?? 0;
@@ -747,10 +849,7 @@ export class RecommendationsEngine {
         targetId: areaId,
         academicAreaId: areaId,
         title: name,
-        description:
-          count > 0
-            ? `Hay ${count} ${count === 1 ? 'actividad, curso o recurso disponible' : 'actividades, cursos o recursos disponibles'} en esta área.`
-            : 'Por ahora no hay actividades publicadas en esta área.',
+        description: descripcionDisponibles(count),
         targetLink: null,
         reasons,
         score: this.sum(reasons),
@@ -764,6 +863,56 @@ export class RecommendationsEngine {
   // =========================================================================
   // §62 · Posibles companeros de equipo
   // =========================================================================
+
+  /**
+   * §62: motivos de las tres primeras prioridades, en orden: 1. habilidades
+   * faltantes, 2. respaldo relacionado y 3. afinidad contextual (áreas que
+   * comparten o donde el compañero puede aportar).
+   */
+  private motivosDeCompanero(
+    ctx: Contexto,
+    yo: { strongAreas: Set<string>; wantsToGrow: Set<string>; miPuntaje: Map<string, number> },
+    rows: AffinityResult[],
+    tecnologias: TecnologiaUtil[],
+  ): MotivosDeCompanero {
+    const reasons: RecommendationReason[] = [];
+    const faltantes = tecnologias.slice(0, RULES.teammate.maxMissingSkills);
+    for (const s of faltantes) {
+      reasons.push({
+        code: RecommendationReasonCode.MISSING_SKILL,
+        label: `Tiene experiencia respaldada en ${s.name}, que tú todavía no`,
+        points: RULES.teammate.missingSkillPoints,
+      });
+    }
+
+    const shared = rows
+      .filter((r) => yo.strongAreas.has(r.academicAreaId) && ctx.areaName.has(r.academicAreaId))
+      .slice(0, RULES.teammate.maxSharedAreas);
+    for (const r of shared) {
+      const nombre = ctx.areaName.get(r.academicAreaId);
+      const respaldada = Number(r.supportScore ?? 0) > 0;
+      reasons.push(respaldada
+        ? { code: RecommendationReasonCode.SUPPORT_BACKED, label: `Tiene trayectoria respaldada en ${nombre}`, points: RULES.teammate.supportBackedPoints }
+        : { code: RecommendationReasonCode.SHARED_AFFINITY, label: `Comparten trayectoria en ${nombre}`, points: RULES.teammate.sharedAreaPoints });
+    }
+
+    const complementary = rows
+      .filter(
+        (r) =>
+          yo.wantsToGrow.has(r.academicAreaId) &&
+          ctx.areaName.has(r.academicAreaId) &&
+          Number(r.score) > (yo.miPuntaje.get(r.academicAreaId) ?? 0),
+      )
+      .slice(0, RULES.teammate.maxComplementaryAreas);
+    for (const r of complementary) {
+      reasons.push({
+        code: RecommendationReasonCode.COMPLEMENTARY_PROFILE,
+        label: `Puede aportar en ${ctx.areaName.get(r.academicAreaId)}, donde quieres fortalecerte`,
+        points: RULES.teammate.complementaryPoints,
+      });
+    }
+    return { reasons, faltantes, shared, complementary };
+  }
 
   /**
    * Companeros que pueden aportar lo que al estudiante le falta.
@@ -816,23 +965,9 @@ export class RecommendationsEngine {
     const peerAffinities = await this.affinities.find({
       where: { studentProfileId: In(peerIds), score: MoreThan(0) },
     });
-    const byPeer = new Map<string, AffinityResult[]>();
-    for (const row of peerAffinities) {
-      const list = byPeer.get(row.studentProfileId) ?? [];
-      list.push(row);
-      byPeer.set(row.studentProfileId, list);
-    }
-    // De cada companero se miran solo sus areas mas fuertes, por el mismo
-    // motivo que del propio estudiante: un umbral absoluto excluiria a casi
-    // todos.
-    for (const [id, filas] of byPeer) {
-      byPeer.set(
-        id,
-        [...filas]
-          .sort((a, b) => Number(b.score) - Number(a.score))
-          .slice(0, RULES.teammate.topAreas),
-      );
-    }
+    // De cada compañero se miran solo sus áreas más fuertes, por el mismo motivo
+    // que del propio estudiante: un umbral absoluto excluiría a casi todos.
+    const byPeer = areasFuertesPorCompanero(peerAffinities);
 
     // §62, primera prioridad: habilidades faltantes. Solo cuentan las de las
     // areas que al estudiante le importan; que alguien sepa algo ajeno a su
@@ -848,109 +983,21 @@ export class RecommendationsEngine {
       this.backedSkills.forProfile(ctx.profile.id),
     ]);
     const yaTengo = new Set(propias.map((s) => s.skillId));
-    const skillsByPeer = new Map<string, { skillId: string; name: string; academicAreaId: string | null }[]>();
-    for (const [peerId, lista] of peerBacked) {
-      const utiles = lista.filter(
-        (s) => s.academicAreaId && areasQueImportan.has(s.academicAreaId) && !yaTengo.has(s.skillId),
-      );
-      if (utiles.length) skillsByPeer.set(peerId, utiles);
-    }
+    const skillsByPeer = tecnologiasUtiles(peerBacked, areasQueImportan, yaTengo);
 
     const result: Produced[] = [];
+    const yo = { strongAreas, wantsToGrow, miPuntaje };
     for (const peer of peers) {
       if (alreadyTeam.has(peer.userId)) continue;
-      const rows = byPeer.get(peer.profileId) ?? [];
-      const reasons: RecommendationReason[] = [];
-
-      // 1. Habilidades faltantes.
-      const faltantes = (skillsByPeer.get(peer.profileId) ?? []).slice(
-        0,
-        RULES.teammate.maxMissingSkills,
-      );
-      for (const s of faltantes) {
-        reasons.push({
-          code: RecommendationReasonCode.MISSING_SKILL,
-          label: `Tiene experiencia respaldada en ${s.name}, que tú todavía no`,
-          points: RULES.teammate.missingSkillPoints,
-        });
-      }
-
-      // 2. Respaldo relacionado y 3. afinidad contextual.
-      const shared = rows
-        .filter((r) => strongAreas.has(r.academicAreaId) && ctx.areaName.has(r.academicAreaId))
-        .slice(0, RULES.teammate.maxSharedAreas);
-      for (const r of shared) {
-        const nombre = ctx.areaName.get(r.academicAreaId);
-        if (Number(r.supportScore ?? 0) > 0) {
-          reasons.push({
-            code: RecommendationReasonCode.SUPPORT_BACKED,
-            label: `Tiene trayectoria respaldada en ${nombre}`,
-            points: RULES.teammate.supportBackedPoints,
-          });
-        } else {
-          reasons.push({
-            code: RecommendationReasonCode.SHARED_AFFINITY,
-            label: `Comparten trayectoria en ${nombre}`,
-            points: RULES.teammate.sharedAreaPoints,
-          });
-        }
-      }
-
-      const complementary = rows
-        .filter(
-          (r) =>
-            wantsToGrow.has(r.academicAreaId) &&
-            ctx.areaName.has(r.academicAreaId) &&
-            Number(r.score) > (miPuntaje.get(r.academicAreaId) ?? 0),
-        )
-        .slice(0, RULES.teammate.maxComplementaryAreas);
-      for (const r of complementary) {
-        reasons.push({
-          code: RecommendationReasonCode.COMPLEMENTARY_PROFILE,
-          label: `Puede aportar en ${ctx.areaName.get(r.academicAreaId)}, donde quieres fortalecerte`,
-          points: RULES.teammate.complementaryPoints,
-        });
-      }
-
+      const m = this.motivosDeCompanero(ctx, yo, byPeer.get(peer.profileId) ?? [], skillsByPeer.get(peer.profileId) ?? []);
       // Sin ninguna de las tres primeras prioridades no hay sugerencia: la
-      // disponibilidad sola no hace a nadie buen companero.
-      if (reasons.length === 0) continue;
-
-      // 4. Disponibilidad declarada.
-      if (
-        peer.availability === AvailabilityStatus.LOOKING
-        || peer.availability === AvailabilityStatus.OPEN
-      ) {
-        reasons.push({
-          code: RecommendationReasonCode.AVAILABILITY,
-          label:
-            peer.availability === AvailabilityStatus.LOOKING
-              ? 'Declaró que busca sumarse a algo'
-              : 'Declaró que escucha propuestas',
-          points: RULES.teammate.availabilityPoints,
-        });
-      }
-
-      const score = this.sum(reasons);
+      // disponibilidad sola no hace a nadie buen compañero.
+      if (m.reasons.length === 0) continue;
+      const disponible = motivoDeDisponibilidad(peer.availability);
+      if (disponible) m.reasons.push(disponible);
+      const score = this.sum(m.reasons);
       if (score < RULES.teammate.minScore) continue;
-
-      const semester = peer.semester === null ? null : Number(peer.semester);
-      const distance =
-        semester && ctx.profile.semester ? Math.abs(semester - ctx.profile.semester) : 9;
-      result.push({
-        type: RecommendationType.TEAMMATE,
-        targetId: peer.profileId,
-        academicAreaId:
-          (complementary[0] ?? shared[0])?.academicAreaId
-          ?? faltantes[0]?.academicAreaId
-          ?? null,
-        title: peer.name,
-        description: semester ? `Estudiante de ${semester}.º semestre` : 'Estudiante de la carrera',
-        targetLink: null,
-        reasons,
-        score,
-        sortKey: `${distance}|${peer.name}`,
-      });
+      result.push(tarjetaDeCompanero(ctx, peer, m, score));
     }
 
     return result;

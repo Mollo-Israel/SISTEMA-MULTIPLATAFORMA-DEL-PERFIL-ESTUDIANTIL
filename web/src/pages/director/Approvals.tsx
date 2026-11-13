@@ -54,18 +54,18 @@ export default function DirectorApprovalsPage() {
       />
       {tab === 'actividades' ? (
         <ActividadesPendientes />
-      ) : tab === 'recursos' ? (
+      ) : <>{tab === 'recursos' ? (
         <Card title="Recursos propuestos por docentes">
           <p className="muted" style={{ marginTop: 0 }}>
             {recursos.data?.length
-              ? `Hay ${recursos.data.length} recurso${recursos.data.length === 1 ? '' : 's'} esperando revisión.`
+              ? `Hay ${cuantosRecursos(recursos.data.length)} esperando revisión.`
               : 'No hay recursos esperando revisión.'}{' '}
             Se revisan con su contenido completo en <Link to="/director/resources">Recursos</Link>.
           </p>
         </Card>
       ) : (
         <BandejaDireccion />
-      )}
+      )}</>}
     </div>
   );
 }
@@ -136,7 +136,7 @@ function ActividadesPendientes() {
 
       {items === null ? (
         <Diferido><SkeletonCards count={3} /></Diferido>
-      ) : items.length === 0 ? (
+      ) : <>{items.length === 0 ? (
         <EmptyState
           icon={<FiCheck size={28} />}
           message="No hay nada pendiente. Cuando alguien envíe una actividad a revisión, aparecerá aquí."
@@ -227,7 +227,12 @@ function ActividadesPendientes() {
             );
           })}
         </Stagger>
-      )}
+      )}</>}
     </div>
   );
+}
+
+/** «1 recurso» o «3 recursos». */
+function cuantosRecursos(n: number): string {
+  return n === 1 ? '1 recurso' : `${n} recursos`;
 }

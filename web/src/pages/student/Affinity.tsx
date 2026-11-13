@@ -17,6 +17,8 @@ import {
 } from '../../components/affinity';
 import { AFFINITY_BADGE, AFFINITY_LEVEL_LABEL, lbl } from '../../constants';
 
+type PestanaAfinidad = 'areas' | 'history' | 'rules';
+
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -33,7 +35,7 @@ export default function StudentAffinityPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const [tab, setTab] = useState<'areas' | 'history' | 'rules'>('areas');
+  const [tab, setTab] = useState<PestanaAfinidad>('areas');
   const [history, setHistory] = useState<AffinitySnapshotView[] | null>(null);
   const [weights, setWeights] = useState<AffinityEngineRules | null>(null);
   const [weightQuery, setWeightQuery] = useState('');
@@ -162,7 +164,7 @@ export default function StudentAffinityPage() {
                               {h.name}
                               <span className="muted small">
                                 {' · '}
-                                {h.sources.map((x) => `${x.type === 'project' ? 'Proyecto' : x.type === 'credential' ? 'Credencial' : 'Actividad'}: ${x.title}`).join(' · ')}
+                                {h.sources.map((x) => `${ORIGEN[x.type] ?? 'Actividad'}: ${x.title}`).join(' · ')}
                               </span>
                             </li>
                           ))}
@@ -183,7 +185,7 @@ export default function StudentAffinityPage() {
             Historial de los cálculos registrados. No es una predicción de resultados académicos.
           </p>
           {!history && <SkeletonTable rows={4} columns={6} />}
-          {history && history.length === 0 && (
+          {history?.length === 0 && (
             <EmptyState
               icon={<FiActivity size={22} />}
               message="Todavía no hay cálculos registrados. Recalcula tu afinidad para empezar el historial."
@@ -369,3 +371,5 @@ export default function StudentAffinityPage() {
     </div>
   );
 }
+
+const ORIGEN: Record<string, string> = { project: 'Proyecto', credential: 'Credencial' };

@@ -20,7 +20,7 @@ import {
   PUBLIC_SLUG_ALPHABET,
   PUBLIC_SLUG_LENGTH,
 } from '@perfil/shared';
-import { randomInt } from 'crypto';
+import { randomInt } from 'node:crypto';
 import { User } from './user.entity';
 import { StudentSkill } from './student-skill.entity';
 import { StudentInterest } from './student-interest.entity';

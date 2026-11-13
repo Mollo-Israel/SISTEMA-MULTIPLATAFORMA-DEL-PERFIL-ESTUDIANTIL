@@ -48,6 +48,7 @@ import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
+import { quitarBarrasFinales } from '../common/texto';
 
 /**
  * Version del validador. Subirla permite reprocesar lo ya validado
@@ -70,6 +71,52 @@ export interface EnqueueInput {
   resourceId: string;
   /** Fuerza reprocesar aunque ya exista veredicto. */
   force?: boolean;
+}
+
+/** Una verificación manual necesita un método independiente y una prueba externa que no sea la URL del propio certificado. */
+function exigirPruebaExterna(method: ManualReviewMethod | null | undefined, prueba: string | null, urlDelCertificado: string | null): void {
+  const fields: Record<string, string[]> = {};
+  if (!method || !INDEPENDENT_REVIEW_METHODS.includes(method)) {
+    fields.method = ['Para verificarla hace falta una prueba externa: consulta al emisor, su confirmación o un registro institucional. Si solo revisaste el documento, márcala como inconclusa.'];
+  }
+  const mismaUrl = !!prueba && !!urlDelCertificado
+    && quitarBarrasFinales(prueba).toLowerCase() === quitarBarrasFinales(urlDelCertificado).toLowerCase();
+  if (!prueba || prueba.length < 10) fields.proof = ['Indica la prueba externa: enlace oficial individual o referencia concreta (al menos 10 caracteres).'];
+  else if (mismaUrl) fields.proof = ['La prueba debe ser independiente del propio certificado: su misma URL no cuenta.'];
+  if (Object.keys(fields).length) {
+    throw new BadRequestException({
+      code: 'MANUAL_REVIEW_PROOF_REQUIRED',
+      message: 'Una verificación manual necesita una prueba externa independiente del archivo.',
+      fields,
+    });
+  }
+}
+
+/** El respaldo después de la revisión de Dirección. */
+function respaldoTrasRevision(decision: ManualReviewStatus, actual: BackingTier): BackingTier {
+  if (decision === ManualReviewStatus.CORROBORATED) return BackingTier.CORROBORATED;
+  if (decision === ManualReviewStatus.REJECTED) return BackingTier.FLAGGED;
+  if (decision === ManualReviewStatus.INCONCLUSIVE && actual === BackingTier.CORROBORATED) return BackingTier.SUPPORTED;
+  return actual;
+}
+
+/** El aviso al estudiante según la decisión de Dirección. */
+function avisoDeRevision(decision: ManualReviewStatus, nombre: string, motivo: string | null): string {
+  if (decision === ManualReviewStatus.CORROBORATED) return `Dirección verificó «${nombre}» con una prueba externa.`;
+  if (decision === ManualReviewStatus.REJECTED) return `Dirección rechazó «${nombre}»: ${motivo}`;
+  return `Dirección revisó «${nombre}», pero no pudo verificarla con una fuente externa. Queda inconclusa.`;
+}
+
+/**
+ * §16: la revisión manual excepcional se respeta mientras nada la contradiga; si
+ * aparece una contradicción, manda la contradicción. V4.1 A41-018: una revisión
+ * inconclusa no sube de SUPPORTED; un rechazo documentado queda señalado.
+ */
+function ajustarPorRevisionManual(tier: BackingTier, revision: ManualReviewStatus | null | undefined): BackingTier {
+  if (revision === ManualReviewStatus.CORROBORATED && tier !== BackingTier.FLAGGED) return BackingTier.CORROBORATED;
+  if (revision === ManualReviewStatus.REJECTED) return BackingTier.FLAGGED;
+  if (revision === ManualReviewStatus.INCONCLUSIVE && tier === BackingTier.CORROBORATED) return BackingTier.SUPPORTED;
+  return tier;
 }
 
 @Injectable()
@@ -408,23 +455,7 @@ export class ValidationService {
     cred: CredentialContext,
   ): Promise<ValidationRecord> {
     const pipeline: string[] = [];
-    let extracted = null as ValidationRecord['extractedData'];
-    let texto = '';
-    let bakedBadge: { json: unknown | null; url: string | null } | null = null;
-    let identity = IdentityMatchStatus.UNKNOWN;
-    let duplicateOfId: string | null = null;
-
-    if (ctx.file) {
-      duplicateOfId = await this.findDuplicate(ctx.file);
-      const completo = await this.extraction.extractFull(ctx.file.buffer, ctx.file.mimeType);
-      extracted = completo.data;
-      texto = completo.text;
-      bakedBadge = completo.bakedBadge;
-      identity = compareHolderName(ctx.holderName, extracted.holderName);
-      pipeline.push(extracted.source === 'none' ? 'document:unreadable' : `document:${extracted.source}`);
-    } else {
-      pipeline.push('document:none');
-    }
+    const { extracted, texto, bakedBadge, identity, duplicateOfId } = await this.leerDocumento(ctx, pipeline);
 
     const verificacion = await this.verifier.verify({
       declaredUrl: ctx.declaredUrl,
@@ -445,7 +476,7 @@ export class ValidationService {
     pipeline.push('comparison', 'ai:not_used', 'backing:deterministic');
 
     const legible = texto.length >= MIN_USEFUL_TEXT;
-    const contradicciones = this.contradicciones(ctx, cred, extracted, texto, identity, check.status);
+    const contradicciones = this.contradicciones(cred, extracted, texto, identity, check.status);
     // V4.1 B30: la página oficial individual nombra a otra persona.
     if (check.status === CredentialCheckStatus.MISMATCH && check.official === true && check.page?.otherHolder) {
       contradicciones.push('official_holder_mismatch');
@@ -462,16 +493,7 @@ export class ValidationService {
       officialReachable: verificacion.link?.status === LinkCheckStatus.AVAILABLE && check.official === true,
       contradictions: contradicciones,
     });
-    // §16: la revisión manual excepcional se respeta mientras nada la
-    // contradiga; si aparece una contradicción, manda la contradicción.
-    if (record.manualReviewStatus === ManualReviewStatus.CORROBORATED && tier !== BackingTier.FLAGGED) {
-      tier = BackingTier.CORROBORATED;
-    }
-    // V4.1 A41-018: una revisión inconclusa no sube de SUPPORTED; un rechazo documentado queda señalado.
-    if (record.manualReviewStatus === ManualReviewStatus.REJECTED) tier = BackingTier.FLAGGED;
-    if (record.manualReviewStatus === ManualReviewStatus.INCONCLUSIVE && tier === BackingTier.CORROBORATED) {
-      tier = BackingTier.SUPPORTED;
-    }
+    tier = ajustarPorRevisionManual(tier, record.manualReviewStatus);
 
     // §18.2: un proveedor caído o un verificador apagado no permiten concluir,
     // pero eso no es un fallo ni hace falsa la credencial.
@@ -511,26 +533,53 @@ export class ValidationService {
       },
     });
 
-    if (tier === BackingTier.FLAGGED) {
-      try {
-        await this.notifications.emit({
-          userId: cred.ownerUserId,
-          kind: 'EXTERNAL_CREDENTIAL_FLAGGED',
-          title: 'Revisa una credencial',
-          body: 'Algo no coincide en una credencial que registraste. No se borró: corrige los datos o el archivo.',
-          link: '/student/evidences',
-          dedupeKey: `credential-flagged:${record.resourceId}:${guardado.finishedAt?.toISOString() ?? ''}`,
-        });
-      } catch {
-        // La notificación nunca deshace el veredicto.
-      }
-    }
+    if (tier === BackingTier.FLAGGED) await this.avisarCredencialSenalada(cred.ownerUserId, record.resourceId, guardado);
     return guardado;
+  }
+
+  /** Lee el archivo (si lo hay): datos, texto, insignia horneada, titular y posible duplicado. */
+  private async leerDocumento(ctx: ValidationContext, pipeline: string[]) {
+    if (!ctx.file) {
+      pipeline.push('document:none');
+      return {
+        extracted: null as ValidationRecord['extractedData'],
+        texto: '',
+        bakedBadge: null as { json: unknown; url: string | null } | null,
+        identity: IdentityMatchStatus.UNKNOWN,
+        duplicateOfId: null as string | null,
+      };
+    }
+    const duplicateOfId = await this.findDuplicate(ctx.file);
+    const completo = await this.extraction.extractFull(ctx.file.buffer, ctx.file.mimeType);
+    const extracted = completo.data;
+    pipeline.push(extracted.source === 'none' ? 'document:unreadable' : `document:${extracted.source}`);
+    return {
+      extracted: extracted as ValidationRecord['extractedData'],
+      texto: completo.text,
+      bakedBadge: completo.bakedBadge as { json: unknown; url: string | null } | null,
+      identity: compareHolderName(ctx.holderName, extracted.holderName),
+      duplicateOfId: duplicateOfId as string | null,
+    };
+  }
+
+  /** Avisa al estudiante que una credencial quedó señalada; el aviso nunca deshace el veredicto. */
+  private async avisarCredencialSenalada(userId: string, resourceId: string, guardado: ValidationRecord): Promise<void> {
+    try {
+      await this.notifications.emit({
+        userId,
+        kind: 'EXTERNAL_CREDENTIAL_FLAGGED',
+        title: 'Revisa una credencial',
+        body: 'Algo no coincide en una credencial que registraste. No se borró: corrige los datos o el archivo.',
+        link: '/student/evidences',
+        dedupeKey: `credential-flagged:${resourceId}:${guardado.finishedAt?.toISOString() ?? ''}`,
+      });
+    } catch {
+      // La notificación nunca deshace el veredicto.
+    }
   }
 
   /** Contradicciones significativas (§19 FLAGGED). Solo con datos legibles: sin texto no se acusa a nadie. */
   private contradicciones(
-    ctx: ValidationContext,
     cred: CredentialContext,
     extracted: ValidationRecord['extractedData'],
     texto: string,
@@ -560,14 +609,13 @@ export class ValidationService {
       const dominioEnTexto = op.expectedDomains.some((d) => texto.toLowerCase().includes(d.toLowerCase()));
       if (op.provider && !phraseFound(texto, op.provider, 0.5) && !dominioEnTexto) out.push('issuer_mismatch');
     }
-    void ctx;
     return out;
   }
 
   /** §19 SUPPORTED: el documento coincide con lo que se esperaba de la oportunidad. */
   private encajaConOportunidad(texto: string, op: NonNullable<CredentialContext['opportunity']>): boolean {
     const esperado = [op.expectedCourseName, ...op.expectedKeywords].filter((x): x is string => !!x);
-    const curso = esperado.length > 0 && esperado.some((k) => phraseFound(texto, k));
+    const curso = esperado.some((k) => phraseFound(texto, k));
     const proveedor = !!op.provider && phraseFound(texto, op.provider, 0.5);
     return curso && proveedor;
   }
@@ -688,23 +736,7 @@ export class ValidationService {
 
     const decision = decisionPedida === ManualReviewStatus.NOT_CORROBORATED ? ManualReviewStatus.INCONCLUSIVE : decisionPedida;
     const prueba = proof?.trim() || null;
-    if (decision === ManualReviewStatus.CORROBORATED) {
-      const fields: Record<string, string[]> = {};
-      if (!method || !INDEPENDENT_REVIEW_METHODS.includes(method)) {
-        fields.method = ['Para verificarla hace falta una prueba externa: consulta al emisor, su confirmación o un registro institucional. Si solo revisaste el documento, márcala como inconclusa.'];
-      }
-      const mismaUrl = !!prueba && !!cert.certificateUrl
-        && prueba.replace(/\/+$/, '').toLowerCase() === cert.certificateUrl.replace(/\/+$/, '').toLowerCase();
-      if (!prueba || prueba.length < 10) fields.proof = ['Indica la prueba externa: enlace oficial individual o referencia concreta (al menos 10 caracteres).'];
-      else if (mismaUrl) fields.proof = ['La prueba debe ser independiente del propio certificado: su misma URL no cuenta.'];
-      if (Object.keys(fields).length) {
-        throw new BadRequestException({
-          code: 'MANUAL_REVIEW_PROOF_REQUIRED',
-          message: 'Una verificación manual necesita una prueba externa independiente del archivo.',
-          fields,
-        });
-      }
-    }
+    if (decision === ManualReviewStatus.CORROBORATED) exigirPruebaExterna(method, prueba, cert.certificateUrl);
 
     record.manualReviewStatus = decision;
     record.manualReviewerId = reviewer.userId;
@@ -712,11 +744,7 @@ export class ValidationService {
     record.manualReviewReason = reason.trim().slice(0, 500);
     record.manualReviewMethod = method ?? null;
     record.manualReviewProof = prueba ? prueba.slice(0, 500) : null;
-    if (decision === ManualReviewStatus.CORROBORATED) record.backingTier = BackingTier.CORROBORATED;
-    if (decision === ManualReviewStatus.REJECTED) record.backingTier = BackingTier.FLAGGED;
-    if (decision === ManualReviewStatus.INCONCLUSIVE && record.backingTier === BackingTier.CORROBORATED) {
-      record.backingTier = BackingTier.SUPPORTED;
-    }
+    record.backingTier = respaldoTrasRevision(decision, record.backingTier);
     const guardado = await this.records.save(record);
 
     await this.audit.record({
@@ -740,11 +768,7 @@ export class ValidationService {
         userId: cert.studentProfile.userId,
         kind: 'EXTERNAL_CREDENTIAL_MANUAL_REVIEWED',
         title: decision === ManualReviewStatus.CORROBORATED ? 'Credencial verificada' : 'Revisión de credencial',
-        body: decision === ManualReviewStatus.CORROBORATED
-          ? `Dirección verificó «${cert.certificateName}» con una prueba externa.`
-          : decision === ManualReviewStatus.REJECTED
-            ? `Dirección rechazó «${cert.certificateName}»: ${record.manualReviewReason}`
-            : `Dirección revisó «${cert.certificateName}», pero no pudo verificarla con una fuente externa. Queda inconclusa.`,
+        body: avisoDeRevision(decision, cert.certificateName, record.manualReviewReason),
         link: '/student/evidences',
         dedupeKey: `credential-manual-review:${certificateId}:${decision}`,
       });

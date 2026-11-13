@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { FiBookOpen, FiExternalLink, FiFileText, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { catalogService, gamificationService, learningResourceService, uploadService } from '../../services';
-import type { LearningResource } from '../../services';
+import { catalogService, gamificationService, learningResourceService, uploadService, type LearningResource, activityService, approvalPolicyService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
 import type { AcademicArea, Skill } from '../../services/types';
 import {
@@ -14,7 +13,6 @@ import {
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
 import { useAuth } from '../../auth/AuthContext';
-import { activityService, approvalPolicyService } from '../../services';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -69,6 +67,205 @@ const vacio = {
   /** V5 §8.3: criterio opcional de «recurso completado». */
   criterionId: '',
 };
+
+type FormRecurso = typeof vacio;
+type Alcance = 'carrera' | 'semestres';
+type Decision = 'approve' | 'observe' | 'reject';
+
+/** «Para 1.º, 3.º» o «Toda la carrera». */
+function paraSemestres(scope?: number[] | null): string {
+  if (!scope?.length) return 'Toda la carrera';
+  const lista = scope.map((n) => `${n}.º`).join(', ');
+  return `Para ${lista}`;
+}
+
+/** Títulos, botones y avisos según quién usa la pantalla: Dirección, o un docente con o sin autonomía. */
+function textosDeRecursos(esDocente: boolean, directo: boolean) {
+  if (!esDocente) {
+    return {
+      titulo: 'Catálogo de recursos y cursos',
+      descripcion: 'Material que el motor puede recomendar. Solo se recomienda lo que está aquí: nunca enlaces recogidos automáticamente de Internet.',
+      nuevo: 'Incorporar un recurso',
+      enviar: 'Incorporar al catálogo',
+      altaTitulo: 'Recurso incorporado al catálogo.',
+      altaDetalle: 'Desde ahora puede recomendarse a los estudiantes del área.',
+    };
+  }
+  if (directo) {
+    return {
+      titulo: 'Publicar recursos',
+      descripcion: 'Dirección te concedió publicar material para tus semestres sin revisión. Queda registrado y Dirección lo ve.',
+      nuevo: 'Publicar un recurso',
+      enviar: 'Publicar',
+      altaTitulo: 'Recurso incorporado al catálogo.',
+      altaDetalle: 'Ya está en la Biblioteca; Dirección lo ve en su historial.',
+    };
+  }
+  return {
+    titulo: 'Proponer recursos',
+    descripcion: 'Propón material para tus semestres. Dirección lo revisa antes de que llegue a la Biblioteca.',
+    nuevo: 'Proponer un recurso',
+    enviar: 'Enviar propuesta',
+    altaTitulo: 'Propuesta enviada a Dirección.',
+    altaDetalle: 'Aparecerá en la Biblioteca cuando Dirección la apruebe.',
+  };
+}
+
+/** Lo que falta antes de guardar, o null si está completo. */
+function errorAntesDeGuardar(form: FormRecurso, esDocente: boolean, alcance: Alcance, semestres: number[]): string | null {
+  if (form.areaIds.length === 0) return 'Selecciona al menos un área para el recurso.';
+  if (!esDocente && alcance === 'semestres' && semestres.length === 0) return 'Marca al menos un semestre, o elige «Toda la carrera».';
+  return null;
+}
+
+/**
+ * Lo que se envía a la API. Al editar, un campo vacío viaja como null (se
+ * borra); al crear, no se envía.
+ */
+function payloadDeRecurso(form: FormRecurso, editando: boolean, esDocente: boolean, alcance: Alcance, semestres: number[]) {
+  const vacioAlGuardar = editando ? null : undefined;
+  let semesterScope: number[] | undefined;
+  if (!esDocente) semesterScope = alcance === 'carrera' ? [] : semestres;
+  else if (!editando) semesterScope = semestres;
+  return {
+    title: form.title,
+    provider: form.provider,
+    url: form.url.trim() || vacioAlGuardar,
+    fileId: form.fileId || vacioAlGuardar,
+    description: form.description || undefined,
+    academicAreaId: form.areaIds[0] ?? form.academicAreaId,
+    areaIds: form.areaIds,
+    resourceType: form.resourceType,
+    skillIds: form.skillIds,
+    imageFileId: form.imageFileId || vacioAlGuardar,
+    criterionId: form.criterionId || vacioAlGuardar,
+    ...(semesterScope === undefined ? {} : { semesterScope }),
+  };
+}
+
+const MENSAJE_DE_REVISION: Record<Decision, string> = {
+  approve: 'Recurso aprobado: ya está en la Biblioteca.',
+  observe: 'Observado: vuelve al docente.',
+  reject: 'Rechazado.',
+};
+
+/** V4.1 A41-014 (§9.4): propuestas docentes que esperan la decisión de Dirección. */
+function PendientesDeRevision({ pendientes, comentarios, setComentarios, revisar }: Readonly<{
+  pendientes: LearningResource[];
+  comentarios: Record<string, string>;
+  setComentarios: (c: Record<string, string>) => void;
+  revisar: (id: string, decision: Decision) => Promise<void>;
+}>) {
+  return (
+    <Card title={`Pendientes de revisión (${pendientes.length})`}>
+      <ul className="review-list">
+        {pendientes.map((r) => (
+          <li key={r.id} data-testid="recurso-pendiente">
+            <div>
+              <strong>{r.title}</strong> <span className="muted small">· {r.provider} · {r.academicArea?.name ?? ''}</span>
+              <div className="muted small">
+                {paraSemestres(r.semesterScope)}
+                {r.url && <>{' · '}<a href={r.url} target="_blank" rel="noreferrer noopener">Abrir enlace</a></>}
+                {r.fileUrl && <>{' · '}<BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className="link-button">Ver archivo</BotonArchivo></>}
+              </div>
+            </div>
+            <input
+              aria-label={`Comentario para «${r.title}»`}
+              placeholder="Comentario (obligatorio para observar o rechazar)"
+              value={comentarios[r.id] ?? ''}
+              onChange={(e) => setComentarios({ ...comentarios, [r.id]: e.target.value })}
+              maxLength={500}
+            />
+            <div className="flex" style={{ gap: '0.35rem' }}>
+              <Button size="sm" onClick={() => void revisar(r.id, 'approve')}>Aprobar</Button>
+              <Button size="sm" variant="secondary" onClick={() => void revisar(r.id, 'observe')}>Observar</Button>
+              <Button size="sm" variant="danger" onClick={() => void revisar(r.id, 'reject')}>Rechazar</Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** V4.1 A41-014: el docente edita solo su propuesta pendiente u observada, o la que publicó con autonomía. */
+function puedeEditar(r: LearningResource, esDocente: boolean, yo?: string): boolean {
+  if (!esDocente) return true;
+  if (r.createdBy !== yo) return false;
+  return r.reviewStatus === 'pending' || r.reviewStatus === 'observed' || (!!r.policyId && r.reviewStatus === 'not_required');
+}
+
+/** Una fila del catálogo: recurso, área, tipo, estado y acciones. Retirar es de Dirección. */
+function FilaRecurso({ r, esDocente, yo, editar, cambiarEstado }: Readonly<{
+  r: LearningResource;
+  esDocente: boolean;
+  yo?: string;
+  editar: (r: LearningResource) => void;
+  cambiarEstado: (r: LearningResource) => void;
+}>) {
+  const vigente = r.status === 'active';
+  return (
+    <tr>
+      <td>
+        <div className="flex" style={{ gap: '0.4rem' }}>
+          <FiBookOpen size={13} /> {r.title}
+        </div>
+        {r.url ? (
+          <a
+            className="muted"
+            href={r.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            style={{ fontSize: '0.78rem' }}
+          >
+            {r.provider} <FiExternalLink size={11} />
+          </a>
+        ) : (
+          <span className="muted" style={{ fontSize: '0.78rem' }}>{r.provider}</span>
+        )}
+        {r.fileUrl && (
+          <div>
+            <BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className="link-button small">
+              <FiFileText size={11} /> {r.fileName ?? 'Archivo'}
+            </BotonArchivo>
+          </div>
+        )}
+        <div className="muted small">
+          {paraSemestres(r.semesterScope)}
+        </div>
+      </td>
+      <td className="muted">{r.academicArea?.name ?? '—'}</td>
+      <td className="muted">{TIPO_LABEL[r.resourceType] ?? r.resourceType}</td>
+      <td>
+        <Badge tone={vigente ? 'green' : 'gray'}>
+          {vigente ? 'Vigente' : 'Retirado'}
+        </Badge>
+        {r.reviewStatus && r.reviewStatus !== 'not_required' && (
+          <div><Badge tone={REVISION_TONO[r.reviewStatus]}>{REVISION_LABEL[r.reviewStatus]}</Badge></div>
+        )}
+        {r.reviewComment && r.reviewStatus !== 'approved' && <div className="muted small">«{r.reviewComment}»</div>}
+      </td>
+      <td>
+        <div className="flex" style={{ gap: '0.4rem' }}>
+          {puedeEditar(r, esDocente, yo) && (
+            <Button size="sm" variant="secondary" onClick={() => editar(r)}>
+              Editar
+            </Button>
+          )}
+          {!esDocente && (
+          <Button
+            size="sm"
+            variant={vigente ? 'danger' : 'secondary'}
+            onClick={() => cambiarEstado(r)}
+          >
+            {vigente ? 'Retirar' : 'Reponer'}
+          </Button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
 
 /**
  * Catálogo controlado de recursos y cursos externos (§61).
@@ -135,58 +332,32 @@ export default function DirectorLearningResourcesPage() {
   }, { clave: 'recurso', dir: 'asc' });
   const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [query, verRetirados, orden]);
 
-  const skillsDelArea = useMemo(
-    () => skills.filter((s) => !form.academicAreaId || s.academicAreaId === form.academicAreaId),
-    [skills, form.academicAreaId],
-  );
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     // V3 §67: error debajo de cada campo, no el globo del navegador.
     if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
-    if (form.areaIds.length === 0) {
-      toast.error('Selecciona al menos un área para el recurso.');
-      return;
-    }
-    if (!esDocente && alcance === 'semestres' && semestres.length === 0) {
-      toast.error('Marca al menos un semestre, o elige «Toda la carrera».');
+    const problema = errorAntesDeGuardar(form, esDocente, alcance, semestres);
+    if (problema) {
+      toast.error(problema);
       return;
     }
     setSaving(true);
     try {
-      const payload = {
-        title: form.title,
-        provider: form.provider,
-        url: form.url.trim() || (editing ? null : undefined),
-        fileId: form.fileId || (editing ? null : undefined),
-        description: form.description || undefined,
-        academicAreaId: form.areaIds[0] ?? form.academicAreaId,
-        areaIds: form.areaIds,
-        resourceType: form.resourceType,
-        skillIds: form.skillIds,
-        imageFileId: form.imageFileId || (editing ? null : undefined),
-        criterionId: form.criterionId || (editing ? null : undefined),
-        ...(esDocente && !editing ? { semesterScope: semestres } : {}),
-        ...(!esDocente ? { semesterScope: alcance === 'carrera' ? [] : semestres } : {}),
-      };
+      const payload = payloadDeRecurso(form, !!editing, esDocente, alcance, semestres);
       if (editing) {
         await learningResourceService.update(editing.id, payload);
         toast.success('Recurso actualizado.');
       } else {
         await learningResourceService.create(payload);
-        const propone = esDocente && !directo;
-        toast.success(
-          propone ? 'Propuesta enviada a Dirección.' : 'Recurso incorporado al catálogo.',
-          propone ? 'Aparecerá en la Biblioteca cuando Dirección la apruebe.' : esDocente ? 'Ya está en la Biblioteca; Dirección lo ve en su historial.' : 'Desde ahora puede recomendarse a los estudiantes del área.',
-        );
+        toast.success(textos.altaTitulo, textos.altaDetalle);
       }
       setForm(vacio);
       setEditing(null);
       setAlcance('carrera');
       setSemestres([]);
       state.reload();
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     } finally {
       setSaving(false);
     }
@@ -237,7 +408,7 @@ export default function DirectorLearningResourcesPage() {
   };
 
   /** V4.1 A41-014 (§9.4): decisión de Dirección sobre una propuesta. */
-  const revisar = async (id: string, decision: 'approve' | 'observe' | 'reject') => {
+  const revisar = async (id: string, decision: Decision) => {
     const comentario = (comentarios[id] ?? '').trim();
     if (decision !== 'approve' && !comentario) {
       toast.error('Escribe un comentario: explica qué corregir o por qué se rechaza.');
@@ -245,7 +416,7 @@ export default function DirectorLearningResourcesPage() {
     }
     try {
       await learningResourceService.review(id, decision, comentario || undefined);
-      toast.success(decision === 'approve' ? 'Recurso aprobado: ya está en la Biblioteca.' : decision === 'observe' ? 'Observado: vuelve al docente.' : 'Rechazado.');
+      toast.success(MENSAJE_DE_REVISION[decision]);
       pendientes.reload();
       state.reload();
     } catch (e) {
@@ -254,50 +425,25 @@ export default function DirectorLearningResourcesPage() {
   };
 
   const tipoActual = TIPOS.find((t) => t.value === form.resourceType);
+  const textos = textosDeRecursos(esDocente, directo);
 
   return (
     <div>
       <PageHeader
-        title={esDocente ? (directo ? 'Publicar recursos' : 'Proponer recursos') : 'Catálogo de recursos y cursos'}
-        description={esDocente
-          ? directo
-            ? 'Dirección te concedió publicar material para tus semestres sin revisión. Queda registrado y Dirección lo ve.'
-            : 'Propón material para tus semestres. Dirección lo revisa antes de que llegue a la Biblioteca.'
-          : 'Material que el motor puede recomendar. Solo se recomienda lo que está aquí: nunca enlaces recogidos automáticamente de Internet.'}
+        title={textos.titulo}
+        description={textos.descripcion}
       />
 
       {!esDocente && (pendientes.data ?? []).length > 0 && (
-        <Card title={`Pendientes de revisión (${(pendientes.data ?? []).length})`}>
-          <ul className="review-list">
-            {(pendientes.data ?? []).map((r) => (
-              <li key={r.id} data-testid="recurso-pendiente">
-                <div>
-                  <strong>{r.title}</strong> <span className="muted small">· {r.provider} · {r.academicArea?.name ?? ''}</span>
-                  <div className="muted small">
-                    {r.semesterScope?.length ? `Para ${r.semesterScope.map((n) => `${n}.º`).join(', ')}` : 'Toda la carrera'}
-                    {r.url && <>{' · '}<a href={r.url} target="_blank" rel="noreferrer noopener">Abrir enlace</a></>}
-                    {r.fileUrl && <>{' · '}<BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className="link-button">Ver archivo</BotonArchivo></>}
-                  </div>
-                </div>
-                <input
-                  aria-label={`Comentario para «${r.title}»`}
-                  placeholder="Comentario (obligatorio para observar o rechazar)"
-                  value={comentarios[r.id] ?? ''}
-                  onChange={(e) => setComentarios({ ...comentarios, [r.id]: e.target.value })}
-                  maxLength={500}
-                />
-                <div className="flex" style={{ gap: '0.35rem' }}>
-                  <Button size="sm" onClick={() => void revisar(r.id, 'approve')}>Aprobar</Button>
-                  <Button size="sm" variant="secondary" onClick={() => void revisar(r.id, 'observe')}>Observar</Button>
-                  <Button size="sm" variant="danger" onClick={() => void revisar(r.id, 'reject')}>Rechazar</Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <PendientesDeRevision
+          pendientes={pendientes.data ?? []}
+          comentarios={comentarios}
+          setComentarios={setComentarios}
+          revisar={revisar}
+        />
       )}
 
-      <Card title={editing ? `Editar “${editing.title}”` : esDocente && !directo ? 'Proponer un recurso' : esDocente ? 'Publicar un recurso' : 'Incorporar un recurso'}>
+      <Card title={editing ? `Editar “${editing.title}”` : textos.nuevo}>
         <form noValidate onSubmit={submit}>
           <div className="grid-2">
             <div className="field">
@@ -329,7 +475,7 @@ export default function DirectorLearningResourcesPage() {
           {esDocente && !editing && (
             <div className="field">
               <span className="field-label" id="lr-semestres">Semestres a los que va dirigido</span>
-              <div role="group" aria-labelledby="lr-semestres" className="chip-row">
+              <fieldset aria-labelledby="lr-semestres" className="chip-row">
                 {semestresDocente.map((n) => {
                   const on = semestres.includes(n);
                   return (
@@ -339,7 +485,7 @@ export default function DirectorLearningResourcesPage() {
                     </button>
                   );
                 })}
-              </div>
+              </fieldset>
               <small className="muted">Sin marcar ninguno, va a todos tus semestres.</small>
             </div>
           )}
@@ -498,7 +644,7 @@ export default function DirectorLearningResourcesPage() {
 
           <div className="flex" style={{ gap: '0.6rem' }}>
             <Button type="submit" loading={saving} icon={editing ? <FiSave size={15} /> : <FiPlus size={15} />}>
-              {editing ? 'Guardar cambios' : esDocente && !directo ? 'Enviar propuesta' : esDocente ? 'Publicar' : 'Incorporar al catálogo'}
+              {editing ? 'Guardar cambios' : textos.enviar}
             </Button>
             {editing && (
               <Button
@@ -524,7 +670,7 @@ export default function DirectorLearningResourcesPage() {
                 checked={verRetirados}
                 onChange={(e) => setVerRetirados(e.target.checked)}
               />
-              Ver también los retirados
+              <span>Ver también los retirados</span>
             </label>
             <SearchInput value={query} onChange={setQuery} placeholder="Buscar recurso…" />
             <ResultCount shown={visible.length} total={(state.data ?? []).length} noun="recursos" />
@@ -562,66 +708,7 @@ export default function DirectorLearningResourcesPage() {
                   </thead>
                   <tbody>
                     {pag.visibles.map((r) => (
-                      <tr key={r.id}>
-                        <td>
-                          <div className="flex" style={{ gap: '0.4rem' }}>
-                            <FiBookOpen size={13} /> {r.title}
-                          </div>
-                          {r.url ? (
-                            <a
-                              className="muted"
-                              href={r.url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              style={{ fontSize: '0.78rem' }}
-                            >
-                              {r.provider} <FiExternalLink size={11} />
-                            </a>
-                          ) : (
-                            <span className="muted" style={{ fontSize: '0.78rem' }}>{r.provider}</span>
-                          )}
-                          {r.fileUrl && (
-                            <div>
-                              <BotonArchivo src={r.fileUrl} nombre={r.fileName ?? 'material'} className="link-button small">
-                                <FiFileText size={11} /> {r.fileName ?? 'Archivo'}
-                              </BotonArchivo>
-                            </div>
-                          )}
-                          <div className="muted small">
-                            {r.semesterScope?.length ? `Para ${r.semesterScope.map((n) => `${n}.º`).join(', ')}` : 'Toda la carrera'}
-                          </div>
-                        </td>
-                        <td className="muted">{r.academicArea?.name ?? '—'}</td>
-                        <td className="muted">{TIPO_LABEL[r.resourceType] ?? r.resourceType}</td>
-                        <td>
-                          <Badge tone={r.status === 'active' ? 'green' : 'gray'}>
-                            {r.status === 'active' ? 'Vigente' : 'Retirado'}
-                          </Badge>
-                          {r.reviewStatus && r.reviewStatus !== 'not_required' && (
-                            <div><Badge tone={REVISION_TONO[r.reviewStatus]}>{REVISION_LABEL[r.reviewStatus]}</Badge></div>
-                          )}
-                          {r.reviewComment && r.reviewStatus !== 'approved' && <div className="muted small">«{r.reviewComment}»</div>}
-                        </td>
-                        <td>
-                          <div className="flex" style={{ gap: '0.4rem' }}>
-                            {/* V4.1 A41-014: el docente edita solo su propuesta pendiente u observada; retirar es de Dirección. */}
-                            {(!esDocente || (r.createdBy === user?.id && (r.reviewStatus === 'pending' || r.reviewStatus === 'observed' || (!!r.policyId && r.reviewStatus === 'not_required')))) && (
-                              <Button size="sm" variant="secondary" onClick={() => editar(r)}>
-                                Editar
-                              </Button>
-                            )}
-                            {!esDocente && (
-                            <Button
-                              size="sm"
-                              variant={r.status === 'active' ? 'danger' : 'secondary'}
-                              onClick={() => cambiarEstado(r)}
-                            >
-                              {r.status === 'active' ? 'Retirar' : 'Reponer'}
-                            </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                      <FilaRecurso key={r.id} r={r} esDocente={esDocente} yo={user?.id} editar={editar} cambiarEstado={cambiarEstado} />
                     ))}
                   </tbody>
                 </table>

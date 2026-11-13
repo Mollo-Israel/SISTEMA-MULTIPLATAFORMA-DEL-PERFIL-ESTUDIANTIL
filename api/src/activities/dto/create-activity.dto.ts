@@ -31,12 +31,13 @@ import {
   RegistrationMode,
 } from '@perfil/shared';
 import { cleanLine, cleanText, IsPlaceName, trim, trimUniqueArray } from '../../common/validation';
+import { cortarDesdeBarra } from '../../common/texto';
 
 /** Dominio de un emisor: `netacad.com`, `credly.com` (sin esquema ni ruta). */
 const DOMINIO_RE = /^(?=.{3,120}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 const minusculas = ({ value }: { value: unknown }) =>
   Array.isArray(value)
-    ? [...new Set(value.map((v) => (typeof v === 'string' ? v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '') : v)).filter(Boolean))]
+    ? [...new Set(value.map((v) => (typeof v === 'string' ? cortarDesdeBarra(v.trim().toLowerCase().replace(/^https?:\/\//, '')) : v)).filter(Boolean))]
     : value;
 
 /** V3.2 §11.4: habilidad y área en la que se trabaja. */

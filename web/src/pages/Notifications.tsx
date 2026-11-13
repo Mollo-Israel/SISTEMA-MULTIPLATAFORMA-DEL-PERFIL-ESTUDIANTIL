@@ -71,7 +71,7 @@ export default function NotificationsPage() {
       />
       {items === null ? (
         <Loading />
-      ) : items.length === 0 ? (
+      ) : <>{items.length === 0 ? (
         <EmptyState
           icon={<FiBell size={22} />}
           message={filtro === 'unread' ? 'No tienes avisos sin leer.' : 'Todavía no tienes notificaciones.'}
@@ -91,7 +91,7 @@ export default function NotificationsPage() {
             </li>
           ))}
         </ul>
-      )}
+      )}</>}
     </>
   );
 }

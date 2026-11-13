@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { CUENTAS, asegurarBienvenida, captura, entrar, visitar, vigilarErrores } from './ayuda';
+import { asegurarBienvenida, captura, CUENTAS, entrar, expect, test, vigilarErrores, visitar } from './ayuda';
 
 test.describe('Estudiante: perfil, actividades, proyectos, evidencias, afinidad y recomendaciones', () => {
   test('primera vez: el estudiante llega a la bienvenida (onboarding) antes que al resto', async ({ page }, info) => {

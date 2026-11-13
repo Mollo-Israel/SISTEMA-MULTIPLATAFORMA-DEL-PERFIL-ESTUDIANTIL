@@ -91,7 +91,7 @@ const cifras = [
 ];
 
 /** Número que cuenta hasta su valor cuando aparece en pantalla. */
-function Contador({ to, quieto }: { to: number; quieto: boolean }) {
+function Contador({ to, quieto }: Readonly<{ to: number; quieto: boolean }>) {
   const ref = useRef<HTMLSpanElement>(null);
   const [v, setV] = useState(quieto ? to : 0);
   useEffect(() => {
@@ -307,7 +307,8 @@ export default function LandingPage() {
       {/* Cinta continua */}
       <div className="lp-marquee" aria-hidden>
         <div className="lp-marquee-track">
-          {[...cinta, ...cinta].map((c, i) => <span key={i}><FiStar /> {c}</span>)}
+          {/* Dos vueltas de la misma cinta para que el desplazamiento sea continuo. */}
+          {[1, 2].flatMap((vuelta) => cinta.map((c) => <span key={`${vuelta}-${c}`}><FiStar /> {c}</span>))}
         </div>
       </div>
 

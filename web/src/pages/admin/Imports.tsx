@@ -407,7 +407,7 @@ function resumenAplicacion(res: ImportApplyResult): string {
 }
 
 /** Historial: solo lotes aplicados o fallidos, 10 por página y ordenables. */
-function TablaLotes({ lotes, onVer }: { lotes: ImportBatchSummary[]; onVer: (id: string) => void }) {
+function TablaLotes({ lotes, onVer }: Readonly<{ lotes: ImportBatchSummary[]; onVer: (id: string) => void }>) {
   const { ordenados, orden, alternar } = useOrden(
     lotes,
     {
@@ -470,7 +470,7 @@ function TablaLotes({ lotes, onVer }: { lotes: ImportBatchSummary[]; onVer: (id:
   );
 }
 
-function TablaFilas({ rows }: { rows: ImportRow[] }) {
+function TablaFilas({ rows }: Readonly<{ rows: ImportRow[] }>) {
   // V3.2 §6.1: 10 filas por página, ordenables.
   const { ordenados, orden, alternar } = useOrden(rows, {
     fila: (r) => r.rowNumber,
@@ -502,7 +502,7 @@ function TablaFilas({ rows }: { rows: ImportRow[] }) {
                 <td>{r.universityCode ?? '—'}</td>
                 <td>{[r.firstName, r.lastName].filter(Boolean).join(' ') || '—'}</td>
                 <td className="muted">{r.institutionalEmail ?? '—'}</td>
-                <td>{r.semesters ? (r.semesters.length ? r.semesters.join(', ') : 'Ninguno') : (r.semester ?? '—')}</td>
+                <td>{r.semesters ? <>{(r.semesters.length ? r.semesters.join(', ') : 'Ninguno')}</> : (r.semester ?? '—')}</td>
                 <td>
                   <Badge tone={VERDICTO[r.status]?.tone ?? 'gray'}>
                     {VERDICTO[r.status]?.label ?? r.status}

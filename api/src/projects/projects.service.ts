@@ -39,7 +39,6 @@ import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/noti
 import { Skill } from '../entities/skill.entity';
 import { SkillAreaRelation } from '../entities/skill-area-relation.entity';
 import { SkillRequest } from '../entities/skill-request.entity';
-import { normalizarRepo } from './project-backing.service';
 import {
   ProjectLinkCheck,
   ProjectRepositoryCheck,
@@ -62,17 +61,64 @@ import { ProjectEventsService } from './project-events.service';
 import { ProjectBackingService } from './project-backing.service';
 import { RepositoryInspectorService } from './repository-inspector.service';
 import { CatalogsService } from '../catalogs/catalogs.service';
+
 import { CreateSkillDto } from '../catalogs/dto/create-skill.dto';
 import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
+import { siHay } from '../common/texto';
 
 
 /** Lo escrito primero, en su orden; luego lo del catálogo que falte (sin duplicar por mayúsculas). */
 function unirTecnologias(escritas: string[], delCatalogo: string[]): string[] {
   const vistas = new Set(escritas.map((t) => t.toLowerCase()));
   return [...escritas, ...delCatalogo.filter((t) => !vistas.has(t.toLowerCase()) && vistas.add(t.toLowerCase()))];
+}
+
+/** Lo que Administración decide sobre un pedido de tecnología (V5-25). */
+type DecisionDePedido = {
+  decision: 'alias' | 'new_skill' | 'added' | 'rejected';
+  skillId?: string;
+  sameTechnology?: boolean;
+  newSkill?: { name?: string; academicAreaId: string; secondaryAreaIds?: string[]; overrideReason?: string };
+  note?: string;
+};
+
+/** «X y Y no están entre las tecnologías del proyecto…», en singular o plural. */
+function mensajeTecnologiasAjenas(nombres: string[]): string {
+  if (!nombres.length) return 'Alguna de las tecnologías indicadas no existe.';
+  const una = nombres.length === 1;
+  const verbo = una ? 'está' : 'están';
+  const pedido = una ? 'la agregue' : 'las agregue';
+  return `${nombres.join(', ')} no ${verbo} entre las tecnologías del proyecto: pide al responsable que ${pedido} primero.`;
+}
+
+type SkillContext = { skillId: string; areaId: string | null };
+
+/** Áreas y tecnologías que quedarán tras la edición. */
+interface PlanDeAreas {
+  areaIds: string[] | undefined;
+  areasFinales: string[];
+  contextos: SkillContext[] | undefined;
+  skillsFinales: string[] | undefined;
+}
+
+/** V3 §22: un ACTIVE no puede quedarse sin lo que lo hizo activable. */
+function exigirRequisitosDeActivo(dto: UpdateProjectDto, plan: PlanDeAreas): void {
+  const { areaIds, areasFinales, contextos, skillsFinales } = plan;
+  const quitar: string[] = [];
+  if (areaIds?.length === 0) quitar.push('Un proyecto activo necesita al menos un área.');
+  if (dto.skillIds?.length === 0) quitar.push('Un proyecto activo necesita al menos una tecnología.');
+  if (dto.repositoryUrl !== undefined && !dto.repositoryUrl) quitar.push('Un proyecto activo necesita su repositorio.');
+  // V4.1 §10.2: tampoco puede quedar un área sin ninguna tecnología usada en ella.
+  if (contextos && skillsFinales && skillsFinales.length > 0) {
+    const sinSkill = areasFinales.filter((a) => !contextos.some((c) => c.areaId === a));
+    if (sinSkill.length) quitar.push('Cada área de un proyecto activo necesita al menos una tecnología usada en ella.');
+  }
+  if (quitar.length) {
+    throw new BadRequestException({ code: 'PROJECT_ACTIVE_REQUIREMENT', message: quitar.join(' '), fields: { status: quitar } });
+  }
 }
 
 @Injectable()
@@ -146,7 +192,7 @@ export class ProjectsService {
     const project = await this.findOneOrFail(projectId);
     await this.assertOwnerOrMember(user, project);
     const check = await this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } });
-    const vigente = check && check.repositoryUrl === project.repositoryUrl ? check : null;
+    const vigente = check?.repositoryUrl === project.repositoryUrl ? check : null;
     const descartadas = new Set((project.dismissedSuggestions ?? []).map((d) => this.normSenal(d)));
     const detectadas = (await this.senalesVigentes(project, vigente))
       .filter((t) => t.status === TechnologyStatus.DETECTED && !descartadas.has(this.normSenal(t.name)));
@@ -298,7 +344,7 @@ export class ProjectsService {
         userId: a.id,
         kind: 'SKILL_REQUESTED',
         title: 'Tecnología por evaluar',
-        body: `Un estudiante pide agregar «${nombre}» al catálogo${guardada.source ? ` (detectada en ${guardada.source})` : ''}.`,
+        body: `Un estudiante pide agregar «${nombre}» al catálogo${siHay(guardada.source, ' (detectada en ', ')')}.`,
         link: '/admin/skill-requests',
         dedupeKey: `skill-request:${guardada.id}:${a.id}`,
       });
@@ -330,13 +376,7 @@ export class ProjectsService {
    * Los pedidos pendientes del mismo nombre se resuelven igual, y cada aviso
    * dice lo que de verdad pasó. Nada se agrega solo por una detección.
    */
-  async decideSkillRequest(user: AuthenticatedUser, id: string, dto: {
-    decision: 'alias' | 'new_skill' | 'added' | 'rejected';
-    skillId?: string;
-    sameTechnology?: boolean;
-    newSkill?: { name?: string; academicAreaId: string; secondaryAreaIds?: string[]; overrideReason?: string };
-    note?: string;
-  }) {
+  async decideSkillRequest(user: AuthenticatedUser, id: string, dto: DecisionDePedido) {
     const repo = this.projects.manager.getRepository(SkillRequest);
     const r = await repo.findOne({ where: { id } });
     if (!r) throw new NotFoundException('Pedido no encontrado.');
@@ -345,31 +385,9 @@ export class ProjectsService {
     const decision = dto.decision === 'added' ? 'alias' : dto.decision;
     let skill: Skill | null = null;
     if (decision === 'alias') {
-      skill = dto.skillId ? await this.skills.findOne({ where: { id: dto.skillId } }) : null;
-      if (!skill) {
-        const m = 'Elige la tecnología del catálogo de la que este nombre es sinónimo.';
-        throw new BadRequestException({ message: m, fields: { skillId: [m] } });
-      }
-      if (dto.decision === 'alias' && dto.sameTechnology !== true) {
-        const m = `Confirma que «${r.name}» es otro nombre de «${skill.name}». Si es una tecnología distinta, créala como nueva.`;
-        throw new BadRequestException({ code: 'ALIAS_NOT_CONFIRMED', message: m, fields: { sameTechnology: [m] } });
-      }
-      const yaEs = this.normSenal(skill.name) === this.normSenal(r.name)
-        || (skill.aliases ?? []).some((a) => this.normSenal(a) === this.normSenal(r.name));
-      if (!yaEs) skill = await this.catalogs.updateSkill(skill.id, { aliases: [...(skill.aliases ?? []), r.name] }, user.userId);
+      skill = await this.registrarComoAlias(r, dto, user);
     } else if (decision === 'new_skill') {
-      if (!dto.newSkill?.academicAreaId) {
-        const m = 'Elige el área principal de la tecnología nueva.';
-        throw new BadRequestException({ message: m, fields: { academicAreaId: [m] } });
-      }
-      const nombre = dto.newSkill.name?.trim() || r.name;
-      skill = await this.catalogs.createSkill({
-        name: nombre,
-        academicAreaId: dto.newSkill.academicAreaId,
-        secondaryAreaIds: dto.newSkill.secondaryAreaIds ?? [],
-        aliases: this.normSenal(nombre) === this.normSenal(r.name) ? [] : [r.name],
-        overrideReason: dto.newSkill.overrideReason,
-      } satisfies CreateSkillDto, user.userId);
+      skill = await this.crearTecnologiaPedida(r, dto, user);
     } else if (!dto.note?.trim()) {
       throw new BadRequestException({ message: 'Explica por qué se rechaza.', fields: { note: ['Explica por qué se rechaza.'] } });
     }
@@ -378,11 +396,12 @@ export class ProjectsService {
     const mismos = (await repo.find({ where: { status: 'pending' } }))
       .filter((p) => this.normSenal(p.name) === this.normSenal(r.name));
     const ahora = new Date();
+    const nota = dto.note?.trim().slice(0, 300) || null;
     for (const p of mismos) {
       p.status = decision === 'rejected' ? 'rejected' : 'added';
       p.resolution = decision === 'rejected' ? null : decision;
       p.skillId = skill?.id ?? null;
-      p.decisionNote = dto.note?.trim().slice(0, 300) || null;
+      p.decisionNote = nota;
       p.decidedBy = user.userId;
       p.decidedAt = ahora;
     }
@@ -395,20 +414,59 @@ export class ProjectsService {
       metadata: { decision, skillId: skill?.id ?? null, skillName: skill?.name ?? null, note: dto.note?.trim() || null, pedidos: mismos.length },
     });
     for (const p of mismos) {
-      const aviso = decision === 'alias'
-        ? { title: 'Pedido de tecnología resuelto', body: `«${p.name}» quedó registrado como otro nombre de «${skill!.name}»: ya puedes agregarla a tu proyecto.` }
-        : decision === 'new_skill'
-          ? { title: 'Tecnología agregada al catálogo', body: `«${skill!.name}» se agregó al catálogo: ya puedes agregarla a tu proyecto.` }
-          : { title: 'Pedido de tecnología revisado', body: `«${p.name}» no se agregó: ${p.decisionNote}` };
       await this.avisar({
         userId: p.requestedBy,
         kind: 'SKILL_REQUEST_DECIDED',
-        ...aviso,
+        ...this.avisoDePedido(decision, p, skill),
         link: '/student/projects',
         dedupeKey: `skill-request-decided:${p.id}`,
       });
     }
     return mismos.find((p) => p.id === r.id) ?? r;
+  }
+
+  /** `alias`: el nombre pedido pasa a ser otro nombre de una tecnología del catálogo. */
+  private async registrarComoAlias(r: SkillRequest, dto: DecisionDePedido, user: AuthenticatedUser): Promise<Skill> {
+    let skill = dto.skillId ? await this.skills.findOne({ where: { id: dto.skillId } }) : null;
+    if (!skill) {
+      const m = 'Elige la tecnología del catálogo de la que este nombre es sinónimo.';
+      throw new BadRequestException({ message: m, fields: { skillId: [m] } });
+    }
+    if (dto.decision === 'alias' && dto.sameTechnology !== true) {
+      const m = `Confirma que «${r.name}» es otro nombre de «${skill.name}». Si es una tecnología distinta, créala como nueva.`;
+      throw new BadRequestException({ code: 'ALIAS_NOT_CONFIRMED', message: m, fields: { sameTechnology: [m] } });
+    }
+    const yaEs = this.normSenal(skill.name) === this.normSenal(r.name)
+      || (skill.aliases ?? []).some((a) => this.normSenal(a) === this.normSenal(r.name));
+    if (!yaEs) skill = await this.catalogs.updateSkill(skill.id, { aliases: [...(skill.aliases ?? []), r.name] }, user.userId);
+    return skill;
+  }
+
+  /** `new_skill`: una tecnología distinta, creada en el catálogo con sus áreas. */
+  private async crearTecnologiaPedida(r: SkillRequest, dto: DecisionDePedido, user: AuthenticatedUser): Promise<Skill> {
+    if (!dto.newSkill?.academicAreaId) {
+      const m = 'Elige el área principal de la tecnología nueva.';
+      throw new BadRequestException({ message: m, fields: { academicAreaId: [m] } });
+    }
+    const nombre = dto.newSkill.name?.trim() || r.name;
+    return this.catalogs.createSkill({
+      name: nombre,
+      academicAreaId: dto.newSkill.academicAreaId,
+      secondaryAreaIds: dto.newSkill.secondaryAreaIds ?? [],
+      aliases: this.normSenal(nombre) === this.normSenal(r.name) ? [] : [r.name],
+      overrideReason: dto.newSkill.overrideReason,
+    } satisfies CreateSkillDto, user.userId);
+  }
+
+  /** Lo que se le dice a quien pidió la tecnología, según lo que de verdad pasó. */
+  private avisoDePedido(decision: 'alias' | 'new_skill' | 'rejected', p: SkillRequest, skill: Skill | null) {
+    if (decision === 'alias') {
+      return { title: 'Pedido de tecnología resuelto', body: `«${p.name}» quedó registrado como otro nombre de «${skill?.name}»: ya puedes agregarla a tu proyecto.` };
+    }
+    if (decision === 'new_skill') {
+      return { title: 'Tecnología agregada al catálogo', body: `«${skill?.name}» se agregó al catálogo: ya puedes agregarla a tu proyecto.` };
+    }
+    return { title: 'Pedido de tecnología revisado', body: `«${p.name}» no se agregó: ${p.decisionNote}` };
   }
 
   /**
@@ -484,7 +542,7 @@ export class ProjectsService {
     const project = await this.projects.findOne({ where: { id: projectId } });
     if (!project) return;
     const check = await this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } });
-    const vigente = check && check.repositoryUrl === project.repositoryUrl ? check : null;
+    const vigente = check?.repositoryUrl === project.repositoryUrl ? check : null;
     const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
     const senales = new Map((vigente?.technologySignals ?? []).map((t) => [norm(t.name), t]));
     const filas = await this.projectSkills.find({ where: { projectId }, relations: { skill: true } });
@@ -544,12 +602,12 @@ export class ProjectsService {
       skillCount: skillsProyecto.length,
       areasWithoutSkill,
       repositoryUrl: project.repositoryUrl,
-      repositoryCheck: repo && repo.repositoryUrl === project.repositoryUrl ? repo.status : null,
+      repositoryCheck: repo?.repositoryUrl === project.repositoryUrl ? (repo?.status ?? null) : null,
       members: miembros.filter((m) => !m.isOwner).map((m) => ({ confirmed: m.contributionConfirmedAt !== null })),
       pendingInvitations: pendientes,
       ownContributionConfirmed: !!owner?.contributionConfirmedAt,
       evidenceCount: evidencias,
-      demoCheck: demo && demo.url === project.demoUrl ? demo.status : null,
+      demoCheck: demo?.url === project.demoUrl ? (demo?.status ?? null) : null,
     });
   }
 
@@ -684,25 +742,8 @@ export class ProjectsService {
     const visibilidadAnterior = project.visibility;
     const estadoAnterior = project.status;
 
-    const areaIds = this.areasPedidas(dto);
-    if (areaIds !== undefined) {
-      for (const a of areaIds) await this.assertAreaExists(a);
-      project.academicAreaId = areaIds[0] ?? null;
-    }
-    const areasFinales = areaIds
-      ?? (await this.projectAreas.find({ where: { projectId: id } })).map((x) => x.academicAreaId);
-    let contextos: { skillId: string; areaId: string | null }[] | undefined;
-    let skillsFinales: string[] | undefined;
-    if (dto.skillIds !== undefined || areaIds !== undefined || dto.skillContexts !== undefined) {
-      const previas = await this.projectSkills.find({ where: { projectId: id } });
-      skillsFinales = dto.skillIds ?? previas.map((x) => x.skillId);
-      await assertSkillsBelongToAreas(this.projects.manager, skillsFinales, areasFinales);
-      // V3.2 §11.4: sin contexto nuevo se conserva el anterior si sigue valiendo.
-      const conservados = previas
-        .filter((x) => x.academicAreaId && areasFinales.includes(x.academicAreaId))
-        .map((x) => ({ skillId: x.skillId, areaId: x.academicAreaId as string }));
-      contextos = await resolveSkillContexts(this.projects.manager, skillsFinales, areasFinales, dto.skillContexts ?? conservados);
-    }
+    const plan = await this.planDeAreasYTecnologias(id, dto, project);
+    const { areaIds, contextos, skillsFinales } = plan;
     if (dto.teamId !== undefined) {
       if (dto.teamId) await this.assertTeamOfUser(project.createdByProfileId, dto.teamId);
       project.teamId = dto.teamId ?? null;
@@ -710,34 +751,10 @@ export class ProjectsService {
 
     // V3 §22: un ACTIVE no puede quedarse sin lo que lo hizo activable.
     const sigueActivo = (dto.status ?? project.status) === ProjectStatus.ACTIVE && estadoAnterior === ProjectStatus.ACTIVE;
-    if (sigueActivo) {
-      const quitar: string[] = [];
-      if (areaIds !== undefined && areaIds.length === 0) quitar.push('Un proyecto activo necesita al menos un área.');
-      if (dto.skillIds !== undefined && dto.skillIds.length === 0) quitar.push('Un proyecto activo necesita al menos una tecnología.');
-      if (dto.repositoryUrl !== undefined && !dto.repositoryUrl) quitar.push('Un proyecto activo necesita su repositorio.');
-      // V4.1 §10.2: tampoco puede quedar un área sin ninguna tecnología usada en ella.
-      if (contextos && skillsFinales && skillsFinales.length > 0) {
-        const sinSkill = areasFinales.filter((a) => !contextos!.some((c) => c.areaId === a));
-        if (sinSkill.length) quitar.push('Cada área de un proyecto activo necesita al menos una tecnología usada en ella.');
-      }
-      if (quitar.length) {
-        throw new BadRequestException({ code: 'PROJECT_ACTIVE_REQUIREMENT', message: quitar.join(' '), fields: { status: quitar } });
-      }
-    }
+    if (sigueActivo) exigirRequisitosDeActivo(dto, plan);
 
-    if (dto.title !== undefined) project.title = dto.title;
-    if (dto.description !== undefined) project.description = dto.description;
-    if (dto.technologies !== undefined) project.technologies = dto.technologies;
     const activar = dto.status === ProjectStatus.ACTIVE && estadoAnterior !== ProjectStatus.ACTIVE;
-    if (dto.status !== undefined && !activar) project.status = dto.status;
-    const enlacesCambian =
-      (dto.repositoryUrl !== undefined && this.repoRaiz(dto.repositoryUrl) !== project.repositoryUrl)
-      || (dto.demoUrl !== undefined && dto.demoUrl !== project.demoUrl);
-
-    if (dto.repositoryUrl !== undefined) project.repositoryUrl = this.repoRaiz(dto.repositoryUrl);
-    if (dto.demoUrl !== undefined) project.demoUrl = this.demoSegura(dto.demoUrl) ?? null;
-    if (dto.visibility !== undefined) project.visibility = dto.visibility;
-    this.sincronizarEnlacePublico(project);
+    const enlacesCambian = this.aplicarCamposDelProyecto(project, dto, activar);
 
     await this.projects.save(project);
     if (areaIds !== undefined) await this.replaceAreas(project.id, areaIds);
@@ -749,28 +766,9 @@ export class ProjectsService {
     const skillsAntes = dto.skillIds !== undefined && sigueActivo
       ? (await this.projectSkills.find({ where: { projectId: project.id } })).map((x) => x.skillId)
       : [];
-    if (dto.skillIds !== undefined) {
-      await this.replaceSkills(project.id, dto.skillIds, contextos, dto.skillSources);
-      const nombres = (await this.skills.find({ where: { id: In(dto.skillIds.length ? dto.skillIds : ['00000000-0000-4000-8000-000000000000']) } })).map((s) => s.name);
-      if (nombres.length) await this.projects.update(project.id, { technologies: nombres });
-    }
+    if (dto.skillIds !== undefined) await this.cambiarTecnologias(project.id, dto.skillIds, contextos, dto.skillSources);
 
-    if (dto.visibility !== undefined && dto.visibility !== visibilidadAnterior) {
-      await this.events.record({
-        projectId: project.id,
-        actorUserId: user.userId,
-        eventType: ProjectEventType.PROJECT_VISIBILITY_CHANGED,
-        metadata: { de: visibilidadAnterior, a: dto.visibility },
-      });
-    }
-    if (dto.status === ProjectStatus.ARCHIVED && estadoAnterior !== ProjectStatus.ARCHIVED) {
-      await this.events.record({
-        projectId: project.id,
-        actorUserId: user.userId,
-        eventType: ProjectEventType.PROJECT_ARCHIVED,
-        metadata: {},
-      });
-    }
+    await this.registrarEventosDeEdicion(project.id, user.userId, dto, visibilidadAnterior, estadoAnterior);
 
     if (sigueActivo && dto.skillIds !== undefined) {
       const quitadas = skillsAntes.filter((s) => !dto.skillIds!.includes(s));
@@ -794,16 +792,100 @@ export class ProjectsService {
     // V3 §21: cambiar de estado (activar, archivar, volver a borrador) cambia
     // también la afinidad de cada integrante, no solo la del responsable.
     const estadoFinal = activar ? ProjectStatus.ACTIVE : project.status;
-    if (estadoFinal !== estadoAnterior) {
-      const integrantes = await this.members.find({ where: { projectId: project.id } });
-      const perfiles = integrantes.length
-        ? await this.profiles.find({ where: { userId: In(integrantes.map((m) => m.userId)) } })
-        : [];
-      for (const perfil of perfiles) {
-        if (perfil.id !== project.createdByProfileId) await this.trajectory.requestRecalculation(perfil.id);
-      }
-    }
+    if (estadoFinal !== estadoAnterior) await this.recalcularIntegrantes(project);
     return this.findOneOrFail(id);
+  }
+
+  /**
+   * Las áreas pedidas (comprobadas) y, si cambian áreas o tecnologías, las
+   * tecnologías finales con el área en que se usó cada una.
+   */
+  private async planDeAreasYTecnologias(id: string, dto: UpdateProjectDto, project: Project): Promise<PlanDeAreas> {
+    const areaIds = this.areasPedidas(dto);
+    if (areaIds !== undefined) {
+      for (const a of areaIds) await this.assertAreaExists(a);
+      project.academicAreaId = areaIds[0] ?? null;
+    }
+    const areasFinales = areaIds
+      ?? (await this.projectAreas.find({ where: { projectId: id } })).map((x) => x.academicAreaId);
+    if (dto.skillIds === undefined && areaIds === undefined && dto.skillContexts === undefined) {
+      return { areaIds, areasFinales, contextos: undefined, skillsFinales: undefined };
+    }
+    const previas = await this.projectSkills.find({ where: { projectId: id } });
+    const skillsFinales = dto.skillIds ?? previas.map((x) => x.skillId);
+    await assertSkillsBelongToAreas(this.projects.manager, skillsFinales, areasFinales);
+    // V3.2 §11.4: sin contexto nuevo se conserva el anterior si sigue valiendo.
+    const conservados = previas
+      .filter((x) => x.academicAreaId && areasFinales.includes(x.academicAreaId))
+      .map((x) => ({ skillId: x.skillId, areaId: x.academicAreaId as string }));
+    const contextos = await resolveSkillContexts(this.projects.manager, skillsFinales, areasFinales, dto.skillContexts ?? conservados);
+    return { areaIds, areasFinales, contextos, skillsFinales };
+  }
+
+  /** Copia los campos simples del formulario. Devuelve si cambian los enlaces. */
+  private aplicarCamposDelProyecto(project: Project, dto: UpdateProjectDto, activar: boolean): boolean {
+    if (dto.title !== undefined) project.title = dto.title;
+    if (dto.description !== undefined) project.description = dto.description;
+    if (dto.technologies !== undefined) project.technologies = dto.technologies;
+    if (dto.status !== undefined && !activar) project.status = dto.status;
+    const enlacesCambian =
+      (dto.repositoryUrl !== undefined && this.repoRaiz(dto.repositoryUrl) !== project.repositoryUrl)
+      || (dto.demoUrl !== undefined && dto.demoUrl !== project.demoUrl);
+
+    if (dto.repositoryUrl !== undefined) project.repositoryUrl = this.repoRaiz(dto.repositoryUrl);
+    if (dto.demoUrl !== undefined) project.demoUrl = this.demoSegura(dto.demoUrl) ?? null;
+    if (dto.visibility !== undefined) project.visibility = dto.visibility;
+    this.sincronizarEnlacePublico(project);
+    return enlacesCambian;
+  }
+
+  /** Reemplaza las tecnologías y deja sus nombres como texto del proyecto. */
+  private async cambiarTecnologias(
+    projectId: string,
+    skillIds: string[],
+    contextos: SkillContext[] | undefined,
+    fuentes: UpdateProjectDto['skillSources'],
+  ): Promise<void> {
+    await this.replaceSkills(projectId, skillIds, contextos, fuentes);
+    const nombres = (await this.skills.find({ where: { id: In(skillIds.length ? skillIds : ['00000000-0000-4000-8000-000000000000']) } })).map((s) => s.name);
+    if (nombres.length) await this.projects.update(projectId, { technologies: nombres });
+  }
+
+  /** Bitácora de la edición: cambio de visibilidad y archivado. */
+  private async registrarEventosDeEdicion(
+    projectId: string,
+    actorUserId: string,
+    dto: UpdateProjectDto,
+    visibilidadAnterior: Project['visibility'],
+    estadoAnterior: ProjectStatus,
+  ): Promise<void> {
+    if (dto.visibility !== undefined && dto.visibility !== visibilidadAnterior) {
+      await this.events.record({
+        projectId,
+        actorUserId,
+        eventType: ProjectEventType.PROJECT_VISIBILITY_CHANGED,
+        metadata: { de: visibilidadAnterior, a: dto.visibility },
+      });
+    }
+    if (dto.status === ProjectStatus.ARCHIVED && estadoAnterior !== ProjectStatus.ARCHIVED) {
+      await this.events.record({
+        projectId,
+        actorUserId,
+        eventType: ProjectEventType.PROJECT_ARCHIVED,
+        metadata: {},
+      });
+    }
+  }
+
+  /** V3 §21: la afinidad de cada integrante (la del responsable ya se pidió aparte). */
+  private async recalcularIntegrantes(project: Project): Promise<void> {
+    const integrantes = await this.members.find({ where: { projectId: project.id } });
+    const perfiles = integrantes.length
+      ? await this.profiles.find({ where: { userId: In(integrantes.map((m) => m.userId)) } })
+      : [];
+    for (const perfil of perfiles) {
+      if (perfil.id !== project.createdByProfileId) await this.trajectory.requestRecalculation(perfil.id);
+    }
   }
 
   /**
@@ -1413,28 +1495,33 @@ export class ProjectsService {
     if (unicas.length > 20) {
       throw new BadRequestException('Máximo 20 tecnologías por integrante.');
     }
-    if (unicas.length > 0) {
-      const delProyecto = new Set((await this.projectSkills.find({ where: { projectId } })).map((s) => s.skillId));
-      // Un proyecto anterior al catálogo declara sus tecnologías como texto
-      // (`technologies`): una tecnología del catálogo con ese nombre o alias
-      // también es del proyecto.
-      const texto = new Set(((await this.projects.findOne({ where: { id: projectId }, select: { id: true, technologies: true } }))?.technologies ?? [])
-        .map((t) => this.normSenal(t)));
-      if (texto.size) {
-        for (const s of await this.skills.find({ where: { id: In(unicas) } })) {
-          if (texto.has(this.normSenal(s.name)) || (s.aliases ?? []).some((a) => texto.has(this.normSenal(a)))) delProyecto.add(s.id);
-        }
-      }
-      const ajenas = unicas.filter((id) => !delProyecto.has(id));
-      if (ajenas.length > 0) {
-        const nombres = (await this.skills.find({ where: { id: In(ajenas) } })).map((s) => s.name);
-        const m = nombres.length
-          ? `${nombres.join(', ')} no ${nombres.length === 1 ? 'está' : 'están'} entre las tecnologías del proyecto: pide al responsable que ${nombres.length === 1 ? 'la agregue' : 'las agregue'} primero.`
-          : 'Alguna de las tecnologías indicadas no existe.';
-        throw new BadRequestException({ code: 'SKILL_NOT_IN_PROJECT', message: m, fields: { skillIds: [m] } });
-      }
+    if (unicas.length === 0) return unicas;
+    const delProyecto = await this.tecnologiasDelProyecto(projectId, unicas);
+    const ajenas = unicas.filter((id) => !delProyecto.has(id));
+    if (ajenas.length > 0) {
+      const nombres = (await this.skills.find({ where: { id: In(ajenas) } })).map((s) => s.name);
+      const m = mensajeTecnologiasAjenas(nombres);
+      throw new BadRequestException({ code: 'SKILL_NOT_IN_PROJECT', message: m, fields: { skillIds: [m] } });
     }
     return unicas;
+  }
+
+  /**
+   * Tecnologías del proyecto. Un proyecto anterior al catálogo declara las suyas
+   * como texto (`technologies`): una tecnología del catálogo con ese nombre o
+   * alias también es del proyecto.
+   */
+  private async tecnologiasDelProyecto(projectId: string, candidatas: string[]): Promise<Set<string>> {
+    const delProyecto = new Set((await this.projectSkills.find({ where: { projectId } })).map((s) => s.skillId));
+    const proyecto = await this.projects.findOne({ where: { id: projectId }, select: { id: true, technologies: true } });
+    const texto = new Set((proyecto?.technologies ?? []).map((t) => this.normSenal(t)));
+    if (texto.size) {
+      for (const s of await this.skills.find({ where: { id: In(candidatas) } })) {
+        const coincide = texto.has(this.normSenal(s.name)) || (s.aliases ?? []).some((a) => texto.has(this.normSenal(a)));
+        if (coincide) delProyecto.add(s.id);
+      }
+    }
+    return delProyecto;
   }
 
   private async memberView(memberId: string) {
@@ -1613,7 +1700,7 @@ export class ProjectsService {
       await this.syncSkillEvidence(f.id);
       await this.backing.recalculate(f.id, null);
     }
-    return { procesados: filas.length, siguiente: filas.length === limit ? filas[filas.length - 1].id : null };
+    return { procesados: filas.length, siguiente: filas.length === limit ? filas.at(-1)!.id : null };
   }
 
   /** Vuelve a comprobar las fuentes externas a petición del responsable. */

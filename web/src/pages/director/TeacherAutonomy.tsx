@@ -22,6 +22,13 @@ const fecha = (v: string | null) =>
 
 const CAMPOS = ['teacherUserId', 'module', 'justification'] as const;
 
+/** « · 1º, 3º» o « · sin semestres». */
+function semestresDeDocente(semestres: number[]): string {
+  if (!semestres.length) return ' · sin semestres';
+  const lista = semestres.map((s) => `${s}º`).join(', ');
+  return ` · ${lista}`;
+}
+
 /**
  * Autonomía docente (V5 §9.2).
  *
@@ -113,7 +120,7 @@ export default function TeacherAutonomyPage() {
                   <option value="">{(docentes.data ?? []).length ? 'Elige un docente' : 'No hay docentes activos'}</option>
                   {(docentes.data ?? []).map((d) => (
                     <option key={d.id} value={d.id} disabled={yaTiene.has(`${d.id}:${form.module}`)}>
-                      {d.name}{d.semesters.length ? ` · ${d.semesters.map((s) => `${s}º`).join(', ')}` : ' · sin semestres'}
+                      {d.name}{semestresDeDocente(d.semesters)}
                       {yaTiene.has(`${d.id}:${form.module}`) ? ' (ya la tiene)' : ''}
                     </option>
                   ))}

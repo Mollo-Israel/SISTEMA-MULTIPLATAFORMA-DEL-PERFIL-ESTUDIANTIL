@@ -18,11 +18,11 @@ export function Screen({
   children,
   refreshing,
   onRefresh,
-}: {
+}: Readonly<{
   children: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
-}) {
+}>) {
   return (
     <ScrollView
       style={styles.screen}
@@ -36,7 +36,7 @@ export function Screen({
   );
 }
 
-export function Card({ children, title }: { children: ReactNode; title?: string }) {
+export function Card({ children, title }: Readonly<{ children: ReactNode; title?: string }>) {
   return (
     <View style={styles.card}>
       {title ? <Text style={styles.cardTitle}>{title}</Text> : null}
@@ -45,11 +45,11 @@ export function Card({ children, title }: { children: ReactNode; title?: string 
   );
 }
 
-export function H1({ children }: { children: ReactNode }) {
+export function H1({ children }: Readonly<{ children: ReactNode }>) {
   return <Text style={styles.h1}>{children}</Text>;
 }
 
-export function Muted({ children }: { children: ReactNode }) {
+export function Muted({ children }: Readonly<{ children: ReactNode }>) {
   return <Text style={styles.muted}>{children}</Text>;
 }
 
@@ -65,7 +65,7 @@ export function Button({
   loading,
   small,
   icon,
-}: {
+}: Readonly<{
   title: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'danger';
@@ -73,7 +73,7 @@ export function Button({
   loading?: boolean;
   small?: boolean;
   icon?: IconName;
-}) {
+}>) {
   const blocked = disabled || loading;
   const solid = variant === 'primary' || variant === 'danger';
   return (
@@ -92,15 +92,14 @@ export function Button({
       ]}
     >
       <View style={styles.btnInner}>
-        {loading ? (
-          <ActivityIndicator size="small" color={solid ? colors.white : colors.gray700} />
-        ) : icon ? (
+        {loading && <ActivityIndicator size="small" color={solid ? colors.white : colors.gray700} />}
+        {!loading && !!icon && (
           <Icon
             name={icon}
             size={small ? 13 : 15}
             color={solid ? colors.white : colors.gray700}
           />
-        ) : null}
+        )}
         <Text style={solid ? styles.btnPrimaryText : styles.btnSecondaryText}>{title}</Text>
       </View>
     </Pressable>
@@ -115,7 +114,7 @@ export function Field({
   secureTextEntry,
   keyboardType,
   multiline,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   onChangeText: (t: string) => void;
@@ -123,7 +122,7 @@ export function Field({
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address' | 'numeric';
   multiline?: boolean;
-}) {
+}>) {
   return (
     <View style={{ marginBottom: 12 }}>
       <Text style={styles.label}>{label}</Text>
@@ -144,7 +143,7 @@ export function Field({
   );
 }
 
-export function Badge({ children, color = colors.gray500 }: { children: ReactNode; color?: string }) {
+export function Badge({ children, color = colors.gray500 }: Readonly<{ children: ReactNode; color?: string }>) {
   return (
     <View style={[styles.badge, { backgroundColor: color + '22' }]}>
       <Text style={[styles.badgeText, { color }]}>{children}</Text>
@@ -164,11 +163,11 @@ export function EmptyState({
   message = 'Sin datos.',
   icon,
   action,
-}: {
+}: Readonly<{
   message?: string;
   icon?: IconName;
   action?: ReactNode;
-}) {
+}>) {
   return (
     <View style={styles.center}>
       {icon ? (
@@ -189,11 +188,11 @@ export function PageHeader({
   title,
   description,
   right,
-}: {
+}: Readonly<{
   title: string;
   description?: string;
   right?: ReactNode;
-}) {
+}>) {
   return (
     <View style={styles.pageHeader}>
       <View style={{ flex: 1 }}>
@@ -210,11 +209,11 @@ export function SearchInput({
   value,
   onChangeText,
   placeholder = 'Buscar…',
-}: {
+}: Readonly<{
   value: string;
   onChangeText: (t: string) => void;
   placeholder?: string;
-}) {
+}>) {
   return (
     <View style={styles.search}>
       <Icon name="search" size={16} />
@@ -243,24 +242,31 @@ export function SearchInput({
 }
 
 /** Cuantos resultados quedaron tras filtrar: da certeza de que el filtro corrio. */
+/** «1 proyecto», no «1 proyectos»: actividades → actividad, áreas → área. */
+export function singular(noun: string): string {
+  if (/[^aeiouáéíóú]es$/i.test(noun)) return noun.slice(0, -2);
+  return noun.endsWith('s') ? noun.slice(0, -1) : noun;
+}
+
 export function ResultCount({
   shown,
   total,
   noun = 'resultados',
-}: {
+}: Readonly<{
   shown: number;
   total: number;
   noun?: string;
-}) {
+}>) {
+  const palabra = total === 1 ? singular(noun) : noun;
   return (
     <Text style={styles.resultCount}>
-      {shown === total ? `${total} ${noun}` : `${shown} de ${total} ${noun}`}
+      {shown === total ? `${total} ${palabra}` : `${shown} de ${total} ${noun}`}
     </Text>
   );
 }
 
 /** Bloque gris que late mientras llegan los datos, en lugar de una pantalla vacia. */
-export function Skeleton({ height = 14, width }: { height?: number; width?: number | string }) {
+export function Skeleton({ height = 14, width }: Readonly<{ height?: number; width?: number | string }>) {
   const anim = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
@@ -284,11 +290,11 @@ export function Skeleton({ height = 14, width }: { height?: number; width?: numb
   );
 }
 
-export function SkeletonCards({ count = 3 }: { count?: number }) {
+export function SkeletonCards({ count = 3 }: Readonly<{ count?: number }>) {
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      {Array.from({ length: count }).map((_, i) => (
-        <View key={i} style={styles.card}>
+      {Array.from({ length: count }, (_, i) => `esqueleto-${i}`).map((id) => (
+        <View key={id} style={styles.card}>
           <Skeleton height={15} width="60%" />
           <View style={{ height: 8 }} />
           <Skeleton height={11} />
@@ -305,11 +311,11 @@ export function ProgressBar({
   value,
   label,
   tone = colors.bordo,
-}: {
+}: Readonly<{
   value: number;
   label?: string;
   tone?: string;
-}) {
+}>) {
   const anim = useRef(new Animated.Value(0)).current;
   const safe = Math.max(0, Math.min(100, value));
 
@@ -349,7 +355,7 @@ export function ProgressBar({
 }
 
 /** Entrada escalonada de una tarjeta de la lista. */
-export function FadeIn({ children, index = 0 }: { children: ReactNode; index?: number }) {
+export function FadeIn({ children, index = 0 }: Readonly<{ children: ReactNode; index?: number }>) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -380,11 +386,11 @@ export function Chip({
   label,
   on,
   onPress,
-}: {
+}: Readonly<{
   label: string;
   on: boolean;
   onPress: () => void;
-}) {
+}>) {
   return (
     <Pressable
       onPress={onPress}
@@ -397,11 +403,11 @@ export function Chip({
   );
 }
 
-export function ErrorText({ message }: { message: string }) {
+export function ErrorText({ message }: Readonly<{ message: string }>) {
   return <Text style={styles.error}>⚠ {message}</Text>;
 }
 
-export function Success({ message }: { message: string }) {
+export function Success({ message }: Readonly<{ message: string }>) {
   return <Text style={styles.success}>{message}</Text>;
 }
 

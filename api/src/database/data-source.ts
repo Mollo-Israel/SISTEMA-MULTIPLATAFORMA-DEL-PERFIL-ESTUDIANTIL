@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { join } from 'path';
+import { join } from 'node:path';
 import * as dotenv from 'dotenv';
 import { DataSource } from 'typeorm';
 import { databaseConnection } from '../config/database-connection';

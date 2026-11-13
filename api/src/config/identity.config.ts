@@ -1,11 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
+import { quitarBarrasFinales } from '../common/texto';
 
 const logger = new Logger('IdentityConfig');
 
 function num(config: ConfigService, key: string, fallback: number): number {
   const raw = config.get<string>(key);
-  const value = raw === undefined ? NaN : Number(raw);
+  const value = raw === undefined ? Number.NaN : Number(raw);
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
@@ -99,12 +100,12 @@ export const identityConfig = {
  */
 export function webAppUrl(config: ConfigService): string {
   const explicita = config.get<string>('WEB_APP_URL')?.trim();
-  if (explicita) return explicita.replace(/\/+$/, '');
+  if (explicita) return quitarBarrasFinales(explicita);
   const primero = (config.get<string>('WEB_ORIGINS') ?? config.get<string>('CORS_ORIGINS') ?? '')
     .split(',')
     .map((o) => o.trim())
     .find((o) => o && o !== '*');
-  return (primero ?? 'http://localhost:5173').replace(/\/+$/, '');
+  return quitarBarrasFinales(primero ?? 'http://localhost:5173');
 }
 
 /** Zona horaria con la que se escriben las fechas en los correos. */

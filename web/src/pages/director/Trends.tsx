@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { FiEyeOff, FiInfo } from 'react-icons/fi';
 import { analyticsService, type DirectorTrends } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
@@ -169,11 +170,11 @@ export function Tabla({
   filas,
   columnas,
   vacio,
-}: {
+}: Readonly<{
   filas: Record<string, unknown>[];
   columnas: Columna[];
   vacio: string;
-}) {
+}>) {
   if (filas.length === 0) return <EmptyState message={vacio} />;
 
   return (
@@ -196,12 +197,12 @@ export function Tabla({
                   // Una sola celda explica la supresión, y ocupa lo que queda.
                   return j === columnas.findIndex((x) => f[x.clave] === undefined) ? (
                     <td key={c.clave} colSpan={columnas.length - j} className="muted sin-desglose">
-                      <FiEyeOff size={12} /> {String(f.reason ?? '')}
+                      <FiEyeOff size={12} /> {String((f.reason as string | undefined) ?? '')}
                     </td>
                   ) : null;
                 }
                 return (
-                  <td key={c.clave} style={c.numerica ? { textAlign: 'right' } : c.clave === 'period' ? { whiteSpace: 'nowrap' } : undefined}>
+                  <td key={c.clave} style={estiloDeCelda(c.numerica, c.clave)}>
                     {f[c.clave] === null || f[c.clave] === undefined ? '—' : String(f[c.clave])}
                   </td>
                 );
@@ -212,4 +213,10 @@ export function Tabla({
       </table>
     </div>
   );
+}
+
+/** Los números a la derecha; el periodo, sin cortarse. */
+function estiloDeCelda(numerica: boolean | undefined, clave: string): CSSProperties | undefined {
+  if (numerica) return { textAlign: 'right' };
+  return clave === 'period' ? { whiteSpace: 'nowrap' } : undefined;
 }

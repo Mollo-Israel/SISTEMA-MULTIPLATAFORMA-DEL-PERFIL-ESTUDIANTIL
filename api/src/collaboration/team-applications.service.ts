@@ -29,6 +29,7 @@ import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { semestreElegible } from './team-need.rules';
 import { AuditEventType, AuditService } from '../audit/audit.service';
+import { siHay } from '../common/texto';
 
 const ENLACE = '/student/collaboration?tab=equipos';
 const motivoDe = (code: string | null) =>
@@ -195,7 +196,7 @@ export class TeamApplicationsService {
       relations: { need: { owner: { user: true } }, applicant: true },
     });
     // De otra necesidad: 404, sin revelar que existe.
-    if (!a || a.need.ownerProfileId !== ownerProfileId) throw new NotFoundException('Postulación no encontrada.');
+    if (a?.need.ownerProfileId !== ownerProfileId) throw new NotFoundException('Postulación no encontrada.');
     if (a.status !== TeamApplicationStatus.PENDING) {
       throw new ConflictException({ code: 'TEAM_APPLICATION_DECIDED', message: 'Esa postulación ya tiene respuesta.' });
     }
@@ -278,7 +279,7 @@ export class TeamApplicationsService {
       userId: a.applicant.userId,
       kind: 'TEAM_APPLICATION_REJECTED',
       title: 'Respuesta a tu postulación',
-      body: `«${a.need.purpose}»: ${motivoDe(reason)}.${comment ? ` ${comment}` : ''}`,
+      body: `«${a.need.purpose}»: ${motivoDe(reason)}.${siHay(comment, ' ')}`,
       link: ENLACE,
       entityType: 'team_application',
       entityId: a.id,

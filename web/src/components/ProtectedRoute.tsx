@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import { HOME_BY_ROLE } from '../navigation';
 import { Loading } from './ui';
 
-export default function ProtectedRoute({ roles, children }: { roles: string[]; children: ReactNode }) {
+export default function ProtectedRoute({ roles, children }: Readonly<{ roles: string[]; children: ReactNode }>) {
   const { user, loading } = useAuth();
   if (loading) return <Loading label="Verificando sesión…" />;
   if (!user) return <Navigate to="/login" replace />;

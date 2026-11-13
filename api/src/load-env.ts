@@ -1,5 +1,5 @@
 import { config as loadDotenv } from 'dotenv';
-import * as path from 'path';
+import * as path from 'node:path';
 
 /**
  * Carga el .env antes que nada.

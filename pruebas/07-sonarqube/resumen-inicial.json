@@ -1,0 +1,82 @@
+{
+  "nota": "Estado del primer análisis de SonarQube, antes de las correcciones de calidad interna. Las métricas y el Quality Gate son los leídos del servidor tras ese análisis.",
+  "analisis": "2026-11-10T00:15:16+0000",
+  "qualityGate": "ERROR",
+  "condiciones": [
+    {
+      "status": "ERROR",
+      "metricKey": "new_coverage",
+      "comparator": "LT",
+      "errorThreshold": "80",
+      "actualValue": "16.9"
+    },
+    {
+      "status": "OK",
+      "metricKey": "new_duplicated_lines_density",
+      "comparator": "GT",
+      "errorThreshold": "3",
+      "actualValue": "0.83879"
+    },
+    {
+      "status": "ERROR",
+      "metricKey": "new_violations",
+      "comparator": "GT",
+      "errorThreshold": "0",
+      "actualValue": "135"
+    }
+  ],
+  "metricas": {
+    "coverage": "28.3",
+    "bugs": "5",
+    "reliability_rating": "4.0",
+    "code_smells": "895",
+    "duplicated_lines_density": "1.1",
+    "security_rating": "2.0",
+    "ncloc": "72378",
+    "vulnerabilities": "1",
+    "security_hotspots": "0",
+    "sqale_rating": "1.0"
+  },
+  "incidencias": {
+    "todo": {
+      "total": 901,
+      "types": {
+        "CODE_SMELL": 895,
+        "BUG": 5,
+        "VULNERABILITY": 1
+      },
+      "impactSoftwareQualities": {
+        "MAINTAINABILITY": 862,
+        "SECURITY": 4,
+        "RELIABILITY": 69
+      },
+      "impactSeverities": {
+        "HIGH": 101,
+        "MEDIUM": 436,
+        "LOW": 376,
+        "INFO": 1,
+        "BLOCKER": 2
+      }
+    },
+    "codigoNuevo": {
+      "total": 135,
+      "types": {
+        "CODE_SMELL": 135,
+        "BUG": 0,
+        "VULNERABILITY": 0
+      },
+      "impactSoftwareQualities": {
+        "MAINTAINABILITY": 135,
+        "SECURITY": 0,
+        "RELIABILITY": 2
+      },
+      "impactSeverities": {
+        "HIGH": 16,
+        "MEDIUM": 101,
+        "LOW": 18,
+        "INFO": 0,
+        "BLOCKER": 2
+      }
+    }
+  }
+}

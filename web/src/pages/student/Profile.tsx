@@ -104,7 +104,7 @@ export default function StudentProfilePage() {
           <ProgressBar
             value={profile.completionPercentage}
             label="Completitud"
-            tone={profile.completionPercentage >= 80 ? 'green' : profile.completionPercentage >= 40 ? 'amber' : 'bordo'}
+            tone={tonoDeAvance(profile.completionPercentage)}
           />
           <div className="inst-grid" style={{ marginTop: '0.8rem' }}>
             <div className="inst-dato">
@@ -136,15 +136,15 @@ export default function StudentProfilePage() {
 
       {loading ? (
         <Diferido><Card><SkeletonCards count={3} /></Card></Diferido>
-      ) : tab === 'datos' ? (
+      ) : <>{tab === 'datos' ? (
         <SobreMiTab profile={profile} onSaved={(p) => setProfile(p)} />
-      ) : tab === 'intereses' ? (
+      ) : <>{tab === 'intereses' ? (
         <>
           <MejoraCard profile={profile} areas={areas} onSaved={(p) => setProfile(p)} />
           <InteresesTab areas={areas} skills={skills} mejora={profile?.improvementAreaIds ?? []} onSaved={recargar} />
           <CuestionarioTab />
         </>
-      ) : tab === 'disponibilidad' ? (
+      ) : <>{tab === 'disponibilidad' ? (
         <DisponibilidadTab profile={profile} onSaved={(p) => setProfile(p)} />
       ) : (
         <>
@@ -154,7 +154,7 @@ export default function StudentProfilePage() {
           <StudentPrivacyPage embedded />
           <VistaPreviaPublica />
         </>
-      )}
+      )}</>}</>}</>}
     </div>
   );
 }
@@ -180,16 +180,18 @@ function VistaPreviaPublica() {
       actions={<Button size="sm" variant="secondary" icon={<FiRefreshCw size={13} />} onClick={cargar}>Actualizar</Button>}
     >
       <div data-testid="vista-previa-publica">
-        {estado.cargando ? (
+        {estado.cargando && (
           <p className="muted">Cargando…</p>
-        ) : estado.perfil ? (
+        )}
+        {!estado.cargando && estado.perfil && (
           <>
             <p className="muted small" style={{ marginTop: 0 }}>Esto es lo que ve quien abre tu enlace o escanea tu QR, sin iniciar sesión.</p>
             <div className="vista-previa">
               <PerfilPublicoVista perfil={estado.perfil} />
             </div>
           </>
-        ) : (
+        )}
+        {!estado.cargando && !estado.perfil && (
           <p className="muted" data-testid="perfil-no-publicado">
             Tu perfil compartido está desactivado: quien abra tu enlace o tu QR no verá nada. Actívalo arriba para publicarlo.
           </p>
@@ -200,7 +202,7 @@ function VistaPreviaPublica() {
 }
 
 /** V6 §8.3: foto propia opcional; sin ella, el avatar. No es pública por defecto. */
-function FotoPropia({ profile, onChanged }: { profile: StudentProfile; onChanged: () => void }) {
+function FotoPropia({ profile, onChanged }: Readonly<{ profile: StudentProfile; onChanged: () => void }>) {
   const toast = useToast();
   const [ocupado, setOcupado] = useState(false);
   const [version, setVersion] = useState(0);
@@ -271,7 +273,7 @@ function useGuardarPerfil(onSaved: (p: StudentProfile) => void) {
   return { saving, guardar };
 }
 
-function SobreMiTab({ profile, onSaved }: { profile: StudentProfile | null; onSaved: (p: StudentProfile) => void }) {
+function SobreMiTab({ profile, onSaved }: Readonly<{ profile: StudentProfile | null; onSaved: (p: StudentProfile) => void }>) {
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [avatar, setAvatar] = useState<string | null>(profile?.avatarKey ?? null);
   const { saving, guardar } = useGuardarPerfil(onSaved);
@@ -316,11 +318,11 @@ function MejoraCard({
   profile,
   areas,
   onSaved,
-}: {
+}: Readonly<{
   profile: StudentProfile | null;
   areas: AcademicArea[];
   onSaved: (p: StudentProfile) => void;
-}) {
+}>) {
   const [mejora, setMejora] = useState<string[]>(profile?.improvementAreaIds ?? []);
   const [error, setError] = useState<string | null>(null);
   const { saving, guardar } = useGuardarPerfil(onSaved);
@@ -356,10 +358,10 @@ function MejoraCard({
 function DisponibilidadTab({
   profile,
   onSaved,
-}: {
+}: Readonly<{
   profile: StudentProfile | null;
   onSaved: (p: StudentProfile) => void;
-}) {
+}>) {
   const [form, setForm] = useState({
     availability: (profile?.availability ?? 'unspecified') as AvailabilityStatus,
     modes: profile?.collaborationPreferences?.modes ?? [],
@@ -404,7 +406,7 @@ function DisponibilidadTab({
       <Card title="Cómo te gusta trabajar">
         <div className="field">
           <span className="field-label" id="profile-buscas-con-quien-trabajar">¿Buscas con quién trabajar?</span>
-          <div role="group" aria-labelledby="profile-buscas-con-quien-trabajar" className="chip-row">
+          <fieldset aria-labelledby="profile-buscas-con-quien-trabajar" className="chip-row">
             {AVAILABILITIES.map((a) => (
               <button
                 type="button"
@@ -416,12 +418,12 @@ function DisponibilidadTab({
                 {AVAILABILITY_LABEL[a]}
               </button>
             ))}
-          </div>
+          </fieldset>
         </div>
         <div className="row">
           <div className="field">
             <span className="field-label" id="profile-modo-de-trabajo">Modo de trabajo</span>
-            <div role="group" aria-labelledby="profile-modo-de-trabajo" className="chip-row">
+            <fieldset aria-labelledby="profile-modo-de-trabajo" className="chip-row">
               {MODES.map((m) => (
                 <button
                   type="button"
@@ -433,7 +435,7 @@ function DisponibilidadTab({
                   {COLLABORATION_MODE_LABEL[m]}
                 </button>
               ))}
-            </div>
+            </fieldset>
           </div>
           <div className="field">
             <label htmlFor="perfil-horas">Horas por semana</label>
@@ -453,7 +455,7 @@ function DisponibilidadTab({
         </div>
         <div className="field">
           <span className="field-label" id="profile-que-te-interesa-hacer">Qué te interesa hacer</span>
-          <div role="group" aria-labelledby="profile-que-te-interesa-hacer" className="chip-row">
+          <fieldset aria-labelledby="profile-que-te-interesa-hacer" className="chip-row">
             {COLLAB_INTERESTS.map((i) => (
               <button
                 type="button"
@@ -465,7 +467,7 @@ function DisponibilidadTab({
                 {COLLABORATION_INTEREST_LABEL[i]}
               </button>
             ))}
-          </div>
+          </fieldset>
         </div>
         <div className="field">
           <label htmlFor="perfil-nota">Nota para quien quiera invitarte</label>
@@ -503,12 +505,12 @@ function InteresesTab({
   skills,
   mejora,
   onSaved,
-}: {
+}: Readonly<{
   areas: AcademicArea[];
   skills: Skill[];
   mejora: string[];
   onSaved: () => void;
-}) {
+}>) {
   const [intereses, setIntereses] = useCachedState<Record<string, number>>('intereses', {});
   const [tecnologias, setTecnologias] = useCachedState<Record<string, SkillInterestKind>>('tecnologias', {});
   const [respaldadas, setRespaldadas] = useCachedState<BackedSkill[]>('respaldadas', []);
@@ -679,7 +681,7 @@ function CuestionarioTab() {
       </p>
       {cargando ? (
         <SkeletonCards count={1} />
-      ) : run ? (
+      ) : <>{run ? (
         <div style={{ marginBottom: '1rem' }}>
           <p style={{ margin: '0 0 0.5rem' }}>
             Lo respondiste el {new Date(run.createdAt).toLocaleDateString('es-BO', { dateStyle: 'long' })}. Te sugirió:
@@ -692,7 +694,7 @@ function CuestionarioTab() {
         </div>
       ) : (
         <p className="muted">Todavía no lo respondiste.</p>
-      )}
+      )}</>}
       <Button
         onClick={() => setRespondiendo(true)}
         icon={run ? <FiRefreshCw size={15} /> : <FiCompass size={15} />}
@@ -718,4 +720,10 @@ function SaldoPuntos() {
       </span>
     </div>
   );
+}
+
+/** El color del avance del perfil: verde casi completo, ámbar a medias, bordó al empezar. */
+function tonoDeAvance(p: number): 'green' | 'amber' | 'bordo' {
+  if (p >= 80) return 'green';
+  return p >= 40 ? 'amber' : 'bordo';
 }

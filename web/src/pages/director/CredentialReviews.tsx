@@ -69,7 +69,7 @@ export default function CredentialReviewsPage() {
       {error && <p className="form-error">{error}</p>}
       {items === null ? (
         <Diferido><SkeletonTable rows={3} columns={4} /></Diferido>
-      ) : items.length === 0 ? (
+      ) : <>{items.length === 0 ? (
         <EmptyState icon={<FiAward size={22} />} message="No hay credenciales esperando revisión." />
       ) : (
         <div className="grid" style={{ gap: '1rem' }}>
@@ -176,7 +176,7 @@ export default function CredentialReviewsPage() {
             </Stagger>
           ))}
         </div>
-      )}
+      )}</>}
     </div>
   );
 }

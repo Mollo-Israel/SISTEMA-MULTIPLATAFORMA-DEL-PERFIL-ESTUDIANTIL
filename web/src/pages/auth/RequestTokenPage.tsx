@@ -49,7 +49,7 @@ function reloj(segundos: number): string {
  * diez correos al mismo buzón, y eso es justo lo que lleva a Outlook a marcar
  * a Afinia como spam y a dejar de entregar sus correos a todo el mundo.
  */
-export default function RequestTokenPage({ mode }: { mode: Mode }) {
+export default function RequestTokenPage({ mode }: Readonly<{ mode: Mode }>) {
   const copy = COPY[mode];
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState<string | null>(null);
@@ -152,7 +152,7 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
                 </Link>
               </div>
             </motion.div>
-          ) : sent ? (
+          ) : <>{sent ? (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <div className="li-ok">
                 <span className="ic"><FiSend size={18} /></span>
@@ -182,7 +182,7 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
             <form onSubmit={submit} noValidate>
               <div className="li-field">
                 <span className="field-label" id="request-token-page-correo-institucional">Correo institucional</span>
-                <div role="group" aria-labelledby="request-token-page-correo-institucional" className={`li-input-wrap ${error ? 'bad' : ''}`}>
+                <fieldset aria-labelledby="request-token-page-correo-institucional" className={`li-input-wrap ${error ? 'bad' : ''}`}>
                   <input
                     type="email"
                     value={email}
@@ -192,7 +192,7 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
                     autoComplete="email"
                   />
                   <span className="ic"><FiMail /></span>
-                </div>
+                </fieldset>
                 {!error && (
                   <div className="li-err" style={{ color: '#9a8a8f' }}>
                     <FiAlertCircle /> Solo enviamos a correos @univalle.edu y @est.univalle.edu.
@@ -204,7 +204,7 @@ export default function RequestTokenPage({ mode }: { mode: Mode }) {
                 {busy ? <><span className="li-spin" /> Enviando…</> : <>{copy.cta} <FiArrowRight /></>}
               </motion.button>
             </form>
-          )}
+          )}</>}
 
           <div className="li-back"><Link to="/login">← Volver a iniciar sesión</Link></div>
         </div>

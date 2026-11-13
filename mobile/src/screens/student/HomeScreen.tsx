@@ -156,7 +156,7 @@ export default function HomeScreen({ navigation }: any) {
 }
 
 /** Tarjeta de saludo con fondo bordó, círculos que flotan y el avance del perfil. */
-function Hero({ nombre, semestre, avance, onPerfil }: { nombre?: string; semestre?: number | null; avance?: number; onPerfil: () => void }) {
+function Hero({ nombre, semestre, avance, onPerfil }: Readonly<{ nombre?: string; semestre?: number | null; avance?: number; onPerfil: () => void }>) {
   const flota = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -197,7 +197,7 @@ function Hero({ nombre, semestre, avance, onPerfil }: { nombre?: string; semestr
   );
 }
 
-function Fila({ icon, texto }: { icon: IconName; texto: string }) {
+function Fila({ icon, texto }: Readonly<{ icon: IconName; texto: string }>) {
   return (
     <View style={styles.fila}>
       <View style={styles.filaIco}><Icon name={icon} size={14} color={colors.bordo} /></View>

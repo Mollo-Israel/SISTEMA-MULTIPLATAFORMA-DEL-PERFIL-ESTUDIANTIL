@@ -65,7 +65,7 @@ export default function DirectorDashboard() {
   );
 }
 
-function Pendiente({ to, icon, n, titulo, detalle }: { to: string; icon: React.ReactNode; n: number; titulo: string; detalle: string }) {
+function Pendiente({ to, icon, n, titulo, detalle }: Readonly<{ to: string; icon: React.ReactNode; n: number; titulo: string; detalle: string }>) {
   return (
     <Link to={to} className={`card pendiente ${n > 0 ? 'con' : ''}`}>
       <span className="qi" aria-hidden>{icon}</span>

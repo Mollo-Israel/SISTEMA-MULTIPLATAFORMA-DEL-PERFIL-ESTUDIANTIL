@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="afinia" tests="3" failures="0" time="225.268" timestamp="2026-11-13T16:23:24">
+    <testcase id="00-bienvenida" name="00-bienvenida" classname="00-bienvenida" file="pruebas\08-movil-maestro\flujos\00-bienvenida.yaml" time="58.053" timestamp="2026-11-13T16:23:24" status="SUCCESS"/>
+    <testcase id="01-login-actividad-perfil" name="01-login-actividad-perfil" classname="01-login-actividad-perfil" file="pruebas\08-movil-maestro\flujos\01-login-actividad-perfil.yaml" time="101.922" timestamp="2026-11-13T16:24:22" status="SUCCESS"/>
+    <testcase id="02-proyectos-qr" name="02-proyectos-qr" classname="02-proyectos-qr" file="pruebas\08-movil-maestro\flujos\02-proyectos-qr.yaml" time="65.26" timestamp="2026-11-13T16:26:04" status="SUCCESS"/>
+  </testsuite>
+</testsuites>

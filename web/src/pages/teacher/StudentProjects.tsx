@@ -190,8 +190,8 @@ export default function TeacherStudentProjectsPage() {
       setComment('');
       setEditingId(null);
       setFeedback(await projectFeedbackService.list(selectedId));
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     } finally {
       setSaving(false);
     }
@@ -432,7 +432,7 @@ export default function TeacherStudentProjectsPage() {
                       );
                     })}
                   </ul>
-                ) : selected.technologies?.length ? (
+                ) : <>{selected.technologies?.length ? (
                   <div className="tag-list mt">
                     {selected.technologies.map((t) => (
                       <Badge key={t} tone="gray">
@@ -442,7 +442,7 @@ export default function TeacherStudentProjectsPage() {
                   </div>
                 ) : (
                   <p className="muted">Sin tecnologías declaradas.</p>
-                )}
+                )}</>}
               </div>
               <div>
                 <strong>Enlaces</strong>

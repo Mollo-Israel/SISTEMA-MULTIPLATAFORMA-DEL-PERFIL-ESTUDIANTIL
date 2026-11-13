@@ -62,7 +62,7 @@ const DURATION: Record<ToastTone, number> = {
   error: 6500,
 };
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
   const timers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
@@ -171,7 +171,7 @@ type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
 
 const ConfirmContext = createContext<ConfirmFn | null>(null);
 
-export function ConfirmProvider({ children }: { children: ReactNode }) {
+export function ConfirmProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [pending, setPending] = useState<{
     options: ConfirmOptions;
     resolve: (value: boolean) => void;

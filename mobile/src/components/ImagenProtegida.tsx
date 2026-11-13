@@ -10,7 +10,7 @@ import { API_URL } from '../config';
  */
 export function ImagenProtegida({
   src, style, fallback = null,
-}: { src: string; style?: StyleProp<ImageStyle>; fallback?: ReactNode }) {
+}: Readonly<{ src: string; style?: StyleProp<ImageStyle>; fallback?: ReactNode }>) {
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [fallo, setFallo] = useState(false);
 

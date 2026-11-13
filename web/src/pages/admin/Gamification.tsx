@@ -266,13 +266,13 @@ function CriterioDialog({
   areas,
   onClose,
   onSaved,
-}: {
+}: Readonly<{
   modo: Modo;
   criterio: GamificationCriterion | null;
   areas: { id: string; name: string }[];
   onClose: () => void;
   onSaved: (msg: string) => void;
-}) {
+}>) {
   const [form, setForm] = useState<Form>({
     name: criterio?.name ?? '',
     code: criterio?.code ?? '',
@@ -314,7 +314,7 @@ function CriterioDialog({
       ...(bono
         ? {
             validFrom: (v: string) => (v ? null : 'Indica desde cuándo vale.'),
-            validUntil: (v: string) => (!v ? 'Indica hasta cuándo vale.' : form.validFrom && v < form.validFrom ? 'La vigencia termina antes de empezar.' : null),
+            validUntil: (v: string) => problemaDeVigencia(v, form.validFrom),
           }
         : {}),
     });
@@ -346,15 +346,15 @@ function CriterioDialog({
         await adminService.createCriterion(payload);
         onSaved(bono ? 'Extra de temporada creado.' : 'Extra creado. Desde ahora el área usa estos puntos.');
       }
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
       setSaving(false);
     }
   };
 
   return (
     <Modal
-      title={general ? `Puntos por «${lbl(TRIGGER_LABEL, form.trigger)}»` : criterio ? `Editar «${criterio.name}»` : bono ? 'Nuevo extra de temporada' : 'Nuevo extra por área'}
+      title={tituloDelCriterio(general ? lbl(TRIGGER_LABEL, form.trigger) : null, criterio ? criterio.name : null, !!bono)}
       subtitle={general ? 'Valen para todas las áreas que no tengan un extra propio.' : undefined}
       onClose={onClose}
       width={560}
@@ -409,4 +409,17 @@ function CriterioDialog({
       </form>
     </Modal>
   );
+}
+
+/** El fin de la vigencia de un extra: obligatorio y no antes del inicio. */
+function problemaDeVigencia(hasta: string, desde: string | null | undefined): string | null {
+  if (!hasta) return 'Indica hasta cuándo vale.';
+  return desde && hasta < desde ? 'La vigencia termina antes de empezar.' : null;
+}
+
+/** El título del editor: puntos generales, un criterio existente o un extra nuevo. */
+function tituloDelCriterio(disparador: string | null, criterio: string | null, bono: boolean): string {
+  if (disparador !== null) return `Puntos por «${disparador}»`;
+  if (criterio !== null) return `Editar «${criterio}»`;
+  return bono ? 'Nuevo extra de temporada' : 'Nuevo extra por área';
 }

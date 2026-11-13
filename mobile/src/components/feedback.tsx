@@ -60,7 +60,7 @@ const LIFE: Record<ToastKind, number> = { success: 3200, info: 3800, error: 6000
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
 
@@ -98,10 +98,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 function ToastStack({
   items,
   onDismiss,
-}: {
+}: Readonly<{
   items: ToastItem[];
   onDismiss: (id: number) => void;
-}) {
+}>) {
   const insets = useSafeAreaInsets();
   if (items.length === 0) return null;
   return (
@@ -113,7 +113,7 @@ function ToastStack({
   );
 }
 
-function ToastRow({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
+function ToastRow({ item, onDismiss }: Readonly<{ item: ToastItem; onDismiss: () => void }>) {
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -177,7 +177,7 @@ type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
 
 const ConfirmContext = createContext<ConfirmFn | null>(null);
 
-export function ConfirmProvider({ children }: { children: ReactNode }) {
+export function ConfirmProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [pending, setPending] = useState<{
     options: ConfirmOptions;
     resolve: (value: boolean) => void;

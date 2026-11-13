@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import { Icon, TAB_ICON } from '../components/icons';
-import { Screen, Card, H1, Muted } from '../components/ui';
+import { Screen, Card, H1, Muted, Loading } from '../components/ui';
 import { colors } from '../theme';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -25,9 +25,7 @@ import AffinityScreen from '../screens/student/AffinityScreen';
 import WelcomeScreen from '../screens/student/WelcomeScreen';
 import NotificationsScreen from '../screens/student/NotificationsScreen';
 import TrajectoryScreen from '../screens/student/TrajectoryScreen';
-import { notificationService } from '../services';
-import { profileService } from '../services';
-import { Loading } from '../components/ui';
+import { notificationService, profileService } from '../services';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -188,7 +186,7 @@ function StudentTabs() {
       <Tab.Screen
         name="Avisos"
         component={NotificationsScreen}
-        options={{ title: 'Avisos', tabBarIcon: tabIcon('Avisos'), tabBarBadge: noLeidas > 0 ? (noLeidas > 99 ? '99+' : noLeidas) : undefined, ...withLogout }}
+        options={{ title: 'Avisos', tabBarIcon: tabIcon('Avisos'), tabBarBadge: insigniaDeAvisos(noLeidas), ...withLogout }}
         listeners={{ focus: refrescar }}
       />
     </Tab.Navigator>
@@ -291,4 +289,10 @@ function SoloEstudiantes() {
       </Card>
     </Screen>
   );
+}
+
+/** El número de avisos sin leer en la pestaña: nada si no hay, «99+» si son muchos. */
+function insigniaDeAvisos(n: number): string | number | undefined {
+  if (n <= 0) return undefined;
+  return n > 99 ? '99+' : n;
 }

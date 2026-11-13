@@ -1,0 +1,29 @@
+Suite                  Correctas  Fallos
+---------------------  ---------  ------
+e2e-objectives-40            249       0  ✓
+e2e-objective-5              116       0  ✓
+e2e-objective-6               85       0  ✓
+e2e-objective-7               89       0  ✓
+e2e-batch-1                   59       0  ✓
+e2e-batch-2                   65       0  ✓
+e2e-batch-3                   58       0  ✓
+e2e-batch-4                   48       0  ✓
+e2e-batch-5                   50       0  ✓
+e2e-batch-6                   53       0  ✓
+e2e-batch-7                   57       0  ✓
+e2e-batch-8                   63       0  ✓
+e2e-batch-9                   52       0  ✓
+e2e-batch-10                  42       0  ✓
+e2e-batch-11                  46       0  ✓
+e2e-qa                        68       0  ✓
+e2e-v2                       162       0  ✓
+e2e-v3                       379       0  ✓
+e2e-v3-2                     206       0  ✓
+e2e-v4-1                     173       0  ✓
+e2e-v5                       135       0  ✓
+e2e-v6                        98       0  ✓
+e2e-ai-provider               37       0  ✓
+e2e-web                      106       0  ✓
+e2e-v6-web                    63       0  ✓
+---------------------  ---------  ------
+TOTAL (25 suites)           2559       0

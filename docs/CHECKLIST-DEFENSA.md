@@ -74,7 +74,7 @@ Entrar a `http://localhost:5173`.
 
 ## 5. Checklist de Móvil (QA manual)
 
-Abrir con Expo Go (configurar `EXPO_PUBLIC_API_URL`, ver `mobile/README.md`).
+Abrir con Expo Go para SDK 54 o instalar el APK (`npm run mobile:apk`); ver `mobile/README.md`.
 
 - [ ] 1. Login (y registro de estudiante).
 - [ ] 2. Perfil: completar/editar, ver completitud.

@@ -22,12 +22,12 @@ export function Icon({
   size = 16,
   color = colors.gray500,
   style,
-}: {
+}: Readonly<{
   name: IconName;
   size?: number;
   color?: string;
   style?: StyleProp<TextStyle>;
-}) {
+}>) {
   return <Feather name={name} size={size} color={color} style={style} />;
 }
 

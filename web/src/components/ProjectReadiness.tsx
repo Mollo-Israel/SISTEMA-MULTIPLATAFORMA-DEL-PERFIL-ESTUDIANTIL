@@ -31,11 +31,11 @@ export default function ProjectReadiness({
   projectId,
   canActivate,
   onActivated,
-}: {
+}: Readonly<{
   projectId: string;
   canActivate: boolean;
   onActivated: () => void;
-}) {
+}>) {
   const [r, setR] = useState<Readiness | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();

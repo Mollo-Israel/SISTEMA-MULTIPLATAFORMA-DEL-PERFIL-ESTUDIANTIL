@@ -14,6 +14,7 @@ import {
   MAX_MANIFEST_BYTES,
   signalsFromManifest,
 } from './dependency-map';
+import { quitarBarrasFinales } from '../common/texto';
 
 /**
  * Inspección de un repositorio público (V3 §24, §25).
@@ -60,6 +61,21 @@ interface Respuesta {
   cached: boolean;
 }
 
+/** Lo guardado en caché, como respuesta. */
+function deCache(r: GithubApiCache): Respuesta {
+  return { ok: r.status === 200, status: r.status, data: r.body ? JSON.parse(r.body) : null, cached: true };
+}
+
+/** Sin nada que responder. */
+function sinRespuesta(status: number): Respuesta {
+  return { ok: false, status, data: null, cached: false };
+}
+
+/** GitHub dice que se acabó la cuota (403 con el contador en cero, o 429). */
+function cuotaAgotada(res: Response): boolean {
+  return res.status === 429 || (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0');
+}
+
 @Injectable()
 export class RepositoryInspectorService {
   private readonly logger = new Logger(RepositoryInspectorService.name);
@@ -79,7 +95,7 @@ export class RepositoryInspectorService {
     config: ConfigService,
     @InjectRepository(GithubApiCache) private readonly cache: Repository<GithubApiCache>,
   ) {
-    this.apiBase = (config.get<string>('GITHUB_API_BASE_URL') || 'https://api.github.com').replace(/\/+$/, '');
+    this.apiBase = quitarBarrasFinales(config.get<string>('GITHUB_API_BASE_URL') || 'https://api.github.com');
     // §24.6: el token es opcional. Sin él se usa la cuota pública, que es menor
     // pero suficiente para el volumen de una carrera.
     const raw = config.get<string>('GITHUB_TOKEN', '').trim();
@@ -280,54 +296,57 @@ export class RepositoryInspectorService {
    */
   private async get(url: string, force = false): Promise<Respuesta> {
     const guardada = await this.cache.findOne({ where: { url } });
-    const deCache = (r: GithubApiCache): Respuesta => ({
-      ok: r.status === 200, status: r.status, data: r.body ? JSON.parse(r.body) : null, cached: true,
-    });
     if (guardada && !force && Date.now() - guardada.fetchedAt.getTime() < this.freshMs) {
       return deCache(guardada);
     }
     if (Date.now() < this.cuotaHasta) {
       // Sin cuota: lo último que se supo vale más que nada.
-      return guardada ? deCache(guardada) : { ok: false, status: 403, data: null, cached: false };
+      return guardada ? deCache(guardada) : sinRespuesta(403);
     }
 
     let ultimoError: unknown = null;
     for (let intento = 0; intento <= REINTENTOS_MS.length; intento += 1) {
       if (intento > 0) await new Promise((r) => setTimeout(r, REINTENTOS_MS[intento - 1]));
       try {
-        const res = await this.fetchOnce(url, guardada?.etag ?? null);
-        if (res.status === 304 && guardada) {
-          guardada.fetchedAt = new Date();
-          await this.cache.save(guardada);
-          return deCache(guardada);
-        }
-        const restante = res.headers.get('x-ratelimit-remaining');
-        if ((res.status === 403 || res.status === 429) && (restante === '0' || res.status === 429)) {
-          const reinicio = Number(res.headers.get('x-ratelimit-reset'));
-          this.cuotaHasta = Number.isFinite(reinicio) && reinicio > 0 ? reinicio * 1000 : Date.now() + 60_000;
-          this.logger.warn(`Cuota de GitHub agotada; se reanuda a las ${new Date(this.cuotaHasta).toISOString()}.`);
-          return guardada ? deCache(guardada) : { ok: false, status: res.status, data: null, cached: false };
-        }
-        if (res.status >= 500) {
-          ultimoError = new Error(`GitHub respondió ${res.status}`);
-          continue;
-        }
-        const texto = res.status === 200 ? await res.text() : null;
-        if (res.status === 200 || res.status === 404) {
-          await this.cache.save(this.cache.create({
-            url,
-            etag: res.headers.get('etag'),
-            status: res.status,
-            body: texto,
-            fetchedAt: new Date(),
-          }));
-        }
-        return { ok: res.ok, status: res.status, data: texto ? JSON.parse(texto) : null, cached: false };
+        const respuesta = await this.unIntento(url, guardada);
+        if (!(respuesta instanceof Error)) return respuesta;
+        ultimoError = respuesta;
       } catch (error) {
         ultimoError = error;
       }
     }
     throw ultimoError ?? new Error('GitHub no respondió.');
+  }
+
+  /**
+   * Una consulta a GitHub. Devuelve la respuesta o, si GitHub falló (5xx),
+   * un Error para que se reintente.
+   */
+  private async unIntento(url: string, guardada: GithubApiCache | null): Promise<Respuesta | Error> {
+    const res = await this.fetchOnce(url, guardada?.etag ?? null);
+    if (res.status === 304 && guardada) {
+      guardada.fetchedAt = new Date();
+      await this.cache.save(guardada);
+      return deCache(guardada);
+    }
+    if (cuotaAgotada(res)) {
+      const reinicio = Number(res.headers.get('x-ratelimit-reset'));
+      this.cuotaHasta = Number.isFinite(reinicio) && reinicio > 0 ? reinicio * 1000 : Date.now() + 60_000;
+      this.logger.warn(`Cuota de GitHub agotada; se reanuda a las ${new Date(this.cuotaHasta).toISOString()}.`);
+      return guardada ? deCache(guardada) : sinRespuesta(res.status);
+    }
+    if (res.status >= 500) return new Error(`GitHub respondió ${res.status}`);
+    const texto = res.status === 200 ? await res.text() : null;
+    if (res.status === 200 || res.status === 404) {
+      await this.cache.save(this.cache.create({
+        url,
+        etag: res.headers.get('etag'),
+        status: res.status,
+        body: texto,
+        fetchedAt: new Date(),
+      }));
+    }
+    return { ok: res.ok, status: res.status, data: texto ? JSON.parse(texto) : null, cached: false };
   }
 
   private async fetchOnce(url: string, etag: string | null): Promise<Response> {
@@ -390,7 +409,7 @@ export class RepositoryInspectorService {
     for (const f of ficheros) {
       try {
         const res = await this.get(`${base}/contents/${encodeURIComponent(f)}?ref=${encodeURIComponent(branch)}`, force);
-        if (!res.ok || !res.data || res.data.encoding !== 'base64' || typeof res.data.content !== 'string') continue;
+        if (!res.ok || res.data?.encoding !== 'base64' || typeof res.data.content !== 'string') continue;
         if (Number(res.data.size ?? 0) > MAX_MANIFEST_BYTES) continue;
         const texto = Buffer.from(res.data.content, 'base64').toString('utf8');
         salida.push(...signalsFromManifest(f, texto));

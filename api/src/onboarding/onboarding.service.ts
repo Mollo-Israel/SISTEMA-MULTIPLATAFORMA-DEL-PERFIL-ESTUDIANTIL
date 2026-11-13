@@ -114,12 +114,12 @@ export class OnboardingService {
   private tagOfArea(area: AcademicArea): AreaTag | null {
     const todas = Object.keys(DEEP_DIVES) as AreaTag[];
     const sin = (t: AreaTag) => AREA_SYNONYMS[t].map((s) => this.normalize(s));
-    const etiquetas = (area.tags ?? []).map((t) => this.normalize(t));
+    const etiquetas = new Set((area.tags ?? []).map((t) => this.normalize(t)));
     const nombre = this.normalize(area.name);
     // Mismo orden de señales que matchArea: etiquetas del catálogo, nombre
     // exacto y, por último, nombre que contiene un sinónimo largo.
     return (
-      todas.find((t) => sin(t).some((s) => etiquetas.includes(s)))
+      todas.find((t) => sin(t).some((s) => etiquetas.has(s)))
       ?? todas.find((t) => sin(t).includes(nombre))
       ?? todas.find((t) => sin(t).some((s) => s.length >= 5 && nombre.includes(s)))
       ?? null
@@ -128,7 +128,7 @@ export class OnboardingService {
 
   /** «dd_desarrollo_web» → «desarrollo-web». Solo para las de profundización. */
   private tagDe(code: string): string | null {
-    return code.startsWith('dd_') ? code.slice(3).replace(/_/g, '-') : null;
+    return code.startsWith('dd_') ? code.slice(3).replaceAll('_', '-') : null;
   }
 
   /** La ejecución vigente del estudiante, si respondió alguna vez. */
@@ -259,7 +259,7 @@ export class OnboardingService {
   async confirm(userId: string, runId: string, dto: ConfirmOnboardingDto) {
     const profile = await this.ownProfile(userId);
     const run = await this.runs.findOne({ where: { id: runId } });
-    if (!run || run.studentProfileId !== profile.id) {
+    if (run?.studentProfileId !== profile.id) {
       throw new NotFoundException('Cuestionario no encontrado.');
     }
     if (run.status === OnboardingRunStatus.CONFIRMED) {
@@ -364,7 +364,20 @@ export class OnboardingService {
         throw new BadRequestException(`La pregunta «${answer.questionCode}» viene repetida.`);
       }
       vistas.add(answer.questionCode);
+      this.validarOpciones(answer, pregunta);
+    }
 
+    // Se aceptan respuestas parciales: el cuestionario es opcional y quien lo
+    // deja a medias tiene derecho a aprovechar lo que contestó. Pero por debajo
+    // de un mínimo el resultado orientaría mal, y entonces se dice.
+    this.exigirMinimo(vistas.size);
+  }
+
+  /** Las opciones elegidas en una respuesta: cuántas, sin repetir y del cuestionario. */
+  private validarOpciones(
+    answer: SubmitOnboardingDto['answers'][number],
+    pregunta: NonNullable<ReturnType<typeof QUESTION_BY_CODE.get>>,
+  ): void {
       if (answer.optionCodes.length === 0) {
         throw new BadRequestException(`La pregunta «${answer.questionCode}» no tiene respuesta.`);
       }
@@ -391,15 +404,13 @@ export class OnboardingService {
           `La opción «${invalida}» no pertenece a la pregunta «${answer.questionCode}».`,
         );
       }
-    }
+  }
 
-    // Se aceptan respuestas parciales: el cuestionario es opcional y quien lo
-    // deja a medias tiene derecho a aprovechar lo que contestó. Pero por debajo
-    // de un mínimo el resultado orientaría mal, y entonces se dice.
-    if (vistas.size < MIN_ANSWERS) {
+  private exigirMinimo(respondidas: number): void {
+    if (respondidas < MIN_ANSWERS) {
       throw new BadRequestException(
         `Responde al menos ${MIN_ANSWERS} preguntas para que las sugerencias tengan sentido `
-        + `(llevas ${vistas.size}). Puedes dejar el resto en blanco.`,
+        + `(llevas ${respondidas}). Puedes dejar el resto en blanco.`,
       );
     }
   }

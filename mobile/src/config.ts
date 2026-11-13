@@ -34,7 +34,7 @@ function expoHost(): string | null {
 function packagerHost(): string | null {
   const url: string | undefined = NativeModules?.SourceCode?.scriptURL;
   if (!url) return null;
-  const match = url.match(/^https?:\/\/([^/:]+)/);
+  const match = /^https?:\/\/([^/:]+)/.exec(url);
   return match ? match[1] : null;
 }
 

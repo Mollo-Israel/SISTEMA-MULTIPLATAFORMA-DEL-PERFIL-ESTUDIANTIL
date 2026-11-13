@@ -61,7 +61,7 @@ export const formatDateTime = (value: string | null) => {
  * rendimiento ni tomar decisiones academicas formales, y quien los lee tiene
  * que saberlo sin buscarlo.
  */
-export function AffinityDisclaimer({ forTeacher = false }: { forTeacher?: boolean }) {
+export function AffinityDisclaimer({ forTeacher = false }: Readonly<{ forTeacher?: boolean }>) {
   return (
     <div className="scope-note">
       <FiInfo size={16} />
@@ -78,10 +78,10 @@ export function AffinityDisclaimer({ forTeacher = false }: { forTeacher?: boolea
 export function AffinityInsufficient({
   message,
   forTeacher = false,
-}: {
+}: Readonly<{
   message: string;
   forTeacher?: boolean;
-}) {
+}>) {
   return (
     <div className="state">
       <p className="muted">{message}</p>
@@ -107,10 +107,10 @@ export function AffinityInsufficient({
 export function AffinityRanking({
   summary,
   loadBreakdown,
-}: {
+}: Readonly<{
   summary: AffinitySummary;
   loadBreakdown: (areaId: string) => Promise<AffinityBreakdown>;
-}) {
+}>) {
   const [open, setOpen] = useState<string | null>(null);
   const [cache, setCache] = useState<Record<string, AffinityBreakdown>>({});
   const [loadingArea, setLoadingArea] = useState<string | null>(null);
@@ -221,7 +221,7 @@ function Fuente({ c }: Readonly<{ c: AffinityBreakdown['contributions'][number] 
   );
 }
 
-function AffinityDetail({ detail }: { detail: AffinityBreakdown }) {
+function AffinityDetail({ detail }: Readonly<{ detail: AffinityBreakdown }>) {
   const fila = (c: AffinityBreakdown['contributions'][number], i: number) => (
     <tr key={`${c.sourceId ?? 'x'}-${i}`}>
       <td>{c.reason ?? c.sourceLabel}<Fuente c={c} /></td>

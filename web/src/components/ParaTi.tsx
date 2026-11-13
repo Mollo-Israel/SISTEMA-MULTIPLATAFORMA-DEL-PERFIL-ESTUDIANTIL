@@ -8,7 +8,7 @@ import { Badge, Button, Card, Diferido, EmptyState, SkeletonCards, Stagger } fro
 import { useToast } from './feedback';
 
 /** Tipos que son oportunidades (actividades y cursos). */
-const DE_OPORTUNIDAD = ['activity', 'opportunity', 'external_course'];
+const DE_OPORTUNIDAD = new Set(['activity', 'opportunity', 'external_course']);
 
 /**
  * «Para ti» dentro de Actividades (V3 §34.2).
@@ -18,7 +18,7 @@ const DE_OPORTUNIDAD = ['activity', 'opportunity', 'external_course'];
  * V6 §9.1: sin «No me interesa» ni «Descartadas»; «Guardar» es un favorito
  * de acceso rápido que no cambia el orden.
  */
-export default function ParaTi({ onChanged }: { onChanged?: () => void }) {
+export default function ParaTi({ onChanged }: Readonly<{ onChanged?: () => void }>) {
   // Con memoria de la sesión: al volver a Actividades se pinta al instante
   // con lo último y se refresca por detrás.
   const [data, setData] = useCachedState<RecommendationsResponse | null>('para-ti', null);
@@ -34,7 +34,15 @@ export default function ParaTi({ onChanged }: { onChanged?: () => void }) {
     try {
       const ya = guardadas.has(r.targetId);
       await (ya ? activityService.unfavorite(r.targetId) : activityService.favorite(r.targetId));
-      setGuardadas((s) => { const n = new Set(s); if (ya) n.delete(r.targetId); else n.add(r.targetId); return n; });
+      setGuardadas((s) => {
+        const n = new Set(s);
+        if (ya) {
+          n.delete(r.targetId);
+        } else {
+          n.add(r.targetId);
+        }
+        return n;
+      });
       toast.success(ya ? 'Quitada de guardadas' : 'Guardada', ya ? undefined : 'La encuentras en «Guardadas». No cambia lo que te sugerimos.');
       onChanged?.();
     } catch (e) {
@@ -45,7 +53,7 @@ export default function ParaTi({ onChanged }: { onChanged?: () => void }) {
   };
 
   if (!data) return <Diferido><SkeletonCards count={3} /></Diferido>;
-  const items = data.groups.flatMap((g) => g.items).filter((i) => DE_OPORTUNIDAD.includes(i.type))
+  const items = data.groups.flatMap((g) => g.items).filter((i) => DE_OPORTUNIDAD.has(i.type))
     .sort((a, b) => b.score - a.score);
 
   return (

@@ -6,6 +6,14 @@
 
 Este informe resume qué pruebas se ejecutaron, con qué comandos, qué resultados dieron y dónde está cada evidencia. Todas las evidencias (reportes HTML, salidas de consola, JSON y capturas) están dentro de esta carpeta `pruebas/`, una subcarpeta por herramienta.
 
+> **Actualización del 10/11/2026.** Se corrigieron los hallazgos de SonarQube y el Quality Gate quedó
+> **aprobado** (§8.1): 0 bugs, 0 vulnerabilidades, 0 incidencias en el código nuevo y 81,1 % de cobertura del
+> código nuevo (mínimo 80 %). Se repitieron todas las pruebas sobre el código corregido: Jest 120/120 ·
+> unitarias de Node 157/157 · regresión 26 suites, 2.606 verificaciones, 0 fallos, con la suite nueva
+> `e2e-web-gestion` (`10-regresion-suites-propias/corrida-2026-11-10/`) · Newman 70/70 · Playwright 54/54 ·
+> k6 p95 de 113 ms (`05-k6/corrida-2026-11-10/`) · ZAP 119 PASS, 0 FAIL, 0 WARN (`06-zap/corrida-2026-11-10/`).
+> Las tablas de abajo conservan los resultados de la primera ejecución (21/10).
+
 ---
 
 ## 1. Resumen general
@@ -223,6 +231,63 @@ Estos 6 hallazgos quedan como **backlog de mejora** y no bloquean el Quality Gat
 **Evidencias:** `resumen.json`, `bugs-y-vulnerabilidades.json`, `salida-analisis.txt` (token omitido).
 **Capturas:** `capturas/01-panel-sonarqube.png`, `capturas/02-issues-sonarqube.png`, `capturas/03-medidas-cobertura.png`.
 
+### 8.1 Ciclo de corrección (09–10/11/2026)
+
+El análisis del 09/11 (`resumen-inicial.json`) registró 901 incidencias: 5 bugs, 1 vulnerabilidad y 895 code
+smells, 135 de ellas en el código nuevo (lo modificado desde el 21/10), con el Quality Gate no aprobado.
+Se corrigieron sin cambiar el comportamiento y se repitieron todas las pruebas.
+
+| Indicador | 09/11 (inicial) | 10/11 (final) |
+|---|---|---|
+| Bugs | 5 (fiabilidad D) | **0 (A)** |
+| Vulnerabilidades | 1 (seguridad B) | **0 (A)** |
+| Code smells | 895 (A) | 672 (A), todos en código anterior al 21/10 |
+| Incidencias en el código nuevo | 135 | **0** |
+| Cobertura total | 28,3 % | **74,8 %** |
+| Cobertura del código nuevo (mínimo 80 %) | 16,9 % | **81,1 %** (API 87,3 %, web 76,5 %) |
+| Quality Gate | No aprobado | **Aprobado** |
+
+- Los 2 `sort()` sin comparador usan `localeCompare('es')`; las 3 expresiones del mapa de dependencias agrupan
+  sus alternativas.
+- La «vulnerabilidad» SMTP es un falso positivo (ya se exige TLS o STARTTLS); quedó justificada en el código.
+- Las expresiones regulares con retroceso no lineal se reemplazaron por funciones lineales, con 20 pruebas de
+  equivalencia en Jest (`texto`, `manifiestos`, `titular-de-pagina`).
+- Cobertura real: además de Jest, se mide la de la regresión y la batería unitaria (API) y la de Playwright y
+  las suites de navegador (web) con V8 y source maps, sumada sobre la estructura de Istanbul que usa Jest:
+  `scripts/pruebas/cobertura.mjs`. Sonar recibe los informes de `07-sonarqube/cobertura/` (uno de la API y
+  otro de la web).
+- Para los formularios web que ninguna prueba recorría (portada pública, pedidos de tecnologías, autonomía
+  docente, recursos, puntos, galería de proyectos, constancias…) se agregó la suite `scripts/e2e-web-gestion.mjs`
+  (`npm run test:web-gestion`, 47 verificaciones con navegador real). Con ella, el código nuevo superó el 80 %.
+  La app móvil sigue sin cobertura automatizada (en esta PC no hay Android SDK para Maestro).
+- El aviso «Missing blame information» del panel se debe a que los archivos modificados aún no están en un
+  commit; desaparece al confirmarlos.
+
+Pasos para repetir la medición:
+
+```bash
+npm --prefix api run build && npm --prefix api run build:e2e
+node scripts/pruebas/cobertura.mjs api            # API instrumentada en :3010 (detener antes la de desarrollo)
+#   … correr las suites de API contra :3010 …
+node scripts/pruebas/cobertura.mjs detener
+node scripts/pruebas/cobertura.mjs unitarias
+npm run pruebas:jest
+PRUEBAS_COBERTURA=1 node scripts/pruebas/entorno.mjs web     # web de pruebas con mapas «hidden»
+PRUEBAS_COBERTURA=1 npx playwright test
+# Suites de navegador: web/dist con mapas «hidden» y la API en :3010 con correo simulado
+(cd web && npx vite build --sourcemap hidden)
+PRUEBAS_COBERTURA=1 node scripts/e2e-web.mjs
+PRUEBAS_COBERTURA=1 node scripts/e2e-v6-web.mjs
+PRUEBAS_COBERTURA=1 node scripts/e2e-web-gestion.mjs
+node scripts/pruebas/cobertura.mjs convertir
+npm run pruebas:sonar
+```
+
+`convertir` parte de la estructura de Istanbul que deja Jest (`api/coverage/coverage-final.json`) y le suma lo
+que V8 registró en las demás pruebas, ubicado en las fuentes con los source maps: una línea o una condición
+cuenta como cubierta si cualquier prueba la ejecutó. Al terminar, conviene volver a compilar la web sin mapas
+(`npm --prefix web run build`).
+
 ---
 
 ## 9. Pruebas móviles: Android Emulator + Expo + Maestro (§3.4) — `08-movil-maestro/` ⏳
@@ -264,6 +329,10 @@ Además de las herramientas del documento, se ejecutaron las **22 suites E2E pro
 Los 8 fallos **no eran del producto**: la suite `e2e-ai-provider` levanta un servidor propio en el puerto 3011, que la API de pruebas estaba ocupando. Ver §12.
 
 **Evidencias:** `resumen-regresion.txt` y `registros/*.log` (uno por suite, más `e2e-ai-provider.reintento.log`).
+
+**Corrida del 10/11/2026** (después de las correcciones de SonarQube): **26 suites, 2.606 verificaciones,
+0 fallos**, incluida la suite nueva `e2e-web-gestion`. Registros, repeticiones y sus causas en
+`corrida-2026-11-10/` (ver su `LEEME.md`).
 
 ---
 
@@ -343,4 +412,8 @@ npm run pruebas:capturas
 
 1. **Móvil:** instalar Android Studio y Maestro, y ejecutar los flujos de `08-movil-maestro/`. Llenar la matriz de compatibilidad, con al menos un Android físico.
 2. **Usabilidad:** hacer la sesión con 5–8 estudiantes siguiendo `09-usabilidad-sus/GUIA_SESION.md` y ejecutar `calcular-sus.mjs`.
-3. **Opcional:** corregir los 6 hallazgos de SonarQube (§8) y paginar los listados completos de personal (§6).
+3. **Opcional:** paginar los listados completos de personal (§6); en particular `GET /activities/managed`, que con
+   14.492 actividades acumuladas tardó unos 5 s (los 6 hallazgos de SonarQube ya se corrigieron y el Quality Gate
+   quedó aprobado, §8.1).
+4. **Opcional:** corregir los 672 code smells que quedan en el código anterior al 21/10 (fuera del código nuevo
+   que evalúa el Quality Gate) y medir la cobertura de la app móvil cuando se ejecuten los flujos de Maestro.

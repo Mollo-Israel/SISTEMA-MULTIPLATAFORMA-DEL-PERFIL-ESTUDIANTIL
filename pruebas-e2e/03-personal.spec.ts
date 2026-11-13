@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { ADMIN, CUENTAS, captura, entrar, visitar, vigilarErrores } from './ayuda';
+import { ADMIN, captura, CUENTAS, entrar, expect, test, vigilarErrores, visitar } from './ayuda';
 
 test.describe('Paneles del personal según sus permisos', () => {
   test('docente: panel académico, estudiantes de su alcance, actividades y puntos', async ({ page }, info) => {

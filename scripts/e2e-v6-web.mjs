@@ -14,6 +14,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { ADMIN_CREDENTIALS, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
+import { medirCobertura } from './lib/cobertura-navegador.mjs';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = process.env.WEB_URL ?? 'http://localhost:5173';
@@ -608,7 +609,7 @@ const BATCHES = { batch2, batch3, batch4, batch5, batch6, batch7, batch11, batch
 async function main() {
   console.log(`${C.bold}Afinia V6 — la web con un navegador real${C.r}`);
   await servirWeb();
-  const browser = await navegador();
+  const browser = medirCobertura(await navegador(), 'e2e-v6-web');
   const ctx = { admin: await loginAdmin() };
   const pedidos = process.argv.slice(2);
   try {

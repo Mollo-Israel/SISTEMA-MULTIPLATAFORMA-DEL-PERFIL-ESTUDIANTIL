@@ -1,5 +1,6 @@
 import { IdentityMatchStatus } from '@perfil/shared';
 import type { ExtractedDocumentData } from '../entities/validation-record.entity';
+import { recortarExtremos, recortarFinal } from '../common/texto';
 
 /**
  * Candidatos de metadata a partir del texto del documento (§29, paso 5).
@@ -137,7 +138,7 @@ function buscarFecha(texto: string): string | null {
     august: 8, september: 9, october: 10, november: 11, december: 12,
   };
   const literal = new RegExp(
-    `\\b(\\d{1,2})\\s+(?:de\\s+)?(${Object.keys(MESES).join('|')})\\s+(?:de\\s+)?(\\d{4})\\b`,
+    String.raw`\b(\d{1,2})\s+(?:de\s+)?(${Object.keys(MESES).join('|')})\s+(?:de\s+)?(\d{4})\b`,
     'i',
   ).exec(texto);
   if (literal) {
@@ -155,8 +156,10 @@ function buscarCredencial(lineas: string[], texto: string): string | null {
   }
   // Sin etiqueta: un código con letras, cifras y guiones es reconocible por
   // su forma. Se exige mezcla para no confundirlo con una palabra cualquiera.
-  const suelto = /\b(?=[A-Z0-9-]*[A-Z])(?=[A-Z0-9-]*\d)[A-Z0-9]{2,}(?:-[A-Z0-9]{2,}){1,4}\b/.exec(texto);
-  return suelto ? suelto[0].slice(0, 80) : null;
+  for (const m of texto.matchAll(/\b[A-Z0-9]{2,}(?:-[A-Z0-9]{2,}){1,4}\b/g)) {
+    if (/[A-Z]/.test(m[0]) && /\d/.test(m[0])) return m[0].slice(0, 80);
+  }
+  return null;
 }
 
 /**
@@ -177,12 +180,12 @@ function buscarUrl(
   if (extras.links?.length) return extras.links[0].slice(0, 500);
 
   const enTexto = /https?:\/\/[^\s<>"')]+/i.exec(texto);
-  return enTexto ? enTexto[0].replace(/[.,;:]+$/, '').slice(0, 500) : null;
+  return enTexto ? recortarFinal(enTexto[0], '.,;:').slice(0, 500) : null;
 }
 
 function limpiar(valor: string | null, max: number): string | null {
   if (!valor) return null;
-  const limpio = valor.replace(/\s+/g, ' ').replace(/^[\s:.,-]+|[\s:.,-]+$/g, '').trim();
+  const limpio = recortarExtremos(valor.replace(/\s+/g, ' '), ' :.,-').trim();
   return limpio.length >= 2 ? limpio.slice(0, max) : null;
 }
 

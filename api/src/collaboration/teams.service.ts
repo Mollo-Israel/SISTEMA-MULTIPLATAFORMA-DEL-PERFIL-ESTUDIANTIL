@@ -10,34 +10,15 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
-import {
-  AffinityLevel,
-  AvailabilityRequirement,
-  AvailabilityStatus,
-  TEAM_SUGGESTION_WEIGHTS,
-  TeamInvitationStatus,
-  TeamNameStatus,
-  TeamNeedStatus,
-  TeamStatus,
-  TeamSuggestionReason,
-  UserStatus,
-} from '@perfil/shared';
+import { AvailabilityRequirement, AvailabilityStatus, TEAM_SUGGESTION_WEIGHTS, TeamInvitationStatus, TeamNameStatus, TeamNeedStatus, TeamStatus, TeamSuggestionReason, UserStatus } from '@perfil/shared';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { BackedSkillsService } from '../backed-skills/backed-skills.service';
 import { AiService } from '../ai/ai.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { checkTeamName, forbiddenTerms } from './team-name.rules';
-import {
-  Team,
-  TeamInvitation,
-  TeamMember,
-  TeamNeed,
-  TeamNeedArea,
-  TeamNeedSkill,
-} from '../entities/collaboration.entity';
+import { Team, TeamInvitation, TeamMember, TeamNeed, TeamNeedArea, TeamNeedSkill, TeamApplication } from '../entities/collaboration.entity';
 import { assertSkillsBelongToAreas } from '../catalogs/area-skill.guard';
-import { TeamApplication } from '../entities/collaboration.entity';
 import { semestreElegible } from './team-need.rules';
 
 /** Cuántos candidatos se devuelven como máximo. */
@@ -428,7 +409,7 @@ export class TeamsService {
 
         // --------------------------------- 20 % · afinidad con el contexto
         const suyasAfinidad = afinidadPorCandidato.get(c.profileId) ?? [];
-        const mejor = suyasAfinidad.sort((a, b) => Number(b.score) - Number(a.score))[0];
+        const mejor = [...suyasAfinidad].sort((a, b) => Number(b.score) - Number(a.score))[0];
         if (mejor && Number(mejor.score) > 0) {
           motivos.push({
             code: TeamSuggestionReason.CONTEXT_AFFINITY,
@@ -677,7 +658,7 @@ export class TeamsService {
       where: { id: invitationId },
       relations: { team: { need: true } },
     });
-    if (!invitacion || invitacion.invitedProfileId !== studentProfileId) {
+    if (invitacion?.invitedProfileId !== studentProfileId) {
       throw new NotFoundException('Invitación no encontrada.');
     }
     if (invitacion.status !== TeamInvitationStatus.PENDING) {

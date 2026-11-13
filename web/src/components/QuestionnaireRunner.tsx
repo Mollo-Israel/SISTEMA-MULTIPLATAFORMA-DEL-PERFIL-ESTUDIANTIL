@@ -22,11 +22,11 @@ export default function QuestionnaireRunner({
   onFinished,
   onCancel,
   cancelLabel = 'Salir del cuestionario',
-}: {
+}: Readonly<{
   onFinished: (resultado: { confirmed: number; run: OnboardingRun }) => void;
   onCancel?: () => void;
   cancelLabel?: string;
-}) {
+}>) {
   const [questionnaire, setQuestionnaire] = useState<Questionnaire | null>(null);
   const [cargando, setCargando] = useState(true);
   const [indice, setIndice] = useState(0);
@@ -117,53 +117,13 @@ export default function QuestionnaireRunner({
   // ------------------------------------------------------------ sugerencias
   if (run) {
     return (
-      <motion.div className="qz-result" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="qz-result-head">
-          <span className="qz-badge"><FiStar /></span>
-          <div>
-            <h3>{run.suggestedAreas.length > 0 ? 'Esto es lo que vemos en tus respuestas' : 'Gracias por responder'}</h3>
-            <p>
-              {run.suggestedAreas.length > 0
-                ? 'Marca las áreas que quieras sumar a tus intereses. Puedes cambiarlas cuando quieras.'
-                : 'No encontramos áreas que sugerirte esta vez. Tus intereses declarados siguen igual.'}
-            </p>
-          </div>
-        </div>
-        <div className="qz-suggestions">
-          {run.suggestedAreas.map((a, i) => {
-            const on = elegidas.includes(a.academicAreaId);
-            const { icono: Icono, color } = areaVisual(a.name);
-            return (
-              <motion.button
-                type="button"
-                key={a.academicAreaId}
-                className={`qz-sugg ${on ? 'on' : ''}`}
-                onClick={() =>
-                  setElegidas((prev) =>
-                    prev.includes(a.academicAreaId)
-                      ? prev.filter((x) => x !== a.academicAreaId)
-                      : [...prev, a.academicAreaId],
-                  )
-                }
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.06 }}
-                aria-pressed={on}
-              >
-                <span className="ico" style={{ background: `${color}1a`, color }}><Icono /></span>
-                <span className="nm">{a.name}</span>
-                <span className="chk">{on && <FiCheck size={13} />}</span>
-              </motion.button>
-            );
-          })}
-        </div>
-        <div className="qz-actions">
-          <button type="button" className="wz-btn" onClick={confirmar} disabled={confirmando}>
-            {confirmando ? 'Guardando…' : run.suggestedAreas.length > 0 ? 'Guardar y continuar' : 'Continuar'}
-            <FiArrowRight />
-          </button>
-        </div>
-      </motion.div>
+      <ResultadoDelCuestionario
+        run={run}
+        elegidas={elegidas}
+        onAlternar={(id) => setElegidas((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))}
+        confirmando={confirmando}
+        onConfirmar={confirmar}
+      />
     );
   }
 
@@ -250,5 +210,58 @@ export default function QuestionnaireRunner({
         <p className="qz-min">Responde al menos {minimo} preguntas para ver resultados (llevas {respondidas}).</p>
       )}
     </div>
+  );
+}
+
+/** Las áreas que sugieren las respuestas, para marcar las que se suman a los intereses. */
+function ResultadoDelCuestionario({ run, elegidas, onAlternar, confirmando, onConfirmar }: Readonly<{
+  run: OnboardingRun;
+  elegidas: string[];
+  onAlternar: (academicAreaId: string) => void;
+  confirmando: boolean;
+  onConfirmar: () => void;
+}>) {
+  return (
+    <motion.div className="qz-result" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="qz-result-head">
+        <span className="qz-badge"><FiStar /></span>
+        <div>
+          <h3>{run.suggestedAreas.length > 0 ? 'Esto es lo que vemos en tus respuestas' : 'Gracias por responder'}</h3>
+          <p>
+            {run.suggestedAreas.length > 0
+              ? 'Marca las áreas que quieras sumar a tus intereses. Puedes cambiarlas cuando quieras.'
+              : 'No encontramos áreas que sugerirte esta vez. Tus intereses declarados siguen igual.'}
+          </p>
+        </div>
+      </div>
+      <div className="qz-suggestions">
+        {run.suggestedAreas.map((a, i) => {
+          const on = elegidas.includes(a.academicAreaId);
+          const { icono: Icono, color } = areaVisual(a.name);
+          return (
+            <motion.button
+              type="button"
+              key={a.academicAreaId}
+              className={`qz-sugg ${on ? 'on' : ''}`}
+              onClick={() => onAlternar(a.academicAreaId)}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              aria-pressed={on}
+            >
+              <span className="ico" style={{ background: `${color}1a`, color }}><Icono /></span>
+              <span className="nm">{a.name}</span>
+              <span className="chk">{on && <FiCheck size={13} />}</span>
+            </motion.button>
+          );
+        })}
+      </div>
+      <div className="qz-actions">
+        <button type="button" className="wz-btn" onClick={onConfirmar} disabled={confirmando}>
+          {confirmando ? 'Guardando…' : <>{run.suggestedAreas.length > 0 ? 'Guardar y continuar' : 'Continuar'}</>}
+          <FiArrowRight />
+        </button>
+      </div>
+    </motion.div>
   );
 }

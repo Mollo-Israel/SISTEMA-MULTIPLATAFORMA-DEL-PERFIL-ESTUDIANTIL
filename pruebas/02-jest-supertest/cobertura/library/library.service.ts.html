@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">11.86% </span>
+                <span class="strong">12.71% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>14/118</span>
+                <span class='fraction'>15/118</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">3.84% </span>
+                <span class="strong">4% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/26</span>
+                <span class='fraction'>1/25</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">12.9% </span>
+                <span class="strong">13.82% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>12/93</span>
+                <span class='fraction'>13/94</span>
             </div>
         
             
@@ -298,19 +298,17 @@
 <a name='L233'></a><a href='#L233'>233</a>
 <a name='L234'></a><a href='#L234'>234</a>
 <a name='L235'></a><a href='#L235'>235</a>
-<a name='L236'></a><a href='#L236'>236</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -329,11 +327,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -542,6 +544,7 @@ import { LearningResourceFavorite } from '../entities/learning-resource-library.
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
+import { escaparComodinesLike } from '../common/texto';
 &nbsp;
 export interface LibraryQuery {
   q?: string;
@@ -599,7 +602,7 @@ export class LibraryService {
     }
     const texto = <span class="cstat-no" title="statement not covered" >filtros.q?.trim();</span>
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (texto) {</span>
-      const t = <span class="cstat-no" title="statement not covered" >`%${texto.replace(/[%_\\]/g, <span class="fstat-no" title="function not covered" >(c</span>) =&gt; <span class="cstat-no" title="statement not covered" >`\\${c}`)</span>}%`;</span>
+      const t = <span class="cstat-no" title="statement not covered" >`%${escaparComodinesLike(texto)}%`;</span>
 <span class="cstat-no" title="statement not covered" >      qb.andWhere('(r.title ILIKE :t OR r.description ILIKE :t OR r.provider ILIKE :t)', { t });</span>
     }
 <span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (filtros.areaId) {</span>
@@ -775,7 +778,7 @@ export class LibraryService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-28T15:55:56.993Z
+                at 2026-11-12T06:56:13.243Z
             </div>
         <script src="../prettify.js"></script>
         <script>

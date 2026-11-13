@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { ADMIN, CUENTAS, captura, entrar, visitar, vigilarErrores } from './ayuda';
+import { ADMIN, captura, CUENTAS, entrar, expect, test, vigilarErrores, visitar } from './ayuda';
 
 /**
  * Cierre V5: las pantallas nuevas y los flujos que cambiaron, por rol, en los

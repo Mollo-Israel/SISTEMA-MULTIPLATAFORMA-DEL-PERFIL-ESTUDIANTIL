@@ -9,21 +9,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Not, Repository } from 'typeorm';
-import {
-  DEFAULT_PUBLIC_VISIBILITY,
-  InterestSource,
-  ProfileStatus,
-  ProjectVisibility,
-  PUBLIC_PROFILE_FIELDS,
-  PublicProfileField,
-  RegistrationStatus,
-  RolNombre,
-  SkillInterestKind,
-  SkillInterestSource,
-  UserStatus,
-  normalizeUniversityCode,
-  universityCodeProblem,
-} from '@perfil/shared';
+import { DEFAULT_PUBLIC_VISIBILITY, InterestSource, ProfileStatus, ProjectVisibility, PUBLIC_PROFILE_FIELDS, RolNombre, SkillInterestKind, SkillInterestSource, UserStatus, normalizeUniversityCode, universityCodeProblem } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { User } from '../entities/user.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
@@ -52,6 +38,7 @@ import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
+import { escaparComodinesLike } from '../common/texto';
 
 interface StudentDirectoryRow {
   profileId: string;
@@ -383,7 +370,7 @@ export class ProfilesService {
   async searchPeers(user: AuthenticatedUser, search: string) {
     // Se escapan los comodines de ILIKE: sin esto, buscar "%%" cumpliria el
     // minimo de dos caracteres y devolveria a cualquier estudiante.
-    const term = `%${search.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+    const term = `%${escaparComodinesLike(search)}%`;
 
     const rows = await this.profiles
       .createQueryBuilder('p')
@@ -746,7 +733,7 @@ export class ProfilesService {
     }
     profile.privacyReviewedAt = new Date();
     if (dto.fields) {
-      const actual = { ...DEFAULT_PUBLIC_VISIBILITY, ...(profile.publicVisibilityConfig ?? {}) };
+      const actual = { ...DEFAULT_PUBLIC_VISIBILITY, ...profile.publicVisibilityConfig };
       for (const field of PUBLIC_PROFILE_FIELDS) {
         const valor = (dto.fields as Record<string, boolean | undefined>)[field];
         if (valor !== undefined) actual[field] = valor;
@@ -769,7 +756,7 @@ export class ProfilesService {
   }
 
   private visibilityView(profile: StudentProfile) {
-    const config = { ...DEFAULT_PUBLIC_VISIBILITY, ...(profile.publicVisibilityConfig ?? {}) };
+    const config = { ...DEFAULT_PUBLIC_VISIBILITY, ...profile.publicVisibilityConfig };
     return {
       publicProfileEnabled: profile.publicProfileEnabled,
       fields: config,
@@ -873,7 +860,6 @@ export class ProfilesService {
       if (m.project) projectsMap.set(m.project.id, m.project);
     });
     const projects = [...projectsMap.values()];
-    const projectIds = projects.map((p) => p.id);
 
     // Las evidencias pertenecen al perfil, no al proyecto: una evidencia puede
     // respaldar una actividad o un area sin estar ligada a ningun proyecto.
@@ -888,7 +874,6 @@ export class ProfilesService {
         relations: { activity: true },
       }),
     ]);
-    void projectIds;
 
     const improvementAreas = await this.resolveAreas(profile.improvementAreaIds);
 

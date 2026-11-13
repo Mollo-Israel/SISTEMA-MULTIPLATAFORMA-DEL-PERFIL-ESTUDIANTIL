@@ -34,7 +34,7 @@ export default function AiAssist({
   onUse,
   useLabel = 'Usar sugerencia',
   choices,
-}: {
+}: Readonly<{
   task: AiTask;
   label: string;
   /** Cuerpo del pedido, armado en el momento del clic. */
@@ -45,7 +45,7 @@ export default function AiAssist({
   useLabel?: string;
   /** Si la sugerencia trae alternativas, cada una con su botón «Usar». */
   choices?: (result: Record<string, any>) => string[];
-}) {
+}>) {
   const status = useAiStatus();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -84,13 +84,13 @@ export default function AiAssist({
         {label}
       </Button>
       {r && (
-        <div className="ai-assist-card" role="status">
+        <output className="ai-assist-card">
           {r.ok && r.result ? (
             <>
               {choices && onUse ? (
                 <ol className="ai-choices">
                   {choices(r.result).map((texto, i) => (
-                    <li key={i}>
+                    <li key={texto}>
                       <p style={{ margin: '0 0 0.3rem' }}>{texto}</p>
                       <Button type="button" size="sm" icon={<FiCheck size={13} />} onClick={() => usar(i)}>
                         {useLabel}
@@ -117,7 +117,7 @@ export default function AiAssist({
               <button type="button" className="link-button" onClick={() => setR(null)}>Cerrar</button>
             </p>
           )}
-        </div>
+        </output>
       )}
     </div>
   );

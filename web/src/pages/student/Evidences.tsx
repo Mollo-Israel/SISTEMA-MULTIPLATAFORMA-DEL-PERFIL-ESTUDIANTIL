@@ -1,11 +1,9 @@
 import EstadosDeRespaldo from '../../components/EstadosDeRespaldo';
-import { FieldError, validarFormulario } from '../../components/form';
+import { FieldError } from '../../components/form';
 import { BotonArchivo } from '../../components/ArchivoProtegido';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { useEffect, useRef, useState } from 'react';
-import {
-  FiUpload, FiLink, FiFile, FiTrash2, FiExternalLink, FiAward, FiSearch,
-} from 'react-icons/fi';
+import { FiLink, FiFile, FiTrash2, FiExternalLink, FiAward, FiSearch } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
   catalogService,
@@ -99,8 +97,8 @@ export default function StudentEvidencesPage() {
       await evidenceService.remove(e.id);
       notify('Evidencia eliminada.');
       evidences.reload();
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     }
   };
 
@@ -116,8 +114,8 @@ export default function StudentEvidencesPage() {
       await certificateService.remove(c.id);
       notify('Certificado eliminado.');
       certificates.reload();
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     }
   };
 
@@ -341,7 +339,7 @@ export default function StudentEvidencesPage() {
                           <BotonArchivo src={c.fileUrl} nombre="certificado">
                             <FiFile /> Ver
                           </BotonArchivo>
-                        ) : c.certificateUrl ? (
+                        ) : <>{c.certificateUrl ? (
                           <a
                             className="btn btn-secondary btn-sm"
                             href={c.certificateUrl}
@@ -352,7 +350,7 @@ export default function StudentEvidencesPage() {
                           </a>
                         ) : (
                           <span className="muted">Sin adjunto</span>
-                        )}
+                        )}</>}
                       </td>
                       <td>
                         <RespaldoDelCertificado certificateId={c.id} />
@@ -436,12 +434,12 @@ function FilePicker({
   onPicked,
   onError,
   label = 'Archivo',
-}: {
+}: Readonly<{
   file: StoredFile | null;
   onPicked: (f: StoredFile | null) => void;
   onError: (msg: string) => void;
   label?: string;
-}) {
+}>) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
@@ -462,8 +460,8 @@ function FilePicker({
       if (subido.duplicateOfId) {
         onError('Ya habías subido este mismo archivo. Puedes usarlo igual, pero no sumará respaldo por separado.');
       }
-    } catch (e2) {
-      onError(apiError(e2, 'No se pudo subir el archivo.'));
+    } catch (error_) {
+      onError(apiError(error_, 'No se pudo subir el archivo.'));
     } finally {
       setBusy(false);
     }
@@ -502,11 +500,11 @@ function CertificateForm({
   areas,
   onSaved,
   onError,
-}: {
+}: Readonly<{
   areas: AcademicArea[];
   onSaved: () => void;
   onError: (m: string) => void;
-}) {
+}>) {
   const [form, setForm] = useState({
     certificateName: '',
     issuer: '',
@@ -581,8 +579,8 @@ function CertificateForm({
       setActivityId('');
       certificateService.eligibleOpportunities().then(setOportunidades).catch(() => {});
       onSaved();
-    } catch (e2) {
-      onError(apiError(e2));
+    } catch (error_) {
+      onError(apiError(error_));
     } finally {
       setSaving(false);
     }
@@ -711,7 +709,7 @@ function CertificateForm({
  * El texto evita cualquier palabra que suene a autenticidad legal: esto mide
  * qué pudo corroborarse técnicamente, nada más.
  */
-function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
+function RespaldoDelCertificado({ certificateId }: Readonly<{ certificateId: string }>) {
   const [verdict, setVerdict] = useState<ValidationVerdict | null>(null);
   const [cargando, setCargando] = useState(true);
   const [pidiendo, setPidiendo] = useState(false);
@@ -736,11 +734,7 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
     return <Badge tone="gray">En cola</Badge>;
   }
 
-  const tono = verdict.backingTier === 'corroborated'
-    ? 'green'
-    : verdict.backingTier === 'supported'
-      ? 'bordo'
-      : verdict.backingTier === 'flagged' ? 'red' : 'gray';
+  const tono = TONO_DE_RESPALDO[verdict.backingTier ?? ''] ?? 'gray';
   const chequeo = verdict.credentialCheck;
   const revision = verdict.manualReview;
 
@@ -833,3 +827,5 @@ function RespaldoDelCertificado({ certificateId }: { certificateId: string }) {
     </div>
   );
 }
+
+const TONO_DE_RESPALDO: Record<string, string> = { corroborated: 'green', supported: 'bordo', flagged: 'red' };

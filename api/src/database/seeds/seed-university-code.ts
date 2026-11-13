@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { RolNombre, UNIVERSITY_CODE_BODY_LENGTH, UNIVERSITY_CODE_PREFIX } from '@perfil/shared';
 
 const ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

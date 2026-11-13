@@ -128,24 +128,8 @@ function textoDeContenido(contenido: string): string {
   const salida: string[] = [];
 
   for (const m of contenido.matchAll(/\[((?:[^\][\\]|\\.)*)\]\s*TJ|\((?:[^()\\]|\\.)*\)\s*(?:Tj|')/g)) {
-    if (m[1] !== undefined) {
-      let linea = '';
-      for (const parte of m[1].matchAll(/\((?:[^()\\]|\\.)*\)|-?\d+(?:\.\d+)?/g)) {
-        const t = parte[0];
-        if (t.startsWith('(')) {
-          linea += literal(t);
-        } else if (Number(t) < -120) {
-          linea += ' ';
-        }
-      }
-      if (linea.trim()) salida.push(linea);
-    } else {
-      const lit = /\((?:[^()\\]|\\.)*\)/.exec(m[0]);
-      if (lit) {
-        const t = literal(lit[0]);
-        if (t.trim()) salida.push(t);
-      }
-    }
+    const t = m[1] === undefined ? literalSuelto(m[0]) : lineaDeArreglo(m[1]);
+    if (t.trim()) salida.push(t);
   }
 
   // Cadenas hexadecimales: <0041...> Tj
@@ -155,6 +139,26 @@ function textoDeContenido(contenido: string): string {
   }
 
   return salida.join('\n');
+}
+
+/** El texto de un arreglo `TJ`: sus cadenas, con un espacio donde un ajuste grande separa palabras. */
+function lineaDeArreglo(arreglo: string): string {
+  let linea = '';
+  for (const parte of arreglo.matchAll(/\((?:[^()\\]|\\.)*\)|-?\d+(?:\.\d+)?/g)) {
+    const t = parte[0];
+    if (t.startsWith('(')) {
+      linea += literal(t);
+    } else if (Number(t) < -120) {
+      linea += ' ';
+    }
+  }
+  return linea;
+}
+
+/** El texto del literal de un operador `Tj` o `'`; vacío si no lo tiene. */
+function literalSuelto(operacion: string): string {
+  const lit = /\((?:[^()\\]|\\.)*\)/.exec(operacion);
+  return lit ? literal(lit[0]) : '';
 }
 
 /** Convierte un literal `(...)` de PDF a texto, resolviendo sus escapes. */
@@ -184,7 +188,7 @@ function literal(crudo: string): string {
             oct += cuerpo[i + 1];
             i += 1;
           }
-          salida += String.fromCharCode(parseInt(oct, 8));
+          salida += String.fromCodePoint(Number.parseInt(oct, 8));
         } else {
           salida += siguiente ?? '';
         }
@@ -199,8 +203,8 @@ function desdeHex(crudo: string): string {
   // Se leen de dos en dos; con cuatro cifras seria UTF-16, que aqui se ignora
   // porque produciria basura mas que texto.
   for (let i = 0; i + 1 < limpio.length; i += 2) {
-    const code = parseInt(limpio.slice(i, i + 2), 16);
-    if (code >= 32 || code === 10 || code === 13) salida += String.fromCharCode(code);
+    const code = Number.parseInt(limpio.slice(i, i + 2), 16);
+    if (code >= 32 || code === 10 || code === 13) salida += String.fromCodePoint(code);
   }
   return salida;
 }

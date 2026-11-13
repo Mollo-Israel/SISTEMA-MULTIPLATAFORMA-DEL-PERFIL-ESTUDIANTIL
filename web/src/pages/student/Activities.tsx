@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  FiAlertCircle,
-  FiCalendar,
-  FiCheckCircle,
-  FiExternalLink,
-  FiBookmark,
-  FiMapPin,
-  FiSearch,
-  FiTag,
-  FiUserMinus, FiUserPlus,
-  FiUsers,
-} from 'react-icons/fi';
+import { FiAlertCircle, FiCalendar, FiBookmark, FiSearch, FiUserMinus, FiUserPlus } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { activityService } from '../../services';
 import { useSearchParams } from 'react-router-dom';
@@ -18,21 +7,9 @@ import ParaTi from '../../components/ParaTi';
 import { ActivityCard, ActivityDetail } from '../../components/ActivityCard';
 import type { Activity } from '../../services/types';
 import { useAsync } from '../../hooks/useAsync';
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  PageHeader,
-  ResultCount,
-  SearchInput,
-  SkeletonCards,
-  Diferido,
-  Stagger,
-  Tabs,
-} from '../../components/ui';
+import { Button, Card, EmptyState, PageHeader, ResultCount, SearchInput, SkeletonCards, Diferido, Stagger, Tabs } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
-import { ACTIVITY_STATUS_LABEL, ACTIVITY_TYPE_LABEL, REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
+import { REGISTRATION_STATUS_LABEL, lbl } from '../../constants';
 
 const formatDate = (value: string | null) =>
   value
@@ -42,6 +19,33 @@ const formatDate = (value: string | null) =>
 /** V3.2 §36: ya empezó, cerró o terminó: no se ofrece inscribirse. */
 const yaPaso = (a: Activity) =>
   a.status === 'closed' || a.status === 'finished' || (!!a.eventDate && new Date(a.eventDate).getTime() < Date.now());
+
+/** V5 §6.1 y V6 §4.1: qué pasa al pedir un lugar. */
+function textoDeSolicitud(auto: boolean, capacidad?: number | null): string {
+  if (!auto) return 'Inscripción sujeta a aprobación: el responsable decide si te admite.';
+  return capacidad
+    ? `Admisión abierta con ${capacidad} plazas: se asignan por orden de solicitud; si quedan, tienes la tuya al instante.`
+    : 'Admisión abierta: quedarás admitido al instante.';
+}
+
+/** §23: qué significa el estado de la participación para el estudiante. */
+function notaDeParticipacion(reg: { status: string; evidenceEligible?: boolean; decisionReason?: string | null }): string {
+  if (reg.status === 'accepted') {
+    return reg.evidenceEligible
+      ? 'Terminó y fuiste aceptado: ya puedes adjuntar tu credencial en Evidencias.'
+      : 'Fuiste aceptado. Cuando termine, podrás adjuntar la credencial que emita el proveedor.';
+  }
+  if (reg.status === 'confirmed') {
+    return reg.evidenceEligible
+      ? 'Asistencia registrada. Ya puedes adjuntar en Evidencias la credencial del proveedor.'
+      : 'El responsable registró tu asistencia. Si hay un error, avísale.';
+  }
+  if (reg.status === 'rejected') {
+    const motivo = reg.decisionReason ? `: ${reg.decisionReason}` : '.';
+    return `Tu solicitud no fue admitida${motivo}`;
+  }
+  return 'El responsable registró tu ausencia.';
+}
 
 export default function StudentActivitiesPage() {
   const [query, setQuery] = useState('');
@@ -101,8 +105,7 @@ export default function StudentActivitiesPage() {
     try {
       const r = await activityService.page({
         limit: PASO, offset, q: buscado.trim() || undefined, mine, favorites, responsibleId: responsable?.id,
-        ...(type === 'externas' ? { originType: 'external' as const }
-          : type === 'todas' ? {} : { type, originType: 'internal' as const }),
+        ...filtroDeTipo(type),
       });
       setItems((prev) => (offset === 0 ? r.items : [...prev, ...r.items]));
       setTotal(r.total);
@@ -150,11 +153,7 @@ export default function StudentActivitiesPage() {
       message: (
         <>
           Vas a pedir un lugar en <strong>{a.title}</strong>.{' '}
-          {!auto
-            ? 'Inscripción sujeta a aprobación: el responsable decide si te admite.'
-            : a.capacity
-              ? `Admisión abierta con ${a.capacity} plazas: se asignan por orden de solicitud; si quedan, tienes la tuya al instante.`
-              : 'Admisión abierta: quedarás admitido al instante.'}
+          {textoDeSolicitud(auto, a.capacity)}
           {' '}Cuenta en tu trayectoria cuando el responsable registre tu asistencia.
         </>
       ),
@@ -218,28 +217,7 @@ export default function StudentActivitiesPage() {
       {tab === 'para-ti' && <ParaTi onChanged={reload} />}
 
       {tab === 'historial' && (
-        <Card title="Tu historial">
-          {!historial.data ? (
-            <SkeletonCards count={2} />
-          ) : historial.data.length === 0 ? (
-            <EmptyState icon={<FiCalendar size={22} />} message="Todavía no participas en ninguna actividad." />
-          ) : (
-            <div className="scroll-x">
-              <table>
-                <thead><tr><th>Actividad</th><th>Fecha</th><th>Estado</th></tr></thead>
-                <tbody>
-                  {historial.data.map((r) => (
-                    <tr key={r.registrationId}>
-                      <td>{r.activity?.title}</td>
-                      <td className="muted">{formatDate(r.activity?.eventDate ?? null) ?? '—'}</td>
-                      <td>{lbl(REGISTRATION_STATUS_LABEL, r.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+        <HistorialDeActividades filas={historial.data} />
       )}
 
       {(tab === 'todas' || tab === 'guardadas' || tab === 'inscritas') && (<>
@@ -305,16 +283,14 @@ export default function StudentActivitiesPage() {
 
       {loading && !data ? (
         <Diferido><SkeletonCards count={4} /></Diferido>
-      ) : error && !data ? (
+      ) : <>{error && !data ? (
         <div className="alert alert-error">{error}</div>
-      ) : items.length === 0 && !buscado && type === 'todas' ? (
+      ) : <>{items.length === 0 && !buscado && type === 'todas' ? (
         <EmptyState
           icon={<FiCalendar size={22} />}
-          message={tab === 'guardadas' ? 'Todavía no guardaste ninguna actividad.'
-            : tab === 'inscritas' ? 'Todavía no te inscribiste en ninguna actividad.'
-              : 'Todavía no hay actividades publicadas. Vuelve a consultar más adelante.'}
+          message={SIN_ACTIVIDADES[tab] ?? 'Todavía no hay actividades publicadas. Vuelve a consultar más adelante.'}
         />
-      ) : visible.length === 0 ? (
+      ) : <>{visible.length === 0 ? (
         <EmptyState
           icon={<FiSearch size={22} />}
           message={`Ninguna actividad coincide con los filtros aplicados.`}
@@ -350,17 +326,7 @@ export default function StudentActivitiesPage() {
                       || a.myRegistration?.status === 'rejected' ? (
                         <p className="inline-note" style={{ margin: 0 }}>
                           <FiAlertCircle size={13} />{' '}
-                          {a.myRegistration.status === 'accepted'
-                            ? a.myRegistration.evidenceEligible
-                              ? 'Terminó y fuiste aceptado: ya puedes adjuntar tu credencial en Evidencias.'
-                              : 'Fuiste aceptado. Cuando termine, podrás adjuntar la credencial que emita el proveedor.'
-                            : a.myRegistration.status === 'confirmed'
-                              ? a.myRegistration.evidenceEligible
-                                ? 'Asistencia registrada. Ya puedes adjuntar en Evidencias la credencial del proveedor.'
-                                : 'El responsable registró tu asistencia. Si hay un error, avísale.'
-                              : a.myRegistration.status === 'rejected'
-                                ? `Tu solicitud no fue admitida${a.myRegistration.decisionReason ? `: ${a.myRegistration.decisionReason}` : '.'}`
-                                : 'El responsable registró tu ausencia.'}
+                          {notaDeParticipacion(a.myRegistration)}
                         </p>
                       ) : (
                         <>
@@ -385,7 +351,7 @@ export default function StudentActivitiesPage() {
                               <FiAlertCircle size={13} /> Solicitud pendiente: el responsable decide si te admite.
                             </span>
                           )}
-                          {yaPaso(a) || a.status === 'cancelled' ? null : a.myRegistration?.status === 'registered' || a.myRegistration?.status === 'accepted' ? (
+                          {!yaPaso(a) && a.status !== 'cancelled' && (a.myRegistration?.status === 'registered' || a.myRegistration?.status === 'accepted' ? (
                             <Button
                               variant="secondary"
                               size="sm"
@@ -404,7 +370,7 @@ export default function StudentActivitiesPage() {
                             >
                               Solicitar inscripción
                             </Button>
-                          )}
+                          ))}
                         </>
                       )}
                   </>
@@ -421,7 +387,7 @@ export default function StudentActivitiesPage() {
             );
           })}
         </div>
-      )}
+      )}</>}</>}</>}
       {lista && items.length < total && (
         <div style={{ textAlign: 'center', marginTop: '1rem' }}>
           <Button variant="secondary" loading={loading} onClick={() => pedir(items.length)}>
@@ -437,5 +403,46 @@ export default function StudentActivitiesPage() {
         />
       )}
     </div>
+  );
+}
+
+/** El filtro de tipo: externas, todas, o un tipo de las internas. */
+function filtroDeTipo(type: string) {
+  if (type === 'externas') return { originType: 'external' as const };
+  return type === 'todas' ? {} : { type, originType: 'internal' as const };
+}
+
+const SIN_ACTIVIDADES: Record<string, string> = {
+  guardadas: 'Todavía no guardaste ninguna actividad.',
+  inscritas: 'Todavía no te inscribiste en ninguna actividad.',
+};
+
+/** Las actividades en las que participó, con su fecha y estado. */
+function HistorialDeActividades({ filas }: Readonly<{
+  filas: { registrationId: string; status: string; activity: Activity }[] | null | undefined;
+}>) {
+  return (
+    <Card title="Tu historial">
+      {!filas ? (
+        <SkeletonCards count={2} />
+      ) : <>{filas.length === 0 ? (
+        <EmptyState icon={<FiCalendar size={22} />} message="Todavía no participas en ninguna actividad." />
+      ) : (
+        <div className="scroll-x">
+          <table>
+            <thead><tr><th>Actividad</th><th>Fecha</th><th>Estado</th></tr></thead>
+            <tbody>
+              {filas.map((r) => (
+                <tr key={r.registrationId}>
+                  <td>{r.activity?.title}</td>
+                  <td className="muted">{formatDate(r.activity?.eventDate ?? null) ?? '—'}</td>
+                  <td>{lbl(REGISTRATION_STATUS_LABEL, r.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}</>}
+    </Card>
   );
 }

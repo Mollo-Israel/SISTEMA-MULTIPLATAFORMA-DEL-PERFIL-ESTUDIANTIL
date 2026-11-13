@@ -94,7 +94,7 @@ export default function LibraryScreen() {
       {pagina.data && total === 0 && (
         <EmptyState
           icon={favoritos ? 'bookmark' : 'book-open'}
-          message={favoritos ? 'Todavía no guardaste recursos.' : q || areaId ? 'Ningún recurso coincide con la búsqueda.' : 'Todavía no hay recursos publicados.'}
+          message={mensajeSinRecursos(favoritos, !!(q || areaId))}
         />
       )}
 
@@ -153,3 +153,9 @@ const styles = StyleSheet.create({
   desc: { fontSize: 13.5, color: colors.gray700, marginBottom: 6 },
   nota: { flexDirection: 'row', gap: 6, alignItems: 'flex-start', marginTop: 14 },
 });
+
+/** Por qué no hay recursos: sin favoritos, sin coincidencias o sin nada publicado. */
+function mensajeSinRecursos(favoritos: boolean, buscando: boolean): string {
+  if (favoritos) return 'Todavía no guardaste recursos.';
+  return buscando ? 'Ningún recurso coincide con la búsqueda.' : 'Todavía no hay recursos publicados.';
+}

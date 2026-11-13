@@ -5,24 +5,31 @@
 📦 report is created on: C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\pruebas\02-jest-supertest\reporte\reporte-jest.html
 
 =============================== Coverage summary ===============================
-Statements   : 38.86% ( 6151/15828 )
-Branches     : 30.97% ( 3702/11951 )
-Functions    : 23.76% ( 677/2849 )
-Lines        : 40.76% ( 5604/13747 )
+Statements   : 38.5% ( 6495/16866 )
+Branches     : 31.43% ( 3840/12216 )
+Functions    : 23.05% ( 733/3179 )
+Lines        : 40.48% ( 5896/14562 )
 ================================================================================
 
-PASS test/jest/api/afinia-v5-gobernanza.spec.ts (5.765 s)
+[BABEL] Note: The code generator has deoptimised the styling of C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\api\src\activities\activities.service.ts as it exceeds the max of 500KB.
+PASS test/jest/api/afinia-no-certifica.spec.ts (11.842 s)
+PASS test/jest/unit/titular-de-pagina.spec.ts
 PASS test/jest/api/integridad-negocio.spec.ts
-PASS test/jest/api/autenticacion.spec.ts
-PASS test/jest/api/afinia-no-certifica.spec.ts
 PASS test/jest/api/autorizacion-alcance.spec.ts
+PASS test/jest/api/integracion-postgres.spec.ts
+PASS test/jest/api/afinia-v5-gobernanza.spec.ts
+PASS test/jest/api/autenticacion.spec.ts
+PASS test/jest/unit/texto.spec.ts
+PASS test/jest/unit/manifiestos.spec.ts
 PASS test/jest/unit/reglas-negocio.spec.ts
+PASS test/jest/unit/afinidad-factores.spec.ts
+PASS test/jest/unit/transicion-actividades.spec.ts
 PASS test/jest/unit/inscripcion-admision-asistencia.spec.ts
 PASS test/jest/unit/apellidos.spec.ts
 
-Test Suites: 8 passed, 8 total
-Tests:       69 passed, 69 total
+Test Suites: 14 passed, 14 total
+Tests:       120 passed, 120 total
 Snapshots:   0 total
-Time:        16.307 s, estimated 26 s
+Time:        34.269 s
 Ran all test suites.
 Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

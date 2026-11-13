@@ -1,5 +1,6 @@
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { AiTaskType, CvAssistMode } from '@perfil/shared';
+import { ocultarCorreos } from '../common/texto';
 
 /**
  * Lo que rodea a una llamada de IA y no depende del proveedor (V2 §43.3,
@@ -13,10 +14,10 @@ import { AiTaskType, CvAssistMode } from '@perfil/shared';
  * de URL. Luego normaliza espacios y recorta a `maxChars`.
  */
 export function sanitizeForAi(text: string, maxChars: number): string {
-  return (text ?? '')
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, '[token]')
-    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g, '[token]')
-    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[correo]')
+  const sinTokens = (text ?? '')
+    .replace(/Bearer\s+[A-Z0-9._~+/=-]+/gi, '[token]')
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g, '[token]');
+  return ocultarCorreos(sinTokens, '[correo]')
     .replace(/(https?:\/\/[^\s?#]+)[?#][^\s]*/gi, '$1')
     .replace(/\+?\d[\d\s().-]{6,}\d/g, '[teléfono]')
     .replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[clave]')

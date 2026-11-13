@@ -20,6 +20,7 @@ import { Contact, ContactRequest } from '../entities/collaboration.entity';
 import { ContactNote, StudentContactChannel } from '../entities/contact-channel.entity';
 import { channelHref, checkContactChannel } from './contact-channel.rules';
 import { ContactChannelDto, ContactNoteDto } from './dto/collaboration.dto';
+import { escaparComodinesLike } from '../common/texto';
 
 /** Un canal tal como lo ve otra persona: etiqueta y enlace seguro. */
 export interface ChannelView {
@@ -180,7 +181,7 @@ export class ContactsService {
     });
     // Mismo 404 que un perfil cerrado: decir «existe pero no está publicado»
     // ya es contar algo de alguien que decidió no contarlo.
-    if (!destino || !destino.publicProfileEnabled) {
+    if (!destino?.publicProfileEnabled) {
       throw new NotFoundException('No existe un perfil compartible con ese enlace.');
     }
     if (destino.id === requesterProfileId) {
@@ -269,7 +270,7 @@ export class ContactsService {
     const solicitud = await this.requests.findOne({ where: { id: requestId } });
     // 404 y no 403: quien no es el destinatario no tiene por qué enterarse de
     // que la solicitud existe.
-    if (!solicitud || solicitud.targetProfileId !== studentProfileId) {
+    if (solicitud?.targetProfileId !== studentProfileId) {
       throw new NotFoundException('Solicitud no encontrada.');
     }
     if (solicitud.status !== ContactRequestStatus.PENDING) {
@@ -312,7 +313,7 @@ export class ContactsService {
   /** Quien envió una solicitud puede retirarla mientras nadie la respondió. */
   async cancel(studentProfileId: string, requestId: string) {
     const solicitud = await this.requests.findOne({ where: { id: requestId } });
-    if (!solicitud || solicitud.requesterProfileId !== studentProfileId) {
+    if (solicitud?.requesterProfileId !== studentProfileId) {
       throw new NotFoundException('Solicitud no encontrada.');
     }
     if (solicitud.status !== ContactRequestStatus.PENDING) {
@@ -337,7 +338,7 @@ export class ContactsService {
       const m = 'Escribe al menos 3 letras del nombre o el identificador de su perfil.';
       throw new BadRequestException({ code: 'SEARCH_TOO_SHORT', message: m, fields: { q: [m] } });
     }
-    const patron = `%${texto.slice(0, 60).replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+    const patron = `%${escaparComodinesLike(texto.slice(0, 60))}%`;
     const filas = await this.profiles.createQueryBuilder('p')
       .innerJoin('p.user', 'u')
       .select(['p.id', 'p.semester', 'p.publicProfileSlug'])

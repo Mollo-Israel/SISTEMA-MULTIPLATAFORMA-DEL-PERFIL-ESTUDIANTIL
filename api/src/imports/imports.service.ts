@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, In, Repository } from 'typeorm';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 import {
   ImportBatchStatus,
@@ -25,6 +25,7 @@ import {
 import { NAME_RE } from '../common/validation';
 import { codificacionProblema, columnasDeApellido, columnasProblema, parseCsv } from './csv.parser';
 import { resolverApellidos } from '../users/surnames';
+import { ocultarCorreosEnMensaje, tieneFormatoDeCorreo } from '../common/texto';
 
 /** Columnas mínimas de la plantilla (§10). */
 const REQUIRED_HEADERS = [
@@ -50,6 +51,36 @@ interface EvaluatedRow {
   /** Usuario existente al que corresponde la fila, si se identificó. */
   existingUserId: string | null;
 }
+
+type FilaLeida = { lineNumber: number; values: Record<string, string>; columns?: number };
+
+/** Lo ya conocido al evaluar las filas: cuentas existentes y lo visto en el archivo. */
+interface ContextoDeFilas {
+  domains: string[];
+  columnasPlantilla: number;
+  byCode: Map<string, StudentProfile>;
+  byEmail: Map<string, User>;
+  accountByCode: Map<string, string>;
+  seenCodes: Set<string>;
+  seenEmails: Set<string>;
+}
+
+/** Los valores de una fila, limpios. */
+function leerFila(values: Record<string, string>) {
+  const semesterRaw = values.semester?.trim() || '';
+  return {
+    universityCode: normalizeUniversityCode(values.university_code) || null,
+    email: values.institutional_email?.trim().toLowerCase() || null,
+    firstName: values.first_name?.trim() || null,
+    lastName: values.last_name?.trim() || null,
+    firstSurname: values.first_surname?.trim() || null,
+    secondSurname: values.second_surname?.trim() || null,
+    semesterRaw,
+    semester: semesterRaw ? Number(semesterRaw) : null,
+  };
+}
+
+type DatosDeFila = ReturnType<typeof leerFila>;
 
 @Injectable()
 export class ImportsService {
@@ -197,116 +228,109 @@ export class ImportsService {
     const seenCodes = new Set<string>();
     const seenEmails = new Set<string>();
 
+    const ctx: ContextoDeFilas = { domains, columnasPlantilla, byCode, byEmail, accountByCode, seenCodes, seenEmails };
     const out: EvaluatedRow[] = [];
-
     for (const fila of parsed) {
-      const { lineNumber, values } = fila;
-      const universityCode = normalizeUniversityCode(values.university_code) || null;
-      const email = values.institutional_email?.trim().toLowerCase() || null;
-      const firstName = values.first_name?.trim() || null;
-      const lastName = values.last_name?.trim() || null;
-      const firstSurname = values.first_surname?.trim() || null;
-      const secondSurname = values.second_surname?.trim() || null;
-      const semesterRaw = values.semester?.trim() || '';
-      const semester = semesterRaw ? Number(semesterRaw) : null;
-
-      const base = {
-        lineNumber,
-        universityCode,
-        institutionalEmail: email,
-        firstName,
-        lastName,
-        firstSurname,
-        secondSurname,
-        semester: Number.isFinite(semester) ? semester : null,
-        existingUserId: null as string | null,
-      };
-
-      // ---- formato ----
-      const invalid = columnasProblema(fila, columnasPlantilla)
-        ?? this.validateRow({ universityCode, email, firstName, lastName, semesterRaw, semester, domains });
-      if (invalid) {
-        out.push({ ...base, status: ImportRowStatus.INVALID, message: invalid });
-        continue;
-      }
-
-      // ---- duplicado dentro del archivo ----
-      if (seenCodes.has(universityCode!) || (email && seenEmails.has(email))) {
-        out.push({
-          ...base,
-          status: ImportRowStatus.CONFLICT,
-          message: 'La fila repite un código o un correo que ya aparece antes en este archivo.',
-        });
-        continue;
-      }
-      seenCodes.add(universityCode!);
-      if (email) seenEmails.add(email);
-
-      // ---- identificación ----
-      const byCodeMatch = byCode.get(universityCode!);
-      const byEmailMatch = email ? byEmail.get(email) : undefined;
-
-      const cuentaDelCodigo = accountByCode.get(universityCode!);
-      if (!byCodeMatch && cuentaDelCodigo && cuentaDelCodigo !== byEmailMatch?.id) {
-        out.push({
-          ...base,
-          status: ImportRowStatus.CONFLICT,
-          message: 'Ese código universitario ya pertenece a otra cuenta.',
-        });
-        continue;
-      }
-
-      if (byCodeMatch && byEmailMatch && byCodeMatch.userId !== byEmailMatch.id) {
-        out.push({
-          ...base,
-          status: ImportRowStatus.CONFLICT,
-          message:
-            'El código universitario y el correo corresponden a dos cuentas distintas. '
-            + 'Debe resolverse manualmente.',
-        });
-        continue;
-      }
-
-      if (!byCodeMatch && byEmailMatch) {
-        // El correo ya existe en otra cuenta que no lleva este código.
-        const profile = await this.profiles.findOne({ where: { userId: byEmailMatch.id } });
-        if (profile?.universityCode && profile.universityCode !== universityCode) {
-          out.push({
-            ...base,
-            status: ImportRowStatus.CONFLICT,
-            message: `El correo ya pertenece a la cuenta con código ${profile.universityCode}.`,
-          });
-          continue;
-        }
-      }
-
-      const existing = byCodeMatch ?? (byEmailMatch ? { userId: byEmailMatch.id } : null);
-
-      if (!existing) {
-        out.push({ ...base, status: ImportRowStatus.NEW, message: null });
-        continue;
-      }
-
-      // ---- ¿cambia algo? ----
-      const user = byCodeMatch?.user ?? byEmailMatch ?? (await this.users.findOne({ where: { id: existing.userId } }));
-      const profile = byCodeMatch ?? (await this.profiles.findOne({ where: { userId: existing.userId } }));
-
-      const changes: string[] = [];
-      if (user && firstName && user.firstName !== firstName) changes.push('nombre');
-      if (user && lastName && user.lastName !== lastName) changes.push('apellido');
-      if (user && email && user.email !== email) changes.push('correo');
-      if (profile && semester !== null && profile.semester !== semester) changes.push('semestre');
-      if (profile && !profile.universityCode && universityCode) changes.push('código');
-
-      out.push({
-        ...base,
-        existingUserId: existing.userId,
-        status: changes.length > 0 ? ImportRowStatus.UPDATE : ImportRowStatus.UNCHANGED,
-        message: changes.length > 0 ? `Actualiza: ${changes.join(', ')}.` : null,
-      });
+      out.push(await this.evaluarFila(fila, ctx));
     }
-
     return out;
+  }
+
+  /** Una fila: inválida, en conflicto, nueva, con cambios o sin ellos. */
+  private async evaluarFila(fila: FilaLeida, ctx: ContextoDeFilas): Promise<EvaluatedRow> {
+    const d = leerFila(fila.values);
+    const { universityCode, email } = d;
+    const base = {
+      lineNumber: fila.lineNumber,
+      universityCode,
+      institutionalEmail: email,
+      firstName: d.firstName,
+      lastName: d.lastName,
+      firstSurname: d.firstSurname,
+      secondSurname: d.secondSurname,
+      semester: Number.isFinite(d.semester) ? d.semester : null,
+      existingUserId: null as string | null,
+    };
+
+    // ---- formato ----
+    const invalid = columnasProblema(fila, ctx.columnasPlantilla)
+      ?? this.validateRow({ ...d, domains: ctx.domains });
+    if (invalid) return { ...base, status: ImportRowStatus.INVALID, message: invalid };
+
+    // ---- duplicado dentro del archivo ----
+    if (ctx.seenCodes.has(universityCode!) || (email && ctx.seenEmails.has(email))) {
+      return {
+        ...base,
+        status: ImportRowStatus.CONFLICT,
+        message: 'La fila repite un código o un correo que ya aparece antes en este archivo.',
+      };
+    }
+    ctx.seenCodes.add(universityCode!);
+    if (email) ctx.seenEmails.add(email);
+
+    // ---- identificación ----
+    const byCodeMatch = ctx.byCode.get(universityCode!);
+    const byEmailMatch = email ? ctx.byEmail.get(email) : undefined;
+    const conflicto = await this.conflictoDeIdentidad(universityCode!, byCodeMatch, byEmailMatch, ctx.accountByCode);
+    if (conflicto) return { ...base, status: ImportRowStatus.CONFLICT, message: conflicto };
+
+    const existing = byCodeMatch ?? (byEmailMatch ? { userId: byEmailMatch.id } : null);
+    if (!existing) return { ...base, status: ImportRowStatus.NEW, message: null };
+
+    // ---- ¿cambia algo? ----
+    const changes = await this.cambiosDeFila(d, existing.userId, byCodeMatch, byEmailMatch);
+    return {
+      ...base,
+      existingUserId: existing.userId,
+      status: changes.length > 0 ? ImportRowStatus.UPDATE : ImportRowStatus.UNCHANGED,
+      message: changes.length > 0 ? `Actualiza: ${changes.join(', ')}.` : null,
+    };
+  }
+
+  /**
+   * El código y el correo, ¿apuntan a cuentas que no encajan? Devuelve el
+   * motivo del conflicto, o null si no lo hay.
+   */
+  private async conflictoDeIdentidad(
+    universityCode: string,
+    byCodeMatch: StudentProfile | undefined,
+    byEmailMatch: User | undefined,
+    accountByCode: Map<string, string>,
+  ): Promise<string | null> {
+    const cuentaDelCodigo = accountByCode.get(universityCode);
+    if (!byCodeMatch && cuentaDelCodigo && cuentaDelCodigo !== byEmailMatch?.id) {
+      return 'Ese código universitario ya pertenece a otra cuenta.';
+    }
+    if (byCodeMatch && byEmailMatch && byCodeMatch.userId !== byEmailMatch.id) {
+      return 'El código universitario y el correo corresponden a dos cuentas distintas. '
+        + 'Debe resolverse manualmente.';
+    }
+    if (!byCodeMatch && byEmailMatch) {
+      // El correo ya existe en otra cuenta que no lleva este código.
+      const profile = await this.profiles.findOne({ where: { userId: byEmailMatch.id } });
+      if (profile?.universityCode && profile.universityCode !== universityCode) {
+        return `El correo ya pertenece a la cuenta con código ${profile.universityCode}.`;
+      }
+    }
+    return null;
+  }
+
+  /** Qué cambiaría al aplicar la fila sobre la cuenta existente. */
+  private async cambiosDeFila(
+    d: DatosDeFila,
+    userId: string,
+    byCodeMatch: StudentProfile | undefined,
+    byEmailMatch: User | undefined,
+  ): Promise<string[]> {
+    const user = byCodeMatch?.user ?? byEmailMatch ?? (await this.users.findOne({ where: { id: userId } }));
+    const profile = byCodeMatch ?? (await this.profiles.findOne({ where: { userId } }));
+    const changes: string[] = [];
+    if (user && d.firstName && user.firstName !== d.firstName) changes.push('nombre');
+    if (user && d.lastName && user.lastName !== d.lastName) changes.push('apellido');
+    if (user && d.email && user.email !== d.email) changes.push('correo');
+    if (profile && d.semester !== null && profile.semester !== d.semester) changes.push('semestre');
+    if (profile && !profile.universityCode && d.universityCode) changes.push('código');
+    return changes;
   }
 
   private validateRow(input: {
@@ -326,7 +350,7 @@ export class ImportsService {
     if (!NAME_RE.test(input.firstName)) return 'El nombre contiene caracteres no permitidos.';
     if (!NAME_RE.test(input.lastName)) return 'El apellido contiene caracteres no permitidos.';
     if (!input.email) return 'Falta el correo institucional.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) return 'El correo no tiene un formato válido.';
+    if (!tieneFormatoDeCorreo(input.email)) return 'El correo no tiene un formato válido.';
     if (!isInstitutionalEmail(input.email, input.domains)) {
       return 'El correo no pertenece a un dominio institucional autorizado.';
     }
@@ -355,7 +379,7 @@ export class ImportsService {
    */
   async apply(adminUserId: string, batchId: string) {
     const batch = await this.batches.findOne({ where: { id: batchId } });
-    if (!batch || batch.kind !== 'students') throw new NotFoundException('Lote de importación no encontrado.');
+    if (batch?.kind !== 'students') throw new NotFoundException('Lote de importación no encontrado.');
     if (batch.status === ImportBatchStatus.APPLIED) {
       throw new BadRequestException('Este lote ya se aplicó.');
     }
@@ -512,8 +536,7 @@ export class ImportsService {
   /** V3.2 §7.5: un lote que no se pudo aplicar queda con su motivo. */
   async marcarFallido(batchId: string, error: unknown) {
     // Sin datos personales: los correos que traiga el error del motor se ocultan.
-    const motivo = (error instanceof Error ? error.message : String(error))
-      .replace(/[^\s@'"]+@[^\s@'"]+/g, '[correo]');
+    const motivo = ocultarCorreosEnMensaje(error instanceof Error ? error.message : String(error), '[correo]');
     await this.batches.update(
       { id: batchId },
       { status: ImportBatchStatus.FAILED, failureReason: motivo.slice(0, 300) },

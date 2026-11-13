@@ -138,7 +138,7 @@ export class GamificationService {
         .orIgnore()
         .execute();
       await this.recalcularTotal(manager, studentProfileId);
-      return r.identifiers.filter(Boolean).length > 0;
+      return r.identifiers.some(Boolean);
     });
     await this.otorgarInsignias(studentProfileId);
     return insertado;

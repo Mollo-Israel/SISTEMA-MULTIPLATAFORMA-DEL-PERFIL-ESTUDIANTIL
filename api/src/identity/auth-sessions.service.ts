@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager, IsNull, LessThan, MoreThan, Repository } from 'typeorm';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { AuthSession } from '../entities/auth-session.entity';
 import { identityConfig } from '../config/identity.config';
 

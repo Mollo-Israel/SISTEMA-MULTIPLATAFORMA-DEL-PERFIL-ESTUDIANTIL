@@ -3,7 +3,6 @@ import { ImagenProtegida } from './ArchivoProtegido';
 import PersonPicker from './PersonPicker';
 import { entradaAIso, formatearFechaHora, isoAEntrada } from '../lib/fechas';
 import { placeName } from '../lib/validators';
-import { ROLE_LABEL } from '../constants';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -32,6 +31,7 @@ import {
   REGISTRATION_BADGE,
   registrationLabel,
   lbl,
+  ROLE_LABEL,
 } from '../constants';
 
 /** V4.1 A41-006 (A.5): tope de imágenes por actividad. */
@@ -141,13 +141,13 @@ export default function ActivityManager({
   activityType,
   filtroOrigen,
   puedeCrear = true,
-}: {
+}: Readonly<{
   activityType: 'academica' | 'extracurricular';
   /** V3.2 §26: la vista «Externas» de Dirección muestra las externas de cualquier tipo. */
   filtroOrigen?: 'internal' | 'external';
   /** Dirección da seguimiento a lo extracurricular aprobado, pero no lo crea (§15). */
   puedeCrear?: boolean;
-}) {
+}>) {
   const { user } = useAuth();
   /** Docente y Sociedad proponen; Dirección decide. Dirección y Administración publican sin revisión (V3 §12.2). */
   const necesitaRevision = user?.role !== 'CAREER_DIRECTOR' && user?.role !== 'ADMIN';
@@ -278,54 +278,9 @@ export default function ActivityManager({
    * valida lo mismo (esto solo evita el viaje).
    */
   const validarLocal = (completa: boolean): boolean => {
-    const e: Record<string, string> = {};
-    if (!form.title.trim()) e.title = 'El título es obligatorio.';
-    else if (!/\p{L}/u.test(form.title)) e.title = 'El título no puede contener solo símbolos.';
-    if (!form.categoryId) e.categoryId = 'Elige una categoría.';
-    const ini = entradaAIso(form.activityDate);
-    const fin = entradaAIso(form.endAt);
-    if (ini && fin && new Date(fin).getTime() <= new Date(ini).getTime()) {
-      e.endAt = 'La fecha final debe ser posterior a la fecha inicial.';
-    }
-    form.resourceLinks.forEach((l) => {
-      if (!l.label.trim() || !/^https:\/\/\S+\.\S+/.test(l.url.trim())) {
-        e.resourceLinks = 'Cada enlace necesita un nombre y una URL https.';
-      }
-    });
-    if (form.meetingUrl && !/^https:\/\/\S+\.\S+/.test(form.meetingUrl.trim())) {
-      e.meetingUrl = 'El enlace de la reunión debe ser una URL https.';
-    }
-    // V4.1 A41-004: el formato del aula vale siempre que se escriba (también en
-    // borrador); que sea obligatoria lo decide la modalidad al publicar.
-    if (!externa && presencial && form.location.trim()) {
-      const lugar = placeName(form.location);
-      if (lugar) e.location = lugar;
-    }
-    if (completa) {
-      if (!ini) e.activityDate = 'Indica la fecha y hora de inicio.';
-      if (!fin && !e.endAt) e.endAt = 'Indica la fecha y hora de fin.';
-      if (!externa && presencial && !form.location.trim()) e.location = 'Indica el aula o el lugar.';
-      if (!externa && virtual && !form.meetingUrl.trim()) e.meetingUrl = 'Indica el enlace de la reunión.';
-      if (externa && !form.provider.trim()) e.provider = 'Indica el proveedor de la oportunidad externa.';
-      if (externa && !form.externalUrl.trim()) e.externalUrl = 'Indica el enlace oficial de la oportunidad externa.';
-      if (!externa && form.outcomePolicy === 'institution_issued_certificate' && !form.certificateIssuer.trim()) {
-        e.certificateIssuer = 'Indica quién emite el certificado: Afinia no se atribuye su autoría.';
-      }
-      if (form.areaIds.length === 0) e.areaIds = 'Selecciona al menos un área.';
-      if (!esDocente && !soloDocentes && form.audiencia === 'especificos' && form.semesterScope.length === 0) {
-        e.semesterScope = 'Elige al menos un semestre, o marca «Toda la carrera».';
-      }
-      if (soloDocentes && audienciaFinal.length === 0) {
-        e.semesterScope = 'Asigna al menos un semestre a un docente responsable. Para «Toda la carrera», suma a Dirección o a la Sociedad.';
-      }
-      const sinSemestres = form.responsables.filter((p) => !esDocente && esDocenteResponsable(p) && (form.asignaciones[p.id] ?? []).length === 0);
-      if (sinSemestres.length) {
-        e.responsibleAssignments = `${sinSemestres.map((p) => `${p.firstName} ${p.lastName}`).join(', ')} no tiene semestres asignados: asígnale al menos uno o quítalo de responsables.`;
-      }
-      // V4.1 V41-01: una charla general puede no tener una habilidad concreta.
-      // V4.1 A41-007: el borrador puede guardarse sin responsable; se pide al publicar.
-      if (esAdmin && form.responsables.length === 0) e.responsibleUserIds = 'Indica quién responde por esta oportunidad antes de publicar.';
-    }
+    const ctx: ContextoDelFormulario = { externa, presencial, virtual, esDocente, esAdmin, soloDocentes, audienciaFinal };
+    const e = erroresDeFormato(form, ctx);
+    if (completa) Object.assign(e, erroresParaPublicar(form, ctx, e));
     errores.setErrors(e as never);
     if (Object.keys(e).length) {
       const primero = document.querySelector<HTMLElement>(`[data-campo="${Object.keys(e)[0]}"] input, [data-campo="${Object.keys(e)[0]}"] select, [data-campo="${Object.keys(e)[0]}"] textarea, [data-campo="${Object.keys(e)[0]}"] button`);
@@ -362,60 +317,10 @@ export default function ActivityManager({
     }
     setSaving(true);
     errores.reset();
-    const payload: Record<string, unknown> = {
-      title: form.title,
-      description: form.description || undefined,
-      type: activityType,
-      categoryId: form.categoryId,
-      modality: form.modality,
-      areaIds: form.areaIds,
-      skillIds: form.skillIds,
-      skillContexts: form.skillIds
-        .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
-        .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
-      originType: form.originType,
-      // V3.2 §29: una externa no tiene selector; su resultado es la credencial.
-      ...(externa ? {} : { outcomePolicy: form.outcomePolicy }),
-      ...(!externa && form.outcomePolicy === 'institution_issued_certificate'
-        ? { certificateIssuer: form.certificateIssuer.trim() }
-        : {}),
-      ...(externa || form.outcomePolicy === 'external_credential_expected'
-        ? {
-          provider: form.provider.trim(),
-          expectedIssuerDomains: form.expectedIssuerDomains.split(',').map((t) => t.trim()).filter(Boolean),
-          expectedKeywords: form.expectedKeywords.split(',').map((t) => t.trim()).filter(Boolean),
-        }
-        : {}),
-      ...(!esDocente && (esAdmin || form.responsables.length > 0)
-        ? {
-          responsibleUserIds: form.responsables.map((p) => p.id),
-          // V6 §3.2: qué atiende cada docente; el servidor vuelve a validarlo.
-          responsibleAssignments: form.responsables
-            .filter(esDocenteResponsable)
-            .map((p) => ({ userId: p.id, semesters: (form.asignaciones[p.id] ?? []).filter((n) => audienciaFinal.length === 0 || audienciaFinal.includes(n)) })),
-        }
-        : {}),
-      contactUserIds: form.contactos.map((p) => p.id),
-      activityDate: entradaAIso(form.activityDate),
-      endAt: entradaAIso(form.endAt),
-      location: presencial ? form.location || undefined : undefined,
-      meetingUrl: virtual ? form.meetingUrl.trim() || null : null,
-      externalUrl: form.externalUrl || undefined,
-      resourceLinks: form.resourceLinks
-        .filter((l) => l.label.trim() || l.url.trim())
-        .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
-      imageFileIds: editing || form.imagenes.length ? form.imagenes.map((i) => i.fileId) : undefined,
-      capacity: form.capacity ? Number(form.capacity) : undefined,
-      // V6 §4.3: las externas tienen la misma política de admisión y cupo.
-      registrationMode: form.registrationMode,
-      // V6 §3.4: al editar se envía siempre (vacío = toda la carrera).
-      semesterScope: esDocente
-        ? form.semesterScope.length ? form.semesterScope : undefined
-        : editing ? audienciaFinal : audienciaFinal.length ? audienciaFinal : undefined,
-      gamificationRules: form.criterionId
-        ? [{ trigger: 'participacion_confirmada', criterionId: form.criterionId }]
-        : [],
-    };
+    const payload = cargaDeActividad(form, {
+      externa, presencial, virtual, esDocente, esAdmin, soloDocentes, audienciaFinal,
+      activityType, editando: !!editing,
+    });
     if (!editing) payload.status = accion === 'publish' ? 'open' : 'draft';
     else if (accion === 'publish' && editing.status === 'draft') payload.status = 'open';
     const conReferencia = externa || form.outcomePolicy === 'external_credential_expected';
@@ -440,10 +345,7 @@ export default function ActivityManager({
       await guardarReferencia(id);
       if (accion === 'review') await activityService.submit(id);
       notify(
-        accion === 'review' ? 'Enviada a revisión de Dirección.'
-          : accion === 'publish' ? 'Actividad publicada: ya acepta inscripciones.'
-            : accion === 'draft' ? 'Borrador guardado. Nadie más lo ve todavía.'
-              : 'Cambios guardados.',
+        AVISO_AL_GUARDAR[accion] ?? 'Cambios guardados.',
       );
       resetForm();
       await load();
@@ -508,22 +410,33 @@ export default function ActivityManager({
     return habilitados.filter((n) => form.semesterScope.includes(n));
   };
 
+  /**
+   * Semestres de cada docente responsable: los que ya tenía o, si es nuevo,
+   * solo los suyos (regla 4), nunca todos los del público.
+   */
+  const asignacionesPara = (lista: ActivityPerson[], todosLosSuyos: boolean): Record<string, number[]> => {
+    const asignaciones: Record<string, number[]> = {};
+    for (const p of lista) {
+      if (!esDocenteResponsable(p)) continue;
+      const previa = form.asignaciones[p.id];
+      if (previa) {
+        asignaciones[p.id] = previa;
+        continue;
+      }
+      const habilitados = p.semesters ?? [];
+      asignaciones[p.id] = todosLosSuyos
+        ? habilitados
+        : habilitados.filter((n) => form.audiencia === 'carrera' || form.semesterScope.includes(n));
+    }
+    return asignaciones;
+  };
+
   /** Cambia los responsables y avisa si algún semestre se queda sin quien lo atienda. */
   const cambiarResponsables = (lista: ActivityPerson[]) => {
     const antes = audienciaFinal;
     const quedanSoloDocentes = lista.length > 0 && lista.every(esDocenteResponsable);
     const eranSoloDocentes = soloDocentes || form.responsables.length === 0;
-    const asignaciones: Record<string, number[]> = {};
-    for (const p of lista) {
-      if (!esDocenteResponsable(p)) continue;
-      const previa = form.asignaciones[p.id];
-      if (previa) { asignaciones[p.id] = previa; continue; }
-      // Regla 4: solo sus semestres, nunca todos los del público.
-      const habilitados = p.semesters ?? [];
-      asignaciones[p.id] = quedanSoloDocentes && eranSoloDocentes
-        ? habilitados
-        : habilitados.filter((n) => form.audiencia === 'carrera' || form.semesterScope.includes(n));
-    }
+    const asignaciones = asignacionesPara(lista, quedanSoloDocentes && eranSoloDocentes);
     const siguiente = {
       ...form,
       responsables: lista,
@@ -538,9 +451,9 @@ export default function ActivityManager({
     const despues = audienciaDe(siguiente, !esDocente && quedanSoloDocentes);
     const perdidos = semestresPerdidos(antes, despues);
     if (perdidos.length) {
-      const lista = perdidos.map((n) => `${n}.º`).join(', ');
+      const semestres = perdidos.map((n) => `${n}.º`).join(', ');
       toast.info(
-        `Quedan sin responsable: ${lista}.`,
+        `Quedan sin responsable: ${semestres}.`,
         editing && editing.status !== 'draft'
           ? 'La actividad ya está publicada: al guardar se te pedirá confirmar que deja de dirigirse a esos semestres, o asígnalos a otro responsable.'
           : 'Se quitaron del público porque ningún otro responsable los cubre.',
@@ -615,9 +528,7 @@ export default function ActivityManager({
       description: a.description ?? '',
       categoryId: a.categoryId,
       modality: a.modality,
-      areaIds: (a.activityAreas ?? []).map((x) => x.academicAreaId).length
-        ? (a.activityAreas ?? []).map((x) => x.academicAreaId)
-        : a.academicAreaId ? [a.academicAreaId] : [],
+      areaIds: areasDeLaActividad(a),
       skillIds: (a.activitySkills ?? []).map((x) => x.skillId),
       skillContexts: Object.fromEntries(
         (a.activitySkills ?? []).filter((x) => x.academicAreaId).map((x) => [x.skillId, x.academicAreaId as string]),
@@ -636,7 +547,7 @@ export default function ActivityManager({
       meetingUrl: a.meetingUrl ?? '',
       externalUrl: a.externalUrl ?? '',
       resourceLinks: a.resourceLinks ?? [],
-      imagenes: a.images?.length ? a.images : a.imageFileId && a.imageUrl ? [{ fileId: a.imageFileId, url: a.imageUrl }] : [],
+      imagenes: imagenesDeLaActividad(a),
       certificateIssuer: a.certificateIssuer ?? '',
       capacity: a.capacity ? String(a.capacity) : '',
       registrationMode: a.registrationMode ?? 'open',
@@ -1304,7 +1215,7 @@ export default function ActivityManager({
               <span className="field-label">Enlaces de apoyo</span>
               <div className="links-editor">
                 {form.resourceLinks.map((l, k) => (
-                  <div key={k} className="link-row">
+                  <div key={k} className="link-row">{/* NOSONAR: la fila se edita en el lugar; una clave por contenido cambiaría a cada tecla y perdería el foco */}
                     <input
                       aria-label={`Nombre del enlace ${k + 1}`}
                       value={l.label}
@@ -1409,15 +1320,7 @@ export default function ActivityManager({
                   <option value="approval">Sujeta a aprobación del responsable</option>
                 </select>
                 <span className="field-hint" data-testid="admision-regla">
-                  {externa
-                    ? form.registrationMode === 'open'
-                      ? 'La plaza la confirma el proveedor: cuando lo haga, marca al estudiante como «Aceptado por el proveedor».'
-                      : 'Antes de que el proveedor confirme, tú decides a quién admitir. El cupo nunca se supera.'
-                    : form.registrationMode === 'approval'
-                      ? 'Las solicitudes quedan pendientes hasta que las admitas; el cupo nunca se supera.'
-                      : form.capacity
-                        ? 'Las plazas se asignan solas por orden de solicitud hasta llenar el cupo; después ya no se admiten más.'
-                        : 'Sin cupo, quien se inscribe queda admitido.'}
+                  {textoReglaDeAdmision(externa, form.registrationMode, form.capacity)}
                   {' '}Admitir no es asistir: la asistencia se registra el día del evento.
                 </span>
               </div>
@@ -1464,7 +1367,7 @@ export default function ActivityManager({
                 </div>
               )}
               {(esDocente || (!soloDocentes && form.audiencia === 'especificos')) && (
-                <div role="group" aria-labelledby="activity-manager-semestres-a-los-que" className="chip-row" data-testid="audiencia-semestres">
+                <fieldset aria-labelledby="activity-manager-semestres-a-los-que" className="chip-row" data-testid="audiencia-semestres">
                   {semestresPermitidos.map((n) => {
                     const on = form.semesterScope.includes(n);
                     return (
@@ -1473,16 +1376,10 @@ export default function ActivityManager({
                       </button>
                     );
                   })}
-                </div>
+                </fieldset>
               )}
               <small className="muted">
-                {esDocente
-                  ? 'Solo aparecen tus semestres habilitados. Sin marcar ninguno, va a todos ellos.'
-                  : soloDocentes
-                    ? 'Todos los responsables son docentes: el público es la suma de los semestres que le asignas a cada uno. Para «Toda la carrera», suma a Dirección o a la Sociedad.'
-                    : form.audiencia === 'carrera'
-                      ? 'Va a toda la carrera.'
-                      : 'Solo los semestres marcados.'}
+                {textoAudiencia(esDocente, soloDocentes, form.audiencia)}
               </small>
 
               {!esDocente && form.responsables.length > 0 && (
@@ -1506,7 +1403,7 @@ export default function ActivityManager({
                           {' '}· Docente · habilitado en {(p.semesters ?? []).length ? (p.semesters ?? []).map((n) => `${n}.º`).join(', ') : 'ningún semestre'}
                         </span>
                         {ofrecidos.length ? (
-                          <div role="group" aria-labelledby={`cobertura-${p.id}-nombre`} className="chip-row">
+                          <fieldset aria-labelledby={`cobertura-${p.id}-nombre`} className="chip-row">
                             {ofrecidos.map((n) => {
                               const on = asignados.includes(n);
                               return (
@@ -1515,7 +1412,7 @@ export default function ActivityManager({
                                 </button>
                               );
                             })}
-                          </div>
+                          </fieldset>
                         ) : (
                           <p className="muted small" style={{ margin: '4px 0 0' }}>
                             No cubre ninguno de los semestres elegidos: quítalo de responsables o elige semestres que tenga habilitados.
@@ -1647,7 +1544,7 @@ export default function ActivityManager({
             message={`Todavía no ha publicado ninguna actividad ${tipo}. Use el botón “Nueva actividad” para crear la primera.`}
           />
         </Card>
-      ) : visible.length === 0 ? (
+      ) : <>{visible.length === 0 ? (
         <Card>
           <EmptyState
             icon={<FiSearch size={22} />}
@@ -1825,7 +1722,7 @@ export default function ActivityManager({
           </div>
           <Paginacion {...pagGestion} noun="actividades" />
         </Card>
-      )}
+      )}</>}
 
       {selectedActivity && (
         <Stagger index={0}>
@@ -1861,28 +1758,28 @@ export default function ActivityManager({
           </p>
           {/* V4.1 A41-011 (§5): terminar el evento no cierra el acta; se regulariza y se cierra a mano. */}
           {!esExterna && actaCerrada && (
-            <div className="inline-note" role="status" data-testid="acta-cerrada">
+            <output className="inline-note" data-testid="acta-cerrada">
               <FiCheck size={13} /> Asistencia cerrada{selectedActivity.attendanceClosedAt ? ` el ${formatearFechaHora(selectedActivity.attendanceClosedAt)}` : ''}.
               {' '}{esAutoridad ? 'Puedes hacer una corrección excepcional con motivo.' : 'Si hay un error, lo corrige Dirección con un motivo.'}
-            </div>
+            </output>
           )}
           {!esExterna && !actaCerrada && selectedActivity.status === 'finished' && !esAdmin && (
-            <div className="inline-note" role="status">
+            <output className="inline-note">
               La actividad terminó: puedes registrar la asistencia pendiente y, cuando termines,
               <Button size="sm" variant="secondary" icon={<FiCheck size={13} />} onClick={() => void cerrarAsistencia()} style={{ marginLeft: '0.4rem' }}>
                 Cerrar asistencia
               </Button>
-            </div>
+            </output>
           )}
 
           {partLoading ? (
             <SkeletonTable rows={3} columns={3} />
-          ) : participants.length === 0 ? (
+          ) : <>{participants.length === 0 ? (
             <EmptyState
               icon={<FiUsers size={22} />}
               message="Todavía nadie manifestó interés ni se inscribió en esta actividad."
             />
-          ) : shownParticipants.length === 0 ? (
+          ) : <>{shownParticipants.length === 0 ? (
             <EmptyState
               icon={<FiSearch size={22} />}
               message={`Ningún participante coincide con “${partQuery}”.`}
@@ -1907,7 +1804,7 @@ export default function ActivityManager({
                         size="sm"
                         disabled={full || actaCerrada}
                         loading={busyRow === r.id}
-                        title={full ? 'El cupo está lleno' : esExterna ? 'El proveedor lo aceptó' : 'Darle un lugar'}
+                        title={tituloAdmitir(full, esExterna)}
                         onClick={() => decide(selectedActivity.id, r, 'accepted')}
                         icon={<FiCheck size={14} />}
                       >
@@ -2072,7 +1969,7 @@ export default function ActivityManager({
                 />
               )}
             </>
-          )}
+          )}</>}</>}
         </Card>
         </Stagger>
       )}
@@ -2200,14 +2097,14 @@ function ParticipantGroup({
   empty,
   render,
   externa,
-}: {
+}: Readonly<{
   title: string;
   rows: Participant[];
   empty: string;
   render: (r: Participant) => React.ReactNode;
   /** En una externa, admitir es «aceptado por el proveedor». */
   externa?: boolean;
-}) {
+}>) {
   // V3.2 §64 (C17): 10 por página, con contador, y apilada en el teléfono.
   const pag = usePaginacion(rows, FILAS_POR_PAGINA, [rows.length]);
   if (rows.length === 0 && !empty) return null;
@@ -2250,11 +2147,44 @@ function ParticipantGroup({
   );
 }
 
+/** V6 §3.4: la audiencia que se envía. Al editar va siempre (vacía = toda la carrera). */
+function audienciaParaEnviar(esDocente: boolean, editando: boolean, propia: number[], final: number[]): number[] | undefined {
+  if (esDocente) return propia.length ? propia : undefined;
+  if (editando) return final;
+  return final.length ? final : undefined;
+}
+
+/** V5 §6.1 y V6 §4.1: qué pasa con una solicitud según la admisión y el cupo. */
+function textoReglaDeAdmision(externa: boolean, modo: string, cupo: unknown): string {
+  if (externa) {
+    return modo === 'open'
+      ? 'La plaza la confirma el proveedor: cuando lo haga, marca al estudiante como «Aceptado por el proveedor».'
+      : 'Antes de que el proveedor confirme, tú decides a quién admitir. El cupo nunca se supera.';
+  }
+  if (modo === 'approval') return 'Las solicitudes quedan pendientes hasta que las admitas; el cupo nunca se supera.';
+  return cupo
+    ? 'Las plazas se asignan solas por orden de solicitud hasta llenar el cupo; después ya no se admiten más.'
+    : 'Sin cupo, quien se inscribe queda admitido.';
+}
+
+/** Explicación del público según quién responde por la actividad. */
+function textoAudiencia(esDocente: boolean, soloDocentes: boolean, audiencia: string): string {
+  if (esDocente) return 'Solo aparecen tus semestres habilitados. Sin marcar ninguno, va a todos ellos.';
+  if (soloDocentes) return 'Todos los responsables son docentes: el público es la suma de los semestres que le asignas a cada uno. Para «Toda la carrera», suma a Dirección o a la Sociedad.';
+  return audiencia === 'carrera' ? 'Va a toda la carrera.' : 'Solo los semestres marcados.';
+}
+
+/** Ayuda del botón para dar un lugar a una solicitud. */
+function tituloAdmitir(lleno: boolean, externa: boolean): string {
+  if (lleno) return 'El cupo está lleno';
+  return externa ? 'El proveedor lo aceptó' : 'Darle un lugar';
+}
+
 /**
  * V6 §3.6: lo que necesita saber quien opera una actividad que no creó.
  * Ver detalles no es editar: no hay acciones aquí.
  */
-function DetalleActividad({ a, yo }: { a: Activity; yo?: string }) {
+function DetalleActividad({ a, yo }: Readonly<{ a: Activity; yo?: string }>) {
   const sem = (lista?: number[] | null) => (lista?.length ? lista.map((n) => `${n}.º`).join(', ') : null);
   const modalidad = ACTIVITY_MODALITIES.find((m) => m.value === a.modality)?.label ?? a.modality;
   const areas = (a.activityAreas ?? []).map((x) => x.academicArea?.name).filter(Boolean);
@@ -2313,4 +2243,184 @@ function DetalleActividad({ a, yo }: { a: Activity; yo?: string }) {
       </p>
     </div>
   );
+}
+
+/** El aviso tras guardar, según lo que se hizo (si no está, «Cambios guardados.»). */
+const AVISO_AL_GUARDAR: Record<string, string> = {
+  review: 'Enviada a revisión de Dirección.',
+  publish: 'Actividad publicada: ya acepta inscripciones.',
+  draft: 'Borrador guardado. Nadie más lo ve todavía.',
+};
+
+/** Las áreas de una actividad: las de la relación o, si no hay, la principal. */
+function areasDeLaActividad(a: Activity): string[] {
+  const deLaRelacion = (a.activityAreas ?? []).map((x) => x.academicAreaId);
+  if (deLaRelacion.length) return deLaRelacion;
+  return a.academicAreaId ? [a.academicAreaId] : [];
+}
+
+/** Las imágenes de una actividad: la galería o, si no hay, la portada. */
+function imagenesDeLaActividad(a: Activity) {
+  if (a.images?.length) return a.images;
+  return a.imageFileId && a.imageUrl ? [{ fileId: a.imageFileId, url: a.imageUrl }] : [];
+}
+
+/** Lo que decide qué se valida y qué se envía: origen, modalidad, rol y audiencia. */
+interface ContextoDelFormulario {
+  externa: boolean;
+  presencial: boolean;
+  virtual: boolean;
+  esDocente: boolean;
+  esAdmin: boolean;
+  soloDocentes: boolean;
+  audienciaFinal: number[];
+}
+
+const URL_HTTPS = /^https:\/\/\S+\.\S+/;
+
+/**
+ * V3.2 §6.4, §18: lo que está mal escrito, también en un borrador: título,
+ * categoría, fechas en orden, enlaces https y formato del aula.
+ */
+function erroresDeFormato(form: typeof emptyForm, ctx: ContextoDelFormulario): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (!form.title.trim()) e.title = 'El título es obligatorio.';
+  else if (!/\p{L}/u.test(form.title)) e.title = 'El título no puede contener solo símbolos.';
+  if (!form.categoryId) e.categoryId = 'Elige una categoría.';
+  const ini = entradaAIso(form.activityDate);
+  const fin = entradaAIso(form.endAt);
+  if (ini && fin && new Date(fin).getTime() <= new Date(ini).getTime()) {
+    e.endAt = 'La fecha final debe ser posterior a la fecha inicial.';
+  }
+  if (form.resourceLinks.some((l) => !l.label.trim() || !URL_HTTPS.test(l.url.trim()))) {
+    e.resourceLinks = 'Cada enlace necesita un nombre y una URL https.';
+  }
+  if (form.meetingUrl && !URL_HTTPS.test(form.meetingUrl.trim())) {
+    e.meetingUrl = 'El enlace de la reunión debe ser una URL https.';
+  }
+  // V4.1 A41-004: el formato del aula vale siempre que se escriba (también en
+  // borrador); que sea obligatoria lo decide la modalidad al publicar.
+  if (!ctx.externa && ctx.presencial && form.location.trim()) {
+    const lugar = placeName(form.location);
+    if (lugar) e.location = lugar;
+  }
+  return e;
+}
+
+/** V3.2 §21.1: lo mínimo para publicar o enviar a revisión. */
+function erroresParaPublicar(
+  form: typeof emptyForm,
+  ctx: ContextoDelFormulario,
+  previos: Record<string, string>,
+): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (!entradaAIso(form.activityDate)) e.activityDate = 'Indica la fecha y hora de inicio.';
+  if (!entradaAIso(form.endAt) && !previos.endAt) e.endAt = 'Indica la fecha y hora de fin.';
+  Object.assign(e, erroresDeLugarYOrigen(form, ctx));
+  if (form.areaIds.length === 0) e.areaIds = 'Selecciona al menos un área.';
+  Object.assign(e, erroresDeAudiencia(form, ctx));
+  // V4.1 V41-01: una charla general puede no tener una habilidad concreta.
+  // V4.1 A41-007: el borrador puede guardarse sin responsable; se pide al publicar.
+  if (ctx.esAdmin && form.responsables.length === 0) e.responsibleUserIds = 'Indica quién responde por esta oportunidad antes de publicar.';
+  return e;
+}
+
+/** Aula o reunión según la modalidad; proveedor y enlace si es externa; emisor del certificado. */
+function erroresDeLugarYOrigen(form: typeof emptyForm, ctx: ContextoDelFormulario): Record<string, string> {
+  const e: Record<string, string> = {};
+  const { externa } = ctx;
+  if (!externa && ctx.presencial && !form.location.trim()) e.location = 'Indica el aula o el lugar.';
+  if (!externa && ctx.virtual && !form.meetingUrl.trim()) e.meetingUrl = 'Indica el enlace de la reunión.';
+  if (externa && !form.provider.trim()) e.provider = 'Indica el proveedor de la oportunidad externa.';
+  if (externa && !form.externalUrl.trim()) e.externalUrl = 'Indica el enlace oficial de la oportunidad externa.';
+  if (!externa && form.outcomePolicy === 'institution_issued_certificate' && !form.certificateIssuer.trim()) {
+    e.certificateIssuer = 'Indica quién emite el certificado: Afinia no se atribuye su autoría.';
+  }
+  return e;
+}
+
+/** V6 §3.2: a qué semestres se dirige y qué docente atiende cada uno. */
+function erroresDeAudiencia(form: typeof emptyForm, ctx: ContextoDelFormulario): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (!ctx.esDocente && !ctx.soloDocentes && form.audiencia === 'especificos' && form.semesterScope.length === 0) {
+    e.semesterScope = 'Elige al menos un semestre, o marca «Toda la carrera».';
+  }
+  if (ctx.soloDocentes && ctx.audienciaFinal.length === 0) {
+    e.semesterScope = 'Asigna al menos un semestre a un docente responsable. Para «Toda la carrera», suma a Dirección o a la Sociedad.';
+  }
+  const sinSemestres = form.responsables.filter((p) => !ctx.esDocente && esDocenteResponsable(p) && (form.asignaciones[p.id] ?? []).length === 0);
+  if (sinSemestres.length) {
+    const nombres = sinSemestres.map((p) => `${p.firstName} ${p.lastName}`).join(', ');
+    e.responsibleAssignments = `${nombres} no tiene semestres asignados: asígnale al menos uno o quítalo de responsables.`;
+  }
+  return e;
+}
+
+/** V3.2 §29: resultado, emisor del certificado y datos del proveedor. */
+function datosDeResultado(form: typeof emptyForm, externa: boolean): Record<string, unknown> {
+  const datos: Record<string, unknown> = {};
+  // Una externa no tiene selector; su resultado es la credencial.
+  if (!externa) datos.outcomePolicy = form.outcomePolicy;
+  if (!externa && form.outcomePolicy === 'institution_issued_certificate') {
+    datos.certificateIssuer = form.certificateIssuer.trim();
+  }
+  if (externa || form.outcomePolicy === 'external_credential_expected') {
+    datos.provider = form.provider.trim();
+    datos.expectedIssuerDomains = form.expectedIssuerDomains.split(',').map((t) => t.trim()).filter(Boolean);
+    datos.expectedKeywords = form.expectedKeywords.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+  return datos;
+}
+
+/** Responsables y, por docente, los semestres que atiende (V6 §3.2; el servidor vuelve a validarlo). */
+function datosDeResponsables(form: typeof emptyForm, ctx: ContextoDelFormulario): Record<string, unknown> {
+  if (ctx.esDocente || !(ctx.esAdmin || form.responsables.length > 0)) return {};
+  const { audienciaFinal } = ctx;
+  return {
+    responsibleUserIds: form.responsables.map((p) => p.id),
+    responsibleAssignments: form.responsables
+      .filter(esDocenteResponsable)
+      .map((p) => ({ userId: p.id, semesters: (form.asignaciones[p.id] ?? []).filter((n) => audienciaFinal.length === 0 || audienciaFinal.includes(n)) })),
+  };
+}
+
+/** Lo que se envía al servidor al guardar la actividad. */
+function cargaDeActividad(
+  form: typeof emptyForm,
+  ctx: ContextoDelFormulario & { activityType: string; editando: boolean },
+): Record<string, unknown> {
+  const { externa, presencial, virtual } = ctx;
+  return {
+    title: form.title,
+    description: form.description || undefined,
+    type: ctx.activityType,
+    categoryId: form.categoryId,
+    modality: form.modality,
+    areaIds: form.areaIds,
+    skillIds: form.skillIds,
+    skillContexts: form.skillIds
+      .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
+      .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
+    originType: form.originType,
+    ...datosDeResultado(form, externa),
+    ...datosDeResponsables(form, ctx),
+    contactUserIds: form.contactos.map((p) => p.id),
+    activityDate: entradaAIso(form.activityDate),
+    endAt: entradaAIso(form.endAt),
+    location: presencial ? form.location || undefined : undefined,
+    meetingUrl: virtual ? form.meetingUrl.trim() || null : null,
+    externalUrl: form.externalUrl || undefined,
+    resourceLinks: form.resourceLinks
+      .filter((l) => l.label.trim() || l.url.trim())
+      .map((l) => ({ label: l.label.trim(), url: l.url.trim() })),
+    imageFileIds: ctx.editando || form.imagenes.length ? form.imagenes.map((i) => i.fileId) : undefined,
+    capacity: form.capacity ? Number(form.capacity) : undefined,
+    // V6 §4.3: las externas tienen la misma política de admisión y cupo.
+    registrationMode: form.registrationMode,
+    // V6 §3.4: al editar se envía siempre (vacío = toda la carrera).
+    semesterScope: audienciaParaEnviar(ctx.esDocente, ctx.editando, form.semesterScope, ctx.audienciaFinal),
+    gamificationRules: form.criterionId
+      ? [{ trigger: 'participacion_confirmada', criterionId: form.criterionId }]
+      : [],
+  };
 }

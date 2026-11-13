@@ -1,5 +1,4 @@
-import { expect, test } from '@playwright/test';
-import { CLAVE, CUENTAS, captura, entrar, vigilarErrores } from './ayuda';
+import { captura, CLAVE, CUENTAS, entrar, expect, test, vigilarErrores } from './ayuda';
 
 test.describe('Acceso: inicio de sesión y recuperación', () => {
   test('pantalla de inicio de sesión', async ({ page }, info) => {

@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { ActivityStatus, RegistrationStatus } from '@perfil/shared';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from './notification.port';
+import { siHay } from '../common/texto';
 
 const HORA = 3_600_000;
 
@@ -102,7 +103,7 @@ export class ActivityRemindersService implements OnApplicationBootstrap, OnAppli
           ...base,
           kind: 'ACTIVITY_STARTING',
           title: 'Tu actividad empieza en unas horas',
-          body: `«${a.title}» empieza ${a.location ? `en ${a.location} ` : ''}a las ${a.eventDate!.toLocaleTimeString('es-BO', { timeStyle: 'short' })}.`,
+          body: `«${a.title}» empieza ${siHay(a.location, 'en ', ' ')}a las ${a.eventDate!.toLocaleTimeString('es-BO', { timeStyle: 'short' })}.`,
           dedupeKey: `activity-starting-3h:${r.id}`,
         });
         emitidos += 1;

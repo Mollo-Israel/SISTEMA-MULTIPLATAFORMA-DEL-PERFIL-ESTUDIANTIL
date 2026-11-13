@@ -40,7 +40,7 @@ export function passwordRequirements(password: string, context: { email?: string
     { t: 'Un símbolo', ok: /[^A-Za-z0-9\s]/.test(password) },
     { t: 'Sin espacios', ok: password.length > 0 && !/\s/.test(password) },
   ];
-  if (email && email.includes('@')) {
+  if (email?.includes('@')) {
     reglas.push({ t: 'Sin tu correo', ok: password.length > 0 && !contieneCorreo(password, email) });
   }
   return reglas;

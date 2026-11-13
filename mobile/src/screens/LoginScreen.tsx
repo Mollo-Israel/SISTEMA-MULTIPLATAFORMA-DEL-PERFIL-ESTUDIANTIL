@@ -202,7 +202,7 @@ export default function LoginScreen() {
                       styles.barraLlena,
                       {
                         width: `${avance}%`,
-                        backgroundColor: avance === 100 ? colors.green : avance >= 50 ? colors.amber : colors.red,
+                        backgroundColor: colorDeAvance(avance),
                       },
                     ]}
                   />
@@ -230,12 +230,7 @@ export default function LoginScreen() {
           )}
 
           <Button
-            title={
-              modo === 'login' ? 'Ingresar'
-                : modo === 'recuperar' ? 'Enviarme el código'
-                  : modo === 'activar' ? 'Activar mi cuenta'
-                    : 'Guardar contraseña'
-            }
+            title={TITULO_POR_MODO[modo]}
             onPress={submit}
             loading={busy}
           />
@@ -289,3 +284,16 @@ const styles = StyleSheet.create({
   req: { flexDirection: 'row', alignItems: 'center', width: '50%', marginBottom: 3 },
   reqText: { fontSize: 11, color: colors.gray500, marginLeft: 4 },
 });
+
+/** El color de la barra de la contraseña: verde completa, ámbar a medias, rojo si falta mucho. */
+function colorDeAvance(avance: number): string {
+  if (avance === 100) return colors.green;
+  return avance >= 50 ? colors.amber : colors.red;
+}
+
+const TITULO_POR_MODO: Record<Modo, string> = {
+  login: 'Ingresar',
+  recuperar: 'Enviarme el código',
+  activar: 'Activar mi cuenta',
+  restablecer: 'Guardar contraseña',
+};

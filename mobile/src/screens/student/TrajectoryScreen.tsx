@@ -72,8 +72,8 @@ export default function TrajectoryScreen() {
           ))}
           {data.evolution.length > 0 && (
             <Card title="Afinidad y respaldo actuales">
-              {data.evolution.map((a, i) => (
-                <Text key={i} style={styles.explica}>
+              {data.evolution.map((a) => (
+                <Text key={a.area} style={styles.explica}>
                   {a.area} · afinidad {Math.round(a.score)}/100
                   {a.supportScore !== null ? ` · respaldo ${Math.round(a.supportScore)}/100` : ''}
                 </Text>

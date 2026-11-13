@@ -30,6 +30,7 @@ import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
+import { siHay } from '../common/texto';
 
 /**
  * Integrantes e invitaciones de un proyecto (RF14).
@@ -142,7 +143,7 @@ export class ProjectMembersService {
         userId: perfil.userId,
         kind: 'PROJECT_MEMBER_EXCLUDED',
         title: 'Un proyecto de tu equipo',
-        body: `«${project.title}» se registró sin incluirte como integrante. Tu lugar en ${teamName ? `el equipo «${teamName}»` : 'tu equipo'} no cambia. Si crees que es un error, habla con quien lo registró.`,
+        body: `«${project.title}» se registró sin incluirte como integrante. Tu lugar en ${siHay(teamName, 'el equipo «', '»') || 'tu equipo'} no cambia. Si crees que es un error, habla con quien lo registró.`,
         link: '/student/projects',
         dedupeKey: `project-excluded:${project.id}:${profileId}`,
       });
@@ -275,7 +276,7 @@ export class ProjectMembersService {
     // V4.1 A41-023: si viene de un equipo, excluirlo del proyecto exige motivo; el equipo no cambia.
     const team = project.teamId ? await this.teams.findOne({ where: { id: project.teamId } }) : null;
     const delEquipo = !!team && !!profile && (team.ownerProfileId === profile.id
-      || await this.teamMembers.exist({ where: { teamId: team.id, studentProfileId: profile.id } }));
+      || await this.teamMembers.exists({ where: { teamId: team.id, studentProfileId: profile.id } }));
     const motivo = reason?.trim() ?? '';
     if (delEquipo && motivo.length < 10) {
       const m = 'Viene de tu equipo: explica el motivo (al menos 10 caracteres). Seguirá en el equipo.';

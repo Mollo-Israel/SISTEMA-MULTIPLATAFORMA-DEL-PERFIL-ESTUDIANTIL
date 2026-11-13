@@ -88,7 +88,7 @@ export default function NotificationsScreen({ navigation }: any) {
       {hayNoLeidas && <Button small variant="secondary" icon="check" title="Marcar todo como leído" onPress={todas} />}
       {error && <ErrorText message={error} />}
       {items === null && !error && <SkeletonCards count={3} />}
-      {items && items.length === 0 && (
+      {items?.length === 0 && (
         <EmptyState icon="bell" message={soloNoLeidas ? 'No tienes avisos sin leer.' : 'Todavía no tienes avisos.'} />
       )}
       {(items ?? []).map((n) => (

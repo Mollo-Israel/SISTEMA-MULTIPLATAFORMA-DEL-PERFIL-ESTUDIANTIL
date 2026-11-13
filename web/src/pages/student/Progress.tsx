@@ -1,26 +1,12 @@
 import EstadosDeRespaldo from '../../components/EstadosDeRespaldo';
 import { useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import {
-  FiArrowDown, FiArrowUp, FiAward, FiCheckCircle, FiDownload, FiFileText, FiGift, FiInfo,
-} from 'react-icons/fi';
+import { FiArrowDown, FiArrowUp, FiAward, FiCheckCircle, FiDownload, FiFileText, FiInfo } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import {
-  gamificationService,
-  trajectoryService,
-  type CvItemsSection,
-  type CvRequest,
-  type CvSectionOption,
-  type CvTemplateOption,
-  type TrajectoryEntry,
-  type TrajectoryHistory,
-  type GamificationSummary,
-  type TrajectorySectionOption,
-} from '../../services';
+import { gamificationService, trajectoryService, type CvItemsSection, type CvRequest, type CvSectionOption, type CvTemplateOption, type TrajectoryEntry, type TrajectoryHistory, type GamificationSummary } from '../../services';
 import AiAssist from '../../components/AiAssist';
 import { useAsync } from '../../hooks/useAsync';
-import { useConfirm, useToast } from '../../components/feedback';
-import type { RewardItem, Wallet } from '../../services/types';
+import { useToast } from '../../components/feedback';
 import {
   AsyncView, Badge, Button, Card, EmptyState, PageHeader, SkeletonCards, Tabs,
 } from '../../components/ui';
@@ -60,7 +46,7 @@ export default function StudentProgressPage() {
           { key: 'resumen', label: 'Resumen de trayectoria' },
         ]}
       />
-      {tab === 'trayectoria' ? <Trayectoria /> : tab === 'progreso' ? <Progreso /> : <Resumen />}
+      {tab === 'trayectoria' ? <Trayectoria /> : <>{tab === 'progreso' ? <Progreso /> : <Resumen />}</>}
     </div>
   );
 }
@@ -105,7 +91,7 @@ function Trayectoria() {
               </ul>
             </Card>
             <Card title="Histórico">
-              <div className="chip-row" role="group" aria-label="Filtrar por nivel">
+              <fieldset className="chip-row" aria-label="Filtrar por nivel">
                 <button type="button" className={`chip ${filtro === 'todos' ? 'on' : ''}`} aria-pressed={filtro === 'todos'} onClick={() => setFiltro('todos')}>
                   Todo ({h.entries.length})
                 </button>
@@ -114,7 +100,7 @@ function Trayectoria() {
                     {l.label} ({l.count})
                   </button>
                 ))}
-              </div>
+              </fieldset>
               {entradas.length === 0 ? (
                 <EmptyState message={h.entries.length === 0
                   ? 'Todavía no hay nada en tu trayectoria. Inscríbete a una actividad o registra un proyecto.'
@@ -146,8 +132,8 @@ function Trayectoria() {
               <Card title="Evolución por área">
                 <p className="muted" style={{ marginTop: 0 }}>Afinidad y respaldo actuales. El historial completo está en «Afinidad».</p>
                 <ul className="plain-list">
-                  {h.evolution.map((a, i) => (
-                    <li key={i}>
+                  {h.evolution.map((a) => (
+                    <li key={a.area}>
                       <strong>{a.area}</strong> · afinidad {Math.round(a.score)}/100
                       {a.supportScore !== null ? ` · respaldo ${Math.round(a.supportScore)}/100` : ''}
                     </li>
@@ -291,20 +277,25 @@ const NIVEL: Record<string, string> = { high: 'alto', medium: 'medio', low: 'baj
  * V3 §44: el documento va en la misma línea de la actividad. V5 §1: la
  * asistencia la registró el responsable; no es un certificado de Afinia.
  */
-const actividadCv = (a: any) =>
-  `Asistencia registrada por el responsable en ${a.title}${a.date ? ` (${FECHA(a.date)})` : ''}${a.constancyLabel ? ` · ${a.constancyLabel}` : a.constancy ? ' · Documento registrado' : ''}`;
+const actividadCv = (a: any) => {
+  const fecha = a.date ? ` (${FECHA(a.date)})` : '';
+  let respaldo = '';
+  if (a.constancyLabel) respaldo = ` · ${a.constancyLabel}`;
+  else if (a.constancy) respaldo = ' · Documento registrado';
+  return `Asistencia registrada por el responsable en ${a.title}${fecha}${respaldo}`;
+};
 
 /**
  * La vista previa se dibuja con la misma información que irá al PDF, y con el
  * aire de la plantilla elegida. Antes se mostraba el JSON crudo: correcto,
  * pero nadie revisa un CV leyendo llaves y comillas.
  */
-function CvPreview({ d }: { d: Record<string, any> }) {
+function CvPreview({ d }: Readonly<{ d: Record<string, any> }>) {
   const lista = (titulo: string, items: (string | null | undefined)[]) =>
-    items.filter(Boolean).length > 0 && (
+    items.some(Boolean) && (
       <section>
         <h4>{titulo}</h4>
-        <ul>{items.filter(Boolean).map((t, i) => <li key={i}>{t}</li>)}</ul>
+        <ul>{items.filter(Boolean).map((t) => <li key={t}>{t}</li>)}</ul>
       </section>
     );
   return (
@@ -325,8 +316,8 @@ function CvPreview({ d }: { d: Record<string, any> }) {
         <section>
           <h4>Proyectos</h4>
           <ul>
-            {d.projects.map((p: any, i: number) => (
-              <li key={i}>
+            {d.projects.map((p: any) => (
+              <li key={`${p.title}-${p.role}`}>
                 <strong>{p.title}</strong> — {p.role}{p.level ? <span className="muted"> · {p.level}</span> : null}
                 {p.contribution && <div>Contribución: {p.contribution}</div>}
                 {(p.technologies ?? []).length > 0 && <div className="muted">Tecnologías: {p.technologies.join(', ')}</div>}

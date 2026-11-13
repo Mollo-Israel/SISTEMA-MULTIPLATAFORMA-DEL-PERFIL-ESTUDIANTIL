@@ -54,10 +54,10 @@ export class CredentialEligibilityService {
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
 
-  static esperaCredencial = esperaCredencial;
-  static estadoQueHabilita = estadoQueHabilita;
-  static terminada = terminada;
-  static elegible = elegible;
+  static readonly esperaCredencial = esperaCredencial;
+  static readonly estadoQueHabilita = estadoQueHabilita;
+  static readonly terminada = terminada;
+  static readonly elegible = elegible;
 
   /**
    * Oportunidades en las que este perfil puede adjuntar su credencial y

@@ -1,12 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
-import {
-  LinkCheckStatus,
-  ProjectBackingTier,
-  ProjectEventType,
-  ProjectInvitationStatus,
-} from '@perfil/shared';
+import { LinkCheckStatus, ProjectBackingTier, ProjectEventType } from '@perfil/shared';
 import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
@@ -149,8 +144,8 @@ export class ProjectBackingService {
     const perfilDueno = await this.profiles.findOne({ where: { id: project.createdByProfileId } });
     for (const o of otros) {
       const duenoOtro = await this.profiles.findOne({ where: { id: o.createdByProfileId } });
-      const yoEnSuyo = perfilDueno && await this.members.exist({ where: { projectId: o.id, userId: perfilDueno.userId } });
-      const elEnMio = duenoOtro && await this.members.exist({ where: { projectId: project.id, userId: duenoOtro.userId } });
+      const yoEnSuyo = perfilDueno && await this.members.exists({ where: { projectId: o.id, userId: perfilDueno.userId } });
+      const elEnMio = duenoOtro && await this.members.exists({ where: { projectId: project.id, userId: duenoOtro.userId } });
       if (!yoEnSuyo && !elEnMio) return true;
     }
     return false;
@@ -282,7 +277,7 @@ export class ProjectBackingService {
   }
 
   private mismasRazones(a: string[] | null, b: string[]): boolean {
-    if (!a || a.length !== b.length) return false;
+    if (a?.length !== b.length) return false;
     return a.every((x, i) => x === b[i]);
   }
 }

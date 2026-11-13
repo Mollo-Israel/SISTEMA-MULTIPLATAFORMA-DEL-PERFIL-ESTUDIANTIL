@@ -194,24 +194,18 @@
 <a name='L129'></a><a href='#L129'>129</a>
 <a name='L130'></a><a href='#L130'>130</a>
 <a name='L131'></a><a href='#L131'>131</a>
-<a name='L132'></a><a href='#L132'>132</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<a name='L132'></a><a href='#L132'>132</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -225,7 +219,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -239,12 +239,12 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -356,7 +356,7 @@ export interface ProjectEventInput {
 }
 &nbsp;
 /** Claves que nunca deben acabar en la bitácora (§41). */
-const PROHIBIDAS = ['password', 'token', 'secret', 'authorization', 'apikey', 'accesstoken'];
+const PROHIBIDAS = new Set(['password', 'token', 'secret', 'authorization', 'apikey', 'accesstoken']);
 &nbsp;
 /**
  * Bitácora del proyecto (especificacion §41).
@@ -439,7 +439,7 @@ export class ProjectEventsService {
   private <span class="fstat-no" title="function not covered" >sanear(</span>metadata: Record&lt;string, unknown&gt;): Record&lt;string, unknown&gt; {
     const salida: Record&lt;string, unknown&gt; = <span class="cstat-no" title="statement not covered" >{};</span>
 <span class="cstat-no" title="statement not covered" >    for (const [clave, valor] of Object.entries(metadata)) {</span>
-<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (PROHIBIDAS.includes(clave.toLowerCase().replace(/[_-]/g, ''))) <span class="cstat-no" title="statement not covered" >continue;</span></span>
+<span class="cstat-no" title="statement not covered" >      <span class="missing-if-branch" title="if path not taken" >I</span>if (PROHIBIDAS.has(clave.toLowerCase().replace(/[_-]/g, ''))) <span class="cstat-no" title="statement not covered" >continue;</span></span>
 <span class="cstat-no" title="statement not covered" >      if (typeof valor === 'string') {</span>
 <span class="cstat-no" title="statement not covered" >        salida[clave] = valor.length &gt; 200 ? `${valor.slice(0, 200)}…` : valor;</span>
       } else <span class="cstat-no" title="statement not covered" >if (</span>
@@ -463,7 +463,7 @@ export class ProjectEventsService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-28T15:55:56.993Z
+                at 2026-11-12T06:56:13.243Z
             </div>
         <script src="../prettify.js"></script>
         <script>

@@ -65,7 +65,7 @@ export interface Readiness {
   warnings: string[];
 }
 
-const REPO = /^https?:\/\/(www\.)?(github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\.git)?\/?$/i;
+const REPO = /^https?:\/\/(www\.)?(github\.com|gitlab\.com|bitbucket\.org)\/[A-Z0-9_.-]+\/[A-Z0-9_.-]+(\.git)?\/?$/i;
 
 export function isRepositoryUrl(url: string): boolean {
   return REPO.test(url.trim());

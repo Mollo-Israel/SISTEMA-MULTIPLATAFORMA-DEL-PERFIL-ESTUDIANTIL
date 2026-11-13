@@ -29,7 +29,8 @@ export function resumen(nombres: string[], max = 2): string {
 
 const areasDe = (a: Activity) => {
   const todas = (a.activityAreas ?? []).map((x) => x.academicArea?.name).filter((x): x is string => !!x);
-  return todas.length ? todas : a.academicArea?.name ? [a.academicArea.name] : [];
+  const principal = a.academicArea?.name ? [a.academicArea.name] : [];
+  return todas.length ? todas : principal;
 };
 
 /** V6 §4.1: la admisión en palabras; cupo y admisión son cosas distintas. */
@@ -47,7 +48,7 @@ export function plazasDe(a: Activity): string {
 
 const skillsDe = (a: Activity) => (a.activitySkills ?? []).map((s) => s.skill?.name).filter((x): x is string => !!x);
 
-function Rango({ a }: { a: Activity }) {
+function Rango({ a }: Readonly<{ a: Activity }>) {
   if (!a.eventDate) return null;
   return (
     <span>
@@ -68,12 +69,12 @@ export function ActivityCard({
   onDetalle,
   aviso,
   acciones,
-}: {
+}: Readonly<{
   a: Activity;
   onDetalle: () => void;
   aviso?: string | null;
   acciones?: ReactNode;
-}) {
+}>) {
   const areas = areasDe(a);
   const skills = skillsDe(a);
   const primerEnlace = (a.resourceLinks ?? [])[0];
@@ -121,14 +122,14 @@ export function ActivityCard({
 }
 
 /** Detalle completo (V3.2 §37): todo lo que la tarjeta resume. */
-export function ActivityDetail({ a, onClose, acciones }: { a: Activity; onClose: () => void; acciones?: ReactNode }) {
+export function ActivityDetail({ a, onClose, acciones }: Readonly<{ a: Activity; onClose: () => void; acciones?: ReactNode }>) {
   const areas = areasDe(a);
   const skills = skillsDe(a);
   return (
     <Modal title={a.title} subtitle={`${lbl(ACTIVITY_TYPE_LABEL, a.type)} · ${lbl(ACTIVITY_STATUS_LABEL, a.status)}`} onClose={onClose} width={720}>
       <Carrusel a={a} />
       {a.status === 'cancelled' && a.cancellationReason && (
-        <div className="form-alert" role="status"><FiAlertCircle size={15} /> <span>Cancelada: {a.cancellationReason}</span></div>
+        <output className="form-alert"><FiAlertCircle size={15} /> <span>Cancelada: {a.cancellationReason}</span></output>
       )}
       {a.description && <p style={{ whiteSpace: 'pre-line' }}>{a.description}</p>}
       <dl className="detail-list">
@@ -179,27 +180,31 @@ export function ActivityDetail({ a, onClose, acciones }: { a: Activity; onClose:
  * se ve como antes; con varias, anterior / siguiente con botones, flechas del
  * teclado y el número de imagen anunciado a los lectores de pantalla.
  */
-function Carrusel({ a }: { a: Activity }) {
-  const imagenes = a.images?.length ? a.images : a.imageUrl ? [{ fileId: a.imageFileId ?? 'portada', url: a.imageUrl }] : [];
+function Carrusel({ a }: Readonly<{ a: Activity }>) {
+  const portada = a.imageUrl ? [{ fileId: a.imageFileId ?? 'portada', url: a.imageUrl }] : [];
+  const imagenes = a.images?.length ? a.images : portada;
   const [i, setI] = useState(0);
   if (imagenes.length === 0) return null;
   if (imagenes.length === 1) return <ImagenProtegida src={imagenes[0].url} className="activity-detail-img" />;
   const actual = Math.min(i, imagenes.length - 1);
   const ir = (n: number) => setI((n + imagenes.length) % imagenes.length);
   return (
-    <div
+    <fieldset
       className="activity-carousel"
-      role="group"
       aria-roledescription="carrusel"
       aria-label="Imágenes de la actividad"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowRight') { e.preventDefault(); ir(actual + 1); }
-        if (e.key === 'ArrowLeft') { e.preventDefault(); ir(actual - 1); }
-      }}
     >
       <ImagenProtegida key={imagenes[actual].fileId} src={imagenes[actual].url} className="activity-detail-img" />
-      <div className="activity-carousel-ctrl">
+      {/* Las flechas del teclado recorren las imágenes desde los controles (patrón «barra de herramientas»). */}
+      <div
+        className="activity-carousel-ctrl"
+        role="toolbar"
+        aria-label="Controles del carrusel"
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight') { e.preventDefault(); ir(actual + 1); }
+          if (e.key === 'ArrowLeft') { e.preventDefault(); ir(actual - 1); }
+        }}
+      >
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => ir(actual - 1)} aria-label="Imagen anterior">
           <FiChevronLeft />
         </button>
@@ -208,6 +213,6 @@ function Carrusel({ a }: { a: Activity }) {
           <FiChevronRight />
         </button>
       </div>
-    </div>
+    </fieldset>
   );
 }

@@ -232,12 +232,6 @@ export default function WelcomeWizard() {
     );
   }
 
-  const Atras = ({ a }: { a: OnboardingStepKey }) => (
-    <button type="button" className="wz-btn ghost" onClick={() => irA(a)}>
-      <FiArrowLeft /> Atrás
-    </button>
-  );
-
   return (
     <div className="wz-shell">
       <div className="wz-blob b1" />
@@ -256,7 +250,7 @@ export default function WelcomeWizard() {
         <ol className="wz-steps" aria-label="Pasos de la bienvenida">
           {ETAPAS.map((e, i) => {
             const Icono = e.icono;
-            const estado = i < etapaActual ? 'hecho' : i === etapaActual ? 'actual' : 'pendiente';
+            const estado = estadoDeEtapa(i, etapaActual);
             return (
               <li key={e.titulo} className={`wz-step ${estado}`}>
                 <span className="dot">{estado === 'hecho' ? <FiCheck /> : <Icono />}</span>
@@ -341,7 +335,7 @@ export default function WelcomeWizard() {
                   placeholder="Por ejemplo: me gusta crear apps y quiero aprender más de bases de datos."
                 />
                 <div className="wz-actions">
-                  <Atras a="welcome" />
+                  <BotonAtras onClick={() => irA('welcome')} />
                   <button type="button" className="wz-btn" onClick={confirmarDatos} disabled={guardando}>
                     {guardando ? 'Guardando…' : 'Mis datos son correctos'} <FiArrowRight />
                   </button>
@@ -365,7 +359,7 @@ export default function WelcomeWizard() {
                   destacadas={destacadas}
                 />
                 <div className="wz-actions">
-                  <Atras a="profile" />
+                  <BotonAtras onClick={() => irA('profile')} />
                   <button type="button" className="wz-btn" onClick={guardarIntereses} disabled={guardando}>
                     {guardando ? 'Guardando…' : 'Siguiente'} <FiArrowRight />
                   </button>
@@ -391,7 +385,7 @@ export default function WelcomeWizard() {
                   destacadas={destacadas}
                 />
                 <div className="wz-actions">
-                  <Atras a="interests" />
+                  <BotonAtras onClick={() => irA('interests')} />
                   <button type="button" className="wz-btn" onClick={guardarMejora} disabled={guardando}>
                     {guardando ? 'Guardando…' : 'Siguiente'} <FiArrowRight />
                   </button>
@@ -474,20 +468,18 @@ export default function WelcomeWizard() {
                 <label className="wz-toggle">
                   <input type="checkbox" checked={descubrible} onChange={(e) => setDescubrible(e.target.checked)} />
                   <span>
-                    Aparecer como posible compañero en las sugerencias de otros estudiantes
-                    <small>Solo se muestra tu nombre, semestre y lo que tu trayectoria respalda.</small>
+                    Aparecer como posible compañero en las sugerencias de otros estudiantes<small>Solo se muestra tu nombre, semestre y lo que tu trayectoria respalda.</small>
                   </span>
                 </label>
                 <label className="wz-toggle">
                   <input type="checkbox" checked={compartible} onChange={(e) => setCompartible(e.target.checked)} />
                   <span>
-                    Activar mi perfil compartible (enlace y QR)
-                    <small>Tú eliges después qué se ve. Tu correo y tu código nunca se muestran.</small>
+                    Activar mi perfil compartible (enlace y QR)<small>Tú eliges después qué se ve. Tu correo y tu código nunca se muestran.</small>
                   </span>
                 </label>
 
                 <div className="wz-actions">
-                  <Atras a="improvement" />
+                  <BotonAtras onClick={() => irA('improvement')} />
                   <button type="button" className="wz-btn" onClick={guardarColaboracion} disabled={guardando}>
                     {guardando ? 'Guardando…' : 'Siguiente'} <FiArrowRight />
                   </button>
@@ -509,7 +501,7 @@ export default function WelcomeWizard() {
                   <p className="wz-pill">Ya lo respondiste antes: puedes repetirlo si quieres.</p>
                 )}
                 <div className="wz-actions center">
-                  <Atras a="availability" />
+                  <BotonAtras onClick={() => irA('availability')} />
                   <button type="button" className="wz-btn soft" onClick={() => irA('done')}>
                     <FiSkipForward /> Saltar por ahora
                   </button>
@@ -549,7 +541,7 @@ export default function WelcomeWizard() {
                   <div><FiHeart /> <strong>{Object.values(intereses).filter(Boolean).length}</strong> área(s) de interés</div>
                   <div><FiTarget /> <strong>{mejora.length}</strong> área(s) para mejorar</div>
                   <div><FiZap /> <strong>{cuenta('interest') + cuenta('improve')}</strong> tecnología(s)</div>
-                  <div><FiUsers /> {disponibilidad ? (disponibilidad === 'unspecified' ? 'Prefiero no decirlo' : AVAILABILITY_LABEL[disponibilidad]) : 'Sin decidir'}</div>
+                  <div><FiUsers /> {disponibilidad ? <>{(disponibilidad === 'unspecified' ? 'Prefiero no decirlo' : AVAILABILITY_LABEL[disponibilidad])}</> : 'Sin decidir'}</div>
                 </div>
                 {faltan.length > 0 && (
                   <ul className="wz-missing" aria-label="Lo que falta">
@@ -561,7 +553,7 @@ export default function WelcomeWizard() {
                   construyendo tu trayectoria.
                 </p>
                 <div className="wz-actions center">
-                  <Atras a="questionnaire" />
+                  <BotonAtras onClick={() => irA('questionnaire')} />
                   <button type="button" className="wz-btn big" onClick={terminar} disabled={guardando}>
                     {guardando ? 'Un momento…' : 'Ir a mi inicio'} <FiArrowRight />
                   </button>
@@ -572,5 +564,20 @@ export default function WelcomeWizard() {
         </AnimatePresence>
       </main>
     </div>
+  );
+}
+
+/** Una etapa ya hecha, la actual o una pendiente. */
+function estadoDeEtapa(i: number, actual: number): 'hecho' | 'actual' | 'pendiente' {
+  if (i < actual) return 'hecho';
+  return i === actual ? 'actual' : 'pendiente';
+}
+
+/** Volver al paso anterior de la bienvenida. */
+function BotonAtras({ onClick }: Readonly<{ onClick: () => void }>) {
+  return (
+    <button type="button" className="wz-btn ghost" onClick={onClick}>
+      <FiArrowLeft /> Atrás
+    </button>
   );
 }

@@ -129,8 +129,8 @@ export default function AdminAuditPage() {
                           <tr className="audit-detalle">
                             <td colSpan={6}>
                               <dl className="detail-list">
-                                {e.detalle.map((x, k) => (
-                                  <Fragment key={k}><dt>{x.campo}</dt><dd>{x.valor}</dd></Fragment>
+                                {e.detalle.map((x) => (
+                                  <Fragment key={x.campo}><dt>{x.campo}</dt><dd>{x.valor}</dd></Fragment>
                                 ))}
                                 <dt>Código del evento</dt><dd><code>{e.eventType}</code></dd>
                               </dl>

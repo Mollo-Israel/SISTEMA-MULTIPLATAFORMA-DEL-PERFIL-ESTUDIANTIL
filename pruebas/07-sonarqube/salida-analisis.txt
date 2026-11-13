@@ -1,145 +1,334 @@
-15:56:27.447 INFO  Scanner configuration file: /opt/sonar-scanner/conf/sonar-scanner.properties
-15:56:27.454 INFO  Project root configuration file: /usr/src/sonar-project.properties
-15:56:27.492 INFO  SonarScanner CLI 8.1.0.6389
-15:56:27.498 INFO  Linux 6.18.54.1-microsoft-standard-WSL2 amd64
-15:56:29.651 INFO  Communicating with SonarQube Community Build 26.9.0.129388
-15:56:29.653 INFO  JRE provisioning: os[linux], arch[x86_64]
-15:56:45.911 INFO  Starting SonarScanner Engine...
-15:56:45.913 INFO  Java 21.0.11 Eclipse Adoptium (64-bit)
-15:56:48.300 INFO  Load global settings
-15:56:48.413 INFO  Load global settings (done) | time=110ms
-15:56:48.416 INFO  Server id: 147B411E-AaFhI2HVBEtH5OPdlBNA
-15:56:48.429 INFO  Loading required plugins
-15:56:48.429 INFO  Load plugins index
-15:56:48.453 INFO  Load plugins index (done) | time=23ms
-15:56:48.453 INFO  Load/download plugins
-15:56:51.715 INFO  Load/download plugins (done) | time=3262ms
-15:56:52.037 INFO  Process project properties
-15:56:52.062 INFO  Process project properties (done) | time=26ms
-15:56:52.074 INFO  Project key: afinia
-15:56:52.075 INFO  Base dir: /usr/src
-15:56:52.075 INFO  Working dir: /tmp/.scannerwork
-15:56:52.085 INFO  Load project settings for component key: 'afinia'
-15:56:52.111 INFO  Load project settings for component key: 'afinia' (done) | time=26ms
-15:56:52.147 INFO  Load quality profiles
-15:56:52.263 INFO  Load quality profiles (done) | time=117ms
-15:56:52.330 INFO  Load active rules
-15:56:52.783 INFO  Load active rules (done) | time=453ms
-15:56:52.789 INFO  Load analysis cache
-15:56:53.258 INFO  Load analysis cache | time=468ms
-15:56:53.582 INFO  Preprocessing files...
-15:56:59.899 INFO  3 languages detected in 488 preprocessed files (done) | time=6315ms
-15:56:59.899 INFO  19 files ignored because of inclusion/exclusion patterns
-15:56:59.900 INFO  2 directories skipped because of exclusion patterns (content not counted)
-15:56:59.900 INFO  0 files ignored because of scm ignore settings
-15:56:59.901 INFO  Loading plugins for detected languages
-15:56:59.901 INFO  Load/download plugins
-15:57:13.474 INFO  Load/download plugins (done) | time=13573ms
-15:57:13.676 INFO  Load project repositories
-15:57:13.792 INFO  Load project repositories (done) | time=115ms
-15:57:13.820 INFO  Indexing files...
-15:57:13.821 INFO  Project configuration:
-15:57:13.821 INFO    Excluded sources: **/node_modules/**, **/dist/**, **/dist-e2e/**, api/src/database/migrations/**, api/src/database/seeds/**, api/test/**/*.ts, scripts/e2e-*.mjs
-15:57:13.821 INFO    Included tests: api/test/**/*.ts, scripts/e2e-*.mjs
-15:57:15.932 INFO  487 files indexed (done) | time=2112ms
-15:57:15.933 INFO  Quality profile for css: Sonar way
-15:57:15.933 INFO  Quality profile for js: Sonar way
-15:57:15.934 INFO  Quality profile for ts: Sonar way
-15:57:15.934 INFO  ------------- Run sensors on module Afinia
-15:57:15.972 INFO  Load metrics repository
-15:57:16.001 INFO  Load metrics repository (done) | time=29ms
-15:57:16.448 INFO  Reflections took 76 ms to scan 1 urls, producing 30 keys and 295 values
-15:57:16.590 INFO  Sensor IaC YAML File Type Classification Sensor [iac]
-15:57:16.599 INFO  Sensor IaC YAML File Type Classification Sensor [iac] (done) | time=9ms
-15:57:16.600 INFO  Sensor IaC hadolint report Sensor [iac]
-15:57:16.600 INFO  Sensor IaC hadolint report Sensor [iac] (done) | time=0ms
-15:57:16.600 INFO  Sensor Java Config Sensor [iac]
-15:57:16.600 INFO  There are no files to be analyzed for the Java language
-15:57:16.601 INFO  Sensor Java Config Sensor [iac] (done) | time=0ms
-15:57:16.601 INFO  Sensor IaC Docker Sensor [iac]
-15:57:16.607 INFO  There are no files to be analyzed for the Docker language
-15:57:16.608 INFO  Sensor IaC Docker Sensor [iac] (done) | time=7ms
-15:57:16.608 INFO  Sensor HTML [web]
-15:57:16.615 INFO  Sensor HTML [web] (done) | time=7ms
-15:57:16.615 INFO  Sensor JavaScript/TypeScript Coverage [javascript]
-15:57:16.617 INFO  Analysing [/usr/src/api/coverage/lcov-sonar.info]
-15:57:20.744 INFO  Sensor JavaScript/TypeScript Coverage [javascript] (done) | time=4128ms
-15:57:20.744 INFO  Sensor TextAndSecretsSensor [text]
-15:57:20.773 INFO  Available processors: 6
-15:57:20.773 INFO  Using 6 threads for analysis.
-15:57:21.324 INFO  Start fetching files for the text and secrets analysis
-15:57:21.333 INFO  Using Git CLI to retrieve dirty files
-15:57:21.342 WARN  Retrieving only language associated files, make sure to run the analysis inside a git repository to make use of inclusions specified via "sonar.text.inclusions"
-15:57:21.345 INFO  Starting the text and secrets analysis
-15:57:21.346 INFO  487 source files to be analyzed for the text and secrets analysis
-15:57:24.486 INFO  487/487 source files have been analyzed for the text and secrets analysis
-15:57:24.489 INFO  Sensor TextAndSecretsSensor [text] (done) | time=3745ms
-15:57:24.491 INFO  ------------- Run sensors on project
-15:57:24.748 INFO  Sensor JavaScript/TypeScript/CSS analysis [javascript]
-15:57:25.084 INFO  Detected os: Linux arch: amd64 alpine: false. Platform: LINUX_X64
-15:57:25.085 INFO  Deploy location /opt/sonar-scanner/.sonar/js/node-runtime, tagetRuntime: /opt/sonar-scanner/.sonar/js/node-runtime/node,  version: /opt/sonar-scanner/.sonar/js/node-runtime/version.txt
-15:57:32.588 INFO  Using embedded Node.js runtime.
-15:57:32.588 INFO  Using Node.js executable: '/opt/sonar-scanner/.sonar/js/node-runtime/node'.
-15:57:53.029 INFO  Memory configuration: OS (7906 MB), Node.js (2240 MB).
-15:57:53.055 INFO  gRPC analyze-project server listening on 127.0.0.1:44193
-15:57:53.402 INFO  Plugin version: [13.8.0.44569]
-15:58:04.986 INFO  Found 4 tsconfig.json file(s): [/usr/src/api/tsconfig.json, /usr/src/mobile/tsconfig.json, /usr/src/shared/tsconfig.json, /usr/src/web/tsconfig.json]
-16:02:45.776 INFO  487 source files to be analyzed
-16:02:45.776 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/api/tsconfig.json [lib: lib.es2024.d.ts, lib.dom.d.ts]
-16:02:45.777 INFO  Analyzing 289 file(s) from tsconfig /usr/src/api/tsconfig.json (1700 total files in program)
-16:02:45.777 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/mobile/tsconfig.json [lib: lib.dom.d.ts, lib.esnext.d.ts]
-16:02:45.777 INFO  Analyzing 37 file(s) from tsconfig /usr/src/mobile/tsconfig.json (492 total files in program)
-16:02:45.778 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/shared/tsconfig.json [lib: lib.es2023.d.ts, lib.dom.d.ts]
-16:02:45.778 INFO  Analyzing 24 file(s) from tsconfig /usr/src/shared/tsconfig.json (86 total files in program)
-16:02:45.778 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/web/tsconfig.json [lib: lib.es2020.d.ts, lib.dom.d.ts, lib.dom.iterable.d.ts]
-16:02:45.778 INFO  Analyzing 96 file(s) from tsconfig /usr/src/web/tsconfig.json (248 total files in program)
-16:02:45.778 INFO  Analyzing 14 file(s) using merged compiler options [lib: lib.es2024.d.ts, lib.dom.d.ts]
-16:02:45.793 INFO  Analyzing 23 file(s) using merged compiler options [lib: lib.es2023.d.ts, lib.dom.d.ts]
-16:02:45.793 INFO  487/487 source files have been analyzed
-16:02:45.821 INFO  Hit the cache for 0 out of 483
-16:02:45.822 INFO  Miss the cache for 483 out of 483: ANALYSIS_MODE_INELIGIBLE [483/483]
-16:02:45.839 INFO  Sensor JavaScript/TypeScript/CSS analysis [javascript] (done) | time=321091ms
-16:02:45.839 INFO  Sensor IaC Project Sensor [iac]
-16:02:45.841 INFO  Sensor IaC Project Sensor [iac] (done) | time=1ms
-16:02:45.841 INFO  Sensor Zero Coverage Sensor
-16:02:45.869 INFO  Sensor Zero Coverage Sensor (done) | time=27ms
-16:02:45.869 INFO  ------------- Gather SCA dependencies on project
-16:02:45.877 INFO  Dependency analysis skipped
-16:02:45.944 INFO  SCM Publisher SCM provider for this project is: git
-16:02:45.945 INFO  SCM Publisher 19 source files to be analyzed
-16:02:46.022 WARN  Thread[#63,ForkJoinPool.commonPool-worker-1,5,main]: got smaller file timestamp on /usr/src (C:\), /usr/src/.git: 2026-10-28T16:02:46Z < 2026-10-28T16:02:46.0099374Z. Aborting measurement at resolution PT0.9900626S.
-16:02:47.844 INFO  SCM Publisher 0/19 source files have been analyzed (done) | time=1898ms
-16:02:47.845 WARN  Missing blame information for the following files:
-16:02:47.847 WARN    * web/src/pages/teacher/StudentProjects.tsx
-16:02:47.848 WARN    * web/src/components/RepositoryAnalyzer.tsx
-16:02:47.850 WARN    * web/src/pages/director/TeacherAutonomy.tsx
-16:02:47.851 WARN    * web/src/pages/teacher/Activities.tsx
-16:02:47.852 WARN    * scripts/e2e-v5.mjs
-16:02:47.856 WARN    * web/src/pages/admin/SkillRequests.tsx
-16:02:47.857 WARN    * web/src/components/ProjectContribution.tsx
-16:02:47.859 WARN    * scripts/e2e-web.mjs
-16:02:47.860 WARN    * api/src/projects/project-gallery.service.ts
-16:02:47.862 WARN    * web/src/components/ProjectImages.tsx
-16:02:47.864 WARN    * web/src/pages/staff/StudentPoints.tsx
-16:02:47.870 WARN    * web/src/components/ActivityTabs.tsx
-16:02:47.871 WARN    * web/src/components/affinity.tsx
-16:02:47.873 WARN    * web/src/pages/admin/Users.tsx
-16:02:47.874 WARN    * mobile/src/screens/student/LibraryScreen.tsx
-16:02:47.875 WARN    * web/src/pages/director/LearningResources.tsx
-16:02:47.877 WARN    * api/src/gamification/gamification.service.ts
-16:02:47.878 WARN    * web/src/components/AreaSkillPicker.tsx
-16:02:47.878 WARN    * web/src/index.css
-16:02:47.914 WARN  This may lead to missing/broken features in SonarQube
-16:02:47.959 INFO  CPD Executor 38 files had no CPD blocks
-16:02:47.961 INFO  CPD Executor Calculating CPD for 412 files
-16:02:48.146 INFO  CPD Executor CPD calculation finished (done) | time=187ms
-16:02:48.175 INFO  SCM revision ID '0786340cff094d80235a54133b10999361ae64cb'
-16:02:50.423 INFO  Analysis report generated in 2244ms, dir size=12.4 MB
-16:02:51.785 INFO  Analysis report compressed in 1363ms, zip size=6.8 MB
-16:02:52.051 INFO  Analysis report uploaded in 266ms
-16:02:52.053 INFO  ------------- Check Quality Gate status
-16:02:52.053 INFO  Waiting for the analysis report to be processed (max 600s)
-16:03:07.594 INFO  EXECUTION FAILURE
-16:03:07.609 INFO  Total time: 6:40.151s
+20:36:48.648 INFO  Scanner configuration file: /opt/sonar-scanner/conf/sonar-scanner.properties
+20:36:48.654 INFO  Project root configuration file: /usr/src/sonar-project.properties
+20:36:48.689 INFO  SonarScanner CLI 8.1.0.6389
+20:36:48.695 INFO  Linux 6.18.58.1-microsoft-standard-WSL2 amd64
+20:36:50.038 INFO  Communicating with SonarQube Community Build 26.9.0.129388
+20:36:50.039 INFO  JRE provisioning: os[linux], arch[x86_64]
+20:37:03.080 INFO  Starting SonarScanner Engine...
+20:37:03.081 INFO  Java 21.0.11 Eclipse Adoptium (64-bit)
+20:37:04.405 INFO  Load global settings
+20:37:04.491 INFO  Load global settings (done) | time=85ms
+20:37:04.494 INFO  Server id: 147B411E-AaFhI2HVBEtH5OPdlBNA
+20:37:04.506 INFO  Loading required plugins
+20:37:04.506 INFO  Load plugins index
+20:37:04.523 INFO  Load plugins index (done) | time=16ms
+20:37:04.524 INFO  Load/download plugins
+20:37:07.927 INFO  Load/download plugins (done) | time=3404ms
+20:37:08.211 INFO  Process project properties
+20:37:08.230 INFO  Process project properties (done) | time=19ms
+20:37:08.241 INFO  Project key: afinia
+20:37:08.242 INFO  Base dir: /usr/src
+20:37:08.242 INFO  Working dir: /tmp/.scannerwork
+20:37:08.253 INFO  Load project settings for component key: 'afinia'
+20:37:08.273 INFO  Load project settings for component key: 'afinia' (done) | time=21ms
+20:37:08.317 INFO  Load quality profiles
+20:37:08.393 INFO  Load quality profiles (done) | time=76ms
+20:37:08.453 INFO  Load active rules
+20:37:08.923 INFO  Load active rules (done) | time=470ms
+20:37:08.932 INFO  Load analysis cache
+20:37:09.299 INFO  Load analysis cache | time=367ms
+20:37:09.474 INFO  Preprocessing files...
+20:37:16.697 INFO  3 languages detected in 507 preprocessed files (done) | time=7223ms
+20:37:16.698 INFO  26 files ignored because of inclusion/exclusion patterns
+20:37:16.698 INFO  2 directories skipped because of exclusion patterns (content not counted)
+20:37:16.698 INFO  0 files ignored because of scm ignore settings
+20:37:16.699 INFO  Loading plugins for detected languages
+20:37:16.700 INFO  Load/download plugins
+20:37:30.678 INFO  Load/download plugins (done) | time=13979ms
+20:37:30.813 INFO  Load project repositories
+20:37:30.939 INFO  Load project repositories (done) | time=125ms
+20:37:30.964 INFO  Indexing files...
+20:37:30.966 INFO  Project configuration:
+20:37:30.967 INFO    Excluded sources: **/node_modules/**, **/dist/**, **/dist-e2e/**, api/src/database/migrations/**, api/src/database/seeds/**, api/test/**/*.ts, scripts/e2e-*.mjs
+20:37:30.967 INFO    Included tests: api/test/**/*.ts, scripts/e2e-*.mjs
+20:37:33.073 INFO  506 files indexed (done) | time=2109ms
+20:37:33.074 INFO  Quality profile for css: Sonar way
+20:37:33.074 INFO  Quality profile for js: Sonar way
+20:37:33.075 INFO  Quality profile for ts: Sonar way
+20:37:33.075 INFO  ------------- Run sensors on module Afinia
+20:37:33.113 INFO  Load metrics repository
+20:37:33.139 INFO  Load metrics repository (done) | time=25ms
+20:37:33.469 INFO  Reflections took 71 ms to scan 1 urls, producing 30 keys and 295 values
+20:37:33.575 INFO  Sensor IaC YAML File Type Classification Sensor [iac]
+20:37:33.584 INFO  Sensor IaC YAML File Type Classification Sensor [iac] (done) | time=8ms
+20:37:33.585 INFO  Sensor IaC hadolint report Sensor [iac]
+20:37:33.585 INFO  Sensor IaC hadolint report Sensor [iac] (done) | time=0ms
+20:37:33.585 INFO  Sensor Java Config Sensor [iac]
+20:37:33.586 INFO  There are no files to be analyzed for the Java language
+20:37:33.587 INFO  Sensor Java Config Sensor [iac] (done) | time=0ms
+20:37:33.588 INFO  Sensor IaC Docker Sensor [iac]
+20:37:33.593 INFO  There are no files to be analyzed for the Docker language
+20:37:33.594 INFO  Sensor IaC Docker Sensor [iac] (done) | time=6ms
+20:37:33.594 INFO  Sensor HTML [web]
+20:37:33.599 INFO  Sensor HTML [web] (done) | time=5ms
+20:37:33.599 INFO  Sensor JavaScript/TypeScript Coverage [javascript]
+20:37:33.604 INFO  Analysing [/usr/src/pruebas/07-sonarqube/cobertura/api/lcov.info, /usr/src/pruebas/07-sonarqube/cobertura/web/lcov.info]
+20:37:50.250 INFO  Sensor JavaScript/TypeScript Coverage [javascript] (done) | time=16651ms
+20:37:50.251 INFO  Sensor TextAndSecretsSensor [text]
+20:37:50.274 INFO  Available processors: 6
+20:37:50.274 INFO  Using 6 threads for analysis.
+20:37:50.556 INFO  Start fetching files for the text and secrets analysis
+20:37:50.563 INFO  Using Git CLI to retrieve dirty files
+20:37:50.572 WARN  Retrieving only language associated files, make sure to run the analysis inside a git repository to make use of inclusions specified via "sonar.text.inclusions"
+20:37:50.573 INFO  Starting the text and secrets analysis
+20:37:50.575 INFO  506 source files to be analyzed for the text and secrets analysis
+20:37:51.772 INFO  506/506 source files have been analyzed for the text and secrets analysis
+20:37:51.774 INFO  Sensor TextAndSecretsSensor [text] (done) | time=1523ms
+20:37:51.777 INFO  ------------- Run sensors on project
+20:37:52.023 INFO  Sensor JavaScript/TypeScript/CSS analysis [javascript]
+20:37:52.304 INFO  Detected os: Linux arch: amd64 alpine: false. Platform: LINUX_X64
+20:37:52.305 INFO  Deploy location /opt/sonar-scanner/.sonar/js/node-runtime, tagetRuntime: /opt/sonar-scanner/.sonar/js/node-runtime/node,  version: /opt/sonar-scanner/.sonar/js/node-runtime/version.txt
+20:37:55.025 INFO  Using embedded Node.js runtime.
+20:37:55.025 INFO  Using Node.js executable: '/opt/sonar-scanner/.sonar/js/node-runtime/node'.
+20:37:57.502 INFO  Memory configuration: OS (7906 MB), Node.js (2240 MB).
+20:37:57.522 INFO  gRPC analyze-project server listening on 127.0.0.1:38069
+20:37:57.692 INFO  Plugin version: [13.8.0.44569]
+20:38:03.661 INFO  Found 4 tsconfig.json file(s): [/usr/src/api/tsconfig.json, /usr/src/mobile/tsconfig.json, /usr/src/shared/tsconfig.json, /usr/src/web/tsconfig.json]
+20:43:19.342 INFO  506 source files to be analyzed
+20:43:19.342 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/api/tsconfig.json [lib: lib.es2024.d.ts, lib.dom.d.ts]
+20:43:19.342 INFO  Analyzing 295 file(s) from tsconfig /usr/src/api/tsconfig.json (2308 total files in program)
+20:43:19.343 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/mobile/tsconfig.json [lib: lib.dom.d.ts, lib.esnext.d.ts]
+20:43:19.344 INFO  Analyzing 36 file(s) from tsconfig /usr/src/mobile/tsconfig.json (491 total files in program)
+20:43:19.344 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/shared/tsconfig.json [lib: lib.es2023.d.ts, lib.dom.d.ts]
+20:43:19.345 INFO  Analyzing 24 file(s) from tsconfig /usr/src/shared/tsconfig.json (86 total files in program)
+20:43:19.345 INFO  Creating TypeScript(6.0.3) program with configuration file /usr/src/web/tsconfig.json [lib: lib.es2020.d.ts, lib.dom.d.ts, lib.dom.iterable.d.ts]
+20:43:19.346 INFO  Analyzing 99 file(s) from tsconfig /usr/src/web/tsconfig.json (251 total files in program)
+20:43:19.346 INFO  Analyzing 22 file(s) using merged compiler options [lib: lib.es2024.d.ts, lib.dom.d.ts]
+20:43:19.347 INFO  Analyzing 26 file(s) using merged compiler options [lib: lib.es2023.d.ts, lib.dom.d.ts]
+20:43:19.348 INFO  506/506 source files have been analyzed
+20:43:19.359 INFO  Hit the cache for 0 out of 502
+20:43:19.361 INFO  Miss the cache for 502 out of 502: ANALYSIS_MODE_INELIGIBLE [502/502]
+20:43:19.361 INFO  Sensor JavaScript/TypeScript/CSS analysis [javascript] (done) | time=327336ms
+20:43:19.361 INFO  Sensor IaC Project Sensor [iac]
+20:43:19.361 INFO  Sensor IaC Project Sensor [iac] (done) | time=1ms
+20:43:19.362 INFO  Sensor Zero Coverage Sensor
+20:43:19.374 INFO  Sensor Zero Coverage Sensor (done) | time=11ms
+20:43:19.374 INFO  ------------- Gather SCA dependencies on project
+20:43:19.380 INFO  Dependency analysis skipped
+20:43:19.412 INFO  SCM Publisher SCM provider for this project is: git
+20:43:19.415 INFO  SCM Publisher 204 source files to be analyzed
+20:43:19.511 WARN  Thread[#64,ForkJoinPool.commonPool-worker-1,5,main]: got smaller file timestamp on /usr/src (C:\), /usr/src/.git: 2026-11-13T20:43:19Z < 2026-11-13T20:43:19.4930603Z. Aborting measurement at resolution PT0.5069397S.
+20:43:29.414 INFO  
+20:43:39.415 INFO  
+20:43:40.804 INFO  SCM Publisher 0/204 source files have been analyzed (done) | time=21388ms
+20:43:40.804 WARN  Missing blame information for the following files:
+20:43:40.804 WARN    * web/src/pages/teacher/StudentProjects.tsx
+20:43:40.804 WARN    * api/src/imports/csv.parser.ts
+20:43:40.805 WARN    * mobile/src/screens/student/NotificationsScreen.tsx
+20:43:40.805 WARN    * mobile/src/screens/student/ProfileScreen.tsx
+20:43:40.805 WARN    * api/test/jest/unit/manifiestos.spec.ts
+20:43:40.805 WARN    * api/src/identity/auth-sessions.service.ts
+20:43:40.806 WARN    * api/src/recommendations/recommendation.rules.ts
+20:43:40.806 WARN    * scripts/e2e-v6-web.mjs
+20:43:40.806 WARN    * web/src/pages/society/Participants.tsx
+20:43:40.807 WARN    * api/src/database/data-source.ts
+20:43:40.807 WARN    * web/src/components/Layout.tsx
+20:43:40.808 WARN    * api/src/common/http-exception.filter.ts
+20:43:40.808 WARN    * api/src/validation/pdf-text.ts
+20:43:40.808 WARN    * mobile/src/screens/student/ProjectsScreen.tsx
+20:43:40.809 WARN    * web/src/pages/admin/Home.tsx
+20:43:40.809 WARN    * mobile/src/components/feedback.tsx
+20:43:40.809 WARN    * api/src/access/teacher-scope.service.ts
+20:43:40.810 WARN    * api/src/imports/imports.service.ts
+20:43:40.810 WARN    * api/src/ai/ai-text.ts
+20:43:40.811 WARN    * api/src/common/validation-messages.ts
+20:43:40.812 WARN    * web/src/App.tsx
+20:43:40.813 WARN    * api/src/identity/account-tokens.service.ts
+20:43:40.813 WARN    * api/test/jest/api/afinia-no-certifica.spec.ts
+20:43:40.813 WARN    * api/test/jest/unit/transicion-actividades.spec.ts
+20:43:40.814 WARN    * api/src/constancies/constancies.service.ts
+20:43:40.814 WARN    * web/src/pages/director/TeacherAutonomy.tsx
+20:43:40.814 WARN    * api/src/audit/audit-labels.ts
+20:43:40.815 WARN    * web/src/components/ActivityCard.tsx
+20:43:40.815 WARN    * api/src/certificates/certificates.service.ts
+20:43:40.816 WARN    * mobile/src/config.ts
+20:43:40.816 WARN    * mobile/src/navigation/RootNavigator.tsx
+20:43:40.816 WARN    * api/src/storage/files.controller.ts
+20:43:40.817 WARN    * web/src/login.css
+20:43:40.817 WARN    * api/src/users/users.service.ts
+20:43:40.818 WARN    * web/src/pages/teacher/Activities.tsx
+20:43:40.818 WARN    * web/src/pages/student/Projects.tsx
+20:43:40.819 WARN    * web/src/pages/admin/SkillRequests.tsx
+20:43:40.820 WARN    * web/src/components/Tutorial.tsx
+20:43:40.821 WARN    * api/test/unit/pdf-text.test.ts
+20:43:40.821 WARN    * mobile/src/screens/student/ProjectDetailScreen.tsx
+20:43:40.822 WARN    * web/src/components/ActivityManager.tsx
+20:43:40.822 WARN    * web/src/pages/student/Library.tsx
+20:43:40.823 WARN    * api/src/projects/project-members.service.ts
+20:43:40.824 WARN    * web/src/pages/PublicProject.tsx
+20:43:40.824 WARN    * web/src/components/ProjectTechnicalCheck.tsx
+20:43:40.824 WARN    * mobile/src/components/icons.tsx
+20:43:40.825 WARN    * mobile/src/screens/student/HomeScreen.tsx
+20:43:40.826 WARN    * api/src/affinity-recalc/affinity.engine.ts
+20:43:40.826 WARN    * api/src/project-feedback/project-feedback.service.ts
+20:43:40.826 WARN    * api/src/common/request-context.ts
+20:43:40.826 WARN    * api/src/validation/validation.service.ts
+20:43:40.827 WARN    * mobile/src/components/PriorityPicker.tsx
+20:43:40.827 WARN    * api/src/collaboration/teams.service.ts
+20:43:40.827 WARN    * api/src/trajectory/pdf-writer.ts
+20:43:40.828 WARN    * api/src/projects/repository-inspector.service.ts
+20:43:40.828 WARN    * api/src/collaboration/team-name.rules.ts
+20:43:40.828 WARN    * api/src/common/validation.ts
+20:43:40.828 WARN    * web/src/pages/director/Approvals.tsx
+20:43:40.829 WARN    * web/src/pages/director/CredentialReviews.tsx
+20:43:40.829 WARN    * mobile/src/screens/student/EvidencesScreen.tsx
+20:43:40.830 WARN    * api/src/collaboration/public-profile.service.ts
+20:43:40.830 WARN    * api/src/gamification/gamification-extras.service.ts
+20:43:40.830 WARN    * mobile/src/components/ui.tsx
+20:43:40.832 WARN    * web/src/components/ProjectContribution.tsx
+20:43:40.832 WARN    * web/src/pages/student/Activities.tsx
+20:43:40.833 WARN    * api/src/validation/metadata.extractor.ts
+20:43:40.833 WARN    * api/src/entities/student-profile.entity.ts
+20:43:40.833 WARN    * web/src/pages/LandingPage.tsx
+20:43:40.834 WARN    * api/src/profiles/profiles.service.ts
+20:43:40.834 WARN    * api/src/identity/activation.service.ts
+20:43:40.834 WARN    * scripts/e2e-web.mjs
+20:43:40.835 WARN    * mobile/src/components/ImagenProtegida.tsx
+20:43:40.836 WARN    * api/src/collaboration/qr-encoder.ts
+20:43:40.836 WARN    * api/src/config/environment.check.ts
+20:43:40.837 WARN    * web/src/pages/Notifications.tsx
+20:43:40.837 WARN    * web/src/pages/director/Constancies.tsx
+20:43:40.837 WARN    * web/src/hooks/useAsync.ts
+20:43:40.838 WARN    * web/src/components/CambiosSinGuardar.tsx
+20:43:40.838 WARN    * web/src/components/charts.tsx
+20:43:40.839 WARN    * web/src/pages/teacher/Panel.tsx
+20:43:40.839 WARN    * web/src/pages/help/Help.tsx
+20:43:40.840 WARN    * api/src/projects/dto/invite-member.dto.ts
+20:43:40.841 WARN    * mobile/src/auth/AuthContext.tsx
+20:43:40.841 WARN    * web/src/pages/society/Metrics.tsx
+20:43:40.841 WARN    * web/src/pages/auth/RequestTokenPage.tsx
+20:43:40.841 WARN    * api/test/unit/hosting.test.ts
+20:43:40.842 WARN    * api/src/validation/credential-verifier.service.ts
+20:43:40.842 WARN    * api/src/config/identity.config.ts
+20:43:40.842 WARN    * api/src/activities/credential-pattern.ts
+20:43:40.843 WARN    * api/test/jest/unit/afinidad-factores.spec.ts
+20:43:40.843 WARN    * api/src/storage/file-access.service.ts
+20:43:40.843 WARN    * web/src/components/AiAssist.tsx
+20:43:40.844 WARN    * web/src/components/ProtectedRoute.tsx
+20:43:40.844 WARN    * api/src/catalogs/skill-classification.ts
+20:43:40.844 WARN    * web/src/auth/AuthContext.tsx
+20:43:40.844 WARN    * web/src/pages/CareerProjects.tsx
+20:43:40.845 WARN    * api/src/collaboration/contact-channel.rules.ts
+20:43:40.845 WARN    * mobile/src/screens/student/TrajectoryScreen.tsx
+20:43:40.845 WARN    * api/src/audit/audit.controller.ts
+20:43:40.845 WARN    * api/src/certificates/dto/create-external-certificate.dto.ts
+20:43:40.846 WARN    * web/src/pages/student/Welcome.tsx
+20:43:40.846 WARN    * web/src/pages/auth/SetPasswordPage.tsx
+20:43:40.846 WARN    * web/src/pages/student/Dashboard.tsx
+20:43:40.846 WARN    * web/src/pages/PublicProfile.tsx
+20:43:40.847 WARN    * api/src/trajectory/trajectory-summary.service.ts
+20:43:40.847 WARN    * mobile/src/screens/student/MyActivitiesScreen.tsx
+20:43:40.847 WARN    * web/src/pages/admin/Mail.tsx
+20:43:40.847 WARN    * api/src/projects/manifiestos.ts
+20:43:40.847 WARN    * web/src/landing.css
+20:43:40.847 WARN    * api/src/validation/validation.controller.ts
+20:43:40.848 WARN    * api/src/ai/adapters/openai-compatible.adapter.ts
+20:43:40.848 WARN    * api/src/catalogs/catalogs.service.ts
+20:43:40.848 WARN    * web/src/services/index.ts
+20:43:40.849 WARN    * web/src/components/ArchivoProtegido.tsx
+20:43:40.849 WARN    * api/src/mail/mail.settings.ts
+20:43:40.850 WARN    * web/src/pages/auth/passwordPolicy.ts
+20:43:40.850 WARN    * api/src/mail/mail-test.cli.ts
+20:43:40.850 WARN    * mobile/src/screens/student/ActivitiesScreen.tsx
+20:43:40.851 WARN    * api/src/gamification/gamification-proposals.service.ts
+20:43:40.851 WARN    * api/src/onboarding/onboarding.service.ts
+20:43:40.851 WARN    * api/src/validation/credential-check.rules.ts
+20:43:40.852 WARN    * web/src/pages/staff/StudentPoints.tsx
+20:43:40.852 WARN    * api/src/collaboration/team-applications.service.ts
+20:43:40.852 WARN    * api/src/storage/storage-names.ts
+20:43:40.852 WARN    * api/src/mail/templates.ts
+20:43:40.853 WARN    * scripts/e2e-web-gestion.mjs
+20:43:40.854 WARN    * api/src/imports/teacher-import.service.ts
+20:43:40.854 WARN    * web/src/pages/director/Dashboard.tsx
+20:43:40.854 WARN    * web/src/pages/student/Affinity.tsx
+20:43:40.854 WARN    * api/src/load-env.ts
+20:43:40.856 WARN    * web/src/components/affinity.tsx
+20:43:40.856 WARN    * web/src/pages/student/Privacy.tsx
+20:43:40.857 WARN    * api/src/entities/project.entity.ts
+20:43:40.857 WARN    * api/test/jest/unit/titular-de-pagina.spec.ts
+20:43:40.857 WARN    * api/src/common/texto.ts
+20:43:40.857 WARN    * web/src/pages/admin/Imports.tsx
+20:43:40.857 WARN    * api/src/entities/account-token.entity.ts
+20:43:40.857 WARN    * mobile/src/screens/student/ProgressScreen.tsx
+20:43:40.857 WARN    * api/src/projects/project-events.service.ts
+20:43:40.857 WARN    * web/src/pages/teacher/Students.tsx
+20:43:40.858 WARN    * mobile/src/screens/student/AffinityScreen.tsx
+20:43:40.858 WARN    * web/src/lib/texto.ts
+20:43:40.858 WARN    * web/src/components/QuestionnaireRunner.tsx
+20:43:40.859 WARN    * api/src/projects/project-readiness.rules.ts
+20:43:40.860 WARN    * mobile/src/screens/student/ActivityTabs.tsx
+20:43:40.860 WARN    * web/src/components/form.tsx
+20:43:40.861 WARN    * api/src/validation/document-extraction.service.ts
+20:43:40.861 WARN    * web/src/pages/student/Progress.tsx
+20:43:40.861 WARN    * web/src/components/ui.tsx
+20:43:40.861 WARN    * mobile/src/constants.ts
+20:43:40.862 WARN    * api/src/projects/projects.service.ts
+20:43:40.862 WARN    * mobile/src/screens/student/WelcomeScreen.tsx
+20:43:40.862 WARN    * api/src/ai/ai.service.ts
+20:43:40.863 WARN    * mobile/src/screens/LoginScreen.tsx
+20:43:40.863 WARN    * web/src/pages/admin/Users.tsx
+20:43:40.863 WARN    * web/src/pages/admin/Audit.tsx
+20:43:40.863 WARN    * api/src/gamification/gamification.controller.ts
+20:43:40.863 WARN    * web/src/api/client.ts
+20:43:40.863 WARN    * web/src/components/feedback.tsx
+20:43:40.863 WARN    * mobile/src/screens/student/LibraryScreen.tsx
+20:43:40.864 WARN    * api/src/audit/audit.service.ts
+20:43:40.864 WARN    * api/test/jest/unit/texto.spec.ts
+20:43:40.864 WARN    * mobile/src/hooks/useAsync.ts
+20:43:40.864 WARN    * api/test/jest/api/integracion-postgres.spec.ts
+20:43:40.864 WARN    * api/src/library/library.service.ts
+20:43:40.865 WARN    * web/src/pages/student/Profile.tsx
+20:43:40.865 WARN    * api/src/activities/dto/create-activity.dto.ts
+20:43:40.865 WARN    * web/src/pages/admin/Gamification.tsx
+20:43:40.865 WARN    * api/src/validation/link-checker.service.ts
+20:43:40.866 WARN    * web/src/pages/director/LearningResources.tsx
+20:43:40.866 WARN    * api/src/activities/activities.service.ts
+20:43:40.866 WARN    * api/src/affinity-recalc/affinity-recalc.module.ts
+20:43:40.866 WARN    * api/src/gamification/gamification.service.ts
+20:43:40.866 WARN    * api/src/notifications/activity-reminders.service.ts
+20:43:40.867 WARN    * web/src/pages/director/Trends.tsx
+20:43:40.867 WARN    * web/src/components/AreaSkillPicker.tsx
+20:43:40.867 WARN    * web/src/pages/admin/AreasSkills.tsx
+20:43:40.867 WARN    * api/src/mail/mail.service.ts
+20:43:40.867 WARN    * web/src/components/ProjectReadiness.tsx
+20:43:40.867 WARN    * web/src/pages/admin/ActivityCategories.tsx
+20:43:40.868 WARN    * web/src/components/PersonPicker.tsx
+20:43:40.868 WARN    * mobile/src/screens/student/CollaborationScreen.tsx
+20:43:40.868 WARN    * api/src/collaboration/collaboration.controller.ts
+20:43:40.868 WARN    * web/src/components/Declarations.tsx
+20:43:40.868 WARN    * api/src/reports/analytics.service.ts
+20:43:40.869 WARN    * web/src/components/OnboardingGate.tsx
+20:43:40.869 WARN    * web/src/pages/student/Evidences.tsx
+20:43:40.869 WARN    * mobile/src/theme.ts
+20:43:40.869 WARN    * api/src/projects/dependency-map.ts
+20:43:40.870 WARN    * web/src/pages/student/Collaboration.tsx
+20:43:40.870 WARN    * api/src/activities/credential-eligibility.service.ts
+20:43:40.870 WARN    * web/src/pages/LoginPage.tsx
+20:43:40.871 WARN    * api/src/collaboration/dto/collaboration.dto.ts
+20:43:40.871 WARN    * api/src/projects/project-backing.service.ts
+20:43:40.871 WARN    * api/src/recommendations/recommendations.engine.ts
+20:43:40.871 WARN    * api/src/collaboration/contacts.service.ts
+20:43:40.871 WARN    * web/src/lib/validators.ts
+20:43:40.871 WARN    * api/src/mail/mail-capture.ts
+20:43:40.871 WARN    * web/src/index.css
+20:43:40.872 WARN    * mobile/src/api/client.ts
+20:43:40.872 WARN    * api/src/library/library.controller.ts
+20:43:40.872 WARN    * web/src/components/Avatar.tsx
+20:43:40.872 WARN    * web/src/pages/director/Analytics.tsx
+20:43:40.872 WARN    * web/src/components/ParaTi.tsx
+20:43:40.872 WARN  This may lead to missing/broken features in SonarQube
+20:43:40.900 INFO  CPD Executor 40 files had no CPD blocks
+20:43:40.900 INFO  CPD Executor Calculating CPD for 418 files
+20:43:41.081 INFO  CPD Executor CPD calculation finished (done) | time=180ms
+20:43:41.105 INFO  SCM revision ID '0e9ac420dda5752575fd177bb6c1ea2ee20f9ece'
+20:43:43.412 INFO  Analysis report generated in 2300ms, dir size=13.3 MB
+20:43:44.457 INFO  Analysis report compressed in 1044ms, zip size=7.2 MB
+20:43:45.647 INFO  Analysis report uploaded in 1190ms
+20:43:45.649 INFO  ------------- Check Quality Gate status
+20:43:45.650 INFO  Waiting for the analysis report to be processed (max 600s)
+20:44:06.829 INFO  QUALITY GATE STATUS: PASSED - View details on http://host.docker.internal:9100/dashboard?id=afinia
+20:44:07.187 INFO  Analysis total time: 6:59.211 s
+20:44:07.191 INFO  SonarScanner Engine completed successfully
+20:44:07.234 INFO  EXECUTION SUCCESS
+20:44:07.235 INFO  Total time: 7:18.590s
 
-16:03:07.538 ERROR QUALITY GATE STATUS: FAILED - View details on http://host.docker.internal:9100/dashboard?id=afinia

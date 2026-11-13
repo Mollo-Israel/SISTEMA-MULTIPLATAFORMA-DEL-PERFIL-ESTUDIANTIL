@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
 import {
@@ -240,54 +240,7 @@ export default function ProjectsScreen({ navigation }: any) {
                 placeholder="Qué resuelve el proyecto y cómo."
                 multiline
               />
-              <Text style={styles.label}>Áreas del proyecto</Text>
-              <View style={styles.chips}>
-                {areas.map((a: any) => {
-                  const on = form.areaIds.includes(a.id);
-                  return (
-                    <Chip
-                      key={a.id}
-                      label={a.name}
-                      on={on}
-                      onPress={() => {
-                        const areaIds = on ? form.areaIds.filter((x) => x !== a.id) : [...form.areaIds, a.id].slice(0, 6);
-                        // §4: al quitar un área, salen sus tecnologías.
-                        const skillIds = form.skillIds.filter((id) =>
-                          areaIds.includes(skills.find((s: any) => s.id === id)?.academicAreaId));
-                        setForm({ ...form, areaIds, skillIds });
-                      }}
-                    />
-                  );
-                })}
-              </View>
-
-              {form.areaIds.map((areaId) => {
-                const delArea = skills.filter((s: any) => s.academicAreaId === areaId);
-                if (!delArea.length) return null;
-                return (
-                  <View key={areaId}>
-                    <Text style={styles.label}>
-                      Tecnologías · {areas.find((a: any) => a.id === areaId)?.name}
-                    </Text>
-                    <View style={styles.chips}>
-                      {delArea.map((s: any) => {
-                        const on = form.skillIds.includes(s.id);
-                        return (
-                          <Chip
-                            key={s.id}
-                            label={s.name}
-                            on={on}
-                            onPress={() => setForm({
-                              ...form,
-                              skillIds: on ? form.skillIds.filter((x) => x !== s.id) : [...form.skillIds, s.id].slice(0, 20),
-                            })}
-                          />
-                        );
-                      })}
-                    </View>
-                  </View>
-                );
-              })}
+              <SelectorDeAreasYTecnologias form={form} setForm={setForm} areas={areas} skills={skills} />
 
               <Text style={styles.label}>Visibilidad</Text>
               <View style={styles.chips}>
@@ -468,7 +421,7 @@ export default function ProjectsScreen({ navigation }: any) {
 
 /* ------------------------------------------------------------------ */
 
-function ProjectCard({ project, onOpen }: { project: any; onOpen: () => void }) {
+function ProjectCard({ project, onOpen }: Readonly<{ project: any; onOpen: () => void }>) {
   const visibility = VISIBILITY_OPTIONS.find((v) => v.value === project.visibility);
   return (
     <Card>
@@ -539,3 +492,64 @@ const styles = StyleSheet.create({
   openRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 10 },
   open: { color: colors.bordo, fontSize: 12.5, fontWeight: '700' },
 });
+
+/** Áreas del proyecto y, por cada una, sus tecnologías (§4: al quitar un área, salen sus tecnologías). */
+function SelectorDeAreasYTecnologias({ form, setForm, areas, skills }: Readonly<{
+  form: typeof emptyForm;
+  setForm: (f: typeof emptyForm) => void;
+  areas: any[];
+  skills: any[];
+}>) {
+  return (
+    <>
+      <Text style={styles.label}>Áreas del proyecto</Text>
+      <View style={styles.chips}>
+        {areas.map((a: any) => {
+          const on = form.areaIds.includes(a.id);
+          return (
+            <Chip
+              key={a.id}
+              label={a.name}
+              on={on}
+              onPress={() => {
+                const areaIds = on ? form.areaIds.filter((x) => x !== a.id) : [...form.areaIds, a.id].slice(0, 6);
+                // §4: al quitar un área, salen sus tecnologías.
+                const skillIds = form.skillIds.filter((id) =>
+                  areaIds.includes(skills.find((s: any) => s.id === id)?.academicAreaId));
+                setForm({ ...form, areaIds, skillIds });
+              }}
+            />
+          );
+        })}
+      </View>
+
+      {form.areaIds.map((areaId) => {
+        const delArea = skills.filter((s: any) => s.academicAreaId === areaId);
+        if (!delArea.length) return null;
+        return (
+          <View key={areaId}>
+            <Text style={styles.label}>
+              Tecnologías · {areas.find((a: any) => a.id === areaId)?.name}
+            </Text>
+            <View style={styles.chips}>
+              {delArea.map((s: any) => {
+                const on = form.skillIds.includes(s.id);
+                return (
+                  <Chip
+                    key={s.id}
+                    label={s.name}
+                    on={on}
+                    onPress={() => setForm({
+                      ...form,
+                      skillIds: on ? form.skillIds.filter((x) => x !== s.id) : [...form.skillIds, s.id].slice(0, 20),
+                    })}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        );
+      })}
+    </>
+  );
+}

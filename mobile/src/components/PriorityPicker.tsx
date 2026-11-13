@@ -13,10 +13,10 @@ import { colors } from '../theme';
 export function PriorityPicker({
   value,
   onChange,
-}: {
+}: Readonly<{
   value: number;
   onChange: (v: number) => void;
-}) {
+}>) {
   return (
     <View style={styles.row}>
       {[0, 1, 2, 3, 4, 5].map((n) => {

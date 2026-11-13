@@ -44,6 +44,11 @@ api/uploads/
 web/dist/
 mobile/.expo/
 mobile/dist/
+# APK generado con npm run mobile:apk (y lo nativo, si alguien corre expo prebuild aquí)
+mobile/apk/
+mobile/android/
+mobile/ios/
+*.apk
 
 # Respaldo del documento de grado (no versionar: 22 MB)
 docs/respaldo-documento/
@@ -63,4 +68,9 @@ pruebas/01-entorno/api-pruebas.log
 pruebas/03-playwright/resultados/
 web/dist-pruebas/
 pruebas/07-sonarqube/.credenciales-local.json
+# Cobertura V8 en bruto (cientos de MB); en git queda el lcov ya convertido
+pruebas/07-sonarqube/cobertura/v8-api/
+pruebas/07-sonarqube/cobertura/v8-unitarias/
+pruebas/07-sonarqube/cobertura/.detener-api
+pruebas/03-playwright/cobertura-v8/
 api/coverage/

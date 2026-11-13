@@ -106,7 +106,7 @@ export default function ProfileScreen({ navigation }: any) {
         <ProgressBar
           value={completion}
           label="Avance de tu perfil"
-          tone={completion >= 80 ? colors.green : completion >= 40 ? colors.amber : colors.bordo}
+          tone={colorDeAvance(completion)}
         />
       </Card>
 
@@ -201,3 +201,9 @@ const styles = StyleSheet.create({
   instFila: { fontSize: 13, color: colors.gray700, marginBottom: 2 },
   instValor: { fontWeight: '700', color: colors.gray900 },
 });
+
+/** El color del avance del perfil: verde casi completo, ámbar a medias, bordó al empezar. */
+function colorDeAvance(completion: number): string {
+  if (completion >= 80) return colors.green;
+  return completion >= 40 ? colors.amber : colors.bordo;
+}

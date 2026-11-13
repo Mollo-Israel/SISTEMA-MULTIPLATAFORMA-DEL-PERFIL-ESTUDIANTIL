@@ -126,7 +126,7 @@ export class GamificationExtrasService {
       throw new BadRequestException('Este reto está desactivado: actívelo para reconocerlo.');
     }
     const resultado = { awarded: 0, alreadyHad: 0 };
-    for (const profileId of [...new Set(studentProfileIds)]) {
+    for (const profileId of new Set(studentProfileIds)) {
       await this.scope.assertCanAccessProfile(user, profileId);
       const nuevo = await this.gamification.award(profileId, {
         trigger: GamificationTrigger.RECONOCIMIENTO_DOCENTE,
@@ -156,8 +156,9 @@ export class GamificationExtrasService {
   // ======================================================================
 
   async listRewards(user: AuthenticatedUser) {
+    const delPersonal = esAdmin(user) ? {} : { createdByUserId: user.userId };
     const filas = await this.recompensas.find({
-      where: esPersonal(user.role) ? (esAdmin(user) ? {} : { createdByUserId: user.userId }) : { isActive: true },
+      where: esPersonal(user.role) ? delPersonal : { isActive: true },
       relations: { createdBy: true },
       order: { cost: 'ASC' },
     });
@@ -228,7 +229,7 @@ export class GamificationExtrasService {
         where: { id: rewardId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!reward || !reward.isActive) throw new NotFoundException('Esa recompensa ya no está disponible.');
+      if (!reward?.isActive) throw new NotFoundException('Esa recompensa ya no está disponible.');
       if (reward.stock !== null && reward.stock <= 0) {
         throw new ConflictException('Esa recompensa se agotó.');
       }

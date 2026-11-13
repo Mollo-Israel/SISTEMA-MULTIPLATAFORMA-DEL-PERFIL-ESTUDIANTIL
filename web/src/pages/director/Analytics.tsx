@@ -110,7 +110,7 @@ function Panorama() {
   );
 }
 
-function Participacion({ t }: { t: DirectorTrends }) {
+function Participacion({ t }: Readonly<{ t: DirectorTrends }>) {
   const semestre = useAsync(() => reportService.participationBySemester(), []);
   return (
     <>
@@ -128,8 +128,8 @@ function Participacion({ t }: { t: DirectorTrends }) {
               <table>
                 <thead><tr><th>Semestre</th><th>Total</th><th>Interés</th><th>Inscritos</th><th>Confirmados</th><th>Ausentes</th></tr></thead>
                 <tbody>
-                  {rows.map((r: any, i: number) => (
-                    <tr key={i}>
+                  {rows.map((r: any) => (
+                    <tr key={r.semester ?? 'sin-semestre'}>
                       <td>{r.semester ? `${r.semester}.º` : 'Sin semestre'}</td><td>{r.total}</td>
                       <td>{r.byStatus.interested}</td><td>{r.byStatus.registered}</td>
                       <td>{r.byStatus.confirmed}</td><td>{r.byStatus.absent}</td>
@@ -157,7 +157,7 @@ function Participacion({ t }: { t: DirectorTrends }) {
   );
 }
 
-function Demanda({ t }: { t: DirectorTrends }) {
+function Demanda({ t }: Readonly<{ t: DirectorTrends }>) {
   return (
     <>
       <Card title="Actividades que más atraen">
@@ -209,7 +209,7 @@ function Demanda({ t }: { t: DirectorTrends }) {
   );
 }
 
-function Evolucion({ t }: { t: DirectorTrends }) {
+function Evolucion({ t }: Readonly<{ t: DirectorTrends }>) {
   return (
     <>
       <Card title="Afinidad y respaldo promedio por área, mes a mes">

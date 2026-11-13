@@ -4,132 +4,132 @@ Afinia — API (pruebas de control de calidad)
 
 □ 01 · Identidad y sesión
 └ Iniciar sesión · admin
-  POST http://localhost:3020/api/auth/login [200 OK, 1.51kB, 105ms]
+  POST http://localhost:3020/api/auth/login [200 OK, 1.51kB, 167ms]
   √  responde en menos de 2 s
   √  200/201 con token de acceso
 
 └ Iniciar sesión · estudiante
-  POST http://localhost:3020/api/auth/login [200 OK, 1.52kB, 83ms]
+  POST http://localhost:3020/api/auth/login [200 OK, 1.52kB, 90ms]
   √  responde en menos de 2 s
   √  200/201 con token de acceso
 
 └ Iniciar sesión · docente
-  POST http://localhost:3020/api/auth/login [200 OK, 1.52kB, 80ms]
+  POST http://localhost:3020/api/auth/login [200 OK, 1.52kB, 84ms]
   √  responde en menos de 2 s
   √  200/201 con token de acceso
 
 └ Iniciar sesión · director
-  POST http://localhost:3020/api/auth/login [200 OK, 1.54kB, 80ms]
+  POST http://localhost:3020/api/auth/login [200 OK, 1.54kB, 87ms]
   √  responde en menos de 2 s
   √  200/201 con token de acceso
 
 └ Iniciar sesión · sociedad
-  POST http://localhost:3020/api/auth/login [200 OK, 1.56kB, 80ms]
+  POST http://localhost:3020/api/auth/login [200 OK, 1.56kB, 88ms]
   √  responde en menos de 2 s
   √  200/201 con token de acceso
 
 └ Contraseña incorrecta → 401 genérico
-  POST http://localhost:3020/api/auth/login [401 Unauthorized, 879B, 75ms]
+  POST http://localhost:3020/api/auth/login [401 Unauthorized, 879B, 84ms]
   √  responde en menos de 2 s
   √  401 sin revelar si la cuenta existe
 
 └ Recuperar contraseña de una cuenta que no existe → respuesta genérica
-  POST http://localhost:3020/api/activation/forgot-password [200 OK, 950B, 4ms]
+  POST http://localhost:3020/api/activation/forgot-password [200 OK, 951B, 6ms]
   √  responde en menos de 2 s
   √  responde sin revelar la existencia de la cuenta
 
 └ Ruta protegida sin sesión → 401
-  GET http://localhost:3020/api/profiles/me [401 Unauthorized, 867B, 3ms]
+  GET http://localhost:3020/api/profiles/me [401 Unauthorized, 867B, 5ms]
   √  responde en menos de 2 s
   √  401 sin token
 
 □ 02 · Estudiante
 └ Mi perfil
-  GET http://localhost:3020/api/profiles/me [200 OK, 1.82kB, 10ms]
+  GET http://localhost:3020/api/profiles/me [200 OK, 1.69kB, 15ms]
   √  responde en menos de 2 s
   √  200 con su semestre
   √  no expone hash de contraseña
 
 └ Mi afinidad (resumen)
-  GET http://localhost:3020/api/affinity/me/summary [200 OK, 1.47kB, 50ms]
+  GET http://localhost:3020/api/affinity/me/summary [200 OK, 1.45kB, 59ms]
   √  responde en menos de 2 s
   √  200
 
 └ Mis recomendaciones
-  GET http://localhost:3020/api/recommendations/me [200 OK, 9.26kB, 112ms]
+  GET http://localhost:3020/api/recommendations/me [200 OK, 6.54kB, 137ms]
   √  responde en menos de 2 s
   √  200
 
 └ Mi trayectoria
-  GET http://localhost:3020/api/trajectory/me [200 OK, 4.79kB, 61ms]
+  GET http://localhost:3020/api/trajectory/me [200 OK, 3.19kB, 75ms]
   √  responde en menos de 2 s
   √  200 con entradas y niveles
 
 └ Mis proyectos
-  GET http://localhost:3020/api/projects/my [200 OK, 6.92kB, 25ms]
+  GET http://localhost:3020/api/projects/my [200 OK, 3.69kB, 49ms]
   √  responde en menos de 2 s
   √  200
 
 └ Actividades publicadas
-  GET http://localhost:3020/api/activities [200 OK, 80.21kB, 45ms]
+  GET http://localhost:3020/api/activities [200 OK, 32.5kB, 42ms]
   √  responde en menos de 2 s
   √  200
 
 □ 03 · Autorización y alcance (casos negativos)
 └ Estudiante → auditoría → 403
-  GET http://localhost:3020/api/audit/events [403 Forbidden, 892B, 6ms]
+  GET http://localhost:3020/api/audit/events [403 Forbidden, 892B, 10ms]
   √  responde en menos de 2 s
   √  403
 
 └ Estudiante → lista de estudiantes → 403
-  GET http://localhost:3020/api/profiles/students [403 Forbidden, 892B, 17ms]
+  GET http://localhost:3020/api/profiles/students [403 Forbidden, 892B, 19ms]
   √  responde en menos de 2 s
   √  403
 
 └ Docente (sem. 1–4) → estudiantes de su alcance
-  GET http://localhost:3020/api/profiles/students [200 OK, 3.87kB, 16ms]
+  GET http://localhost:3020/api/profiles/students [200 OK, 2.32kB, 17ms]
   √  responde en menos de 2 s
   √  200 con alcance restringido a sus semestres
 
 └ Docente → criterios de puntos (solo lectura de los elegibles)
-  GET http://localhost:3020/api/gamification-criteria/available [200 OK, 958B, 10ms]
+  GET http://localhost:3020/api/gamification-criteria/available [200 OK, 958B, 15ms]
   √  responde en menos de 2 s
   √  200
 
 └ Docente → crear criterio → 403
-  POST http://localhost:3020/api/gamification-criteria [403 Forbidden, 892B, 6ms]
+  POST http://localhost:3020/api/gamification-criteria [403 Forbidden, 892B, 8ms]
   √  responde en menos de 2 s
   √  403: los criterios los configura Dirección o Administración
 
 └ Retos (retirados en V4.1) → 410
-  POST http://localhost:3020/api/gamification/challenges [410 Gone, 988B, 5ms]
+  POST http://localhost:3020/api/gamification/challenges [410 Gone, 988B, 9ms]
   √  responde en menos de 2 s
   √  410 Gone
 
 □ 04 · Dirección y Administración
 └ Dirección → pendientes de aprobación
-  GET http://localhost:3020/api/activities/reviews/pending [200 OK, 754B, 20ms]
+  GET http://localhost:3020/api/activities/reviews/pending [200 OK, 754B, 17ms]
   √  responde en menos de 2 s
   √  200
 
 └ Dirección → propuestas de puntos pendientes
-  GET http://localhost:3020/api/gamification/proposals?status=pending [200 OK, 754B, 9ms]
+  GET http://localhost:3020/api/gamification/proposals?status=pending [200 OK, 754B, 13ms]
   √  responde en menos de 2 s
   √  200
 
 └ Administración → auditoría
-  GET http://localhost:3020/api/audit/events?limit=5 [200 OK, 2.77kB, 10ms]
+  GET http://localhost:3020/api/audit/events?limit=5 [200 OK, 2.21kB, 13ms]
   √  responde en menos de 2 s
   √  200
 
 └ Administración → informe de recálculo de respaldo (en seco)
-  POST http://localhost:3020/api/project-backing/recalculate [200 OK, 874B, 66ms]
+  POST http://localhost:3020/api/project-backing/recalculate [200 OK, 871B, 63ms]
   √  responde en menos de 2 s
   √  200 sin aplicar cambios
 
 □ 05 · Cierre V5
 └ Docente → autonomía propia (revisión por defecto)
-  GET http://localhost:3020/api/approval-policies/me [200 OK, 843B, 8ms]
+  GET http://localhost:3020/api/approval-policies/me [200 OK, 843B, 9ms]
   √  responde en menos de 2 s
   √  200 y actividades siempre con revisión
 
@@ -139,38 +139,38 @@ Afinia — API (pruebas de control de calidad)
   √  403: la concede Dirección
 
 └ Administración → conceder autonomía → 403
-  POST http://localhost:3020/api/approval-policies [403 Forbidden, 892B, 5ms]
+  POST http://localhost:3020/api/approval-policies [403 Forbidden, 892B, 6ms]
   √  responde en menos de 2 s
   √  403: Administración no concede
 
 └ Dirección → excepción en actividades → 400
-  POST http://localhost:3020/api/approval-policies [400 Bad Request, 1.15kB, 5ms]
+  POST http://localhost:3020/api/approval-policies [400 Bad Request, 1.15kB, 7ms]
   √  responde en menos de 2 s
   √  400 ACTIVITY_OVERRIDE_NOT_ENABLED
 
 └ Dirección → historial de acciones directas
-  GET http://localhost:3020/api/approval-policies/direct-actions [200 OK, 754B, 8ms]
+  GET http://localhost:3020/api/approval-policies/direct-actions [200 OK, 754B, 12ms]
   √  responde en menos de 2 s
   √  200
 
 └ Estudiante → proyectos de la carrera (6 por página, sin correos)
-  GET http://localhost:3020/api/projects/community?page=1 [200 OK, 798B, 11ms]
+  GET http://localhost:3020/api/projects/community?page=1 [200 OK, 798B, 14ms]
   √  responde en menos de 2 s
   √  200 con páginas de 6
   √  sin correos
 
 └ Estudiante → analizar un enlace inválido → 400 en su campo
-  POST http://localhost:3020/api/projects/repository/analyze [400 Bad Request, 1.07kB, 6ms]
+  POST http://localhost:3020/api/projects/repository/analyze [400 Bad Request, 1.07kB, 12ms]
   √  responde en menos de 2 s
   √  400 en repositoryUrl
 
 └ Docente → criterio con familia retirada → 403
-  POST http://localhost:3020/api/gamification-criteria [403 Forbidden, 892B, 4ms]
+  POST http://localhost:3020/api/gamification-criteria [403 Forbidden, 892B, 6ms]
   √  responde en menos de 2 s
   √  403: el docente no crea criterios
 
 └ Estudiante → historial de puntos de otro → 403
-  GET http://localhost:3020/api/gamification/students/00000000-0000-4000-8000-000000000000/history [403 Forbidden, 892B, 5ms]
+  GET http://localhost:3020/api/gamification/students/00000000-0000-4000-8000-000000000000/history [403 Forbidden, 892B, 7ms]
   √  responde en menos de 2 s
   √  403: no hay ranking ni consulta entre estudiantes
 
@@ -192,12 +192,12 @@ Afinia — API (pruebas de control de calidad)
 ├─────────────────────────┼───────────────────┼──────────────────┤
 │              assertions │                70 │                0 │
 ├─────────────────────────┴───────────────────┴──────────────────┤
-│ total run duration: 3.9s                                       │
+│ total run duration: 4.1s                                       │
 ├────────────────────────────────────────────────────────────────┤
-│ total data received: 113.95kB (approx)                         │
+│ total data received: 56.47kB (approx)                          │
 ├────────────────────────────────────────────────────────────────┤
-│ average response time: 30ms [min: 3ms, max: 112ms, s.d.: 33ms] │
+│ average response time: 36ms [min: 5ms, max: 167ms, s.d.: 41ms] │
 └────────────────────────────────────────────────────────────────┘
 
-(node:19012) [DEP0176] DeprecationWarning: fs.F_OK is deprecated, use fs.constants.F_OK instead
+(node:7180) [DEP0176] DeprecationWarning: fs.F_OK is deprecated, use fs.constants.F_OK instead
 (Use `node --trace-deprecation ...` to show where the warning was created)

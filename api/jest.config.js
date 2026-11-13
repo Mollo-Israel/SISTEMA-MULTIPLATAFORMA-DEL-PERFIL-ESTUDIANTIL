@@ -32,7 +32,9 @@ module.exports = {
     '!src/**/*.module.ts',
   ],
   coverageDirectory: '<rootDir>/coverage',
-  coverageReporters: ['lcov', 'text-summary', 'json-summary'],
+  // `json` (coverage-final.json): estructura completa de Istanbul, que
+  // scripts/pruebas/cobertura.mjs completa con la cobertura de las demás pruebas.
+  coverageReporters: ['lcov', 'text-summary', 'json-summary', 'json'],
   reporters: [
     'default',
     ['jest-html-reporters', {

@@ -82,7 +82,7 @@ export default function PublicProfilePage() {
  * perfil → Visibilidad» con la misma respuesta pública: no hay una vista
  * previa aparte que pueda mostrar de más.
  */
-export function PerfilPublicoVista({ perfil }: { perfil: PublicProfileView }) {
+export function PerfilPublicoVista({ perfil }: Readonly<{ perfil: PublicProfileView }>) {
   return (
     <>
       <Card>

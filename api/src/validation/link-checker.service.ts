@@ -38,7 +38,8 @@ const DEFAULT_TIMEOUT_MS = 8_000;
  * cubierto por el rango enlace-local, pero se comprueba explícitamente porque
  * es el objetivo concreto de este tipo de ataque.
  */
-const CLOUD_METADATA = new Set(['169.254.169.254', 'fd00:ec2::254', '100.100.100.200']);
+// Lista de bloqueo: estas direcciones se RECHAZAN; nunca se usan para conectarse.
+const CLOUD_METADATA = new Set(['169.254.169.254', 'fd00:ec2::254', '100.100.100.200']); // NOSONAR
 
 /** Motivo que no es un bloqueo de seguridad sino un servidor ausente. */
 const NO_RESUELVE = 'No se pudo resolver el nombre del servidor.';
@@ -48,6 +49,38 @@ export interface FetchedPage {
   result: LinkCheckResult;
   body: string | null;
   contentType: string | null;
+}
+
+const sinCuerpo = (result: LinkCheckResult): FetchedPage => ({ result, body: null, contentType: null });
+const fin = (pagina: FetchedPage) => ({ fin: pagina });
+
+/** Las direcciones del host: él mismo si ya es una IP, o lo que resuelve el DNS; `null` si no resuelve. */
+async function resolverDirecciones(host: string): Promise<string[] | null> {
+  if (isIP(host)) return [host];
+  try {
+    const resueltas = await lookup(host, { all: true, verbatim: true });
+    return resueltas.map((r) => r.address);
+  } catch {
+    return null;
+  }
+}
+
+/** Rangos IPv4 que no se consultan: privados, reservados, bucle local, enlace-local y multidifusión. */
+function rangoIpv4Prohibido(ip: string): string | null {
+  const o = ip.split('.').map(Number);
+  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return 'Dirección IPv4 mal formada.';
+  }
+  if (o[0] === 0) return 'Rango reservado.';
+  if (o[0] === 10) return 'Rango privado.';
+  if (o[0] === 127) return 'Dirección de bucle local.';
+  if (o[0] === 169 && o[1] === 254) return 'Rango enlace-local.';
+  if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return 'Rango privado.';
+  if (o[0] === 192 && o[1] === 168) return 'Rango privado.';
+  if (o[0] === 192 && o[1] === 0 && o[2] === 0) return 'Rango reservado.';
+  if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return 'Rango compartido de operador.';
+  if (o[0] >= 224) return 'Rango multidifusión o reservado.';
+  return null;
 }
 
 @Injectable()
@@ -119,7 +152,6 @@ export class LinkCheckerService {
       checkedAt: ahora,
     };
 
-    const sinCuerpo = (result: LinkCheckResult): FetchedPage => ({ result, body: null, contentType: null });
     if (!this.enabled) return sinCuerpo(base);
 
     let actual: URL;
@@ -130,70 +162,81 @@ export class LinkCheckerService {
     }
 
     for (let salto = 0; salto <= MAX_REDIRECTS; salto += 1) {
-      const veredicto = await this.assertSafe(actual);
-      if (veredicto) {
-        // Que un nombre no resuelva no es un bloqueo de seguridad: es un
-        // servidor que no esta. Llamarlo BLOCKED mezclaria «me niego a ir»
-        // con «no existe», que es justo lo que §31 separa.
-        const inexistente = veredicto === NO_RESUELVE;
-        return sinCuerpo({
-          ...base,
-          status: inexistente ? LinkCheckStatus.UNAVAILABLE : LinkCheckStatus.BLOCKED,
-          blockedReason: inexistente ? null : veredicto,
-          finalUrl: actual.toString(),
-        });
-      }
-
-      let respuesta: Response;
-      try {
-        respuesta = await this.fetchOnce(actual);
-      } catch (error) {
-        return sinCuerpo({
-          ...base,
-          status: LinkCheckStatus.UNAVAILABLE,
-          finalUrl: actual.toString(),
-          blockedReason: null,
-          title: null,
-          httpStatus: null,
-          ...(this.logFallo(actual, error) ?? {}),
-        });
-      }
-
-      const redireccion = respuesta.status >= 300 && respuesta.status < 400;
-      const destino = respuesta.headers.get('location');
-      if (redireccion && destino) {
-        if (salto === MAX_REDIRECTS) {
-          return sinCuerpo({
-            ...base,
-            status: LinkCheckStatus.UNAVAILABLE,
-            finalUrl: actual.toString(),
-            httpStatus: respuesta.status,
-          });
-        }
-        try {
-          actual = new URL(destino, actual);
-        } catch {
-          return sinCuerpo({ ...base, status: LinkCheckStatus.UNAVAILABLE, finalUrl: actual.toString() });
-        }
-        continue;
-      }
-
-      const tipo = respuesta.headers.get('content-type');
-      const texto = await this.readBody(respuesta);
-      return {
-        result: {
-          ...base,
-          status: respuesta.ok ? LinkCheckStatus.AVAILABLE : LinkCheckStatus.UNAVAILABLE,
-          finalUrl: actual.toString(),
-          httpStatus: respuesta.status,
-          title: tipo?.includes('html') && texto ? this.titleOf(texto) : null,
-        },
-        body: respuesta.ok ? texto : null,
-        contentType: tipo,
-      };
+      const paso = await this.unSalto(actual, salto, base);
+      if ('fin' in paso) return paso.fin;
+      actual = paso.siguiente;
     }
 
     return sinCuerpo({ ...base, status: LinkCheckStatus.UNAVAILABLE, finalUrl: actual.toString() });
+  }
+
+  /** Un salto: consulta `actual` y devuelve el resultado final o la dirección a la que redirige. */
+  private async unSalto(actual: URL, salto: number, base: LinkCheckResult): Promise<{ fin: FetchedPage } | { siguiente: URL }> {
+    const veredicto = await this.assertSafe(actual);
+    if (veredicto) {
+      // Que un nombre no resuelva no es un bloqueo de seguridad: es un
+      // servidor que no esta. Llamarlo BLOCKED mezclaria «me niego a ir»
+      // con «no existe», que es justo lo que §31 separa.
+      const inexistente = veredicto === NO_RESUELVE;
+      return fin(sinCuerpo({
+        ...base,
+        status: inexistente ? LinkCheckStatus.UNAVAILABLE : LinkCheckStatus.BLOCKED,
+        blockedReason: inexistente ? null : veredicto,
+        finalUrl: actual.toString(),
+      }));
+    }
+
+    let respuesta: Response;
+    try {
+      respuesta = await this.fetchOnce(actual);
+    } catch (error) {
+      this.logFallo(actual, error);
+      return fin(sinCuerpo({
+        ...base,
+        status: LinkCheckStatus.UNAVAILABLE,
+        finalUrl: actual.toString(),
+        blockedReason: null,
+        title: null,
+        httpStatus: null,
+      }));
+    }
+
+    const redireccion = respuesta.status >= 300 && respuesta.status < 400;
+    const destino = respuesta.headers.get('location');
+    if (redireccion && destino) {
+      if (salto === MAX_REDIRECTS) {
+        return fin(sinCuerpo({
+          ...base,
+          status: LinkCheckStatus.UNAVAILABLE,
+          finalUrl: actual.toString(),
+          httpStatus: respuesta.status,
+        }));
+      }
+      try {
+        return { siguiente: new URL(destino, actual) };
+      } catch {
+        return fin(sinCuerpo({ ...base, status: LinkCheckStatus.UNAVAILABLE, finalUrl: actual.toString() }));
+      }
+    }
+
+    return fin(await this.paginaFinal(respuesta, actual, base));
+  }
+
+  /** La respuesta que no redirige: su estado, su título (si es HTML) y su cuerpo si fue exitosa. */
+  private async paginaFinal(respuesta: Response, actual: URL, base: LinkCheckResult): Promise<FetchedPage> {
+    const tipo = respuesta.headers.get('content-type');
+    const texto = await this.readBody(respuesta);
+    return {
+      result: {
+        ...base,
+        status: respuesta.ok ? LinkCheckStatus.AVAILABLE : LinkCheckStatus.UNAVAILABLE,
+        finalUrl: actual.toString(),
+        httpStatus: respuesta.status,
+        title: tipo?.includes('html') && texto ? this.titleOf(texto) : null,
+      },
+      body: respuesta.ok ? texto : null,
+      contentType: tipo,
+    };
   }
 
   // ====================================================================
@@ -226,22 +269,17 @@ export class LinkCheckerService {
 
     // Si el host ya es una IP, se comprueba tal cual. Si es un nombre, hay que
     // resolverlo: un dominio publico puede apuntar a 127.0.0.1 a proposito.
-    const direcciones: string[] = [];
-    if (isIP(host)) {
-      direcciones.push(host);
-    } else {
-      try {
-        const resueltas = await lookup(host, { all: true, verbatim: true });
-        direcciones.push(...resueltas.map((r) => r.address));
-      } catch {
-        return NO_RESUELVE;
-      }
-    }
+    const direcciones = await resolverDirecciones(host);
+    if (direcciones === null) return NO_RESUELVE;
     if (direcciones.length === 0) return 'El nombre no resolvió a ninguna dirección.';
 
     // Basta que UNA resolucion sea interna para rechazar: con DNS de respuesta
     // rotatoria, aceptar "alguna es publica" dejaria pasar el ataque una de
     // cada dos veces.
+    return this.motivoDeDirecciones(direcciones);
+  }
+
+  private motivoDeDirecciones(direcciones: string[]): string | null {
     for (const ip of direcciones) {
       if (CLOUD_METADATA.has(ip)) return 'No se consulta el servicio de metadata de la nube.';
       const motivo = this.rangoProhibido(ip);
@@ -253,55 +291,39 @@ export class LinkCheckerService {
   /** Motivo por el que una IP no debe consultarse, o `null` si es pública. */
   private rangoProhibido(ip: string): string | null {
     const version = isIP(ip);
-
-    if (version === 4) {
-      const o = ip.split('.').map(Number);
-      if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
-        return 'Dirección IPv4 mal formada.';
-      }
-      if (o[0] === 0) return 'Rango reservado.';
-      if (o[0] === 10) return 'Rango privado.';
-      if (o[0] === 127) return 'Dirección de bucle local.';
-      if (o[0] === 169 && o[1] === 254) return 'Rango enlace-local.';
-      if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return 'Rango privado.';
-      if (o[0] === 192 && o[1] === 168) return 'Rango privado.';
-      if (o[0] === 192 && o[1] === 0 && o[2] === 0) return 'Rango reservado.';
-      if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return 'Rango compartido de operador.';
-      if (o[0] >= 224) return 'Rango multidifusión o reservado.';
-      return null;
-    }
-
-    if (version === 6) {
-      const grupos = this.expandirIpv6(ip);
-      if (!grupos) return 'Dirección IPv6 mal formada.';
-
-      // ::  y  ::1
-      if (grupos.slice(0, 7).every((g) => g === 0)) {
-        return grupos[7] <= 1 ? 'Dirección de bucle local.' : 'Rango reservado.';
-      }
-
-      // IPv4 embebida: ::ffff:a.b.c.d. `new URL` la reescribe a su forma
-      // hexadecimal (::ffff:7f00:1), asi que comparar el texto no basta: hay
-      // que expandir la direccion y mirar los grupos. Sin esto, ::ffff:127.0.0.1
-      // pasaba el filtro y el servidor acababa hablando con su propio bucle
-      // local.
-      const mapeada = grupos.slice(0, 5).every((g) => g === 0) && grupos[5] === 0xffff;
-      if (mapeada) {
-        const a = (grupos[6] >> 8) & 0xff;
-        const b = grupos[6] & 0xff;
-        const c = (grupos[7] >> 8) & 0xff;
-        const d = grupos[7] & 0xff;
-        return this.rangoProhibido(`${a}.${b}.${c}.${d}`);
-      }
-
-      const primero = grupos[0];
-      if ((primero & 0xffc0) === 0xfe80) return 'Rango enlace-local.';
-      if ((primero & 0xfe00) === 0xfc00) return 'Rango privado.';
-      if ((primero & 0xff00) === 0xff00) return 'Rango multidifusión.';
-      return null;
-    }
-
+    if (version === 4) return rangoIpv4Prohibido(ip);
+    if (version === 6) return this.rangoIpv6Prohibido(ip);
     return 'Dirección no reconocida.';
+  }
+
+  private rangoIpv6Prohibido(ip: string): string | null {
+    const grupos = this.expandirIpv6(ip);
+    if (!grupos) return 'Dirección IPv6 mal formada.';
+
+    // ::  y  ::1
+    if (grupos.slice(0, 7).every((g) => g === 0)) {
+      return grupos[7] <= 1 ? 'Dirección de bucle local.' : 'Rango reservado.';
+    }
+
+    // IPv4 embebida: ::ffff:a.b.c.d. `new URL` la reescribe a su forma
+    // hexadecimal (::ffff:7f00:1), asi que comparar el texto no basta: hay
+    // que expandir la direccion y mirar los grupos. Sin esto, ::ffff:127.0.0.1
+    // pasaba el filtro y el servidor acababa hablando con su propio bucle
+    // local.
+    const mapeada = grupos.slice(0, 5).every((g) => g === 0) && grupos[5] === 0xffff;
+    if (mapeada) {
+      const a = (grupos[6] >> 8) & 0xff;
+      const b = grupos[6] & 0xff;
+      const c = (grupos[7] >> 8) & 0xff;
+      const d = grupos[7] & 0xff;
+      return this.rangoProhibido(`${a}.${b}.${c}.${d}`);
+    }
+
+    const primero = grupos[0];
+    if ((primero & 0xffc0) === 0xfe80) return 'Rango enlace-local.';
+    if ((primero & 0xfe00) === 0xfc00) return 'Rango privado.';
+    if ((primero & 0xff00) === 0xff00) return 'Rango multidifusión.';
+    return null;
   }
 
   /**
@@ -329,7 +351,7 @@ export class LinkCheckerService {
     if (partes.length > 2) return null;
 
     const aNumeros = (trozo: string) =>
-      (trozo === '' ? [] : trozo.split(':').map((g) => parseInt(g, 16)));
+      (trozo === '' ? [] : trozo.split(':').map((g) => Number.parseInt(g, 16)));
 
     const izquierda = aNumeros(partes[0]);
     const derecha = partes.length === 2 ? aNumeros(partes[1]) : [];
@@ -342,7 +364,7 @@ export class LinkCheckerService {
     }
     const relleno = 8 - izquierda.length - derecha.length;
     if (relleno < 0) return null;
-    return [...izquierda, ...Array(relleno).fill(0), ...derecha];
+    return [...izquierda, ...new Array(relleno).fill(0), ...derecha];
   }
 
   /**
@@ -415,8 +437,7 @@ export class LinkCheckerService {
     return m[1].replace(/\s+/g, ' ').trim().slice(0, 200) || null;
   }
 
-  private logFallo(url: URL, error: unknown): null {
+  private logFallo(url: URL, error: unknown): void {
     this.logger.debug(`No se pudo consultar ${url.origin}: ${String(error)}`);
-    return null;
   }
 }

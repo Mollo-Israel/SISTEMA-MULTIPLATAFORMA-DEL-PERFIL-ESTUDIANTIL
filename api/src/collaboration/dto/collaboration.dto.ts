@@ -1,23 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import {
-  ArrayMaxSize,
-  ArrayUnique,
-  IsArray,
-  IsEnum,
-  IsIn,
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Matches,
-  Max,
-  MaxLength,
-  Min,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { IsBoolean, ValidateNested } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsEnum, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, IsBoolean, ValidateNested } from 'class-validator';
 import {
   AvailabilityRequirement,
   CONTACT_ALIAS_MAX,

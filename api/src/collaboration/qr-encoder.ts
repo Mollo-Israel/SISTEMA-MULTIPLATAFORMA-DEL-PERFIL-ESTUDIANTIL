@@ -117,7 +117,7 @@ function ecc(datos: Uint8Array, cantidad: number): Uint8Array {
 class BitStream {
   private readonly bits: number[] = [];
 
-  push(valor: number, longitud: number): void {
+  escribir(valor: number, longitud: number): void {
     for (let i = longitud - 1; i >= 0; i--) {
       this.bits.push((valor >> i) & 1);
     }
@@ -162,40 +162,55 @@ interface Lienzo {
 
 const idx = (l: Lienzo, fila: number, col: number) => fila * l.size + col;
 
-function set(l: Lienzo, fila: number, col: number, valor: number, reserva = true): void {
-  l.modulos[idx(l, fila, col)] = valor;
-  if (reserva) l.reservado[idx(l, fila, col)] = 1;
+function set(l: Lienzo, y: number, x: number, valor: number, reserva = true): void {
+  l.modulos[idx(l, y, x)] = valor;
+  if (reserva) l.reservado[idx(l, y, x)] = 1;
 }
 
 function dibujarPatronesFijos(l: Lienzo, version: number): void {
   const n = l.size;
-
   // Buscadores y separadores, en las tres esquinas.
-  const buscador = (fila: number, col: number) => {
-    for (let i = -1; i <= 7; i++) {
-      for (let j = -1; j <= 7; j++) {
-        const f = fila + i;
-        const c = col + j;
-        if (f < 0 || f >= n || c < 0 || c >= n) continue;
-        const enBorde = i === -1 || i === 7 || j === -1 || j === 7;
-        const enAnillo = i === 0 || i === 6 || j === 0 || j === 6;
-        const enCentro = i >= 2 && i <= 4 && j >= 2 && j <= 4;
-        set(l, f, c, enBorde ? 0 : enAnillo || enCentro ? 1 : 0);
-      }
-    }
-  };
-  buscador(0, 0);
-  buscador(0, n - 7);
-  buscador(n - 7, 0);
+  dibujarBuscador(l, 0, 0);
+  dibujarBuscador(l, 0, n - 7);
+  dibujarBuscador(l, n - 7, 0);
+  dibujarTemporizadores(l);
+  dibujarAlineacion(l, version);
+  // Módulo oscuro fijo.
+  set(l, n - 8, 8, 1);
+  reservarFormato(l);
+  if (version >= 7) reservarVersion(l);
+}
 
-  // Temporizadores.
+/** Un buscador de 7×7 con su separador, con la esquina superior izquierda en (fila, col). */
+function dibujarBuscador(l: Lienzo, fila: number, col: number): void {
+  const n = l.size;
+  for (let i = -1; i <= 7; i++) {
+    for (let j = -1; j <= 7; j++) {
+      const f = fila + i;
+      const c = col + j;
+      if (f < 0 || f >= n || c < 0 || c >= n) continue;
+      const enBorde = i === -1 || i === 7 || j === -1 || j === 7;
+      const enAnillo = i === 0 || i === 6 || j === 0 || j === 6;
+      const enCentro = i >= 2 && i <= 4 && j >= 2 && j <= 4;
+      const oscuro = !enBorde && (enAnillo || enCentro);
+      set(l, f, c, oscuro ? 1 : 0);
+    }
+  }
+}
+
+/** Temporizadores: la fila y la columna 6 alternan claro y oscuro. */
+function dibujarTemporizadores(l: Lienzo): void {
+  const n = l.size;
   for (let i = 8; i < n - 8; i++) {
     const valor = i % 2 === 0 ? 1 : 0;
     set(l, 6, i, valor);
     set(l, i, 6, valor);
   }
+}
 
-  // Patrones de alineación, salvo donde chocarían con un buscador.
+/** Patrones de alineación, salvo donde chocarían con un buscador. */
+function dibujarAlineacion(l: Lienzo, version: number): void {
+  const n = l.size;
   const centros = ALIGNMENT[version];
   for (const fila of centros) {
     for (const col of centros) {
@@ -203,20 +218,23 @@ function dibujarPatronesFijos(l: Lienzo, version: number): void {
         (fila === 6 && col === 6)
         || (fila === 6 && col === n - 7)
         || (fila === n - 7 && col === 6);
-      if (esquinaBuscador) continue;
-      for (let i = -2; i <= 2; i++) {
-        for (let j = -2; j <= 2; j++) {
-          const anillo = Math.abs(i) === 2 || Math.abs(j) === 2;
-          set(l, fila + i, col + j, anillo || (i === 0 && j === 0) ? 1 : 0);
-        }
-      }
+      if (!esquinaBuscador) dibujarPatronDeAlineacion(l, fila, col);
     }
   }
+}
 
-  // Módulo oscuro fijo.
-  set(l, n - 8, 8, 1);
+function dibujarPatronDeAlineacion(l: Lienzo, fila: number, col: number): void {
+  for (let i = -2; i <= 2; i++) {
+    for (let j = -2; j <= 2; j++) {
+      const anillo = Math.abs(i) === 2 || Math.abs(j) === 2;
+      set(l, fila + i, col + j, anillo || (i === 0 && j === 0) ? 1 : 0);
+    }
+  }
+}
 
-  // Zonas reservadas para el formato.
+/** Zonas reservadas para el formato. */
+function reservarFormato(l: Lienzo): void {
+  const n = l.size;
   for (let i = 0; i <= 8; i++) {
     if (i !== 6) {
       l.reservado[idx(l, 8, i)] = 1;
@@ -227,14 +245,15 @@ function dibujarPatronesFijos(l: Lienzo, version: number): void {
     l.reservado[idx(l, 8, n - 1 - i)] = 1;
     l.reservado[idx(l, n - 1 - i, 8)] = 1;
   }
+}
 
-  // Zonas reservadas para la versión, a partir de la 7.
-  if (version >= 7) {
-    for (let i = 0; i < 6; i++) {
-      for (let j = 0; j < 3; j++) {
-        l.reservado[idx(l, i, n - 11 + j)] = 1;
-        l.reservado[idx(l, n - 11 + j, i)] = 1;
-      }
+/** Zonas reservadas para la versión, a partir de la 7. */
+function reservarVersion(l: Lienzo): void {
+  const n = l.size;
+  for (let i = 0; i < 6; i++) {
+    for (let j = 0; j < 3; j++) {
+      l.reservado[idx(l, i, n - 11 + j)] = 1;
+      l.reservado[idx(l, n - 11 + j, i)] = 1;
     }
   }
 }
@@ -248,18 +267,26 @@ function colocarDatos(l: Lienzo, datos: Uint8Array): void {
   for (let col = n - 1; col > 0; col -= 2) {
     // La columna del temporizador vertical no participa del recorrido.
     if (col === 6) col--;
-    for (let paso = 0; paso < n; paso++) {
-      const fila = haciaArriba ? n - 1 - paso : paso;
-      for (const c of [col, col - 1]) {
-        if (l.reservado[idx(l, fila, c)]) continue;
-        const byte = datos[bit >> 3];
-        const valor = byte === undefined ? 0 : (byte >> (7 - (bit & 7))) & 1;
-        l.modulos[idx(l, fila, c)] = valor;
-        bit++;
-      }
-    }
+    bit = colocarParDeColumnas(l, datos, col, haciaArriba, bit);
     haciaArriba = !haciaArriba;
   }
+}
+
+/** Llena el par de columnas `col` y `col - 1` en una dirección; devuelve el siguiente bit. */
+function colocarParDeColumnas(l: Lienzo, datos: Uint8Array, col: number, haciaArriba: boolean, desde: number): number {
+  const n = l.size;
+  let bit = desde;
+  for (let paso = 0; paso < n; paso++) {
+    const fila = haciaArriba ? n - 1 - paso : paso;
+    for (const c of [col, col - 1]) {
+      if (l.reservado[idx(l, fila, c)]) continue;
+      const byte = datos[bit >> 3];
+      const valor = byte === undefined ? 0 : (byte >> (7 - (bit & 7))) & 1;
+      l.modulos[idx(l, fila, c)] = valor;
+      bit++;
+    }
+  }
+  return bit;
 }
 
 const MASKS: ((i: number, j: number) => boolean)[] = [
@@ -280,41 +307,64 @@ const MASKS: ((i: number, j: number) => boolean)[] = [
  * dibujos que se parezcan a un buscador: un lector se confundiría.
  */
 function penalizacion(l: Lienzo): number {
-  const n = l.size;
-  const at = (f: number, c: number) => l.modulos[idx(l, f, c)];
-  let total = 0;
+  return penalizarRachas(l) + penalizarBloques(l) + penalizarFalsosBuscadores(l) + penalizarDesequilibrio(l);
+}
 
-  // 1. Cinco o más módulos iguales seguidos.
-  for (let f = 0; f < n; f++) {
-    for (const porFila of [true, false]) {
-      let racha = 1;
-      for (let c = 1; c < n; c++) {
-        const actual = porFila ? at(f, c) : at(c, f);
-        const previo = porFila ? at(f, c - 1) : at(c - 1, f);
-        if (actual === previo) {
-          racha++;
-        } else {
-          if (racha >= 5) total += 3 + (racha - 5);
-          racha = 1;
-        }
-      }
-      if (racha >= 5) total += 3 + (racha - 5);
+const modulo = (l: Lienzo) => (y: number, x: number) => l.modulos[idx(l, y, x)];
+
+/** Puntos por una racha de `racha` módulos iguales: 3 desde cinco, uno más por cada extra. */
+const puntosDeRacha = (racha: number) => (racha >= 5 ? 3 + (racha - 5) : 0);
+
+/** 1. Cinco o más módulos iguales seguidos, en filas y columnas. */
+function penalizarRachas(l: Lienzo): number {
+  let total = 0;
+  for (let f = 0; f < l.size; f++) total += rachasEnLinea(l, f, true) + rachasEnLinea(l, f, false);
+  return total;
+}
+
+/** Puntos por rachas en la fila `f` (o en la columna `f` si `porFila` es falso). */
+function rachasEnLinea(l: Lienzo, f: number, porFila: boolean): number {
+  const n = l.size;
+  const at = modulo(l);
+  const valor = (c: number) => (porFila ? at(f, c) : at(c, f));
+  let total = 0;
+  let racha = 1;
+  for (let c = 1; c < n; c++) {
+    if (valor(c) === valor(c - 1)) {
+      racha++;
+    } else {
+      total += puntosDeRacha(racha);
+      racha = 1;
     }
   }
+  return total + puntosDeRacha(racha);
+}
 
-  // 2. Bloques de 2x2 del mismo color.
+/** 2. Bloques de 2x2 del mismo color. */
+function penalizarBloques(l: Lienzo): number {
+  const n = l.size;
+  const at = modulo(l);
+  let total = 0;
   for (let f = 0; f < n - 1; f++) {
     for (let c = 0; c < n - 1; c++) {
       const v = at(f, c);
       if (v === at(f, c + 1) && v === at(f + 1, c) && v === at(f + 1, c + 1)) total += 3;
     }
   }
+  return total;
+}
 
-  // 3. El dibujo 1:1:3:1:1 con cuatro claros a un lado, que imita un buscador.
-  const patron = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0];
-  const invertido = [...patron].reverse();
-  const coincide = (linea: number[], desde: number, ref: number[]) =>
-    ref.every((v, k) => linea[desde + k] === v);
+const PATRON_BUSCADOR = [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0];
+const PATRON_BUSCADOR_INVERTIDO = [...PATRON_BUSCADOR].reverse();
+const coincideEn = (linea: number[], desde: number, ref: number[]) => ref.every((v, k) => linea[desde + k] === v);
+const pareceBuscador = (linea: number[], desde: number) =>
+  coincideEn(linea, desde, PATRON_BUSCADOR) || coincideEn(linea, desde, PATRON_BUSCADOR_INVERTIDO);
+
+/** 3. El dibujo 1:1:3:1:1 con cuatro claros a un lado, que imita un buscador. */
+function penalizarFalsosBuscadores(l: Lienzo): number {
+  const n = l.size;
+  const at = modulo(l);
+  let total = 0;
   for (let f = 0; f < n; f++) {
     const fila: number[] = [];
     const columna: number[] = [];
@@ -322,19 +372,20 @@ function penalizacion(l: Lienzo): number {
       fila.push(at(f, c));
       columna.push(at(c, f));
     }
-    for (let c = 0; c + patron.length <= n; c++) {
-      if (coincide(fila, c, patron) || coincide(fila, c, invertido)) total += 40;
-      if (coincide(columna, c, patron) || coincide(columna, c, invertido)) total += 40;
+    for (let c = 0; c + PATRON_BUSCADOR.length <= n; c++) {
+      if (pareceBuscador(fila, c)) total += 40;
+      if (pareceBuscador(columna, c)) total += 40;
     }
   }
-
-  // 4. Desequilibrio entre claros y oscuros.
-  let oscuros = 0;
-  for (let i = 0; i < l.modulos.length; i++) oscuros += l.modulos[i] === 1 ? 1 : 0;
-  const porcentaje = (oscuros * 100) / l.modulos.length;
-  total += Math.floor(Math.abs(porcentaje - 50) / 5) * 10;
-
   return total;
+}
+
+/** 4. Desequilibrio entre claros y oscuros. */
+function penalizarDesequilibrio(l: Lienzo): number {
+  let oscuros = 0;
+  for (const m of l.modulos) oscuros += m === 1 ? 1 : 0;
+  const porcentaje = (oscuros * 100) / l.modulos.length;
+  return Math.floor(Math.abs(porcentaje - 50) / 5) * 10;
 }
 
 /** 15 bits de formato: nivel de corrección, máscara y su BCH. */
@@ -419,58 +470,98 @@ export interface QrCode {
  * El texto viaja tal cual: lo que se encode aquí es exactamente lo que leerá
  * quien escanee, que es lo que §43 exige poder afirmar.
  */
-export function encodeQr(texto: string): QrCode {
-  const datos = Buffer.from(texto, 'utf8');
-
-  const version = Number(
+/** La versión más chica (1 a 10) donde caben los datos; 0 si no cabe en ninguna. */
+function versionParaBytes(bytes: number): number {
+  return Number(
     Object.keys(VERSIONS).find((v) => {
       const [capacidad] = VERSIONS[Number(v)];
       const indicador = Number(v) >= 10 ? 16 : 8;
       // 4 bits de modo + el indicador de longitud + los datos.
-      return capacidad * 8 >= 4 + indicador + datos.length * 8;
+      return capacidad * 8 >= 4 + indicador + bytes * 8;
     }) ?? 0,
   );
+}
+
+/** Corta los codewords en bloques (dos grupos) y calcula la corrección de cada uno. */
+function dividirEnBloques(codewords: Uint8Array, version: number): { datos: Uint8Array[]; ecc: Uint8Array[] } {
+  const [, eccPorBloque, bloques1, datos1, bloques2, datos2] = VERSIONS[version];
+  const datos: Uint8Array[] = [];
+  const correccion: Uint8Array[] = [];
+  let desde = 0;
+  for (const [cantidad, largo] of [[bloques1, datos1], [bloques2, datos2]]) {
+    for (let i = 0; i < cantidad; i++) {
+      const bloque = codewords.slice(desde, desde + largo);
+      desde += largo;
+      datos.push(bloque);
+      correccion.push(ecc(bloque, eccPorBloque));
+    }
+  }
+  return { datos, ecc: correccion };
+}
+
+/** Entrelaza: primero los datos de todos los bloques, columna por columna; después la corrección. */
+function entrelazar(datos: Uint8Array[], correccion: Uint8Array[], version: number): number[] {
+  const [, eccPorBloque, , datos1, , datos2] = VERSIONS[version];
+  const salida: number[] = [];
+  const maxDatos = Math.max(datos1, datos2);
+  for (let i = 0; i < maxDatos; i++) {
+    for (const bloque of datos) {
+      if (i < bloque.length) salida.push(bloque[i]);
+    }
+  }
+  for (let i = 0; i < eccPorBloque; i++) {
+    for (const bloque of correccion) salida.push(bloque[i]);
+  }
+  return salida;
+}
+
+/** Copia del lienzo con la máscara `m` aplicada fuera de las zonas reservadas y su formato escrito. */
+function conMascara(base: Lienzo, m: number): Lienzo {
+  const size = base.size;
+  const candidato: Lienzo = { size, modulos: Int8Array.from(base.modulos), reservado: base.reservado };
+  for (let f = 0; f < size; f++) {
+    for (let c = 0; c < size; c++) {
+      if (!candidato.reservado[idx(candidato, f, c)] && MASKS[m](f, c)) candidato.modulos[idx(candidato, f, c)] ^= 1;
+    }
+  }
+  escribirFormato(candidato, m);
+  return candidato;
+}
+
+/** Se prueban las ocho máscaras y gana la de menor penalización (la primera, si empatan). */
+function mejorMascara(base: Lienzo): Lienzo {
+  let mejor = conMascara(base, 0);
+  let mejorPuntaje = penalizacion(mejor);
+  for (let m = 1; m < 8; m++) {
+    const candidato = conMascara(base, m);
+    const puntaje = penalizacion(candidato);
+    if (puntaje < mejorPuntaje) {
+      mejorPuntaje = puntaje;
+      mejor = candidato;
+    }
+  }
+  return mejor;
+}
+
+export function encodeQr(texto: string): QrCode {
+  const datos = Buffer.from(texto, 'utf8');
+  const version = versionParaBytes(datos.length);
   if (!version) {
     throw new Error(
       `El texto no cabe en un código QR de hasta versión 10 (${datos.length} bytes).`,
     );
   }
 
-  const [totalDatos, eccPorBloque, bloques1, datos1, bloques2, datos2] = VERSIONS[version];
-
+  const [totalDatos] = VERSIONS[version];
   const flujo = new BitStream();
-  flujo.push(0b0100, 4);
-  flujo.push(datos.length, version >= 10 ? 16 : 8);
-  for (const byte of datos) flujo.push(byte, 8);
+  flujo.escribir(0b0100, 4);
+  flujo.escribir(datos.length, version >= 10 ? 16 : 8);
+  for (const byte of datos) flujo.escribir(byte, 8);
   const codewords = flujo.toCodewords(totalDatos);
 
   // Bloques, con su corrección, y entrelazado.
-  const bloquesDatos: Uint8Array[] = [];
-  const bloquesEcc: Uint8Array[] = [];
-  let desde = 0;
-  for (let i = 0; i < bloques1; i++) {
-    const bloque = codewords.slice(desde, desde + datos1);
-    desde += datos1;
-    bloquesDatos.push(bloque);
-    bloquesEcc.push(ecc(bloque, eccPorBloque));
-  }
-  for (let i = 0; i < bloques2; i++) {
-    const bloque = codewords.slice(desde, desde + datos2);
-    desde += datos2;
-    bloquesDatos.push(bloque);
-    bloquesEcc.push(ecc(bloque, eccPorBloque));
-  }
-
-  const entrelazado: number[] = [];
-  const maxDatos = Math.max(datos1, datos2);
-  for (let i = 0; i < maxDatos; i++) {
-    for (const bloque of bloquesDatos) {
-      if (i < bloque.length) entrelazado.push(bloque[i]);
-    }
-  }
-  for (let i = 0; i < eccPorBloque; i++) {
-    for (const bloque of bloquesEcc) entrelazado.push(bloque[i]);
-  }
+  const bloques = dividirEnBloques(codewords, version);
+  const entrelazado = entrelazar(bloques.datos, bloques.ecc, version);
 
   const size = 17 + version * 4;
   const base: Lienzo = {
@@ -482,30 +573,7 @@ export function encodeQr(texto: string): QrCode {
   escribirVersion(base, version);
   colocarDatos(base, new Uint8Array(entrelazado));
 
-  // Se prueban las ocho máscaras y gana la de menor penalización.
-  let mejor: Lienzo | null = null;
-  let mejorPuntaje = Infinity;
-  for (let m = 0; m < 8; m++) {
-    const candidato: Lienzo = {
-      size,
-      modulos: Int8Array.from(base.modulos),
-      reservado: base.reservado,
-    };
-    for (let f = 0; f < size; f++) {
-      for (let c = 0; c < size; c++) {
-        if (candidato.reservado[idx(candidato, f, c)]) continue;
-        if (MASKS[m](f, c)) candidato.modulos[idx(candidato, f, c)] ^= 1;
-      }
-    }
-    escribirFormato(candidato, m);
-    const puntaje = penalizacion(candidato);
-    if (puntaje < mejorPuntaje) {
-      mejorPuntaje = puntaje;
-      mejor = candidato;
-    }
-  }
-
-  const elegido = mejor as Lienzo;
+  const elegido = mejorMascara(base);
   const modules: boolean[][] = [];
   for (let f = 0; f < size; f++) {
     const fila: boolean[] = [];

@@ -33,11 +33,27 @@ describe('V5 §1, §7 · Afinia no certifica', () => {
   it('pedir una constancia nueva en una actividad antigua que las emitía se rechaza (H02)', async () => {
     // Precondición en la base de pruebas: una asistencia confirmada sin constancia
     // en una actividad antigua que las emitía (las sembradas ya tienen la suya).
-    const [act] = await db(app).query(`
+    let [act] = await db(app).query(`
       SELECT a.id FROM activities a
        WHERE a.outcome_policy = 'internal_constancy' AND a.origin_type = 'internal'
          AND a.status NOT IN ('draft', 'cancelled') AND a.review_status IN ('approved', 'not_required')
        LIMIT 1`);
+    // En una base recién reconstruida no queda ninguna: la API ya no deja crearlas.
+    // Se simula una actividad antigua y se restaura al terminar.
+    let restaurar: {
+      id: string; outcome_policy: string; review_status: string | null; internal_constancy_enabled: boolean;
+    } | undefined;
+    if (!act) {
+      [restaurar] = await db(app).query(`
+        SELECT id, outcome_policy, review_status, internal_constancy_enabled FROM activities
+         WHERE origin_type = 'internal' AND status NOT IN ('draft', 'cancelled') LIMIT 1`);
+      await db(app).query(
+        `UPDATE activities SET outcome_policy = 'internal_constancy', review_status = 'not_required',
+                internal_constancy_enabled = true WHERE id = $1`,
+        [restaurar!.id],
+      );
+      act = { id: restaurar!.id };
+    }
     const [perfil] = await db(app).query(`
       SELECT sp.id FROM student_profiles sp
        WHERE NOT EXISTS (SELECT 1 FROM activity_registrations r WHERE r.activity_id = $1 AND r.student_profile_id = sp.id)
@@ -56,6 +72,12 @@ describe('V5 §1, §7 · Afinia no certifica', () => {
       expect(await contar()).toBe(antes);
     } finally {
       await db(app).query('DELETE FROM activity_registrations WHERE id = $1', [reg.id]);
+      if (restaurar) {
+        await db(app).query(
+          'UPDATE activities SET outcome_policy = $2, review_status = $3, internal_constancy_enabled = $4 WHERE id = $1',
+          [restaurar.id, restaurar.outcome_policy, restaurar.review_status, restaurar.internal_constancy_enabled],
+        );
+      }
     }
   });
 

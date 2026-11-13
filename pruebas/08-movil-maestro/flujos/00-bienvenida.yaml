@@ -1,0 +1,61 @@
+# Primer ingreso del estudiante: la app exige la bienvenida antes del inicio
+# (los mismos cuatro pasos obligatorios que la web y que valida la API).
+# Corre primero; los flujos 01 y 02 entran después directo al inicio.
+#
+# Requiere el APK de pruebas (npm run mobile:apk -- http://10.0.2.2:3020/api)
+# instalado en el emulador y la API de pruebas en :3020 con la base recién
+# reconstruida (node scripts/pruebas/entorno.mjs reconstruir).
+appId: com.afinia.app
+env:
+  EMAIL: ana.quispe@est.univalle.edu
+  PASSWORD: Univalle2026*
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "nombre.apellido@est.univalle.edu"
+    timeout: 60000
+- tapOn: "nombre.apellido@est.univalle.edu"
+- inputText: ${EMAIL}
+- tapOn:
+    text: ".*contraseña.*"
+    optional: true
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn: "Ingresar"
+- extendedWaitUntil:
+    visible: "Empezar"
+    timeout: 30000
+- takeScreenshot: 00a-bienvenida
+- tapOn: "Empezar"
+# 1 · Datos institucionales
+- extendedWaitUntil:
+    visible: "Mis datos son correctos"
+    timeout: 20000
+- tapOn: "Mis datos son correctos"
+# 2 · Intereses (al menos uno)
+- extendedWaitUntil:
+    visible: "Desarrollo Web"
+    timeout: 20000
+- tapOn: "Desarrollo Web"
+- takeScreenshot: 00b-intereses
+- tapOn: "Siguiente"
+# 3 · Áreas por mejorar (opcional)
+- extendedWaitUntil:
+    visible: ".*quieres mejorar.*"
+    timeout: 20000
+- tapOn: "Siguiente"
+# 4 · Colaboración y privacidad
+- extendedWaitUntil:
+    visible: "Busco equipo"
+    timeout: 20000
+- tapOn: "Busco equipo"
+- tapOn: "Terminar"
+- extendedWaitUntil:
+    visible: ".*Listo.*"
+    timeout: 20000
+- takeScreenshot: 00c-listo
+- tapOn: "Ir al inicio"
+- extendedWaitUntil:
+    visible: "Inicio"
+    timeout: 30000

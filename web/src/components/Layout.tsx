@@ -176,8 +176,7 @@ export default function Layout() {
       <aside className="sidebar">
         <div className="brand">
           <strong>
-            <img src="/afiniaapp2Login.png" alt="Afinia" className="brand-logo" />
-            Afinia
+            <img src="/afiniaapp2Login.png" alt="Afinia" className="brand-logo" />Afinia
           </strong>
           <span>Perfil estudiantil dinámico</span>
           <button
@@ -262,9 +261,9 @@ export default function Layout() {
       </div>
 
       {/* V7: en el teléfono, los accesos de uso diario abajo, como una app.
-          No es un <nav>: el menú completo sigue siendo el lateral («Más»). */}
+          Es una navegación secundaria: el menú completo sigue siendo el lateral («Más»). */}
       {pestanas.length > 0 && (
-        <div className="tabbar" role="navigation" aria-label="Accesos rápidos">
+        <nav className="tabbar" aria-label="Accesos rápidos">
           {pestanas.map((p) => {
             const Icon = ICONS[p.to] ?? FiClock;
             const on = activo(p.to, location.pathname, location.search, pestanas.map((x) => x.to));
@@ -279,7 +278,7 @@ export default function Layout() {
             <span className="tb-ico"><FiMoreHorizontal /></span>
             <span className="tb-lbl">Más</span>
           </button>
-        </div>
+        </nav>
       )}
     </div>
   );

@@ -8,6 +8,7 @@ import {
   ManualReviewStatus,
   ValidationStatus,
 } from '@perfil/shared';
+import { reemplazarEtiquetas } from '../common/texto';
 
 /**
  * Reglas puras de la validación escalonada de credenciales externas (V3 §18–§20).
@@ -120,14 +121,14 @@ export function isOfficialUrl(url: string | null, official: string[] | null): bo
 /** Texto visible de una página HTML: sin scripts, estilos ni etiquetas. */
 export function htmlToText(html: string): string {
   const metas = [...html.matchAll(/<meta[^>]+content=["']([^"']{1,500})["'][^>]*>/gi)].map((m) => m[1]);
-  const cuerpo = html
+  const sinScripts = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  const cuerpo = reemplazarEtiquetas(sinScripts, ' ')
+    .replaceAll('&nbsp;', ' ')
+    .replaceAll('&amp;', '&')
     .replace(/&#39;|&apos;/g, "'")
-    .replace(/&quot;/g, '"');
+    .replaceAll('&quot;', '"');
   return `${metas.join(' ')} ${cuerpo}`.replace(/\s+/g, ' ').trim().slice(0, 200_000);
 }
 
@@ -172,16 +173,92 @@ export interface PageComparison {
 }
 
 /**
+ * Etiquetas con las que una página nombra al titular. La inicial puede ir en
+ * mayúscula o en minúscula; el resto se escribe tal cual.
+ */
+const ETIQUETAS_DE_TITULAR = [
+  'issued to', 'awarded to', 'earned by', 'presented to', 'granted to',
+  'otorgado a', 'otorgada a', 'emitido a', 'emitida a', 'expedido a', 'expedida a', 'conferido a', 'conferida a',
+];
+// Sin la bandera «i»: con ella \p{Lu} también aceptaría minúsculas y el
+// nombre se comería las palabras siguientes («… for CCNA»).
+const PALABRA_DE_NOMBRE = /\p{Lu}[\p{L}'’-]+/uy;
+// Partículas entre dos palabras del nombre, en el orden en que se prueban.
+const PARTICULAS_DE_NOMBRE = [/de\s+la\s+/uy, /de\s+/uy, /del\s+/uy];
+
+/** Fin de lo que reconoce `re` (con bandera «y») justo en `desde`, o -1. */
+function finEn(re: RegExp, texto: string, desde: number): number {
+  re.lastIndex = desde;
+  return re.test(texto) ? re.lastIndex : -1;
+}
+
+function finDeEspacios(texto: string, desde: number): number {
+  let i = desde;
+  while (i < texto.length && /\s/.test(texto[i])) i += 1;
+  return i;
+}
+
+/** Fin de la etiqueta que empieza en `i`, o -1. */
+function finDeEtiqueta(texto: string, i: number): number {
+  const inicial = texto[i];
+  for (const e of ETIQUETAS_DE_TITULAR) {
+    if ((inicial === e[0] || inicial === e[0].toUpperCase()) && texto.startsWith(e.slice(1), i + 1)) return i + e.length;
+  }
+  return -1;
+}
+
+/** Tras la etiqueta va «: » o al menos un espacio; devuelve dónde empieza el nombre, o -1. */
+function inicioDelNombre(texto: string, finEtiqueta: number): number {
+  const p = finDeEspacios(texto, finEtiqueta);
+  if (texto[p] === ':') {
+    const q = finDeEspacios(texto, p + 1);
+    return q > p + 1 ? q : -1;
+  }
+  return p > finEtiqueta ? p : -1;
+}
+
+/** Fin de la palabra siguiente del nombre (con su partícula, si la hay), o -1. */
+function finDeOtraPalabra(texto: string, desde: number): number {
+  const tras = finDeEspacios(texto, desde);
+  if (tras === desde) return -1;
+  for (const particula of PARTICULAS_DE_NOMBRE) {
+    const finParticula = finEn(particula, texto, tras);
+    const fin = finParticula === -1 ? -1 : finEn(PALABRA_DE_NOMBRE, texto, finParticula);
+    if (fin !== -1) return fin;
+  }
+  return finEn(PALABRA_DE_NOMBRE, texto, tras);
+}
+
+/** Nombre de dos a cinco palabras que empieza en `inicio`, o null. */
+function nombreEn(texto: string, inicio: number): string | null {
+  let fin = finEn(PALABRA_DE_NOMBRE, texto, inicio);
+  if (fin === -1) return null;
+  let palabras = 1;
+  while (palabras < 5) {
+    const siguiente = finDeOtraPalabra(texto, fin);
+    if (siguiente === -1) break;
+    fin = siguiente;
+    palabras += 1;
+  }
+  return palabras >= 2 ? texto.slice(inicio, fin) : null;
+}
+
+/**
  * Nombre que la página declara como titular, si lo dice con una etiqueta
  * reconocible. `null` si no hay etiqueta: nunca se adivina un nombre suelto.
+ *
+ * Se lee por pasos para que ninguna expresión regular sea compleja
+ * (SonarQube S5843). Da lo mismo que la expresión única de antes;
+ * test/jest/unit/titular-de-pagina.spec.ts lo comprueba con miles de entradas.
  */
 export function pageRecipientName(text: string): string | null {
-  const m = text.match(
-    // Sin la bandera «i»: con ella \p{Lu} también aceptaría minúsculas y el
-    // nombre se comería las palabras siguientes («… for CCNA»).
-    /(?:[Ii]ssued to|[Aa]warded to|[Ee]arned by|[Pp]resented to|[Gg]ranted to|[Oo]torgad[oa] a|[Ee]mitid[oa] a|[Ee]xpedid[oa] a|[Cc]onferid[oa] a)\s*:?\s+(\p{Lu}[\p{L}'’-]+(?:\s+(?:de\s+(?:la\s+)?|del\s+)?\p{Lu}[\p{L}'’-]+){1,4})/u,
-  );
-  return m ? m[1].trim() : null;
+  for (let i = 0; i < text.length; i += 1) {
+    const finEtiqueta = finDeEtiqueta(text, i);
+    const inicio = finEtiqueta === -1 ? -1 : inicioDelNombre(text, finEtiqueta);
+    const nombre = inicio === -1 ? null : nombreEn(text, inicio);
+    if (nombre !== null) return nombre.trim();
+  }
+  return null;
 }
 
 export function comparePage(
@@ -221,6 +298,27 @@ export interface OpenBadgeResult {
 const ctxIncluye = (ctx: unknown, needle: string) =>
   (Array.isArray(ctx) ? ctx : [ctx]).some((c) => typeof c === 'string' && c.includes(needle));
 
+/** OB 2.0: el destinatario, por correo en claro o por hash `sha256$…` con su sal. */
+function destinatarioOb2(r: Record<string, any>, emails: string[]): boolean | null {
+  if (typeof r.identity !== 'string' || (r.type ?? 'email') !== 'email') return null;
+  if (!r.hashed) return emails.some((e) => e.toLowerCase() === String(r.identity).toLowerCase());
+  const [alg, hash] = String(r.identity).split('$');
+  if (alg?.toLowerCase() !== 'sha256' || !hash) return null;
+  return emails.some((e) =>
+    createHash('sha256').update(`${e.toLowerCase()}${r.salt ?? ''}`).digest('hex') === hash.toLowerCase());
+}
+
+/** VC / OB 3.0: el sujeto, por correo si lo trae; si no, por nombre. */
+function destinatarioVc(sujeto: Record<string, any> | undefined, ctx: { emails: string[]; holderName: string }): boolean | null {
+  const nombreSujeto: string | null = sujeto?.name ?? null;
+  const correoSujeto: string | null = sujeto?.email ?? sujeto?.identifier?.identityHash ?? null;
+  if (correoSujeto && ctx.emails.length) {
+    return ctx.emails.some((e) => e.toLowerCase() === String(correoSujeto).toLowerCase());
+  }
+  if (nombreSujeto) return holderFound(nombreSujeto, ctx.holderName);
+  return null;
+}
+
 /**
  * Reconoce una aserción Open Badges 2.0 o una credencial verificable (OB 3.0).
  *
@@ -245,19 +343,7 @@ export function parseOpenBadge(
   if (!esOb2 && !esVc) return null;
 
   if (esOb2) {
-    const r = o.recipient ?? {};
-    let recipientMatch: boolean | null = null;
-    if (typeof r.identity === 'string' && (r.type ?? 'email') === 'email') {
-      if (r.hashed) {
-        const [alg, hash] = String(r.identity).split('$');
-        if (alg?.toLowerCase() === 'sha256' && hash) {
-          recipientMatch = ctx.emails.some((e) =>
-            createHash('sha256').update(`${e.toLowerCase()}${r.salt ?? ''}`).digest('hex') === hash.toLowerCase());
-        }
-      } else {
-        recipientMatch = ctx.emails.some((e) => e.toLowerCase() === String(r.identity).toLowerCase());
-      }
-    }
+    const recipientMatch = destinatarioOb2(o.recipient ?? {}, ctx.emails);
     const verificacion = String(o.verification?.type ?? o.verify?.type ?? '').toLowerCase();
     const hosted = (verificacion === 'hosted' || verificacion === 'hostedbadge')
       && !!ctx.fetchedUrl && typeof o.id === 'string' && sameResource(o.id, ctx.fetchedUrl);
@@ -275,14 +361,7 @@ export function parseOpenBadge(
   }
 
   const sujeto = Array.isArray(o.credentialSubject) ? o.credentialSubject[0] : o.credentialSubject;
-  const nombreSujeto: string | null = sujeto?.name ?? null;
-  const correoSujeto: string | null = sujeto?.email ?? sujeto?.identifier?.identityHash ?? null;
-  let recipientMatch: boolean | null = null;
-  if (correoSujeto && ctx.emails.length) {
-    recipientMatch = ctx.emails.some((e) => e.toLowerCase() === String(correoSujeto).toLowerCase());
-  } else if (nombreSujeto) {
-    recipientMatch = holderFound(nombreSujeto, ctx.holderName);
-  }
+  const recipientMatch = destinatarioVc(sujeto, ctx);
   const estado = o.credentialStatus?.statusPurpose === 'revocation' && o.credentialStatus?.revoked === true;
   return {
     format: 'verifiable_credential',
@@ -306,13 +385,42 @@ function sameResource(a: string, b: string): boolean {
   }
 }
 
+type InsigniaHorneada = { json: unknown; url: string | null };
+
+/**
+ * Lo que trae un bloque tEXt/iTXt con la clave «openbadges»: la aserción (JSON)
+ * o su URL; `null` si no se puede leer; `undefined` si el bloque es de otra cosa.
+ */
+function bloqueOpenBadges(tipo: string, datos: Buffer): InsigniaHorneada | null | undefined {
+  const cero = datos.indexOf(0);
+  if (datos.toString('latin1', 0, cero) !== 'openbadges') return undefined;
+  let texto: string;
+  if (tipo === 'tEXt') {
+    texto = datos.toString('latin1', cero + 1);
+  } else {
+    // iTXt: clave\0 compresión(1) método(1) idioma\0 clave traducida\0 texto
+    if (datos[cero + 1] === 1) return null;
+    let p = cero + 3;
+    p = datos.indexOf(0, p) + 1;
+    p = datos.indexOf(0, p) + 1;
+    texto = datos.toString('utf8', p);
+  }
+  texto = texto.trim();
+  if (/^https?:\/\//i.test(texto)) return { json: null, url: texto.slice(0, 500) };
+  try {
+    return { json: JSON.parse(texto), url: null };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Busca una aserción Open Badges horneada en un PNG (§18.3).
  *
  * El estándar la guarda en un bloque `iTXt` (o `tEXt`) con la clave
  * `openbadges`: puede ser la aserción en JSON o la URL donde está publicada.
  */
-export function readBakedBadge(png: Buffer): { json: unknown | null; url: string | null } | null {
+export function readBakedBadge(png: Buffer): { json: unknown; url: string | null } | null {
   const FIRMA = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   if (png.length < 16 || !png.subarray(0, 8).equals(FIRMA)) return null;
   let off = 8;
@@ -324,30 +432,8 @@ export function readBakedBadge(png: Buffer): { json: unknown | null; url: string
     const fin = inicio + largo;
     if (fin + 4 > png.length) return null;
     if (tipo === 'iTXt' || tipo === 'tEXt') {
-      const datos = png.subarray(inicio, fin);
-      const cero = datos.indexOf(0);
-      const clave = datos.toString('latin1', 0, cero);
-      if (clave === 'openbadges') {
-        let texto: string;
-        if (tipo === 'tEXt') {
-          texto = datos.toString('latin1', cero + 1);
-        } else {
-          // iTXt: clave\0 compresión(1) método(1) idioma\0 clave traducida\0 texto
-          const comprimido = datos[cero + 1] === 1;
-          if (comprimido) return null;
-          let p = cero + 3;
-          p = datos.indexOf(0, p) + 1;
-          p = datos.indexOf(0, p) + 1;
-          texto = datos.toString('utf8', p);
-        }
-        texto = texto.trim();
-        if (/^https?:\/\//i.test(texto)) return { json: null, url: texto.slice(0, 500) };
-        try {
-          return { json: JSON.parse(texto), url: null };
-        } catch {
-          return null;
-        }
-      }
+      const insignia = bloqueOpenBadges(tipo, png.subarray(inicio, fin));
+      if (insignia !== undefined) return insignia;
     }
     if (tipo === 'IEND') break;
     off = fin + 4;
@@ -380,19 +466,28 @@ export interface CredentialCheckInput {
  *   UNREACHABLE                    — el proveedor no respondió. No es «falso» (§18.2).
  *   NO_VERIFIER                    — la credencial no trae URL, QR ni insignia verificable.
  */
-export function decideCredentialCheck(i: CredentialCheckInput): CredentialCheckStatus {
-  if (i.openBadge) {
-    if (i.openBadge.revoked || i.openBadge.recipientMatch === false) return CredentialCheckStatus.MISMATCH;
-    const fuerte = i.openBadge.recipientMatch === true
-      && (i.openBadge.hosted || i.openBadge.proofVerified)
-      && i.official === true;
-    if (fuerte) return CredentialCheckStatus.VERIFIED_MATCH;
-  }
+/** Lo que decide por sí sola una insignia: revocada o de otra persona, o verificada en fuente oficial. */
+function decisionPorInsignia(i: CredentialCheckInput): CredentialCheckStatus | null {
+  const ob = i.openBadge;
+  if (!ob) return null;
+  if (ob.revoked || ob.recipientMatch === false) return CredentialCheckStatus.MISMATCH;
+  const fuerte = ob.recipientMatch === true && (ob.hosted || ob.proofVerified) && i.official === true;
+  return fuerte ? CredentialCheckStatus.VERIFIED_MATCH : null;
+}
+
+/** Lo que decide el enlace cuando no está disponible o no es oficial. */
+function decisionPorEnlace(i: CredentialCheckInput): CredentialCheckStatus | null {
   if (!i.link) return i.openBadge ? CredentialCheckStatus.REACHABLE_NO_STRUCTURED_PROOF : CredentialCheckStatus.NO_VERIFIER;
   if (i.link.status === LinkCheckStatus.BLOCKED) return CredentialCheckStatus.MISMATCH;
   if (i.official === false) return CredentialCheckStatus.MISMATCH;
   if (i.link.status === LinkCheckStatus.UNVERIFIED) return CredentialCheckStatus.INCONCLUSIVE;
   if (i.link.status === LinkCheckStatus.UNAVAILABLE) return CredentialCheckStatus.UNREACHABLE;
+  return null;
+}
+
+export function decideCredentialCheck(i: CredentialCheckInput): CredentialCheckStatus {
+  const previa = decisionPorInsignia(i) ?? decisionPorEnlace(i);
+  if (previa) return previa;
 
   // Disponible. Solo un dominio oficial puede corroborar, y solo si la
   // página nombra al estudiante: el código y la URL los escribe quien

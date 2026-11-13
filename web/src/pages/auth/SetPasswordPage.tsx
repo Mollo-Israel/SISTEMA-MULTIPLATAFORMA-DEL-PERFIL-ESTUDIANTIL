@@ -61,7 +61,7 @@ function extraerToken(valor: string): string {
  * otro equipo. Antes solo existía un token de 43 caracteres que había que
  * copiar a mano.
  */
-export default function SetPasswordPage({ mode }: { mode: Mode }) {
+export default function SetPasswordPage({ mode }: Readonly<{ mode: Mode }>) {
   const copy = COPY[mode];
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -110,16 +110,7 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
     ev.preventDefault();
     setServerError(null);
 
-    const e: Record<string, string> = {};
-    if (via === 'link') {
-      if (!extraerToken(token)) e.token = 'Pega el enlace que recibiste por correo.';
-    } else {
-      const errCorreo = institutionalEmail(email);
-      if (errCorreo) e.email = errCorreo;
-      if (!/^\d{6}$/.test(code.replace(/\s+/g, ''))) e.code = 'El código tiene 6 dígitos.';
-    }
-    if (!reqs.every((r) => r.ok)) e.password = 'La contraseña todavía no cumple todos los requisitos.';
-    if (confirm !== password) e.confirm = 'Las dos contraseñas no coinciden.';
+    const e = erroresDelFormulario({ via, token, email, code, password, confirm, cumple: reqs.every((r) => r.ok) });
     setErrors(e);
     if (Object.values(e).some(Boolean)) {
       setErrorKey((k) => k + 1);
@@ -146,8 +137,7 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
     }
   };
 
-  const Err = ({ name }: { name: string }) =>
-    errors[name] ? <div className="li-err"><FiAlertCircle /> {errors[name]}</div> : null;
+  const irAlLogin = () => navigate('/login', { replace: true });
 
   // ---------------------------------------------------------------- enlace muerto
   const enlaceNoSirve = !!tokenUrl && !checking && check && check.state !== 'valid';
@@ -166,48 +156,13 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
           </div>
 
           {done ? (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="li-done">
-                <motion.span
-                  className="ic"
-                  initial={{ scale: 0.4, rotate: -20 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: 'spring', stiffness: 260, damping: 14 }}
-                >
-                  <FiCheckCircle size={30} />
-                </motion.span>
-                <h1>{copy.done}</h1>
-                <p>{copy.doneLead}</p>
-              </div>
-              <button className="li-btn" onClick={() => navigate('/login', { replace: true })}>
-                Ir a iniciar sesión <FiArrowRight />
-              </button>
-            </motion.div>
-          ) : checking ? (
+            <ContrasenaLista titulo={copy.done} texto={copy.doneLead} onIr={irAlLogin} />
+          ) : <>{checking ? (
             <div className="li-checking">
               <span className="li-spin dark" /> Comprobando tu enlace…
             </div>
-          ) : enlaceNoSirve ? (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="li-done li-done-warn">
-                <span className="ic">{check!.state === 'used' ? <FiCheckCircle size={28} /> : <FiClock size={28} />}</span>
-                <h1>
-                  {check!.state === 'used'
-                    ? mode === 'activate' ? 'Tu cuenta ya está activa' : 'Este enlace ya se usó'
-                    : 'Este enlace ya no sirve'}
-                </h1>
-                <p>{check!.message}</p>
-              </div>
-              {check!.state === 'used' && mode === 'activate' ? (
-                <button className="li-btn" onClick={() => navigate('/login', { replace: true })}>
-                  Iniciar sesión <FiArrowRight />
-                </button>
-              ) : (
-                <Link className="li-btn" to={copy.again}>
-                  <FiRefreshCw /> Pedir un enlace nuevo
-                </Link>
-              )}
-            </motion.div>
+          ) : <>{enlaceNoSirve ? (
+            <EnlaceQueNoSirve check={check!} mode={mode} pedirOtro={copy.again} onIr={irAlLogin} />
           ) : (
             <>
               <div className="head">
@@ -268,46 +223,18 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                 )}
 
                 {via === 'code' && !tokenUrl && (
-                  <>
-                    <div className="li-field">
-                      <span className="field-label" id="set-password-page-correo-institucional">Correo institucional</span>
-                      <div role="group" aria-labelledby="set-password-page-correo-institucional" className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => { setEmail(e.target.value); limpiar('email'); }}
-                          placeholder="tu.nombre@est.univalle.edu"
-                          autoComplete="email"
-                        />
-                        <span className="ic"><FiMail /></span>
-                      </div>
-                      <Err name="email" />
-                    </div>
-                    <div className="li-field">
-                      <span className="field-label" id="set-password-page-codigo-de-6-digitos">Código de 6 dígitos</span>
-                      <div role="group" aria-labelledby="set-password-page-codigo-de-6-digitos" className={`li-input-wrap li-code ${errors.code ? 'bad' : ''}`}>
-                        <input
-                          value={code}
-                          onChange={(e) => {
-                            setCode(e.target.value.replace(/[^\d ]/g, '').slice(0, 7));
-                            limpiar('code');
-                          }}
-                          placeholder="000 000"
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                        />
-                        <span className="ic"><FiHash /></span>
-                      </div>
-                      <Err name="code" />
-                      <p className="li-hint">Está en el mismo correo que el enlace, debajo del botón.</p>
-                    </div>
-                  </>
+                  <CamposDeCodigo
+                    email={email}
+                    code={code}
+                    errors={errors}
+                    onEmail={(v) => { setEmail(v); limpiar('email'); }}
+                    onCode={(v) => { setCode(v); limpiar('code'); }}
+                  />
                 )}
-
                 {via === 'link' && !tokenUrl && (
                   <div className="li-field">
                     <span className="field-label" id="set-password-page-enlace-del-correo">Enlace del correo</span>
-                    <div role="group" aria-labelledby="set-password-page-enlace-del-correo" className={`li-input-wrap ${errors.token ? 'bad' : ''}`}>
+                    <fieldset aria-labelledby="set-password-page-enlace-del-correo" className={`li-input-wrap ${errors.token ? 'bad' : ''}`}>
                       <input
                         value={token}
                         onChange={(e) => { setToken(e.target.value); limpiar('token'); }}
@@ -316,14 +243,14 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                         spellCheck={false}
                       />
                       <span className="ic"><FiLink /></span>
-                    </div>
-                    <Err name="token" />
+                    </fieldset>
+                    <ErrorDeCampo mensaje={errors.token} />
                   </div>
                 )}
 
                 <div className="li-field">
                   <span className="field-label" id="set-password-page-nueva-contrasena">Nueva contraseña</span>
-                  <div role="group" aria-labelledby="set-password-page-nueva-contrasena" className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
+                  <fieldset aria-labelledby="set-password-page-nueva-contrasena" className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
                     <input
                       type={showPwd ? 'text' : 'password'}
                       value={password}
@@ -341,25 +268,9 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                     >
                       {showPwd ? <FiEyeOff /> : <FiEye />}
                     </button>
-                  </div>
-                  <Err name="password" />
-                  {password.length > 0 && (
-                    <div className="li-strength" aria-hidden>
-                      <motion.span
-                        animate={{ width: `${strength}%` }}
-                        transition={{ duration: 0.25 }}
-                        data-level={strength === 100 ? 'alta' : strength >= 50 ? 'media' : 'baja'}
-                      />
-                    </div>
-                  )}
-                  {verdict && <div className="li-verdict"><FiCheckCircle /> {verdict}</div>}
-                  <ul className="li-reqs">
-                    {reqs.map((r) => (
-                      <li key={r.t} className={r.ok ? 'ok' : ''}>
-                        {r.ok ? <FiCheck /> : <span style={{ width: 14 }}>•</span>} {r.t}
-                      </li>
-                    ))}
-                  </ul>
+                  </fieldset>
+                  <ErrorDeCampo mensaje={errors.password} />
+                  <IndicadoresDeContrasena escrita={password.length > 0} strength={strength} verdict={verdict} reqs={reqs} />
                   <p className="li-hint">
                     No uses tu correo ni tu código universitario dentro de la contraseña.
                   </p>
@@ -367,7 +278,7 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
 
                 <div className="li-field">
                   <span className="field-label" id="set-password-page-confirmar-contrasena">Confirmar contraseña</span>
-                  <div role="group" aria-labelledby="set-password-page-confirmar-contrasena" className={`li-input-wrap ${errors.confirm ? 'bad' : ''}`}>
+                  <fieldset aria-labelledby="set-password-page-confirmar-contrasena" className={`li-input-wrap ${errors.confirm ? 'bad' : ''}`}>
                     <input
                       type={showPwd ? 'text' : 'password'}
                       value={confirm}
@@ -377,8 +288,8 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                       autoComplete="new-password"
                     />
                     <span className="ic"><FiLock /></span>
-                  </div>
-                  <Err name="confirm" />
+                  </fieldset>
+                  <ErrorDeCampo mensaje={errors.confirm} />
                 </div>
 
                 <motion.button className="li-btn" disabled={busy} whileTap={{ scale: 0.98 }}>
@@ -391,11 +302,157 @@ export default function SetPasswordPage({ mode }: { mode: Mode }) {
                 <Link to={copy.again}>Pedir uno nuevo</Link>
               </div>
             </>
-          )}
+          )}</>}</>}
 
           <div className="li-back"><Link to="/login">← Volver a iniciar sesión</Link></div>
         </div>
       </motion.div>
     </div>
+  );
+}
+
+/** El nivel de la barra de fuerza de la contraseña. */
+function nivelDeFuerza(strength: number): 'alta' | 'media' | 'baja' {
+  if (strength === 100) return 'alta';
+  return strength >= 50 ? 'media' : 'baja';
+}
+
+/** El error de un campo, si lo hay. */
+function ErrorDeCampo({ mensaje }: Readonly<{ mensaje?: string }>) {
+  return mensaje ? <div className="li-err"><FiAlertCircle /> {mensaje}</div> : null;
+}
+
+/** Qué falta o está mal en el formulario, campo por campo. */
+function erroresDelFormulario(f: {
+  via: Via; token: string; email: string; code: string; password: string; confirm: string; cumple: boolean;
+}): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (f.via === 'link') {
+    if (!extraerToken(f.token)) e.token = 'Pega el enlace que recibiste por correo.';
+  } else {
+    const errCorreo = institutionalEmail(f.email);
+    if (errCorreo) e.email = errCorreo;
+    if (!/^\d{6}$/.test(f.code.replace(/\s+/g, ''))) e.code = 'El código tiene 6 dígitos.';
+  }
+  if (!f.cumple) e.password = 'La contraseña todavía no cumple todos los requisitos.';
+  if (f.confirm !== f.password) e.confirm = 'Las dos contraseñas no coinciden.';
+  return e;
+}
+
+/** La contraseña quedó guardada: aviso y botón para iniciar sesión. */
+function ContrasenaLista({ titulo, texto, onIr }: Readonly<{ titulo: string; texto: string; onIr: () => void }>) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="li-done">
+        <motion.span
+          className="ic"
+          initial={{ scale: 0.4, rotate: -20 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 14 }}
+        >
+          <FiCheckCircle size={30} />
+        </motion.span>
+        <h1>{titulo}</h1>
+        <p>{texto}</p>
+      </div>
+      <button className="li-btn" onClick={onIr}>
+        Ir a iniciar sesión <FiArrowRight />
+      </button>
+    </motion.div>
+  );
+}
+
+/** El enlace del correo ya se usó o venció: se dice antes de pedir la contraseña. */
+function EnlaceQueNoSirve({ check, mode, pedirOtro, onIr }: Readonly<{
+  check: TokenCheck; mode: Mode; pedirOtro: string; onIr: () => void;
+}>) {
+  const usado = check.state === 'used';
+  const yaActiva = usado && mode === 'activate';
+  let titulo = 'Este enlace ya no sirve';
+  if (usado) titulo = mode === 'activate' ? 'Tu cuenta ya está activa' : 'Este enlace ya se usó';
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="li-done li-done-warn">
+        <span className="ic">{usado ? <FiCheckCircle size={28} /> : <FiClock size={28} />}</span>
+        <h1>{titulo}</h1>
+        <p>{check.message}</p>
+      </div>
+      {yaActiva ? (
+        <button className="li-btn" onClick={onIr}>
+          Iniciar sesión <FiArrowRight />
+        </button>
+      ) : (
+        <Link className="li-btn" to={pedirOtro}>
+          <FiRefreshCw /> Pedir un enlace nuevo
+        </Link>
+      )}
+    </motion.div>
+  );
+}
+
+/** Fuerza, veredicto y requisitos de la contraseña mientras se escribe. */
+function IndicadoresDeContrasena({ escrita, strength, verdict, reqs }: Readonly<{
+  escrita: boolean; strength: number; verdict: string | null; reqs: { t: string; ok: boolean }[];
+}>) {
+  return (
+    <>
+      {escrita && (
+        <div className="li-strength" aria-hidden>
+          <motion.span
+            animate={{ width: `${strength}%` }}
+            transition={{ duration: 0.25 }}
+            data-level={nivelDeFuerza(strength)}
+          />
+        </div>
+      )}
+      {verdict && <div className="li-verdict"><FiCheckCircle /> {verdict}</div>}
+      <ul className="li-reqs">
+        {reqs.map((r) => (
+          <li key={r.t} className={r.ok ? 'ok' : ''}>
+            {r.ok ? <FiCheck /> : <span style={{ width: 14 }}>•</span>} {r.t}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** Correo y código de seis dígitos, para quien no trae el enlace. */
+function CamposDeCodigo({ email, code, errors, onEmail, onCode }: Readonly<{
+  email: string; code: string; errors: Record<string, string>;
+  onEmail: (v: string) => void; onCode: (v: string) => void;
+}>) {
+  return (
+    <>
+      <div className="li-field">
+        <span className="field-label" id="set-password-page-correo-institucional">Correo institucional</span>
+        <fieldset aria-labelledby="set-password-page-correo-institucional" className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => onEmail(e.target.value)}
+            placeholder="tu.nombre@est.univalle.edu"
+            autoComplete="email"
+          />
+          <span className="ic"><FiMail /></span>
+        </fieldset>
+        <ErrorDeCampo mensaje={errors.email} />
+      </div>
+      <div className="li-field">
+        <span className="field-label" id="set-password-page-codigo-de-6-digitos">Código de 6 dígitos</span>
+        <fieldset aria-labelledby="set-password-page-codigo-de-6-digitos" className={`li-input-wrap li-code ${errors.code ? 'bad' : ''}`}>
+          <input
+            value={code}
+            onChange={(e) => onCode(e.target.value.replace(/[^\d ]/g, '').slice(0, 7))}
+            placeholder="000 000"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+          />
+          <span className="ic"><FiHash /></span>
+        </fieldset>
+        <ErrorDeCampo mensaje={errors.code} />
+        <p className="li-hint">Está en el mismo correo que el enlace, debajo del botón.</p>
+      </div>
+    </>
   );
 }

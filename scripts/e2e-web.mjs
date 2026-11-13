@@ -22,6 +22,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
 import { ADMIN_CREDENTIALS, API, asegurarGithubSimulado, loginAdmin, provisionAndActivate, req, PWD } from './lib/fixtures.mjs';
+import { medirCobertura } from './lib/cobertura-navegador.mjs';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = 'http://localhost:5173';
@@ -901,7 +902,7 @@ async function pruebas(browser) {
   await entrar(p62, estProy.email);
   await p62.goto(`${WEB}/student/projects`);
   await p62.getByRole('button', { name: 'Omitir' }).click({ timeout: 4000 }).catch(() => {});
-  const grupoAreas = p62.locator('.area-skill-picker [role="group"][aria-label="Áreas del proyecto"]');
+  const grupoAreas = p62.locator('.area-skill-picker fieldset[aria-label="Áreas del proyecto"]');
   const area = grupoAreas.locator('button.chip').first();
   const nombreArea = (await area.innerText()).trim();
   await area.click();
@@ -1067,7 +1068,7 @@ async function main() {
   let browser = null;
   try {
     await servirWeb();
-    browser = await navegador();
+    browser = medirCobertura(await navegador(), 'e2e-web');
     await pruebas(browser);
   } catch (e) {
     failures.push(`Error: ${e.message}`);

@@ -1,5 +1,6 @@
 // Helpers reutilizables de validacion/transformacion para los DTOs.
 import { registerDecorator, ValidationOptions } from 'class-validator';
+import { limpiarBordesDeLineas, recortarExtremos } from './texto';
 
 // Detecta caracteres invisibles/no imprimibles que no deben quedar en un campo:
 // control ASCII (salvo tab y salto de linea, que se colapsan luego), DEL,
@@ -42,9 +43,7 @@ export const cleanLine = ({ value }: { value: unknown }) => {
 // limpia invisibles, colapsa espacios/tabs y evita mas de un renglon en blanco.
 export const cleanText = ({ value }: { value: unknown }) => {
   if (typeof value !== 'string') return value;
-  return stripInvisible(value.normalize('NFC'))
-    .replace(/[ \t]+/g, ' ')
-    .replace(/[ \t]*\n[ \t]*/g, '\n')
+  return limpiarBordesDeLineas(stripInvisible(value.normalize('NFC')).replace(/[ \t]+/g, ' '))
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
@@ -92,8 +91,7 @@ export const UNIVALLE_RE = /^[a-z0-9._%+-]+@(?:[a-z0-9-]+\.)*univalle\.edu$/i;
 export const PASSWORD_MIN = 12;
 export const PASSWORD_MAX = 128;
 export const PASSWORD_RE = new RegExp(
-  '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9\\s])(?!.*\\s)'
-    + `.{${PASSWORD_MIN},${PASSWORD_MAX}}$`,
+  String.raw`^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s])(?!.*\s).{${PASSWORD_MIN},${PASSWORD_MAX}}$`,
 );
 
 export const NAME_MSG = 'Solo admite letras, espacios, apóstrofo o guion.';
@@ -203,14 +201,14 @@ export function IsNotFutureDate(validationOptions?: ValidationOptions) {
 // validators.ts) para avisar mientras se escribe. Aquí es donde se decide.
 
 const LETRA = 'A-Za-zÀ-ÖØ-öø-ÿ';
-const contarLetras = (v: string) => (v.match(new RegExp(`[${LETRA}]`, 'g')) ?? []).length;
+const contarLetras = (v: string) => [...v.matchAll(new RegExp(`[${LETRA}]`, 'g'))].length;
 
 /**
  * Nombre de área, categoría o criterio: empieza por letra, tiene al menos tres
  * letras y solo admite signos de puntuación entre palabras. Acepta «Industria
  * 4.0» o «Gestión de Proyectos (PMI)»; rechaza «#!@#!@#» y «123213».
  */
-export const CATALOG_NAME_RE = new RegExp(`^[${LETRA}]+(?:[ .,/&'()-]+[${LETRA}0-9]+)*\\)?$`);
+export const CATALOG_NAME_RE = new RegExp(String.raw`^[${LETRA}]+(?:[ .,/&'()-]+[${LETRA}0-9]+)*\)?$`);
 
 /**
  * Nombre de habilidad o tecnología. Más permisivo, porque las tecnologías
@@ -218,7 +216,7 @@ export const CATALOG_NAME_RE = new RegExp(`^[${LETRA}]+(?:[ .,/&'()-]+[${LETRA}0
  * al menos una letra y que los signos vayan entre palabras.
  */
 export const SKILL_NAME_RE = new RegExp(
-  `^\\.?[${LETRA}0-9]+(?:[ ./&'()-]+[${LETRA}0-9]+)*\\)?(?:\\+\\+|#)?$`,
+  String.raw`^\.?[${LETRA}0-9]+(?:[ ./&'()-]+[${LETRA}0-9]+)*\)?(?:\+\+|#)?$`,
 );
 
 /** Etiqueta del motor: minúsculas, números y los signos de una tecnología. */
@@ -231,13 +229,14 @@ export const CODE_MSG =
 
 /** «Bases de Datos» → «bases_de_datos». Para sugerir y para rellenar códigos. */
 export function slugCode(nombre: string): string {
-  const base = nombre
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 56);
+  const base = recortarExtremos(
+    nombre
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_'),
+    '_',
+  ).slice(0, 56);
   if (!base) return 'item';
   return /^[a-z]/.test(base) ? base : `c_${base}`.slice(0, 56);
 }
@@ -308,7 +307,7 @@ export function IsPlaceName(validationOptions?: ValidationOptions) {
       const t = v.trim();
       if (t === '') return null;
       if (!/\p{L}/u.test(t)) return PLACE_MSG;
-      if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:;#°º'"()\/&-]*$/u.test(t)) return PLACE_MSG;
+      if (!/^[\p{L}\p{N}][\p{L}\p{N} .,:;#°º'"()/&-]*$/u.test(t)) return PLACE_MSG;
       return null;
     },
     validationOptions,

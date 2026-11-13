@@ -30,7 +30,7 @@ const ESTADO_ENLACE: Record<string, string> = {
  * dependencia de un manifiesto o la imagen de docker-compose. Lo que no se
  * encontró queda «Declarada»: no es falso ni resta (§29).
  */
-export default function ProjectTechnicalCheck({ projectId, canRecheck, onChanged }: { projectId: string; canRecheck: boolean; onChanged?: () => void }) {
+export default function ProjectTechnicalCheck({ projectId, canRecheck, onChanged }: Readonly<{ projectId: string; canRecheck: boolean; onChanged?: () => void }>) {
   const [c, setC] = useState<ProjectChecks | null>(null);
   const [busy, setBusy] = useState(false);
   const [sug, setSug] = useState<ProjectSuggestions | null>(null);

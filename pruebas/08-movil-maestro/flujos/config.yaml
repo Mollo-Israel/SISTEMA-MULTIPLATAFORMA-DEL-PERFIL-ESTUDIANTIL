@@ -1,0 +1,10 @@
+# Orden de ejecución: la bienvenida va primero porque la base de pruebas
+# recién reconstruida trae a la estudiante sin el primer ingreso completado.
+flows:
+  - "0*.yaml"
+executionOrder:
+  continueOnFailure: false
+  flowsOrder:
+    - 00-bienvenida
+    - 01-login-actividad-perfil
+    - 02-proyectos-qr

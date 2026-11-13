@@ -86,11 +86,8 @@ export class AccountToken {
   state(now: Date = new Date()): TokenState {
     if (this.usedAt) return 'used';
     if (this.revokedAt) {
-      return this.revokedReason === 'too_many_attempts'
-        ? 'locked'
-        : this.revokedReason === 'account_suspended'
-          ? 'suspended'
-          : 'replaced';
+      if (this.revokedReason === 'too_many_attempts') return 'locked';
+      return this.revokedReason === 'account_suspended' ? 'suspended' : 'replaced';
     }
     if (this.expiresAt.getTime() <= now.getTime()) return 'expired';
     return 'valid';

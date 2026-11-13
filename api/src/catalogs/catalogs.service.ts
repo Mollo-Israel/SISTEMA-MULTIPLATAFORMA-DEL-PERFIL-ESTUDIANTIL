@@ -226,8 +226,10 @@ export class CatalogsService {
     base: string,
   ): Promise<string> {
     let candidato = base;
-    for (let n = 2; await repo.findOne({ where: { code: candidato } as unknown as FindOptionsWhere<T> }); n++) {
+    let n = 2;
+    while (await repo.findOne({ where: { code: candidato } as unknown as FindOptionsWhere<T> })) {
       candidato = `${base}_${n}`;
+      n++;
     }
     return candidato;
   }
@@ -486,11 +488,12 @@ export class CatalogsService {
   async availableParticipationCriteria(trigger?: string) {
     // V5 §10: las tres familias que una persona elige o propone: participación
     // (actividad), reconocimiento de proyecto y recurso completado.
-    const disparador = trigger === GamificationTrigger.PROYECTO_CORROBORADO
-      ? GamificationTrigger.PROYECTO_CORROBORADO
-      : trigger === GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO
-        ? GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO
-        : GamificationTrigger.PARTICIPACION_CONFIRMADA;
+    let disparador = GamificationTrigger.PARTICIPACION_CONFIRMADA;
+    if (trigger === GamificationTrigger.PROYECTO_CORROBORADO) {
+      disparador = GamificationTrigger.PROYECTO_CORROBORADO;
+    } else if (trigger === GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO) {
+      disparador = GamificationTrigger.RECURSO_COMPLETADO_ATESTIGUADO;
+    }
     const lista = await this.criteria.find({
       where: { isActive: true, isBonus: false, trigger: disparador },
       order: { points: 'ASC' },
@@ -587,9 +590,10 @@ export class CatalogsService {
     // V4.1 A41-014: lo que espera revisión lo ven Dirección, Administración y
     // quien lo propuso; el resto, solo lo publicado.
     const rol = opciones.viewer?.role;
+    const viewerId = opciones.viewer?.userId;
     const autoridad = rol === RolNombre.ADMIN || rol === RolNombre.CAREER_DIRECTOR;
     const visibles = lista.filter((r) => r.reviewStatus === 'not_required' || r.reviewStatus === 'approved'
-      || autoridad || (opciones.viewer && r.createdBy === opciones.viewer.userId));
+      || autoridad || (viewerId !== undefined && r.createdBy === viewerId));
     return this.conAreasEImagen(visibles);
   }
 
@@ -618,7 +622,9 @@ export class CatalogsService {
       const m = 'Explica qué hay que corregir o por qué se rechaza.';
       throw new BadRequestException({ message: m, fields: { comment: [m] } });
     }
-    recurso.reviewStatus = decision === 'approve' ? 'approved' : decision === 'observe' ? 'observed' : 'rejected';
+    if (decision === 'approve') recurso.reviewStatus = 'approved';
+    else if (decision === 'observe') recurso.reviewStatus = 'observed';
+    else recurso.reviewStatus = 'rejected';
     recurso.reviewComment = comment?.trim() || null;
     recurso.reviewedBy = user.userId;
     recurso.reviewedAt = new Date();
@@ -644,7 +650,8 @@ export class CatalogsService {
     if (unicos.length === 0) return suyos;
     const fuera = unicos.filter((s) => !suyos.includes(s));
     if (fuera.length) {
-      const m = `Solo puedes proponer recursos para tus semestres (${suyos.map((s) => `${s}.º`).join(', ') || 'ninguno habilitado'}).`;
+      const semestres = suyos.map((s) => `${s}.º`).join(', ') || 'ninguno habilitado';
+      const m = `Solo puedes proponer recursos para tus semestres (${semestres}).`;
       // V5 D06: fuera de su alcance es un permiso que no tiene (403, como en
       // las actividades), no un dato mal escrito.
       throw new ForbiddenException({ message: m, fields: { semesterScope: [m] } });
@@ -749,22 +756,36 @@ export class CatalogsService {
     if (!recurso) {
       throw new NotFoundException('Recurso no encontrado.');
     }
-    // V4.1 A41-014: un docente edita solo su propuesta mientras está pendiente u
-    // observada; corregir una observada la vuelve a enviar a Dirección.
-    if (user && user.role === RolNombre.TEACHER) {
-      if (recurso.createdBy !== user.userId) throw new NotFoundException('Recurso no encontrado.');
-      // V5 §9.2: lo que publicó con una excepción lo sigue ajustando; si se le
-      // revocó, el ajuste vuelve a pasar por Dirección (E03).
-      const directo = !!recurso.policyId && recurso.reviewStatus === 'not_required';
-      if (!directo && recurso.reviewStatus !== 'pending' && recurso.reviewStatus !== 'observed') {
-        throw new ConflictException('Ya fue revisado por Dirección: los ajustes los hace Dirección.');
-      }
-      if (dto.status !== undefined) throw new ForbiddenException('Retirar o reponer recursos lo decide Dirección.');
-      const politica = await this.approvals.vigente(user, 'RESOURCE');
-      recurso.reviewStatus = politica ? 'not_required' : 'pending';
-      if (politica) recurso.policyId = politica.id;
-    }
+    if (user && user.role === RolNombre.TEACHER) await this.prepararEdicionDocente(recurso, dto, user);
 
+    await this.aplicarEnlaceYArchivo(id, recurso, dto, user);
+    await this.aplicarCamposDeRecurso(recurso, dto, user);
+
+    await this.learningResources.save(recurso);
+    await this.actualizarRelacionesDeRecurso(id, recurso, dto);
+    return this.findLearningResourceOrFail(id);
+  }
+
+  /**
+   * V4.1 A41-014: un docente edita solo su propuesta mientras está pendiente u
+   * observada; corregir una observada la vuelve a enviar a Dirección.
+   */
+  private async prepararEdicionDocente(recurso: LearningResource, dto: UpdateLearningResourceDto, user: AuthenticatedUser): Promise<void> {
+    if (recurso.createdBy !== user.userId) throw new NotFoundException('Recurso no encontrado.');
+    // V5 §9.2: lo que publicó con una excepción lo sigue ajustando; si se le
+    // revocó, el ajuste vuelve a pasar por Dirección (E03).
+    const directo = !!recurso.policyId && recurso.reviewStatus === 'not_required';
+    if (!directo && recurso.reviewStatus !== 'pending' && recurso.reviewStatus !== 'observed') {
+      throw new ConflictException('Ya fue revisado por Dirección: los ajustes los hace Dirección.');
+    }
+    if (dto.status !== undefined) throw new ForbiddenException('Retirar o reponer recursos lo decide Dirección.');
+    const politica = await this.approvals.vigente(user, 'RESOURCE');
+    recurso.reviewStatus = politica ? 'not_required' : 'pending';
+    if (politica) recurso.policyId = politica.id;
+  }
+
+  /** El enlace y el archivo del recurso; tras el cambio sigue habiendo al menos uno. */
+  private async aplicarEnlaceYArchivo(id: string, recurso: LearningResource, dto: UpdateLearningResourceDto, user?: AuthenticatedUser): Promise<void> {
     if (dto.url !== undefined && dto.url !== recurso.url) {
       const repetido = dto.url ? await this.learningResources.findOne({
         where: { url: dto.url, id: Not(id) },
@@ -783,6 +804,10 @@ export class CatalogsService {
       const m = 'Un recurso necesita un enlace o un archivo: deja al menos uno.';
       throw new BadRequestException({ message: m, fields: { url: [m] } });
     }
+  }
+
+  /** Los demás campos del recurso, validando los que apuntan a otras tablas. */
+  private async aplicarCamposDeRecurso(recurso: LearningResource, dto: UpdateLearningResourceDto, user?: AuthenticatedUser): Promise<void> {
     if (dto.academicAreaId !== undefined) {
       await this.assertAreaExists(dto.academicAreaId);
       recurso.academicAreaId = dto.academicAreaId;
@@ -802,8 +827,10 @@ export class CatalogsService {
     if (dto.description !== undefined) recurso.description = dto.description ?? null;
     if (dto.resourceType !== undefined) recurso.resourceType = dto.resourceType;
     if (dto.status !== undefined) recurso.status = dto.status;
+  }
 
-    await this.learningResources.save(recurso);
+  /** Habilidades y áreas del recurso, ya guardado. */
+  private async actualizarRelacionesDeRecurso(id: string, recurso: LearningResource, dto: UpdateLearningResourceDto): Promise<void> {
     if (dto.skillIds !== undefined) {
       await this.assertSkillsExist(dto.skillIds);
       await this.replaceResourceSkills(id, dto.skillIds);
@@ -812,7 +839,6 @@ export class CatalogsService {
       const actuales = dto.areaIds ?? (await this.resourceAreas.find({ where: { learningResourceId: id } })).map((x) => x.academicAreaId);
       await this.replaceResourceAreas(id, await this.areasDelRecurso(recurso.academicAreaId, actuales));
     }
-    return this.findLearningResourceOrFail(id);
   }
 
   /** V3.2 §35: la principal primero, sin repetir; todas existen. */

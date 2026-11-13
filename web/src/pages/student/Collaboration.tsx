@@ -1,10 +1,8 @@
 import { validarFormulario } from '../../components/form';
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useCachedState } from '../../hooks/viewCache';
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import {
-  FiAlertTriangle, FiCheck, FiCopy, FiEdit2, FiLink, FiRefreshCw, FiUserPlus, FiUsers, FiX,
-} from 'react-icons/fi';
+import { Fragment, useEffect, useState } from 'react';
+import { FiAlertTriangle, FiCheck, FiCopy, FiEdit2, FiRefreshCw, FiUserPlus, FiUsers, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import {
   collaborationService,
@@ -45,8 +43,10 @@ const ESTADO_POSTULACION: Record<string, { label: string; tone: string }> = {
   rejected: { label: 'No aceptada', tone: 'gray' },
   withdrawn: { label: 'Retirada', tone: 'gray' },
 };
-const semestresTexto = (s: number[]) =>
-  s.length === 0 ? 'Cualquier semestre' : `Semestre${s.length > 1 ? 's' : ''} ${s.join(', ')}`;
+const semestresTexto = (s: number[]) => {
+  if (s.length === 0) return 'Cualquier semestre';
+  return `${s.length > 1 ? 'Semestres' : 'Semestre'} ${s.join(', ')}`;
+};
 
 const DISPONIBILIDAD: Record<string, string> = {
   looking: 'Busca equipo',
@@ -105,7 +105,7 @@ export default function StudentCollaborationPage() {
 // §43 · Mi enlace y mi QR
 // ---------------------------------------------------------------------------
 
-export function MiEnlace({ toast, confirm }: { toast: any; confirm: any }) {
+export function MiEnlace({ toast, confirm }: Readonly<{ toast: any; confirm: any }>) {
   const [enlace, setEnlace] = useCachedState<PublicLinkView | null>('enlace', null);
   const [rotando, setRotando] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -113,7 +113,7 @@ export function MiEnlace({ toast, confirm }: { toast: any; confirm: any }) {
   const cargar = () =>
     collaborationService.myPublicLink().then(setEnlace).catch((e) => toast.error(apiError(e)));
 
-  useEffect(() => { void cargar(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { void cargar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const rotar = async () => {
     const ok = await confirm({
@@ -216,7 +216,7 @@ const CANALES: { channel: ContactChannelType; label: string; placeholder: string
   { channel: 'link', label: 'Otro enlace', placeholder: 'https://tu-portafolio.dev', help: 'Solo enlaces https.' },
 ];
 
-export function MisCanales({ toast }: { toast: any }) {
+export function MisCanales({ toast }: Readonly<{ toast: any }>) {
   const [valores, setValores] = useCachedState<Record<string, { value: string; isPublic: boolean }>>('canales', {});
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
@@ -226,7 +226,7 @@ export function MisCanales({ toast }: { toast: any }) {
 
   useEffect(() => {
     collaborationService.myChannels().then(aplicar).catch((e) => toast.error(apiError(e)));
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const guardar = async (e: React.FormEvent) => {
@@ -297,7 +297,7 @@ export function MisCanales({ toast }: { toast: any }) {
   );
 }
 
-function CanalesDe({ canales, preferido }: { canales: ContactChannelView[]; preferido: ContactChannelType | null }) {
+function CanalesDe({ canales, preferido }: Readonly<{ canales: ContactChannelView[]; preferido: ContactChannelType | null }>) {
   if (canales.length === 0) return <span className="muted">No compartió canales</span>;
   const orden = [...canales].sort((a, b) => Number(b.channel === preferido) - Number(a.channel === preferido));
   return (
@@ -317,7 +317,7 @@ function CanalesDe({ canales, preferido }: { canales: ContactChannelView[]; pref
 // §45 · Contactos
 // ---------------------------------------------------------------------------
 
-function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
+function Contactos({ toast, confirm }: Readonly<{ toast: any; confirm: any }>) {
   const [contactos, setContactos] = useCachedState<ContactView[] | null>('contactos', null);
   const [recibidas, setRecibidas] = useCachedState<any[]>('recibidas', []);
   const [enviadas, setEnviadas] = useCachedState<any[]>('enviadas', []);
@@ -367,7 +367,7 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
     }
   };
 
-  useEffect(() => { void cargar(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { void cargar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   const solicitar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -460,9 +460,9 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
             {hallados.map((p) => (
               <li key={p.slug} className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
                 <span><strong>{p.name}</strong>{p.semester ? <span className="muted"> · {p.semester}.º semestre</span> : null}</span>
-                {p.isContact ? <Badge tone="green">Ya es tu contacto</Badge>
-                  : p.pending ? <Badge tone="amber">Solicitud pendiente</Badge>
-                    : <Button size="sm" onClick={() => void solicitarA(p)}>Solicitar contacto</Button>}
+                {p.isContact && <Badge tone="green">Ya es tu contacto</Badge>}
+                {!p.isContact && p.pending && <Badge tone="amber">Solicitud pendiente</Badge>}
+                {!p.isContact && !p.pending && <Button size="sm" onClick={() => void solicitarA(p)}>Solicitar contacto</Button>}
               </li>
             ))}
           </ul>
@@ -552,7 +552,7 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
 
       <Card title="Mis contactos">
         {!contactos && <Diferido><Loading /></Diferido>}
-        {contactos && contactos.length === 0 && (
+        {contactos?.length === 0 && (
           <EmptyState
             icon={<FiUsers size={22} />}
             message="Todavía no tienes contactos. Comparte tu QR o solicita el de alguien."
@@ -630,7 +630,7 @@ function Contactos({ toast, confirm }: { toast: any; confirm: any }) {
 // §46, §47, §93 · Equipos
 // ---------------------------------------------------------------------------
 
-function Equipos({ toast }: { toast: any }) {
+function Equipos({ toast }: Readonly<{ toast: any }>) {
   const [necesidades, setNecesidades] = useCachedState<TeamNeedView[] | null>('necesidades', null);
   const [equipos, setEquipos] = useCachedState<TeamView[]>('equipos', []);
   const [invitaciones, setInvitaciones] = useCachedState<any[]>('invitaciones-equipo', []);
@@ -683,7 +683,7 @@ function Equipos({ toast }: { toast: any }) {
     void cargar();
     catalogService.skills().then(setSkills).catch(() => {});
     catalogService.areas().then(setAreas).catch(() => {});
-    // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const crear = async (e: React.FormEvent) => {
@@ -866,7 +866,7 @@ function Equipos({ toast }: { toast: any }) {
             tecnologías que te interesan). No usamos datos privados de nadie más.
           </p>
           {!paraTi && <Diferido><Loading /></Diferido>}
-          {paraTi && paraTi.length === 0 && (
+          {paraTi?.length === 0 && (
             <EmptyState message="Ahora mismo ninguna necesidad abierta coincide con tu perfil. Revisa todas las de tu semestre más abajo." />
           )}
           {(paraTi ?? []).map((n) => (
@@ -898,7 +898,7 @@ function Equipos({ toast }: { toast: any }) {
           decide y te avisamos.
         </p>
         {!abiertas && <Diferido><Loading /></Diferido>}
-        {abiertas && abiertas.length === 0 && (
+        {abiertas?.length === 0 && (
           <EmptyState message="Por ahora no hay necesidades abiertas para tu semestre." />
         )}
         {(abiertas ?? []).map((n) => {
@@ -924,13 +924,13 @@ function Equipos({ toast }: { toast: any }) {
               </div>
               {n.isMember ? (
                 <span className="muted">Ya formas parte de este equipo.</span>
-              ) : mia?.status === 'pending' ? (
+              ) : <>{mia?.status === 'pending' ? (
                 <div>
                   <Button size="sm" variant="secondary" loading={ocupado === mia.id} onClick={() => retirar(mia.id)}>
                     Retirar postulación
                   </Button>
                 </div>
-              ) : mia?.status === 'rejected' || mia?.status === 'accepted' ? null : postulando?.needId === n.id ? (
+              ) : <>{mia?.status === 'rejected' || mia?.status === 'accepted' ? null : <>{postulando?.needId === n.id ? (
                 <div className="field" style={{ marginBottom: 0 }}>
                   <label htmlFor={`postular-${n.id}`}>Preséntate en una o dos líneas (opcional)</label>
                   <textarea
@@ -957,7 +957,7 @@ function Equipos({ toast }: { toast: any }) {
                     Postular
                   </Button>
                 </div>
-              )}
+              )}</>}</>}</>}
             </div>
           );
         })}
@@ -1061,7 +1061,7 @@ function Equipos({ toast }: { toast: any }) {
 
       <Card title="Mis necesidades">
         {!necesidades && <Diferido><Loading /></Diferido>}
-        {necesidades && necesidades.length === 0 && (
+        {necesidades?.length === 0 && (
           <EmptyState message="Todavía no publicaste ninguna." />
         )}
         {(necesidades ?? []).map((n) => (
@@ -1208,7 +1208,7 @@ function Equipos({ toast }: { toast: any }) {
                       </div>
                       <div className="flex" style={{ gap: '0.4rem' }}>
                         <Badge tone="bordo">{Math.round(c.score)}/100</Badge>
-                        {equipoDe(n.id) && equipoDe(n.id)!.nameStatus === 'ok' && (
+                        {equipoDe(n.id)?.nameStatus === 'ok' && (
                           <Button
                             size="sm"
                             variant="secondary"

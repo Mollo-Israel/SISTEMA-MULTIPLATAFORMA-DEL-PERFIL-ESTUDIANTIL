@@ -1,4 +1,4 @@
-Total of 759 URLs
+Total of 814 URLs
 PASS: Directory Browsing [0]
 PASS: Vulnerable JS Library (Powered by Retire.js) [10003]
 PASS: In Page Banner Information Leak [10009]
@@ -66,6 +66,7 @@ PASS: Heartbleed OpenSSL Vulnerability [20015]
 PASS: Source Code Disclosure - CVE-2012-1823 [20017]
 PASS: Remote Code Execution - CVE-2012-1823 [20018]
 PASS: External Redirect [20019]
+PASS: Server Side Technology Version with Known Vulnerabilities [20020]
 PASS: Session ID in URL Rewrite [3]
 PASS: Buffer Overflow [30001]
 PASS: Format String Error [30002]
@@ -117,7 +118,7 @@ PASS: Cloud Metadata Potentially Exposed [90034]
 PASS: Server Side Template Injection [90035]
 PASS: Server Side Template Injection (Blind) [90036]
 PASS: Remote OS Command Injection (Time Based) [90037]
-FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 0	PASS: 118
+FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 0	PASS: 119
 
-2026-10-22 00:19:33,381 Using override, new target: http://host.docker.internal:3011
-2026-10-22 00:19:33,382 Number of Imported URLs: 310
+2026-11-13 13:54:09,847 Using override, new target: http://host.docker.internal:3020
+2026-11-13 13:54:09,848 Number of Imported URLs: 333

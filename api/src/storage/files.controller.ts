@@ -10,7 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import * as path from 'path';
+import * as path from 'node:path';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { STORAGE_PORT, StoragePort } from './storage.port';

@@ -24,7 +24,7 @@ const ROSE = '#d24b60';
 /** El nivel se muestra en español (V3 §68: sin términos internos). */
 const NIVEL_ES: Record<string, string> = { high: 'alto', medium: 'medio', low: 'bajo' };
 
-export function AffinityBars({ data }: { data: { area: string; score: number; level: string }[] }) {
+export function AffinityBars({ data }: Readonly<{ data: { area: string; score: number; level: string }[] }>) {
   const animar = useContext(PrimeraVisita);
   if (!data.length) return <p className="muted">Sin datos de afinidad.</p>;
   return (
@@ -34,8 +34,8 @@ export function AffinityBars({ data }: { data: { area: string; score: number; le
         <YAxis type="category" dataKey="area" width={140} tick={{ fontSize: 12 }} />
         <Tooltip cursor={{ fill: 'rgba(107,18,32,0.05)' }} formatter={(v: number, _n, p: any) => [`${v} · nivel ${NIVEL_ES[p?.payload?.level] ?? p?.payload?.level ?? ''}`, 'Afinidad']} />
         <Bar isAnimationActive={animar} dataKey="score" radius={[0, 6, 6, 0]} barSize={20}>
-          {data.map((d, i) => (
-            <Cell key={i} fill={LEVEL_COLOR[d.level] ?? BORDO} />
+          {data.map((d) => (
+            <Cell key={d.area} fill={LEVEL_COLOR[d.level] ?? BORDO} />
           ))}
         </Bar>
       </BarChart>
@@ -43,7 +43,7 @@ export function AffinityBars({ data }: { data: { area: string; score: number; le
   );
 }
 
-export function CompletionDonut({ value }: { value: number }) {
+export function CompletionDonut({ value }: Readonly<{ value: number }>) {
   const animar = useContext(PrimeraVisita);
   const data = [
     { name: 'Completo', value },
@@ -69,7 +69,7 @@ export function CompletionDonut({ value }: { value: number }) {
   );
 }
 
-export function CountBars({ data, color = BORDO }: { data: { label: string; value: number }[]; color?: string }) {
+export function CountBars({ data, color = BORDO }: Readonly<{ data: { label: string; value: number }[]; color?: string }>) {
   const animar = useContext(PrimeraVisita);
   if (!data.length) return <p className="muted">Sin datos.</p>;
   return (
@@ -84,7 +84,7 @@ export function CountBars({ data, color = BORDO }: { data: { label: string; valu
   );
 }
 
-export function LevelStackBars({ data }: { data: { area: string; low: number; medium: number; high: number }[] }) {
+export function LevelStackBars({ data }: Readonly<{ data: { area: string; low: number; medium: number; high: number }[] }>) {
   const animar = useContext(PrimeraVisita);
   if (!data.length) return <p className="muted">Sin datos.</p>;
   return (

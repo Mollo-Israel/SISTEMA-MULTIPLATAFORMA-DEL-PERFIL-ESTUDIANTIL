@@ -160,7 +160,7 @@ export default function CollaborationScreen() {
   const responderInvitacion = async (id: string, decision: 'accept' | 'decline') => {
     try {
       await collaborationService.decideTeamInvitation(id, decision);
-      toast.success(decision === 'accept' ? 'Te sumaste al equipo.' : 'Invitacion declinada.');
+      toast.success(decision === 'accept' ? 'Te sumaste al equipo.' : 'Invitación declinada.');
       recargar();
     } catch (e) {
       toast.error(apiError(e));
@@ -185,7 +185,7 @@ export default function CollaborationScreen() {
             </View>
             {!enlace.enabled && (
               <Muted>
-                Todavia no esta publicado. Actualo desde la web, en Privacidad, y elige que campos
+                Todavía no está publicado. Actívalo desde la web, en Privacidad, y elige qué campos
                 se ven: nada se comparte mientras no lo decidas.
               </Muted>
             )}
@@ -194,7 +194,7 @@ export default function CollaborationScreen() {
                 ya resuelve manteniendo pulsado. */}
             <Text style={styles.enlace} selectable>{enlace.url}</Text>
             <Muted>
-              El codigo QR lleva solo este enlace. Ni tu correo, ni tu codigo universitario.
+              El código QR lleva solo este enlace. Ni tu correo, ni tu código universitario.
               Para imprimirlo, entra desde la web.
             </Muted>
             <View style={styles.botones}>
@@ -280,7 +280,7 @@ export default function CollaborationScreen() {
       <Card title="Mis contactos">
         {contactosState.loading && !contactosState.data && <SkeletonCards count={2} />}
         {(!contactosState.loading || contactosState.data) && contactos.length === 0 && (
-          <EmptyState message="Todavia no tienes contactos. Comparte tu enlace o solicita el de alguien." />
+          <EmptyState message="Todavía no tienes contactos. Comparte tu enlace o solicita el de alguien." />
         )}
         {contactos.map((c) => (
           <View key={c.contactId} style={styles.item}>

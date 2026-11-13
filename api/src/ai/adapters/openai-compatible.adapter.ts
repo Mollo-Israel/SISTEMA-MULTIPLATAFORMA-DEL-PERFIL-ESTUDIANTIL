@@ -1,5 +1,6 @@
 import { AiProvider } from '@perfil/shared';
 import { AiAssistancePort, AiCompletionRequest, AiUnavailableError } from '../ai-assistance.port';
+import { quitarBarrasFinales } from '../../common/texto';
 
 export interface OpenAiCompatibleConfig {
   baseUrl: string;
@@ -31,7 +32,7 @@ export class OpenAiCompatibleAdapter implements AiAssistancePort {
   }
 
   async complete({ system, user, maxTokens = 600 }: AiCompletionRequest): Promise<string> {
-    const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+    const url = `${quitarBarrasFinales(this.config.baseUrl)}/chat/completions`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.config.timeoutMs);
     let res: Response;

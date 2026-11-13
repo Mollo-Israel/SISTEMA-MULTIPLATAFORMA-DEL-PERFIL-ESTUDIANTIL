@@ -60,7 +60,7 @@ canales (Teams, WhatsApp, LinkedIn, correo o un enlace).
 ## Puesta en marcha
 
 Requisitos: **Node 20+**, **npm**, **Docker Desktop** abierto y, para el móvil,
-**Expo Go** o un emulador.
+**Expo Go para SDK 54**, el APK de la app o un emulador.
 
 ```bash
 cp .env.example .env          # valores de desarrollo listos; ver comentarios en el archivo
@@ -90,6 +90,10 @@ siembra lo mínimo).
 > paquete; el celular debe estar en la misma Wi‑Fi y la API en el puerto 3010.
 > Si no conecta: `npx expo start --tunnel`, o `EXPO_PUBLIC_API_URL=http://TU_IP:3010/api`.
 > Revise que `mobile/.env` no tenga una dirección vieja escrita a mano.
+>
+> La app está en **Expo SDK 54** y la Expo Go de las tiendas ya es de una versión más nueva: en
+> Android, instale Expo Go para SDK 54 o genere el APK con `npm run mobile:apk`, que no necesita
+> Expo Go (detalles en [`mobile/README.md`](mobile/README.md)).
 
 ### Cuentas de ejemplo (tras `seed:populate`)
 
@@ -139,6 +143,7 @@ npm run test:all         # en otra: unitarias + 21 suites de API (incluidas V3, 
 | `npm run test:unit` | Reglas puras (afinidad, recomendaciones 40/30/15/10, respaldo, credenciales, currículo, transiciones de estado, guard del correo, auditoría, respaldos de OCR y correo…) |
 | `npm run test:v6` | Los batches del cierre V6 contra la API, cada comprobación con su escenario del contrato (`node scripts/e2e-v6.mjs batch7` corre uno) |
 | `npm run test:v6-web` | El cierre V6 en la web con Playwright (necesita `npm --prefix web run build`; `node scripts/e2e-v6-web.mjs batch2` corre uno) |
+| `npm run test:web-gestion` | Pantallas de gestión, del docente y del estudiante en la web con Playwright: portada, pedidos de tecnologías, autonomía, recursos, puntos, galería, constancias (`node scripts/e2e-web-gestion.mjs recursos` corre una parte) |
 | `npm run test:v5` | Los batches del cierre V5, cada comprobación con su escenario A01…I07 (`node scripts/e2e-v5.mjs batch7` corre uno) |
 | `npm run test:v41` | Los batches del cierre V4.1 (`node scripts/e2e-v4-1.mjs batch10` corre uno) |
 | `npm run test:v32` | Los batches del cierre V3.2 (`node scripts/e2e-v3-2.mjs batch15` corre uno) |

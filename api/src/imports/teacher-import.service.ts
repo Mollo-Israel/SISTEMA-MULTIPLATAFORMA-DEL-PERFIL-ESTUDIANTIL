@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, In, Repository } from 'typeorm';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 import {
   ImportBatchStatus,
@@ -23,6 +23,7 @@ import { NAME_RE } from '../common/validation';
 import { codificacionProblema, columnasDeApellido, columnasProblema, parseCsv } from './csv.parser';
 import { resolverApellidos } from '../users/surnames';
 import { ImportsService } from './imports.service';
+import { tieneFormatoDeCorreo } from '../common/texto';
 
 /** Columnas del padrón de docentes (V3 §7.1). */
 export const TEACHER_IMPORT_HEADERS = [
@@ -69,6 +70,30 @@ interface FilaEvaluada {
   status: ImportRowStatus;
   message: string | null;
   existingUserId: string | null;
+}
+
+/** Lo ya conocido al evaluar las filas: cuentas existentes y lo visto en el archivo. */
+interface ContextoDocentes {
+  dominios: string[];
+  columnasPlantilla: number;
+  cuentaPorCodigo: Map<string, User>;
+  cuentaPorCorreo: Map<string, User>;
+  semestresActuales: Map<string, number[]>;
+  vistosCodigo: Set<string>;
+  vistosCorreo: Set<string>;
+}
+
+/** El código o el correo ya son de una cuenta que no encaja; null si no hay conflicto. */
+function conflictoDeDocente(porCod: User | undefined, porMail: User | undefined, universityCode: string | null): string | null {
+  if (porCod && porCod.role?.name !== RolNombre.TEACHER) return 'Ese código universitario pertenece a una cuenta que no es docente.';
+  if (porMail && porMail.role?.name !== RolNombre.TEACHER) return 'Ese correo pertenece a una cuenta que no es docente.';
+  if (porCod && porMail && porCod.id !== porMail.id) {
+    return 'El código y el correo corresponden a dos cuentas distintas. Debe resolverse manualmente.';
+  }
+  if (!porCod && porMail && porMail.universityCode !== universityCode) {
+    return `El correo ya pertenece a la cuenta con código ${porMail.universityCode}.`;
+  }
+  return null;
 }
 
 /**
@@ -189,83 +214,71 @@ export class TeacherImportService {
       for (const f of filas) semestresActuales.set(f.teacherId, [...(semestresActuales.get(f.teacherId) ?? []), f.semester]);
     }
 
-    const vistosCodigo = new Set<string>();
-    const vistosCorreo = new Set<string>();
-    const out: FilaEvaluada[] = [];
+    const ctx: ContextoDocentes = {
+      dominios, columnasPlantilla, cuentaPorCodigo, cuentaPorCorreo, semestresActuales,
+      vistosCodigo: new Set<string>(), vistosCorreo: new Set<string>(),
+    };
+    return parsed.map((fila) => this.evaluarFila(fila, ctx));
+  }
 
-    for (const fila of parsed) {
-      const { lineNumber, values } = fila;
-      const universityCode = normalizeUniversityCode(values.university_code) || null;
-      const email = values.institutional_email?.trim().toLowerCase() || null;
-      const firstName = values.first_name?.trim() || null;
-      const lastName = values.last_name?.trim() || null;
-      const firstSurname = values.first_surname?.trim() || null;
-      const secondSurname = values.second_surname?.trim() || null;
-      const semestres = parseAuthorizedSemesters(values.authorized_semesters);
-      const base = {
-        lineNumber,
-        universityCode,
-        institutionalEmail: email,
-        firstName,
-        lastName,
-        firstSurname,
-        secondSurname,
-        semesters: Array.isArray(semestres) ? semestres : null,
-        existingUserId: null as string | null,
-      };
+  /** Una fila: inválida, en conflicto, nueva, con cambios o sin ellos. */
+  private evaluarFila(
+    fila: { lineNumber: number; values: Record<string, string>; columns?: number },
+    ctx: ContextoDocentes,
+  ): FilaEvaluada {
+    const { lineNumber, values } = fila;
+    const universityCode = normalizeUniversityCode(values.university_code) || null;
+    const email = values.institutional_email?.trim().toLowerCase() || null;
+    const firstName = values.first_name?.trim() || null;
+    const lastName = values.last_name?.trim() || null;
+    const firstSurname = values.first_surname?.trim() || null;
+    const secondSurname = values.second_surname?.trim() || null;
+    const semestres = parseAuthorizedSemesters(values.authorized_semesters);
+    const base = {
+      lineNumber,
+      universityCode,
+      institutionalEmail: email,
+      firstName,
+      lastName,
+      firstSurname,
+      secondSurname,
+      semesters: Array.isArray(semestres) ? semestres : null,
+      existingUserId: null as string | null,
+    };
 
-      const invalida = columnasProblema(fila, columnasPlantilla)
-        ?? this.validar({ universityCode, email, firstName, lastName, dominios })
-        ?? (typeof semestres === 'string' ? semestres : null);
-      if (invalida) {
-        out.push({ ...base, status: ImportRowStatus.INVALID, message: invalida });
-        continue;
-      }
-      if (vistosCodigo.has(universityCode!) || vistosCorreo.has(email!)) {
-        out.push({
-          ...base,
-          status: ImportRowStatus.CONFLICT,
-          message: 'La fila repite un código o un correo que ya aparece antes en este archivo.',
-        });
-        continue;
-      }
-      vistosCodigo.add(universityCode!);
-      vistosCorreo.add(email!);
-
-      const porCod = cuentaPorCodigo.get(universityCode!);
-      const porMail = cuentaPorCorreo.get(email!);
-      const conflicto =
-        (porCod && porCod.role?.name !== RolNombre.TEACHER && 'Ese código universitario pertenece a una cuenta que no es docente.')
-        || (porMail && porMail.role?.name !== RolNombre.TEACHER && 'Ese correo pertenece a una cuenta que no es docente.')
-        || (porCod && porMail && porCod.id !== porMail.id
-          && 'El código y el correo corresponden a dos cuentas distintas. Debe resolverse manualmente.')
-        || (!porCod && porMail && porMail.universityCode !== universityCode
-          && `El correo ya pertenece a la cuenta con código ${porMail.universityCode}.`)
-        || null;
-      if (conflicto) {
-        out.push({ ...base, status: ImportRowStatus.CONFLICT, message: conflicto });
-        continue;
-      }
-
-      const cuenta = porCod ?? porMail;
-      if (!cuenta) {
-        out.push({ ...base, status: ImportRowStatus.NEW, message: null });
-        continue;
-      }
-      const cambios: string[] = [];
-      if (cuenta.firstName !== firstName) cambios.push('nombre');
-      if (cuenta.lastName !== lastName) cambios.push('apellido');
-      if (cuenta.email !== email) cambios.push('correo');
-      const actuales = semestresActuales.get(cuenta.id) ?? [];
-      if (actuales.join() !== (base.semesters ?? []).join()) cambios.push('semestres autorizados');
-      out.push({
+    const invalida = columnasProblema(fila, ctx.columnasPlantilla)
+      ?? this.validar({ universityCode, email, firstName, lastName, dominios: ctx.dominios })
+      ?? (typeof semestres === 'string' ? semestres : null);
+    if (invalida) return { ...base, status: ImportRowStatus.INVALID, message: invalida };
+    if (ctx.vistosCodigo.has(universityCode!) || ctx.vistosCorreo.has(email!)) {
+      return {
         ...base,
-        existingUserId: cuenta.id,
-        status: cambios.length ? ImportRowStatus.UPDATE : ImportRowStatus.UNCHANGED,
-        message: cambios.length ? `Actualiza: ${cambios.join(', ')}.` : null,
-      });
+        status: ImportRowStatus.CONFLICT,
+        message: 'La fila repite un código o un correo que ya aparece antes en este archivo.',
+      };
     }
-    return out;
+    ctx.vistosCodigo.add(universityCode!);
+    ctx.vistosCorreo.add(email!);
+
+    const porCod = ctx.cuentaPorCodigo.get(universityCode!);
+    const porMail = ctx.cuentaPorCorreo.get(email!);
+    const conflicto = conflictoDeDocente(porCod, porMail, universityCode);
+    if (conflicto) return { ...base, status: ImportRowStatus.CONFLICT, message: conflicto };
+
+    const cuenta = porCod ?? porMail;
+    if (!cuenta) return { ...base, status: ImportRowStatus.NEW, message: null };
+    const cambios: string[] = [];
+    if (cuenta.firstName !== firstName) cambios.push('nombre');
+    if (cuenta.lastName !== lastName) cambios.push('apellido');
+    if (cuenta.email !== email) cambios.push('correo');
+    const actuales = ctx.semestresActuales.get(cuenta.id) ?? [];
+    if (actuales.join() !== (base.semesters ?? []).join()) cambios.push('semestres autorizados');
+    return {
+      ...base,
+      existingUserId: cuenta.id,
+      status: cambios.length ? ImportRowStatus.UPDATE : ImportRowStatus.UNCHANGED,
+      message: cambios.length ? `Actualiza: ${cambios.join(', ')}.` : null,
+    };
   }
 
   private validar(i: {
@@ -283,7 +296,7 @@ export class TeacherImportService {
     if (!NAME_RE.test(i.firstName)) return 'El nombre contiene caracteres no permitidos.';
     if (!NAME_RE.test(i.lastName)) return 'El apellido contiene caracteres no permitidos.';
     if (!i.email) return 'Falta el correo institucional.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(i.email)) return 'El correo no tiene un formato válido.';
+    if (!tieneFormatoDeCorreo(i.email)) return 'El correo no tiene un formato válido.';
     if (!isInstitutionalEmail(i.email, i.dominios)) {
       return 'El correo no pertenece a un dominio institucional autorizado.';
     }
@@ -293,7 +306,7 @@ export class TeacherImportService {
   /** Aplica NEW y UPDATE de un lote de docentes. Idempotente. */
   async apply(adminUserId: string, batchId: string) {
     const batch = await this.batches.findOne({ where: { id: batchId } });
-    if (!batch || batch.kind !== 'teachers') throw new NotFoundException('Lote de importación de docentes no encontrado.');
+    if (batch?.kind !== 'teachers') throw new NotFoundException('Lote de importación de docentes no encontrado.');
     if (batch.status === ImportBatchStatus.APPLIED) throw new BadRequestException('Este lote ya se aplicó.');
     if (batch.status === ImportBatchStatus.DISCARDED) {
       throw new BadRequestException('Este lote fue descartado. Vuelva a subir el archivo.');

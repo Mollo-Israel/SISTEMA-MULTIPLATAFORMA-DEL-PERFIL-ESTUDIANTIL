@@ -1,5 +1,5 @@
 import { AuditEventType, AuditService } from '../audit/audit.service';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
@@ -38,7 +38,7 @@ import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
-import { ExternalCertificate } from '../entities/external-certificate.entity';
+import { ExternalCertificate, ExternalCertificateSkill } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { ValidationRecord } from '../entities/validation-record.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';
@@ -48,7 +48,6 @@ import { AffinitySnapshot } from '../entities/affinity-snapshot.entity';
 import { AffinitySnapshotItem } from '../entities/affinity-snapshot-item.entity';
 import { ProjectSkill } from '../entities/project-area.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
-import { ExternalCertificateSkill } from '../entities/external-certificate.entity';
 
 interface AreaInfo {
   id: string;
@@ -68,7 +67,7 @@ type SupportBucket = 'activity' | 'project' | 'certificate' | 'other';
 /**
  * Una senal candidata, antes de aplicar rendimientos y topes.
  *
- * El motor trabaja en dos tiempos: primero reune TODO lo que podria puntuar y
+ * El motor trabaja en dos tiempos: primero reúne todo lo que podría puntuar y
  * despues puntua. Ese orden no es cosmetico. Los rendimientos decrecientes de
  * §51 dependen de cuantas senales hay en el area y en que orden quedan, y los
  * topes dependen del total: ninguna de las dos cosas se puede decidir mirando
@@ -283,6 +282,28 @@ interface AreaScore {
   supportFamilies: AffinitySignalFamily[];
 }
 
+/** Suma una tecnología respaldada al área, con la fuente que la respalda. */
+type SumarTecnologia = (areaId: string | null | undefined, skillId: string, name: string, type: string, title: string) => void;
+
+/** Lo que comparten las fuentes de señales durante un recálculo. */
+/** Por qué un proyecto no suma afinidad aunque su respaldo cuente (V4 §35.3). */
+function motivoSinAfinidad(puntua: boolean, hayConfirmadas: boolean, tier: ProjectBackingTier): string {
+  if (!puntua) {
+    return `V4 §35.3: un proyecto ${PROJECT_TIER_LABEL[tier]} no suma afinidad; solo CORROBORATED o REVIEWED. Su respaldo sí cuenta.`;
+  }
+  return hayConfirmadas
+    ? 'V4 §35.3: las tecnologías que confirmaste no están corroboradas en el proyecto (repositorio o docente). Su respaldo sí cuenta.'
+    : AFFINITY_EXCLUDED_REASON.project_without_skills;
+}
+
+interface Recalculo {
+  studentProfileId: string;
+  profile: StudentProfile;
+  areaName: Map<string, string>;
+  weightOf: Awaited<ReturnType<AffinityEngineService['loadWeights']>>['points'];
+  add: (senal: Partial<Senal> & { areaId?: string | null }) => void;
+}
+
 @Injectable()
 export class AffinityEngineService {
   constructor(
@@ -365,360 +386,13 @@ export class AffinityEngineService {
       });
     };
 
-    // =================================================== §51.1 · Preferencias
-    const interests = await this.interests.find({ where: { studentProfileId } });
-    interests.forEach((i) => {
-      const code = this.interestWeightCode(i.priority);
-      add({
-        areaId: i.academicAreaId,
-        family: AffinitySignalFamily.PREFERENCE,
-        weightCode: code,
-        matchType: AffinityMatchType.DECLARED,
-        sourceEntityType: AffinitySourceEntityType.STUDENT_INTEREST,
-        sourceId: i.id,
-        // V3 §45.1: el interés orienta recomendaciones; no suma afinidad.
-        base: 0,
-        reason: `${areaName.get(i.academicAreaId) ?? 'Área'}: ${AFFINITY_EXCLUDED_REASON.interest}`,
-      });
-    });
-
-    // V2 §22: la autoevaluación de nivel (`student_skills`) ya no alimenta la
-    // afinidad. La tabla se conserva como histórico; aquí no se lee.
-
-    // §20: se registra para poder decir que se tuvo en cuenta y no sumo.
-    (profile.improvementAreaIds ?? []).forEach((id) =>
-      add({
-        areaId: id,
-        family: AffinitySignalFamily.PREFERENCE,
-        weightCode: AffinityWeightCode.IMPROVEMENT_AREA,
-        matchType: AffinityMatchType.DECLARED,
-        sourceEntityType: AffinitySourceEntityType.IMPROVEMENT_AREA,
-        base: 0,
-        reason: AFFINITY_EXCLUDED_REASON.improvement_area,
-      }),
-    );
-
-    // ==================================================== §51.2 · Actividades
-    const registrations = await this.registrations.find({
-      where: { studentProfileId },
-      relations: { activity: { activityAreas: true } },
-    });
-    /** Areas con participacion confirmada: la constancia refuerza estas (§55). */
-    const areasConParticipacion = new Set<string>();
-    const registrationByActivity = new Map<string, ActivityRegistration>();
-
-    registrations.forEach((r) => {
-      // V4 §35.2: las áreas configuradas en la actividad (todas), no solo
-      // la principal.
-      const areasDeActividad = [...new Set([
-        ...(r.activity?.activityAreas ?? []).map((x) => x.academicAreaId),
-        ...(r.activity?.academicAreaId ? [r.activity.academicAreaId] : []),
-      ])];
-      if (!areasDeActividad.length) return;
-      if (r.activity?.id) registrationByActivity.set(r.activity.id, r);
-      for (const areaId of areasDeActividad) {
-
-      if (r.status !== RegistrationStatus.CONFIRMED) {
-        const code = this.activityWeightCode(r.status);
-        if (!code) continue;
-        add({
-          areaId,
-          family: AffinitySignalFamily.ACTIVITY,
-          weightCode: code,
-          matchType: AffinityMatchType.INHERITED,
-          sourceEntityType: AffinitySourceEntityType.ACTIVITY_REGISTRATION,
-          sourceId: r.id,
-          base: 0,
-          reason:
-            `${r.activity?.title ?? 'Actividad'}: `
-            + `${AFFINITY_EXCLUDED_REASON[code] ?? 'no suma afinidad'}`,
-        });
-        continue;
-      }
-
-      areasConParticipacion.add(areaId);
-      add({
-        areaId,
-        family: AffinitySignalFamily.ACTIVITY,
-        weightCode: AffinityWeightCode.ACTIVITY_CONFIRMED,
-        matchType: AffinityMatchType.INHERITED,
-        sourceEntityType: AffinitySourceEntityType.ACTIVITY_REGISTRATION,
-        sourceId: r.id,
-        base: weightOf.get(AffinityWeightCode.ACTIVITY_CONFIRMED) ?? 0,
-        supportBase: SUPPORT_POINTS.ACTIVITY_CONFIRMED,
-        affinityBucket: 'activity',
-        supportBucket: 'activity',
-        scale: DIMINISHING.ACTIVITY,
-        reason: `Participacion confirmada: ${r.activity?.title ?? 'actividad'}`,
-      });
-      }
-    });
-
-    // ====================================================== §51.3 · Proyectos
-    const owned = await this.projects.find({ where: { createdByProfileId: studentProfileId } });
-    const memberships = await this.projectMembers.find({
-      where: { userId: profile.userId },
-      relations: { memberSkills: { skill: true } },
-    });
-    const ownedIds = new Set(owned.map((p) => p.id));
-    const collaborativeIds = memberships
-      .map((m) => m.projectId)
-      .filter((id) => !ownedIds.has(id));
-    const collaborative = collaborativeIds.length
-      ? await this.projects.find({ where: { id: In(collaborativeIds) } })
-      : [];
-    const membershipByProject = new Map(memberships.map((m) => [m.projectId, m]));
-    // V4 §35.3: tecnologías del proyecto corroboradas (repositorio o docente).
-    const todosLosProyectos = [...owned, ...collaborative].map((p) => p.id);
-    const corroboradasPorProyecto = new Map<string, Set<string>>();
-    /** V3.2 §11.5, §50.1: en qué área del proyecto se usó cada tecnología. */
-    const contextoPorProyecto = new Map<string, Map<string, string>>();
-    if (todosLosProyectos.length) {
-      const filas = await this.projectSkills.find({ where: { projectId: In(todosLosProyectos) } });
-      for (const f of filas) {
-        if (f.academicAreaId) {
-          const ctx = contextoPorProyecto.get(f.projectId) ?? new Map<string, string>();
-          ctx.set(f.skillId, f.academicAreaId);
-          contextoPorProyecto.set(f.projectId, ctx);
-        }
-        if (f.evidenceStatus === ProjectSkillEvidenceStatus.DECLARED) continue;
-        const set = corroboradasPorProyecto.get(f.projectId) ?? new Set<string>();
-        set.add(f.skillId);
-        corroboradasPorProyecto.set(f.projectId, set);
-      }
-    }
-
-    const areasByProject = new Map<string, string[]>();
-    const proyectosContados: Project[] = [];
-
-    for (const project of [...owned, ...collaborative]) {
-      const isOwned = ownedIds.has(project.id);
-      const membership = membershipByProject.get(project.id);
-
-      // §33: mientras el integrante no confirme su contribucion, lo que figura
-      // en ella lo escribio otra persona.
-      if (!isOwned && (!membership || !membership.contributionConfirmedAt)) {
-        continue;
-      }
-      // V4 §35.1: un borrador no es trayectoria respaldada.
-      if (project.status === ProjectStatus.DRAFT) continue;
-
-      // V3 §48: el proyecto pertenece, para este estudiante, a las áreas de
-      // las tecnologías que ÉL confirmó haber usado (`skills_used`). Ni las
-      // tecnologías generales del proyecto ni su área principal atribuyen
-      // experiencia a nadie.
-      // V4 §35.3: solo las tecnologías que ÉL confirmó y que además están
-      // corroboradas en el proyecto. Nunca todas las del proyecto para todos.
-      const corroboradas = corroboradasPorProyecto.get(project.id) ?? new Set<string>();
-      const confirmadas = (membership?.memberSkills ?? []).filter((s) => s.skill);
-      const habilidades = confirmadas.filter((s) => corroboradas.has(s.skillId));
-      const tierBase = project.backingTier ?? ProjectBackingTier.DECLARED;
-      const puntua = tierBase === ProjectBackingTier.CORROBORATED || tierBase === ProjectBackingTier.REVIEWED;
-      // V3.2 §50.1: el área de cada tecnología es la de su contexto en el
-      // proyecto; solo si no lo tiene (dato anterior) se usa su área principal.
-      const contexto = contextoPorProyecto.get(project.id) ?? new Map<string, string>();
-      const areaDe = (s: { skillId: string; skill?: { academicAreaId: string | null } | null }) =>
-        contexto.get(s.skillId) ?? s.skill?.academicAreaId ?? null;
-      const areasPropias = puntua ? [
-        ...new Set(habilidades.map(areaDe).filter((a): a is string => !!a)),
-      ] : [];
-      const tier = project.backingTier ?? ProjectBackingTier.DECLARED;
-      const code = PROJECT_CODE[tier];
-      const rol = isOwned ? 'propio' : 'como integrante';
-      proyectosContados.push(project);
-
-      if (areasPropias.length > 0) {
-        areasByProject.set(project.id, areasPropias);
-        for (const areaId of areasPropias) {
-          const nombres = habilidades
-            .filter((s) => areaDe(s) === areaId)
-            .map((s) => s.skill!.name)
-            .slice(0, 4)
-            .join(', ');
-          add({
-            areaId,
-            family: AffinitySignalFamily.PROJECT,
-            weightCode: code,
-            matchType: AffinityMatchType.DECLARED,
-            sourceEntityType: AffinitySourceEntityType.PROJECT,
-            sourceId: project.id,
-            base: weightOf.get(code) ?? 0,
-            supportBase: PROJECT_SUPPORT[tier],
-            affinityBucket: 'project',
-            supportBucket: 'project',
-            scale: DIMINISHING.PROJECT,
-            reason: `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title} (${nombres})`,
-          });
-        }
-        continue;
-      }
-
-      // Sin tecnologías propias confirmadas no hay afinidad (§48), pero el
-      // respaldo del proyecto sigue contando en su área principal: la
-      // trayectoria existe aunque falte decir con qué se hizo.
-      const areasDeConfirmadas = [...new Set(confirmadas.map(areaDe).filter((a): a is string => !!a))];
-      // V3.2 §12.3: nunca se deduce el área por etiquetas o texto: o la dicen
-      // las tecnologías confirmadas, o el área explícita del proyecto.
-      const fallback = areasDeConfirmadas.length
-        ? areasDeConfirmadas
-        : project.academicAreaId
-          ? [project.academicAreaId]
-          : [];
-      const motivoV4 = !puntua
-        ? `V4 §35.3: un proyecto ${PROJECT_TIER_LABEL[tier]} no suma afinidad; solo CORROBORATED o REVIEWED. Su respaldo sí cuenta.`
-        : confirmadas.length
-          ? 'V4 §35.3: las tecnologías que confirmaste no están corroboradas en el proyecto (repositorio o docente). Su respaldo sí cuenta.'
-          : AFFINITY_EXCLUDED_REASON.project_without_skills;
-      areasByProject.set(project.id, fallback);
-      fallback.forEach((areaId) =>
-        add({
-          areaId,
-          family: AffinitySignalFamily.PROJECT,
-          weightCode: code,
-          matchType: AffinityMatchType.DECLARED,
-          sourceEntityType: AffinitySourceEntityType.PROJECT,
-          sourceId: project.id,
-          base: 0,
-          supportBase: PROJECT_SUPPORT[tier],
-          supportBucket: 'project',
-          scale: DIMINISHING.PROJECT,
-          reason: `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title}. ${motivoV4}`,
-        }),
-      );
-    }
-
-    // ============================================== §50, §55 · Evidencias
-    // Una evidencia no crea un proyecto mas: mejora el respaldo del que ya
-    // existe. Se registra con cero para que el desglose lo diga.
-    const evidences = await this.evidences.find({
-      where: { studentProfileId },
-      relations: { activity: true },
-    });
-    const evidenceTiers = await this.backingTiersOf(
-      ValidationResourceType.PROJECT_EVIDENCE,
-      evidences.map((e) => e.id),
-    );
-
-    for (const evidence of evidences) {
-      const label = evidence.description ?? 'sin descripcion';
-      const esDeActividad = !!evidence.activityId;
-      const tier = evidenceTiers.get(evidence.id) ?? BackingTier.DECLARED;
-
-      const destinos = evidence.academicAreaId
-        ? [evidence.academicAreaId]
-        : evidence.activity?.academicAreaId
-          ? [evidence.activity.academicAreaId]
-          : (evidence.projectId ? areasByProject.get(evidence.projectId) ?? [] : []);
-
-      destinos.forEach((areaId) => {
-        // §53.4: una evidencia de actividad corroborada es trazabilidad que no
-        // esta contada en ningun otro sitio. La de proyecto si lo esta: ya
-        // elevo el nivel de respaldo del proyecto (§36).
-        const aportaRespaldo = esDeActividad && tier !== BackingTier.DECLARED;
-        add({
-          areaId,
-          family: AffinitySignalFamily.OTHER,
-          signalType: AffinitySignalType.EVIDENCE,
-          weightCode: AffinityWeightCode.EVIDENCE,
-          matchType: evidence.academicAreaId
-            ? AffinityMatchType.DECLARED
-            : AffinityMatchType.INHERITED,
-          sourceEntityType: esDeActividad
-            ? AffinitySourceEntityType.ACTIVITY_EVIDENCE
-            : AffinitySourceEntityType.PROJECT_EVIDENCE,
-          sourceId: evidence.id,
-          base: 0,
-          supportBase: aportaRespaldo ? SUPPORT_POINTS.ACTIVITY_EVIDENCE : 0,
-          supportBucket: aportaRespaldo ? 'other' : null,
-          reason: aportaRespaldo
-            ? `Evidencia de actividad ${CERTIFICATE_TIER_LABEL[tier]}: ${label}`
-            : `Evidencia: ${label}. ${AFFINITY_EXCLUDED_REASON.evidence}`,
-        });
-      });
-    }
-
-    // =================================================== §51.4 · Certificados
-    const certs = await this.certificates.find({ where: { studentProfileId } });
-    const certTiers = await this.backingTiersOf(
-      ValidationResourceType.EXTERNAL_CERTIFICATE,
-      certs.map((c) => c.id),
-      true,
-    );
-
-    const areasPorCertificado = new Map<string, string[]>();
-    if (certs.length) {
-      const filas: { certificate_id: string; academic_area_id: string }[] = await this.projects.manager.query(
-        `SELECT "certificate_id", "academic_area_id" FROM "external_certificate_areas" WHERE "certificate_id" = ANY($1::uuid[])`,
-        [certs.map((c) => c.id)],
-      );
-      for (const f of filas) areasPorCertificado.set(f.certificate_id, [...(areasPorCertificado.get(f.certificate_id) ?? []), f.academic_area_id]);
-    }
-    certs.forEach((c) => {
-      const { tier, duplicado } = certTiers.get(c.id)
-        ?? { tier: BackingTier.DECLARED, duplicado: false };
-      const code = CERTIFICATE_CODE[tier];
-      // V3.2 §12.3, §33: las áreas explícitas de la credencial; sin área
-      // declarada no se adivina por el nombre del curso.
-      const destinos = [...new Set([
-        ...(c.academicAreaId ? [c.academicAreaId] : []),
-        ...(areasPorCertificado.get(c.id) ?? []),
-      ])];
-
-      destinos.forEach((areaId) =>
-        add({
-          areaId,
-          family: AffinitySignalFamily.EXTERNAL_CERTIFICATE,
-          weightCode: code,
-          matchType: AffinityMatchType.DECLARED,
-          sourceEntityType: AffinitySourceEntityType.EXTERNAL_CERTIFICATE,
-          sourceId: c.id,
-          base: tier === BackingTier.FLAGGED ? 0 : (weightOf.get(code) ?? 0),
-          supportBase: CERTIFICATE_SUPPORT[tier],
-          affinityBucket: 'certificate',
-          supportBucket: 'certificate',
-          scale: DIMINISHING.PROJECT,
-          reason:
-            `Certificado externo ${CERTIFICATE_TIER_LABEL[tier]}: ${c.certificateName}`
-            + (duplicado ? ' · contenido repetido, no vuelve a respaldar (§28)' : ''),
-        }),
-      );
-    });
-
-    // ================================================ §53.1, §53.4 · Constancias
-    const constancies = await this.constancies.find({
-      where: { studentProfileId, status: ConstancyStatus.AUTHORIZED },
-      relations: { activity: true },
-    });
-    constancies.forEach((c) => {
-      // V3.2 §12.3: el área de la actividad que la emitió; nunca el texto.
-      const areaDeActividad = c.activity?.academicAreaId ?? null;
-      const destinos = areaDeActividad ? [areaDeActividad] : [];
-
-      destinos.forEach((areaId) => {
-        // §53.1: si respalda una participacion ya contada, suma respaldo en la
-        // familia de actividades. Si no hay tal participacion, es una senal
-        // suelta y cae en «otros respaldos» (§53.4). En ningun caso crea un
-        // segundo evento de afinidad (§55).
-        const refuerzaParticipacion = areasConParticipacion.has(areaId);
-        add({
-          areaId,
-          family: AffinitySignalFamily.ACADEMIC_REVIEW,
-          signalType: AffinitySignalType.CONSTANCY,
-          weightCode: AffinityWeightCode.CONSTANCY,
-          matchType: areaDeActividad ? AffinityMatchType.INHERITED : AffinityMatchType.TEXT,
-          sourceEntityType: AffinitySourceEntityType.INTERNAL_CONSTANCY,
-          sourceId: c.id,
-          base: 0,
-          supportBase: refuerzaParticipacion
-            ? SUPPORT_POINTS.CONSTANCY
-            : SUPPORT_POINTS.STANDALONE_CONSTANCY,
-          supportBucket: refuerzaParticipacion ? 'activity' : 'other',
-          reason:
-            `Constancia interna: ${c.description}. `
-            + AFFINITY_EXCLUDED_REASON.constancy,
-        });
-      });
-    });
+    const r: Recalculo = { studentProfileId, profile, areaName, weightOf, add };
+    await this.senalesDePreferencias(r);
+    const areasConParticipacion = await this.senalesDeActividades(r);
+    const { areasByProject, proyectosContados } = await this.senalesDeProyectos(r);
+    await this.senalesDeEvidencias(r, areasByProject);
+    await this.senalesDeCertificados(r);
+    await this.senalesDeConstancias(r, areasConParticipacion);
 
     // ============================================ §53.4, §54 · Revision docente
     const proyectoIds = proyectosContados.map((p) => p.id);
@@ -767,6 +441,413 @@ export class AffinityEngineService {
     });
     return resultado;
   }
+
+  /** §51.1: intereses y áreas de mejora (se registran, no suman afinidad). */
+  private async senalesDePreferencias(r: Recalculo): Promise<void> {
+    const { studentProfileId, profile, areaName, add } = r;
+    // =================================================== §51.1 · Preferencias
+    const interests = await this.interests.find({ where: { studentProfileId } });
+    interests.forEach((i) => {
+      const code = this.interestWeightCode(i.priority);
+      add({
+        areaId: i.academicAreaId,
+        family: AffinitySignalFamily.PREFERENCE,
+        weightCode: code,
+        matchType: AffinityMatchType.DECLARED,
+        sourceEntityType: AffinitySourceEntityType.STUDENT_INTEREST,
+        sourceId: i.id,
+        // V3 §45.1: el interés orienta recomendaciones; no suma afinidad.
+        base: 0,
+        reason: `${areaName.get(i.academicAreaId) ?? 'Área'}: ${AFFINITY_EXCLUDED_REASON.interest}`,
+      });
+    });
+
+    // V2 §22: la autoevaluación de nivel (`student_skills`) ya no alimenta la
+    // afinidad. La tabla se conserva como histórico; aquí no se lee.
+
+    // §20: se registra para poder decir que se tuvo en cuenta y no sumo.
+    (profile.improvementAreaIds ?? []).forEach((id) =>
+      add({
+        areaId: id,
+        family: AffinitySignalFamily.PREFERENCE,
+        weightCode: AffinityWeightCode.IMPROVEMENT_AREA,
+        matchType: AffinityMatchType.DECLARED,
+        sourceEntityType: AffinitySourceEntityType.IMPROVEMENT_AREA,
+        base: 0,
+        reason: AFFINITY_EXCLUDED_REASON.improvement_area,
+      }),
+    );
+  }
+
+  /** §51.2: participación en actividades; devuelve las áreas con participación confirmada. */
+  private async senalesDeActividades(r: Recalculo): Promise<Set<string>> {
+    const { studentProfileId, weightOf, add } = r;
+    // ==================================================== §51.2 · Actividades
+    const registrations = await this.registrations.find({
+      where: { studentProfileId },
+      relations: { activity: { activityAreas: true } },
+    });
+    /** Areas con participacion confirmada: la constancia refuerza estas (§55). */
+    const areasConParticipacion = new Set<string>();
+
+    registrations.forEach((r) => {
+      // V4 §35.2: las áreas configuradas en la actividad (todas), no solo
+      // la principal.
+      const areasDeActividad = [...new Set([
+        ...(r.activity?.activityAreas ?? []).map((x) => x.academicAreaId),
+        ...(r.activity?.academicAreaId ? [r.activity.academicAreaId] : []),
+      ])];
+      if (!areasDeActividad.length) return;
+      for (const areaId of areasDeActividad) {
+
+      if (r.status !== RegistrationStatus.CONFIRMED) {
+        const code = this.activityWeightCode(r.status);
+        if (!code) continue;
+        add({
+          areaId,
+          family: AffinitySignalFamily.ACTIVITY,
+          weightCode: code,
+          matchType: AffinityMatchType.INHERITED,
+          sourceEntityType: AffinitySourceEntityType.ACTIVITY_REGISTRATION,
+          sourceId: r.id,
+          base: 0,
+          reason:
+            `${r.activity?.title ?? 'Actividad'}: `
+            + `${AFFINITY_EXCLUDED_REASON[code] ?? 'no suma afinidad'}`,
+        });
+        continue;
+      }
+
+      areasConParticipacion.add(areaId);
+      add({
+        areaId,
+        family: AffinitySignalFamily.ACTIVITY,
+        weightCode: AffinityWeightCode.ACTIVITY_CONFIRMED,
+        matchType: AffinityMatchType.INHERITED,
+        sourceEntityType: AffinitySourceEntityType.ACTIVITY_REGISTRATION,
+        sourceId: r.id,
+        base: weightOf.get(AffinityWeightCode.ACTIVITY_CONFIRMED) ?? 0,
+        supportBase: SUPPORT_POINTS.ACTIVITY_CONFIRMED,
+        affinityBucket: 'activity',
+        supportBucket: 'activity',
+        scale: DIMINISHING.ACTIVITY,
+        reason: `Participación confirmada: ${r.activity?.title ?? 'actividad'}`,
+      });
+      }
+    });
+    return areasConParticipacion;
+  }
+
+  /** §51.3: proyectos propios y como integrante. */
+  private async senalesDeProyectos(r: Recalculo): Promise<{ areasByProject: Map<string, string[]>; proyectosContados: Project[] }> {
+    const { studentProfileId, profile } = r;
+    // ====================================================== §51.3 · Proyectos
+    const owned = await this.projects.find({ where: { createdByProfileId: studentProfileId } });
+    const memberships = await this.projectMembers.find({
+      where: { userId: profile.userId },
+      relations: { memberSkills: { skill: true } },
+    });
+    const ownedIds = new Set(owned.map((p) => p.id));
+    const collaborativeIds = memberships
+      .map((m) => m.projectId)
+      .filter((id) => !ownedIds.has(id));
+    const collaborative = collaborativeIds.length
+      ? await this.projects.find({ where: { id: In(collaborativeIds) } })
+      : [];
+    const membershipByProject = new Map(memberships.map((m) => [m.projectId, m]));
+    // V4 §35.3: tecnologías del proyecto corroboradas (repositorio o docente).
+    const { corroboradasPorProyecto, contextoPorProyecto } = await this.tecnologiasDeProyectos(
+      [...owned, ...collaborative].map((p) => p.id),
+    );
+
+    const areasByProject = new Map<string, string[]>();
+    const proyectosContados: Project[] = [];
+
+    for (const project of [...owned, ...collaborative]) {
+      const areas = this.senalesDeUnProyecto(r, project, {
+        isOwned: ownedIds.has(project.id),
+        membership: membershipByProject.get(project.id),
+        corroboradasPorProyecto,
+        contextoPorProyecto,
+      });
+      if (areas === null) continue;
+      proyectosContados.push(project);
+      areasByProject.set(project.id, areas);
+    }
+    return { areasByProject, proyectosContados };
+  }
+
+  /**
+   * V4 §35.3 y V3.2 §11.5, §50.1: por proyecto, las tecnologías corroboradas
+   * (repositorio o docente) y en qué área se usó cada una.
+   */
+  private async tecnologiasDeProyectos(ids: string[]): Promise<{
+    corroboradasPorProyecto: Map<string, Set<string>>;
+    contextoPorProyecto: Map<string, Map<string, string>>;
+  }> {
+    const corroboradasPorProyecto = new Map<string, Set<string>>();
+    const contextoPorProyecto = new Map<string, Map<string, string>>();
+    if (!ids.length) return { corroboradasPorProyecto, contextoPorProyecto };
+    const filas = await this.projectSkills.find({ where: { projectId: In(ids) } });
+    for (const f of filas) {
+      if (f.academicAreaId) {
+        const ctx = contextoPorProyecto.get(f.projectId) ?? new Map<string, string>();
+        ctx.set(f.skillId, f.academicAreaId);
+        contextoPorProyecto.set(f.projectId, ctx);
+      }
+      if (f.evidenceStatus === ProjectSkillEvidenceStatus.DECLARED) continue;
+      const set = corroboradasPorProyecto.get(f.projectId) ?? new Set<string>();
+      set.add(f.skillId);
+      corroboradasPorProyecto.set(f.projectId, set);
+    }
+    return { corroboradasPorProyecto, contextoPorProyecto };
+  }
+
+  /**
+   * Las señales de un proyecto. Devuelve sus áreas para este estudiante, o
+   * null si el proyecto no cuenta (borrador o contribución sin confirmar).
+   */
+  private senalesDeUnProyecto(
+    r: Recalculo,
+    project: Project,
+    p: {
+      isOwned: boolean;
+      membership: ProjectMember | undefined;
+      corroboradasPorProyecto: Map<string, Set<string>>;
+      contextoPorProyecto: Map<string, Map<string, string>>;
+    },
+  ): string[] | null {
+    const { weightOf, add } = r;
+    const { isOwned, membership, corroboradasPorProyecto, contextoPorProyecto } = p;
+
+    // §33: mientras el integrante no confirme su contribucion, lo que figura
+    // en ella lo escribio otra persona.
+    if (!isOwned && (!membership?.contributionConfirmedAt)) {
+      return null;
+    }
+    // V4 §35.1: un borrador no es trayectoria respaldada.
+    if (project.status === ProjectStatus.DRAFT) return null;
+
+    // V3 §48: el proyecto pertenece, para este estudiante, a las áreas de
+    // las tecnologías que ÉL confirmó haber usado (`skills_used`). Ni las
+    // tecnologías generales del proyecto ni su área principal atribuyen
+    // experiencia a nadie.
+    // V4 §35.3: solo las tecnologías que ÉL confirmó y que además están
+    // corroboradas en el proyecto. Nunca todas las del proyecto para todos.
+    const corroboradas = corroboradasPorProyecto.get(project.id) ?? new Set<string>();
+    const confirmadas = (membership?.memberSkills ?? []).filter((s) => s.skill);
+    const habilidades = confirmadas.filter((s) => corroboradas.has(s.skillId));
+    const tierBase = project.backingTier ?? ProjectBackingTier.DECLARED;
+    const puntua = tierBase === ProjectBackingTier.CORROBORATED || tierBase === ProjectBackingTier.REVIEWED;
+    // V3.2 §50.1: el área de cada tecnología es la de su contexto en el
+    // proyecto; solo si no lo tiene (dato anterior) se usa su área principal.
+    const contexto = contextoPorProyecto.get(project.id) ?? new Map<string, string>();
+    const areaDe = (s: { skillId: string; skill?: { academicAreaId: string | null } | null }) =>
+      contexto.get(s.skillId) ?? s.skill?.academicAreaId ?? null;
+    const areasPropias = puntua ? [
+      ...new Set(habilidades.map(areaDe).filter((a): a is string => !!a)),
+    ] : [];
+    const tier = project.backingTier ?? ProjectBackingTier.DECLARED;
+    const code = PROJECT_CODE[tier];
+    const rol = isOwned ? 'propio' : 'como integrante';
+
+    if (areasPropias.length > 0) {
+      for (const areaId of areasPropias) {
+        const nombres = habilidades
+          .filter((s) => areaDe(s) === areaId)
+          .map((s) => s.skill!.name)
+          .slice(0, 4)
+          .join(', ');
+        add({
+          areaId,
+          family: AffinitySignalFamily.PROJECT,
+          weightCode: code,
+          matchType: AffinityMatchType.DECLARED,
+          sourceEntityType: AffinitySourceEntityType.PROJECT,
+          sourceId: project.id,
+          base: weightOf.get(code) ?? 0,
+          supportBase: PROJECT_SUPPORT[tier],
+          affinityBucket: 'project',
+          supportBucket: 'project',
+          scale: DIMINISHING.PROJECT,
+          reason: `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title} (${nombres})`,
+        });
+      }
+      return areasPropias;
+    }
+
+    // Sin tecnologías propias confirmadas no hay afinidad (§48), pero el
+    // respaldo del proyecto sigue contando en su área principal: la
+    // trayectoria existe aunque falte decir con qué se hizo.
+    const areasDeConfirmadas = [...new Set(confirmadas.map(areaDe).filter((a): a is string => !!a))];
+    // V3.2 §12.3: nunca se deduce el área por etiquetas o texto: o la dicen
+    // las tecnologías confirmadas, o el área explícita del proyecto.
+    const areaPropia = project.academicAreaId ? [project.academicAreaId] : [];
+    const fallback = areasDeConfirmadas.length ? areasDeConfirmadas : areaPropia;
+    const motivoV4 = motivoSinAfinidad(puntua, confirmadas.length > 0, tier);
+    fallback.forEach((areaId) =>
+      add({
+        areaId,
+        family: AffinitySignalFamily.PROJECT,
+        weightCode: code,
+        matchType: AffinityMatchType.DECLARED,
+        sourceEntityType: AffinitySourceEntityType.PROJECT,
+        sourceId: project.id,
+        base: 0,
+        supportBase: PROJECT_SUPPORT[tier],
+        supportBucket: 'project',
+        scale: DIMINISHING.PROJECT,
+        reason: `Proyecto ${rol} ${PROJECT_TIER_LABEL[tier]}: ${project.title}. ${motivoV4}`,
+      }),
+    );
+    return fallback;
+  }
+
+  /** §50, §55: evidencias, que mejoran el respaldo del proyecto que acompañan. */
+  private async senalesDeEvidencias(r: Recalculo, areasByProject: Map<string, string[]>): Promise<void> {
+    const { studentProfileId, add } = r;
+    // ============================================== §50, §55 · Evidencias
+    // Una evidencia no crea un proyecto mas: mejora el respaldo del que ya
+    // existe. Se registra con cero para que el desglose lo diga.
+    const evidences = await this.evidences.find({
+      where: { studentProfileId },
+      relations: { activity: true },
+    });
+    const evidenceTiers = await this.backingTiersOf(
+      ValidationResourceType.PROJECT_EVIDENCE,
+      evidences.map((e) => e.id),
+    );
+
+    for (const evidence of evidences) {
+      const label = evidence.description ?? 'sin descripcion';
+      const esDeActividad = !!evidence.activityId;
+      const tier = evidenceTiers.get(evidence.id) ?? BackingTier.DECLARED;
+
+      let destinos: string[];
+      if (evidence.academicAreaId) destinos = [evidence.academicAreaId];
+      else if (evidence.activity?.academicAreaId) destinos = [evidence.activity.academicAreaId];
+      else destinos = evidence.projectId ? areasByProject.get(evidence.projectId) ?? [] : [];
+
+      destinos.forEach((areaId) => {
+        // §53.4: una evidencia de actividad corroborada es trazabilidad que no
+        // esta contada en ningun otro sitio. La de proyecto si lo esta: ya
+        // elevo el nivel de respaldo del proyecto (§36).
+        const aportaRespaldo = esDeActividad && tier !== BackingTier.DECLARED;
+        add({
+          areaId,
+          family: AffinitySignalFamily.OTHER,
+          signalType: AffinitySignalType.EVIDENCE,
+          weightCode: AffinityWeightCode.EVIDENCE,
+          matchType: evidence.academicAreaId
+            ? AffinityMatchType.DECLARED
+            : AffinityMatchType.INHERITED,
+          sourceEntityType: esDeActividad
+            ? AffinitySourceEntityType.ACTIVITY_EVIDENCE
+            : AffinitySourceEntityType.PROJECT_EVIDENCE,
+          sourceId: evidence.id,
+          base: 0,
+          supportBase: aportaRespaldo ? SUPPORT_POINTS.ACTIVITY_EVIDENCE : 0,
+          supportBucket: aportaRespaldo ? 'other' : null,
+          reason: aportaRespaldo
+            ? `Evidencia de actividad ${CERTIFICATE_TIER_LABEL[tier]}: ${label}`
+            : `Evidencia: ${label}. ${AFFINITY_EXCLUDED_REASON.evidence}`,
+        });
+      });
+    }
+  }
+
+  /** §51.4: credenciales externas. */
+  private async senalesDeCertificados(r: Recalculo): Promise<void> {
+    const { studentProfileId, weightOf, add } = r;
+    // =================================================== §51.4 · Certificados
+    const certs = await this.certificates.find({ where: { studentProfileId } });
+    const certTiers = await this.backingTiersOf(
+      ValidationResourceType.EXTERNAL_CERTIFICATE,
+      certs.map((c) => c.id),
+      true,
+    );
+
+    const areasPorCertificado = new Map<string, string[]>();
+    if (certs.length) {
+      const filas: { certificate_id: string; academic_area_id: string }[] = await this.projects.manager.query(
+        `SELECT "certificate_id", "academic_area_id" FROM "external_certificate_areas" WHERE "certificate_id" = ANY($1::uuid[])`,
+        [certs.map((c) => c.id)],
+      );
+      for (const f of filas) areasPorCertificado.set(f.certificate_id, [...(areasPorCertificado.get(f.certificate_id) ?? []), f.academic_area_id]);
+    }
+    certs.forEach((c) => {
+      const { tier, duplicado } = certTiers.get(c.id)
+        ?? { tier: BackingTier.DECLARED, duplicado: false };
+      const code = CERTIFICATE_CODE[tier];
+      // V3.2 §12.3, §33: las áreas explícitas de la credencial; sin área
+      // declarada no se adivina por el nombre del curso.
+      const destinos = [...new Set([
+        ...(c.academicAreaId ? [c.academicAreaId] : []),
+        ...(areasPorCertificado.get(c.id) ?? []),
+      ])];
+
+      destinos.forEach((areaId) =>
+        add({
+          areaId,
+          family: AffinitySignalFamily.EXTERNAL_CERTIFICATE,
+          weightCode: code,
+          matchType: AffinityMatchType.DECLARED,
+          sourceEntityType: AffinitySourceEntityType.EXTERNAL_CERTIFICATE,
+          sourceId: c.id,
+          base: tier === BackingTier.FLAGGED ? 0 : (weightOf.get(code) ?? 0),
+          supportBase: CERTIFICATE_SUPPORT[tier],
+          affinityBucket: 'certificate',
+          supportBucket: 'certificate',
+          scale: DIMINISHING.PROJECT,
+          reason:
+            `Certificado externo ${CERTIFICATE_TIER_LABEL[tier]}: ${c.certificateName}`
+            + (duplicado ? ' · contenido repetido, no vuelve a respaldar (§28)' : ''),
+        }),
+      );
+    });
+  }
+
+  /** §53.1, §53.4: constancias internas. */
+  private async senalesDeConstancias(r: Recalculo, areasConParticipacion: Set<string>): Promise<void> {
+    const { studentProfileId, add } = r;
+    // ================================================ §53.1, §53.4 · Constancias
+    const constancies = await this.constancies.find({
+      where: { studentProfileId, status: ConstancyStatus.AUTHORIZED },
+      relations: { activity: true },
+    });
+    constancies.forEach((c) => {
+      // V3.2 §12.3: el área de la actividad que la emitió; nunca el texto.
+      const areaDeActividad = c.activity?.academicAreaId ?? null;
+      const destinos = areaDeActividad ? [areaDeActividad] : [];
+
+      destinos.forEach((areaId) => {
+        // §53.1: si respalda una participacion ya contada, suma respaldo en la
+        // familia de actividades. Si no hay tal participacion, es una senal
+        // suelta y cae en «otros respaldos» (§53.4). En ningun caso crea un
+        // segundo evento de afinidad (§55).
+        const refuerzaParticipacion = areasConParticipacion.has(areaId);
+        add({
+          areaId,
+          family: AffinitySignalFamily.ACADEMIC_REVIEW,
+          signalType: AffinitySignalType.CONSTANCY,
+          weightCode: AffinityWeightCode.CONSTANCY,
+          matchType: areaDeActividad ? AffinityMatchType.INHERITED : AffinityMatchType.TEXT,
+          sourceEntityType: AffinitySourceEntityType.INTERNAL_CONSTANCY,
+          sourceId: c.id,
+          base: 0,
+          supportBase: refuerzaParticipacion
+            ? SUPPORT_POINTS.CONSTANCY
+            : SUPPORT_POINTS.STANDALONE_CONSTANCY,
+          supportBucket: refuerzaParticipacion ? 'activity' : 'other',
+          reason:
+            // La descripción suele terminar en punto: no se repite.
+            `Constancia interna: ${c.description.endsWith('.') ? c.description.slice(0, -1) : c.description}. `
+            + AFFINITY_EXCLUDED_REASON.constancy,
+        });
+      });
+    });
+  }
+
 
   // =========================================================================
   //  Calculo
@@ -1009,9 +1090,16 @@ export class AffinityEngineService {
       salida.set(areaId, area);
     };
 
-    // Proyectos
+    await this.respaldadasEnProyectos(profile.userId, sumar);
+    await this.respaldadasEnCredenciales(studentProfileId, sumar);
+    await this.respaldadasEnActividades(studentProfileId, sumar);
+
+    return new Map([...salida].map(([areaId, m]) => [areaId, [...m.values()].sort((a, b) => b.sources.length - a.sources.length)]));
+  }
+  /** Tecnologías confirmadas y corroboradas en proyectos CORROBORATED o REVIEWED. */
+  private async respaldadasEnProyectos(userId: string, sumar: SumarTecnologia): Promise<void> {
     const memberships = await this.projectMembers.find({
-      where: { userId: profile.userId },
+      where: { userId },
       relations: { memberSkills: { skill: true }, project: true },
     });
     const validos = memberships.filter((m) => m.project
@@ -1029,8 +1117,10 @@ export class AffinityEngineService {
         }
       }
     }
+  }
 
-    // Credenciales CORROBORATED
+  /** Tecnologías de credenciales externas corroboradas (no duplicadas). */
+  private async respaldadasEnCredenciales(studentProfileId: string, sumar: SumarTecnologia): Promise<void> {
     const certs = await this.certificates.find({ where: { studentProfileId } });
     const tiers = await this.backingTiersOf(ValidationResourceType.EXTERNAL_CERTIFICATE, certs.map((c) => c.id), true);
     const corroborados = certs.filter((c) => tiers.get(c.id)?.tier === BackingTier.CORROBORATED && !tiers.get(c.id)?.duplicado);
@@ -1039,17 +1129,18 @@ export class AffinityEngineService {
       const nombre = new Map(corroborados.map((c) => [c.id, c.certificateName]));
       for (const f of filas) if (f.skill) sumar(f.skill.academicAreaId, f.skillId, f.skill.name, 'credential', nombre.get(f.certificateId) ?? '');
     }
+  }
 
-    // Actividades confirmadas
+  /** Tecnologías de actividades con participación confirmada. */
+  private async respaldadasEnActividades(studentProfileId: string, sumar: SumarTecnologia): Promise<void> {
     const regs = await this.registrations.find({ where: { studentProfileId, status: RegistrationStatus.CONFIRMED }, relations: { activity: true } });
     if (regs.length) {
       const filas = await this.activitySkills.find({ where: { activityId: In(regs.map((r) => r.activityId)) }, relations: { skill: true } });
       const titulo = new Map(regs.map((r) => [r.activityId, r.activity?.title ?? '']));
       for (const f of filas) if (f.skill) sumar(f.skill.academicAreaId, f.skillId, f.skill.name, 'activity', titulo.get(f.activityId) ?? '');
     }
-
-    return new Map([...salida].map(([areaId, m]) => [areaId, [...m.values()].sort((a, b) => b.sources.length - a.sources.length)]));
   }
+
 
   /**
    * Desglose de un area concreta: por que el estudiante tiene ese puntaje.
@@ -1086,14 +1177,26 @@ export class AffinityEngineService {
       q(`SELECT c.id, c.certificate_name, c.issuer FROM external_certificates c WHERE c.id = ANY($1::uuid[])`, deCredencial),
     ]);
     type Fuente = { type: 'activity' | 'project' | 'credential' | 'declaration'; id: string | null; title: string | null; link: string | null };
+    const enlaceActividad = (id: string | null): string | null => {
+      if (!id) return null;
+      if (viewer === 'student') return `/student/activities?actividad=${id}`;
+      if (viewer === 'teacher') return `/teacher?tab=actividades&actividad=${id}`;
+      return null;
+    };
+    // El docente solo abre lo que el estudiante habilitó para docentes.
+    const enlaceProyecto = (id: string | null, visibility: string | null): string | null => {
+      if (!id) return null;
+      if (viewer === 'student') return `/student/projects?proyecto=${id}`;
+      if (viewer === 'teacher' && visibility === 'teachers') return `/teacher?tab=proyectos&proyecto=${id}`;
+      return null;
+    };
     const actividad = (id: string | null, title: string | null): Fuente => ({
       type: 'activity', id, title,
-      link: id ? (viewer === 'student' ? `/student/activities?actividad=${id}` : viewer === 'teacher' ? `/teacher?tab=actividades&actividad=${id}` : null) : null,
+      link: enlaceActividad(id),
     });
     const proyecto = (id: string | null, title: string | null, visibility: string | null): Fuente => ({
       type: 'project', id, title,
-      // El docente solo abre lo que el estudiante habilitó para docentes.
-      link: id ? (viewer === 'student' ? `/student/projects?proyecto=${id}` : viewer === 'teacher' && visibility === 'teachers' ? `/teacher?tab=proyectos&proyecto=${id}` : null) : null,
+      link: enlaceProyecto(id, visibility),
     });
     return (r: AffinityContribution): Fuente => {
       const t = r.sourceEntityType;
@@ -1123,7 +1226,8 @@ export class AffinityEngineService {
         const x = credenciales.find((y) => y.id === id);
         // El archivo es privado: el estudiante lo abre en sus evidencias; el
         // docente ve el nombre y el emisor en la ficha, no el documento.
-        return { type: 'credential', id: id ?? null, title: x ? `${x.certificate_name}${x.issuer ? ` · ${x.issuer}` : ''}` : null,
+        const emisor = x?.issuer ? ` · ${x.issuer}` : '';
+        return { type: 'credential', id: id ?? null, title: x ? `${x.certificate_name}${emisor}` : null,
           link: viewer === 'student' ? '/student/evidences?tab=certificados' : null };
       }
       return { type: 'declaration', id: null, title: null, link: null };

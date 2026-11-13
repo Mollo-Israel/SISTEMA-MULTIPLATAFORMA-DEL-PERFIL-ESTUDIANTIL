@@ -1,6 +1,6 @@
 import { ProjectSkill } from '../entities/project-area.entity';
 import { ActivitySkill } from '../entities/activity-skill.entity';
-import { ExternalCertificateSkill } from '../entities/external-certificate.entity';
+import { ExternalCertificateSkill, ExternalCertificate } from '../entities/external-certificate.entity';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -12,7 +12,6 @@ import { Project } from '../entities/project.entity';
 import { ProjectMember } from '../entities/project-member.entity';
 import { ProjectEvidence } from '../entities/project-evidence.entity';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
-import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { InternalConstancy } from '../entities/internal-constancy.entity';
 import { ValidationRecord } from '../entities/validation-record.entity';
 import { AffinityResult } from '../entities/affinity-result.entity';

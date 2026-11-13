@@ -446,31 +446,22 @@
 <a name='L381'></a><a href='#L381'>381</a>
 <a name='L382'></a><a href='#L382'>382</a>
 <a name='L383'></a><a href='#L383'>383</a>
-<a name='L384'></a><a href='#L384'>384</a>
-<a name='L385'></a><a href='#L385'>385</a>
-<a name='L386'></a><a href='#L386'>386</a>
-<a name='L387'></a><a href='#L387'>387</a>
-<a name='L388'></a><a href='#L388'>388</a>
-<a name='L389'></a><a href='#L389'>389</a>
-<a name='L390'></a><a href='#L390'>390</a>
-<a name='L391'></a><a href='#L391'>391</a>
-<a name='L392'></a><a href='#L392'>392</a>
-<a name='L393'></a><a href='#L393'>393</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<a name='L384'></a><a href='#L384'>384</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -479,7 +470,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -498,15 +489,15 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -650,15 +641,6 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1043,7 +1025,7 @@ export class RecommendationsService {
 <span class="fstat-no" title="function not covered" >  getRules(</span>) {
 <span class="cstat-no" title="statement not covered" >    return {</span>
       rulesVersion: RULES_VERSION,
-      /** V3 §34 · Reparto del ranking. Suma 100; la afinidad no es un factor. */
+      /** V3 §34 / V6 §9.2 · Reparto del ranking (solo lo declarado en el perfil); la afinidad no es un factor. */
       ranking: [
         {
           code: 'preferred_area',
@@ -1069,20 +1051,11 @@ export class RecommendationsService {
           weight: RULES.ranking.orientation,
           detail: 'Áreas que te sugirió el cuestionario y que tú decidiste sumar.',
         },
-        {
-          code: 'activity_interested',
-          label: '«Me interesa» en actividades',
-          weight: RULES.ranking.feedback,
-          detail: 'Áreas y tecnologías de actividades en las que marcaste «Me interesa». Guardar algo o marcarlo como favorito no cuenta.',
-        },
       ],
+      /** V6 §9.1–§9.2: lo que NO ordena las recomendaciones. */
+      sinEfecto: 'Guardar una actividad, inscribirte, abrirla o el antiguo «Me interesa» en actividades no cambian el orden: solo cuenta lo que declaras en tu perfil.',
       /** V3 §34 · Filtros duros antes de puntuar. */
       filters: 'Solo oportunidades visibles, aprobadas, abiertas, con fecha vigente, para tu semestre y con cupo. La afinidad no ordena la lista.',
-      /** V3 §34.1 · «No me interesa». */
-      dismissal: {
-        factor: RULES.dismissal.factor,
-        detail: 'Cada recomendación parecida que descartaste (misma área y tipo) multiplica la prioridad por este factor. No cambia tus intereses: eso se hace en Mi perfil → Intereses.',
-      },
       /** §62 · Prioridades para sugerir un compañero, en su orden. */
       teammate: [
         {
@@ -1246,7 +1219,7 @@ export class RecommendationsService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-28T15:55:56.993Z
+                at 2026-11-12T06:56:13.243Z
             </div>
         <script src="../prettify.js"></script>
         <script>

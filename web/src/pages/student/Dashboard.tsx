@@ -87,100 +87,110 @@ export default function StudentDashboard() {
 
       {summary.loading && !d ? (
         <SkeletonCards count={3} />
-      ) : summary.error ? (
+      ) : <>{summary.error ? (
         <Card><p className="muted">{summary.error}</p></Card>
-      ) : d ? (
-        <>
-          {(() => {
-            const paso = siguientePaso(d);
-            return (
-              <motion.div className="next-step" variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={1}>
-                <span className="ns-icon"><FiArrowRight /></span>
-                <div className="grow">
-                  <span className="ns-kicker">Tu siguiente paso</span>
-                  <strong>{paso.titulo}</strong>
-                  <p>{paso.texto}</p>
-                </div>
-                <Link to={paso.to} className="btn btn-primary">{paso.cta}</Link>
-              </motion.div>
-            );
-          })()}
-
-          <div className="home-stats">
-            {[
-              { n: d.projects.length, l: 'proyectos', c: 'c3' },
-              { n: d.activities.length, l: 'actividades', c: 'c2' },
-              { n: d.externalCertificates.length + d.internalConstancies.length, l: 'certificados y constancias', c: 'c4' },
-              { n: d.skills.length, l: 'tecnologías con respaldo', c: 'c1' },
-            ].map((s, i) => (
-              <motion.div key={s.l} className={`home-stat ${s.c}`} variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={i + 2}>
-                <span className="n">{s.n}</span>
-                <span className="l">{s.l}</span>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="dash-grid3" style={{ marginTop: '1rem' }}>
-            <div className="chart-card">
-              <div className="flex between">
-                <h3>Tus áreas fuertes</h3>
-                <Link to="/student/affinity" className="btn btn-ghost btn-sm">Ver detalle</Link>
-              </div>
-              {d.affinities.length > 0 ? (
-                <AffinityBars data={d.affinities.map((a) => ({ area: a.area ?? '—', score: Number(a.score), level: a.level }))} />
-              ) : (
-                <p className="muted">Aparecen a medida que cargas proyectos, actividades y certificados.</p>
-              )}
-            </div>
-
-            <Card title="Tus actividades">
-              {d.activities.length === 0 ? (
-                <p className="muted">Todavía no te inscribiste en ninguna.</p>
-              ) : (
-                d.activities.slice(0, 4).map((a) => (
-                  <div className="act-item" key={a.activityId}>
-                    <span className="ai"><FiCalendar /></span>
-                    <span className="grow"><b>{a.title}</b><span>{lbl(ACTIVITY_TYPE_LABEL, a.type ?? '')}</span></span>
-                    <span className="badge badge-bordo">{lbl(REGISTRATION_STATUS_LABEL, a.status)}</span>
-                  </div>
-                ))
-              )}
-            </Card>
-
-            <Card title="Tus proyectos">
-              {d.projects.length === 0 ? (
-                <p className="muted">Todavía no registraste ninguno.</p>
-              ) : (
-                d.projects.slice(0, 4).map((p) => (
-                  <div className="act-item" key={p.id}>
-                    <span className="ai"><FiFolder /></span>
-                    <span className="grow"><b>{p.title}</b><span>{(p.technologies ?? []).join(', ') || '—'}</span></span>
-                    <span className="badge badge-gray">{lbl(PROJECT_STATUS_LABEL, p.status)}</span>
-                  </div>
-                ))
-              )}
-            </Card>
-          </div>
-
-          <h2 className="home-h2">¿Qué quieres hacer?</h2>
-          <div className="qa-grid">
-            {ATAJOS.map((q, i) => (
-              <motion.div key={q.t} variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={i}>
-                <Link to={q.to} className={`qa-card tinted ${q.c}`}>
-                  <span className="qi">{q.icon}</span>
-                  <b>{q.t}</b>
-                  <span>{q.d}</span>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-
-          <p className="home-foot">
-            <FiBarChart2 /> Lo que declaras orienta tus recomendaciones; tus proyectos, actividades y
-            certificados son lo que demuestra tus áreas fuertes.
-          </p>
-        </>
-      ) : null}
+      ) : <>{d ? (
+        <ResumenDeInicio d={d} primera={primera} />
+      ) : null}</>}</>}
     </div>
+  );
+}
+
+/** El inicio con datos: siguiente paso, cifras, áreas fuertes, actividades, proyectos y atajos. */
+function ResumenDeInicio({ d, primera }: Readonly<{
+  d: ProfileSummary;
+  primera: boolean;
+}>) {
+  return (
+    <>
+      {(() => {
+        const paso = siguientePaso(d);
+        return (
+          <motion.div className="next-step" variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={1}>
+            <span className="ns-icon"><FiArrowRight /></span>
+            <div className="grow">
+              <span className="ns-kicker">Tu siguiente paso</span>
+              <strong>{paso.titulo}</strong>
+              <p>{paso.texto}</p>
+            </div>
+            <Link to={paso.to} className="btn btn-primary">{paso.cta}</Link>
+          </motion.div>
+        );
+      })()}
+
+      <div className="home-stats">
+        {[
+          { n: d.projects.length, l: 'proyectos', c: 'c3' },
+          { n: d.activities.length, l: 'actividades', c: 'c2' },
+          { n: d.externalCertificates.length + d.internalConstancies.length, l: 'certificados y constancias', c: 'c4' },
+          { n: d.skills.length, l: 'tecnologías con respaldo', c: 'c1' },
+        ].map((s, i) => (
+          <motion.div key={s.l} className={`home-stat ${s.c}`} variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={i + 2}>
+            <span className="n">{s.n}</span>
+            <span className="l">{s.l}</span>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="dash-grid3" style={{ marginTop: '1rem' }}>
+        <div className="chart-card">
+          <div className="flex between">
+            <h3>Tus áreas fuertes</h3>
+            <Link to="/student/affinity" className="btn btn-ghost btn-sm">Ver detalle</Link>
+          </div>
+          {d.affinities.length > 0 ? (
+            <AffinityBars data={d.affinities.map((a) => ({ area: a.area ?? '—', score: Number(a.score), level: a.level }))} />
+          ) : (
+            <p className="muted">Aparecen a medida que cargas proyectos, actividades y certificados.</p>
+          )}
+        </div>
+
+        <Card title="Tus actividades">
+          {d.activities.length === 0 ? (
+            <p className="muted">Todavía no te inscribiste en ninguna.</p>
+          ) : (
+            d.activities.slice(0, 4).map((a) => (
+              <div className="act-item" key={a.activityId}>
+                <span className="ai"><FiCalendar /></span>
+                <span className="grow"><b>{a.title}</b><span>{lbl(ACTIVITY_TYPE_LABEL, a.type ?? '')}</span></span>
+                <span className="badge badge-bordo">{lbl(REGISTRATION_STATUS_LABEL, a.status)}</span>
+              </div>
+            ))
+          )}
+        </Card>
+
+        <Card title="Tus proyectos">
+          {d.projects.length === 0 ? (
+            <p className="muted">Todavía no registraste ninguno.</p>
+          ) : (
+            d.projects.slice(0, 4).map((p) => (
+              <div className="act-item" key={p.id}>
+                <span className="ai"><FiFolder /></span>
+                <span className="grow"><b>{p.title}</b><span>{(p.technologies ?? []).join(', ') || '—'}</span></span>
+                <span className="badge badge-gray">{lbl(PROJECT_STATUS_LABEL, p.status)}</span>
+              </div>
+            ))
+          )}
+        </Card>
+      </div>
+
+      <h2 className="home-h2">¿Qué quieres hacer?</h2>
+      <div className="qa-grid">
+        {ATAJOS.map((q, i) => (
+          <motion.div key={q.t} variants={aparecer} initial={primera ? 'hidden' : false} animate="show" custom={i}>
+            <Link to={q.to} className={`qa-card tinted ${q.c}`}>
+              <span className="qi">{q.icon}</span>
+              <b>{q.t}</b>
+              <span>{q.d}</span>
+            </Link>
+          </motion.div>
+        ))}
+      </div>
+
+      <p className="home-foot">
+        <FiBarChart2 /> Lo que declaras orienta tus recomendaciones; tus proyectos, actividades y
+        certificados son lo que demuestra tus áreas fuertes.
+      </p>
+    </>
   );
 }

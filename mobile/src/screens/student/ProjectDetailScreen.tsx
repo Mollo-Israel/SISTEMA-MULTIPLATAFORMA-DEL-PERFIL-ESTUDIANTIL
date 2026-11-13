@@ -2,15 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { abrirArchivo } from '../../archivos';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiError } from '../../api/client';
-import {
-  catalogService,
-  evidenceService,
-  profileService,
-  projectFeedbackService,
-  projectInvitationService,
-  projectService,
-  uploadService,
-} from '../../services';
+import { catalogService, evidenceService, profileService, projectFeedbackService, projectInvitationService, projectService } from '../../services';
 import {
   Screen,
   Card,
@@ -372,60 +364,13 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
       </View>
 
       {readiness && (
-        <Card title="Para activarlo">
-          {readiness.missing.length === 0 ? (
-            <Muted>Cumple todo lo necesario.</Muted>
-          ) : (
-            readiness.missing.map((m: any) => <Muted key={m.code}>• {m.message}</Muted>)
-          )}
-          {(readiness.warnings ?? []).map((w: string) => <Muted key={w}>{w}</Muted>)}
-          {isOwner && (
-            <Button
-              title="Activar proyecto"
-              icon="check"
-              onPress={activar}
-              loading={activando}
-              disabled={!readiness.ready}
-            />
-          )}
-        </Card>
+        <ParaActivarlo readiness={readiness} isOwner={isOwner} activando={activando} onActivar={activar} />
       )}
 
 
       {/* ---------------- Datos del proyecto ---------------- */}
       {!editing ? (
-        <Card title="Información">
-          {project.description ? (
-            <Text style={styles.desc}>{project.description}</Text>
-          ) : (
-            <Muted>Sin descripción.</Muted>
-          )}
-          <Muted>Área: {project.academicArea?.name ?? 'Sin área'}</Muted>
-          {project.technologies?.length ? (
-            <View style={styles.tags}>
-              {project.technologies.map((t: string) => (
-                <Badge key={t}>{t}</Badge>
-              ))}
-            </View>
-          ) : (
-            <Muted>Sin tecnologías declaradas.</Muted>
-          )}
-          {project.repositoryUrl ? (
-            <Button
-              title="Abrir repositorio"
-              variant="secondary"
-              onPress={() => Linking.openURL(project.repositoryUrl)}
-            />
-          ) : null}
-          {project.demoUrl ? (
-            <Button
-              title="Abrir demostración"
-              variant="secondary"
-              onPress={() => Linking.openURL(project.demoUrl)}
-            />
-          ) : null}
-          {isOwner && <Button icon="edit-2" title="Editar proyecto" onPress={() => setEditing(true)} />}
-        </Card>
+        <InformacionDelProyecto project={project} isOwner={isOwner} onEditar={() => setEditing(true)} />
       ) : (
         <Card title="Editar proyecto">
           <Field
@@ -683,49 +628,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
 
       {/* ---------------- Invitaciones enviadas (solo responsable) ---------------- */}
       {isOwner && (
-        <Card title={`Invitaciones enviadas (${invitations.length})`}>
-          {invitations.length === 0 ? (
-            <Muted>Todavía no enviaste invitaciones.</Muted>
-          ) : (
-            <>
-              {pendingInvites.map((i) => (
-                <View key={i.id} style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>{i.invitedName ?? 'Estudiante'}</Text>
-                    <Text style={styles.meta}>{i.proposedRole}</Text>
-                    <View style={{ marginTop: 4 }}>
-                      <Badge color={colors.amber}>{INVITATION_LABEL[i.status]}</Badge>
-                    </View>
-                  </View>
-                  <Pressable onPress={() => cancelInvitation(i.id)} hitSlop={8}>
-                    <Text style={styles.danger}>Cancelar</Text>
-                  </Pressable>
-                </View>
-              ))}
-              {answeredInvites.map((i) => (
-                <View key={i.id} style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>{i.invitedName ?? 'Estudiante'}</Text>
-                    <Text style={styles.meta}>{i.proposedRole}</Text>
-                    <View style={{ marginTop: 4 }}>
-                      <Badge
-                        color={
-                          i.status === 'accepted'
-                            ? colors.green
-                            : i.status === 'rejected'
-                              ? colors.red
-                              : colors.gray500
-                        }
-                      >
-                        {INVITATION_LABEL[i.status]}
-                      </Badge>
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </>
-          )}
-        </Card>
+        <InvitacionesEnviadas invitations={invitations} pendingInvites={pendingInvites} answeredInvites={answeredInvites} onCancelar={cancelInvitation} />
       )}
 
       {/* ---------------- Evidencias ---------------- */}
@@ -744,7 +647,7 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
               <Pressable
                 onPress={() =>
                   ev.evidenceType === 'file'
-                    ? abrirArchivo(ev.fileUrl, 'evidencia').catch((x) => toast.error(x.message))
+                    ? abrirArchivo(ev.fileUrl, 'evidencia').catch((error_) => toast.error(error_.message))
                     : Linking.openURL(ev.externalUrl)
                 }
                 hitSlop={8}
@@ -774,42 +677,13 @@ export default function ProjectDetailScreen({ route, navigation }: any) {
           disabled={addingEvidence || !evidenceUrl}
         />
         <Muted>
-          Para adjuntar un archivo (PDF o imagen), usa la pantalla “Evidencias y certificados” de tu
-          perfil y elige este proyecto.
+          Para adjuntar un archivo (PDF o imagen), hazlo desde la web, en «Mis proyectos»: la
+          app solo agrega enlaces.
         </Muted>
       </Card>
 
       {/* ---------------- Retroalimentación docente ---------------- */}
-      <Card title={`Retroalimentación docente (${feedback.length})`}>
-        <Muted>
-          Orientación académica complementaria de tus docentes. No es una nota ni una evaluación
-          oficial.
-        </Muted>
-        {feedback.length === 0 ? (
-          <EmptyState
-            message={
-              project.visibility === 'teachers'
-                ? 'Todavía no recibes retroalimentación en este proyecto.'
-                : 'Marca el proyecto como visible para docentes si quieres recibir retroalimentación.'
-            }
-          />
-        ) : (
-          feedback.map((f: any) => (
-            <View key={f.id} style={styles.feedbackBox}>
-              <Text style={styles.desc}>{f.comment}</Text>
-              <Text style={styles.meta}>
-                {f.teacher ?? 'Docente'} ·{' '}
-                {new Date(f.createdAt).toLocaleDateString('es-BO', {
-                  day: '2-digit',
-                  month: 'long',
-                  year: 'numeric',
-                })}
-                {f.editedAt ? ' · editada' : ''}
-              </Text>
-            </View>
-          ))
-        )}
-      </Card>
+      <RetroalimentacionDocente feedback={feedback} visibleParaDocentes={project.visibility === 'teachers'} />
     </Screen>
   );
 }
@@ -865,3 +739,149 @@ const styles = StyleSheet.create({
   },
   avisoTexto: { fontSize: 12, color: colors.gray700, lineHeight: 17 },
 });
+
+/** El color de una invitación: aceptada, rechazada o pendiente. */
+function colorDeInvitacion(status: string): string {
+  if (status === 'accepted') return colors.green;
+  return status === 'rejected' ? colors.red : colors.gray500;
+}
+
+/** V3 §22: qué le falta a un borrador para activarse y el botón para hacerlo. */
+function ParaActivarlo({ readiness, isOwner, activando, onActivar }: Readonly<{ readiness: any; isOwner: boolean; activando: boolean; onActivar: () => void }>) {
+  return (
+    <Card title="Para activarlo">
+      {readiness.missing.length === 0 ? (
+        <Muted>Cumple todo lo necesario.</Muted>
+      ) : (
+        readiness.missing.map((m: any) => <Muted key={m.code}>• {m.message}</Muted>)
+      )}
+      {(readiness.warnings ?? []).map((w: string) => <Muted key={w}>{w}</Muted>)}
+      {isOwner && (
+        <Button
+          title="Activar proyecto"
+          icon="check"
+          onPress={onActivar}
+          loading={activando}
+          disabled={!readiness.ready}
+        />
+      )}
+    </Card>
+  );
+}
+
+/** Descripción, área, tecnologías y enlaces del proyecto. */
+function InformacionDelProyecto({ project, isOwner, onEditar }: Readonly<{ project: any; isOwner: boolean; onEditar: () => void }>) {
+  return (
+    <Card title="Información">
+      {project.description ? (
+        <Text style={styles.desc}>{project.description}</Text>
+      ) : (
+        <Muted>Sin descripción.</Muted>
+      )}
+      <Muted>Área: {project.academicArea?.name ?? 'Sin área'}</Muted>
+      {project.technologies?.length ? (
+        <View style={styles.tags}>
+          {project.technologies.map((t: string) => (
+            <Badge key={t}>{t}</Badge>
+          ))}
+        </View>
+      ) : (
+        <Muted>Sin tecnologías declaradas.</Muted>
+      )}
+      {project.repositoryUrl ? (
+        <Button
+          title="Abrir repositorio"
+          variant="secondary"
+          onPress={() => Linking.openURL(project.repositoryUrl)}
+        />
+      ) : null}
+      {project.demoUrl ? (
+        <Button
+          title="Abrir demostración"
+          variant="secondary"
+          onPress={() => Linking.openURL(project.demoUrl)}
+        />
+      ) : null}
+      {isOwner && <Button icon="edit-2" title="Editar proyecto" onPress={onEditar} />}
+    </Card>
+  );
+}
+
+/** Invitaciones del responsable: las pendientes se pueden cancelar. */
+function InvitacionesEnviadas({ invitations, pendingInvites, answeredInvites, onCancelar }: Readonly<{ invitations: any[]; pendingInvites: any[]; answeredInvites: any[]; onCancelar: (id: string) => void }>) {
+  return (
+    <Card title={`Invitaciones enviadas (${invitations.length})`}>
+      {invitations.length === 0 ? (
+        <Muted>Todavía no enviaste invitaciones.</Muted>
+      ) : (
+        <>
+          {pendingInvites.map((i) => (
+            <View key={i.id} style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{i.invitedName ?? 'Estudiante'}</Text>
+                <Text style={styles.meta}>{i.proposedRole}</Text>
+                <View style={{ marginTop: 4 }}>
+                  <Badge color={colors.amber}>{INVITATION_LABEL[i.status]}</Badge>
+                </View>
+              </View>
+              <Pressable onPress={() => onCancelar(i.id)} hitSlop={8}>
+                <Text style={styles.danger}>Cancelar</Text>
+              </Pressable>
+            </View>
+          ))}
+          {answeredInvites.map((i) => (
+            <View key={i.id} style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{i.invitedName ?? 'Estudiante'}</Text>
+                <Text style={styles.meta}>{i.proposedRole}</Text>
+                <View style={{ marginTop: 4 }}>
+                  <Badge
+                    color={colorDeInvitacion(i.status)}
+                  >
+                    {INVITATION_LABEL[i.status]}
+                  </Badge>
+                </View>
+              </View>
+            </View>
+          ))}
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** La retroalimentación de los docentes: orientación, no una nota. */
+function RetroalimentacionDocente({ feedback, visibleParaDocentes }: Readonly<{ feedback: any[]; visibleParaDocentes: boolean }>) {
+  return (
+    <Card title={`Retroalimentación docente (${feedback.length})`}>
+      <Muted>
+        Orientación académica complementaria de tus docentes. No es una nota ni una evaluación
+        oficial.
+      </Muted>
+      {feedback.length === 0 ? (
+        <EmptyState
+          message={
+            visibleParaDocentes
+              ? 'Todavía no recibes retroalimentación en este proyecto.'
+              : 'Marca el proyecto como visible para docentes si quieres recibir retroalimentación.'
+          }
+        />
+      ) : (
+        feedback.map((f: any) => (
+          <View key={f.id} style={styles.feedbackBox}>
+            <Text style={styles.desc}>{f.comment}</Text>
+            <Text style={styles.meta}>
+              {f.teacher ?? 'Docente'} ·{' '}
+              {new Date(f.createdAt).toLocaleDateString('es-BO', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric',
+              })}
+              {f.editedAt ? ' · editada' : ''}
+            </Text>
+          </View>
+        ))
+      )}
+    </Card>
+  );
+}

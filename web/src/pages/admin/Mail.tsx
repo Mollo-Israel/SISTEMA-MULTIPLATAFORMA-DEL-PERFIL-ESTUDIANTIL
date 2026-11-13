@@ -94,8 +94,7 @@ export default function AdminMailPage() {
             <Card title="Cómo activar el correo real">
               <ol className="steps">
                 <li>
-                  Abra el archivo <code>.env</code> en la raíz del proyecto y rellene las variables
-                  <code> SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>,{' '}
+                  Abra el archivo <code>.env</code> en la raíz del proyecto y rellene las variables<code> SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>,{' '}
                   <code>SMTP_PASSWORD</code> y <code>SMTP_FROM</code>. El archivo{' '}
                   <code>.env.example</code> trae los valores listos para Gmail, Outlook y Brevo.
                 </li>
@@ -125,20 +124,13 @@ function EstadoCard({
   s,
   onVerify,
   verifying,
-}: {
+}: Readonly<{
   s: MailStatus;
   onVerify: () => void;
   verifying: boolean;
-}) {
+}>) {
   const real = s.transport !== 'console';
-  const conexion =
-    s.connection === 'ok'
-      ? { tono: 'green', icono: <FiCheckCircle />, texto: 'Conectado' }
-      : s.connection === 'checking'
-        ? { tono: 'amber', icono: <FiRefreshCw />, texto: 'Comprobando…' }
-        : s.connection === 'error'
-          ? { tono: 'red', icono: <FiXCircle />, texto: 'Sin conexión' }
-          : { tono: 'gray', icono: <FiInfo />, texto: 'No aplica' };
+  const conexion = estadoDeConexion(s.connection);
 
   return (
     <Card
@@ -214,4 +206,12 @@ function EstadoCard({
       ))}
     </Card>
   );
+}
+
+/** Cómo se muestra el estado de la conexión con el proveedor de correo. */
+function estadoDeConexion(connection: MailStatus['connection']) {
+  if (connection === 'ok') return { tono: 'green', icono: <FiCheckCircle />, texto: 'Conectado' };
+  if (connection === 'checking') return { tono: 'amber', icono: <FiRefreshCw />, texto: 'Comprobando…' };
+  if (connection === 'error') return { tono: 'red', icono: <FiXCircle />, texto: 'Sin conexión' };
+  return { tono: 'gray', icono: <FiInfo />, texto: 'No aplica' };
 }

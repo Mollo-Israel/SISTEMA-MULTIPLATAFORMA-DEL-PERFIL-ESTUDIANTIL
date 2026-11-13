@@ -1,6 +1,53 @@
-import { expect, Page, TestInfo } from '@playwright/test';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { expect, Page, TestInfo, test as base } from '@playwright/test';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+/**
+ * El `test` de Playwright con un agregado: con PRUEBAS_COBERTURA=1 y en
+ * Chromium, registra el JavaScript que ejecuta la página (cobertura de V8) y
+ * lo guarda en pruebas/03-playwright/cobertura-v8/ para pasarlo a lcov
+ * (scripts/pruebas/cobertura.mjs convertir). Sin esa variable no hace nada,
+ * y un fallo al medir nunca cambia el resultado de una prueba.
+ */
+export const test = base.extend<{ coberturaWeb: void }>({
+  coberturaWeb: [
+    async ({ page, browserName }, use, info) => {
+      if (process.env.PRUEBAS_COBERTURA !== '1' || browserName !== 'chromium') {
+        await use();
+        return;
+      }
+      // V8 descarta la cobertura de un documento al cargar otro: se recoge
+      // antes de cada navegación completa (goto o reload) y al terminar.
+      const entradas: unknown[] = [];
+      const recoger = async (seguir: boolean) => {
+        try {
+          entradas.push(...(await page.coverage.stopJSCoverage()).filter((e) => e.url.includes('/assets/')));
+          if (seguir) await page.coverage.startJSCoverage({ resetOnNavigation: false });
+        } catch {
+          // La página ya se cerró: lo recogido hasta aquí se conserva.
+        }
+      };
+      await page.coverage.startJSCoverage({ resetOnNavigation: false }).catch(() => {});
+      const ir = page.goto.bind(page);
+      page.goto = async (url, opciones) => {
+        await recoger(true);
+        return ir(url, opciones);
+      };
+      const recargar = page.reload.bind(page);
+      page.reload = async (opciones) => {
+        await recoger(true);
+        return recargar(opciones);
+      };
+      await use();
+      await recoger(false);
+      const dir = join('pruebas', '03-playwright', 'cobertura-v8');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, `${info.testId}.json`), JSON.stringify(entradas));
+    },
+    { auto: true },
+  ],
+});
+export { expect };
 
 /** Valor de la raíz `.env` (la contraseña del administrador nunca va en el código). */
 function deEnv(clave: string): string {

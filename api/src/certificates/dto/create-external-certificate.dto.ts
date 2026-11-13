@@ -58,7 +58,7 @@ export class CreateExternalCertificateDto {
   @Transform(cleanLine)
   @IsString()
   @MaxLength(80, { message: 'El identificador de credencial es demasiado largo.' })
-  @Matches(/^[A-Za-z0-9._\/-]+$/, {
+  @Matches(/^[A-Za-z0-9._/-]+$/, {
     message: 'El identificador de credencial solo admite letras, números, punto, guion y barra.',
   })
   credentialId?: string;

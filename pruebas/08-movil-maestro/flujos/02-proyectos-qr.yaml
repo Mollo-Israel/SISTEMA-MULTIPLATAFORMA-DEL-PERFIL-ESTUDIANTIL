@@ -1,6 +1,8 @@
-# Flujo del estudiante: abrir proyectos y compartir el perfil por QR
-# (Investigación §3.4 y tareas de §3.8). Mismos requisitos que el flujo 01.
-appId: host.exp.exponent
+# Flujo del estudiante: abrir proyectos y compartir el perfil
+# (Investigación §3.4 y tareas de §3.8). En el móvil se comparte el enlace del
+# perfil, que es lo mismo que lleva el código QR; la imagen del QR se imprime
+# desde la web. Mismos requisitos que el flujo 01.
+appId: com.afinia.app
 env:
   EMAIL: ana.quispe@est.univalle.edu
   PASSWORD: Univalle2026*
@@ -19,20 +21,35 @@ env:
 - hideKeyboard
 - tapOn: "Ingresar"
 - extendedWaitUntil:
-    visible: "Inicio"
+    visible: ".*Hola, Ana.*"
     timeout: 30000
-- tapOn: "Proyectos"
+# Proyectos: el portafolio propio.
+- tapOn: ".*, Proyectos"
 - extendedWaitUntil:
     visible: "Portafolio"
     timeout: 20000
 - takeScreenshot: 08-proyectos
-- tapOn: "Perfil"
+# Perfil → Colaboración y equipos: enlace compartible (el contenido del QR)
+# y canales de contacto; no hay chat dentro de Afinia.
+- tapOn: ".*, Perfil"
 - scrollUntilVisible:
-    element: "Colaboración"
+    element: "Colaboración y equipos"
     direction: DOWN
     timeout: 20000
-    optional: true
-- tapOn:
-    text: "Colaboración"
-    optional: true
+    centerElement: true
+- tapOn: "Colaboración y equipos"
+- extendedWaitUntil:
+    visible: ".*El código QR lleva solo este enlace.*"
+    timeout: 20000
+- assertNotVisible: "Mensajes"
 - takeScreenshot: 09-colaboracion-qr
+- scrollUntilVisible:
+    element: "Cómo contactarte"
+    direction: DOWN
+    timeout: 20000
+# Salir vuelve a la pantalla de ingreso.
+- back
+- tapOn: "Cerrar sesión"
+- extendedWaitUntil:
+    visible: "Ingresar"
+    timeout: 20000

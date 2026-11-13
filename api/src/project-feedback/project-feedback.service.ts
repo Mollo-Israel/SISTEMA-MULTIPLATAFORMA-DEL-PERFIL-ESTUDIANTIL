@@ -8,8 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RolNombre } from '@perfil/shared';
-import { ProjectSkillEvidenceStatus, ProjectEventType } from '@perfil/shared';
+import { RolNombre, ProjectSkillEvidenceStatus, ProjectEventType } from '@perfil/shared';
 import { ProjectFeedback } from '../entities/project-feedback.entity';
 import { ProjectEventsService } from '../projects/project-events.service';
 import { ProjectBackingService } from '../projects/project-backing.service';

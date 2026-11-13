@@ -71,6 +71,37 @@ import {
 import { useToast } from '../../components/feedback';
 import { PROJECT_STATUS_LABEL, lbl } from '../../constants';
 
+type FormProyecto = typeof emptyForm;
+
+/** Áreas de trabajo de cada tecnología elegida, solo si el área sigue elegida. */
+function contextosElegidos(form: FormProyecto) {
+  return form.skillIds
+    .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
+    .map((id) => ({ skillId: id, areaId: form.skillContexts[id] }));
+}
+
+/** Un proyecto que nace de un equipo: a quién invitar y a quién dejar fuera. */
+function datosDeEquipo(form: FormProyecto) {
+  if (form.origen !== 'equipo' || !form.teamId) {
+    return { teamId: undefined, inviteTeamMembers: undefined, excludedTeamMembers: undefined };
+  }
+  return {
+    teamId: form.teamId,
+    inviteTeamMembers: form.inviteTeamMembers,
+    excludedTeamMembers: form.inviteTeamMembers
+      ? Object.entries(form.excluidos).map(([profileId, reason]) => ({ profileId, reason: reason.trim() }))
+      : undefined,
+  };
+}
+
+/** Aviso al guardar el borrador: cuántas invitaciones salieron o qué falta. */
+function avisoDeBorrador(form: FormProyecto, invitados: number): string {
+  if (form.origen === 'contactos' && form.contactos.length) {
+    return `Se invitó a ${invitados} de ${form.contactos.length} contacto(s); cada uno acepta y confirma su contribución.`;
+  }
+  return 'Completa lo que falta en su tarjeta y actívalo.';
+}
+
 const emptyForm = {
   title: '',
   description: '',
@@ -231,57 +262,47 @@ export default function StudentProjectsPage() {
 
   // V3 §21: se guarda como borrador aunque esté incompleto; se activa cuando
   // cumple los requisitos (§22), desde la tarjeta del proyecto.
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // V3 §67: error debajo de cada campo, no el globo del navegador.
-    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
-    setCreating(true);
-    if (editando) {
-      try {
-        await projectService.update(editando.id, {
-          title: form.title,
-          description: form.description || null,
-          areaIds: form.areaIds,
-          skillIds: form.skillIds,
-          skillContexts: form.skillIds
-            .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
-            .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
-          skillSources: fuentesElegidas(),
-          repositoryUrl: form.repositoryUrl || null,
-          demoUrl: form.demoUrl || null,
-          visibility: form.visibility,
-        });
-        const eraActivo = editando.status === 'active';
-        cancelarEdicion();
-        await load();
-        toast.success('Cambios guardados', eraActivo
-          ? 'Si cambiaste el repositorio o la demo, se vuelven a comprobar; los integrantes afectados reconfirman su contribución.'
-          : 'Sigue siendo un borrador hasta que lo actives.');
-      } catch (err) {
-        toast.error(apiError(err));
-      } finally {
-        setCreating(false);
-      }
-      return;
+  /** Guarda los cambios de un proyecto existente. */
+  const guardarEdicion = async (proyecto: NonNullable<typeof editando>) => {
+    try {
+      await projectService.update(proyecto.id, {
+        title: form.title,
+        description: form.description || null,
+        areaIds: form.areaIds,
+        skillIds: form.skillIds,
+        skillContexts: contextosElegidos(form),
+        skillSources: fuentesElegidas(),
+        repositoryUrl: form.repositoryUrl || null,
+        demoUrl: form.demoUrl || null,
+        visibility: form.visibility,
+      });
+      const eraActivo = proyecto.status === 'active';
+      cancelarEdicion();
+      await load();
+      toast.success('Cambios guardados', eraActivo
+        ? 'Si cambiaste el repositorio o la demo, se vuelven a comprobar; los integrantes afectados reconfirman su contribución.'
+        : 'Sigue siendo un borrador hasta que lo actives.');
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally {
+      setCreating(false);
     }
+  };
+
+  /** Crea el borrador y, si se eligieron contactos, los invita. */
+  const crearBorrador = async () => {
     try {
       const creado = await projectService.create({
         title: form.title,
         description: form.description || undefined,
         areaIds: form.areaIds,
         skillIds: form.skillIds,
-        skillContexts: form.skillIds
-          .filter((id) => form.skillContexts[id] && form.areaIds.includes(form.skillContexts[id]))
-          .map((id) => ({ skillId: id, areaId: form.skillContexts[id] })),
+        skillContexts: contextosElegidos(form),
         skillSources: fuentesElegidas(),
         repositoryUrl: form.repositoryUrl || undefined,
         demoUrl: form.demoUrl || undefined,
         visibility: form.visibility,
-        teamId: form.origen === 'equipo' && form.teamId ? form.teamId : undefined,
-        inviteTeamMembers: form.origen === 'equipo' && form.teamId ? form.inviteTeamMembers : undefined,
-        excludedTeamMembers: form.origen === 'equipo' && form.teamId && form.inviteTeamMembers
-          ? Object.entries(form.excluidos).map(([profileId, reason]) => ({ profileId, reason: reason.trim() }))
-          : undefined,
+        ...datosDeEquipo(form),
         status: 'draft',
       });
       // V5-28: los contactos elegidos reciben una invitación; ninguno es integrante hasta aceptar.
@@ -293,14 +314,24 @@ export default function StudentProjectsPage() {
       }
       setForm(emptyForm);
       await load();
-      toast.success('Borrador guardado', form.origen === 'contactos' && form.contactos.length
-        ? `Se invitó a ${invitados} de ${form.contactos.length} contacto(s); cada uno acepta y confirma su contribución.`
-        : 'Completa lo que falta en su tarjeta y actívalo.');
+      toast.success('Borrador guardado', avisoDeBorrador(form, invitados));
     } catch (err) {
       toast.error(apiError(err));
     } finally {
       setCreating(false);
     }
+  };
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // V3 §67: error debajo de cada campo, no el globo del navegador.
+    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
+    setCreating(true);
+    if (editando) {
+      await guardarEdicion(editando);
+      return;
+    }
+    await crearBorrador();
   };
 
   const cambiarVisibilidad = async (p: Project, visibility: ProjectVisibility) => {
@@ -530,7 +561,7 @@ export default function StudentProjectsPage() {
                       checked={form.inviteTeamMembers}
                       onChange={(e) => setForm({ ...form, inviteTeamMembers: e.target.checked })}
                     />
-                    Invitar a los integrantes del equipo (cada uno acepta y confirma su contribución)
+                    <span>Invitar a los integrantes del equipo (cada uno acepta y confirma su contribución)</span>
                   </label>
                   {form.inviteTeamMembers && (
                     <ul className="plain-list" data-testid="candidatos-equipo">
@@ -592,12 +623,12 @@ export default function StudentProjectsPage() {
 
       {loading ? (
         <Diferido><SkeletonCards count={3} /></Diferido>
-      ) : projects.length === 0 ? (
+      ) : <>{projects.length === 0 ? (
         <EmptyState
           icon={<FiFolder size={22} />}
           message="Aún no has registrado proyectos. El primero que registres ya suma a tu afinidad."
         />
-      ) : visible.length === 0 ? (
+      ) : <>{visible.length === 0 ? (
         <EmptyState
           icon={<FiFolder size={22} />}
           message={`Ningún proyecto coincide con “${query}”.`}
@@ -643,7 +674,7 @@ export default function StudentProjectsPage() {
                       <span
                         key={sk.skillId}
                         className={`badge ${estado === 'declared' ? 'badge-gray' : 'badge-green'}`}
-                        title={`${SKILL_EVIDENCE_LABEL[estado]}${sk.evidenceSource ? ` · ${sk.evidenceSource}` : ''}`}
+                        title={[SKILL_EVIDENCE_LABEL[estado], sk.evidenceSource].filter(Boolean).join(' · ')}
                       >
                         {sk.skill?.name}{estado !== 'declared' ? ' ✓' : ''}
                       </span>
@@ -707,11 +738,7 @@ export default function StudentProjectsPage() {
               {p.backingTier && (
                 <div className="mt respaldo-proyecto">
                   <Badge
-                    tone={
-                      p.backingTier === 'flagged' ? 'red'
-                        : p.backingTier === 'reviewed' || p.backingTier === 'corroborated' ? 'green'
-                          : p.backingTier === 'supported' ? 'bordo' : 'gray'
-                    }
+                    tone={TONO_DE_RESPALDO[p.backingTier] ?? 'gray'}
                   >
                     <FiShield size={11} /> {PROJECT_BACKING_LABEL[p.backingTier]}
                   </Badge>
@@ -853,7 +880,7 @@ export default function StudentProjectsPage() {
                   <div className="feedback-list">
                     {loadingFeedback === p.id ? (
                       <Loading label="Cargando retroalimentación…" />
-                    ) : (feedback[p.id] ?? []).length === 0 ? (
+                    ) : <>{(feedback[p.id] ?? []).length === 0 ? (
                       <p className="muted">
                         Todavía no recibes retroalimentación en este proyecto. Para que un
                         docente pueda comentarlo debe estar marcado como visible para docentes.
@@ -875,7 +902,7 @@ export default function StudentProjectsPage() {
                           </div>
                         </article>
                       ))
-                    )}
+                    )}</>}
                     <p className="muted" style={{ fontSize: '0.76rem', marginTop: '0.5rem' }}>
                       Orientación académica complementaria. No es una nota ni una evaluación
                       oficial.
@@ -959,7 +986,9 @@ export default function StudentProjectsPage() {
             </Card>
           </Stagger>
         ))
-      )}
+      )}</>}</>}
     </div>
   );
 }
+
+const TONO_DE_RESPALDO: Record<string, string> = { flagged: 'red', reviewed: 'green', corroborated: 'green', supported: 'bordo' };

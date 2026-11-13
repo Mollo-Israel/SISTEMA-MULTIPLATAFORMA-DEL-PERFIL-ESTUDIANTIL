@@ -6,9 +6,11 @@
  * 1. Levanta (o reutiliza) el contenedor `sonarqube-afinia` en :9100.
  * 2. Primera vez: cambia la contraseña por omisión por una aleatoria, guardada
  *    solo en pruebas/07-sonarqube/.credenciales-local.json (ignorado por git).
- * 3. Convierte api/coverage/lcov.info a rutas relativas (el escáner corre en Docker).
+ * 3. Convierte api/coverage/lcov.info a rutas relativas (el escáner corre en Docker)
+ *    y suma, si existen, los lcov de la regresión y de Playwright
+ *    (scripts/pruebas/cobertura.mjs).
  * 4. Corre sonar-scanner-cli y espera a que el servidor procese el análisis.
- * 5. Guarda el Quality Gate y las métricas en pruebas/07-sonarqube/resumen.json.
+ * 5. Guarda el Quality Gate, las métricas y las incidencias en pruebas/07-sonarqube/resumen.json.
  */
 import { execSync, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -88,6 +90,14 @@ if (existsSync(lcov)) {
   writeFileSync(join(RAIZ, 'api', 'coverage', 'lcov-sonar.info'), rel);
 }
 
+// Informes de scripts/pruebas/cobertura.mjs, ya con rutas relativas: el de la API
+// parte de la estructura y los conteos de Jest y suma las demás pruebas, así que
+// reemplaza al de Jest (darle ambos a Sonar contaría dos veces lo mismo).
+const API_COMBINADA = 'pruebas/07-sonarqube/cobertura/api/lcov.info';
+const informes = [existsSync(join(RAIZ, API_COMBINADA)) ? API_COMBINADA : 'api/coverage/lcov-sonar.info', 'pruebas/07-sonarqube/cobertura/web/lcov.info']
+  .filter((r) => existsSync(join(RAIZ, r)));
+console.log(`Informes de cobertura: ${informes.join(', ') || 'ninguno'}`);
+
 // 4. Análisis.
 const raiz = RAIZ.replace(/\\/g, '/');
 const r = spawnSync('docker', [
@@ -96,23 +106,56 @@ const r = spawnSync('docker', [
   '-e', `SONAR_TOKEN=${tok.token}`,
   '-v', `${raiz}:/usr/src`,
   'sonarsource/sonar-scanner-cli',
-  '-Dsonar.javascript.lcov.reportPaths=api/coverage/lcov-sonar.info',
+  `-Dsonar.javascript.lcov.reportPaths=${informes.join(',')}`,
   '-Dsonar.qualitygate.wait=true',
   '-Dsonar.qualitygate.timeout=600',
 ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const salida = `${r.stdout ?? ''}\n${r.stderr ?? ''}`.split(tok.token).join('[token omitido]');
 writeFileSync(join(OUT, 'salida-analisis.txt'), salida);
+// Si el escáner falla, el servidor conserva el análisis anterior: leerlo aquí
+// lo haría pasar por nuevo. Se corta antes de tocar resumen.json. (Con
+// qualitygate.wait, un Quality Gate no aprobado también sale con código 3,
+// pero el análisis sí se completó y se informa normalmente.)
+const gateInformado = /QUALITY GATE STATUS/.test(salida);
+if (r.status !== 0 && !gateInformado) {
+  console.error(`El análisis falló (código ${r.status}). El resumen anterior no se modificó.`);
+  console.error(salida.split('\n').filter((l) => /ERROR|Caused by/.test(l)).slice(0, 8).join('\n'));
+  process.exit(1);
+}
 
 // 5. Resultado.
 const metricas = 'bugs,vulnerabilities,security_hotspots,code_smells,coverage,duplicated_lines_density,ncloc,reliability_rating,security_rating,sqale_rating';
-const [gate, medidas] = await Promise.all([
+// Incidencias abiertas por tipo, cualidad y severidad: en todo el proyecto y en el código nuevo.
+const facetas = async (extra) => {
+  const j = await pedir(`${URL_SONAR}/api/issues/search?componentKeys=afinia&resolved=false&ps=1&facets=types,impactSoftwareQualities,impactSeverities${extra}`, { headers: auth }).then((x) => x.json());
+  return { total: j.total, ...Object.fromEntries((j.facets ?? []).map((f) => [f.property, Object.fromEntries(f.values.map((v) => [v.val, v.count]))])) };
+};
+const [gate, medidas, analisis, todo, codigoNuevo] = await Promise.all([
   pedir(`${URL_SONAR}/api/qualitygates/project_status?projectKey=afinia`, { headers: auth }).then((x) => x.json()),
   pedir(`${URL_SONAR}/api/measures/component?component=afinia&metricKeys=${metricas}`, { headers: auth }).then((x) => x.json()),
+  pedir(`${URL_SONAR}/api/project_analyses/search?project=afinia&ps=1`, { headers: auth }).then((x) => x.json()),
+  facetas(''),
+  facetas('&inNewCodePeriod=true'),
 ]);
+// Cobertura por paquete, en todo el código y en el código nuevo (las métricas
+// «new_*» llegan en «period» y no en «value»).
+const valor = (m) => m.value ?? m.period?.value ?? m.periods?.[0]?.value;
+const metricasCobertura = 'coverage,line_coverage,branch_coverage,lines_to_cover,uncovered_lines,'
+  + 'new_coverage,new_line_coverage,new_branch_coverage,new_lines_to_cover,new_uncovered_lines';
+const cobertura = {};
+for (const paquete of ['api/src', 'web/src', 'mobile/src', 'shared/src', '']) {
+  const componente = encodeURIComponent(paquete ? `afinia:${paquete}` : 'afinia');
+  const j = await pedir(`${URL_SONAR}/api/measures/component?component=${componente}&metricKeys=${metricasCobertura}`, { headers: auth }).then((x) => x.json());
+  cobertura[paquete || 'total'] = Object.fromEntries((j.component?.measures ?? []).map((m) => [m.metric, valor(m)]));
+}
 const resumen = {
   qualityGate: gate.projectStatus?.status,
   condiciones: gate.projectStatus?.conditions,
-  metricas: Object.fromEntries((medidas.component?.measures ?? []).map((m) => [m.metric, m.value])),
+  metricas: Object.fromEntries((medidas.component?.measures ?? []).map((m) => [m.metric, valor(m)])),
+  cobertura,
+  incidencias: { todo, codigoNuevo },
+  informesDeCobertura: informes,
+  analisis: analisis.analyses?.[0]?.date,
   fecha: new Date().toISOString(),
 };
 writeFileSync(join(OUT, 'resumen.json'), JSON.stringify(resumen, null, 2));

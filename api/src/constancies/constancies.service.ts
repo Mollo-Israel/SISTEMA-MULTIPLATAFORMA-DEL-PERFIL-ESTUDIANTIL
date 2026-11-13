@@ -232,13 +232,8 @@ export class ConstanciesService {
    * subir. Un archivo común (plantilla) o ninguno; el código de verificación
    * es opcional. Volver a entregar actualiza el archivo o el código.
    */
-  async deliverInstitutionCertificates(
-    user: AuthenticatedUser,
-    activityId: string,
-    dto: { profileIds: string[]; storedFileId?: string | null; certificateCode?: string | null },
-  ) {
-    const activity = await this.activities.findOne({ where: { id: activityId } });
-    if (!activity || !(await this.gestiona(user, activity))) throw new NotFoundException('Actividad no encontrada.');
+  /** Quién entrega y en qué actividad se puede entregar un certificado institucional. */
+  private assertEntregaPosible(user: AuthenticatedUser, activity: Activity): void {
     if (user.role === RolNombre.ADMIN) {
       throw new ForbiddenException('Administración no entrega documentos académicos: lo hace el responsable o Dirección.');
     }
@@ -254,16 +249,29 @@ export class ConstanciesService {
         fields: { certificateIssuer: ['Indica primero quién emite el certificado.'] },
       });
     }
-    if (dto.storedFileId) {
-      const archivo = await this.activities.manager.query(
-        `SELECT "uploaded_by_user_id", "mime_type_detected" FROM "stored_files" WHERE "id" = $1`,
-        [dto.storedFileId],
-      );
-      if (!archivo.length || archivo[0].uploaded_by_user_id !== user.userId) {
-        const msg = 'El certificado tiene que ser un archivo que hayas subido tú.';
-        throw new BadRequestException({ message: msg, fields: { storedFileId: [msg] } });
-      }
+  }
+
+  /** El archivo del certificado tiene que haberlo subido quien lo entrega. */
+  private async assertArchivoPropio(user: AuthenticatedUser, storedFileId: string): Promise<void> {
+    const archivo = await this.activities.manager.query(
+      `SELECT "uploaded_by_user_id", "mime_type_detected" FROM "stored_files" WHERE "id" = $1`,
+      [storedFileId],
+    );
+    if (!archivo.length || archivo[0].uploaded_by_user_id !== user.userId) {
+      const msg = 'El certificado tiene que ser un archivo que hayas subido tú.';
+      throw new BadRequestException({ message: msg, fields: { storedFileId: [msg] } });
     }
+  }
+
+  async deliverInstitutionCertificates(
+    user: AuthenticatedUser,
+    activityId: string,
+    dto: { profileIds: string[]; storedFileId?: string | null; certificateCode?: string | null },
+  ) {
+    const activity = await this.activities.findOne({ where: { id: activityId } });
+    if (!activity || !(await this.gestiona(user, activity))) throw new NotFoundException('Actividad no encontrada.');
+    this.assertEntregaPosible(user, activity);
+    if (dto.storedFileId) await this.assertArchivoPropio(user, dto.storedFileId);
     const ids = [...new Set(dto.profileIds)];
     if (ids.length === 0) throw new BadRequestException('Elige al menos un participante confirmado.');
     const confirmadas = await this.registrations.find({

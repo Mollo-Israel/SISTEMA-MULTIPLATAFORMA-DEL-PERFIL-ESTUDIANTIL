@@ -168,7 +168,7 @@ export function auditDetail(metadata: Record<string, unknown> | null | undefined
       return Object.entries(v as Record<string, unknown>).map(([k, x]) => `${CAMPO[k] ?? k}: ${legible(x)}`).join(' · ');
     }
     if (typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v)) return `#${v.slice(0, 8)}`;
-    return String(v);
+    return String(v as string | number | boolean | bigint | null | undefined);
   };
   return Object.entries(metadata).slice(0, 12).map(([k, v]) => ({ campo: CAMPO[k] ?? k, valor: legible(v).slice(0, 300) }));
 }

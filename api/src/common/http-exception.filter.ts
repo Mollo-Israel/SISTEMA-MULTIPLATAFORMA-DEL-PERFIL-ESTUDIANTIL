@@ -51,6 +51,63 @@ function esMapaDeCampos(valor: unknown): valor is Record<string, string[]> {
   );
 }
 
+type Traduccion = { status: number; cuerpo: RespuestaDeError; paraRegistro?: string };
+
+/** Una HttpException de Nest: con cuerpo de objeto (validación, campos) o con un mensaje simple. */
+function traducirHttp(exception: HttpException, requestId: string | undefined): Traduccion {
+  const status = exception.getStatus();
+  const respuesta = exception.getResponse();
+  // El ValidationPipe devuelve `{ message: string[] }`: ese arreglo es el
+  // `details` de §103, y el mensaje principal se queda legible.
+  if (typeof respuesta === 'object' && respuesta !== null) {
+    return traducirObjeto(respuesta as Record<string, unknown>, status, exception, requestId);
+  }
+  return {
+    status,
+    cuerpo: {
+      code: CODIGO_POR_ESTADO[status] ?? 'ERROR',
+      message: String(respuesta ?? exception.message),
+      requestId,
+    },
+  };
+}
+
+function traducirObjeto(objeto: Record<string, unknown>, status: number, exception: HttpException, requestId: string | undefined): Traduccion {
+  const mensajes = objeto.message;
+  // Errores por campo: el formulario los coloca debajo de cada casilla.
+  const fields = esMapaDeCampos(objeto.fields) ? objeto.fields : undefined;
+  const retryAfterSeconds =
+    typeof objeto.retryAfterSeconds === 'number' ? objeto.retryAfterSeconds : undefined;
+  if (Array.isArray(mensajes)) {
+    return {
+      status,
+      cuerpo: {
+        code: CODIGO_POR_ESTADO[status] ?? 'VALIDATION_ERROR',
+        message:
+          mensajes.length === 1
+            ? String(mensajes[0])
+            : 'Revisa los campos marcados: hay datos que no son válidos.',
+        details: mensajes,
+        ...(fields ? { fields } : {}),
+        requestId,
+      },
+    };
+  }
+  return {
+    status,
+    cuerpo: {
+      code: String((objeto.code as string | number | undefined) ?? CODIGO_POR_ESTADO[status] ?? 'ERROR'),
+      message: String((mensajes as string | string[] | undefined) ?? exception.message),
+      ...(fields ? { fields } : {}),
+      // Datos estructurados que construye el propio servicio (p. ej. el
+      // área sugerida): nunca una traza ni un error de base.
+      ...(objeto.details !== undefined ? { details: objeto.details } : {}),
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+      requestId,
+    },
+  };
+}
+
 /**
  * Formato de error consistente (§103) y registro sin secretos (§102).
  *
@@ -101,58 +158,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     exception: unknown,
     requestId: string | undefined,
   ): { status: number; cuerpo: RespuestaDeError; paraRegistro?: string } {
-    if (exception instanceof HttpException) {
-      const status = exception.getStatus();
-      const respuesta = exception.getResponse();
-
-      // El ValidationPipe devuelve `{ message: string[] }`: ese arreglo es el
-      // `details` de §103, y el mensaje principal se queda legible.
-      if (typeof respuesta === 'object' && respuesta !== null) {
-        const objeto = respuesta as Record<string, unknown>;
-        const mensajes = objeto.message;
-        // Errores por campo: el formulario los coloca debajo de cada casilla.
-        const fields = esMapaDeCampos(objeto.fields) ? objeto.fields : undefined;
-        const retryAfterSeconds =
-          typeof objeto.retryAfterSeconds === 'number' ? objeto.retryAfterSeconds : undefined;
-        if (Array.isArray(mensajes)) {
-          return {
-            status,
-            cuerpo: {
-              code: CODIGO_POR_ESTADO[status] ?? 'VALIDATION_ERROR',
-              message:
-                mensajes.length === 1
-                  ? String(mensajes[0])
-                  : 'Revisa los campos marcados: hay datos que no son válidos.',
-              details: mensajes,
-              ...(fields ? { fields } : {}),
-              requestId,
-            },
-          };
-        }
-        return {
-          status,
-          cuerpo: {
-            code: String(objeto.code ?? CODIGO_POR_ESTADO[status] ?? 'ERROR'),
-            message: String(mensajes ?? exception.message),
-            ...(fields ? { fields } : {}),
-            // Datos estructurados que construye el propio servicio (p. ej. el
-            // área sugerida): nunca una traza ni un error de base.
-            ...(objeto.details !== undefined ? { details: objeto.details } : {}),
-            ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
-            requestId,
-          },
-        };
-      }
-
-      return {
-        status,
-        cuerpo: {
-          code: CODIGO_POR_ESTADO[status] ?? 'ERROR',
-          message: String(respuesta ?? exception.message),
-          requestId,
-        },
-      };
-    }
+    if (exception instanceof HttpException) return traducirHttp(exception, requestId);
 
     /*
      * Un fallo de la base nunca llega tal cual al cliente. El mensaje de

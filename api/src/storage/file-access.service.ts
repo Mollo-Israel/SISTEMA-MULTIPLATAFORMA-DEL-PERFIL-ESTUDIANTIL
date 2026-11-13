@@ -53,8 +53,29 @@ export class FileAccessService {
    */
   async authorize(user: AuthenticatedUser, key: string): Promise<ResolvedFile> {
     const storageKey = this.sanitizeKey(key);
-    const fileUrl = `/api/files/${storageKey}`;
+    // Cada tipo de archivo se revisa en este orden; el primero que lo reconoce decide.
+    const revisiones = [
+      () => this.deEvidencia(user, storageKey),
+      () => this.deCertificadoExterno(user, storageKey),
+      () => this.deMuestraDeOportunidad(user, storageKey),
+      () => this.deRecursoDeBiblioteca(storageKey),
+      () => this.deConstanciaEntregada(user, storageKey),
+      () => this.deImagenDeActividad(user, storageKey),
+      () => this.deImagenDeProyecto(user, storageKey),
+    ];
+    for (const revisar of revisiones) {
+      const archivo = await revisar();
+      if (archivo) return archivo;
+    }
 
+    // Mismo error para "no existe" y "no autorizado": distinguirlos permitiría
+    // averiguar qué archivos hay probando claves.
+    throw new NotFoundException('Archivo no encontrado.');
+  }
+
+  /** Evidencia: la ve quien alcanza el perfil (y el proyecto) del dueño. */
+  private async deEvidencia(user: AuthenticatedUser, storageKey: string): Promise<ResolvedFile | null> {
+    const fileUrl = `/api/files/${storageKey}`;
     const evidence = await this.evidences.findOne({ where: { fileUrl } });
     if (evidence) {
       await this.assertCanReachProfile(user, evidence.studentProfileId, evidence.projectId);
@@ -64,7 +85,12 @@ export class FileAccessService {
         ownerProfileId: evidence.studentProfileId,
       };
     }
+    return null;
+  }
 
+  /** Credencial externa del estudiante. */
+  private async deCertificadoExterno(user: AuthenticatedUser, storageKey: string): Promise<ResolvedFile | null> {
+    const fileUrl = `/api/files/${storageKey}`;
     const certificate = await this.certificates.findOne({ where: { fileUrl } });
     if (certificate) {
       // §105: el archivo del certificado es privado por defecto. Solo su
@@ -87,7 +113,11 @@ export class FileAccessService {
         ownerProfileId: certificate.studentProfileId,
       };
     }
+    return null;
+  }
 
+  /** Certificado de ejemplo de una oportunidad externa. */
+  private async deMuestraDeOportunidad(user: AuthenticatedUser, storageKey: string): Promise<ResolvedFile | null> {
     // V3 §17: certificado de ejemplo de una oportunidad externa. Lo ven
     // quienes responden por ella y Dirección; un estudiante nunca: es
     // material interno de validación, no una plantilla para imitar.
@@ -112,7 +142,11 @@ export class FileAccessService {
         };
       }
     }
+    return null;
+  }
 
+  /** Imagen o material de un recurso de la Biblioteca. */
+  private async deRecursoDeBiblioteca(storageKey: string): Promise<ResolvedFile | null> {
     // V3.2 §35: imagen de un recurso de la Biblioteca: la ve cualquiera con sesión.
     const deRecurso = await this.records.manager.query(
       `SELECT 1 FROM "learning_resources" r JOIN "stored_files" f ON f."id" = r."image_file_id" WHERE f."storage_key" = $1 LIMIT 1`,
@@ -130,7 +164,11 @@ export class FileAccessService {
     if (materialRecurso.length) {
       return { storageKey, downloadName: materialRecurso[0].original_filename ?? 'material', ownerProfileId: '' };
     }
+    return null;
+  }
 
+  /** Certificado institucional entregado. */
+  private async deConstanciaEntregada(user: AuthenticatedUser, storageKey: string): Promise<ResolvedFile | null> {
     // V3.2 §28.3: certificado institucional entregado. Lo descargan su
     // titular, quien lo entregó, Dirección y Administración.
     const certificado = await this.records.manager.query(
@@ -148,7 +186,11 @@ export class FileAccessService {
         return { storageKey, downloadName: 'certificado', ownerProfileId: certificado[0].student_profile_id };
       }
     }
+    return null;
+  }
 
+  /** Imagen de una actividad. */
+  private async deImagenDeActividad(user: AuthenticatedUser, storageKey: string): Promise<ResolvedFile | null> {
     // V3.2 §18.3: imagen ilustrativa de una actividad. Publicada, la ve
     // cualquiera con sesión; en borrador, solo quien la gestiona.
     // V4.1 A41-006: la portada o cualquiera de sus imágenes (`activity_images`).
@@ -176,7 +218,11 @@ export class FileAccessService {
         )).length > 0;
       if (gestiona) return { storageKey, downloadName: 'imagen-actividad', ownerProfileId: '' };
     }
+    return null;
+  }
 
+  /** Imagen de muestra de un proyecto. */
+  private async deImagenDeProyecto(user: AuthenticatedUser, storageKey: string): Promise<ResolvedFile | null> {
     // V5 BATCH 13 (§13.4, G08): imagen de muestra de un proyecto. Se ve donde
     // el proyecto ya se ve: activo y en la comunidad o por enlace, cualquiera con
     // sesión; visible a docentes, docentes y Administración; siempre, su dueño y
@@ -200,10 +246,7 @@ export class FileAccessService {
           && await this.teacherScope.assertCanAccessProfile(user, p.owner_profile_id).then(() => true, () => false));
       if (visible) return { storageKey, downloadName: 'imagen-proyecto', ownerProfileId: '' };
     }
-
-    // Mismo error para "no existe" y "no autorizado": distinguirlos permitiría
-    // averiguar qué archivos hay probando claves.
-    throw new NotFoundException('Archivo no encontrado.');
+    return null;
   }
 
   /**
@@ -217,37 +260,48 @@ export class FileAccessService {
     projectId: string | null,
   ): Promise<void> {
     if (user.role === RolNombre.ADMIN) return;
+    if (user.role === RolNombre.STUDENT) return this.assertEstudiantePuedeVer(user, ownerProfileId, projectId);
+    if (user.role === RolNombre.TEACHER) return this.assertDocentePuedeVer(user, ownerProfileId, projectId);
+    throw new NotFoundException('Archivo no encontrado.');
+  }
 
-    if (user.role === RolNombre.STUDENT) {
-      const profile = await this.profiles.findOne({ where: { userId: user.userId } });
-      if (profile && profile.id === ownerProfileId) return;
+  /** Estudiante: el dueño o un integrante aceptado del proyecto. */
+  private async assertEstudiantePuedeVer(
+    user: AuthenticatedUser,
+    ownerProfileId: string,
+    projectId: string | null,
+  ): Promise<void> {
+    const profile = await this.profiles.findOne({ where: { userId: user.userId } });
+    const propioId = profile?.id;
+    if (propioId !== undefined && propioId === ownerProfileId) return;
 
-      if (projectId && profile) {
-        const membership = await this.members.findOne({
-          where: { projectId, userId: user.userId },
-        });
-        if (membership) return;
-      }
+    if (projectId && profile) {
+      const membership = await this.members.findOne({
+        where: { projectId, userId: user.userId },
+      });
+      if (membership) return;
+    }
+    throw new NotFoundException('Archivo no encontrado.');
+  }
+
+  /** Docente: proyecto visible para docentes y estudiante dentro de su alcance. */
+  private async assertDocentePuedeVer(
+    user: AuthenticatedUser,
+    ownerProfileId: string,
+    projectId: string | null,
+  ): Promise<void> {
+    if (!projectId) throw new NotFoundException('Archivo no encontrado.');
+
+    const project = await this.projects.findOne({ where: { id: projectId } });
+    if (project?.visibility !== ProjectVisibility.TEACHERS) {
       throw new NotFoundException('Archivo no encontrado.');
     }
 
-    if (user.role === RolNombre.TEACHER) {
-      if (!projectId) throw new NotFoundException('Archivo no encontrado.');
-
-      const project = await this.projects.findOne({ where: { id: projectId } });
-      if (!project || project.visibility !== ProjectVisibility.TEACHERS) {
-        throw new NotFoundException('Archivo no encontrado.');
-      }
-
-      const owner = await this.profiles.findOne({ where: { id: ownerProfileId } });
-      const allowed = await this.teacherScope.allowedSemesters(user.userId);
-      if (!owner || !inTeacherScope(owner, allowed)) {
-        throw new ForbiddenException('El estudiante no pertenece a sus semestres habilitados.');
-      }
-      return;
+    const owner = await this.profiles.findOne({ where: { id: ownerProfileId } });
+    const allowed = await this.teacherScope.allowedSemesters(user.userId);
+    if (!owner || !inTeacherScope(owner, allowed)) {
+      throw new ForbiddenException('El estudiante no pertenece a sus semestres habilitados.');
     }
-
-    throw new NotFoundException('Archivo no encontrado.');
   }
 
   private async assertOwnerOrAdmin(
@@ -257,7 +311,8 @@ export class FileAccessService {
     if (user.role === RolNombre.ADMIN) return;
     if (user.role === RolNombre.STUDENT) {
       const profile = await this.profiles.findOne({ where: { userId: user.userId } });
-      if (profile && profile.id === ownerProfileId) return;
+      const propioId = profile?.id;
+      if (propioId !== undefined && propioId === ownerProfileId) return;
     }
     throw new NotFoundException('Archivo no encontrado.');
   }

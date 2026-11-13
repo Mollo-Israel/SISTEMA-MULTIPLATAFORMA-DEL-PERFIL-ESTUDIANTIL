@@ -44,7 +44,8 @@ const RESULTADO: Record<string, string> = {
 /** V3.2 §13: todas las áreas de la actividad y sus habilidades. */
 const areasDe = (a: any): string[] => {
   const todas = (a.activityAreas ?? []).map((x: any) => x.academicArea?.name).filter(Boolean);
-  return todas.length ? todas : a.academicArea?.name ? [a.academicArea.name] : [];
+  const principal = a.academicArea?.name ? [a.academicArea.name] : [];
+  return todas.length ? todas : principal;
 };
 const skillsDe = (a: any): string[] => (a.activitySkills ?? []).map((s: any) => s.skill?.name).filter(Boolean);
 
@@ -69,6 +70,45 @@ const PESTANAS = [
   { key: 'historial', label: 'Historial' },
 ] as const;
 type Pestana = (typeof PESTANAS)[number]['key'];
+
+type MiParticipacion = { status: string; evidenceEligible?: boolean; decisionReason?: string | null };
+
+/** V6 §4.1: cómo se admite la solicitud (mismo texto que la web). */
+function textoDeSolicitud(auto: boolean, capacidad?: number | null): string {
+  if (!auto) return 'Inscripción sujeta a aprobación: el responsable decide si te admite.';
+  return capacidad
+    ? `Admisión abierta con ${capacidad} plazas: se asignan por orden de solicitud; si quedan, tienes la tuya al instante.`
+    : 'Admisión abierta: quedarás admitido al instante.';
+}
+
+/** V5 §6: el estado de la participación, en palabras del estudiante. */
+function textoDeEstado(mine: MiParticipacion, externa: boolean): string {
+  switch (mine.status) {
+    case 'confirmed':
+      return 'asistencia registrada por el responsable';
+    case 'accepted':
+      if (!externa) return 'admitido: tienes un lugar. La asistencia se registra el día del evento';
+      return mine.evidenceEligible ? 'aceptado; ya puedes adjuntar tu credencial en Evidencias' : 'aceptado por el proveedor';
+    case 'rejected': {
+      const motivo = mine.decisionReason ? `: ${mine.decisionReason}` : '';
+      return `no admitido${motivo}`;
+    }
+    case 'registered':
+      return 'solicitud pendiente: el responsable decide si te admite';
+    case 'absent':
+      return 'registrado como ausente';
+    case 'cancelled':
+      return 'diste de baja tu inscripción';
+    default:
+      return 'interesado';
+  }
+}
+
+/** §23: lo que ya registró el responsable no se cambia desde la app. */
+function resueltaPorElResponsable(mine: MiParticipacion | null | undefined, externa: boolean): boolean {
+  const estado = mine?.status;
+  return estado === 'confirmed' || estado === 'absent' || estado === 'rejected' || (estado === 'accepted' && externa);
+}
 
 export default function ActivitiesScreen({ navigation }: any) {
   const [pestana, setPestana] = useState<Pestana>('parati');
@@ -198,19 +238,24 @@ export default function ActivitiesScreen({ navigation }: any) {
     }
   };
 
-  /** Inscribirse compromete un cupo: se confirma antes de enviarlo. */
+  /**
+   * Inscribirse compromete un cupo: se confirma antes de enviarlo.
+   * V6 §4.1, igual que en la web: una actividad interna abierta (con o sin
+   * cupo) admite sola; las demás las admite el responsable.
+   */
   const enrol = async (a: any) => {
+    const auto = a.originType !== 'external' && (a.registrationMode ?? 'open') === 'open';
     const ok = await confirm({
       title: 'Solicitar inscripción',
-      message: `Vas a solicitar un lugar en “${a.title}”. El responsable debe aprobarlo, y tu participación solo cuenta cuando te la confirmen.`,
+      message: `Vas a pedir un lugar en “${a.title}”. ${textoDeSolicitud(auto, a.capacity)} Cuenta en tu trayectoria cuando el responsable registre tu asistencia.`,
       confirmLabel: 'Solicitar inscripción',
     });
     if (!ok) return;
     act(
       () => activityService.register(a.id),
-      'Inscripción enviada.',
+      auto ? 'Inscripción admitida.' : 'Solicitud enviada.',
       a.id,
-      'Queda pendiente de aprobación del responsable.',
+      auto ? 'Tienes un lugar. La asistencia la registra el responsable el día del evento.' : 'Queda pendiente de que el responsable la admita.',
     );
   };
 
@@ -325,13 +370,7 @@ export default function ActivitiesScreen({ navigation }: any) {
       {(!loading || data) && !error && filtered.length === 0 && (
         <EmptyState
           icon={query || hasFilters ? 'search' : 'calendar'}
-          message={
-            query
-              ? `Ninguna actividad coincide con “${query}”.`
-              : hasFilters
-                ? 'Ninguna actividad coincide con los filtros elegidos.'
-                : 'Todavía no hay actividades publicadas.'
-          }
+          message={mensajeSinActividades(query, hasFilters)}
           action={
             query || hasFilters ? (
               <Button
@@ -395,39 +434,7 @@ export default function ActivitiesScreen({ navigation }: any) {
                 ) : null}
                 {d.description ? <Text style={styles.desc}>{d.description}</Text> : null}
 
-                <View style={styles.metaBlock}>
-                  {d.eventDate ? <Text style={styles.meta}>Inicio: {fechaHora(d.eventDate)}</Text> : null}
-                  {d.endAt ? <Text style={styles.meta}>Fin: {fechaHora(d.endAt)}</Text> : null}
-                  <Text style={styles.meta}>Modalidad: {MODALIDAD[d.modality] ?? d.modality}</Text>
-                  {d.location ? <Text style={styles.meta}>Lugar: {d.location}</Text> : null}
-                  {areasDe(d).length ? <Text style={styles.meta}>Áreas: {areasDe(d).join(', ')}</Text> : null}
-                  {skillsDe(d).length ? <Text style={styles.meta}>Habilidades: {skillsDe(d).join(', ')}</Text> : null}
-                  {(d.responsibles ?? []).length ? (
-                    <Text style={styles.meta}>
-                      Responsables: {(d.responsibles ?? []).map((p: any) => `${p.firstName} ${p.lastName}`).join(', ')}
-                    </Text>
-                  ) : null}
-                  {(d.contacts ?? []).map((p: any) => (
-                    <Text key={p.id} style={styles.meta}>
-                      Contacto: {p.firstName} {p.lastName}{p.email ? ` · ${p.email}` : ''}
-                    </Text>
-                  ))}
-                  {d.outcomePolicy && RESULTADO[d.outcomePolicy] ? (
-                    <Text style={styles.meta}>Al terminar: {RESULTADO[d.outcomePolicy]}</Text>
-                  ) : null}
-                  <Text style={styles.meta}>
-                    Confirmados: {d.confirmedCount ?? 0}
-                    {d.capacity ? ` de ${d.capacity} (quedan ${d.seatsLeft})` : ' · cupo ilimitado'}
-                  </Text>
-                  {d.creator && !(d.responsibles ?? []).length && (
-                    <Text style={styles.meta}>
-                      Responsable: {d.creator.firstName} {d.creator.lastName}
-                    </Text>
-                  )}
-                  {d.tags?.length ? (
-                    <Text style={styles.meta}>Etiquetas: {d.tags.join(', ')}</Text>
-                  ) : null}
-                </View>
+                <DatosDeActividad d={d} />
 
                 {d.meetingUrl ? (
                   <Button
@@ -464,39 +471,24 @@ export default function ActivitiesScreen({ navigation }: any) {
                     <Text style={styles.myStateText}>
                       Tu estado:{' '}
                       {/* V5 §6: pedir un lugar, tenerlo y asistir son tres cosas. */}
-                      {mine.status === 'confirmed'
-                        ? 'asistencia registrada por el responsable'
-                        : mine.status === 'accepted'
-                          ? a.originType === 'external'
-                            ? mine.evidenceEligible
-                              ? 'aceptado; ya puedes adjuntar tu credencial en Evidencias'
-                              : 'aceptado por el proveedor'
-                            : 'admitido: tienes un lugar. La asistencia se registra el día del evento'
-                        : mine.status === 'rejected'
-                          ? `no admitido${mine.decisionReason ? `: ${mine.decisionReason}` : ''}`
-                        : mine.status === 'registered'
-                          ? 'solicitud pendiente: el responsable decide si te admite'
-                          : mine.status === 'absent'
-                            ? 'registrado como ausente'
-                            : mine.status === 'cancelled'
-                              ? 'diste de baja tu inscripción'
-                              : 'interesado'}
+                      {textoDeEstado(mine, a.originType === 'external')}
                     </Text>
                   </View>
                 )}
 
-                {blocked ? (
+                {!!blocked && (
                   <View style={styles.blocked}>
                     <Text style={styles.blockedText}>{blocked}</Text>
                   </View>
-                ) : mine?.status === 'confirmed' || mine?.status === 'absent' || mine?.status === 'rejected'
-                  || (mine?.status === 'accepted' && a.originType === 'external') ? (
+                )}
+                {!blocked && resueltaPorElResponsable(mine, a.originType === 'external') && (
                   <Muted>
                     {mine?.status === 'rejected'
                       ? 'Si crees que es un error, escribe al responsable.'
                       : 'Lo registró el responsable y no puede modificarse desde aquí.'}
                   </Muted>
-                ) : (
+                )}
+                {!blocked && !resueltaPorElResponsable(mine, a.originType === 'external') && (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <View style={{ flex: 1 }}>
                       {/* V6 §9.1: «Me interesa» se retiró de actividades; queda «Guardar». */}
@@ -592,3 +584,48 @@ const styles = StyleSheet.create({
   enlace: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
   enlaceTexto: { color: colors.bordo, fontSize: 13, fontWeight: '600' },
 });
+
+/** Por qué la lista está vacía: la búsqueda, los filtros o que no hay nada publicado. */
+function mensajeSinActividades(query: string, hasFilters: boolean): string {
+  if (query) return `Ninguna actividad coincide con “${query}”.`;
+  return hasFilters ? 'Ninguna actividad coincide con los filtros elegidos.' : 'Todavía no hay actividades publicadas.';
+}
+
+/** Fechas, lugar, áreas, responsables, contactos y cupo de una actividad abierta. */
+function DatosDeActividad({ d }: Readonly<{ d: any }>) {
+  return (
+    <View style={styles.metaBlock}>
+      {d.eventDate ? <Text style={styles.meta}>Inicio: {fechaHora(d.eventDate)}</Text> : null}
+      {d.endAt ? <Text style={styles.meta}>Fin: {fechaHora(d.endAt)}</Text> : null}
+      <Text style={styles.meta}>Modalidad: {MODALIDAD[d.modality] ?? d.modality}</Text>
+      {d.location ? <Text style={styles.meta}>Lugar: {d.location}</Text> : null}
+      {areasDe(d).length ? <Text style={styles.meta}>Áreas: {areasDe(d).join(', ')}</Text> : null}
+      {skillsDe(d).length ? <Text style={styles.meta}>Habilidades: {skillsDe(d).join(', ')}</Text> : null}
+      {(d.responsibles ?? []).length ? (
+        <Text style={styles.meta}>
+          Responsables: {(d.responsibles ?? []).map((p: any) => `${p.firstName} ${p.lastName}`).join(', ')}
+        </Text>
+      ) : null}
+      {(d.contacts ?? []).map((p: any) => (
+        <Text key={p.id} style={styles.meta}>
+          Contacto: {p.firstName} {p.lastName}{p.email ? ` · ${p.email}` : ''}
+        </Text>
+      ))}
+      {d.outcomePolicy && RESULTADO[d.outcomePolicy] ? (
+        <Text style={styles.meta}>Al terminar: {RESULTADO[d.outcomePolicy]}</Text>
+      ) : null}
+      <Text style={styles.meta}>
+        Confirmados: {d.confirmedCount ?? 0}
+        {d.capacity ? ` de ${d.capacity} (quedan ${d.seatsLeft})` : ' · cupo ilimitado'}
+      </Text>
+      {d.creator && !(d.responsibles ?? []).length && (
+        <Text style={styles.meta}>
+          Responsable: {d.creator.firstName} {d.creator.lastName}
+        </Text>
+      )}
+      {d.tags?.length ? (
+        <Text style={styles.meta}>Etiquetas: {d.tags.join(', ')}</Text>
+      ) : null}
+    </View>
+  );
+}

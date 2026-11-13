@@ -83,7 +83,8 @@ function recolectar(
     for (const [restriccion, mensaje] of Object.entries(error.constraints ?? {})) {
       const texto = traducir(restriccion, campo, String(mensaje));
       salida.push(texto);
-      (porCampo[campo] ??= []).push(texto);
+      porCampo[campo] ??= [];
+      porCampo[campo].push(texto);
     }
 
     // Los DTO anidados llegan con sus propios errores dentro.

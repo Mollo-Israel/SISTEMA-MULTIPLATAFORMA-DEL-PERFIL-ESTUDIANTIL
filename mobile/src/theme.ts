@@ -39,16 +39,16 @@ export const shadow = {
   elevation: 2,
 };
 
-export const affinityColor = (level: string) =>
-  level === 'high' ? colors.green : level === 'medium' ? colors.amber : colors.gray500;
+export const affinityColor = (level: string) => {
+  if (level === 'high') return colors.green;
+  return level === 'medium' ? colors.amber : colors.gray500;
+};
 
-export const registrationColor = (status: string) =>
-  status === 'confirmed'
-    ? colors.green
-    : status === 'accepted'
-      ? colors.bordo
-      : status === 'registered'
-        ? colors.amber
-        : status === 'absent'
-          ? colors.red
-          : colors.gray500;
+const REGISTRATION_COLOR: Record<string, string> = {
+  confirmed: colors.green,
+  accepted: colors.bordo,
+  registered: colors.amber,
+  absent: colors.red,
+};
+
+export const registrationColor = (status: string) => REGISTRATION_COLOR[status] ?? colors.gray500;

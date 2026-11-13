@@ -9,7 +9,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ProjectStatus, ProjectVisibility } from '@perfil/shared';
+import { ProjectStatus, ProjectVisibility, ProjectBackingTier } from '@perfil/shared';
 import { StudentProfile } from './student-profile.entity';
 import { AcademicArea } from './academic-area.entity';
 import { ProjectMember } from './project-member.entity';
@@ -18,7 +18,6 @@ import { ProjectInvitation } from './project-invitation.entity';
 import { ProjectFeedback } from './project-feedback.entity';
 import { ProjectArea, ProjectSkill } from './project-area.entity';
 import { Team } from './collaboration.entity';
-import { ProjectBackingTier } from '@perfil/shared';
 
 @Entity('projects')
 export class Project {

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager, IsNull, MoreThan, Repository } from 'typeorm';
-import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { AccountTokenPurpose } from '@perfil/shared';
 import { AccountToken, TokenRevocationReason, TokenState } from '../entities/account-token.entity';
 import { identityConfig } from '../config/identity.config';
@@ -120,7 +120,7 @@ export class AccountTokensService {
       order: { createdAt: 'DESC' },
       relations: { user: true },
     });
-    if (!vivo || !vivo.codeHash || vivo.state() !== 'valid') {
+    if (!vivo?.codeHash || vivo.state() !== 'valid') {
       return { ok: false, locked: false };
     }
 

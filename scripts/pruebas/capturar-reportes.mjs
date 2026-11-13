@@ -3,7 +3,8 @@
  * control de calidad (Investigación §6). Navegador sin ventana: no interfiere
  * con lo que el usuario esté haciendo.
  *
- *   node scripts/pruebas/capturar-reportes.mjs
+ *   node scripts/pruebas/capturar-reportes.mjs                # todas
+ *   node scripts/pruebas/capturar-reportes.mjs 07-sonarqube   # solo las de esa carpeta (o ese nombre)
  *
  * Las capturas quedan en la carpeta de cada herramienta (capturas/).
  */
@@ -34,12 +35,14 @@ const objetivos = [
   ['07-sonarqube', '02-issues-sonarqube', sonar && `${sonar.url}/project/issues?id=afinia&issueStatuses=OPEN%2CCONFIRMED&types=BUG%2CVULNERABILITY`, { esperar: 6000, login: true }],
 ];
 
+const pedidos = process.argv.slice(2);
 const navegador = await chromium.launch({ headless: true });
 const ctx = await navegador.newContext({ viewport: { width: 1440, height: 900 }, locale: 'es-BO' });
 const page = await ctx.newPage();
 let sonarIniciado = false;
 
 for (const [carpeta, nombre, url, opc = {}] of objetivos) {
+  if (pedidos.length && !pedidos.includes(carpeta) && !pedidos.includes(nombre)) continue;
   if (!url) { console.log(`– ${nombre}: sin URL (omitido)`); continue; }
   if (url.startsWith('file:') && !existsSync(new URL(url))) { console.log(`– ${nombre}: el reporte no existe todavía`); continue; }
   if (opc.login && !sonarIniciado) {

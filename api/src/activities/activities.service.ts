@@ -17,6 +17,7 @@ import {
   LessThanOrEqual,
   MoreThanOrEqual,
   Repository,
+  SelectQueryBuilder,
 } from 'typeorm';
 import {
   ACTIVITY_STATUS_LABEL,
@@ -61,19 +62,18 @@ import { ActivityContact } from '../entities/activity-contact.entity';
 import { StoredFileRecord } from '../entities/stored-file.entity';
 import { ActivityImage } from '../entities/activity-image.entity';
 import { GamificationEvent, StudentPoints } from '../entities/gamification.entity';
-import { effectiveSemesters } from '../access/teacher-scope.service';
+import { effectiveSemesters, TeacherScopeService } from '../access/teacher-scope.service';
 import { assertSkillsBelongToAreas, resolveSkillContexts, SkillContext } from '../catalogs/area-skill.guard';
 import { Skill } from '../entities/skill.entity';
 import { ActivityGamificationRule, ActivityReview } from '../entities/activity-review.entity';
 import { GamificationCriterion } from '../entities/gamification-criterion.entity';
 import { ConfigService } from '@nestjs/config';
-import { ActivityGamificationRuleDto } from './dto/create-activity.dto';
+import { ActivityGamificationRuleDto, CreateActivityDto } from './dto/create-activity.dto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
-import { TeacherScopeService } from '../access/teacher-scope.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
-import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivitiesDto } from './dto/query-activities.dto';
+import { escaparComodinesLike } from '../common/texto';
 import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
@@ -126,6 +126,18 @@ const endOfDay = (value: string): Date => {
   return d;
 };
 
+/** «1.º, 3.º, 5.º»: semestres listos para un mensaje. */
+const listaSemestres = (semestres: number[]): string => semestres.map((s) => `${s}.º`).join(', ');
+
+/** Evento de auditoría de la decisión del responsable sobre una participación. */
+function eventoDeDecision(status: RegistrationStatus, externa: boolean) {
+  if (status === RegistrationStatus.ACCEPTED) {
+    return externa ? AuditEventType.EXTERNAL_OPPORTUNITY_ACCEPTED : AuditEventType.REGISTRATION_ADMITTED;
+  }
+  if (status === RegistrationStatus.REJECTED) return AuditEventType.REGISTRATION_REJECTED;
+  return AuditEventType.PARTICIPATION_CONFIRMED;
+}
+
 export interface ActivityWithCounts extends Activity {
   registrationCount: number;
   confirmedCount: number;
@@ -160,7 +172,6 @@ function vistaEstudiante<T extends object>(actividad: T) {
     reviewComment?: unknown; reviewedById?: unknown; reviewedAt?: unknown;
     submittedAt?: unknown; requiresReview?: unknown; reviewStatus?: unknown;
   };
-  void reviewComment; void reviewedById; void reviewedAt; void submittedAt; void requiresReview; void reviewStatus;
   return {
     ...resto,
     creator: creator ? { id: creator.id, firstName: creator.firstName, lastName: creator.lastName } : null,
@@ -174,6 +185,141 @@ interface Asignacion {
   userId: string;
   semesters: number[];
   docente: boolean;
+}
+
+type PonerError = (campo: string, msg: string) => void;
+
+/**
+ * Rango de fechas (RF8). Una actividad sin fecha declarada queda fuera cuando
+ * se filtra por fecha: no hay forma de ubicarla en el rango.
+ */
+function filtroDeFechas(fromDate: QueryActivitiesDto['fromDate'], toDate: QueryActivitiesDto['toDate']) {
+  if (fromDate && toDate) return Between(startOfDay(fromDate), endOfDay(toDate));
+  if (fromDate) return MoreThanOrEqual(startOfDay(fromDate));
+  if (toDate) return LessThanOrEqual(endOfDay(toDate));
+  return undefined;
+}
+
+/** Inicio y fin presentes, y el fin después del inicio. */
+function revisarFechas(activity: Activity, poner: PonerError): void {
+  if (!activity.eventDate) poner('activityDate', 'Indica la fecha y hora de inicio.');
+  if (!activity.endAt) poner('endAt', 'Indica la fecha y hora de fin.');
+  if (activity.eventDate && activity.endAt && activity.endAt.getTime() <= activity.eventDate.getTime()) {
+    poner('endAt', 'La fecha final debe ser posterior a la fecha inicial.');
+  }
+}
+
+/**
+ * V5-11 (§5.4): la modalidad se valida igual en internas y externas. En una
+ * externa virtual, el enlace oficial del proveedor sirve de enlace de acceso
+ * (un curso asíncrono no tiene «reunión»), pero alguno tiene que haber.
+ */
+function revisarModalidad(activity: Activity, poner: PonerError): void {
+  const externa = activity.originType === ActivityOrigin.EXTERNAL;
+  const presencial = activity.modality === ActivityModality.PRESENCIAL || activity.modality === ActivityModality.HIBRIDA;
+  const virtual = activity.modality === ActivityModality.VIRTUAL || activity.modality === ActivityModality.HIBRIDA;
+  if (presencial && !activity.location?.trim()) poner('location', 'Indica el aula o el lugar.');
+  if (virtual && !activity.meetingUrl && !(externa && activity.externalUrl)) {
+    poner('meetingUrl', externa
+      ? 'Indica el enlace de acceso: el de la reunión o el oficial del proveedor.'
+      : 'Indica el enlace de la reunión.');
+  }
+}
+
+/**
+ * Admitir o rechazar es una decisión sobre la solicitud, no sobre la
+ * asistencia: no se toma después de registrarla, ni con el acta cerrada.
+ */
+function assertPuedeDecidirAdmision(
+  activity: Activity,
+  anterior: RegistrationStatus,
+  yaAsistencia: boolean,
+  status: RegistrationStatus,
+  reason: string | undefined,
+): void {
+  if (activity.attendanceStatus === 'locked') {
+    const m = 'La asistencia ya está cerrada. Si hay un error, la corrige Dirección con un motivo.';
+    throw new ConflictException({ code: 'ATTENDANCE_LOCKED', message: m });
+  }
+  if (yaAsistencia) {
+    const m = 'Ya se registró su asistencia: la admisión no se cambia. Si hay un error, la corrige Dirección con un motivo.';
+    throw new ConflictException({ code: 'ADMISSION_AFTER_ATTENDANCE', message: m });
+  }
+  if (anterior === RegistrationStatus.INTERESTED || anterior === RegistrationStatus.CANCELLED) {
+    const m = 'El estudiante no tiene una solicitud de inscripción vigente.';
+    throw new ConflictException({ code: 'NO_PENDING_REQUEST', message: m });
+  }
+  if (status === RegistrationStatus.REJECTED && !reason?.trim()) {
+    const m = 'Explica el motivo: el estudiante lo verá.';
+    throw new BadRequestException({ code: 'REJECTION_REASON_REQUIRED', message: m, fields: { reason: [m] } });
+  }
+}
+
+/** V3 §33 y V5 §6: cada aviso dice lo que pasó. Admitir no es asistir. */
+function avisoDeDecision(
+  activity: Activity,
+  saved: ActivityRegistration,
+  status: RegistrationStatus,
+  externa: boolean,
+): { kind: string; title: string; body: string } | undefined {
+  const aviso: Record<string, { kind: string; title: string; body: string } | undefined> = {
+    [RegistrationStatus.CONFIRMED]: {
+      kind: 'PARTICIPATION_CONFIRMED',
+      title: 'Asistencia registrada',
+      body: `El responsable registró tu asistencia a «${activity.title}». Ya cuenta en tu trayectoria.`,
+    },
+    [RegistrationStatus.ACCEPTED]: {
+      kind: 'ACTIVITY_REGISTRATION_ACCEPTED',
+      title: externa ? 'Te aceptaron' : 'Inscripción admitida',
+      body: externa
+        ? `El proveedor te aceptó en «${activity.title}». Al terminar podrás adjuntar tu credencial.`
+        : `Tienes un lugar en «${activity.title}». La asistencia la registra el responsable el día del evento.`,
+    },
+    [RegistrationStatus.REJECTED]: {
+      kind: 'ACTIVITY_REGISTRATION_REJECTED',
+      title: 'Inscripción no admitida',
+      body: `Tu solicitud para «${activity.title}» no fue admitida: ${saved.decisionReason}`,
+    },
+  };
+  return aviso[status];
+}
+
+/** Los campos sin reglas propias: se copian tal cual llegan. */
+function aplicarCamposDeEdicion(activity: Activity, dto: UpdateActivityDto): void {
+  if (dto.meetingUrl !== undefined) activity.meetingUrl = dto.meetingUrl ?? null;
+  if (dto.certificateIssuer !== undefined) activity.certificateIssuer = dto.certificateIssuer?.trim() || null;
+  if (dto.resourceLinks !== undefined) activity.resourceLinks = dto.resourceLinks ?? [];
+  if (dto.title !== undefined) activity.title = dto.title;
+  if (dto.description !== undefined) activity.description = dto.description;
+  if (dto.modality !== undefined) activity.modality = dto.modality;
+  aplicarAgendaDeEdicion(activity, dto);
+}
+
+/** Fecha, lugar, cupo, etiquetas, requisitos, modo de inscripción y fin. */
+function aplicarAgendaDeEdicion(activity: Activity, dto: UpdateActivityDto): void {
+  if (dto.activityDate !== undefined) {
+    activity.eventDate = dto.activityDate ? new Date(dto.activityDate) : null;
+  }
+  if (dto.location !== undefined) activity.location = dto.location;
+  if (dto.capacity !== undefined) activity.capacity = dto.capacity;
+  if (dto.tags !== undefined) activity.tags = dto.tags;
+  // V3 §13.1: la evidencia de asistencia ya no se pide; el flag histórico se apaga.
+  if (dto.evidenceRequired !== undefined) activity.evidenceRequired = false;
+  if (dto.requirements !== undefined) activity.requirements = dto.requirements ?? null;
+  if (dto.registrationMode !== undefined) activity.registrationMode = dto.registrationMode;
+  if (dto.endAt !== undefined) activity.endAt = dto.endAt ? new Date(dto.endAt) : null;
+}
+
+/** Por qué no vale el responsable pedido, según quién asigna y el tipo (§17). */
+function mensajeDeResponsableInvalido(rol: RolNombre, type: ActivityType): string {
+  if (rol === RolNombre.SCIENTIFIC_SOCIETY) return 'Los responsables tienen que ser integrantes activos de la Sociedad científica.';
+  if (rol === RolNombre.ADMIN && type === ActivityType.ACADEMICA) {
+    return 'El responsable de una oportunidad académica debe ser un docente o la Dirección, con la cuenta activa.';
+  }
+  if (type === ActivityType.ACADEMICA || rol === RolNombre.CAREER_DIRECTOR) {
+    return 'El responsable debe ser un docente, la Sociedad o la Dirección, con la cuenta activa.';
+  }
+  return 'El responsable de una oportunidad extracurricular debe ser la Sociedad científica o la Dirección, con la cuenta activa.';
 }
 
 @Injectable()
@@ -376,21 +522,14 @@ export class ActivitiesService {
       where: { id: In(unicos) },
       relations: { role: true },
     });
-    const malo = unicos.find((id) => {
+    const malo = unicos.some((id) => {
       if (id === user.userId && user.role !== RolNombre.ADMIN) return false;
       const u = usuarios.find((x) => x.id === id);
-      return !u || u.status !== 'active' || !permitidos.includes(u.role?.name as RolNombre);
+      return u?.status !== 'active' || !permitidos.includes(u.role?.name as RolNombre);
     });
     if (malo) {
-      const msg = user.role === RolNombre.SCIENTIFIC_SOCIETY
-        ? 'Los responsables tienen que ser integrantes activos de la Sociedad científica.'
-        : type === ActivityType.ACADEMICA || user.role === RolNombre.CAREER_DIRECTOR
-          ? 'El responsable debe ser un docente, la Sociedad o la Dirección, con la cuenta activa.'
-          : 'El responsable de una oportunidad extracurricular debe ser la Sociedad científica o la Dirección, con la cuenta activa.';
-      const exacto = user.role === RolNombre.ADMIN && type === ActivityType.ACADEMICA
-        ? 'El responsable de una oportunidad académica debe ser un docente o la Dirección, con la cuenta activa.'
-        : msg;
-      throw new BadRequestException({ message: exacto, fields: { [campo]: [exacto] } });
+      const msg = mensajeDeResponsableInvalido(user.role as RolNombre, type);
+      throw new BadRequestException({ message: msg, fields: { [campo]: [msg] } });
     }
     return unicos;
   }
@@ -408,13 +547,13 @@ export class ActivitiesService {
       where: { id: In(unicos) },
       relations: { role: true },
     });
-    const staff = [RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.SCIENTIFIC_SOCIETY];
+    const staff = new Set([RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, RolNombre.SCIENTIFIC_SOCIETY]);
     const alcance = user.role === RolNombre.TEACHER ? await this.teacherScope.allowedSemesters(user.userId) : [];
     for (const id of unicos) {
       const u = usuarios.find((x) => x.id === id);
       const rol = u?.role?.name as RolNombre | undefined;
-      let valido = !!u && u.status === 'active' && !!rol && staff.includes(rol);
-      if (!valido && u && u.status === 'active' && rol === RolNombre.STUDENT && user.role === RolNombre.TEACHER) {
+      let valido = !!u && u.status === 'active' && !!rol && staff.has(rol);
+      if (!valido && u?.status === 'active' && rol === RolNombre.STUDENT && user.role === RolNombre.TEACHER) {
         const perfil = await this.profiles.findOne({ where: { userId: u.id } });
         valido = !!perfil && effectiveSemesters(perfil).some((s) => alcance.includes(s));
       }
@@ -464,44 +603,72 @@ export class ActivitiesService {
       const u = usuarios.find((x) => x.id === userId);
       const docente = u?.role?.name === RolNombre.TEACHER;
       const pedida = pedidas?.find((p) => p.userId === userId)?.semesters;
-      const nombre = u ? `${u.firstName} ${u.lastName}` : 'El responsable';
-      if (pedida) {
-        const limpia = [...new Set(pedida)].sort((a, b) => a - b);
-        const fueraDeAudiencia = limpia.filter((s) => !enAudiencia(s));
-        if (fueraDeAudiencia.length) {
-          const msg = `Asignaste a ${nombre} semestres que no están en la audiencia: ${fueraDeAudiencia.map((s) => `${s}.º`).join(', ')}.`;
-          throw new BadRequestException({ code: 'ASSIGNMENT_OUTSIDE_AUDIENCE', message: msg, fields: { responsibleAssignments: [msg] } });
-        }
-        if (docente) {
-          const alcance = await this.teacherScope.allowedSemesters(userId);
-          const fuera = limpia.filter((s) => !alcance.includes(s));
-          if (fuera.length) {
-            const msg = `${nombre} no cubre ${fuera.map((s) => `${s}.º`).join(', ')}: sus semestres son ${alcance.length ? alcance.map((s) => `${s}.º`).join(', ') : 'ninguno'}.`;
-            throw new ForbiddenException({ code: 'RESPONSIBLE_SCOPE_EXCEEDED', message: msg, fields: { responsibleAssignments: [msg] } });
-          }
-        }
-        salida.push({ userId, semesters: limpia, docente });
-        continue;
-      }
-      if (!docente) {
-        salida.push({ userId, semesters: [], docente });
-        continue;
-      }
-      const alcance = await this.teacherScope.allowedSemesters(userId);
-      const previa = previas?.get(userId);
       let semesters: number[];
-      if (previa) {
-        const nuevos = (audiencia ?? []).filter((s) => !(audienciaAnterior ?? []).includes(s));
-        semesters = [...new Set([
-          ...previa.filter(enAudiencia),
-          ...alcance.filter((s) => nuevos.includes(s)),
-        ])];
+      if (pedida) {
+        const nombre = u ? `${u.firstName} ${u.lastName}` : 'El responsable';
+        semesters = await this.validarAsignacionPedida(userId, nombre, pedida, docente, enAudiencia);
+      } else if (docente) {
+        semesters = await this.asignacionPorDefecto(userId, audiencia, enAudiencia, previas?.get(userId), audienciaAnterior);
       } else {
-        semesters = alcance.filter(enAudiencia);
+        semesters = [];
       }
-      salida.push({ userId, semesters: semesters.sort((a, b) => a - b), docente });
+      salida.push({ userId, semesters, docente });
     }
     return salida;
+  }
+
+  /** Semestres pedidos para un responsable: dentro de la audiencia y, si es docente, de su alcance. */
+  private async validarAsignacionPedida(
+    userId: string,
+    nombre: string,
+    pedida: number[],
+    docente: boolean,
+    enAudiencia: (s: number) => boolean,
+  ): Promise<number[]> {
+    const limpia = [...new Set(pedida)].sort((a, b) => a - b);
+    const fueraDeAudiencia = limpia.filter((s) => !enAudiencia(s));
+    if (fueraDeAudiencia.length) {
+      const msg = `Asignaste a ${nombre} semestres que no están en la audiencia: ${listaSemestres(fueraDeAudiencia)}.`;
+      throw new BadRequestException({ code: 'ASSIGNMENT_OUTSIDE_AUDIENCE', message: msg, fields: { responsibleAssignments: [msg] } });
+    }
+    if (docente) {
+      const alcance = await this.teacherScope.allowedSemesters(userId);
+      const fuera = limpia.filter((s) => !alcance.includes(s));
+      if (fuera.length) {
+        const suyos = alcance.length ? listaSemestres(alcance) : 'ninguno';
+        const msg = `${nombre} no cubre ${listaSemestres(fuera)}: sus semestres son ${suyos}.`;
+        throw new ForbiddenException({ code: 'RESPONSIBLE_SCOPE_EXCEEDED', message: msg, fields: { responsibleAssignments: [msg] } });
+      }
+    }
+    return limpia;
+  }
+
+  /**
+   * Sin asignación explícita, el docente conserva la que tenía (recortada a la
+   * audiencia) y suma los semestres nuevos de la audiencia que cubre; si es
+   * nuevo, la intersección de su alcance y la audiencia.
+   */
+  private async asignacionPorDefecto(
+    userId: string,
+    audiencia: number[] | null,
+    enAudiencia: (s: number) => boolean,
+    previa: number[] | undefined,
+    audienciaAnterior?: number[] | null,
+  ): Promise<number[]> {
+    const alcance = await this.teacherScope.allowedSemesters(userId);
+    let semesters: number[];
+    if (previa) {
+      const anterior = audienciaAnterior ?? [];
+      const nuevos = new Set((audiencia ?? []).filter((s) => !anterior.includes(s)));
+      semesters = [...new Set([
+        ...previa.filter(enAudiencia),
+        ...alcance.filter((s) => nuevos.has(s)),
+      ])];
+    } else {
+      semesters = alcance.filter(enAudiencia);
+    }
+    semesters.sort((a, b) => a - b);
+    return semesters;
   }
 
   /**
@@ -523,7 +690,7 @@ export class ActivitiesService {
     }
     const huerfanos = audiencia.filter((s) => !cubiertos.includes(s));
     if (huerfanos.length) {
-      const msg = `Los semestres ${huerfanos.map((s) => `${s}.º`).join(', ')} no los cubre ningún responsable (cubren ${lista}). Asígnalos a un responsable que los cubra o quítalos de la audiencia.`;
+      const msg = `Los semestres ${listaSemestres(huerfanos)} no los cubre ningún responsable (cubren ${lista}). Asígnalos a un responsable que los cubra o quítalos de la audiencia.`;
       throw new BadRequestException({
         message: msg, code: 'ACTIVITY_SCOPE_NOT_COVERED', details: { uncoveredSemesters: huerfanos },
         fields: { semesterScope: [msg], responsibleAssignments: [msg] },
@@ -774,7 +941,7 @@ export class ActivitiesService {
       } else {
         if (origen.semesterScope?.length && comunes.length < origen.semesterScope.length) {
           const fuera = origen.semesterScope.filter((s) => !suyos.includes(s));
-          aviso = `La copia va solo a tus semestres (${comunes.map((s) => `${s}.º`).join(', ')}); se quitaron ${fuera.map((s) => `${s}.º`).join(', ')}.`;
+          aviso = `La copia va solo a tus semestres (${listaSemestres(comunes)}); se quitaron ${listaSemestres(fuera)}.`;
         }
         semestresCopia = comunes;
       }
@@ -840,23 +1007,8 @@ export class ActivitiesService {
   private assertCompleta(activity: Activity, areaIds: string[], _skillIds: string[], responsables?: number): void {
     const errores: Record<string, string[]> = {};
     const poner = (campo: string, msg: string) => { errores[campo] = [msg]; };
-    if (!activity.eventDate) poner('activityDate', 'Indica la fecha y hora de inicio.');
-    if (!activity.endAt) poner('endAt', 'Indica la fecha y hora de fin.');
-    if (activity.eventDate && activity.endAt && activity.endAt.getTime() <= activity.eventDate.getTime()) {
-      poner('endAt', 'La fecha final debe ser posterior a la fecha inicial.');
-    }
-    // V5-11 (§5.4): la modalidad se valida igual en internas y externas. En una
-    // externa virtual, el enlace oficial del proveedor sirve de enlace de acceso
-    // (un curso asíncrono no tiene «reunión»), pero alguno tiene que haber.
-    const externa = activity.originType === ActivityOrigin.EXTERNAL;
-    const presencial = activity.modality === ActivityModality.PRESENCIAL || activity.modality === ActivityModality.HIBRIDA;
-    const virtual = activity.modality === ActivityModality.VIRTUAL || activity.modality === ActivityModality.HIBRIDA;
-    if (presencial && !activity.location?.trim()) poner('location', 'Indica el aula o el lugar.');
-    if (virtual && !activity.meetingUrl && !(externa && activity.externalUrl)) {
-      poner('meetingUrl', externa
-        ? 'Indica el enlace de acceso: el de la reunión o el oficial del proveedor.'
-        : 'Indica el enlace de la reunión.');
-    }
+    revisarFechas(activity, poner);
+    revisarModalidad(activity, poner);
     if (activity.outcomePolicy === ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE && !activity.certificateIssuer?.trim()) {
       poner('certificateIssuer', 'Indica quién emite el certificado: Afinia no se atribuye su autoría.');
     }
@@ -951,7 +1103,7 @@ export class ActivitiesService {
     if (texto) {
       qb.andWhere(
         "(u.firstName ILIKE :t OR u.lastName ILIKE :t OR u.email ILIKE :t OR CONCAT(u.firstName, ' ', u.lastName) ILIKE :t)",
-        { t: `%${texto.replace(/[%_\\]/g, (c) => `\\${c}`)}%` },
+        { t: `%${escaparComodinesLike(texto)}%` },
       );
     }
     if (user.role === RolNombre.TEACHER && roles.includes(RolNombre.STUDENT)) {
@@ -1446,46 +1598,7 @@ export class ActivitiesService {
     const limit = filters.limit ?? 30;
     const offset = filters.offset ?? 0;
     const qb = this.activities.createQueryBuilder('a').select('a.id', 'id');
-    // V5-01: el docente consulta aquí la oferta de la carrera; sus borradores
-    // viven en «Mis actividades». Ninguno de los dos ve borradores en esta vista.
-    if (user.role === RolNombre.STUDENT || user.role === RolNombre.TEACHER) {
-      qb.andWhere('a.status <> :borrador', { borrador: ActivityStatus.DRAFT });
-    }
-    if (filters.type) qb.andWhere('a.type = :type', { type: filters.type });
-    if (filters.categoryId) qb.andWhere('a.category_id = :cat', { cat: filters.categoryId });
-    if (filters.status) qb.andWhere('a.status = :status', { status: filters.status });
-    if (filters.modality) qb.andWhere('a.modality = :modality', { modality: filters.modality });
-    if (filters.originType) qb.andWhere('a.origin_type = :origin', { origin: filters.originType });
-    if (filters.areaId) {
-      qb.andWhere('a.id IN (SELECT aa.activity_id FROM activity_areas aa WHERE aa.academic_area_id = :area)', { area: filters.areaId });
-    }
-    if (filters.fromDate) qb.andWhere('a.event_date >= :desde', { desde: startOfDay(filters.fromDate) });
-    if (filters.toDate) qb.andWhere('a.event_date <= :hasta', { hasta: endOfDay(filters.toDate) });
-    if (filters.q) {
-      // Los comodines que escriba la persona se buscan como texto.
-      const texto = `%${filters.q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
-      qb.andWhere('(a.title ILIKE :texto OR a.description ILIKE :texto OR a.location ILIKE :texto)', { texto });
-    }
-    if (filters.mine) {
-      const perfil = await this.profiles.findOne({ where: { userId: user.userId }, select: { id: true } });
-      const estados = filters.mine === 'interested'
-        ? [RegistrationStatus.INTERESTED]
-        : [RegistrationStatus.REGISTERED, RegistrationStatus.ACCEPTED, RegistrationStatus.CONFIRMED];
-      qb.andWhere(
-        'a.id IN (SELECT r.activity_id FROM activity_registrations r WHERE r.student_profile_id = :perfil AND r.status IN (:...estados))',
-        { perfil: perfil?.id ?? '00000000-0000-4000-8000-000000000000', estados },
-      );
-    }
-    if (filters.responsibleId) {
-      // V5-02: quien responde por ella (lista de responsables o el campo de siempre).
-      qb.andWhere(
-        '(a.responsible_user_id = :resp OR a.id IN (SELECT ar.activity_id FROM activity_responsibles ar WHERE ar.user_id = :resp))',
-        { resp: filters.responsibleId },
-      );
-    }
-    if (filters.favorites === 'true') {
-      qb.andWhere('a.id IN (SELECT f.activity_id FROM activity_favorites f WHERE f.user_id = :yo)', { yo: user.userId });
-    }
+    await this.aplicarFiltrosDePagina(qb, user, filters);
     const total = await qb.getCount();
     const filas: { id: string }[] = await qb
       .orderBy('CASE WHEN a.event_date >= now() THEN 0 WHEN a.event_date IS NULL THEN 2 ELSE 1 END', 'ASC')
@@ -1509,6 +1622,57 @@ export class ActivitiesService {
       items: items.map((a) => ({ ...a, isFavorite: favoritas.has((a as { id: string }).id) })),
       total, limit, offset,
     };
+  }
+
+  /** Filtros del listado paginado: los del listado completo, más texto, «las mías» y favoritas. */
+  private async aplicarFiltrosDePagina(
+    qb: SelectQueryBuilder<Activity>,
+    user: AuthenticatedUser,
+    filters: QueryActivitiesDto,
+  ): Promise<void> {
+    // V5-01: el docente consulta aquí la oferta de la carrera; sus borradores
+    // viven en «Mis actividades». Ninguno de los dos ve borradores en esta vista.
+    if (user.role === RolNombre.STUDENT || user.role === RolNombre.TEACHER) {
+      qb.andWhere('a.status <> :borrador', { borrador: ActivityStatus.DRAFT });
+    }
+    if (filters.type) qb.andWhere('a.type = :type', { type: filters.type });
+    if (filters.categoryId) qb.andWhere('a.category_id = :cat', { cat: filters.categoryId });
+    if (filters.status) qb.andWhere('a.status = :status', { status: filters.status });
+    if (filters.modality) qb.andWhere('a.modality = :modality', { modality: filters.modality });
+    if (filters.originType) qb.andWhere('a.origin_type = :origin', { origin: filters.originType });
+    if (filters.areaId) {
+      qb.andWhere('a.id IN (SELECT aa.activity_id FROM activity_areas aa WHERE aa.academic_area_id = :area)', { area: filters.areaId });
+    }
+    if (filters.fromDate) qb.andWhere('a.event_date >= :desde', { desde: startOfDay(filters.fromDate) });
+    if (filters.toDate) qb.andWhere('a.event_date <= :hasta', { hasta: endOfDay(filters.toDate) });
+    if (filters.q) {
+      // Los comodines que escriba la persona se buscan como texto.
+      const texto = `%${escaparComodinesLike(filters.q)}%`;
+      qb.andWhere('(a.title ILIKE :texto OR a.description ILIKE :texto OR a.location ILIKE :texto)', { texto });
+    }
+    if (filters.mine) await this.filtrarLasMias(qb, user, filters.mine);
+    if (filters.responsibleId) {
+      // V5-02: quien responde por ella (lista de responsables o el campo de siempre).
+      qb.andWhere(
+        '(a.responsible_user_id = :resp OR a.id IN (SELECT ar.activity_id FROM activity_responsibles ar WHERE ar.user_id = :resp))',
+        { resp: filters.responsibleId },
+      );
+    }
+    if (filters.favorites === 'true') {
+      qb.andWhere('a.id IN (SELECT f.activity_id FROM activity_favorites f WHERE f.user_id = :yo)', { yo: user.userId });
+    }
+  }
+
+  /** «Las mías»: actividades en las que el estudiante mostró interés o tiene una inscripción vigente. */
+  private async filtrarLasMias(qb: SelectQueryBuilder<Activity>, user: AuthenticatedUser, mine: string): Promise<void> {
+    const perfil = await this.profiles.findOne({ where: { userId: user.userId }, select: { id: true } });
+    const estados = mine === 'interested'
+      ? [RegistrationStatus.INTERESTED]
+      : [RegistrationStatus.REGISTERED, RegistrationStatus.ACCEPTED, RegistrationStatus.CONFIRMED];
+    qb.andWhere(
+      'a.id IN (SELECT r.activity_id FROM activity_registrations r WHERE r.student_profile_id = :perfil AND r.status IN (:...estados))',
+      { perfil: perfil?.id ?? '00000000-0000-4000-8000-000000000000', estados },
+    );
   }
 
   /**
@@ -1537,7 +1701,7 @@ export class ActivitiesService {
    * responsable. Solo el nombre y el rol: ni correo ni datos de contacto.
    */
   async responsablesPublicados(q?: string): Promise<{ id: string; name: string; role: string }[]> {
-    const texto = q?.trim() ? `%${q.trim().replace(/[%_\\]/g, (c) => `\\${c}`)}%` : null;
+    const texto = q?.trim() ? `%${escaparComodinesLike(q.trim())}%` : null;
     const filas: { id: string; first_name: string; last_name: string; role: string }[] = await this.activities.manager.query(`
       SELECT DISTINCT u.id, u.first_name, u.last_name, r.name AS role
         FROM users u
@@ -1570,16 +1734,8 @@ export class ActivitiesService {
       where.id = In(ids.length ? ids : ['00000000-0000-4000-8000-000000000000']);
     }
 
-    // Rango de fechas (RF8). Una actividad sin fecha declarada queda fuera
-    // cuando se filtra por fecha: no hay forma de ubicarla en el rango.
-    const { fromDate, toDate } = filters;
-    if (fromDate && toDate) {
-      where.eventDate = Between(startOfDay(fromDate), endOfDay(toDate));
-    } else if (fromDate) {
-      where.eventDate = MoreThanOrEqual(startOfDay(fromDate));
-    } else if (toDate) {
-      where.eventDate = LessThanOrEqual(endOfDay(toDate));
-    }
+    const rango = filtroDeFechas(filters.fromDate, filters.toDate);
+    if (rango) where.eventDate = rango;
 
     if (soloIds) {
       // La página ya aplicó los filtros; aquí solo se cargan sus filas.
@@ -1709,7 +1865,8 @@ export class ActivitiesService {
       const clave = a.imageFileId ? claveDe.get(a.imageFileId) : null;
       extra.imageUrl = clave ? `${FILES_ROUTE}/${clave}` : null;
       const propias = filasImagen.filter((f) => f.activityId === a.id).map((f) => f.storedFileId);
-      const orden = propias.length ? propias : a.imageFileId ? [a.imageFileId] : [];
+      const soloLaPrincipal = a.imageFileId ? [a.imageFileId] : [];
+      const orden = propias.length ? propias : soloLaPrincipal;
       extra.images = orden
         .map((fileId) => ({ fileId, clave: claveDe.get(fileId) }))
         .filter((x): x is { fileId: string; clave: string } => !!x.clave)
@@ -1757,29 +1914,7 @@ export class ActivitiesService {
     // V6 §3.2: la audiencia antes del cambio, para saber qué semestres son nuevos.
     const audienciaAnterior = activity.semesterScope ? [...activity.semesterScope] : null;
     await this.assertSoloOperacion(user, activity, dto);
-
-    // V2 §27: lo que Dirección revisa no cambia a sus espaldas.
-    const esDireccion = user.role === RolNombre.CAREER_DIRECTOR;
-    let reiniciarRevision = false;
-    if (activity.requiresReview && !esDireccion) {
-      if (activity.reviewStatus === ActivityReviewStatus.REJECTED
-        && !(Object.keys(dto).length === 1 && dto.status === ActivityStatus.CANCELLED)) {
-        throw new ConflictException('Fue rechazada por Dirección: no se reutiliza. Puedes cancelarla o crear una nueva.');
-      }
-      if (this.cambiaContenido(dto)) {
-        if (activity.reviewStatus === ActivityReviewStatus.PENDING) {
-          throw new ConflictException('Está en revisión: espera la decisión de Dirección para cambiar su contenido.');
-        }
-        // V3.2 §23.3 (C10): aprobada, quien la propuso ya no cambia su
-        // contenido (esté publicada o no). Sigue gestionando la participación.
-        if (activity.reviewStatus === ActivityReviewStatus.APPROVED && user.role !== RolNombre.ADMIN) {
-          throw new ConflictException({
-            message: 'Ya fue aprobada por Dirección: el contenido ya no lo cambia quien la propuso. Pide a Dirección los ajustes.',
-            code: 'ACTIVITY_APPROVED_LOCKED',
-          });
-        }
-      }
-    }
+    this.assertRevisionPermiteEditar(user, activity, dto);
 
     if (dto.type && dto.type !== activity.type) {
       // Cambiar el tipo cambia el responsable: se valida con el tipo destino.
@@ -1789,23 +1924,107 @@ export class ActivitiesService {
     const areasNuevas = this.areasPedidas(dto);
     // V3.2 C6/C7: primero se valida todo; después, en una transacción, se
     // escriben la actividad, sus áreas y sus habilidades con su contexto.
-    let contextos: SkillContext[] | undefined;
-    if (areasNuevas !== undefined || dto.skillIds !== undefined || dto.skillContexts !== undefined) {
-      const areasFinales = areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
-      const skillsFinales = dto.skillIds ?? (activity.activitySkills ?? []).map((s) => s.skillId);
-      if (areasNuevas !== undefined) {
-        for (const areaId of areasNuevas) await this.assertAreaExists(areaId);
-      }
-      await assertSkillsBelongToAreas(this.activities.manager, skillsFinales, areasFinales, 'skillIds');
-      // Sin contexto nuevo, se conserva el que ya tenían si sigue siendo válido.
-      const previos = (activity.activitySkills ?? [])
-        .filter((s) => s.academicAreaId && areasFinales.includes(s.academicAreaId))
-        .map((s) => ({ skillId: s.skillId, areaId: s.academicAreaId as string }));
-      contextos = await resolveSkillContexts(
-        this.activities.manager, skillsFinales, areasFinales, dto.skillContexts ?? previos,
-      );
-      if (areasNuevas !== undefined) activity.academicAreaId = areasNuevas[0] ?? null;
+    const contextos = await this.contextosDeEdicion(activity, dto, areasNuevas);
+    this.aplicarOrigenYPolitica(activity, dto);
+    const responsablesNuevos = await this.responsablesDeEdicion(user, activity, dto);
+    const contactosNuevos = await this.resolverContactos(user, dto.contactUserIds);
+    const imagenesNuevas = (dto.imageFileIds !== undefined || dto.imageFileId !== undefined)
+      ? await this.resolverImagenes(user, dto, await this.imagenesDe(activity.id), activity.imageFileId)
+      : undefined;
+    if (imagenesNuevas !== undefined) activity.imageFileId = imagenesNuevas[0] ?? null;
+    if (dto.categoryId !== undefined) {
+      await this.assertCategoryUsable(dto.categoryId, dto.type ?? activity.type);
+      activity.categoryId = dto.categoryId;
     }
+    aplicarCamposDeEdicion(activity, dto);
+
+    this.assertDateWindow(
+      dto.activityDate ?? activity.eventDate?.toISOString() ?? null,
+      dto.endAt ?? activity.endAt?.toISOString() ?? null,
+    );
+
+    if (dto.semesterScope !== undefined) {
+      // Se revalida contra el alcance de quien edita: un docente no puede
+      // ampliar el alcance de una actividad hasta abarcar semestres ajenos.
+      activity.semesterScope = await this.resolveSemesterScope(user, dto.semesterScope);
+    }
+
+    const estadoAnterior = activity.status;
+    await this.aplicarCambioDeEstado(activity, dto);
+    this.normalizarModalidad(activity);
+    activity.updatedById = user.userId;
+    // V3.2 §21.1: lo que se publica (o sigue publicado y cambia) tiene que estar completo.
+    const publica = (dto.status === ActivityStatus.PUBLISHED || dto.status === ActivityStatus.OPEN)
+      && estadoAnterior === ActivityStatus.DRAFT;
+    await this.assertCompletaTrasEdicion(user, activity, dto, { publica, areasNuevas, contextos, responsablesNuevos });
+
+    // V6 §3.2: si cambian los responsables, sus asignaciones o la audiencia, se
+    // recalcula quién cubre qué; y una actividad que no es borrador nunca queda
+    // con semestres sin responsable (también al publicarla).
+    const recalcula = responsablesNuevos !== undefined || dto.responsibleAssignments !== undefined || dto.semesterScope !== undefined;
+    const asignacionesNuevas = recalcula || publica
+      ? await this.asignacionesDeEdicion(activity, dto, responsablesNuevos, audienciaAnterior)
+      : undefined;
+
+    await this.guardarEdicion(user, activity, dto, estadoAnterior, {
+      areasNuevas, contextos, asignacionesNuevas, contactosNuevos, imagenesNuevas,
+    });
+
+    if (dto.status !== undefined && dto.status !== estadoAnterior) await this.anunciarSiFinaliza(activity, dto.status, user.userId);
+
+    return this.findOne(id);
+  }
+
+  /** V2 §27: lo que Dirección revisa no cambia a sus espaldas. */
+  private assertRevisionPermiteEditar(user: AuthenticatedUser, activity: Activity, dto: UpdateActivityDto): void {
+    if (!activity.requiresReview || user.role === RolNombre.CAREER_DIRECTOR) return;
+    if (activity.reviewStatus === ActivityReviewStatus.REJECTED
+      && !(Object.keys(dto).length === 1 && dto.status === ActivityStatus.CANCELLED)) {
+      throw new ConflictException('Fue rechazada por Dirección: no se reutiliza. Puedes cancelarla o crear una nueva.');
+    }
+    if (!this.cambiaContenido(dto)) return;
+    if (activity.reviewStatus === ActivityReviewStatus.PENDING) {
+      throw new ConflictException('Está en revisión: espera la decisión de Dirección para cambiar su contenido.');
+    }
+    // V3.2 §23.3 (C10): aprobada, quien la propuso ya no cambia su
+    // contenido (esté publicada o no). Sigue gestionando la participación.
+    if (activity.reviewStatus === ActivityReviewStatus.APPROVED && user.role !== RolNombre.ADMIN) {
+      throw new ConflictException({
+        message: 'Ya fue aprobada por Dirección: el contenido ya no lo cambia quien la propuso. Pide a Dirección los ajustes.',
+        code: 'ACTIVITY_APPROVED_LOCKED',
+      });
+    }
+  }
+
+  /**
+   * Si cambian áreas o habilidades: las habilidades finales con el área en que
+   * se usa cada una (validadas). Sin cambios, undefined.
+   */
+  private async contextosDeEdicion(
+    activity: Activity,
+    dto: UpdateActivityDto,
+    areasNuevas: string[] | undefined,
+  ): Promise<SkillContext[] | undefined> {
+    if (areasNuevas === undefined && dto.skillIds === undefined && dto.skillContexts === undefined) return undefined;
+    const areasFinales = areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
+    const skillsFinales = dto.skillIds ?? (activity.activitySkills ?? []).map((s) => s.skillId);
+    if (areasNuevas !== undefined) {
+      for (const areaId of areasNuevas) await this.assertAreaExists(areaId);
+    }
+    await assertSkillsBelongToAreas(this.activities.manager, skillsFinales, areasFinales, 'skillIds');
+    // Sin contexto nuevo, se conserva el que ya tenían si sigue siendo válido.
+    const previos = (activity.activitySkills ?? [])
+      .filter((s) => s.academicAreaId && areasFinales.includes(s.academicAreaId))
+      .map((s) => ({ skillId: s.skillId, areaId: s.academicAreaId as string }));
+    const contextos = await resolveSkillContexts(
+      this.activities.manager, skillsFinales, areasFinales, dto.skillContexts ?? previos,
+    );
+    if (areasNuevas !== undefined) activity.academicAreaId = areasNuevas[0] ?? null;
+    return contextos;
+  }
+
+  /** Origen (interna o externa), proveedor y política de resultado. */
+  private aplicarOrigenYPolitica(activity: Activity, dto: UpdateActivityDto): void {
     if (dto.originType !== undefined) activity.originType = dto.originType;
     if (dto.provider !== undefined) activity.provider = dto.provider?.trim() || null;
     if (dto.expectedIssuerDomains !== undefined) activity.expectedIssuerDomains = dto.expectedIssuerDomains;
@@ -1821,66 +2040,37 @@ export class ActivitiesService {
       activity.expectedIssuerDomains = [];
       activity.expectedKeywords = [];
     }
-    // V3.2 §17: reasignan responsables Administración, Dirección y Sociedad
-    // (en lo suyo); el docente no: suma contactos.
-    let responsablesNuevos: string[] | undefined;
-    if (dto.responsibleUserId !== undefined || dto.responsibleUserIds !== undefined || dto.responsibleAssignments !== undefined) {
-      if (user.role === RolNombre.TEACHER || user.role === RolNombre.STUDENT) {
-        throw new ForbiddenException('Los responsables los reasignan Dirección o Administración.');
-      }
-      responsablesNuevos = await this.resolverResponsables(
-        user, activity.type, dto, (dto.status ?? activity.status) === ActivityStatus.DRAFT,
-      );
-      activity.responsibleUserId = responsablesNuevos[0] ?? null;
-    }
-    const contactosNuevos = await this.resolverContactos(user, dto.contactUserIds);
-    const imagenesNuevas = (dto.imageFileIds !== undefined || dto.imageFileId !== undefined)
-      ? await this.resolverImagenes(user, dto, await this.imagenesDe(activity.id), activity.imageFileId)
-      : undefined;
-    if (imagenesNuevas !== undefined) activity.imageFileId = imagenesNuevas[0] ?? null;
-    if (dto.meetingUrl !== undefined) activity.meetingUrl = dto.meetingUrl ?? null;
-    if (dto.certificateIssuer !== undefined) activity.certificateIssuer = dto.certificateIssuer?.trim() || null;
-    if (dto.resourceLinks !== undefined) activity.resourceLinks = dto.resourceLinks ?? [];
-    if (dto.categoryId !== undefined) {
-      await this.assertCategoryUsable(dto.categoryId, dto.type ?? activity.type);
-      activity.categoryId = dto.categoryId;
-    }
-    if (dto.title !== undefined) activity.title = dto.title;
-    if (dto.description !== undefined) activity.description = dto.description;
-    if (dto.modality !== undefined) activity.modality = dto.modality;
-    if (dto.activityDate !== undefined) {
-      activity.eventDate = dto.activityDate ? new Date(dto.activityDate) : null;
-    }
-    if (dto.location !== undefined) activity.location = dto.location;
-    if (dto.capacity !== undefined) activity.capacity = dto.capacity;
-    if (dto.tags !== undefined) activity.tags = dto.tags;
-    // V3 §13.1: la evidencia de asistencia ya no se pide; el flag histórico se apaga.
-    if (dto.evidenceRequired !== undefined) activity.evidenceRequired = false;
-    if (reiniciarRevision) {
-      activity.reviewStatus = null;
-      activity.reviewComment = 'La actividad cambió después de aprobada: envíala de nuevo a revisión.';
-    }
-    if (dto.requirements !== undefined) activity.requirements = dto.requirements ?? null;
-    if (dto.registrationMode !== undefined) activity.registrationMode = dto.registrationMode;
-    if (dto.endAt !== undefined) activity.endAt = dto.endAt ? new Date(dto.endAt) : null;
+  }
 
-    this.assertDateWindow(
-      dto.activityDate ?? activity.eventDate?.toISOString() ?? null,
-      dto.endAt ?? activity.endAt?.toISOString() ?? null,
+  /**
+   * V3.2 §17: reasignan responsables Administración, Dirección y Sociedad
+   * (en lo suyo); el docente no: suma contactos. Sin cambios, undefined.
+   */
+  private async responsablesDeEdicion(
+    user: AuthenticatedUser,
+    activity: Activity,
+    dto: UpdateActivityDto,
+  ): Promise<string[] | undefined> {
+    if (dto.responsibleUserId === undefined && dto.responsibleUserIds === undefined && dto.responsibleAssignments === undefined) {
+      return undefined;
+    }
+    if (user.role === RolNombre.TEACHER || user.role === RolNombre.STUDENT) {
+      throw new ForbiddenException('Los responsables los reasignan Dirección o Administración.');
+    }
+    const responsables = await this.resolverResponsables(
+      user, activity.type, dto, (dto.status ?? activity.status) === ActivityStatus.DRAFT,
     );
+    activity.responsibleUserId = responsables[0] ?? null;
+    return responsables;
+  }
 
-    if (dto.semesterScope !== undefined) {
-      // Se revalida contra el alcance de quien edita: un docente no puede
-      // ampliar el alcance de una actividad hasta abarcar semestres ajenos.
-      activity.semesterScope = await this.resolveSemesterScope(user, dto.semesterScope);
-    }
-
+  /** Cambio de estado; V3.2 §21.6: cancelar exige motivo, que el estudiante verá. */
+  private async aplicarCambioDeEstado(activity: Activity, dto: UpdateActivityDto): Promise<void> {
     const estadoAnterior = activity.status;
     if (dto.status !== undefined) {
       await this.assertStatusTransition(activity, dto.status);
       activity.status = dto.status;
     }
-    // V3.2 §21.6: cancelar exige motivo, que el estudiante verá.
     if (dto.status === ActivityStatus.CANCELLED && estadoAnterior !== ActivityStatus.CANCELLED) {
       if (!dto.cancellationReason) {
         const msg = 'Indica el motivo de la cancelación: el estudiante lo verá.';
@@ -1889,47 +2079,67 @@ export class ActivitiesService {
       activity.cancellationReason = dto.cancellationReason;
       activity.cancelledAt = new Date();
     }
-    this.normalizarModalidad(activity);
-    activity.updatedById = user.userId;
-    // V3.2 §21.1: lo que se publica (o sigue publicado y cambia) tiene que estar completo.
-    const publica = (dto.status === ActivityStatus.PUBLISHED || dto.status === ActivityStatus.OPEN)
-      && estadoAnterior === ActivityStatus.DRAFT;
+  }
+
+  /** V3.2 §21.1: lo que se publica (o sigue publicado y cambia) tiene que estar completo. */
+  private async assertCompletaTrasEdicion(
+    user: AuthenticatedUser,
+    activity: Activity,
+    dto: UpdateActivityDto,
+    e: { publica: boolean; areasNuevas?: string[]; contextos?: SkillContext[]; responsablesNuevos?: string[] },
+  ): Promise<void> {
     const cambiaLoMinimo = [
       dto.activityDate, dto.endAt, dto.modality, dto.location, dto.meetingUrl, dto.areaIds, dto.areaId, dto.skillIds,
       dto.outcomePolicy, dto.certificateIssuer,
     ].some((v) => v !== undefined);
     const visible = [ActivityStatus.PUBLISHED, ActivityStatus.OPEN, ActivityStatus.CLOSED].includes(activity.status);
-    if (publica || (visible && cambiaLoMinimo)) {
-      const areasFinales = areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
-      const skillsFinales = contextos?.map((c) => c.skillId) ?? (activity.activitySkills ?? []).map((s) => s.skillId);
-      const responsablesFinales = responsablesNuevos?.length
-        ?? await this.activities.manager.getRepository(ActivityResponsible).count({ where: { activityId: activity.id } });
-      this.assertCompleta(activity, areasFinales, skillsFinales, responsablesFinales);
-      if (publica) this.assertInicioFuturo(activity);
-      if (publica) this.assertSemestresDelDocente(user, activity);
-    }
+    if (!e.publica && !(visible && cambiaLoMinimo)) return;
+    const areasFinales = e.areasNuevas ?? (await this.activityAreas.find({ where: { activityId: activity.id } })).map((a) => a.academicAreaId);
+    const skillsFinales = e.contextos?.map((c) => c.skillId) ?? (activity.activitySkills ?? []).map((s) => s.skillId);
+    const responsablesFinales = e.responsablesNuevos?.length
+      ?? await this.activities.manager.getRepository(ActivityResponsible).count({ where: { activityId: activity.id } });
+    this.assertCompleta(activity, areasFinales, skillsFinales, responsablesFinales);
+    if (e.publica) this.assertInicioFuturo(activity);
+    if (e.publica) this.assertSemestresDelDocente(user, activity);
+  }
 
-    // V6 §3.2: si cambian los responsables, sus asignaciones o la audiencia, se
-    // recalcula quién cubre qué; y una actividad que no es borrador nunca queda
-    // con semestres sin responsable (también al publicarla).
-    const recalcula = responsablesNuevos !== undefined || dto.responsibleAssignments !== undefined || dto.semesterScope !== undefined;
-    let asignacionesNuevas: Asignacion[] | undefined;
-    if (recalcula || publica) {
-      const filas = await this.activities.manager.getRepository(ActivityResponsible).find({ where: { activityId: activity.id } });
-      const ids = responsablesNuevos ?? filas.map((r) => r.userId);
-      const previas = new Map(filas.map((r) => [r.userId, r.semesters ?? []]));
-      asignacionesNuevas = await this.resolverAsignaciones(ids, activity.semesterScope, dto.responsibleAssignments, previas, audienciaAnterior);
-      if (activity.status !== ActivityStatus.DRAFT) this.assertCoberturaAsignada(activity, asignacionesNuevas);
-    }
+  /** V6 §3.2: quién cubre qué semestres tras la edición. */
+  private async asignacionesDeEdicion(
+    activity: Activity,
+    dto: UpdateActivityDto,
+    responsablesNuevos: string[] | undefined,
+    audienciaAnterior: number[] | null,
+  ): Promise<Asignacion[]> {
+    const filas = await this.activities.manager.getRepository(ActivityResponsible).find({ where: { activityId: activity.id } });
+    const ids = responsablesNuevos ?? filas.map((r) => r.userId);
+    const previas = new Map(filas.map((r) => [r.userId, r.semesters ?? []]));
+    const asignaciones = await this.resolverAsignaciones(ids, activity.semesterScope, dto.responsibleAssignments, previas, audienciaAnterior);
+    if (activity.status !== ActivityStatus.DRAFT) this.assertCoberturaAsignada(activity, asignaciones);
+    return asignaciones;
+  }
 
+  /** Escribe la actividad y todo lo que cuelga de ella en una sola transacción. */
+  private async guardarEdicion(
+    user: AuthenticatedUser,
+    activity: Activity,
+    dto: UpdateActivityDto,
+    estadoAnterior: ActivityStatus,
+    n: {
+      areasNuevas?: string[];
+      contextos?: SkillContext[];
+      asignacionesNuevas?: Asignacion[];
+      contactosNuevos?: Awaited<ReturnType<ActivitiesService['resolverContactos']>>;
+      imagenesNuevas?: string[];
+    },
+  ): Promise<void> {
     await this.activities.manager.transaction(async (m) => {
       await m.getRepository(Activity).save(this.soloFila(activity));
-      if (areasNuevas !== undefined) await this.replaceAreas(activity.id, areasNuevas, m);
-      if (contextos !== undefined) await this.replaceSkills(activity.id, contextos, m);
-      if (asignacionesNuevas !== undefined) await this.replaceResponsables(activity.id, asignacionesNuevas, m);
-      if (contactosNuevos !== undefined) await this.replaceContactos(activity.id, contactosNuevos, m);
-      if (imagenesNuevas !== undefined) await this.replaceImagenes(activity.id, imagenesNuevas, m);
-      if (areasNuevas !== undefined || contextos !== undefined) await this.derivarPalabrasClave(activity.id, m);
+      if (n.areasNuevas !== undefined) await this.replaceAreas(activity.id, n.areasNuevas, m);
+      if (n.contextos !== undefined) await this.replaceSkills(activity.id, n.contextos, m);
+      if (n.asignacionesNuevas !== undefined) await this.replaceResponsables(activity.id, n.asignacionesNuevas, m);
+      if (n.contactosNuevos !== undefined) await this.replaceContactos(activity.id, n.contactosNuevos, m);
+      if (n.imagenesNuevas !== undefined) await this.replaceImagenes(activity.id, n.imagenesNuevas, m);
+      if (n.areasNuevas !== undefined || n.contextos !== undefined) await this.derivarPalabrasClave(activity.id, m);
       if (dto.gamificationRules !== undefined) {
         await this.replaceRules(activity.id, user.userId, dto.gamificationRules ?? [], m);
       }
@@ -1947,21 +2157,19 @@ export class ActivitiesService {
         }, m);
       }
     });
+  }
 
-    if (dto.status !== undefined && dto.status !== estadoAnterior) {
-      // §15: al darla por finalizada, quienes fueron aceptados (o
-      // confirmados, si es interna con credencial de un tercero) ya pueden
-      // adjuntar su credencial.
-      if (dto.status === ActivityStatus.FINISHED && CredentialEligibilityService.esperaCredencial(activity)) {
-        const habilitadas = await this.registrations.find({
-          where: { activityId: activity.id, status: CredentialEligibilityService.estadoQueHabilita(activity) },
-          relations: { studentProfile: true },
-        });
-        await this.eligibility.announce(activity, habilitadas, user.userId);
-      }
-    }
-
-    return this.findOne(id);
+  /**
+   * §15: al darla por finalizada, quienes fueron aceptados (o confirmados, si
+   * es interna con credencial de un tercero) ya pueden adjuntar su credencial.
+   */
+  private async anunciarSiFinaliza(activity: Activity, status: ActivityStatus, actorUserId: string): Promise<void> {
+    if (status !== ActivityStatus.FINISHED || !CredentialEligibilityService.esperaCredencial(activity)) return;
+    const habilitadas = await this.registrations.find({
+      where: { activityId: activity.id, status: CredentialEligibilityService.estadoQueHabilita(activity) },
+      relations: { studentProfile: true },
+    });
+    await this.eligibility.announce(activity, habilitadas, actorUserId);
   }
 
   registerInterest(userId: string, activityId: string): Promise<ActivityRegistration> {
@@ -2043,29 +2251,7 @@ export class ActivitiesService {
       'Su rol no puede registrar participación en esta actividad.',
     );
 
-    const profile = await this.profiles.findOne({ where: { id: studentProfileId } });
-    if (!profile) {
-      throw new BadRequestException('El perfil del estudiante no existe.');
-    }
-    if (profile.userId === confirmer.userId) {
-      throw new ForbiddenException('No puede confirmar su propia participación.');
-    }
-    // V6 §3.2 (regla 9, ADM-06): un docente responsable opera solo a los
-    // estudiantes de los semestres que tiene asignados en esta actividad.
-    const opera = await this.semestresQueOpera(confirmer, activity);
-    if (opera && !effectiveSemesters(profile).some((s) => opera.includes(s))) {
-      const m = `Este estudiante no es de los semestres que atiendes en esta actividad (${opera.map((s) => `${s}.º`).join(', ') || 'ninguno'}).`;
-      throw new ForbiddenException({ code: 'STUDENT_OUT_OF_RESPONSIBLE_SCOPE', message: m });
-    }
-
-    const registration = await this.registrations.findOne({
-      where: { activityId: activity.id, studentProfileId },
-    });
-    if (!registration) {
-      throw new NotFoundException(
-        'El estudiante no manifestó interés ni se inscribió en esta actividad.',
-      );
-    }
+    const { profile, registration } = await this.perfilEInscripcion(confirmer, activity, studentProfileId);
 
     // V3 §15: en una externa no se confirma asistencia —no ocurre en la
     // carrera—; se registra que el proveedor lo aceptó.
@@ -2084,43 +2270,8 @@ export class ActivitiesService {
     const asistencia = ATTENDANCE_STATUSES.includes(status);
     const yaAsistencia = ATTENDANCE_STATUSES.includes(anterior);
 
-    if (asistencia) {
-      // V5 §6.1 / §5.7 / ND-06: asistir solo se registra con el evento empezado,
-      // dentro de la ventana de regularización y con el acta abierta.
-      const bloqueo = bloqueoAsistencia(activity, new Date(), this.toleranciaInicioMin(), this.ventanaAsistenciaDias());
-      if (bloqueo) throw new ConflictException(bloqueo);
-      if (!admitidoParaAsistencia(activity, anterior)) {
-        const m = 'Primero admite la solicitud: la asistencia se registra a quien tiene un lugar.';
-        throw new ConflictException({ code: 'ATTENDANCE_REQUIRES_ADMISSION', message: m, fields: { status: [m] } });
-      }
-      // V4.1 A41-011: una participación consolidada (la actividad terminó o
-      // hay constancia emitida) no se retira libremente.
-      if (anterior === RegistrationStatus.CONFIRMED && status !== RegistrationStatus.CONFIRMED
-        && await this.participacionConsolidada(activity, registration)) {
-        const m = 'Esta participación ya está consolidada (la actividad terminó o tiene constancia). '
-          + 'Si hay un error, la corrige Dirección con un motivo.';
-        throw new ConflictException({ code: 'PARTICIPATION_CONSOLIDATED', message: m });
-      }
-    } else {
-      // Admitir o rechazar es una decisión sobre la solicitud, no sobre la
-      // asistencia: no se toma después de registrarla, ni con el acta cerrada.
-      if (activity.attendanceStatus === 'locked') {
-        const m = 'La asistencia ya está cerrada. Si hay un error, la corrige Dirección con un motivo.';
-        throw new ConflictException({ code: 'ATTENDANCE_LOCKED', message: m });
-      }
-      if (yaAsistencia) {
-        const m = 'Ya se registró su asistencia: la admisión no se cambia. Si hay un error, la corrige Dirección con un motivo.';
-        throw new ConflictException({ code: 'ADMISSION_AFTER_ATTENDANCE', message: m });
-      }
-      if (anterior === RegistrationStatus.INTERESTED || anterior === RegistrationStatus.CANCELLED) {
-        const m = 'El estudiante no tiene una solicitud de inscripción vigente.';
-        throw new ConflictException({ code: 'NO_PENDING_REQUEST', message: m });
-      }
-      if (status === RegistrationStatus.REJECTED && !reason?.trim()) {
-        const m = 'Explica el motivo: el estudiante lo verá.';
-        throw new BadRequestException({ code: 'REJECTION_REASON_REQUIRED', message: m, fields: { reason: [m] } });
-      }
-    }
+    if (asistencia) await this.assertPuedeRegistrarAsistencia(activity, registration, anterior, status);
+    else assertPuedeDecidirAdmision(activity, anterior, yaAsistencia, status, reason);
 
     // V5 §6.1 (C05): ocupar plaza es atómico. La fila de la actividad se
     // bloquea y el cupo se cuenta dentro de la misma transacción, así dos
@@ -2135,20 +2286,7 @@ export class ActivitiesService {
       registration.acceptedAt = null;
       registration.decisionReason = reason!.trim().slice(0, 300);
     }
-    const saved = await this.activities.manager.transaction(async (m) => {
-      if (ocupa && activity.capacity) {
-        await m.getRepository(Activity).createQueryBuilder('a')
-          .setLock('pessimistic_write').where('a.id = :id', { id: activity.id }).getOne();
-        const ocupados = await m.getRepository(ActivityRegistration).count({
-          where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
-        });
-        if (ocupados >= activity.capacity) {
-          const msg = `La actividad alcanzó su cupo de ${activity.capacity} lugares.`;
-          throw new ConflictException({ code: 'ACTIVITY_FULL', message: msg });
-        }
-      }
-      return m.getRepository(ActivityRegistration).save(registration);
-    });
+    const saved = await this.guardarDecision(activity, registration, ocupa);
 
     // §23: confirmar dispara trayectoria, afinidad, recomendaciones,
     // gamificación y auditoría. Las tres primeras cuelgan del recálculo;
@@ -2161,11 +2299,7 @@ export class ActivitiesService {
 
     await this.audit.record({
       actorUserId: confirmer.userId,
-      eventType: status === RegistrationStatus.ACCEPTED
-        ? (externa ? AuditEventType.EXTERNAL_OPPORTUNITY_ACCEPTED : AuditEventType.REGISTRATION_ADMITTED)
-        : status === RegistrationStatus.REJECTED
-          ? AuditEventType.REGISTRATION_REJECTED
-          : AuditEventType.PARTICIPATION_CONFIRMED,
+      eventType: eventoDeDecision(status, externa),
       entityType: 'activity_registration',
       entityId: saved.id,
       metadata: {
@@ -2180,44 +2314,108 @@ export class ActivitiesService {
     // Si la oportunidad ya terminó, desde ahora puede adjuntar su credencial.
     if (status !== anterior) {
       await this.eligibility.announce(activity, [saved], confirmer.userId);
-      // V3 §33 y V5 §6: cada aviso dice lo que pasó. Admitir no es asistir.
-      const aviso: Record<string, { kind: string; title: string; body: string } | undefined> = {
-        [RegistrationStatus.CONFIRMED]: {
-          kind: 'PARTICIPATION_CONFIRMED',
-          title: 'Asistencia registrada',
-          body: `El responsable registró tu asistencia a «${activity.title}». Ya cuenta en tu trayectoria.`,
-        },
-        [RegistrationStatus.ACCEPTED]: {
-          kind: 'ACTIVITY_REGISTRATION_ACCEPTED',
-          title: externa ? 'Te aceptaron' : 'Inscripción admitida',
-          body: externa
-            ? `El proveedor te aceptó en «${activity.title}». Al terminar podrás adjuntar tu credencial.`
-            : `Tienes un lugar en «${activity.title}». La asistencia la registra el responsable el día del evento.`,
-        },
-        [RegistrationStatus.REJECTED]: {
-          kind: 'ACTIVITY_REGISTRATION_REJECTED',
-          title: 'Inscripción no admitida',
-          body: `Tu solicitud para «${activity.title}» no fue admitida: ${saved.decisionReason}`,
-        },
-      };
-      const a = aviso[status];
-      if (a) {
-        try {
-          await this.notifications.emit({
-            userId: profile.userId,
-            ...a,
-            link: '/student/activities',
-            entityType: 'activity_registration',
-            entityId: saved.id,
-            dedupeKey: `registration-${status}:${saved.id}`,
-          });
-        } catch {
-          // sin efecto sobre la operación
-        }
-      }
+      await this.avisarDecision(avisoDeDecision(activity, saved, status, externa), profile.userId, saved.id, status);
     }
 
     return saved;
+  }
+
+  /** El perfil del estudiante y su inscripción, si el que confirma puede operarlo. */
+  private async perfilEInscripcion(confirmer: AuthenticatedUser, activity: Activity, studentProfileId: string) {
+    const profile = await this.profiles.findOne({ where: { id: studentProfileId } });
+    if (!profile) {
+      throw new BadRequestException('El perfil del estudiante no existe.');
+    }
+    if (profile.userId === confirmer.userId) {
+      throw new ForbiddenException('No puede confirmar su propia participación.');
+    }
+    // V6 §3.2 (regla 9, ADM-06): un docente responsable opera solo a los
+    // estudiantes de los semestres que tiene asignados en esta actividad.
+    const opera = await this.semestresQueOpera(confirmer, activity);
+    if (opera && !effectiveSemesters(profile).some((s) => opera.includes(s))) {
+      const m = `Este estudiante no es de los semestres que atiendes en esta actividad (${listaSemestres(opera) || 'ninguno'}).`;
+      throw new ForbiddenException({ code: 'STUDENT_OUT_OF_RESPONSIBLE_SCOPE', message: m });
+    }
+
+    const registration = await this.registrations.findOne({
+      where: { activityId: activity.id, studentProfileId },
+    });
+    if (!registration) {
+      throw new NotFoundException(
+        'El estudiante no manifestó interés ni se inscribió en esta actividad.',
+      );
+    }
+    return { profile, registration };
+  }
+
+  /**
+   * V5 §6.1 / §5.7 / ND-06: asistir solo se registra con el evento empezado,
+   * dentro de la ventana de regularización y con el acta abierta.
+   */
+  private async assertPuedeRegistrarAsistencia(
+    activity: Activity,
+    registration: ActivityRegistration,
+    anterior: RegistrationStatus,
+    status: RegistrationStatus,
+  ): Promise<void> {
+    const bloqueo = bloqueoAsistencia(activity, new Date(), this.toleranciaInicioMin(), this.ventanaAsistenciaDias());
+    if (bloqueo) throw new ConflictException(bloqueo);
+    if (!admitidoParaAsistencia(activity, anterior)) {
+      const m = 'Primero admite la solicitud: la asistencia se registra a quien tiene un lugar.';
+      throw new ConflictException({ code: 'ATTENDANCE_REQUIRES_ADMISSION', message: m, fields: { status: [m] } });
+    }
+    // V4.1 A41-011: una participación consolidada (la actividad terminó o
+    // hay constancia emitida) no se retira libremente.
+    if (anterior === RegistrationStatus.CONFIRMED && status !== RegistrationStatus.CONFIRMED
+      && await this.participacionConsolidada(activity, registration)) {
+      const m = 'Esta participación ya está consolidada (la actividad terminó o tiene constancia). '
+        + 'Si hay un error, la corrige Dirección con un motivo.';
+      throw new ConflictException({ code: 'PARTICIPATION_CONSOLIDATED', message: m });
+    }
+  }
+
+  /**
+   * V5 §6.1 (C05): ocupar plaza es atómico. La fila de la actividad se
+   * bloquea y el cupo se cuenta dentro de la misma transacción, así dos
+   * decisiones simultáneas no superan el cupo.
+   */
+  private guardarDecision(activity: Activity, registration: ActivityRegistration, ocupa: boolean): Promise<ActivityRegistration> {
+    return this.activities.manager.transaction(async (m) => {
+      if (ocupa && activity.capacity) {
+        await m.getRepository(Activity).createQueryBuilder('a')
+          .setLock('pessimistic_write').where('a.id = :id', { id: activity.id }).getOne();
+        const ocupados = await m.getRepository(ActivityRegistration).count({
+          where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
+        });
+        if (ocupados >= activity.capacity) {
+          const msg = `La actividad alcanzó su cupo de ${activity.capacity} lugares.`;
+          throw new ConflictException({ code: 'ACTIVITY_FULL', message: msg });
+        }
+      }
+      return m.getRepository(ActivityRegistration).save(registration);
+    });
+  }
+
+  /** Avisa al estudiante; un fallo del aviso no deshace la decisión. */
+  private async avisarDecision(
+    a: { kind: string; title: string; body: string } | undefined,
+    userId: string,
+    registrationId: string,
+    status: RegistrationStatus,
+  ): Promise<void> {
+    if (!a) return;
+    try {
+      await this.notifications.emit({
+        userId,
+        ...a,
+        link: '/student/activities',
+        entityType: 'activity_registration',
+        entityId: registrationId,
+        dedupeKey: `registration-${status}:${registrationId}`,
+      });
+    } catch {
+      // sin efecto sobre la operación
+    }
   }
 
   /** V4.1 A41-011: terminó el evento o ya hay una constancia autorizada. */
@@ -2274,33 +2472,9 @@ export class ActivitiesService {
     status: RegistrationStatus,
     reason: string,
   ): Promise<ActivityRegistration> {
-    if (user.role !== RolNombre.ADMIN && user.role !== RolNombre.CAREER_DIRECTOR) {
-      throw new ForbiddenException('Una corrección excepcional la hacen Dirección o Administración.');
-    }
-    const motivo = (reason ?? '').trim();
-    if (motivo.length < 10) {
-      const m = 'Explica el motivo de la corrección (al menos 10 caracteres): queda en la auditoría.';
-      throw new BadRequestException({ message: m, fields: { reason: [m] } });
-    }
-    const permitidos = [RegistrationStatus.CONFIRMED, RegistrationStatus.ABSENT, RegistrationStatus.REGISTERED];
-    if (!permitidos.includes(status)) {
-      const m = 'La corrección deja la participación como confirmada, ausente o inscrita.';
-      throw new BadRequestException({ message: m, fields: { status: [m] } });
-    }
+    const motivo = this.validarPedidoDeCorreccion(user, status, reason);
     const activity = await this.findOne(activityId);
-    if (activity.originType === ActivityOrigin.EXTERNAL) {
-      throw new BadRequestException('En una oportunidad externa no se confirma asistencia.');
-    }
-    if (activity.status === ActivityStatus.CANCELLED && status === RegistrationStatus.CONFIRMED) {
-      throw new ConflictException({ code: 'ACTIVITY_CANCELLED', message: 'La actividad está cancelada: no se registra asistencia.' });
-    }
-    // V5 §6: ni una corrección registra asistencia a algo que no empezó.
-    if (status !== RegistrationStatus.REGISTERED && !yaEmpezo(activity.eventDate, new Date(), this.toleranciaInicioMin())) {
-      throw new ConflictException({
-        code: 'ATTENDANCE_BEFORE_START',
-        message: 'La actividad todavía no empezó: no hay asistencia que corregir.',
-      });
-    }
+    this.assertCorreccionPosible(activity, status);
     const registration = await this.registrations.findOne({ where: { activityId, studentProfileId } });
     if (!registration) throw new NotFoundException('El estudiante no está inscrito en esta actividad.');
     const anterior = registration.status;
@@ -2325,24 +2499,68 @@ export class ActivitiesService {
       entityId: saved.id,
       metadata: { activityId, studentProfileId, de: anterior, a: status, motivo, actaCerrada: activity.attendanceStatus === 'locked' },
     });
-    const perfil = await this.profiles.findOne({ where: { id: studentProfileId } });
-    if (perfil) {
-      try {
-        await this.notifications.emit({
-          userId: perfil.userId,
-          kind: 'PARTICIPATION_CONFIRMED',
-          title: 'Se corrigió tu participación',
-          body: `Dirección corrigió tu participación en «${activity.title}». Motivo: ${motivo}`,
-          link: '/student/activities',
-          entityType: 'activity_registration',
-          entityId: saved.id,
-          dedupeKey: `participation-correction:${saved.id}:${Date.now()}`,
-        });
-      } catch {
-        // sin efecto sobre la operación
-      }
-    }
+    await this.avisarCorreccion(studentProfileId, activity, saved, motivo);
     return saved;
+  }
+
+  /** Quién y con qué datos se pide una corrección excepcional. Devuelve el motivo limpio. */
+  private validarPedidoDeCorreccion(user: AuthenticatedUser, status: RegistrationStatus, reason: string): string {
+    if (user.role !== RolNombre.ADMIN && user.role !== RolNombre.CAREER_DIRECTOR) {
+      throw new ForbiddenException('Una corrección excepcional la hacen Dirección o Administración.');
+    }
+    const motivo = (reason ?? '').trim();
+    if (motivo.length < 10) {
+      const m = 'Explica el motivo de la corrección (al menos 10 caracteres): queda en la auditoría.';
+      throw new BadRequestException({ message: m, fields: { reason: [m] } });
+    }
+    const permitidos = [RegistrationStatus.CONFIRMED, RegistrationStatus.ABSENT, RegistrationStatus.REGISTERED];
+    if (!permitidos.includes(status)) {
+      const m = 'La corrección deja la participación como confirmada, ausente o inscrita.';
+      throw new BadRequestException({ message: m, fields: { status: [m] } });
+    }
+    return motivo;
+  }
+
+  /** La actividad admite la corrección pedida: interna, no cancelada si se confirma y ya empezada. */
+  private assertCorreccionPosible(activity: Activity, status: RegistrationStatus): void {
+    if (activity.originType === ActivityOrigin.EXTERNAL) {
+      throw new BadRequestException('En una oportunidad externa no se confirma asistencia.');
+    }
+    if (activity.status === ActivityStatus.CANCELLED && status === RegistrationStatus.CONFIRMED) {
+      throw new ConflictException({ code: 'ACTIVITY_CANCELLED', message: 'La actividad está cancelada: no se registra asistencia.' });
+    }
+    // V5 §6: ni una corrección registra asistencia a algo que no empezó.
+    if (status !== RegistrationStatus.REGISTERED && !yaEmpezo(activity.eventDate, new Date(), this.toleranciaInicioMin())) {
+      throw new ConflictException({
+        code: 'ATTENDANCE_BEFORE_START',
+        message: 'La actividad todavía no empezó: no hay asistencia que corregir.',
+      });
+    }
+  }
+
+  /** Aviso al estudiante de una corrección; si el aviso falla, la corrección sigue en pie. */
+  private async avisarCorreccion(
+    studentProfileId: string,
+    activity: Activity,
+    saved: ActivityRegistration,
+    motivo: string,
+  ): Promise<void> {
+    const perfil = await this.profiles.findOne({ where: { id: studentProfileId } });
+    if (!perfil) return;
+    try {
+      await this.notifications.emit({
+        userId: perfil.userId,
+        kind: 'PARTICIPATION_CONFIRMED',
+        title: 'Se corrigió tu participación',
+        body: `Dirección corrigió tu participación en «${activity.title}». Motivo: ${motivo}`,
+        link: '/student/activities',
+        entityType: 'activity_registration',
+        entityId: saved.id,
+        dedupeKey: `participation-correction:${saved.id}:${Date.now()}`,
+      });
+    } catch {
+      // sin efecto sobre la operación
+    }
   }
 
   /**
@@ -2462,7 +2680,7 @@ export class ActivitiesService {
     }
 
     let ref = await this.references.findOne({ where: { activityId } });
-    if (!ref) ref = this.references.create({ activityId });
+    ref ??= this.references.create({ activityId });
 
     if (dto.sampleStoredFileId !== undefined) {
       // §27: solo un archivo propio. Si no cambia, no se vuelve a exigir:
@@ -2533,16 +2751,7 @@ export class ActivitiesService {
     target: RegistrationStatus,
   ): Promise<ActivityRegistration> {
     const activity = await this.findOne(activityId);
-
-    // V3.2 §36: «Me interesa» es un favorito o recordatorio personal. Se puede
-    // guardar aunque la actividad ya cerró o terminó; inscribirse, no.
-    const soloGuardar = target === RegistrationStatus.INTERESTED
-      && (activity.status === ActivityStatus.CLOSED || activity.status === ActivityStatus.FINISHED
-        || (activity.eventDate !== null && activity.eventDate.getTime() < Date.now()));
-    const blocked = soloGuardar ? null : this.registrationBlockReason(activity);
-    if (blocked) {
-      throw new BadRequestException(blocked);
-    }
+    this.assertAdmiteSolicitud(activity, target);
 
     const profile = await this.profiles.findOne({ where: { userId } });
     if (!profile) {
@@ -2552,30 +2761,7 @@ export class ActivitiesService {
     let registration = await this.registrations.findOne({
       where: { activityId: activity.id, studentProfileId: profile.id },
     });
-
-    if (registration && registration.status === RegistrationStatus.REJECTED) {
-      throw new BadRequestException(
-        `Tu solicitud no fue admitida${registration.decisionReason ? `: ${registration.decisionReason}` : '.'} `
-        + 'Si crees que es un error, escribe al responsable.',
-      );
-    }
-    if (
-      registration && (registration.status === RegistrationStatus.CONFIRMED
-        || registration.status === RegistrationStatus.ABSENT
-        || (registration.status === RegistrationStatus.ACCEPTED && target === RegistrationStatus.INTERESTED))
-    ) {
-      throw new BadRequestException(
-        'Su participación ya fue registrada por el responsable de la actividad.',
-      );
-    }
-    if (registration && (registration.status === target
-      || (target === RegistrationStatus.REGISTERED && registration.status === RegistrationStatus.ACCEPTED))) {
-      throw new BadRequestException(
-        target === RegistrationStatus.REGISTERED
-          ? 'Ya está inscrito en esta actividad.'
-          : 'Ya marcó interés en esta actividad.',
-      );
-    }
+    if (registration) this.assertSolicitudNueva(registration, target);
 
     // V5 §6.1: una interna abierta y sin cupo admite sola. No es asistencia:
     // la asistencia la registra el responsable cuando el evento ya empezó.
@@ -2592,23 +2778,8 @@ export class ActivitiesService {
     }
     registration.acceptedAt = admitida ? new Date() : null;
     registration.decisionReason = null;
-    const fila = registration;
     const guardada = admitida && activity.capacity
-      // V6 §4.1: abierta con cupo = por orden de solicitud. Se bloquea la fila
-      // de la actividad para que dos solicitudes simultáneas no tomen la misma
-      // última plaza; agotado el cupo, la solicitud no se guarda.
-      ? await this.activities.manager.transaction(async (m) => {
-        await m.getRepository(Activity).createQueryBuilder('a')
-          .setLock('pessimistic_write').where('a.id = :id', { id: activity.id }).getOne();
-        const ocupados = await m.getRepository(ActivityRegistration).count({
-          where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
-        });
-        if (ocupados >= (activity.capacity ?? 0)) {
-          const msg = `Se agotó el cupo: las ${activity.capacity} plazas ya se asignaron por orden de solicitud.`;
-          throw new ConflictException({ code: 'ACTIVITY_FULL', message: msg });
-        }
-        return m.getRepository(ActivityRegistration).save(fila);
-      })
+      ? await this.guardarConCupo(activity, registration)
       : await this.registrations.save(registration);
     if (target === RegistrationStatus.REGISTERED) {
       await this.audit.record({
@@ -2620,6 +2791,68 @@ export class ActivitiesService {
       });
     }
     return guardada;
+  }
+
+  /**
+   * V3.2 §36: «Me interesa» es un favorito o recordatorio personal. Se puede
+   * guardar aunque la actividad ya cerró o terminó; inscribirse, no.
+   */
+  private assertAdmiteSolicitud(activity: Activity, target: RegistrationStatus): void {
+    const soloGuardar = target === RegistrationStatus.INTERESTED
+      && (activity.status === ActivityStatus.CLOSED || activity.status === ActivityStatus.FINISHED
+        || (activity.eventDate !== null && activity.eventDate.getTime() < Date.now()));
+    const blocked = soloGuardar ? null : this.registrationBlockReason(activity);
+    if (blocked) {
+      throw new BadRequestException(blocked);
+    }
+  }
+
+  /** Una solicitud previa rechazada, ya resuelta por el responsable o idéntica no se repite. */
+  private assertSolicitudNueva(registration: ActivityRegistration, target: RegistrationStatus): void {
+    if (registration.status === RegistrationStatus.REJECTED) {
+      const motivo = registration.decisionReason ? `: ${registration.decisionReason}` : '.';
+      throw new BadRequestException(
+        `Tu solicitud no fue admitida${motivo} `
+        + 'Si crees que es un error, escribe al responsable.',
+      );
+    }
+    if (
+      registration.status === RegistrationStatus.CONFIRMED
+      || registration.status === RegistrationStatus.ABSENT
+      || (registration.status === RegistrationStatus.ACCEPTED && target === RegistrationStatus.INTERESTED)
+    ) {
+      throw new BadRequestException(
+        'Su participación ya fue registrada por el responsable de la actividad.',
+      );
+    }
+    if (registration.status === target
+      || (target === RegistrationStatus.REGISTERED && registration.status === RegistrationStatus.ACCEPTED)) {
+      throw new BadRequestException(
+        target === RegistrationStatus.REGISTERED
+          ? 'Ya está inscrito en esta actividad.'
+          : 'Ya marcó interés en esta actividad.',
+      );
+    }
+  }
+
+  /**
+   * V6 §4.1: abierta con cupo = por orden de solicitud. Se bloquea la fila de
+   * la actividad para que dos solicitudes simultáneas no tomen la misma última
+   * plaza; agotado el cupo, la solicitud no se guarda.
+   */
+  private guardarConCupo(activity: Activity, fila: ActivityRegistration): Promise<ActivityRegistration> {
+    return this.activities.manager.transaction(async (m) => {
+      await m.getRepository(Activity).createQueryBuilder('a')
+        .setLock('pessimistic_write').where('a.id = :id', { id: activity.id }).getOne();
+      const ocupados = await m.getRepository(ActivityRegistration).count({
+        where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
+      });
+      if (ocupados >= (activity.capacity ?? 0)) {
+        const msg = `Se agotó el cupo: las ${activity.capacity} plazas ya se asignaron por orden de solicitud.`;
+        throw new ConflictException({ code: 'ACTIVITY_FULL', message: msg });
+      }
+      return m.getRepository(ActivityRegistration).save(fila);
+    });
   }
 
   /**
@@ -2698,22 +2931,7 @@ export class ActivitiesService {
       );
     }
 
-    // V4.1 A41-010 (§4.6, B14/B15): reabrir inscripciones dice por qué no se puede.
-    if (activity.status === ActivityStatus.CLOSED && next === ActivityStatus.OPEN) {
-      if (activity.eventDate && activity.eventDate.getTime() <= Date.now()) {
-        const msg = 'La actividad ya empezó: para reabrir inscripciones cambia antes la fecha de inicio a una futura.';
-        throw new BadRequestException({ message: msg, code: 'ACTIVITY_REOPEN_STARTED', fields: { status: [msg] } });
-      }
-      if (activity.capacity) {
-        const ocupados = await this.registrations.count({
-          where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
-        });
-        if (ocupados >= activity.capacity) {
-          const msg = 'El cupo está completo: amplía el cupo o libera lugares antes de reabrir inscripciones.';
-          throw new BadRequestException({ message: msg, code: 'ACTIVITY_REOPEN_FULL', fields: { status: [msg] } });
-        }
-      }
-    }
+    if (activity.status === ActivityStatus.CLOSED && next === ActivityStatus.OPEN) await this.assertPuedeReabrir(activity);
 
     if (next === ActivityStatus.DRAFT) {
       const confirmed = await this.registrations.count({
@@ -2724,6 +2942,22 @@ export class ActivitiesService {
           'La actividad ya tiene participación confirmada: no puede volver a borrador.',
         );
       }
+    }
+  }
+
+  /** V4.1 A41-010 (§4.6, B14/B15): reabrir inscripciones dice por qué no se puede. */
+  private async assertPuedeReabrir(activity: Activity): Promise<void> {
+    if (activity.eventDate && activity.eventDate.getTime() <= Date.now()) {
+      const msg = 'La actividad ya empezó: para reabrir inscripciones cambia antes la fecha de inicio a una futura.';
+      throw new BadRequestException({ message: msg, code: 'ACTIVITY_REOPEN_STARTED', fields: { status: [msg] } });
+    }
+    if (!activity.capacity) return;
+    const ocupados = await this.registrations.count({
+      where: { activityId: activity.id, status: In([...OCCUPYING_STATUSES]) },
+    });
+    if (ocupados >= activity.capacity) {
+      const msg = 'El cupo está completo: amplía el cupo o libera lugares antes de reabrir inscripciones.';
+      throw new BadRequestException({ message: msg, code: 'ACTIVITY_REOPEN_FULL', fields: { status: [msg] } });
     }
   }
 

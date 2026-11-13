@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">83.33% </span>
+                <span class="strong">58.33% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>5/6</span>
+                <span class='fraction'>7/12</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">40% </span>
+                <span class="strong">28.57% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>2/5</span>
+                <span class='fraction'>2/7</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">83.33% </span>
+                <span class="strong">63.63% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>5/6</span>
+                <span class='fraction'>7/11</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line medium'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -79,35 +79,56 @@
 <a name='L14'></a><a href='#L14'>14</a>
 <a name='L15'></a><a href='#L15'>15</a>
 <a name='L16'></a><a href='#L16'>16</a>
-<a name='L17'></a><a href='#L17'>17</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import type { ConfigService } from '@nestjs/config';
+import { R2StorageDriver, readR2Settings } from './r2-storage.driver';
 &nbsp;
 /** Drivers de almacenamiento disponibles (V3 RNF08: la configuración manda). */
-export const STORAGE_DRIVERS = ['local'] as const;
+export const STORAGE_DRIVERS = ['local', 'r2'] as const;
 &nbsp;
 /**
- * Elige el driver según `STORAGE_DRIVER`. Un valor desconocido detiene el
- * arranque: ignorarlo en silencio guardaría los archivos donde nadie espera.
+ * Elige el driver según `STORAGE_DRIVER`. Un valor desconocido o una
+ * configuración incompleta detiene el arranque: ignorarlo en silencio guardaría
+ * los archivos donde nadie espera.
  */
-export function storageDriverFactory&lt;T&gt;(config: Pick&lt;ConfigService, 'get'&gt;, local: T): T {
+export function storageDriverFactory&lt;T&gt;(config: Pick&lt;ConfigService, 'get'&gt;, local: T): T | R2StorageDriver {
   const driver = (config.get&lt;string&gt;('STORAGE_DRIVER') ?? <span class="branch-1 cbranch-no" title="branch not covered" >'local')</span>.trim().toLowerCase() || <span class="branch-1 cbranch-no" title="branch not covered" >'local';</span>
   <span class="missing-if-branch" title="if path not taken" >I</span>if (!(STORAGE_DRIVERS as readonly string[]).includes(driver)) {
 <span class="cstat-no" title="statement not covered" >    throw new Error(`STORAGE_DRIVER=${driver} no está soportado. Valores válidos: ${STORAGE_DRIVERS.join(', ')}.`);</span>
+  }
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (driver === 'r2') {
+    const { settings, missing } = <span class="cstat-no" title="statement not covered" >readR2Settings(config);</span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (missing.length) <span class="cstat-no" title="statement not covered" >throw new Error(`STORAGE_DRIVER=r2 necesita: ${missing.join(', ')}.`);</span></span>
+<span class="cstat-no" title="statement not covered" >    return new R2StorageDriver(settings);</span>
   }
   return local;
 }
@@ -118,7 +139,7 @@ export function storageDriverFactory&lt;T&gt;(config: Pick&lt;ConfigService, 'ge
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-28T15:55:56.993Z
+                at 2026-11-12T06:56:13.243Z
             </div>
         <script src="../prettify.js"></script>
         <script>

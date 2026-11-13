@@ -23,7 +23,7 @@ interface Api {
 
 const Ctx = createContext<Api>({ marcar: () => {}, confirmarSalida: async () => true });
 
-export function CambiosSinGuardarProvider({ children }: { children: ReactNode }) {
+export function CambiosSinGuardarProvider({ children }: Readonly<{ children: ReactNode }>) {
   const confirm = useConfirm();
   const navigate = useNavigate();
   /** Formularios con cambios, con lo que hace cada uno al descartarlos. */
@@ -77,8 +77,8 @@ export function CambiosSinGuardarProvider({ children }: { children: ReactNode })
   useEffect(() => {
     const antesDeSalir = (e: BeforeUnloadEvent) => {
       if (sucios.current.size === 0) return;
+      // Basta con preventDefault: todos los navegadores actuales muestran el aviso.
       e.preventDefault();
-      e.returnValue = '';
     };
     window.addEventListener('beforeunload', antesDeSalir);
     return () => window.removeEventListener('beforeunload', antesDeSalir);

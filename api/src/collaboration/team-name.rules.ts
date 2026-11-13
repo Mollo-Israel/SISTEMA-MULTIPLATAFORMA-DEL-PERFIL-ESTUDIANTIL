@@ -117,7 +117,7 @@ export function checkTeamName(raw: string, terms: string[]): TeamNameCheck {
   }
   const ws = palabras(name);
   const frase = ws.join(' ');
-  const prohibido = terms.find((t) =>
+  const prohibido = terms.some((t) =>
     t.includes(' ')
       ? ` ${frase} `.includes(` ${t} `)
       // También en plural: «pendejos», «idiotas».

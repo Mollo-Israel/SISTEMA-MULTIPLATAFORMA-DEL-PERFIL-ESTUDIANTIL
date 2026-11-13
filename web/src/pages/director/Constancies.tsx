@@ -16,6 +16,13 @@ const normalize = (s: string) =>
 const fecha = (iso: string) =>
   new Date(iso).toLocaleDateString('es-BO', { day: '2-digit', month: 'short', year: 'numeric' });
 
+/** Estado de una constancia ya emitida: vigente, pendiente o revocada. */
+function EstadoConstancia({ status }: Readonly<{ status: string }>) {
+  if (status === 'authorized') return <Badge tone="green"><FiCheck /> Vigente</Badge>;
+  if (status === 'pending') return <Badge tone="amber">Pendiente</Badge>;
+  return <Badge tone="gray">Revocada</Badge>;
+}
+
 /**
  * Participaciones confirmadas (V5 §7.2).
  *
@@ -61,8 +68,8 @@ export default function DirectorConstanciesPage() {
       ]);
       setEligible(e);
       setIssued(i);
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     } finally {
       setListBusy(false);
     }
@@ -126,18 +133,20 @@ export default function DirectorConstanciesPage() {
               ) : undefined
             }
           >
-            {eligible.length === 0 ? (
+            {eligible.length === 0 && (
               <EmptyState
                 icon={<FiUsers size={22} />}
                 message="Esta actividad todavía no tiene asistencia registrada. La registra su responsable cuando el evento ya empezó."
               />
-            ) : shown.length === 0 ? (
+            )}
+            {eligible.length > 0 && shown.length === 0 && (
               <EmptyState
                 icon={<FiSearch size={22} />}
                 message={`Ningún estudiante coincide con “${query}”.`}
                 action={<Button variant="secondary" size="sm" onClick={() => setQuery('')}>Limpiar búsqueda</Button>}
               />
-            ) : (
+            )}
+            {shown.length > 0 && (
               <div className="scroll-x">
                 <table>
                   <thead>
@@ -192,11 +201,7 @@ export default function DirectorConstanciesPage() {
                           <div className="small">{c.description}</div>
                         </td>
                         <td>
-                          {c.status === 'authorized'
-                            ? <Badge tone="green"><FiCheck /> Vigente</Badge>
-                            : c.status === 'pending'
-                              ? <Badge tone="amber">Pendiente</Badge>
-                              : <Badge tone="gray">Revocada</Badge>}
+                          <EstadoConstancia status={c.status} />
                         </td>
                         <td className="muted">{fecha(c.createdAt)}</td>
                       </tr>

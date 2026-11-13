@@ -1,3 +1,4 @@
+import { entreComillas } from '../common/texto';
 /**
  * Sugeridor de área para una habilidad nueva (V3.2 §10.5).
  *
@@ -178,7 +179,7 @@ export function classifySkill(
     [s.name, ...(s.aliases ?? [])].some((n) => terminos.includes(normalizeTerm(n))));
   if (exactas.length > 0) {
     const r = resultado('exact_skill', 'high', exactas.map((s) => s.academicAreaId!), (areasTxt) =>
-      `«${name}» coincide con la habilidad ${exactas.map((s) => `«${s.name}»`).join(', ')} del catálogo, que está en ${areasTxt}.`);
+      `«${name}» coincide con la habilidad ${exactas.map((s) => entreComillas(s.name)).join(', ')} del catálogo, que está en ${areasTxt}.`);
     if (r.rule !== 'none') return r;
   }
 
@@ -221,7 +222,7 @@ export function classifySkill(
       for (const a of areasDe(s).slice(0, 1)) porArea.set(a, [...(porArea.get(a) ?? []), s.name]);
     }
     return resultado('related_skill', 'medium', [...porArea.keys()], (areasTxt) =>
-      `«${name}» se relaciona con ${[...porArea.values()].flat().slice(0, 3).map((n) => `«${n}»`).join(', ')}, de ${areasTxt}.`);
+      `«${name}» se relaciona con ${[...porArea.values()].flat().slice(0, 3).map((n) => entreComillas(n)).join(', ')}, de ${areasTxt}.`);
   }
 
   // 4 · Coincidencia semántica débil: una palabra significativa en común.

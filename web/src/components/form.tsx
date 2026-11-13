@@ -18,7 +18,7 @@ export function FormField({
   htmlFor,
   children,
   className,
-}: {
+}: Readonly<{
   label: string;
   error?: string | null;
   hint?: ReactNode;
@@ -26,7 +26,7 @@ export function FormField({
   htmlFor?: string;
   children: ReactNode;
   className?: string;
-}) {
+}>) {
   return (
     <div className={`field ${error ? 'has-error' : ''} ${className ?? ''}`}>
       <label htmlFor={htmlFor}>
@@ -41,7 +41,7 @@ export function FormField({
 }
 
 /** Mensaje de error de una casilla, con una entrada suave. */
-export function FieldError({ message }: { message?: string | null }) {
+export function FieldError({ message }: Readonly<{ message?: string | null }>) {
   return (
     <AnimatePresence initial={false}>
       {message && (
@@ -62,7 +62,7 @@ export function FieldError({ message }: { message?: string | null }) {
 }
 
 /** Aviso general del formulario, para lo que no corresponde a una casilla. */
-export function FormAlert({ message }: { message?: string | null }) {
+export function FormAlert({ message }: Readonly<{ message?: string | null }>) {
   if (!message) return null;
   return (
     <div className="form-alert" role="alert">
@@ -179,7 +179,7 @@ export function validarFormulario(form: HTMLFormElement): boolean {
     const id = `${c.id || c.name || 'campo'}-error`;
     span.id = id;
     c.setAttribute('aria-describedby', id);
-    c.insertAdjacentElement('afterend', span);
+    c.after(span);
     const alCorregir = () => {
       if (!mensajeDe(c)) {
         limpiar(c);

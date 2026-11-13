@@ -18,7 +18,7 @@ const CLAVE = 'onboarding:completada';
  * Si la consulta falla, se deja pasar: un error de red no debe dejar a nadie
  * encerrado fuera del sistema.
  */
-export default function OnboardingGate({ children }: { children: ReactNode }) {
+export default function OnboardingGate({ children }: Readonly<{ children: ReactNode }>) {
   const [estado, setEstado] = useState<'cargando' | 'pendiente' | 'listo'>(
     () => (viewCache.get<boolean>(CLAVE) ? 'listo' : 'cargando'),
   );

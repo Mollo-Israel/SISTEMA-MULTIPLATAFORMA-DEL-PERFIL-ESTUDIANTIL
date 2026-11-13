@@ -62,6 +62,13 @@ type Estado<T> = ReturnType<typeof useAsync<T>>;
 
 const CAMPOS_AREA = ['name', 'code', 'tags', 'description'] as const;
 type CampoArea = (typeof CAMPOS_AREA)[number];
+
+/** El formulario con un campo cambiado; el código sigue al nombre mientras nadie lo toque a mano. */
+function conCampo<C extends string>(value: Record<C, string> & { code: string }, campo: C, v: string, codeTouched: boolean): Record<C, string> {
+  const next: Record<C, string> & { code: string } = { ...value, [campo]: v };
+  if (campo === 'name' && !codeTouched) next.code = suggestCode(v);
+  return next;
+}
 const areaVacia: Record<CampoArea, string> = { name: '', code: '', tags: '', description: '' };
 
 function reglasArea(f: Record<CampoArea, string>) {
@@ -80,19 +87,16 @@ function AreaForm({
   onFieldTouched,
   codeTouched,
   setCodeTouched,
-}: {
+}: Readonly<{
   value: Record<CampoArea, string>;
   onChange: (v: Record<CampoArea, string>) => void;
   errors: Partial<Record<CampoArea, string>>;
   onFieldTouched: (c: CampoArea) => void;
   codeTouched: boolean;
   setCodeTouched: (b: boolean) => void;
-}) {
+}>) {
   const set = (campo: CampoArea, v: string) => {
-    const next = { ...value, [campo]: v };
-    // El código sigue al nombre mientras nadie lo toque a mano.
-    if (campo === 'name' && !codeTouched) next.code = suggestCode(v);
-    onChange(next);
+    onChange(conCampo(value, campo, v, codeTouched));
     onFieldTouched(campo);
   };
   return (
@@ -170,7 +174,7 @@ async function confirmarEtiquetas(
   });
 }
 
-function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onChanged: () => void }) {
+function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[]>; onChanged: () => void }>) {
   const { data, loading, error } = state;
   const [form, setForm] = useState(areaVacia);
   const [codeTouched, setCodeTouched] = useState(false);
@@ -220,8 +224,8 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
       setCodeTouched(false);
       errores.reset();
       onChanged();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
     } finally {
       setSaving(false);
     }
@@ -243,8 +247,8 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
       await adminService.updateArea(area.id, { isActive: !area.isActive });
       toast.success(area.isActive ? 'Área dada de baja.' : 'Área reactivada.');
       onChanged();
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     }
   };
 
@@ -364,7 +368,7 @@ function AreasPanel({ state, onChanged }: { state: Estado<AcademicArea[]>; onCha
   );
 }
 
-function EditAreaDialog({ area, onClose, onSaved }: { area: AcademicArea; onClose: () => void; onSaved: () => void }) {
+function EditAreaDialog({ area, onClose, onSaved }: Readonly<{ area: AcademicArea; onClose: () => void; onSaved: () => void }>) {
   const [form, setForm] = useState<Record<CampoArea, string>>({
     name: area.name,
     code: area.code,
@@ -393,8 +397,8 @@ function EditAreaDialog({ area, onClose, onSaved }: { area: AcademicArea; onClos
         description: form.description.trim(),
       });
       onSaved();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
       setSaving(false);
     }
   };
@@ -500,7 +504,7 @@ function SkillForm({
   areas,
   codeTouched,
   setCodeTouched,
-}: {
+}: Readonly<{
   value: Record<CampoSkill, string>;
   onChange: (v: Record<CampoSkill, string>) => void;
   errors: Partial<Record<CampoSkill, string>>;
@@ -508,17 +512,15 @@ function SkillForm({
   areas: AcademicArea[];
   codeTouched: boolean;
   setCodeTouched: (b: boolean) => void;
-}) {
+}>) {
   const set = (campo: CampoSkill, v: string) => {
-    const next = { ...value, [campo]: v };
-    if (campo === 'name' && !codeTouched) next.code = suggestCode(v);
-    onChange(next);
+    onChange(conCampo(value, campo, v, codeTouched));
     onFieldTouched(campo);
   };
   const clasificacion = useClasificacion(value.name, value.aliases);
-  const elegidas = [value.academicAreaId, ...idsDe(value.secondaryAreaIds)].filter(Boolean);
+  const elegidas = new Set([value.academicAreaId, ...idsDe(value.secondaryAreaIds)].filter(Boolean));
   const fuera = !!clasificacion && clasificacion.rule !== 'none' && !!value.academicAreaId
-    && !clasificacion.areaIds.some((id) => elegidas.includes(id));
+    && !clasificacion.areaIds.some((id) => elegidas.has(id));
   // Una sugerencia débil orienta; solo las de confianza alta o media piden motivo.
   const pideMotivo = fuera && clasificacion?.confidence !== 'low';
   const secundarias = idsDe(value.secondaryAreaIds);
@@ -553,7 +555,7 @@ function SkillForm({
       error={errors.secondaryAreaIds}
       hint="Opcional. Otras áreas donde también se usa (p. ej. Linux: Ciberseguridad, Computación en la nube). No reparte puntaje: cada experiencia dice su área."
     >
-      <div className="chip-picker" role="group" aria-label="Áreas secundarias">
+      <fieldset className="chip-picker" aria-label="Áreas secundarias">
         {areas.filter((a) => a.isActive && a.id !== value.academicAreaId).map((a) => (
           <button
             key={a.id}
@@ -565,7 +567,7 @@ function SkillForm({
             {a.name}
           </button>
         ))}
-      </div>
+      </fieldset>
     </FormField>
     {(clasificacion?.rule === 'none' || clasificacion?.rule === 'weak') && value.name.trim().length >= 2 && (
       <AiAssist
@@ -614,11 +616,11 @@ function SkillsPanel({
   state,
   areas,
   onChanged,
-}: {
+}: Readonly<{
   state: Estado<Skill[]>;
   areas: AcademicArea[];
   onChanged: () => void;
-}) {
+}>) {
   const { data, loading, error } = state;
   const [form, setForm] = useState(skillVacia);
   const [codeTouched, setCodeTouched] = useState(false);
@@ -663,8 +665,8 @@ function SkillsPanel({
       setCodeTouched(false);
       errores.reset();
       onChanged();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
     } finally {
       setSaving(false);
     }
@@ -684,8 +686,8 @@ function SkillsPanel({
       await adminService.updateSkill(skill.id, { isActive: !skill.isActive });
       toast.success(skill.isActive ? 'Habilidad dada de baja.' : 'Habilidad reactivada.');
       onChanged();
-    } catch (e2) {
-      toast.error(apiError(e2));
+    } catch (error_) {
+      toast.error(apiError(error_));
     }
   };
 
@@ -824,12 +826,12 @@ function EditSkillDialog({
   areas,
   onClose,
   onSaved,
-}: {
+}: Readonly<{
   skill: Skill;
   areas: AcademicArea[];
   onClose: () => void;
   onSaved: () => void;
-}) {
+}>) {
   const [form, setForm] = useState<Record<CampoSkill, string>>({
     name: skill.name,
     code: skill.code,
@@ -865,8 +867,8 @@ function EditSkillDialog({
     try {
       await adminService.updateSkill(skill.id, cuerpoSkill(form));
       onSaved();
-    } catch (e2) {
-      errores.fromApi(e2);
+    } catch (error_) {
+      errores.fromApi(error_);
       setSaving(false);
     }
   };

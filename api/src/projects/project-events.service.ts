@@ -29,7 +29,7 @@ export interface ProjectEventInput {
 }
 
 /** Claves que nunca deben acabar en la bitácora (§41). */
-const PROHIBIDAS = ['password', 'token', 'secret', 'authorization', 'apikey', 'accesstoken'];
+const PROHIBIDAS = new Set(['password', 'token', 'secret', 'authorization', 'apikey', 'accesstoken']);
 
 /**
  * Bitácora del proyecto (especificacion §41).
@@ -112,7 +112,7 @@ export class ProjectEventsService {
   private sanear(metadata: Record<string, unknown>): Record<string, unknown> {
     const salida: Record<string, unknown> = {};
     for (const [clave, valor] of Object.entries(metadata)) {
-      if (PROHIBIDAS.includes(clave.toLowerCase().replace(/[_-]/g, ''))) continue;
+      if (PROHIBIDAS.has(clave.toLowerCase().replace(/[_-]/g, ''))) continue;
       if (typeof valor === 'string') {
         salida[clave] = valor.length > 200 ? `${valor.slice(0, 200)}…` : valor;
       } else if (

@@ -75,7 +75,10 @@ export function api() {
 }
 
 export function web() {
-  ejecutar('npx vite build --outDir dist-pruebas --emptyOutDir', join(RAIZ, 'web'));
+  // Para medir cobertura (PRUEBAS_COBERTURA=1) hacen falta los source maps; van
+  // «hidden»: el navegador no los pide y la web servida no cambia.
+  const mapas = process.env.PRUEBAS_COBERTURA === '1' ? ' --sourcemap hidden' : '';
+  ejecutar(`npx vite build --outDir dist-pruebas --emptyOutDir${mapas}`, join(RAIZ, 'web'));
   const p = spawn('npx', ['vite', 'preview', '--outDir', 'dist-pruebas', '--port', String(WEB_PORT), '--strictPort'], {
     cwd: join(RAIZ, 'web'), stdio: 'inherit', shell: true, env: { ...process.env, VITE_API_URL: API_URL },
   });

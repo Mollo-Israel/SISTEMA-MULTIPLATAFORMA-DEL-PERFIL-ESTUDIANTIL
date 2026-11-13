@@ -56,14 +56,14 @@ function sumar(filas: Fila[]): Totales {
   return t;
 }
 
-function Contenido({ m }: { m: SocietyMetrics }) {
+function Contenido({ m }: Readonly<{ m: SocietyMetrics }>) {
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [categoria, setCategoria] = useState('');
   const [area, setArea] = useState('');
 
-  const categorias = useMemo(() => [...new Set(m.activities.map((a) => a.category).filter((x): x is string => !!x))].sort(), [m]);
-  const areas = useMemo(() => [...new Set(m.activities.map((a) => a.area).filter((x): x is string => !!x))].sort(), [m]);
+  const categorias = useMemo(() => [...new Set(m.activities.map((a) => a.category).filter((x): x is string => !!x))].sort((x, y) => x.localeCompare(y, 'es')), [m]);
+  const areas = useMemo(() => [...new Set(m.activities.map((a) => a.area).filter((x): x is string => !!x))].sort((x, y) => x.localeCompare(y, 'es')), [m]);
 
   const enRango = (a: Fila, ini: number | null, fin: number | null) => {
     if (ini === null && fin === null) return true;
@@ -84,7 +84,7 @@ function Contenido({ m }: { m: SocietyMetrics }) {
   const delta = (k: keyof typeof actual) => {
     if (!anterior) return null;
     const d = actual[k] - anterior[k];
-    return <span className={`delta ${d > 0 ? 'sube' : d < 0 ? 'baja' : ''}`}>{d > 0 ? `+${d}` : d} vs. periodo anterior</span>;
+    return <span className={`delta ${sentido(d)}`}>{d > 0 ? `+${d}` : d} vs. periodo anterior</span>;
   };
   const filtrando = !!(desde || hasta || categoria || area);
 
@@ -229,4 +229,10 @@ function Contenido({ m }: { m: SocietyMetrics }) {
       </Card>
     </>
   );
+}
+
+/** La clase del cambio: sube, baja o nada si quedó igual. */
+function sentido(d: number): string {
+  if (d > 0) return 'sube';
+  return d < 0 ? 'baja' : '';
 }

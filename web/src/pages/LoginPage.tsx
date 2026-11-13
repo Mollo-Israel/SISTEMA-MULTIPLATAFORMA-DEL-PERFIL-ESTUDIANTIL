@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthContext';
 import { HOME_BY_ROLE } from '../navigation';
 import { authFieldErrors } from '../api/client';
 import '../login.css';
+import { tieneFormatoDeCorreo } from '../lib/texto';
 
 const UNIVALLE_RE = /^[a-z0-9._%+-]+@(?:[a-z0-9-]+\.)*univalle\.edu$/i;
 
@@ -17,7 +18,7 @@ function validateEmail(v: string): string | null {
   if (t.length > 160) return 'El correo es demasiado largo.';
   if (/\s/.test(t)) return 'El correo no debe contener espacios.';
   if ((t.match(/@/g) || []).length !== 1) return 'El correo debe contener un único “@”.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return 'El correo no tiene un formato válido.';
+  if (!tieneFormatoDeCorreo(t)) return 'El correo no tiene un formato válido.';
   if (!UNIVALLE_RE.test(t)) return 'Debe ser correo institucional (terminar en univalle.edu).';
   return null;
 }
@@ -73,9 +74,6 @@ export default function LoginPage() {
     }
   };
 
-  const Err = ({ name }: { name: string }) =>
-    errors[name] ? <div className="li-err"><FiAlertCircle /> {errors[name]}</div> : null;
-
   return (
     <div className="li">
       <motion.div className="li-card" initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}>
@@ -115,23 +113,23 @@ export default function LoginPage() {
           <form onSubmit={submit} noValidate>
             <div className="li-field">
               <span className="field-label" id="login-page-correo-institucional">Correo institucional</span>
-              <div role="group" aria-labelledby="login-page-correo-institucional" className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
+              <fieldset aria-labelledby="login-page-correo-institucional" className={`li-input-wrap ${errors.email ? 'bad' : ''}`}>
                 <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="nombre.apellido@univalle.edu" maxLength={160} autoComplete="username" />
                 <span className="ic"><FiMail /></span>
-              </div>
-              <Err name="email" />
+              </fieldset>
+              <ErrorDeCampo mensaje={errors.email} />
             </div>
 
             <div className="li-field">
               <span className="field-label" id="login-page-contrasena">Contraseña</span>
-              <div role="group" aria-labelledby="login-page-contrasena" className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
+              <fieldset aria-labelledby="login-page-contrasena" className={`li-input-wrap ${errors.password ? 'bad' : ''}`}>
                 <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="••••••••" maxLength={128} autoComplete="current-password" />
                 <span className="ic"><FiLock /></span>
                 <button type="button" className="li-eye" onClick={() => setShowPwd((s) => !s)} aria-label="Mostrar u ocultar contraseña">
                   {showPwd ? <FiEyeOff /> : <FiEye />}
                 </button>
-              </div>
-              <Err name="password" />
+              </fieldset>
+              <ErrorDeCampo mensaje={errors.password} />
             </div>
 
             <div className="li-links">
@@ -155,4 +153,9 @@ export default function LoginPage() {
       </motion.div>
     </div>
   );
+}
+
+/** El error de un campo, si lo hay. */
+function ErrorDeCampo({ mensaje }: Readonly<{ mensaje?: string }>) {
+  return mensaje ? <div className="li-err"><FiAlertCircle /> {mensaje}</div> : null;
 }

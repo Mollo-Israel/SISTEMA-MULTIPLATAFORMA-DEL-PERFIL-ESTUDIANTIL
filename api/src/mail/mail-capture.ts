@@ -1,6 +1,6 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { randomBytes } from 'crypto';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { MailMessage } from './mail.port';
 

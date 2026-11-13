@@ -51,13 +51,13 @@ const FAMILY_LABEL: Record<string, string> = {
   activity: 'Actividades',
   project: 'Proyectos',
   external_certificate: 'Certificados externos',
-  academic_review: 'Revision academica',
-  other: 'Otras senales',
+  academic_review: 'Revisión académica',
+  other: 'Otras señales',
 };
 
 const MATCH_LABEL: Record<string, string> = {
   declared: 'declarada por ti',
-  tag: 'deducida por tecnologias',
+  tag: 'deducida por tecnologías',
   text: 'deducida por coincidencia de texto',
   inherited: 'heredada de la actividad o proyecto',
 };
@@ -204,15 +204,15 @@ export default function AffinityScreen() {
             <>
               <Card>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Areas con afinidad</Text>
+                  <Text style={styles.metaLabel}>Áreas con afinidad</Text>
                   <Text style={styles.metaValue}>{summary.areas.length}</Text>
                 </View>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Senales consideradas</Text>
+                  <Text style={styles.metaLabel}>Señales consideradas</Text>
                   <Text style={styles.metaValue}>{summary.signalsCount}</Text>
                 </View>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaLabel}>Ultimo calculo</Text>
+                  <Text style={styles.metaLabel}>Último cálculo</Text>
                   <Text style={styles.metaValue}>{formatDate(summary.calculatedAt)}</Text>
                 </View>
               </Card>
@@ -272,7 +272,7 @@ export default function AffinityScreen() {
                       )}
 
                       <Text style={styles.shareText}>
-                        <Text style={styles.link}>{open ? 'ocultar detalle' : 'ver por que'}</Text>
+                        <Text style={styles.link}>{open ? 'ocultar detalle' : 'ver por qué'}</Text>
                       </Text>
                     </TouchableOpacity>
 
@@ -280,10 +280,10 @@ export default function AffinityScreen() {
 
                     {open && detail && (
                       <View style={styles.breakdown}>
-                        <Text style={styles.subtitulo}>Por que</Text>
+                        <Text style={styles.subtitulo}>Por qué</Text>
                         {detail.contributing.length === 0 && (
                           <Text style={styles.contribMeta}>
-                            Todavia no hay ninguna senal que sume en esta area.
+                            Todavía no hay ninguna señal que sume en esta área.
                           </Text>
                         )}
                         {detail.contributing.map((c, i) => (
@@ -304,7 +304,7 @@ export default function AffinityScreen() {
                           </View>
                         ))}
                         <View style={styles.totalRow}>
-                          <Text style={styles.totalLabel}>Total del area</Text>
+                          <Text style={styles.totalLabel}>Total del área</Text>
                           <Text style={styles.totalValue}>
                             {detail.rawPoints} / {detail.maxRawPoints}
                           </Text>
@@ -337,7 +337,7 @@ export default function AffinityScreen() {
           <Card>
             <TouchableOpacity onPress={toggleRules} activeOpacity={0.7}>
               <Text style={styles.link}>
-                {showRules ? 'Ocultar como se calcula' : 'Como se calcula mi afinidad'}
+                {showRules ? 'Ocultar cómo se calcula' : 'Cómo se calcula mi afinidad'}
               </Text>
             </TouchableOpacity>
             {showRules && weights && (
@@ -345,9 +345,9 @@ export default function AffinityScreen() {
                 {/* §51: la estructura limita tanto como los pesos. Mostrar
                     solo los segundos daria una explicacion incompleta. */}
                 <Text style={styles.contribMeta}>
-                  Motor v{weights.engineVersion}. Cada area suma como mucho{' '}
+                  Motor v{weights.engineVersion}. Cada área suma como mucho{' '}
                   {weights.maxRawPoints} puntos, que equivalen a 100 de afinidad. Para que el
-                  respaldo llegue a alto hacen falta senales de al menos dos familias
+                  respaldo llegue a alto hacen falta señales de al menos dos familias
                   independientes.
                 </Text>
                 {weights.weights.map((w: AffinityWeight) => (
@@ -369,14 +369,14 @@ export default function AffinityScreen() {
       {tab === 'history' && (
         <>
           <Muted>
-            Como fue cambiando tu orientacion. Es historial de lo ya ocurrido, no una
-            prediccion de resultados academicos.
+            Cómo fue cambiando tu orientación. Es historial de lo ya ocurrido, no una
+            predicción de resultados académicos.
           </Muted>
 
           {historyState.loading && !historyState.data && <SkeletonCards count={2} />}
           {historyState.error && <ErrorText message={historyState.error} />}
 
-          {historyState.data && historyState.data.length === 0 && (
+          {historyState.data?.length === 0 && (
             <EmptyState
               icon="trending-up"
               message="Todavía no hay cálculos registrados. Se guarda uno cada vez que tu perfil cambia."
@@ -399,16 +399,16 @@ export default function AffinityScreen() {
                 </View>
 
                 {snapshot.status === 'insufficient_data' ? (
-                  <Text style={styles.contribMeta}>Sin informacion suficiente en ese momento.</Text>
+                  <Text style={styles.contribMeta}>Sin información suficiente en ese momento.</Text>
                 ) : (
                   <>
                     <Text style={styles.contribMeta}>
-                      {snapshot.areasCount} areas · {snapshot.signalsCount} senales · total{' '}
+                      {snapshot.areasCount} áreas · {snapshot.signalsCount} señales · total{' '}
                       {snapshot.totalScore}
                     </Text>
                     {top && (
                       <Text style={styles.body}>
-                        Area mas afin: <Text style={styles.strong}>{top.area}</Text> ({top.score})
+                        Área más afín: <Text style={styles.strong}>{top.area}</Text> ({top.score})
                       </Text>
                     )}
                   </>

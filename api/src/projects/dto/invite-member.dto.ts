@@ -1,8 +1,6 @@
 import { PROJECT_ROLES } from '@perfil/shared';
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsIn, IsNotEmpty, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { cleanLine } from '../../common/validation';
+import { IsIn, IsUUID } from 'class-validator';
 
 /**
  * Invitacion a integrar un proyecto (RF14).

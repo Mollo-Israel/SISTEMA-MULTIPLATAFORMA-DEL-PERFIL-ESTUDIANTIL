@@ -7,6 +7,7 @@ import { LearningResourceFavorite } from '../entities/learning-resource-library.
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
+import { escaparComodinesLike } from '../common/texto';
 
 export interface LibraryQuery {
   q?: string;
@@ -64,7 +65,7 @@ export class LibraryService {
     }
     const texto = filtros.q?.trim();
     if (texto) {
-      const t = `%${texto.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+      const t = `%${escaparComodinesLike(texto)}%`;
       qb.andWhere('(r.title ILIKE :t OR r.description ILIKE :t OR r.provider ILIKE :t)', { t });
     }
     if (filtros.areaId) {

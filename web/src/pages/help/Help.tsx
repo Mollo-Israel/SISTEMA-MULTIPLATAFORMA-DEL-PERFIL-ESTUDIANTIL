@@ -19,7 +19,9 @@ export default function HelpPage() {
   const [video, setVideo] = useState<{ url: string; embedUrl: string | null } | null>(null);
   const rol = user?.role ?? '';
   const porTema = (HELP[rol] ?? []).reduce<Partial<Record<HelpTema, HelpEntry[]>>>((acc, t) => {
-    (acc[t.tema] ??= []).push(t);
+    const lista = acc[t.tema] ?? [];
+    lista.push(t);
+    acc[t.tema] = lista;
     return acc;
   }, {});
   const temas = (Object.keys(TEMA_LABEL) as HelpTema[]).filter((t) => porTema[t]?.length);

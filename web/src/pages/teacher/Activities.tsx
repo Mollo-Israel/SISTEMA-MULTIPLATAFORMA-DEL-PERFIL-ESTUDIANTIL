@@ -14,6 +14,21 @@ import type { Activity, ActivityCategoryItem } from '../../services/types';
 const POR_PAGINA = 6;
 
 type Responsable = { id: string; name: string; role: string };
+type Tipo = 'todas' | 'academica' | 'extracurricular' | 'externas';
+
+/** Filtro de tipo para la API: externas, internas de un tipo o todas. */
+function filtroDeTipo(tipo: Tipo) {
+  if (tipo === 'externas') return { originType: 'external' as const };
+  if (tipo === 'todas') return {};
+  return { type: tipo, originType: 'internal' as const };
+}
+
+/** Qué mostrar: el esqueleto la primera vez, el error, el vacío o la lista. */
+function estadoDelListado(cargando: boolean, error: string | null, cantidad: number): 'cargando' | 'error' | 'vacio' | 'lista' {
+  if (cargando && cantidad === 0) return 'cargando';
+  if (error) return 'error';
+  return cantidad === 0 ? 'vacio' : 'lista';
+}
 
 /**
  * Actividades de la carrera, vista del docente (V5-01, V5-02).
@@ -27,7 +42,7 @@ type Responsable = { id: string; name: string; role: string };
  */
 export default function TeacherActivitiesPage() {
   const toast = useToast();
-  const [tipo, setTipo] = useState<'todas' | 'academica' | 'extracurricular' | 'externas'>('todas');
+  const [tipo, setTipo] = useState<Tipo>('todas');
   const [categoryId, setCategoryId] = useState('');
   const [query, setQuery] = useState('');
   const [buscado, setBuscado] = useState('');
@@ -73,8 +88,7 @@ export default function TeacherActivitiesPage() {
         categoryId: categoryId || undefined,
         responsibleId: responsable?.id,
         favorites: soloFavoritas ? 'true' : undefined,
-        ...(tipo === 'externas' ? { originType: 'external' as const }
-          : tipo === 'todas' ? {} : { type: tipo, originType: 'internal' as const }),
+        ...filtroDeTipo(tipo),
       });
       setItems(r.items);
       setTotal(r.total);
@@ -110,6 +124,8 @@ export default function TeacherActivitiesPage() {
   const hayFiltros = tipo !== 'todas' || !!categoryId || !!buscado || soloFavoritas || !!responsable;
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
   const desde = total === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1;
+
+  const estado = estadoDelListado(loading, error, items.length);
 
   const estrella = (a: Activity) => (
     <Button
@@ -194,17 +210,16 @@ export default function TeacherActivitiesPage() {
           <ResultCount shown={items.length} total={total} noun="actividades" />
         </div>
 
-        {loading && items.length === 0 ? (
-          <SkeletonCards count={3} />
-        ) : error ? (
-          <div className="alert alert-error">{error}</div>
-        ) : items.length === 0 ? (
+        {estado === 'cargando' && <SkeletonCards count={3} />}
+        {estado === 'error' && <div className="alert alert-error">{error}</div>}
+        {estado === 'vacio' && (
           <EmptyState
             icon={<FiSearch size={22} />}
             message={hayFiltros ? 'Ninguna actividad coincide con los filtros aplicados.' : 'Todavía no hay actividades publicadas.'}
             action={hayFiltros ? <Button variant="secondary" size="sm" onClick={limpiar}>Quitar filtros</Button> : undefined}
           />
-        ) : (
+        )}
+        {estado === 'lista' && (
           <>
             <div className="activity-grid">
               {items.map((a, index) => (

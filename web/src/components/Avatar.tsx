@@ -29,11 +29,11 @@ export default function Avatar({
   avatarKey,
   nombre,
   size = 44,
-}: {
+}: Readonly<{
   avatarKey?: string | null;
   nombre?: string;
   size?: number;
-}) {
+}>) {
   const a = AVATARES.find((x) => x.key === avatarKey);
   const iniciales = (nombre ?? '')
     .split(/\s+/)
@@ -54,7 +54,7 @@ export default function Avatar({
 }
 
 /** Selector de avatar de catálogo. */
-export function AvatarChooser({ value, onChange }: { value: string | null; onChange: (k: string | null) => void }) {
+export function AvatarChooser({ value, onChange }: Readonly<{ value: string | null; onChange: (k: string | null) => void }>) {
   return (
     <div className="avatar-grid" role="radiogroup" aria-label="Avatar">
       {AVATARES.map((a) => {

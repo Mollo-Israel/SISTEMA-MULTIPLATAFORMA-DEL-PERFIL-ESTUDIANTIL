@@ -16,6 +16,12 @@ export interface AreaSkillValue {
   contexts?: Record<string, string>;
 }
 
+/** «También se quitan React y Vue, que solo pertenecen a esta área.» */
+function mensajeQuitarArea(nombres: string[]): string {
+  const una = nombres.length === 1;
+  return `También se quita${una ? '' : 'n'} ${nombres.join(', ')}, que solo ${una ? 'pertenece' : 'pertenecen'} a esta área.`;
+}
+
 /**
  * Selección relacional área → habilidades (V3 §4, §21.2).
  *
@@ -42,7 +48,7 @@ export default function AreaSkillPicker({
   areaError,
   skillError,
   confirmarQuitar = false,
-}: {
+}: Readonly<{
   areas: AcademicArea[];
   skills: Skill[];
   value: AreaSkillValue;
@@ -58,7 +64,7 @@ export default function AreaSkillPicker({
    * tecnologías, y avisar cuando un área se queda sin ninguna (sin quitarla).
    */
   confirmarQuitar?: boolean;
-}) {
+}>) {
   const confirm = useConfirm();
   const [sinTecnologias, setSinTecnologias] = useState<string | null>(null);
   const [buscar, setBuscar] = useState('');
@@ -97,6 +103,17 @@ export default function AreaSkillPicker({
       });
   }, [value.areaIds, activas, skills, buscar]);
 
+  /** Pide confirmación antes de quitar un área que arrastra tecnologías. */
+  const confirmarQuitarArea = (id: string, seVan: string[]) => {
+    const nombres = skills.filter((s) => seVan.includes(s.id)).map((s) => s.name);
+    return confirm({
+      title: `Quitar «${activas.find((a) => a.id === id)?.name ?? 'el área'}»`,
+      message: mensajeQuitarArea(nombres),
+      confirmLabel: 'Quitar área y tecnologías',
+      tone: 'danger',
+    });
+  };
+
   const alternarArea = async (id: string) => {
     if (value.areaIds.includes(id)) {
       const quedan = value.areaIds.filter((x) => x !== id);
@@ -105,16 +122,7 @@ export default function AreaSkillPicker({
         (!!s.academicAreaId && quedan.includes(s.academicAreaId)) || (s.secondaryAreaIds ?? []).some((a) => quedan.includes(a));
       const vigentes = new Set(skills.filter(sigue).map((s) => s.id));
       const seVan = value.skillIds.filter((s) => !vigentes.has(s));
-      if (confirmarQuitar && seVan.length > 0) {
-        const nombres = skills.filter((s) => seVan.includes(s.id)).map((s) => s.name);
-        const ok = await confirm({
-          title: `Quitar «${activas.find((a) => a.id === id)?.name ?? 'el área'}»`,
-          message: `También se quita${nombres.length === 1 ? '' : 'n'} ${nombres.join(', ')}, que solo ${nombres.length === 1 ? 'pertenece' : 'pertenecen'} a esta área.`,
-          confirmLabel: 'Quitar área y tecnologías',
-          tone: 'danger',
-        });
-        if (!ok) return;
-      }
+      if (confirmarQuitar && seVan.length > 0 && !(await confirmarQuitarArea(id, seVan))) return;
       if (sinTecnologias === id) setSinTecnologias(null);
       onChange({ areaIds: quedan, skillIds: value.skillIds.filter((s) => vigentes.has(s)) });
     } else if (value.areaIds.length < maxAreas) {
@@ -138,7 +146,7 @@ export default function AreaSkillPicker({
   const alternarSkill = (s: Skill, areaId: string) => {
     const id = s.id;
     const elegida = value.skillIds.includes(id);
-    const contextos = { ...(value.contexts ?? {}) };
+    const contextos = { ...value.contexts };
     if (elegida && contextoDe(s) !== areaId) {
       // Ya estaba elegida en otra área: se cambia su contexto, no se quita.
       contextos[id] = areaId;
@@ -197,7 +205,7 @@ export default function AreaSkillPicker({
             style={{ marginBottom: '0.45rem' }}
           />
         )}
-        <div className="chip-row" role="group" aria-label={areaLabel}>
+        <fieldset className="chip-row" aria-label={areaLabel}>
           {areasVisibles.map((a) => {
             const on = value.areaIds.includes(a.id);
             return (
@@ -212,7 +220,7 @@ export default function AreaSkillPicker({
               </button>
             );
           })}
-        </div>
+        </fieldset>
         {ocultas > 0 && (
           <span className="muted small">
             {buscarArea.trim()

@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">33.33% </span>
+                <span class="strong">30% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>20/60</span>
+                <span class='fraction'>18/60</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">15.9% </span>
+                <span class="strong">16.27% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>7/44</span>
+                <span class='fraction'>7/43</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">32.14% </span>
+                <span class="strong">26.78% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>18/56</span>
+                <span class='fraction'>15/56</span>
             </div>
         
             
@@ -282,15 +282,15 @@
 <a name='L217'></a><a href='#L217'>217</a>
 <a name='L218'></a><a href='#L218'>218</a>
 <a name='L219'></a><a href='#L219'>219</a>
-<a name='L220'></a><a href='#L220'>220</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<a name='L220'></a><a href='#L220'>220</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -317,11 +317,11 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5x</span>
-<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">6x</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -450,9 +450,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -505,7 +505,7 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager, IsNull, MoreThan, Repository } from 'typeorm';
-import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { AccountTokenPurpose } from '@perfil/shared';
 import { AccountToken, TokenRevocationReason, TokenState } from '../entities/account-token.entity';
 import { identityConfig } from '../config/identity.config';
@@ -623,7 +623,7 @@ export class AccountTokensService {
       order: { createdAt: 'DESC' },
       relations: { user: true },
     });
-<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!vivo || !vivo.codeHash || vivo.state() !== 'valid') {</span>
+<span class="cstat-no" title="statement not covered" >    <span class="missing-if-branch" title="if path not taken" >I</span>if (!vivo?.codeHash || vivo.state() !== 'valid') {</span>
 <span class="cstat-no" title="statement not covered" >      return { ok: false, locked: false };</span>
     }
 &nbsp;
@@ -667,11 +667,11 @@ export class AccountTokensService {
       where: { userId, purpose },
       order: { createdAt: 'DESC' },
     });
-    <span class="missing-if-branch" title="if path not taken" >I</span>if (!last) <span class="cstat-no" title="statement not covered" >return 0;</span>
+    if (!last) return 0;
 &nbsp;
-    const cooldownMs = identityConfig.resendCooldownSeconds(this.config) * 1000;
-    const elapsed = Date.now() - last.createdAt.getTime();
-    return elapsed &gt;= cooldownMs ? 0 : <span class="branch-1 cbranch-no" title="branch not covered" >Math.ceil((cooldownMs - elapsed) / 1000);</span>
+    const cooldownMs = <span class="cstat-no" title="statement not covered" >identityConfig.resendCooldownSeconds(this.config) * 1000;</span>
+    const elapsed = <span class="cstat-no" title="statement not covered" >Date.now() - last.createdAt.getTime();</span>
+<span class="cstat-no" title="statement not covered" >    return elapsed &gt;= cooldownMs ? 0 : Math.ceil((cooldownMs - elapsed) / 1000);</span>
   }
 &nbsp;
   /**
@@ -727,7 +727,7 @@ export class AccountTokensService {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-10-28T15:55:56.993Z
+                at 2026-11-12T06:56:13.243Z
             </div>
         <script src="../prettify.js"></script>
         <script>

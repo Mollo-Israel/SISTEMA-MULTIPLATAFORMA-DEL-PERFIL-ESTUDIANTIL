@@ -30,7 +30,7 @@ export default function PersonPicker({
   error,
   max = 5,
   disabled = false,
-}: {
+}: Readonly<{
   kind: 'responsible' | 'contact';
   activityType: 'academica' | 'extracurricular';
   value: ActivityPerson[];
@@ -40,7 +40,7 @@ export default function PersonPicker({
   error?: string | null;
   max?: number;
   disabled?: boolean;
-}) {
+}>) {
   const id = useId();
   const [q, setQ] = useState('');
   const [abierto, setAbierto] = useState(false);

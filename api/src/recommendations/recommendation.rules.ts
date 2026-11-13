@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import {
   AffinityLevel,
   HANDS_ON_RESOURCE_TYPES,

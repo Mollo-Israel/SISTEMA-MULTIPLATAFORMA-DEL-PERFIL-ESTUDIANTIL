@@ -1,3 +1,4 @@
+import { bloqueImportadorRaiz, nombresEntreComillas } from './manifiestos';
 /**
  * Lectura determinista de manifiestos (V3 §24.3).
  *
@@ -119,15 +120,15 @@ const JVM: [RegExp, string][] = [
 
 /** Imagen de docker-compose → tecnología. */
 const IMAGES: [RegExp, string][] = [
-  [/^postgres(:|$)|postgis/i, 'PostgreSQL'],
+  [/(?:^postgres(?::|$))|postgis/i, 'PostgreSQL'],
   [/^mysql(:|$)/i, 'MySQL'],
   [/^mariadb(:|$)/i, 'MariaDB'],
   [/^mongo(:|$)/i, 'MongoDB'],
   [/^redis(:|$)/i, 'Redis'],
   [/^nginx(:|$)/i, 'Nginx'],
   [/^rabbitmq(:|$)/i, 'RabbitMQ'],
-  [/^(bitnami\/)?kafka(:|$)|confluentinc\/cp-kafka/i, 'Kafka'],
-  [/^elasticsearch|elastic\/elasticsearch/i, 'Elasticsearch'],
+  [/(?:^(?:bitnami\/)?kafka(?::|$))|confluentinc\/cp-kafka/i, 'Kafka'],
+  [/(?:^elasticsearch)|elastic\/elasticsearch/i, 'Elasticsearch'],
 ];
 
 /** Imagen base de un Dockerfile → tecnología. */
@@ -158,8 +159,95 @@ function paquetePython(linea: string): string | null {
   const limpio = linea.split('#')[0].trim();
   if (!limpio || limpio.startsWith('-')) return null;
   const m = /^([A-Za-z0-9_.-]+)/.exec(limpio);
-  return m ? m[1].toLowerCase().replace(/_/g, '-') : null;
+  return m ? m[1].toLowerCase().replaceAll('_', '-') : null;
 }
+
+/** package.json: dependencias de npm. */
+function leerPackageJson(file: string, text: string, out: DependencySignal[]): void {
+  const pkg = JSON.parse(text);
+  deNpm(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies }), file, out);
+  agregar(out, 'Node.js', file, 'package.json');
+  agregar(out, 'JavaScript', file, 'package.json');
+}
+
+/** package-lock.json: solo las dependencias directas del proyecto (raíz). */
+function leerPackageLock(file: string, text: string, out: DependencySignal[]): void {
+  // Solo las dependencias directas del proyecto (raíz), no las transitivas.
+  const lock = JSON.parse(text);
+  const raiz = lock.packages?.[''] ?? {};
+  deNpm(Object.keys({ ...raiz.dependencies, ...raiz.devDependencies, ...(lock.dependencies && !lock.packages ? lock.dependencies : {}) }), file, out);
+}
+
+/** pnpm-lock.yaml: el bloque `importers: .:`, dependencias directas de la raíz. */
+function leerPnpmLock(file: string, text: string, out: DependencySignal[]): void {
+  // Bloque `importers: .:` → dependencias directas de la raíz.
+  const bloque = bloqueImportadorRaiz(text);
+  const directas = [...bloque.matchAll(/^\s{6}'?(@?[A-Za-z0-9_./-]+)'?:\s*$/gm)].map((m) => m[1]);
+  deNpm(directas, file, out);
+}
+
+/** yarn.lock: sin información de cuáles son directas; solo se reconoce el gestor. */
+function leerYarnLock(file: string, text: string, out: DependencySignal[]): void {
+  // Sin información de cuáles son directas: solo se reconoce el gestor.
+  agregar(out, 'Yarn', file, 'yarn.lock');
+}
+
+/** requirements.txt: paquetes de Python. */
+function leerRequirements(file: string, text: string, out: DependencySignal[]): void {
+  for (const linea of text.split(/\r?\n/)) {
+    const p = paquetePython(linea);
+    if (p && PYPI[p]) agregar(out, PYPI[p], file, p);
+  }
+  agregar(out, 'Python', file, 'requirements.txt');
+}
+
+/** pyproject.toml: dependencias PEP 621 y de Poetry. */
+function leerPyproject(file: string, text: string, out: DependencySignal[]): void {
+  const deps = nombresEntreComillas(text).map((n) => n.toLowerCase());
+  const poetry = [...text.matchAll(/^([A-Za-z0-9_.-]+)\s*=\s*["{]/gm)].map((m) => m[1].toLowerCase());
+  for (const p of [...deps, ...poetry]) {
+    const clave = p.replaceAll('_', '-');
+    if (PYPI[clave]) agregar(out, PYPI[clave], file, p);
+  }
+  agregar(out, 'Python', file, 'pyproject.toml');
+}
+
+/** pom.xml o build.gradle: Java con Maven o Gradle. */
+function leerJvm(file: string, text: string, out: DependencySignal[], nombre: string): void {
+  for (const [re, t] of JVM) if (re.test(text)) agregar(out, t, file, re.source);
+  agregar(out, 'Java', file, nombre);
+  agregar(out, nombre === 'pom.xml' ? 'Maven' : 'Gradle', file, nombre);
+}
+
+/** Dockerfile: las imágenes base. */
+function leerDockerfile(file: string, text: string, out: DependencySignal[]): void {
+  // La clase inicial son los espacios de una misma l\u00ednea: lo que JavaScript
+  // entiende por \s, sin \n, \r, U+2028 ni U+2029. As\u00ed ^ no salta l\u00edneas.
+  for (const m of text.matchAll(/^[\t\v\f \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]*FROM\s+(?:--platform=\S+\s+)?(\S+)/gim)) {
+    for (const [re, t] of BASE_IMAGES) if (re.test(m[1])) agregar(out, t, file, `FROM ${m[1]}`);
+  }
+  agregar(out, 'Docker', file, 'Dockerfile');
+}
+
+/** compose.yml: las imágenes de los servicios. */
+function leerCompose(file: string, text: string, out: DependencySignal[], nombre: string): void {
+  for (const m of text.matchAll(/^[\t\v\f \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]*image:\s*["']?([^\s"']+)/gim)) {
+    for (const [re, t] of IMAGES) if (re.test(m[1])) agregar(out, t, file, `image: ${m[1]}`);
+  }
+  agregar(out, 'Docker', file, nombre);
+}
+
+const LECTORES: Record<string, (file: string, text: string, out: DependencySignal[], nombre: string) => void> = {
+  'package.json': leerPackageJson,
+  'package-lock.json': leerPackageLock,
+  'pnpm-lock.yaml': leerPnpmLock,
+  'yarn.lock': leerYarnLock,
+  'requirements.txt': leerRequirements,
+  'pyproject.toml': leerPyproject,
+  'pom.xml': leerJvm,
+  'build.gradle': leerJvm,
+  dockerfile: leerDockerfile,
+};
 
 /**
  * Señales de un manifiesto. Nunca lanza: un fichero ilegible no aporta
@@ -168,54 +256,9 @@ function paquetePython(linea: string): string | null {
 export function signalsFromManifest(file: string, text: string): DependencySignal[] {
   const out: DependencySignal[] = [];
   const nombre = file.toLowerCase();
+  const leer = LECTORES[nombre] ?? (/^(docker-)?compose\.ya?ml$/.test(nombre) ? leerCompose : null);
   try {
-    if (nombre === 'package.json') {
-      const pkg = JSON.parse(text);
-      deNpm(Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}), ...(pkg.peerDependencies ?? {}) }), file, out);
-      agregar(out, 'Node.js', file, 'package.json');
-      agregar(out, 'JavaScript', file, 'package.json');
-    } else if (nombre === 'package-lock.json') {
-      // Solo las dependencias directas del proyecto (raíz), no las transitivas.
-      const lock = JSON.parse(text);
-      const raiz = lock.packages?.[''] ?? {};
-      deNpm(Object.keys({ ...(raiz.dependencies ?? {}), ...(raiz.devDependencies ?? {}), ...(lock.dependencies && !lock.packages ? lock.dependencies : {}) }), file, out);
-    } else if (nombre === 'pnpm-lock.yaml') {
-      // Bloque `importers: .:` → dependencias directas de la raíz.
-      const bloque = /importers:\s*\n\s+\.:\s*\n([\s\S]*?)(?:\n\S|\n {2}\S)/.exec(text)?.[1] ?? '';
-      const directas = [...bloque.matchAll(/^\s{6}'?(@?[A-Za-z0-9_.\/-]+)'?:\s*$/gm)].map((m) => m[1]);
-      deNpm(directas, file, out);
-    } else if (nombre === 'yarn.lock') {
-      // Sin información de cuáles son directas: solo se reconoce el gestor.
-      agregar(out, 'Yarn', file, 'yarn.lock');
-    } else if (nombre === 'requirements.txt') {
-      for (const linea of text.split(/\r?\n/)) {
-        const p = paquetePython(linea);
-        if (p && PYPI[p]) agregar(out, PYPI[p], file, p);
-      }
-      agregar(out, 'Python', file, 'requirements.txt');
-    } else if (nombre === 'pyproject.toml') {
-      const deps = [...text.matchAll(/["']([A-Za-z0-9_.-]+)\s*(?:[<>=!~^ ;\[].*?)?["']/g)].map((m) => m[1].toLowerCase());
-      const poetry = [...text.matchAll(/^([A-Za-z0-9_.-]+)\s*=\s*["{]/gm)].map((m) => m[1].toLowerCase());
-      for (const p of [...deps, ...poetry]) {
-        const clave = p.replace(/_/g, '-');
-        if (PYPI[clave]) agregar(out, PYPI[clave], file, p);
-      }
-      agregar(out, 'Python', file, 'pyproject.toml');
-    } else if (nombre === 'pom.xml' || nombre === 'build.gradle') {
-      for (const [re, t] of JVM) if (re.test(text)) agregar(out, t, file, re.source);
-      agregar(out, 'Java', file, nombre);
-      agregar(out, nombre === 'pom.xml' ? 'Maven' : 'Gradle', file, nombre);
-    } else if (nombre === 'dockerfile') {
-      for (const m of text.matchAll(/^\s*FROM\s+(?:--platform=\S+\s+)?(\S+)/gim)) {
-        for (const [re, t] of BASE_IMAGES) if (re.test(m[1])) agregar(out, t, file, `FROM ${m[1]}`);
-      }
-      agregar(out, 'Docker', file, 'Dockerfile');
-    } else if (/^(docker-)?compose\.ya?ml$/.test(nombre)) {
-      for (const m of text.matchAll(/^\s*image:\s*["']?([^\s"']+)/gim)) {
-        for (const [re, t] of IMAGES) if (re.test(m[1])) agregar(out, t, file, `image: ${m[1]}`);
-      }
-      agregar(out, 'Docker', file, nombre);
-    }
+    leer?.(file, text, out, nombre);
   } catch {
     // Manifiesto mal formado: no aporta señales.
   }

@@ -79,6 +79,9 @@ npx eas-cli login
 npx eas-cli build --platform android --profile production
 ```
 
+Sin cuenta de Expo, el APK también se genera en la PC: `npm run mobile:apk -- https://api.TU-DOMINIO.com/api`
+(requisitos en [`mobile/README.md`](../mobile/README.md)).
+
 ## 7. Actualizar el sistema
 
 1. Cambia y prueba en tu PC, en una rama de trabajo.
