@@ -8,6 +8,7 @@ import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
 import { CredentialVerifierService } from './credential-verifier.service';
+import { ProofVerifierService } from '../verifiable-credentials/proof-verifier.service';
 import { StorageModule } from '../storage/storage.module';
 import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { OCR_PORT, TesseractOcrAdapter } from './ocr.port';
@@ -52,6 +53,8 @@ import { ValidationController } from './validation.controller';
     DocumentExtractionService,
     LinkCheckerService,
     CredentialVerifierService,
+    // V8: comprobación de firmas de insignias externas (sin claves propias).
+    ProofVerifierService,
     ValidationService,
     ValidationWorker,
   ],

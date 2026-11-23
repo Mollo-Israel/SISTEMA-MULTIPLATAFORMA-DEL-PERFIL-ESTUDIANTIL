@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { CredentialCheckStatus, LinkCheckStatus, QrPresence } from '@perfil/shared';
 import type { CredentialCheckResult, LinkCheckResult } from '../entities/validation-record.entity';
 import { LinkCheckerService } from './link-checker.service';
+import { ProofVerifierService } from '../verifiable-credentials/proof-verifier.service';
+import { pareceJws } from '../verifiable-credentials/crypto/jws';
 import {
   OpenBadgeResult,
   PageComparison,
@@ -102,7 +104,38 @@ function resumenDeInsignia(ob: OpenBadgeResult | null) {
  */
 @Injectable()
 export class CredentialVerifierService {
-  constructor(private readonly links: LinkCheckerService) {}
+  private readonly logger = new Logger(CredentialVerifierService.name);
+
+  constructor(
+    private readonly links: LinkCheckerService,
+    // V8: comprobación criptográfica de la insignia. Opcional: sin ella, todo
+    // funciona como antes y `proofVerified` queda en false.
+    @Optional() private readonly proofs?: ProofVerifierService,
+  ) {}
+
+  /**
+   * V8: si la insignia trae firma (Data Integrity o VC-JWT), se comprueba de
+   * verdad. Antes `proofVerified` era siempre false: la firma se detectaba,
+   * pero no se validaba. Una firma inválida nunca rebaja nada por sí sola; una
+   * válida y del emisor cuenta como prueba fuerte (§18.3).
+   */
+  private async conFirma(ob: OpenBadgeResult | null, crudo: unknown, ctx: { emails: string[]; holderName: string }): Promise<OpenBadgeResult | null> {
+    if (!this.proofs || crudo === null || crudo === undefined) return ob;
+    const esJwt = typeof crudo === 'string' && pareceJws(crudo);
+    if (!esJwt && !ob?.proofPresent) return ob;
+    try {
+      const r = await this.proofs.verify(crudo);
+      let base = ob;
+      if (esJwt && r.credential) {
+        base = parseOpenBadge(r.credential, { fetchedUrl: null, emails: ctx.emails, holderName: ctx.holderName });
+      }
+      if (!base) return ob;
+      return { ...base, proofPresent: true, proofVerified: r.verified === true && r.issuerBound !== false };
+    } catch (e) {
+      this.logger.debug(`No se pudo comprobar la firma de la insignia: ${(e as Error).message}`);
+      return ob;
+    }
+  }
 
   async verify(i: VerifyInput): Promise<VerifyOutput> {
     const candidatos = candidatosDeVerificacion(i);
@@ -113,6 +146,8 @@ export class CredentialVerifierService {
     let openBadge: OpenBadgeResult | null = i.bakedBadge?.json
       ? parseOpenBadge(i.bakedBadge.json, { fetchedUrl: null, emails: i.emails, holderName: i.holderName })
       : null;
+    // V8: el documento original de la insignia, para comprobar su firma.
+    let crudo: unknown = i.bakedBadge?.json ?? null;
 
     const elegido = candidatos[0] ?? null;
     let link: LinkCheckResult | null = null;
@@ -128,11 +163,22 @@ export class CredentialVerifierService {
 
       const cuerpo = consultado.body;
       if (cuerpo && link.status === LinkCheckStatus.AVAILABLE) {
+        const anterior = openBadge;
         const leido = leerCuerpo(cuerpo, consultado.contentType, link.finalUrl ?? elegido.url, i, openBadge);
         openBadge = leido.openBadge;
         page = leido.page;
+        if (openBadge !== anterior) {
+          try {
+            crudo = JSON.parse(cuerpo);
+          } catch {
+            // ya se comparó como texto
+          }
+        } else if (pareceJws(cuerpo.trim())) {
+          crudo = cuerpo.trim();
+        }
       }
     }
+    openBadge = await this.conFirma(openBadge, crudo, { emails: i.emails, holderName: i.holderName });
 
     const status: CredentialCheckStatus = decideCredentialCheck({ link, official: esOficial, page, openBadge });
     return {

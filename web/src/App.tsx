@@ -13,6 +13,8 @@ import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 import PublicProfilePage from './pages/PublicProfile';
 import PublicProjectPage from './pages/PublicProject';
+import VerifyCredentialPage from './pages/VerifyCredential';
+import DirectorVerifiableCredentialsPage from './pages/director/VerifiableCredentials';
 import SetPasswordPage from './pages/auth/SetPasswordPage';
 import RequestTokenPage from './pages/auth/RequestTokenPage';
 
@@ -112,6 +114,9 @@ export default function App() {
               que exigiera iniciar sesión no serviría para lo que existe. */}
           <Route path="/p/:slug" element={<PublicProfilePage />} />
           <Route path="/proyecto/:token" element={<PublicProjectPage />} />
+          {/* V8: verificación pública de registros. Sin sesión: la usa quien recibe el registro. */}
+          <Route path="/verificar" element={<VerifyCredentialPage />} />
+          <Route path="/verificar/:code" element={<VerifyCredentialPage />} />
 
           {/* Activación y recuperación: públicas por necesidad (§12, §13). */}
           <Route path="/activar" element={<SetPasswordPage key="activate" mode="activate" />} />
@@ -181,6 +186,7 @@ export default function App() {
             <Route path="/director" element={<DirectorDashboard />} />
             <Route path="/director/activities" element={<DirectorActivitiesPage />} />
             <Route path="/director/constancies" element={<DirectorConstanciesPage />} />
+            <Route path="/director/credentials" element={<DirectorVerifiableCredentialsPage />} />
             <Route path="/director/approvals" element={<DirectorApprovalsPage />} />
             <Route path="/director/analytics" element={<DirectorAnalyticsPage />} />
             {/* V3 §52: Mapa y Tendencias son pestañas de Analítica. */}
@@ -221,6 +227,7 @@ export default function App() {
             <Route path="/admin/resources" element={<DirectorLearningResourcesPage />} />
             {/* V4.1 A41-018: revisión de credenciales como soporte excepcional auditado. */}
             <Route path="/admin/credential-reviews" element={<CredentialReviewsPage />} />
+            <Route path="/admin/verifiable-credentials" element={<DirectorVerifiableCredentialsPage />} />
             <Route path="/admin/audit" element={<AdminAuditPage />} />
           </Route>
 

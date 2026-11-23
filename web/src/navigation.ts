@@ -130,6 +130,7 @@ export const NAV: Record<string, NavGroup[]> = {
       items: [
         { to: '/director/activities', label: 'Actividades', hint: 'Todas las actividades de la carrera' },
         { to: '/director/constancies', label: 'Participaciones', hint: 'Quién participó y en qué' },
+        { to: '/director/credentials', label: 'Registros verificables', hint: 'Participaciones firmadas que cualquiera puede comprobar' },
         { to: '/director/resources', label: 'Recursos', hint: 'Material de aprendizaje publicado' },
         { to: '/proyectos', label: 'Proyectos de la carrera', hint: 'La galería pública de la carrera' },
       ],
@@ -183,6 +184,7 @@ export const NAV: Record<string, NavGroup[]> = {
         { to: '/admin/gamification', label: 'Gamificación' },
         { to: '/admin/points', label: 'Puntos de estudiantes' },
         { to: '/admin/credential-reviews', label: 'Revisión de credenciales' },
+        { to: '/admin/verifiable-credentials', label: 'Registros verificables' },
         { to: '/admin/audit', label: 'Auditoría' },
         { to: '/proyectos', label: 'Proyectos de la carrera' },
       ],

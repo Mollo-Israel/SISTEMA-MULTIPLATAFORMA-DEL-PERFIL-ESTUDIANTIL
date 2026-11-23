@@ -32,6 +32,7 @@ import { CollaborationModule } from './collaboration/collaboration.module';
 import { AiModule } from './ai/ai.module';
 import { HelpModule } from './help/help.module';
 import { GamificationModule } from './gamification/gamification.module';
+import { VerifiableCredentialsModule } from './verifiable-credentials/verifiable-credentials.module';
 import { RequestIdMiddleware } from './common/request-context';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -85,6 +86,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     AiModule,
     HelpModule,
     GamificationModule,
+    VerifiableCredentialsModule,
   ],
   controllers: [HealthController],
   providers: [

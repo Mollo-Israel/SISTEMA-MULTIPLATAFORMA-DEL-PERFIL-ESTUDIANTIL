@@ -116,6 +116,12 @@ export const AUDIT_EVENT_LABEL: Record<string, { modulo: AuditModule; accion: st
   PROJECT_BACKING_RECALCULATED: { modulo: 'proyectos', accion: 'Recálculo del respaldo de proyectos' },
   RESOURCE_REVIEWED: { modulo: 'catalogo', accion: 'Revisión de un recurso propuesto' },
   CURRICULUM_EXPORTED: { modulo: 'curriculo', accion: 'Currículo exportado' },
+  // V8: registros verificables.
+  CREDENTIAL_POLICY_CHANGED: { modulo: 'credenciales', accion: 'Política de registros verificables decidida' },
+  CREDENTIAL_ISSUED: { modulo: 'credenciales', accion: 'Registro verificable firmado' },
+  CREDENTIAL_SUSPENDED: { modulo: 'credenciales', accion: 'Registro verificable suspendido', resultado: 'moderado' },
+  CREDENTIAL_SUSPENSION_LIFTED: { modulo: 'credenciales', accion: 'Suspensión de registro verificable levantada' },
+  CREDENTIAL_REVOKED: { modulo: 'credenciales', accion: 'Registro verificable revocado', resultado: 'cancelado' },
 };
 
 /** Lo que el evento afecta, en palabras. */
@@ -135,6 +141,8 @@ export const AUDIT_ENTITY_LABEL: Record<string, string> = {
   recommendation: 'Recomendación',
   config: 'Configuración',
   stored_file: 'Archivo',
+  verifiable_credential: 'Registro verificable',
+  credential_policy: 'Política de registros verificables',
 };
 
 /** Nombres de los datos de detalle más frecuentes. */
@@ -155,6 +163,7 @@ const CAMPO: Record<string, string> = {
   campos: 'Campos', from: 'Desde', origen: 'Origen', version: 'Versión', answered: 'Respondida', rol: 'Rol',
   peerDiscoverable: 'Visible para compañeros', skills: 'Habilidades', confirmed: 'Confirmada', integrante: 'Integrante',
   plantilla: 'Plantilla',
+  code: 'Código', enabled: 'Habilitada',
 };
 
 /** El detalle como pares legibles, sin volcar JSON. */
