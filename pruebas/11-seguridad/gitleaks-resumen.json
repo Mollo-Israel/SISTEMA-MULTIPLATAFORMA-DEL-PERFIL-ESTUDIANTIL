@@ -1,0 +1,16 @@
+[
+  {
+    "regla": "square-access-token",
+    "archivo": "pruebas/04-postman-newman/resultados-newman.json",
+    "linea": 97,
+    "commit": "f98d54e6",
+    "fecha": "2026-11-13T23:49:02Z"
+  },
+  {
+    "regla": "square-access-token",
+    "archivo": "pruebas/04-postman-newman/resultados-newman.json",
+    "linea": 2783,
+    "commit": "f98d54e6",
+    "fecha": "2026-11-13T23:49:02Z"
+  }
+]

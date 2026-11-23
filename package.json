@@ -66,6 +66,7 @@
     "pruebas:k6": "node scripts/pruebas/k6.mjs",
     "pruebas:zap": "node scripts/pruebas/zap.mjs",
     "pruebas:sonar": "node scripts/pruebas/sonar.mjs",
+    "pruebas:seguridad": "node scripts/pruebas/seguridad.mjs",
     "pruebas:capturas": "node scripts/pruebas/capturar-reportes.mjs"
   },
   "engines": {

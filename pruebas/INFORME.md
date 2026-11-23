@@ -14,6 +14,12 @@ Este informe resume qué pruebas se ejecutaron, con qué comandos, qué resultad
 > k6 p95 de 113 ms (`05-k6/corrida-2026-11-10/`) · ZAP 119 PASS, 0 FAIL, 0 WARN (`06-zap/corrida-2026-11-10/`).
 > Las tablas de abajo conservan los resultados de la primera ejecución (21/10).
 
+> **Actualización del 17/11/2026.** Pruebas de seguridad del capítulo III, sección 3.4
+> (`11-seguridad/`, ver su `LEEME.md` y el §16 de este informe): 79/79 casos de Jest + SuperTest, incluida
+> la API arrancada con el perfil de producción · 7/7 verificaciones estáticas · npm audit sin vulnerabilidades
+> críticas en producción, con altas pendientes de una actualización mayor de NestJS y Expo · Gitleaks: 196 commits,
+> 0 secretos reales · ZAP repetido con el mismo resultado (`06-zap/corrida-2026-11-17/`).
+
 ---
 
 ## 1. Resumen general
@@ -403,6 +409,7 @@ npm run pruebas:postman
 npm run pruebas:k6
 npm run pruebas:zap
 npm run pruebas:sonar      # después de pruebas:jest (usa su cobertura)
+npm run pruebas:seguridad  # pruebas de seguridad (§16): no necesita la API de :3020
 
 # 3. Capturas de los reportes
 npm run pruebas:capturas
@@ -417,3 +424,24 @@ npm run pruebas:capturas
    quedó aprobado, §8.1).
 4. **Opcional:** corregir los 672 code smells que quedan en el código anterior al 21/10 (fuera del código nuevo
    que evalúa el Quality Gate) y medir la cobertura de la app móvil cuando se ejecuten los flujos de Maestro.
+
+## 16. Pruebas de seguridad (capítulo III, sección 3.4) — `11-seguridad/`
+
+Conjunto creado el 17/11/2026 para la sección «Seguridad del sistema». Sin cambios en el código de la aplicación:
+solo se añadieron `api/jest.seguridad.config.js`, `api/test/seguridad/` y `scripts/pruebas/seguridad.mjs`.
+
+| Parte | Qué verifica | Resultado |
+|---|---|---|
+| `reglas.spec.ts` | Política de contraseñas, arranque seguro en producción, protección SSRF | 24/24 |
+| `api.spec.ts` | Autenticación, sesiones, control de acceso, inyección, archivos, abuso, auditoría, privacidad | 47/47 |
+| `http.spec.ts` | API con `NODE_ENV=production`: cabeceras, CORS, Swagger, errores, límite del cuerpo, cookie, límites de intentos | 8/8 |
+| Verificaciones estáticas | `.env` fuera de git, tokens en web y móvil, HTML sin escapar, tráfico sin cifrar, configuración de la API | 7/7 + 2 observaciones |
+| npm audit | Dependencias de la raíz, la web y la app móvil | Sin críticas en producción; altas con corrección mayor pendiente (riesgo R1) |
+| Gitleaks | Historial completo de git (196 commits) | 0 secretos reales; 2 falsos positivos (`_lastExecutionId` de Newman) |
+
+```bash
+node scripts/pruebas/entorno.mjs reconstruir   # base afinia_test limpia
+npm run pruebas:seguridad                      # todo; --sin-gitleaks para omitir la búsqueda de secretos
+```
+
+Los riesgos residuales (R1 a R12) y el plan de mejora están en la sección 3.4.7 del PGT.

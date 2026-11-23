@@ -1,0 +1,4 @@
+
+[90m4:17AM[0m [32mINF[0m 196 commits scanned.
+[90m4:17AM[0m [32mINF[0m scan completed in 19.2s
+[90m4:17AM[0m [31mWRN[0m leaks found: 2

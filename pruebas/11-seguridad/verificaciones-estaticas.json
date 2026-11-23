@@ -1,0 +1,51 @@
+{
+  "verificaciones": [
+    {
+      "codigo": "PS-EST-01",
+      "descripcion": "El archivo .env no está versionado y git lo ignora",
+      "resultado": "PASS"
+    },
+    {
+      "codigo": "PS-EST-02",
+      "descripcion": "La web no guarda tokens en localStorage (solo una marca sin valor)",
+      "resultado": "PASS"
+    },
+    {
+      "codigo": "PS-EST-03",
+      "descripcion": "La web solo inserta HTML sin escapar en un lugar: el QR que genera el servidor",
+      "resultado": "PASS"
+    },
+    {
+      "codigo": "PS-EST-04",
+      "descripcion": "La app móvil guarda los tokens en el almacenamiento seguro del sistema (SecureStore)",
+      "resultado": "PASS"
+    },
+    {
+      "codigo": "PS-EST-05",
+      "descripcion": "La configuración de la app móvil no habilita tráfico sin cifrar",
+      "resultado": "PASS"
+    },
+    {
+      "codigo": "PS-EST-06",
+      "descripcion": "La API aplica Helmet, validación estricta de entradas y límite del cuerpo",
+      "resultado": "PASS"
+    },
+    {
+      "codigo": "PS-EST-07",
+      "descripcion": "El código de la API no evalúa código dinámico (eval o new Function)",
+      "resultado": "PASS"
+    }
+  ],
+  "observaciones": [
+    {
+      "codigo": "OBS-01",
+      "descripcion": "La API desactiva la Política de Seguridad de Contenido (CSP) de Helmet porque no sirve HTML; la web debe aplicarla en su propio hosting",
+      "presente": true
+    },
+    {
+      "codigo": "OBS-02",
+      "descripcion": "El script de compilación local del APK habilita HTTP sin cifrar para conectarse a la red local",
+      "presente": true
+    }
+  ]
+}

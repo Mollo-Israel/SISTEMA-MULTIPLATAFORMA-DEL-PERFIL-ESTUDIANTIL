@@ -120,5 +120,5 @@ PASS: Server Side Template Injection (Blind) [90036]
 PASS: Remote OS Command Injection (Time Based) [90037]
 FAIL-NEW: 0	FAIL-INPROG: 0	WARN-NEW: 0	WARN-INPROG: 0	INFO: 0	IGNORE: 0	PASS: 119
 
-2026-11-13 13:54:09,847 Using override, new target: http://host.docker.internal:3020
-2026-11-13 13:54:09,848 Number of Imported URLs: 333
+2026-11-17 04:11:03,841 Using override, new target: http://host.docker.internal:3020
+2026-11-17 04:11:03,842 Number of Imported URLs: 333

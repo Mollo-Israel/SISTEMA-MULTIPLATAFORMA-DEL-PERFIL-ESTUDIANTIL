@@ -1,0 +1,100 @@
+{
+  "health": {
+    "cross-origin-opener-policy": "same-origin",
+    "origin-agent-cluster": "?1",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-content-type-options": "nosniff",
+    "x-dns-prefetch-control": "off",
+    "x-download-options": "noopen",
+    "x-frame-options": "SAMEORIGIN",
+    "x-permitted-cross-domain-policies": "none",
+    "x-xss-protection": "0",
+    "vary": "Origin, Accept-Encoding",
+    "access-control-allow-credentials": "true",
+    "x-request-id": "672ab61a-5e34-4f3a-9283-63cce8fe1c1c",
+    "x-ratelimit-limit": "300",
+    "x-ratelimit-remaining": "299",
+    "x-ratelimit-reset": "60",
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "105",
+    "etag": "W/\"69-DYlodPk28prJgAUp5aYN6leRBss\"",
+    "date": "Tue, 17 Nov 2026 04:17:07 GMT",
+    "connection": "close"
+  },
+  "corsPermitido": {
+    "cross-origin-opener-policy": "same-origin",
+    "origin-agent-cluster": "?1",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-content-type-options": "nosniff",
+    "x-dns-prefetch-control": "off",
+    "x-download-options": "noopen",
+    "x-frame-options": "SAMEORIGIN",
+    "x-permitted-cross-domain-policies": "none",
+    "x-xss-protection": "0",
+    "access-control-allow-origin": "http://localhost:5180",
+    "vary": "Origin, Access-Control-Request-Headers",
+    "access-control-allow-credentials": "true",
+    "access-control-allow-methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+    "content-length": "0",
+    "date": "Tue, 17 Nov 2026 04:17:07 GMT",
+    "connection": "close"
+  },
+  "corsAjeno": {
+    "cross-origin-opener-policy": "same-origin",
+    "origin-agent-cluster": "?1",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=31536000; includeSubDomains",
+    "x-content-type-options": "nosniff",
+    "x-dns-prefetch-control": "off",
+    "x-download-options": "noopen",
+    "x-frame-options": "SAMEORIGIN",
+    "x-permitted-cross-domain-policies": "none",
+    "x-xss-protection": "0",
+    "vary": "Origin, Access-Control-Request-Headers",
+    "access-control-allow-credentials": "true",
+    "access-control-allow-methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+    "content-length": "0",
+    "date": "Tue, 17 Nov 2026 04:17:07 GMT",
+    "connection": "close"
+  },
+  "errorJsonMalFormado": {
+    "status": 400,
+    "body": {
+      "code": "VALIDATION_ERROR",
+      "message": "Unexpected end of JSON input"
+    }
+  },
+  "cookieProduccion": "afinia_rt=[valor omitido]; Max-Age=604800; Path=/api/auth; Expires=Tue, 24 Nov 2026 04:17:07 GMT; HttpOnly; Secure; SameSite=Lax",
+  "loginLimitado": {
+    "status": 429,
+    "retryAfter": "60",
+    "body": {
+      "code": "RATE_LIMITED",
+      "message": "ThrottlerException: Too Many Requests",
+      "requestId": "6e0d7d7e-71fa-43b0-a1dd-ff4d6fe30faa"
+    }
+  },
+  "loginEstados": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    401,
+    429
+  ],
+  "recuperacionEstados": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    429
+  ]
+}

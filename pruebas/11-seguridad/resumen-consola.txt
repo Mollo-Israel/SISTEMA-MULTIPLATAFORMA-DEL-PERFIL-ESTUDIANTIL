@@ -1,0 +1,23 @@
+== 1. API con perfil de producción (afinia_test, puerto 3030)
+   lista.
+== 2. Suites de seguridad (Jest + SuperTest)
+Jest: 3 passed, 3 total | 79 passed, 79 total
+== 3. Deteniendo la API de producción
+== 4. npm audit
+   raiz (api y shared): total 47 (crít. 1, altas 23, mod. 20, bajas 3) | solo ejecución 17 (crít. 0, altas 7)
+   web: total 10 (crít. 0, altas 6, mod. 4, bajas 0) | solo ejecución 3 (crít. 0, altas 1)
+   movil: total 26 (crít. 0, altas 14, mod. 12, bajas 0) | solo ejecución 26 (crít. 0, altas 14)
+== 5. Gitleaks (historial completo, hallazgos enmascarados)
+   commits analizados: 196 | hallazgos: 2 {"square-access-token":2}
+== 6. Verificaciones estáticas
+  PASS  PS-EST-01  El archivo .env no está versionado y git lo ignora
+  PASS  PS-EST-02  La web no guarda tokens en localStorage (solo una marca sin valor)
+  PASS  PS-EST-03  La web solo inserta HTML sin escapar en un lugar: el QR que genera el servidor
+  PASS  PS-EST-04  La app móvil guarda los tokens en el almacenamiento seguro del sistema (SecureStore)
+  PASS  PS-EST-05  La configuración de la app móvil no habilita tráfico sin cifrar
+  PASS  PS-EST-06  La API aplica Helmet, validación estricta de entradas y límite del cuerpo
+  PASS  PS-EST-07  El código de la API no evalúa código dinámico (eval o new Function)
+  OBS   OBS-01  La API desactiva la Política de Seguridad de Contenido (CSP) de Helmet porque no sirve HTML; la web debe aplicarla en su propio hosting
+  OBS   OBS-02  El script de compilación local del APK habilita HTTP sin cifrar para conectarse a la red local
+
+Evidencia en C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\pruebas\11-seguridad

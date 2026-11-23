@@ -1,0 +1,114 @@
+[33m[Nest] 21700  - [39m17/11/2026, 12:17:09 a. m. [33m   WARN[39m [38;5;3m[SecurityConfig] [39m[33mWEB_ORIGINS incluye «*»: se acepta cualquier origen, sin credenciales.[39m
+[33m[Nest] 21700  - [39m17/11/2026, 12:17:09 a. m. [33m   WARN[39m [38;5;3m[Environment] [39m[33mSTORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.[39m
+[33m[Nest] 21700  - [39m17/11/2026, 12:17:09 a. m. [33m   WARN[39m [38;5;3m[Environment] [39m[33mSTORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.[39m
+[33m[Nest] 21700  - [39m17/11/2026, 12:17:09 a. m. [33m   WARN[39m [38;5;3m[Environment] [39m[33mSTORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.[39m
+[33m[Nest] 21700  - [39m17/11/2026, 12:17:09 a. m. [33m   WARN[39m [38;5;3m[Environment] [39m[33mSTORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.[39m
+📦 report is created on: C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\pruebas\11-seguridad\reporte\reporte-seguridad.html
+
+[0m[7m[1m[32m PASS [39m[22m[27m[0m [2mtest/seguridad/[22m[1mapi.spec.ts[22m ([0m[1m[41m16.076 s[49m[22m[0m)
+  Pruebas de seguridad de la API (afinia_test)
+    PS-AUT · Autenticación y cuentas
+      [32m√[39m [2mPS-AUT-01 las contraseñas se guardan con bcrypt (costo ≥ 10) y nunca en texto plano (7 ms)[22m
+      [32m√[39m [2mPS-AUT-02 el inicio de sesión responde igual si la contraseña es incorrecta o si la cuenta no existe (83 ms)[22m
+      [32m√[39m [2mPS-AUT-03 al suspender una cuenta, su token vigente y su sesión dejan de valer de inmediato y el cambio queda auditado (327 ms)[22m
+      [32m√[39m [2mPS-AUT-04 la aplicación móvil solo admite cuentas de estudiantes (156 ms)[22m
+      [32m√[39m [2mPS-AUT-05 no existe un registro público de cuentas (9 ms)[22m
+      [32m√[39m [2mPS-AUT-06 ni siquiera Administración puede crear otra cuenta de administrador desde la API (9 ms)[22m
+      [32m√[39m [2mPS-AUT-07 la política de contraseñas se aplica también al restablecerla (4 ms)[22m
+    PS-SES · Sesiones y tokens
+      [32m√[39m [2mPS-SES-01 el token de renovación se guarda solo como huella SHA-256 (83 ms)[22m
+      [32m√[39m [2mPS-SES-02 cada renovación entrega un token nuevo y el anterior deja de servir al vencer la gracia (2752 ms)[22m
+      [32m√[39m [2mPS-SES-03 cerrar sesión revoca el token de renovación (97 ms)[22m
+      [32m√[39m [2mPS-SES-04 «cerrar todas las sesiones» revoca cada sesión abierta y queda auditado (195 ms)[22m
+      [32m√[39m [2mPS-SES-05 un token alterado para suplantar a otra cuenta se rechaza (6 ms)[22m
+      [32m√[39m [2mPS-SES-06 un token sin firma (algoritmo «none») se rechaza (2 ms)[22m
+      [32m√[39m [2mPS-SES-07 un token firmado con otra clave se rechaza (3 ms)[22m
+      [32m√[39m [2mPS-SES-08 un token vencido se rechaza aunque la firma sea válida (3 ms)[22m
+      [32m√[39m [2mPS-SES-09 el rol escrito dentro de un token válido no otorga permisos: se lee de la base (16 ms)[22m
+      [32m√[39m [2mPS-SES-10 la web recibe la renovación en una cookie HttpOnly limitada a /api/auth, nunca en el cuerpo (90 ms)[22m
+    PS-ACC · Control de acceso
+      [32m√[39m [2mPS-ACC-01 un estudiante no accede a la gestión de cuentas ni puede elevar su propio rol (20 ms)[22m
+      [32m√[39m [2mPS-ACC-02 Docente, Dirección y Sociedad Científica no acceden a la gestión de cuentas (344 ms)[22m
+      [32m√[39m [2mPS-ACC-03 un estudiante no modifica el proyecto de otra persona (17 ms)[22m
+      [32m√[39m [2mPS-ACC-04 el borrador privado de otro estudiante no es visible (23 ms)[22m
+      [32m√[39m [2mPS-ACC-05 los campos no permitidos se rechazan (asignación masiva) (20 ms)[22m
+      [32m√[39m [2mPS-ACC-06 un identificador mal formado se rechaza sin provocar un error interno (13 ms)[22m
+    PS-INY · Inyección y validación de entradas
+      [32m√[39m [2mPS-INY-01 una inyección SQL en la búsqueda se trata como texto: ' OR '1'='1 (26 ms)[22m
+      [32m√[39m [2mPS-INY-01 una inyección SQL en la búsqueda se trata como texto: %' OR 1=1 -- (18 ms)[22m
+      [32m√[39m [2mPS-INY-01 una inyección SQL en la búsqueda se trata como texto: x'); DROP TABLE users; -- (18 ms)[22m
+      [32m√[39m [2mPS-INY-02 una inyección en el inicio de sesión se rechaza por validación, sin error interno (5 ms)[22m
+      [32m√[39m [2mPS-INY-03 el HTML escrito por un usuario se guarda como texto y se devuelve como JSON (225 ms)[22m
+      [32m√[39m [2mPS-INY-04 un cuerpo JSON mal formado se rechaza sin exponer detalles internos (7 ms)[22m
+      [32m√[39m [2mPS-INY-05 una ruta de archivo con recorrido de directorios no sale del almacenamiento (19 ms)[22m
+    PS-ARC · Archivos y evidencias
+      [32m√[39m [2mPS-ARC-01 un ejecutable con extensión .pdf se rechaza por su contenido real (13 ms)[22m
+      [32m√[39m [2mPS-ARC-02 un SVG o un HTML con código se rechazan aunque se declaren como imagen (20 ms)[22m
+      [32m√[39m [2mPS-ARC-03 un archivo cuyo tipo declarado no coincide con su contenido se rechaza (6 ms)[22m
+      [32m√[39m [2mPS-ARC-04 un archivo de más de 10 MB se rechaza (47 ms)[22m
+      [32m√[39m [2mPS-ARC-05 un archivo vacío se rechaza (8 ms)[22m
+      [32m√[39m [2mPS-ARC-06 el nombre enviado por el usuario no decide dónde se guarda el archivo (21 ms)[22m
+      [32m√[39m [2mPS-ARC-07 la evidencia la descarga su titular con cabeceras seguras; otra cuenta recibe lo mismo que si no existiera (266 ms)[22m
+      [32m√[39m [2mPS-ARC-08 un archivo subido que no pertenece a ninguna evidencia no se entrega, ni siquiera a quien lo subió (37 ms)[22m
+    PS-ABU · Abuso de los flujos de cuenta
+      [32m√[39m [2mPS-ABU-01 la activación y la recuperación solo atienden correos institucionales (17 ms)[22m
+      [32m√[39m [2mPS-ABU-02 pedir de nuevo la activación respeta la espera entre reenvíos y no duplica correos (19 ms)[22m
+      [32m√[39m [2mPS-ABU-03 el código de 6 dígitos se anula tras 10 intentos fallidos: después ni el código correcto sirve (117 ms)[22m
+      [32m√[39m [2mPS-ABU-04 enlaces y códigos se guardan como huellas, y pedir uno nuevo anula el anterior (26 ms)[22m
+    PS-AUD · Auditoría
+      [32m√[39m [2mPS-AUD-01 un estudiante no puede consultar, alterar ni borrar la auditoría (11 ms)[22m
+      [32m√[39m [2mPS-AUD-02 los cambios de cuenta y el cierre de sesiones quedan con actor y fecha (2 ms)[22m
+    PS-PRI · Privacidad del perfil
+      [32m√[39m [2mPS-PRI-01 el perfil compartible está desactivado por defecto y responde como si no existiera (15 ms)[22m
+      [32m√[39m [2mPS-PRI-02 publicado, no expone el correo ni el código universitario; al rotar el enlace, el anterior deja de funcionar (90 ms)[22m
+      [32m√[39m [2mPS-PRI-03 la búsqueda de compañeros nunca devuelve correos (10 ms)[22m
+
+[0m[7m[1m[32m PASS [39m[22m[27m[0m [2mtest/seguridad/[22m[1mhttp.spec.ts[22m
+  Pruebas de seguridad HTTP con el perfil de producción
+    PS-CFG · Configuración expuesta
+      [32m√[39m [2mPS-CFG-05 las respuestas llevan las cabeceras de seguridad y no revelan la tecnología del servidor (20 ms)[22m
+      [32m√[39m [2mPS-CFG-06 CORS solo autoriza el origen de la aplicación web (4 ms)[22m
+      [32m√[39m [2mPS-CFG-07 la documentación interactiva (Swagger) no se publica en producción (23 ms)[22m
+      [32m√[39m [2mPS-CFG-08 los errores tienen una forma única, con identificador y sin detalles internos (31 ms)[22m
+      [32m√[39m [2mPS-CFG-09 un cuerpo JSON de más de 256 KB se rechaza antes de procesarse (27 ms)[22m
+      [32m√[39m [2mPS-CFG-10 en producción la cookie de sesión de la web solo viaja por HTTPS (134 ms)[22m
+    PS-ABU · Limitación de intentos (valores de producción)
+      [32m√[39m [2mPS-ABU-05 tras 10 intentos de inicio de sesión en un minuto, la misma dirección recibe 429 (751 ms)[22m
+      [32m√[39m [2mPS-ABU-06 tras 5 solicitudes de activación o recuperación en un minuto, la misma dirección recibe 429 (20 ms)[22m
+
+[0m[7m[1m[32m PASS [39m[22m[27m[0m [2mtest/seguridad/[22m[1mreglas.spec.ts[22m
+  PS-CON · Política de contraseñas
+    [32m√[39m [2mPS-CON-01 se rechaza una contraseña con menos de 12 caracteres[22m
+    [32m√[39m [2mPS-CON-02 se rechaza una contraseña sin mayúsculas[22m
+    [32m√[39m [2mPS-CON-03 se rechaza una contraseña sin minúsculas[22m
+    [32m√[39m [2mPS-CON-04 se rechaza una contraseña sin números[22m
+    [32m√[39m [2mPS-CON-05 se rechaza una contraseña sin símbolos (1 ms)[22m
+    [32m√[39m [2mPS-CON-06 se rechaza una contraseña con espacios[22m
+    [32m√[39m [2mPS-CON-07 se rechaza una contraseña que contiene el correo[22m
+    [32m√[39m [2mPS-CON-08 se rechaza una contraseña que contiene el código universitario[22m
+    [32m√[39m [2mPS-CON-09 se acepta una contraseña que cumple la política[22m
+  PS-CFG · Arranque seguro en producción
+    [32m√[39m [2mPS-CFG-01 sin secreto de firma, o con el valor de ejemplo, la API no arranca en producción (14 ms)[22m
+    [32m√[39m [2mPS-CFG-02 el secreto de renovación debe ser propio y distinto del de acceso (2 ms)[22m
+    [32m√[39m [2mPS-CFG-03 en producción CORS exige una lista explícita de orígenes (1 ms)[22m
+    [32m√[39m [2mPS-CFG-04 una configuración de producción incompleta o insegura detiene el arranque (4 ms)[22m
+  PS-SSRF · Verificador de enlaces frente a solicitudes a recursos internos
+    [32m√[39m [2mPS-SSRF-01 se bloquea: servicio de metadatos de la nube[22m
+    [32m√[39m [2mPS-SSRF-02 se bloquea: bucle local por nombre[22m
+    [32m√[39m [2mPS-SSRF-03 se bloquea: bucle local por dirección[22m
+    [32m√[39m [2mPS-SSRF-04 se bloquea: red privada 10.0.0.0/8[22m
+    [32m√[39m [2mPS-SSRF-05 se bloquea: red privada 192.168.0.0/16 (1 ms)[22m
+    [32m√[39m [2mPS-SSRF-06 se bloquea: red privada 172.16.0.0/12[22m
+    [32m√[39m [2mPS-SSRF-07 se bloquea: bucle local en IPv6 (1 ms)[22m
+    [32m√[39m [2mPS-SSRF-08 se bloquea: IPv4 escondida en IPv6[22m
+    [32m√[39m [2mPS-SSRF-09 se bloquea: esquema file://[22m
+    [32m√[39m [2mPS-SSRF-10 se bloquea: credenciales incrustadas en la dirección[22m
+    redirección hacia una dirección interna
+      [32m√[39m [2mPS-SSRF-11 una redirección hacia el servicio de metadatos se bloquea en el segundo salto (14 ms)[22m
+
+[1mTest Suites: [22m[1m[32m3 passed[39m[22m, 3 total
+[1mTests:       [22m[1m[32m79 passed[39m[22m, 79 total
+[1mSnapshots:   [22m0 total
+[1mTime:[22m        19.402 s, estimated 20 s
+[2mRan all test suites[22m[2m.[22m
+[1mForce exiting Jest: [22mHave you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

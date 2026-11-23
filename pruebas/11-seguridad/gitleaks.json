@@ -1,0 +1,42 @@
+[
+ {
+  "Description": "Detected a Square Access Token, risking unauthorized payment processing and financial transaction exposure.",
+  "StartLine": 97,
+  "EndLine": 97,
+  "StartColumn": 40,
+  "EndColumn": 76,
+  "Match": "REDACTED",
+  "Secret": "REDACTED",
+  "File": "pruebas/04-postman-newman/resultados-newman.json",
+  "SymlinkFile": "",
+  "Commit": "f98d54e684306f52e17b51e086b0f7486f3fc17d",
+  "Entropy": 3.7870429,
+  "Author": "perfil-dev",
+  "Email": "israelmollovargas@gmail.com",
+  "Date": "2026-11-13T23:49:02Z",
+  "Message": "test(calidad): Sonar en verde, Maestro en Android, regresión y evidencia del capítulo III\n\n- SonarQube: Quality Gate OK (cobertura nueva 80,0 %, duplicación 0,6 %, de 672 a 24 issues),\n  con cobertura de API, web y scripts.\n- Maestro 2.12.1 en emulador Android 15 con el APK: 3 de 3 flujos (95 pasos).\n- D-14: el aviso de inscripción en la app móvil distingue admisión inmediata y solicitud (V6 §4.1).\n- Regresión de suites propias 2606/0, k6, ZAP y Newman re-ejecutados con su evidencia.\n- Suite e2e-web-gestion, scripts de cobertura y construcción del APK.\n\nCo-Authored-By: Claude Opus 5.5 \u003cnoreply@anthropic.com\u003e",
+  "Tags": [],
+  "RuleID": "square-access-token",
+  "Fingerprint": "f98d54e684306f52e17b51e086b0f7486f3fc17d:pruebas/04-postman-newman/resultados-newman.json:square-access-token:97"
+ },
+ {
+  "Description": "Detected a Square Access Token, risking unauthorized payment processing and financial transaction exposure.",
+  "StartLine": 2783,
+  "EndLine": 2783,
+  "StartColumn": 38,
+  "EndColumn": 74,
+  "Match": "REDACTED",
+  "Secret": "REDACTED",
+  "File": "pruebas/04-postman-newman/resultados-newman.json",
+  "SymlinkFile": "",
+  "Commit": "f98d54e684306f52e17b51e086b0f7486f3fc17d",
+  "Entropy": 3.7870429,
+  "Author": "perfil-dev",
+  "Email": "israelmollovargas@gmail.com",
+  "Date": "2026-11-13T23:49:02Z",
+  "Message": "test(calidad): Sonar en verde, Maestro en Android, regresión y evidencia del capítulo III\n\n- SonarQube: Quality Gate OK (cobertura nueva 80,0 %, duplicación 0,6 %, de 672 a 24 issues),\n  con cobertura de API, web y scripts.\n- Maestro 2.12.1 en emulador Android 15 con el APK: 3 de 3 flujos (95 pasos).\n- D-14: el aviso de inscripción en la app móvil distingue admisión inmediata y solicitud (V6 §4.1).\n- Regresión de suites propias 2606/0, k6, ZAP y Newman re-ejecutados con su evidencia.\n- Suite e2e-web-gestion, scripts de cobertura y construcción del APK.\n\nCo-Authored-By: Claude Opus 5.5 \u003cnoreply@anthropic.com\u003e",
+  "Tags": [],
+  "RuleID": "square-access-token",
+  "Fingerprint": "f98d54e684306f52e17b51e086b0f7486f3fc17d:pruebas/04-postman-newman/resultados-newman.json:square-access-token:2783"
+ }
+]
