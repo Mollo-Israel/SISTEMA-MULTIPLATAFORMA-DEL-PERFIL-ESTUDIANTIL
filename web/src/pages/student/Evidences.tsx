@@ -1,4 +1,5 @@
 import RegistrosVerificables from '../../components/RegistrosVerificables';
+import CorreosComprobados from '../../components/CorreosComprobados';
 import EstadosDeRespaldo from '../../components/EstadosDeRespaldo';
 import { FieldError } from '../../components/form';
 import { BotonArchivo } from '../../components/ArchivoProtegido';
@@ -29,6 +30,7 @@ import {
   BACKING_TIER_LABEL,
   CREDENTIAL_CHECK_LABEL,
   CREDENTIAL_CONTRADICTION_LABEL,
+  FORENSIC_LABEL,
   LINK_CHECK_LABEL,
 } from '../../services/types';
 import type {
@@ -263,6 +265,8 @@ export default function StudentEvidencesPage() {
           certificates.reload();
         }}
       />
+
+      <CorreosComprobados />
 
       <Card
         title="Mis credenciales y su validación"
@@ -780,6 +784,27 @@ function RespaldoDelCertificado({ certificateId }: Readonly<{ certificateId: str
       {chequeo && chequeo.contradictions.length > 0 && (
         <span className="respaldo-aviso">
           {chequeo.contradictions.map((c) => CREDENTIAL_CONTRADICTION_LABEL[c] ?? c).join('; ')}.
+        </span>
+      )}
+      {/* V9: lo que el archivo dice de sí mismo. Solo lo que cambia algo (críticas y advertencias). */}
+      {chequeo?.forensics && chequeo.forensics.signals.some((x) => x.severity !== 'info') && (
+        <span className="muted" data-testid="analisis-archivo">
+          Análisis del archivo:{' '}
+          {chequeo.forensics.signals
+            .filter((x) => x.severity !== 'info')
+            .map((x) => `${FORENSIC_LABEL[x.code] ?? x.code}${x.detail ? ` (${x.detail})` : ''}`)
+            .join('; ')}
+          . Sube el archivo original que te entregó el emisor o registra su enlace oficial.
+        </span>
+      )}
+      {chequeo?.forensics?.signature?.signatureValid && chequeo.forensics.signature.trusted && chequeo.forensics.signature.issuerMatches && (
+        <span className="muted" data-testid="firma-emisor">
+          Firmado digitalmente por {chequeo.forensics.signature.signerOrganization ?? chequeo.forensics.signature.signerName}: la firma corresponde al contenido.
+        </span>
+      )}
+      {chequeo?.openBadge?.provider === 'credly' && chequeo.openBadge.recipientMatch === false && (
+        <span className="muted" data-testid="credly-correo">
+          Credly no la emitió a tu correo institucional. Si la recibiste en un correo personal, compruébalo arriba en «Correos con los que recibes insignias».
         </span>
       )}
       {revision?.status === 'requested' && <span className="muted">Revisión excepcional pedida a Dirección.</span>}

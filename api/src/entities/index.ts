@@ -61,3 +61,4 @@ export * from './verifiable-credential.entity';
 export * from './credential-ledger-entry.entity';
 export * from './credential-signing-key.entity';
 export * from './credential-issuance-policy.entity';
+export * from './verified-email.entity';

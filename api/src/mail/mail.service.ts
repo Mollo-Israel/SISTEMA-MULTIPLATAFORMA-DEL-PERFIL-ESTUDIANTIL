@@ -248,7 +248,10 @@ export class MailService implements MailPort, OnModuleInit, OnApplicationShutdow
     // La prueba de configuración puede ir a cualquier buzón: quien configura
     // el correo no siempre tiene a mano una cuenta institucional. Todo lo
     // demás —activaciones, recuperaciones— solo a direcciones institucionales.
-    if (message.kind !== 'test' && !this.isAllowedRecipient(message.to)) {
+    // V9: la comprobación de un correo personal va, por definición, a ese
+    // correo; el código solo prueba que quien lo pidió puede leerlo.
+    const libre = message.kind === 'test' || message.kind === 'email_ownership';
+    if (libre ? !ASCII_ADDRESS.test(message.to) : !this.isAllowedRecipient(message.to)) {
       this.logger.warn(`Destinatario fuera de los dominios institucionales: ${maskEmail(message.to)}`);
       throw new RecipientRejectedError(message.to);
     }

@@ -1003,6 +1003,51 @@ export const CREDENTIAL_CONTRADICTION_LABEL: Record<string, string> = {
   course_mismatch: 'el documento no menciona el curso esperado',
   issuer_mismatch: 'el documento no menciona al proveedor esperado',
   verification_mismatch: 'el enlace o la insignia no corresponden a una fuente oficial o a ti',
+  // V9 · validación reforzada
+  badge_issuer_mismatch: 'la insignia la emitió otra organización, no la que declaraste',
+  qr_code_mismatch: 'el código del QR no es el que está impreso en el documento',
+  ai_generated_document: 'el archivo declara haber sido generado con inteligencia artificial',
+  document_tampered: 'la firma digital del documento no corresponde a su contenido: se modificó después de emitido',
+  shared_with_other_student: 'esta misma credencial ya la registró otro estudiante',
+};
+
+/** V9: análisis forense del archivo (lo que el archivo dice de sí mismo). */
+export type ForensicCode =
+  | 'ai_generated' | 'signature_broken' | 'modified_after_signature' | 'image_editor' | 'online_editor'
+  | 'incremental_edits' | 'modified_later' | 'future_date' | 'reprinted' | 'content_credentials'
+  | 'near_duplicate_other_student' | 'signature_untrusted';
+
+export interface ForensicSignal {
+  code: ForensicCode;
+  severity: 'critical' | 'warning' | 'info';
+  detail: string | null;
+}
+
+export interface ForensicReport {
+  kind: 'pdf' | 'image' | 'other';
+  producer: string | null;
+  creator: string | null;
+  revisions: number | null;
+  signals: ForensicSignal[];
+  signature: {
+    integrity: boolean | null; signatureValid: boolean | null; trusted: boolean | null;
+    signerName: string | null; signerOrganization: string | null; issuerMatches: boolean | null;
+  } | null;
+}
+
+export const FORENSIC_LABEL: Record<ForensicCode, string> = {
+  ai_generated: 'Generado con inteligencia artificial',
+  signature_broken: 'Firma digital rota',
+  modified_after_signature: 'Modificado después de firmado',
+  image_editor: 'Pasó por un editor de imágenes',
+  online_editor: 'Pasó por un editor de PDF o de diseño',
+  incremental_edits: 'Guardado varias veces sobre sí mismo',
+  modified_later: 'Modificado bastante después de creado',
+  future_date: 'Tiene una fecha en el futuro',
+  reprinted: 'Reimpreso a PDF (no es el archivo original del emisor)',
+  content_credentials: 'Trae credenciales de contenido (C2PA)',
+  near_duplicate_other_student: 'Casi idéntico al archivo de otro estudiante',
+  signature_untrusted: 'Firmado, pero por un certificado sin confianza pública',
 };
 
 export interface CredentialCheck {
@@ -1010,9 +1055,24 @@ export interface CredentialCheck {
   url: string | null;
   official: boolean | null;
   qr: 'qr_present' | 'qr_absent';
-  openBadge: { format: string; recipientMatch: boolean | null; revoked: boolean } | null;
+  openBadge: {
+    format: string; recipientMatch: boolean | null; revoked: boolean;
+    /** V9 */
+    badgeName?: string | null; issuerName?: string | null; issuerMatches?: boolean | null; provider?: string | null;
+  } | null;
   contradictions: string[];
   pipeline: string[];
+  /** V9: análisis forense del archivo. */
+  forensics?: ForensicReport | null;
+}
+
+/** V9: correo personal del estudiante (para reconocerlo como destinatario de sus insignias). */
+export interface VerifiedEmail {
+  id: string;
+  email: string;
+  verified: boolean;
+  verifiedAt: string | null;
+  codeExpiresAt: string | null;
 }
 
 export interface ManualReviewState {
@@ -1077,8 +1137,8 @@ export const LINK_CHECK_LABEL: Record<LinkCheckStatus, string> = {
 export interface ValidationVerdict {
   /** V4.1 A41-018: estado de validación (aparte del respaldo). */
   validationStatus?: { status: CredentialValidationStatus; label: string } | null;
-  /** V4.1 §6.3: verificador de proveedor reconocido y si está integrado (hoy, ninguno). */
-  providerSupport?: { provider: string; integrated: false; note: string } | null;
+  /** V4.1 §6.3 / V9: verificador de proveedor reconocido y si está integrado (Credly sí). */
+  providerSupport?: { provider: string; integrated: boolean; note: string } | null;
   resourceType: string;
   resourceId: string;
   status: ValidationStatus;

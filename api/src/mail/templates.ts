@@ -262,3 +262,47 @@ export function testMail(p: PruebaParams): RenderedMail {
 
   return { subject, text, html };
 }
+
+// ===========================================================================
+//  V9 · Comprobación de un correo personal
+// ===========================================================================
+
+export interface PropiedadCorreoParams {
+  firstName: string;
+  /** Código de seis dígitos. */
+  code: string;
+  minutes: number;
+}
+
+/**
+ * Código para comprobar que el estudiante controla un correo personal. Con
+ * ese correo recibió insignias (Credly, por ejemplo) y Afinia necesita saber
+ * que es suyo para reconocerlo como destinatario.
+ */
+export function emailOwnershipMail(p: PropiedadCorreoParams): RenderedMail {
+  const subject = 'Confirma tu correo en Afinia';
+  const text = [
+    `Hola ${p.firstName}:`,
+    '',
+    'Pediste agregar este correo a tu perfil de Afinia para que reconozca las insignias y',
+    'credenciales que recibiste con él.',
+    '',
+    `Tu código es: ${codigoLegible(p.code)}`,
+    '',
+    `Sirve durante ${p.minutes} minutos. Si no lo pediste tú, ignora este correo: sin el código,`,
+    'nadie puede agregar tu dirección.',
+    '',
+    '— Afinia · Universidad Privada del Valle',
+  ].join('\n');
+  const html = envolver({
+    preheader: `Tu código para confirmar este correo. Sirve ${p.minutes} minutos.`,
+    titulo: subject,
+    cuerpo: `
+<h1 style="margin:6px 0 12px 0;font-size:22px;line-height:1.3;color:${TINTA};">Hola ${esc(p.firstName)}, confirma tu correo</h1>
+<p style="margin:0 0 6px 0;">Pediste agregar este correo a tu perfil de <strong>Afinia</strong> para que reconozca las insignias y credenciales que recibiste con él.</p>
+${cajaCodigo(p.code)}
+<p style="margin:14px 0 0 0;font-size:13px;color:${GRIS};">El código sirve durante <strong>${p.minutes} minutos</strong>.</p>
+<p style="margin:18px 0 0 0;font-size:12px;color:${GRIS};">Si no lo pediste tú, ignora este correo: sin el código, nadie puede agregar tu dirección.</p>`,
+  });
+  return { subject, text, html };
+}

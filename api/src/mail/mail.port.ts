@@ -8,7 +8,12 @@
 export const MAIL_PORT = Symbol('MAIL_PORT');
 
 /** Qué tipo de correo es, para el registro y para la captura de desarrollo. */
-export type MailKind = 'account_activation' | 'password_reset' | 'test';
+/**
+ * `email_ownership` (V9): código para comprobar que un estudiante controla un
+ * correo personal (el que usó en Credly, Coursera…). Por definición va a una
+ * dirección no institucional: es la única excepción, además de `test`.
+ */
+export type MailKind = 'account_activation' | 'password_reset' | 'test' | 'email_ownership';
 
 export interface MailMessage {
   to: string;

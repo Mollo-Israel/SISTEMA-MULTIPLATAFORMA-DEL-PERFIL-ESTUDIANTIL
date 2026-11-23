@@ -17,6 +17,12 @@ import { LinkCheckerService } from './link-checker.service';
 import { ValidationService } from './validation.service';
 import { ValidationWorker } from './validation.worker';
 import { ValidationController } from './validation.controller';
+import { StudentVerifiedEmail } from '../entities/verified-email.entity';
+import { User } from '../entities/user.entity';
+import { ForensicsService } from './forensics/forensics.service';
+import { SharedCredentialService } from './fraud/shared-credential.service';
+import { VerifiedEmailsService } from './verified-emails.service';
+import { VerifiedEmailsController } from './verified-emails.controller';
 
 /**
  * Motor de Validación y Respaldo (especificacion §26).
@@ -39,11 +45,14 @@ import { ValidationController } from './validation.controller';
       ExternalCertificate,
       StudentProfile,
       ExternalOpportunityValidationReference,
+      // V9: correos personales comprobados.
+      StudentVerifiedEmail,
+      User,
     ]),
     StorageModule,
     TrajectoryModule,
   ],
-  controllers: [ValidationController],
+  controllers: [ValidationController, VerifiedEmailsController],
   providers: [
     {
       provide: OCR_PORT,
@@ -57,6 +66,10 @@ import { ValidationController } from './validation.controller';
     ProofVerifierService,
     ValidationService,
     ValidationWorker,
+    // V9: validación reforzada (forense, antifraude entre estudiantes, correos comprobados).
+    ForensicsService,
+    SharedCredentialService,
+    VerifiedEmailsService,
   ],
   exports: [ValidationService, ValidationWorker, DocumentExtractionService, LinkCheckerService],
 })

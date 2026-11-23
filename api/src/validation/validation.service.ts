@@ -32,7 +32,13 @@ import {
   decideCredentialBacking,
   phraseFound,
   deriveCredentialValidationStatus,
+  officialDomainsFor,
 } from './credential-check.rules';
+import { qrContradiceCodigo } from './credential-integrity.rules';
+import { ForensicsService, firmadoPorElEmisor } from './forensics/forensics.service';
+import { CRITICAL_FORENSIC_CODES, ForensicReport, agregarSenal } from './forensics/forensic-report';
+import { SharedCredentialResult, SharedCredentialService } from './fraud/shared-credential.service';
+import { StudentVerifiedEmail } from '../entities/verified-email.entity';
 import { MIN_USEFUL_TEXT } from './pdf-text';
 import { ValidationRecord } from '../entities/validation-record.entity';
 import { StoredFileRecord } from '../entities/stored-file.entity';
@@ -58,7 +64,12 @@ import { quitarBarrasFinales } from '../common/texto';
  *     CORROBORATED solo con señal verificable fuerte.
  * 3 — V4.1 A41-018: la fuente oficial que nombra a otro titular contradice (B30).
  */
-export const VALIDATOR_VERSION = 3;
+/**
+ * V9: análisis forense del archivo, antifraude entre estudiantes, coherencia
+ * QR/código, conector de Credly y correos personales comprobados. Subir la
+ * versión hace que `reprocess-outdated` vuelva a evaluar lo ya validado.
+ */
+export const VALIDATOR_VERSION = 4;
 
 /** Tope de reintentos antes de darlo por fallido (§76). */
 const MAX_ATTEMPTS = 3;
@@ -140,6 +151,9 @@ export class ValidationService {
     private readonly references: Repository<ExternalOpportunityValidationReference>,
     private readonly verifier: CredentialVerifierService,
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
+    private readonly forensics: ForensicsService,
+    private readonly shared: SharedCredentialService,
+    @InjectRepository(StudentVerifiedEmail) private readonly verifiedEmails: Repository<StudentVerifiedEmail>,
   ) {}
 
   // ====================================================================
@@ -457,6 +471,17 @@ export class ValidationService {
     const pipeline: string[] = [];
     const { extracted, texto, bakedBadge, identity, duplicateOfId } = await this.leerDocumento(ctx, pipeline);
 
+    // V9 · 1. El archivo en sí: con qué se hizo, si se retocó, si trae una
+    // firma digital verificable, si declara haber sido generado con IA.
+    const oficiales = officialDomainsFor(ctx.declaredIssuer, cred.opportunity?.expectedDomains ?? []);
+    const forense: ForensicReport | null = ctx.file
+      ? await this.forensics.analyze(ctx.file.buffer, ctx.file.mimeType, { issuer: ctx.declaredIssuer, officialDomains: oficiales })
+      : null;
+    if (forense) pipeline.push(`forensics:${forense.kind}`);
+    if (forense?.signature) pipeline.push(`pdf_signature:${firmadoPorElEmisor(forense) ? 'issuer' : 'present'}`);
+    // Firmado por el emisor, de punta a punta, y a nombre del estudiante.
+    const documentoFirmado = firmadoPorElEmisor(forense) && identity === IdentityMatchStatus.MATCH;
+
     const verificacion = await this.verifier.verify({
       declaredUrl: ctx.declaredUrl,
       qrPayloads: extracted?.qrPayloads ?? [],
@@ -468,6 +493,7 @@ export class ValidationService {
       emails: cred.emails,
       credentialId: cred.declaredCredentialId ?? extracted?.credentialId ?? null,
       course: cred.opportunity?.expectedCourseName ?? ctx.declaredTitle,
+      signedDocument: documentoFirmado,
     });
     const check = verificacion.check;
     pipeline.push(`qr:${check.qr}`);
@@ -481,8 +507,32 @@ export class ValidationService {
     if (check.status === CredentialCheckStatus.MISMATCH && check.official === true && check.page?.otherHolder) {
       contradicciones.push('official_holder_mismatch');
     }
-    const metadataCoherente = legible && identity !== IdentityMatchStatus.MISMATCH && this.metadataEncaja(extracted!, ctx);
-    const contextoOportunidad = !!cred.opportunity && legible && identity !== IdentityMatchStatus.MISMATCH
+    // V9 · 2. La insignia la emitió otra organización que la declarada.
+    if (check.openBadge?.issuerMatches === false) contradicciones.push('badge_issuer_mismatch');
+
+    // V9 · 3. Coherencia interna: el código impreso frente al del QR.
+    const qrVsTexto = qrContradiceCodigo([cred.declaredCredentialId, extracted?.credentialId], extracted?.qrPayloads ?? []);
+    if (qrVsTexto) contradicciones.push('qr_code_mismatch');
+
+    // V9 · 4. Lo comprobable del archivo que acusa: firma rota, edición tras
+    // la firma, marca explícita de IA.
+    const criticas = (forense?.signals ?? []).filter((x) => CRITICAL_FORENSIC_CODES.includes(x.code));
+    if (criticas.some((x) => x.code === 'ai_generated')) contradicciones.push('ai_generated_document');
+    if (criticas.some((x) => x.code === 'signature_broken' || x.code === 'modified_after_signature')) contradicciones.push('document_tampered');
+
+    // V9 · 5. La misma credencial en el perfil de otro estudiante.
+    const compartida = await this.compartida(ctx, cred, extracted, verificacion.check, forense);
+    if (compartida.sameFile || compartida.sameCredentialId || compartida.sameUrl) contradicciones.push('shared_with_other_student');
+    if (forense && compartida.nearDuplicate > 0) {
+      agregarSenal(forense.signals, { code: 'near_duplicate_other_student', severity: 'warning', detail: null });
+    }
+
+    // Una advertencia forense (editor de imágenes, ediciones sucesivas…) no
+    // acusa, pero el documento ya no respalda por sí solo: hace falta la
+    // fuente oficial o una persona.
+    const advertencia = (forense?.signals ?? []).some((x) => x.severity === 'warning');
+    const metadataCoherente = !advertencia && legible && identity !== IdentityMatchStatus.MISMATCH && this.metadataEncaja(extracted!, ctx);
+    const contextoOportunidad = !advertencia && !!cred.opportunity && legible && identity !== IdentityMatchStatus.MISMATCH
       && this.encajaConOportunidad(texto, cred.opportunity);
 
     let tier = decideCredentialBacking({
@@ -509,7 +559,15 @@ export class ValidationService {
       identityMatchStatus: identity,
       linkCheck: verificacion.link,
       duplicateOfId,
-      credentialCheck: { ...check, contradictions: contradicciones, pipeline, aiUsed: false },
+      credentialCheck: {
+        ...check,
+        contradictions: contradicciones,
+        pipeline,
+        aiUsed: false,
+        forensics: forense,
+        sharing: compartida,
+        qrCodeMismatch: qrVsTexto,
+      },
       errorCode: sinConclusion ? 'NO_CONCLUSIVE_SIGNAL' : null,
       errorDetail: sinConclusion
         ? 'No se pudo leer el documento ni comprobar una fuente oficial. La credencial se conserva.'
@@ -533,8 +591,43 @@ export class ValidationService {
       },
     });
 
+    if (contradicciones.includes('shared_with_other_student')) {
+      // Dirección lo encuentra en la auditoría; el estudiante solo ve que su
+      // credencial ya figura en otro perfil.
+      await this.audit.record({
+        actorUserId: null,
+        eventType: AuditEventType.EXTERNAL_CREDENTIAL_SHARED,
+        entityType: record.resourceType,
+        entityId: record.resourceId,
+        metadata: { ...compartida },
+      });
+    }
+
     if (tier === BackingTier.FLAGGED) await this.avisarCredencialSenalada(cred.ownerUserId, record.resourceId, guardado);
     return guardado;
+  }
+
+  /** V9: ¿la misma credencial (archivo, código, enlace o imagen) está en otro perfil? */
+  private async compartida(
+    ctx: ValidationContext,
+    cred: CredentialContext,
+    extracted: ValidationRecord['extractedData'],
+    check: { url: string | null; finalUrl: string | null },
+    forense: ForensicReport | null,
+  ): Promise<SharedCredentialResult> {
+    try {
+      return await this.shared.check({
+        studentProfileId: ctx.studentProfileId,
+        certificateId: cred.certificateId,
+        fileSha256: ctx.file?.sha256 ?? null,
+        credentialIds: [cred.declaredCredentialId, extracted?.credentialId],
+        urls: [ctx.declaredUrl, check.url, check.finalUrl, extracted?.verificationUrl, ...(extracted?.qrPayloads ?? [])],
+        perceptualHash: forense?.perceptualHash ?? null,
+      });
+    } catch (e) {
+      this.logger.warn(`No se pudo buscar la credencial en otros perfiles: ${(e as Error).message}`);
+      return { sameFile: 0, sameCredentialId: 0, sameUrl: 0, nearDuplicate: 0 };
+    }
   }
 
   /** Lee el archivo (si lo hay): datos, texto, insignia horneada, titular y posible duplicado. */
@@ -935,6 +1028,9 @@ export class ValidationService {
         ? await this.references.findOne({ where: { activityId: cert.activityId } })
         : null;
       const a = cert.activity;
+      // V9: además del institucional, los correos personales que el
+      // estudiante demostró controlar (Credly y Open Badges usan esos).
+      const personales = await this.verifiedEmails.find({ where: { userId: cert.studentProfile.userId, verifiedAt: Not(IsNull()) } });
       return {
         holderName: this.nombreDe(cert.studentProfile),
         declaredIssuer: cert.issuer,
@@ -945,7 +1041,11 @@ export class ValidationService {
         file: await this.loadFile(cert.storedFileId),
         credential: {
           ownerUserId: cert.studentProfile.userId,
-          emails: cert.studentProfile.user?.email ? [cert.studentProfile.user.email] : [],
+          emails: [
+            ...(cert.studentProfile.user?.email ? [cert.studentProfile.user.email] : []),
+            ...personales.map((e) => e.email),
+          ],
+          certificateId: cert.id,
           declaredCredentialId: cert.credentialId,
           opportunity: a
             ? {
@@ -1072,6 +1172,8 @@ interface LoadedFile {
 /** Lo propio de una credencial externa (V3 §18). */
 interface CredentialContext {
   ownerUserId: string;
+  /** V9: para buscar la misma credencial en otros perfiles. */
+  certificateId: string;
   /** Correos del estudiante, para comprobar el destinatario de una insignia. */
   emails: string[];
   declaredCredentialId: string | null;

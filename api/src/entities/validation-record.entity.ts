@@ -16,6 +16,8 @@ import {
   ValidationResourceType,
   ValidationStatus,
 } from '@perfil/shared';
+import type { ForensicReport } from '../validation/forensics/forensic-report';
+import type { SharedCredentialResult } from '../validation/fraud/shared-credential.service';
 
 /** Metadata que la extraccion documental intenta encontrar (§29). */
 export interface ExtractedDocumentData {
@@ -54,6 +56,12 @@ export interface CredentialCheckResult {
   openBadge: {
     format: string; recipientMatch: boolean | null; revoked: boolean;
     hosted: boolean; proofPresent: boolean; proofVerified: boolean;
+    /** V9: nombre de la insignia y de su emisor según la fuente oficial. */
+    badgeName?: string | null; issuerName?: string | null;
+    /** V9: el emisor de la insignia corresponde al declarado. */
+    issuerMatches?: boolean | null;
+    /** V9: se consultó un conector propio del proveedor (p. ej. «credly»). */
+    provider?: string | null;
   } | null;
   /** Contradicciones que llevaron a FLAGGED. */
   contradictions: string[];
@@ -62,6 +70,12 @@ export interface CredentialCheckResult {
   /** La IA es opcional y nunca decide el nivel (§18.6). */
   aiUsed: boolean;
   checkedAt: string;
+  /** V9: análisis forense del archivo. */
+  forensics?: ForensicReport | null;
+  /** V9: coincidencias con credenciales de otros estudiantes (solo conteos). */
+  sharing?: SharedCredentialResult | null;
+  /** V9: el QR lleva un código distinto del impreso. */
+  qrCodeMismatch?: { impreso: string; enQr: string } | null;
 }
 
 /** Lo que se pudo averiguar del enlace de verificacion (§31). */

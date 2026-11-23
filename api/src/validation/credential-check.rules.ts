@@ -293,6 +293,12 @@ export interface OpenBadgeResult {
   proofVerified: boolean;
   badgeName: string | null;
   issuerName: string | null;
+  /** V9: dirección de la clase de insignia cuando viene como enlace (Credly). */
+  badgeUrl?: string | null;
+  /** V9: el emisor de la insignia corresponde al declarado. `null` si no se pudo juzgar. */
+  issuerMatches?: boolean | null;
+  /** V9: conector propio del proveedor que se usó, si alguno. */
+  provider?: string | null;
 }
 
 const ctxIncluye = (ctx: unknown, needle: string) =>
@@ -357,6 +363,7 @@ export function parseOpenBadge(
       proofVerified: false,
       badgeName: badge?.name ?? null,
       issuerName: typeof badge?.issuer === 'object' ? badge.issuer?.name ?? null : null,
+      badgeUrl: typeof o.badge === 'string' ? o.badge : null,
     };
   }
 
@@ -452,6 +459,12 @@ export interface CredentialCheckInput {
   official: boolean | null;
   page: PageComparison | null;
   openBadge: OpenBadgeResult | null;
+  /**
+   * V9: el PDF trae una firma digital del emisor que se comprobó de punta a
+   * punta (integridad, raíz pública, firmante = emisor, nada agregado
+   * después) y el documento está a nombre del estudiante.
+   */
+  signedDocument?: boolean;
 }
 
 /**
@@ -487,6 +500,11 @@ function decisionPorEnlace(i: CredentialCheckInput): CredentialCheckStatus | nul
 
 export function decideCredentialCheck(i: CredentialCheckInput): CredentialCheckStatus {
   const previa = decisionPorInsignia(i) ?? decisionPorEnlace(i);
+  // Una contradicción de la fuente oficial gana siempre.
+  if (previa === CredentialCheckStatus.MISMATCH) return previa;
+  // V9: la firma digital del emisor es, por sí sola, la fuente oficial: no
+  // depende de que su página responda.
+  if (i.signedDocument) return CredentialCheckStatus.VERIFIED_MATCH;
   if (previa) return previa;
 
   // Disponible. Solo un dominio oficial puede corroborar, y solo si la
@@ -509,7 +527,17 @@ export type CredentialContradiction =
   | 'credential_id_pattern'
   | 'course_mismatch'
   | 'issuer_mismatch'
-  | 'verification_mismatch';
+  | 'verification_mismatch'
+  /** V9: la insignia la emitió otra organización que la declarada. */
+  | 'badge_issuer_mismatch'
+  /** V9: el QR lleva un código distinto del impreso (edición típica). */
+  | 'qr_code_mismatch'
+  /** V9: el archivo declara haber sido generado con IA. */
+  | 'ai_generated_document'
+  /** V9: firma digital rota o contenido agregado después de firmar. */
+  | 'document_tampered'
+  /** V9: la misma credencial ya figura en el perfil de otro estudiante. */
+  | 'shared_with_other_student';
 
 export interface BackingInput {
   identity: IdentityMatchStatus;
@@ -600,39 +628,60 @@ export function deriveCredentialValidationStatus(i: ValidationStatusInput): Cred
 }
 
 /**
- * V4.1 A41-018 (§6.3): verificadores de proveedor. Ninguno está integrado:
- * su acceso real (API, licencia, CAPTCHA, titular visible) no se pudo
- * comprobar con un caso legítimo. Se dice en lugar de prometerlo; mientras
- * tanto se usa el verificador genérico, que nunca corrobora sin una fuente
- * individual auténtica.
+ * Verificadores de proveedor (V4.1 §6.3, actualizado en V9).
+ *
+ * V9 probó cada portal con una consulta real (23/11/2026):
+ *  - Credly responde su aserción Open Badges 2.0 en JSON por una API pública
+ *    (`api.credly.com/v1/obi/v2/badge_assertions/{id}`): **integrado**. El
+ *    destinatario va como hash con sal de su correo; se reconoce con los
+ *    correos que el estudiante comprobó.
+ *  - Udemy (Cloudflare «Just a moment…»), Huawei (Akamai «Access Denied»),
+ *    Accredible (API con token) y Cisco NetAcad (página que exige JavaScript)
+ *    bloquean las consultas automáticas. No se intenta burlar esos bloqueos:
+ *    quedan sin conclusión y van a revisión humana, nunca a «falso».
  */
-export const PROVIDER_ADAPTERS: Record<string, { name: string; domains: readonly string[]; note: string }> = {
+export const PROVIDER_ADAPTERS: Record<string, { name: string; domains: readonly string[]; integrated: boolean; note: string }> = {
   credly: {
     name: 'Credly / IBM',
     domains: ['credly.com', 'youracclaim.com'],
-    note: 'Sin verificador integrado: la metadata pública de una insignia no siempre expone al titular y la API empresarial exige credenciales.',
+    integrated: true,
+    note: 'Verificador integrado: se consulta la aserción oficial Open Badges de Credly. Para reconocerte como destinatario, comprueba en Afinia el correo con el que recibiste la insignia.',
   },
   cisco: {
     name: 'Cisco Networking Academy',
     domains: ['netacad.com', 'cisco.com'],
-    note: 'Sin verificador integrado: no se comprobó una respuesta individual estable y accesible.',
+    integrated: false,
+    note: 'Las insignias de Cisco se emiten por Credly: registra el enlace de Credly y se verifica automáticamente. Los certificados PDF de NetAcad no exponen una consulta pública automatizable.',
   },
   huawei: {
     name: 'Huawei',
     domains: ['huawei.com'],
-    note: 'Sin verificador integrado: el canal oficial requiere interacción humana; no se automatiza.',
+    integrated: false,
+    note: 'El portal de Huawei bloquea las consultas automáticas: la credencial queda para revisión de Dirección con una prueba externa.',
+  },
+  udemy: {
+    name: 'Udemy',
+    domains: ['udemy.com', 'ude.my'],
+    integrated: false,
+    note: 'Udemy protege sus certificados con un desafío anti-bots: queda para revisión de Dirección.',
+  },
+  accredible: {
+    name: 'Accredible',
+    domains: ['accredible.com', 'credential.net'],
+    integrated: false,
+    note: 'Accredible exige una clave de API del emisor: queda para revisión de Dirección.',
   },
 };
 
 /** Proveedor reconocido por emisor o dominio de la URL, con su estado de integración. */
-export function providerSupportFor(issuer: string | null, url: string | null): { provider: string; integrated: false; note: string } | null {
+export function providerSupportFor(issuer: string | null, url: string | null): { provider: string; integrated: boolean; note: string } | null {
   const palabras = new Set(normalizar(issuer ?? '').split(/[^a-z0-9]+/).filter(Boolean));
   let host: string | null = null;
   try { host = url ? new URL(url).hostname : null; } catch { host = null; }
   for (const [clave, p] of Object.entries(PROVIDER_ADAPTERS)) {
     const porEmisor = palabras.has(clave) || (clave === 'credly' && palabras.has('ibm')) || (clave === 'cisco' && palabras.has('netacad'));
     const porHost = !!host && p.domains.some((d) => hostMatches(host!, d));
-    if (porEmisor || porHost) return { provider: p.name, integrated: false, note: p.note };
+    if (porEmisor || porHost) return { provider: p.name, integrated: p.integrated, note: p.note };
   }
   return null;
 }

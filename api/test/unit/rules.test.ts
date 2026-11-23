@@ -679,8 +679,10 @@ describe('V4.1 A41-018 estado de validación (§6.2, A.8)', () => {
 });
 
 describe('V4.1 §6.3 verificadores de proveedor: sin promesas', () => {
-  it('Credly, Cisco y Huawei se reconocen y se declaran no integrados', () => {
-    assert.equal(providerSupportFor('IBM', 'https://www.credly.com/badges/abc')?.integrated, false);
+  // V9: Credly pasó a integrado (API pública Open Badges, comprobada el
+  // 23/11/2026). Cisco y Huawei siguen sin consulta automatizable.
+  it('Credly integrado; Cisco y Huawei reconocidos y declarados no integrados', () => {
+    assert.equal(providerSupportFor('IBM', 'https://www.credly.com/badges/abc')?.integrated, true);
     assert.equal(providerSupportFor('Cisco Networking Academy', null)?.provider, 'Cisco Networking Academy');
     assert.equal(providerSupportFor('Huawei ICT Academy', null)?.integrated, false);
     assert.equal(providerSupportFor('Academia Lumen', 'https://evilcredly.com/x'), null);

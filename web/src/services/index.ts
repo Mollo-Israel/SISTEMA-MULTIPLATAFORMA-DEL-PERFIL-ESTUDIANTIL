@@ -1,5 +1,5 @@
 import { api, SESSION_REQUEST } from '../api/client';
-import type { AcademicArea, InstitutionalPortfolio, ProjectFeedbackItem, ProjectMemberItem, ActivityCategoryItem, ActivityPerson, LibraryPage, FreeInterest, EligibleParticipant, Evidence, ExternalCertificate, CredentialOpportunity, ValidationReference, ManualReviewItem, ProjectReadiness, PublicProjectView, GamificationCriterion, GamificationProposal, InternalConstancy, StoredFile, StudentDirectory, Activity, AffinityResult, AuthResult, ImportApplyResult, ImportBatchDetail, ImportBatchSummary, ImportCounts, ImportKind, ImportPreview, ImportRowStatus, OnboardingRun, ProjectChecks, ProjectEventItem, ProjectMemberDetailed, ValidationVerdict, Questionnaire, AreaTagAnalysis, SkillClassification, SkillInterest, SkillInterestKind, UserStatus, VisibilitySettings, ProfileSummary, Project, PublicUser, Participant, Skill, StudentProfile, InvitationView, MailRequestResult, MailStatus, TokenCheck, OnboardingState, OnboardingStepKey, Wallet, ScopePoints } from './types';
+import type { AcademicArea, InstitutionalPortfolio, ProjectFeedbackItem, ProjectMemberItem, ActivityCategoryItem, ActivityPerson, LibraryPage, FreeInterest, EligibleParticipant, Evidence, ExternalCertificate, CredentialOpportunity, ValidationReference, ManualReviewItem, ProjectReadiness, PublicProjectView, GamificationCriterion, GamificationProposal, InternalConstancy, StoredFile, StudentDirectory, Activity, AffinityResult, AuthResult, ImportApplyResult, ImportBatchDetail, ImportBatchSummary, ImportCounts, ImportKind, ImportPreview, ImportRowStatus, OnboardingRun, ProjectChecks, ProjectEventItem, ProjectMemberDetailed, ValidationVerdict, VerifiedEmail, Questionnaire, AreaTagAnalysis, SkillClassification, SkillInterest, SkillInterestKind, UserStatus, VisibilitySettings, ProfileSummary, Project, PublicUser, Participant, Skill, StudentProfile, InvitationView, MailRequestResult, MailStatus, TokenCheck, OnboardingState, OnboardingStepKey, Wallet, ScopePoints } from './types';
 
 export const authService = {
   login: (email: string, password: string) =>
@@ -984,6 +984,15 @@ export const validationService = {
       .get<ValidationVerdict>(`/validation/${resourceType}/${resourceId}`)
       .then((r) => r.data),
   queue: () => api.get('/validation/queue').then((r) => r.data),
+};
+
+/** V9: correos personales comprobados (Credly, Coursera… emiten a esos correos). */
+export const verifiedEmailService = {
+  list: () => api.get<VerifiedEmail[]>('/verified-emails').then((r) => r.data),
+  add: (email: string) => api.post<VerifiedEmail>('/verified-emails', { email }).then((r) => r.data),
+  resend: (id: string) => api.post<VerifiedEmail>(`/verified-emails/${id}/resend`).then((r) => r.data),
+  confirm: (id: string, code: string) => api.post<VerifiedEmail>(`/verified-emails/${id}/confirm`, { code }).then((r) => r.data),
+  remove: (id: string) => api.delete(`/verified-emails/${id}`),
 };
 
 /** Proyectos: contribución, respaldo y bitácora (§33 a §41). */

@@ -1497,3 +1497,15 @@ output.ai-assist-card { display: block; }
   .vc-tarjeta { flex-direction: column; }
   .vc-resultado { flex-direction: column; }
 }
+
+/* ------------------------------------------------------------------ */
+/* V9 · Correos personales comprobados                                 */
+/* ------------------------------------------------------------------ */
+
+.correos-comprobados { list-style: none; margin: 0.6rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.correos-comprobados li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border: 1px solid var(--gray-200); border-radius: var(--radius); }
+.correos-comprobados .correo { font-weight: 600; overflow-wrap: anywhere; flex: 1 1 12rem; }
+.correo-codigo { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.correo-codigo input { width: 6.5rem; letter-spacing: 0.18em; text-align: center; padding: 0.35rem 0.5rem; border: 1px solid var(--gray-300); border-radius: var(--radius); font: inherit; }
+.correo-nuevo { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; }
+.correo-nuevo input { flex: 1 1 14rem; min-width: 0; padding: 0.5rem 0.65rem; border: 1px solid var(--gray-300); border-radius: var(--radius); font: inherit; }

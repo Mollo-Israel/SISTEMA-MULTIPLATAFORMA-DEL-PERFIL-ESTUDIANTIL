@@ -13,7 +13,9 @@ import {
   isOfficialUrl,
   officialDomainsFor,
   parseOpenBadge,
+  phraseFound,
 } from './credential-check.rules';
+import { credlyAssertionMatches, credlyAssertionUrl, credlyBadgeId } from './credential-integrity.rules';
 
 export interface VerifyInput {
   /** URL declarada por el estudiante. */
@@ -31,6 +33,8 @@ export interface VerifyInput {
   emails: string[];
   credentialId: string | null;
   course: string | null;
+  /** V9: el PDF está firmado por el emisor (comprobado) y a nombre del estudiante. */
+  signedDocument?: boolean;
 }
 
 export interface VerifyOutput {
@@ -87,6 +91,10 @@ function resumenDeInsignia(ob: OpenBadgeResult | null) {
     hosted: ob.hosted,
     proofPresent: ob.proofPresent,
     proofVerified: ob.proofVerified,
+    badgeName: ob.badgeName,
+    issuerName: ob.issuerName,
+    issuerMatches: ob.issuerMatches ?? null,
+    provider: ob.provider ?? null,
   };
 }
 
@@ -137,6 +145,44 @@ export class CredentialVerifierService {
     }
   }
 
+  /**
+   * V9: Credly guarda la clase de la insignia y su emisor en direcciones
+   * aparte. Se consultan (con la misma protección SSRF) para saber **quién**
+   * la emitió: en Credly emite cualquier organización, así que una insignia
+   * «Cisco» de un emisor que no es Cisco no corrobora nada.
+   */
+  private async completarCredly(ob: OpenBadgeResult, i: VerifyInput): Promise<OpenBadgeResult> {
+    let badgeName = ob.badgeName;
+    let issuerName = ob.issuerName;
+    let issuerUrl: string | null = null;
+    try {
+      const clase = ob.badgeUrl ? await this.json(ob.badgeUrl) : null;
+      if (clase) {
+        badgeName = typeof clase.name === 'string' ? clase.name.slice(0, 200) : badgeName;
+        const emisor = typeof clase.issuer === 'string' ? await this.json(clase.issuer) : clase.issuer;
+        if (emisor && typeof emisor === 'object') {
+          issuerName = typeof emisor.name === 'string' ? emisor.name.slice(0, 200) : issuerName;
+          issuerUrl = typeof emisor.url === 'string' ? emisor.url : null;
+        }
+      }
+    } catch (e) {
+      this.logger.debug(`No se pudo completar la insignia de Credly: ${(e as Error).message}`);
+    }
+    return { ...ob, badgeName, issuerName, issuerMatches: emisorCoincide(issuerName, issuerUrl, i) };
+  }
+
+  /** JSON de una dirección pública, con la protección SSRF del verificador de enlaces. */
+  private async json(url: string): Promise<Record<string, any> | null> {
+    const r = await this.links.fetchPage(url);
+    if (r.result.status !== LinkCheckStatus.AVAILABLE || !r.body) return null;
+    try {
+      const v = JSON.parse(r.body);
+      return v && typeof v === 'object' ? v : null;
+    } catch {
+      return null;
+    }
+  }
+
   async verify(i: VerifyInput): Promise<VerifyOutput> {
     const candidatos = candidatosDeVerificacion(i);
 
@@ -149,13 +195,19 @@ export class CredentialVerifierService {
     // V8: el documento original de la insignia, para comprobar su firma.
     let crudo: unknown = i.bakedBadge?.json ?? null;
 
-    const elegido = candidatos[0] ?? null;
+    // V9: si alguno de los candidatos es una insignia de Credly, se usa ese:
+    // es el único proveedor con una fuente oficial consultable en JSON.
+    const credly = candidatos.find((c) => credlyBadgeId(c.url));
+    const elegido = credly ?? candidatos[0] ?? null;
+    const credlyId = credly ? credlyBadgeId(credly.url) : null;
     let link: LinkCheckResult | null = null;
     let page: PageComparison | null = null;
     let esOficial: boolean | null = null;
 
     if (elegido) {
-      const consultado = await this.links.fetchPage(elegido.url);
+      // Credly: en lugar de la página (que se arma con JavaScript), su
+      // aserción Open Badges oficial.
+      const consultado = await this.links.fetchPage(credlyAssertionUrl(elegido.url) ?? elegido.url);
       link = consultado.result;
       esOficial = link.status === LinkCheckStatus.BLOCKED
         ? false
@@ -179,8 +231,15 @@ export class CredentialVerifierService {
       }
     }
     openBadge = await this.conFirma(openBadge, crudo, { emails: i.emails, holderName: i.holderName });
+    if (openBadge && credlyId && credlyAssertionMatches((crudo as { id?: unknown } | null)?.id, credlyId)) {
+      // La aserción vino de la API oficial de Credly y es la de esa insignia:
+      // es la verificación «hosted» del estándar.
+      openBadge = await this.completarCredly({ ...openBadge, hosted: true, provider: 'credly' }, i);
+    }
 
-    const status: CredentialCheckStatus = decideCredentialCheck({ link, official: esOficial, page, openBadge });
+    const status: CredentialCheckStatus = decideCredentialCheck({
+      link, official: esOficial, page, openBadge, signedDocument: i.signedDocument === true,
+    });
     return {
       link,
       check: {
@@ -197,4 +256,28 @@ export class CredentialVerifierService {
       },
     };
   }
+}
+
+/**
+ * V9: ¿el emisor de la insignia es el declarado? Por nombre (alguna palabra
+ * distintiva del emisor declarado) o por el dominio de su sitio frente a los
+ * dominios oficiales conocidos de ese emisor. `null` si no hay con qué juzgar.
+ */
+export function emisorCoincide(issuerName: string | null, issuerUrl: string | null, i: Pick<VerifyInput, 'issuer' | 'expectedDomains'>): boolean | null {
+  if (!issuerName && !issuerUrl) return null;
+  if (!i.issuer && i.expectedDomains.length === 0) return null;
+  if (issuerName && i.issuer && (phraseFound(issuerName, i.issuer, 0.5) || phraseFound(i.issuer, issuerName, 0.5))) return true;
+  // Solo los dominios del emisor (sin las plataformas de insignias: que la
+  // insignia viva en Credly no dice nada de quién la emitió).
+  const propios = (officialDomainsFor(i.issuer, i.expectedDomains) ?? [])
+    .filter((d) => !['credly.com', 'youracclaim.com', 'accredible.com', 'credential.net', 'badgr.com', 'badgr.io', 'openbadgefactory.com', 'parchment.com'].includes(d));
+  if (issuerUrl && propios.length) {
+    try {
+      const host = new URL(issuerUrl).hostname.toLowerCase();
+      if (propios.some((d) => host === d || host.endsWith(`.${d}`))) return true;
+    } catch {
+      // sitio ilegible: no suma
+    }
+  }
+  return false;
 }

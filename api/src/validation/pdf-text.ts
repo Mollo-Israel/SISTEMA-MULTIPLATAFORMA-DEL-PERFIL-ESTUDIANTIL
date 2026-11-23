@@ -65,7 +65,7 @@ export function esPdf(buffer: Buffer): boolean {
  * con recorrer el archivo de principio a fin, y así un PDF con la tabla rota
  * —que los hay— sigue dando texto.
  */
-function* recorrerStreams(buffer: Buffer): Generator<{ datos: Buffer; filtros: string[] }> {
+export function* recorrerStreams(buffer: Buffer): Generator<{ datos: Buffer; filtros: string[] }> {
   const marca = Buffer.from('stream', 'latin1');
   let desde = 0;
 
@@ -97,7 +97,7 @@ function leerFiltros(diccionario: string): string[] {
   return [...m[1].matchAll(/\/([A-Za-z0-9]+)/g)].map((x) => x[1]);
 }
 
-function decodificar(datos: Buffer, filtros: string[]): string | null {
+export function decodificar(datos: Buffer, filtros: string[]): string | null {
   // Un flujo de imagen o de fuente no tiene texto que extraer y descomprimirlo
   // solo gasta tiempo.
   if (filtros.some((f) => f === 'DCTDecode' || f === 'JPXDecode' || f === 'CCITTFaxDecode')) {
