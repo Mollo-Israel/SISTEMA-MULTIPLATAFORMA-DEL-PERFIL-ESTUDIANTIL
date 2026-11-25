@@ -15,7 +15,7 @@
 
 | Carpeta | Qué contiene |
 |---|---|
-| [`contratos/`](contratos/) | Especificaciones y contratos de cada versión; el vigente es el V6 |
+| [`contratos/`](contratos/) | Especificaciones y contratos de cada versión; el vigente es el V7.1 (`AFINIA_CONTRATO_FINAL_V7_1_CLAUDE_CODE_2026-11-25.md`) |
 | [`auditorias/`](auditorias/) | Auditorías GAP iniciales de cada versión |
 | [`planes/`](planes/) | Planes de ejecución por batches |
 | [`qa/`](qa/) | Resultados de QA y seguridad; la última regresión está en `QA_V6_REGRESION.md` |
