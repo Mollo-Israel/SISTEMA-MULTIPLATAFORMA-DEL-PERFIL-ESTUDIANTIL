@@ -7,8 +7,9 @@
  *   node scripts/pruebas/entorno.mjs web   # compila contra :3020 y sirve en :5180
  *   API_URL=http://localhost:3020/api WEB_URL=http://localhost:5180 node scripts/e2e-v7-web.mjs [batch1 …]
  */
+import { execSync } from 'node:child_process';
 import { chromium } from 'playwright-core';
-import { codigoUniversitario, loginAdmin, provisionAndActivate, req, ADMIN_CREDENTIALS, PWD } from './lib/fixtures.mjs';
+import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req, ADMIN_CREDENTIALS, PWD } from './lib/fixtures.mjs';
 
 const WEB = process.env.WEB_URL ?? 'http://localhost:5180';
 const TS = Date.now();
@@ -27,6 +28,12 @@ function check(condition, label, detail = '') {
 }
 const objective = (t) => console.log(`\n${C.head}${C.bold}${t}${C.r}`);
 const correoStaff = (k) => `v71w.${k}.${TS}@univalle.edu`;
+const correoEst = (k) => `v71w.${k}.${TS}@est.univalle.edu`;
+/** Base de la API en prueba; por omisión la aislada. */
+const psql = (sql) => execSync(
+  `docker exec perfil_postgres psql -U ${process.env.POSTGRES_USER ?? 'perfil_user'} -d ${process.env.POSTGRES_DB ?? 'afinia_test'} -tAc "${sql.replace(/"/g, '\\"')}"`,
+  { encoding: 'utf8' },
+).trim();
 const json = (x) => JSON.stringify(x ?? null).slice(0, 220);
 const en = (h) => new Date(Date.now() + h * 3_600_000).toISOString();
 
@@ -182,7 +189,74 @@ async function batch1(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch1 };
+// ===========================================================================
+//  BATCH V7-2 — Aprobar publica y abre; Admin en solo lectura; asistencia
+// ===========================================================================
+async function batch2(ctx, browser) {
+  objective('BATCH V7-2 · Aprobar publica y abre; Admin consulta en solo lectura; corregir con la lista abierta');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Dora', lastName: `Webaprueba${L}`, email: correoStaff('b2dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Carlos', lastName: `Webpropone${L}`, email: correoStaff('b2doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const base = { type: 'academica', categoryId: cat?.id, activityDate: en(72), endAt: en(74), modality: 'presencial', location: 'Aula 210', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8] };
+  const propuesta = async (titulo) => {
+    const p = await req('POST', '/activities', { token: docente.token, body: { ...base, title: `${titulo} ${L}`, status: 'draft' } });
+    await req('POST', `/activities/${p.data?.id}/submit`, { token: docente.token, body: {} });
+    return p.data;
+  };
+  const aprobarla = await propuesta('Webtaller aprobar');
+  const consultarla = await propuesta('Webtaller consulta');
+
+  // A03: Dirección aprueba desde su bandeja y queda publicada y abierta.
+  const { ctx: cd, page: pd, errores: ed } = await entrar(browser, director.email);
+  await pd.goto(`${WEB}/director/approvals`);
+  const tarjeta = pd.locator('.card', { hasText: aprobarla.title });
+  await tarjeta.getByRole('button', { name: 'Decidir' }).click({ timeout: 30000 });
+  await tarjeta.getByRole('button', { name: 'Aprobar', exact: true }).click();
+  const aviso = await pd.getByText('Actividad aprobada y publicada.').first().waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+  const tras = (await req('GET', `/activities/${aprobarla.id}`, { token: admin })).data;
+  check(aviso && tras?.status === 'open' && tras?.reviewStatus === 'approved',
+    'W7.2.1 A03 Dirección aprueba en su bandeja: el aviso dice «aprobada y publicada» y queda con inscripciones abiertas', json({ aviso, st: tras?.status, r: tras?.reviewStatus }));
+  check(ed.length === 0, 'W7.2.2 Sin errores de JavaScript en la bandeja de Dirección', ed.join(' | '));
+  await cd.close();
+
+  // A01: Administración la ve en «En revisión», en solo lectura, sin acciones.
+  const { ctx: ca, page: pa, errores: ea } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  await pa.goto(`${WEB}/admin/activities?review=pending`);
+  await pa.getByLabel('Revisión', { exact: true }).waitFor({ timeout: 30000 }).catch(() => {});
+  await pa.locator('.search-input input, input[type=search]').first().fill(consultarla.title);
+  await pa.waitForTimeout(400);
+  const fila = pa.locator('tbody tr', { hasText: consultarla.title });
+  const marca = await fila.locator('[data-testid="solo-lectura"]').count();
+  const editar = await fila.getByRole('button', { name: `Editar ${consultarla.title}` }).count();
+  const verDetalles = await fila.getByRole('button', { name: `Ver detalles de ${consultarla.title}` }).count();
+  const selectorEstado = await fila.locator('select').count();
+  check(marca === 1 && editar === 0 && verDetalles === 1 && selectorEstado === 0,
+    'W7.2.3 A01 Administración ve la propuesta en «En revisión»: marcada solo lectura, sin editar ni cambiar estado; solo «Ver detalles»', json({ marca, editar, verDetalles, selectorEstado }));
+  check(ea.length === 0, 'W7.2.4 Sin errores de JavaScript en la gestión de Administración', ea.join(' | '));
+  await ca.close();
+
+  // A10: finalizada con la lista abierta, el responsable ve «Marcar ausente».
+  const asis = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Webasistencia ${L}`, responsibleUserIds: [docente.userId], status: 'open' } });
+  const est = await provisionStudent(admin, { firstName: 'Ivo', lastName: `Webasiste${L}`, email: correoEst('b2est'), semester: 1 });
+  await req('POST', `/activities/${asis.data?.id}/register`, { token: est.token, body: {} });
+  await req('PATCH', `/activities/${asis.data?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
+  psql(`update activities set status = 'finished' where id = '${asis.data?.id}'`);
+  const { ctx: ct, page: pt, errores: et } = await entrar(browser, docente.email);
+  await pt.goto(`${WEB}/teacher/my-activities?actividad=${asis.data?.id}`);
+  const filaEst = pt.locator('tr, li, .participant-row, div', { hasText: `Webasiste${L}` }).last();
+  await filaEst.waitFor({ timeout: 30000 }).catch(() => {});
+  const marcarAusente = await pt.getByRole('button', { name: 'Marcar ausente' }).count();
+  const consolidada = await pt.getByText('Consolidada: la corrige Dirección').count();
+  check(marcarAusente >= 1 && consolidada === 0,
+    'W7.2.5 A10 Finalizada con la lista abierta: el responsable todavía ve «Marcar ausente» (no «Consolidada»)', json({ marcarAusente, consolidada }));
+  check(et.length === 0, 'W7.2.6 Sin errores de JavaScript en la asistencia del docente', et.join(' | '));
+  await ct.close();
+}
+
+const BATCHES = { batch1, batch2 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

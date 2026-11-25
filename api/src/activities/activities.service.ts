@@ -151,7 +151,17 @@ export interface ActivityWithCounts extends Activity {
    * nada y consultarlo seria trabajo tirado.
    */
   myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean; decisionReason?: string | null } | null;
+  /**
+   * V7.1 §4.1: propuesta de otra persona que decide Dirección. Administración
+   * la ve en su gestión, pero no la edita, ni la publica, ni la cancela.
+   */
+  soloLectura?: boolean;
 }
+
+/** V7.1 §4.1: estados de revisión en los que una propuesta ajena es solo lectura para Administración. */
+const REVISION_DE_DIRECCION: readonly (ActivityReviewStatus | null)[] = [
+  ActivityReviewStatus.PENDING, ActivityReviewStatus.OBSERVED, ActivityReviewStatus.REJECTED,
+];
 
 /**
  * Lo que un estudiante recibe de una actividad (V2 §80, minimización).
@@ -1204,7 +1214,7 @@ export class ActivitiesService {
       throw new ConflictException('Ya está en revisión.');
     }
     if (activity.reviewStatus === ActivityReviewStatus.APPROVED) {
-      throw new ConflictException('Ya está aprobada: puedes publicarla.');
+      throw new ConflictException('Ya está aprobada y publicada.');
     }
     if (activity.reviewStatus === ActivityReviewStatus.REJECTED) {
       throw new ConflictException('Fue rechazada. No se reutiliza: crea una actividad nueva.');
@@ -1301,7 +1311,17 @@ export class ActivitiesService {
     return activity;
   }
 
-  /** Dirección aprueba, observa o rechaza (§27.3). Queda en la historia (§88.12). */
+  /**
+   * Dirección aprueba, observa o rechaza (§27.3). Queda en la historia (§88.12).
+   *
+   * V7.1 D02: aprobar es publicar y abrir inscripciones, en la misma
+   * operación. Antes se comprueba lo que exige publicar: datos completos,
+   * inicio futuro y responsables que cubran la audiencia. Si algo falla, nada
+   * cambia: la propuesta sigue pendiente y el motivo dice qué corregir. Una
+   * actividad que ya empezó o terminó no se abre; se observa para corregir la
+   * fecha o se rechaza. La fila se bloquea mientras se decide, así que dos
+   * decisiones a la vez no se pisan ni avisan dos veces.
+   */
   async review(
     user: AuthenticatedUser,
     id: string,
@@ -1321,35 +1341,57 @@ export class ActivitiesService {
         fields: { comment: ['Escribe la observación para quien la propuso.'] },
       });
     }
+    if (decision === 'approve') await this.assertAprobablePublicable(activity);
     const destino = {
       approve: ActivityReviewStatus.APPROVED,
       observe: ActivityReviewStatus.OBSERVED,
       reject: ActivityReviewStatus.REJECTED,
     }[decision];
-    activity.reviewStatus = destino;
-    activity.reviewedAt = new Date();
-    activity.reviewedById = user.userId;
-    activity.reviewComment = comment?.trim() || null;
-    await this.activities.save(activity);
+    const abre = decision === 'approve' && activity.status === ActivityStatus.DRAFT;
     const accion = ({ approve: 'approved', observe: 'observed', reject: 'rejected' } as const)[decision];
-    await this.reviews.save(this.reviews.create({
-      activityId: activity.id, actorUserId: user.userId, action: accion, comment: comment?.trim() || null,
-    }));
-    await this.audit.record({
-      actorUserId: user.userId,
-      eventType: {
-        approve: AuditEventType.ACTIVITY_APPROVED,
-        observe: AuditEventType.ACTIVITY_OBSERVED,
-        reject: AuditEventType.ACTIVITY_REJECTED,
-      }[decision],
-      entityType: 'activity',
-      entityId: activity.id,
-      metadata: { comentario: comment?.trim() ?? null },
+
+    const revision = await this.activities.manager.transaction(async (m) => {
+      const [fila] = await m.query('SELECT "review_status" FROM "activities" WHERE "id" = $1 FOR UPDATE', [id]);
+      if (fila?.review_status !== ActivityReviewStatus.PENDING) {
+        throw new ConflictException('Solo se decide sobre una actividad enviada a revisión.');
+      }
+      await m.getRepository(Activity).update({ id }, {
+        reviewStatus: destino,
+        reviewedAt: new Date(),
+        reviewedById: user.userId,
+        reviewComment: comment?.trim() || null,
+        ...(abre ? { status: ActivityStatus.OPEN } : {}),
+      });
+      const r = await m.getRepository(ActivityReview).save(m.getRepository(ActivityReview).create({
+        activityId: id, actorUserId: user.userId, action: accion, comment: comment?.trim() || null,
+      }));
+      await this.audit.record({
+        actorUserId: user.userId,
+        eventType: {
+          approve: AuditEventType.ACTIVITY_APPROVED,
+          observe: AuditEventType.ACTIVITY_OBSERVED,
+          reject: AuditEventType.ACTIVITY_REJECTED,
+        }[decision],
+        entityType: 'activity',
+        entityId: id,
+        metadata: { comentario: comment?.trim() ?? null },
+      }, m);
+      if (abre) {
+        await this.audit.record({
+          actorUserId: user.userId,
+          eventType: AuditEventType.ACTIVITY_STATUS_CHANGED,
+          entityType: 'activity',
+          entityId: id,
+          metadata: { de: ActivityStatus.DRAFT, a: ActivityStatus.OPEN, automatico: 'aprobacion' },
+        }, m);
+      }
+      return r;
     });
-    // V3.2 §47: quien la propuso se entera de la decisión.
+
+    // V3.2 §47: quien la propuso se entera de la decisión, una sola vez.
     const avisos = {
-      // V3.2 §47: el nombre de la especificación.
-      approve: ['ACTIVITY_APPROVED', 'Actividad aprobada', `Dirección aprobó «${activity.title}». Ya puedes publicarla.`],
+      approve: ['ACTIVITY_APPROVED', 'Actividad aprobada y publicada',
+        `Dirección aprobó «${activity.title}»: ya está publicada y con las inscripciones abiertas.`],
       observe: ['ACTIVITY_REVIEW_OBSERVED', 'Actividad observada', `Dirección observó «${activity.title}»: corrígela y vuelve a enviarla.`],
       reject: ['ACTIVITY_REVIEW_REJECTED', 'Actividad rechazada', `Dirección rechazó «${activity.title}».`],
     } as const;
@@ -1358,9 +1400,39 @@ export class ActivitiesService {
     for (const uid of destinatarios) {
       await this.avisar(uid, tipoAviso, tituloAviso, cuerpoAviso,
         activity.type === ActivityType.EXTRACURRICULAR ? '/society/activities' : '/teacher/my-activities', activity.id,
-        `review-${decision}:${activity.id}:${Date.now()}`);
+        `review-${decision}:${activity.id}:${revision.id}`);
     }
     return this.findOne(id);
+  }
+
+  /**
+   * V7.1 D02: lo que exige publicar, comprobado antes de aprobar. Nunca se
+   * abre una actividad vencida o en curso: la inscripción tiene que poder
+   * ocurrir antes del inicio.
+   */
+  private async assertAprobablePublicable(activity: Activity): Promise<void> {
+    const ahora = new Date();
+    const fin = activity.endAt ?? activity.eventDate;
+    if (fin && fin.getTime() <= ahora.getTime()) {
+      const msg = 'La actividad ya terminó: no se publica una actividad vencida. Obsérvala para que corrijan las fechas, o recházala.';
+      throw new ConflictException({ code: 'ACTIVITY_APPROVAL_EXPIRED', message: msg, fields: { activityDate: [msg] } });
+    }
+    if (inicioYaPaso(activity.eventDate, ahora, this.toleranciaInicioMin())) {
+      const msg = 'La actividad ya empezó: no se abren inscripciones con el evento en curso. Obsérvala para que corrijan la fecha de inicio, o recházala.';
+      throw new ConflictException({ code: 'ACTIVITY_APPROVAL_STARTED', message: msg, fields: { activityDate: [msg] } });
+    }
+    const responsables = await this.activities.manager.getRepository(ActivityResponsible).find({ where: { activityId: activity.id } });
+    this.assertCompleta(
+      activity,
+      (activity.activityAreas ?? []).map((a) => a.academicAreaId),
+      (activity.activitySkills ?? []).map((s) => s.skillId),
+      responsables.length,
+    );
+    const previas = new Map(responsables.map((r) => [r.userId, r.semesters ?? []]));
+    const asignaciones = await this.resolverAsignaciones(
+      responsables.map((r) => r.userId), activity.semesterScope, undefined, previas, activity.semesterScope,
+    );
+    this.assertCoberturaAsignada(activity, asignaciones);
   }
 
   /** Lo que espera la decisión de Dirección. */
@@ -1790,9 +1862,24 @@ export class ActivitiesService {
       },
       order: { createdAt: 'DESC' },
     });
-    const propias = await this.filtrarGestionables(user, activities, { incluirPublicadas: false });
+    const gestionables = new Set((await this.filtrarGestionables(user, activities, { incluirPublicadas: false })).map((a) => a.id));
+    // V7.1 §4.1: Administración también consulta lo enviado a Dirección, en
+    // solo lectura. Un borrador que nadie envió sigue sin existir para ella.
+    const consultables = new Set(user.role === RolNombre.ADMIN
+      ? activities.filter((a) => !gestionables.has(a.id) && this.esPropuestaAjenaEnRevision(user, a)).map((a) => a.id)
+      : []);
+    const propias = activities.filter((a) => gestionables.has(a.id) || consultables.has(a.id));
     await this.adjuntarPersonas(propias);
-    return this.attachCounts(propias);
+    const conConteos = await this.attachCounts(propias);
+    for (const a of conConteos) if (consultables.has(a.id)) a.soloLectura = true;
+    return conConteos;
+  }
+
+  /** V7.1 §4.1: lo que otra persona envió a Dirección y todavía no está aprobado. */
+  private esPropuestaAjenaEnRevision(user: AuthenticatedUser, a: Activity): boolean {
+    return a.requiresReview
+      && REVISION_DE_DIRECCION.includes(a.reviewStatus ?? null)
+      && a.creatorId !== user.userId;
   }
 
   async findOne(id: string): Promise<Activity> {
@@ -2372,11 +2459,11 @@ export class ActivitiesService {
       const m = 'Primero admite la solicitud: la asistencia se registra a quien tiene un lugar.';
       throw new ConflictException({ code: 'ATTENDANCE_REQUIRES_ADMISSION', message: m, fields: { status: [m] } });
     }
-    // V4.1 A41-011: una participación consolidada (la actividad terminó o
-    // hay constancia emitida) no se retira libremente.
+    // V4.1 A41-011 y V7.1 §6.1: una participación consolidada (lista cerrada
+    // o documento entregado) no se retira libremente.
     if (anterior === RegistrationStatus.CONFIRMED && status !== RegistrationStatus.CONFIRMED
       && await this.participacionConsolidada(activity, registration)) {
-      const m = 'Esta participación ya está consolidada (la actividad terminó o tiene constancia). '
+      const m = 'Esta participación ya está consolidada (la lista de asistencia se cerró o ya recibió su documento). '
         + 'Si hay un error, la corrige Dirección con un motivo.';
       throw new ConflictException({ code: 'PARTICIPATION_CONSOLIDATED', message: m });
     }
@@ -2427,8 +2514,14 @@ export class ActivitiesService {
   }
 
   /** V4.1 A41-011: terminó el evento o ya hay una constancia autorizada. */
+  /**
+   * V7.1 §6.1: se consolida al **cerrar la lista** (o al entregar el
+   * documento), no al terminar el evento. Con FINISHED y la lista abierta, el
+   * responsable todavía corrige presente o ausente, dentro de la ventana de
+   * asistencia. Cerrada la lista, la corrige Dirección con un motivo.
+   */
   private async participacionConsolidada(activity: Activity, registration: ActivityRegistration): Promise<boolean> {
-    if (activity.status === ActivityStatus.FINISHED) return true;
+    if (activity.attendanceStatus === 'locked') return true;
     const constancia = await this.constancies.findOne({
       where: { studentProfileId: registration.studentProfileId, activityId: activity.id, status: ConstancyStatus.AUTHORIZED },
     });
@@ -2884,8 +2977,9 @@ export class ActivitiesService {
     if (!REGISTRABLE_STATUSES.includes(activity.status)) {
       return 'La actividad no está abierta para registro.';
     }
-    if (activity.eventDate && activity.eventDate.getTime() < Date.now()) {
-      return 'La fecha de la actividad ya pasó.';
+    // V7.1 D02: desde el instante de inicio ya no se acepta inscripción nueva.
+    if (activity.eventDate && activity.eventDate.getTime() <= Date.now()) {
+      return 'La actividad ya empezó: no admite inscripciones nuevas.';
     }
     return null;
   }
@@ -3009,7 +3103,8 @@ export class ActivitiesService {
   private async canManage(user: AuthenticatedUser, activity: Activity): Promise<boolean> {
     // V3.2 §24 (C9): un borrador ajeno no se gestiona ni se ve.
     if (!(await this.veBorrador(user, activity))) return false;
-    if (user.role === RolNombre.ADMIN) return true;
+    // V7.1 §4.1: Administración consulta en solo lectura lo que está en revisión de Dirección.
+    if (user.role === RolNombre.ADMIN) return !this.esPropuestaAjenaEnRevision(user, activity);
     if (activity.creatorId === user.userId) return true;
     if (activity.responsibleUserId === user.userId) return true;
     // V3.2 §16: cualquiera de sus responsables la gestiona.
@@ -3125,6 +3220,13 @@ export class ActivitiesService {
     activity: Activity,
     message?: string,
   ): Promise<void> {
+    // V7.1 §4.1: lo que decide Dirección no lo cambia Administración, tampoco por la API.
+    if (user.role === RolNombre.ADMIN && this.esPropuestaAjenaEnRevision(user, activity)) {
+      throw new ForbiddenException({
+        code: 'ACTIVITY_PROPOSAL_READ_ONLY',
+        message: 'Es una propuesta que decide Dirección: Administración la consulta, pero no la edita, ni la publica, ni la cancela.',
+      });
+    }
     if (!(await this.canManage(user, activity))) {
       throw new ForbiddenException(
         message ??

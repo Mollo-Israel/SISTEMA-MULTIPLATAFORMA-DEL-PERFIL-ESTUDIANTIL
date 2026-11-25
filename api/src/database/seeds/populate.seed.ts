@@ -7,7 +7,7 @@ import { NestFactory } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import {
-  ActivityCategory as ActivityCategoryCode, ActivityModality, ActivityStatus, ActivityType,
+  ActivityCategory as ActivityCategoryCode, ActivityModality, ActivityOutcomePolicy, ActivityStatus, ActivityType,
   ConstancyStatus, EvidenceType, GamificationTrigger, ProjectInvitationStatus,
   ProjectStatus, ProjectVisibility, RegistrationStatus, RolNombre, SEMESTER_ROLES, SkillLevel, UserStatus,
 } from '@perfil/shared';
@@ -223,16 +223,19 @@ async function run() {
 
   // Responsables segun el documento vigente: el director de carrera publica las
   // actividades academicas y la sociedad cientifica las extracurriculares.
-  const activityDefs: { title: string; type: ActivityType; cat: ActivityCategoryCode; area: string; cap: number; creator: User }[] = [
-    { title: 'Taller de Desarrollo Web', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.TALLER_ACADEMICO, area: 'Desarrollo Web', cap: 20, creator: director },
-    { title: 'Seminario de Inteligencia Artificial', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.SEMINARIO, area: 'Inteligencia Artificial', cap: 30, creator: director },
-    { title: 'Reto de Bases de Datos', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.RETO, area: 'Bases de Datos', cap: 15, creator: director },
-    { title: 'Clase espejo de Ingeniería de Software', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CLASE_ESPEJO, area: 'Ingeniería de Software', cap: 25, creator: director },
-    { title: 'Charla de Ciberseguridad', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CHARLA, area: 'Ciberseguridad', cap: 40, creator: director },
-    { title: 'Tutoría de Redes', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.TUTORIA, area: 'Redes', cap: 12, creator: director },
-    { title: 'Hackathon de Innovación', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.HACKATHON, area: 'Inteligencia Artificial', cap: 50, creator: sociedad },
-    { title: 'Club de Estudio de Desarrollo Móvil', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.CLUB_ESTUDIO, area: 'Desarrollo Móvil', cap: 20, creator: sociedad },
-    { title: 'Actividad de Responsabilidad Social', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.RESPONSABILIDAD_SOCIAL, area: 'Gestión de Proyectos', cap: 30, creator: sociedad },
+  // V7.1 D04: cada actividad de ejemplo declara su resultado. Los talleres y retos
+  // registran participación (trayectoria); la charla y la tutoría quedan «Sin
+  // resultado» (asistencia operativa) para que la demostración muestre ambos casos.
+  const activityDefs: { title: string; type: ActivityType; cat: ActivityCategoryCode; area: string; cap: number; creator: User; outcome: ActivityOutcomePolicy }[] = [
+    { title: 'Taller de Desarrollo Web', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.TALLER_ACADEMICO, area: 'Desarrollo Web', cap: 20, creator: director, outcome: ActivityOutcomePolicy.PARTICIPATION_ONLY },
+    { title: 'Seminario de Inteligencia Artificial', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.SEMINARIO, area: 'Inteligencia Artificial', cap: 30, creator: director, outcome: ActivityOutcomePolicy.PARTICIPATION_ONLY },
+    { title: 'Reto de Bases de Datos', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.RETO, area: 'Bases de Datos', cap: 15, creator: director, outcome: ActivityOutcomePolicy.PARTICIPATION_ONLY },
+    { title: 'Clase espejo de Ingeniería de Software', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CLASE_ESPEJO, area: 'Ingeniería de Software', cap: 25, creator: director, outcome: ActivityOutcomePolicy.PARTICIPATION_ONLY },
+    { title: 'Charla de Ciberseguridad', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.CHARLA, area: 'Ciberseguridad', cap: 40, creator: director, outcome: ActivityOutcomePolicy.NONE },
+    { title: 'Tutoría de Redes', type: ActivityType.ACADEMICA, cat: ActivityCategoryCode.TUTORIA, area: 'Redes', cap: 12, creator: director, outcome: ActivityOutcomePolicy.NONE },
+    { title: 'Hackathon de Innovación', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.HACKATHON, area: 'Inteligencia Artificial', cap: 50, creator: sociedad, outcome: ActivityOutcomePolicy.PARTICIPATION_ONLY },
+    { title: 'Club de Estudio de Desarrollo Móvil', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.CLUB_ESTUDIO, area: 'Desarrollo Móvil', cap: 20, creator: sociedad, outcome: ActivityOutcomePolicy.PARTICIPATION_ONLY },
+    { title: 'Actividad de Responsabilidad Social', type: ActivityType.EXTRACURRICULAR, cat: ActivityCategoryCode.RESPONSABILIDAD_SOCIAL, area: 'Gestión de Proyectos', cap: 30, creator: sociedad, outcome: ActivityOutcomePolicy.PARTICIPATION_ONLY },
   ];
   const activities: Activity[] = [];
   for (const d of activityDefs) {
@@ -245,6 +248,7 @@ async function run() {
     a.academicAreaId = areaByName(d.area).id;
     a.creatorId = d.creator.id;
     a.capacity = d.cap;
+    a.outcomePolicy = d.outcome;
     a.status = ActivityStatus.OPEN;
     activities.push(await activityRepo.save(a));
   }

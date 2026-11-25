@@ -1246,7 +1246,8 @@ async function batch15(ctx) {
   const crudo = (s, a) => Number((s?.areas ?? []).find((x) => x.academicAreaId === a.id)?.rawPoints ?? 0);
 
   let s = await resumen();
-  check(s?.engineVersion === 5, 'V32.15.1 El motor vigente es la versión 5 (contexto explícito)', `versión ${s?.engineVersion}`);
+  // V7.1 D04 subió el motor a la versión 6 (misma regla de contexto; cambia la elegibilidad).
+  check(s?.engineVersion >= 5, 'V32.15.1 El motor vigente aplica el contexto explícito (versión 5 o posterior; V7.1 D04 = 6)', `versión ${s?.engineVersion}`);
 
   const proyecto = await req('POST', '/projects', {
     token: est.token,

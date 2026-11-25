@@ -2,7 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AFFINITY_ENGINE_VERSION } from '@perfil/shared';
+import { AFFINITY_BOOT_BACKFILL_BELOW_VERSION, AFFINITY_ENGINE_VERSION } from '@perfil/shared';
 import { AffinityResult } from '../entities/affinity-result.entity';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { AffinityEngineService } from './affinity.engine';
@@ -42,7 +42,9 @@ export class AffinityBackfillService implements OnApplicationBootstrap {
     }
     // Sin `await`: el arranque de la API no depende de esto y bloquearlo
     // retrasaria el servicio para todos por una tarea que no es urgente.
-    void this.run().catch((e) =>
+    // V7.1 §6.2: al arrancar solo se migra estructura. Un cambio de reglas
+    // (D04, versión 6) se recalcula a pedido y con autorización.
+    void this.run(false, AFFINITY_BOOT_BACKFILL_BELOW_VERSION).catch((e) =>
       this.logger.error(`Recalculo masivo interrumpido: ${String(e)}`),
     );
   }
@@ -53,9 +55,12 @@ export class AffinityBackfillService implements OnApplicationBootstrap {
    * `todos` fuerza el recalculo del padron completo, que es lo que hace falta
    * cuando cambian las ponderaciones: los puntajes de quien no volvio a entrar
    * al sistema quedarian calculados con la regla vieja.
+   *
+   * `menorQue` acota qué versión se considera pendiente. A pedido (endpoint de
+   * Administración) es la versión vigente; al arrancar, solo la estructural.
    */
-  async run(todos = false): Promise<{ recalculados: number; fallidos: number }> {
-    const pendientes = await this.pendientes(todos);
+  async run(todos = false, menorQue = AFFINITY_ENGINE_VERSION): Promise<{ recalculados: number; fallidos: number }> {
+    const pendientes = await this.pendientes(todos, menorQue);
     if (pendientes.length === 0) {
       return { recalculados: 0, fallidos: 0 };
     }
@@ -90,7 +95,7 @@ export class AffinityBackfillService implements OnApplicationBootstrap {
    * Un perfil sin ninguna fila de resultado no entra: no tiene nada que
    * migrar, y su afinidad se calculara la primera vez que declare algo.
    */
-  private async pendientes(todos: boolean): Promise<string[]> {
+  private async pendientes(todos: boolean, menorQue: number): Promise<string[]> {
     if (todos) {
       const filas = await this.profiles.find({ select: { id: true } });
       return filas.map((p) => p.id);
@@ -99,7 +104,7 @@ export class AffinityBackfillService implements OnApplicationBootstrap {
     const filas = await this.results
       .createQueryBuilder('result')
       .select('DISTINCT result.student_profile_id', 'id')
-      .where('result.engine_version < :version', { version: AFFINITY_ENGINE_VERSION })
+      .where('result.engine_version < :version', { version: menorQue })
       .getRawMany<{ id: string }>();
     return filas.map((f) => f.id);
   }

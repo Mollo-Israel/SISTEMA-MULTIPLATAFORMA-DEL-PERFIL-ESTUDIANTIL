@@ -1,6 +1,8 @@
 import {
   ActivityOrigin,
+  ActivityOutcomePolicy,
   BackingTier,
+  cuentaComoTrayectoria,
   ManualReviewStatus,
   ProjectBackingTier,
   ProjectStatus,
@@ -22,9 +24,20 @@ export function projectCvEligible(status: ProjectStatus, tier: ProjectBackingTie
     && (tier === ProjectBackingTier.CORROBORATED || tier === ProjectBackingTier.REVIEWED);
 }
 
-/** §43.3 / §44: actividad interna con participación CONFIRMED. */
-export function activityCvEligible(status: RegistrationStatus, origin: ActivityOrigin | null | undefined): boolean {
-  return status === RegistrationStatus.CONFIRMED && (origin ?? ActivityOrigin.INTERNAL) === ActivityOrigin.INTERNAL;
+/**
+ * §43.3 / §44: actividad interna con participación CONFIRMED.
+ *
+ * V7.1 D04: y con resultado. «Sin resultado» es asistencia operativa: no es
+ * una experiencia de la trayectoria ni un ítem exportable.
+ */
+export function activityCvEligible(
+  status: RegistrationStatus,
+  origin: ActivityOrigin | null | undefined,
+  outcomePolicy?: ActivityOutcomePolicy | string | null,
+): boolean {
+  return status === RegistrationStatus.CONFIRMED
+    && (origin ?? ActivityOrigin.INTERNAL) === ActivityOrigin.INTERNAL
+    && cuentaComoTrayectoria(outcomePolicy);
 }
 
 /**

@@ -632,15 +632,22 @@ async function pruebas(browser) {
   const botonCerrar = p45.locator('.inline-note').getByRole('button', { name: 'Cerrar asistencia' });
   await botonCerrar.waitFor({ timeout: 10000 }).catch(() => {});
   const veCerrar = await botonCerrar.count() > 0;
-  const sinAusente = await p45.getByRole('button', { name: 'Marcar ausente' }).count() === 0;
+  // V7.1 §6.1: «Terminada» no congela la lista. Mientras siga abierta, el
+  // responsable todavía corrige presencia o ausencia; lo congela el cierre.
+  const marcarAusente = p45.getByRole('button', { name: 'Marcar ausente' });
+  await marcarAusente.first().waitFor({ timeout: 5000 }).catch(() => {});
+  const corrigeConListaAbierta = await marcarAusente.count() > 0;
   if (veCerrar) {
     await botonCerrar.click();
     await p45.getByRole('dialog').getByRole('button', { name: 'Cerrar asistencia' }).click().catch(() => {});
   }
   await p45.locator('[data-testid="acta-cerrada"]').waitFor({ timeout: 8000 }).catch(() => {});
-  check(veCerrar && sinAusente && await p45.locator('[data-testid="acta-cerrada"]').count() > 0,
-    'WEB.44.1 B17 B19 A41-011 Terminada la actividad, el docente ve «Cerrar asistencia», no puede marcar ausente lo consolidado y cierra el acta',
-    JSON.stringify({ veCerrar, sinAusente }));
+  const actaCerrada = await p45.locator('[data-testid="acta-cerrada"]').count() > 0;
+  await marcarAusente.first().waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  const congelada = await marcarAusente.count() === 0;
+  check(veCerrar && corrigeConListaAbierta && actaCerrada && congelada,
+    'WEB.44.1 B17 B19 A41-011 V7.1 §6.1 Terminada la actividad, el docente aún corrige con la lista abierta, cierra el acta y ya no puede marcar ausente',
+    JSON.stringify({ veCerrar, corrigeConListaAbierta, actaCerrada, congelada }));
   await c45.close();
 
   const c46 = await browser.newContext({ viewport: { width: 1280, height: 860 } });

@@ -161,6 +161,15 @@ export async function completarActividad(token, original) {
   }
   if (__sinCompletar) return body;
   const out = { ...body };
+  // V7.1 D04: «Sin resultado» ya no es trayectoria. Las suites anteriores
+  // crean actividades sin decir su resultado porque prueban otra cosa
+  // (asistencia, afinidad, puntos…), y esperan que la participación cuente:
+  // se completa con «Solo participación». Lo que la prueba envía no se toca;
+  // D04 se prueba en e2e-v7.mjs con el resultado explícito.
+  if (out.originType !== 'external' && out.outcomePolicy === undefined && out.internalConstancyEnabled === undefined
+    && out.credentialExpected === undefined) {
+    out.outcomePolicy = 'participation_only';
+  }
   const enUnaSemana = Date.now() + 14 * 24 * 3_600_000;
   if (out.activityDate === undefined) out.activityDate = new Date(enUnaSemana).toISOString();
   if (out.endAt === undefined && out.activityDate) {

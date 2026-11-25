@@ -626,6 +626,11 @@ export interface Activity {
   myRegistration?: { id: string; status: RegistrationStatus; evidenceEligible?: boolean; decisionReason?: string | null } | null;
   /** V5-01: favorita de quien consulta (en las páginas del listado). */
   isFavorite?: boolean;
+  /**
+   * V7.1 §4.1: propuesta de otra persona que decide Dirección. Administración
+   * la consulta en su gestión, pero no la edita, ni la publica, ni la cancela.
+   */
+  soloLectura?: boolean;
   /** Revisión de Dirección (V2 §27). null = sin enviar. */
   reviewStatus?: ActivityReviewStatus | null;
   requiresReview?: boolean;

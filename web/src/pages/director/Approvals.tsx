@@ -116,9 +116,10 @@ function ActividadesPendientes() {
     setBusy(true);
     try {
       await activityService.review(a.id, decision, comentario.trim() || undefined);
+      // V7.1 D02: aprobar publica y abre inscripciones en el mismo paso.
       toast.success(
-        { approve: 'Actividad aprobada.', observe: 'Observación enviada.', reject: 'Actividad rechazada.' }[decision],
-        decision === 'approve' ? 'Quien la propuso ya puede publicarla.' : undefined,
+        { approve: 'Actividad aprobada y publicada.', observe: 'Observación enviada.', reject: 'Actividad rechazada.' }[decision],
+        decision === 'approve' ? 'Ya está visible para los estudiantes, con las inscripciones abiertas.' : undefined,
       );
       setAbierta(null);
       setComentario('');

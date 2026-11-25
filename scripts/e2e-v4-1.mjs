@@ -370,7 +370,7 @@ async function batch4(ctx) {
   check(deshace.status === 200, 'V41.4.1 Durante el evento y sin constancia, el responsable corrige un error propio', `status ${deshace.status}`);
   const c1 = await confirmar(ev.data?.id, docente, a1.profileId, 'confirmed');
   // V5 §7: confirmar ya no emite constancia, así que durante el evento nada está
-  // consolidado todavía; la consolidación llega al terminar (V41.4.5).
+  // consolidado todavía; V7.1 §6.1: la consolidación llega al cerrar la lista (V41.4.5).
   const conConstancia = await confirmar(ev.data?.id, docente, a1.profileId, 'absent');
   const reconfirma = await confirmar(ev.data?.id, docente, a1.profileId, 'confirmed');
   const constanciasA1 = (await req('GET', '/constancies/internal/my', { token: a1.token })).data ?? [];
@@ -385,9 +385,13 @@ async function batch4(ctx) {
   const c2 = await confirmar(ev.data?.id, docente, a2.profileId, 'confirmed');
   check(fin.status === 200 && c2.status === 200 && c2.data?.status === 'confirmed',
     'V41.4.4 B17 23.5 Terminada la actividad, el responsable registra una participación pendiente', `${fin.status} / ${c2.status}`);
+  // V7.1 §6.1 cambia B18: terminar el evento no consolida mientras la lista
+  // siga abierta. El responsable todavía corrige (y aquí lo deja como estaba);
+  // cerrada la lista, la corrige solo Dirección (V41.4.7, V41.4.10).
   const b18 = await confirmar(ev.data?.id, docente, a2.profileId, 'absent');
-  check(b18.status === 409 && b18.data?.code === 'PARTICIPATION_CONSOLIDATED',
-    'V41.4.5 B18 23.5 Tras FINISHED, un CONFIRMED no pasa libremente a ausente', `status ${b18.status} ${b18.data?.code}`);
+  const b18b = await confirmar(ev.data?.id, docente, a2.profileId, 'confirmed');
+  check(b18.status === 200 && b18b.status === 200,
+    'V41.4.5 B18 (V7.1 §6.1) Tras FINISHED y con la lista abierta, el responsable todavía corrige; consolida el cierre', `status ${b18.status} / ${b18b.status}`);
 
   // B19: cerrar asistencia congela el registro ordinario.
   const adminCierra = await req('POST', `/activities/${ev.data?.id}/attendance/close`, { token: ctx.admin });

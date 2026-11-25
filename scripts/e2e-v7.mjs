@@ -8,7 +8,8 @@
  *   node scripts/pruebas/entorno.mjs api          # :3020, base afinia_test
  *   API_URL=http://localhost:3020/api node scripts/e2e-v7.mjs [batch1 …]
  */
-import { codigoUniversitario, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { execSync } from 'node:child_process';
+import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 // Solo letras: los nombres de persona no admiten dígitos.
@@ -30,6 +31,16 @@ function check(condition, label, detail = '') {
 }
 const objective = (t) => console.log(`\n${C.head}${C.bold}${t}${C.r}`);
 const correoStaff = (k) => `v71.${k}.${TS}@univalle.edu`;
+const correoEst = (k) => `v71.${k}.${TS}@est.univalle.edu`;
+/**
+ * Consulta a la base de la API en prueba. Por omisión la aislada
+ * (afinia_test): una suite que mueve fechas no debe tocar desarrollo.
+ */
+const psql = (sql) => execSync(
+  `docker exec perfil_postgres psql -U ${process.env.POSTGRES_USER ?? 'perfil_user'} -d ${process.env.POSTGRES_DB ?? 'afinia_test'} -tAc "${sql.replace(/"/g, '\\"')}"`,
+  { encoding: 'utf8' },
+).trim();
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const json = (x) => JSON.stringify(x ?? null).slice(0, 220);
 const en = (h) => new Date(Date.now() + h * 3_600_000).toISOString();
 const q = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== undefined && v !== null)).toString();
@@ -216,9 +227,11 @@ async function batch1(ctx) {
     && (sinRevision.data ?? []).every((a) => !a.requiresReview || a.reviewStatus === 'not_required'),
   'V7.1.23 «No requiere revisión»: lo que publica Administración sin pasar por Dirección', json({ s: sinRevision.status }));
 
+  // V7-2: Administración la ve en su gestión, marcada como solo lectura.
   const adminPend = await gest(admin, { review: 'pending' });
-  check(adminPend.status === 200 && !ids(adminPend.data).includes(propuesta.data.id),
-    'V7.1.24 La propuesta del docente no entra en la gestión de Administración (su consulta de solo lectura es V7-2)', json({ s: adminPend.status }));
+  const filaAdmin = (adminPend.data ?? []).find((a) => a.id === propuesta.data.id);
+  check(adminPend.status === 200 && filaAdmin?.soloLectura === true,
+    'V7.1.24 «En revisión» le muestra a Administración la propuesta del docente, en solo lectura (V7-2)', json({ s: adminPend.status, l: filaAdmin?.soloLectura }));
 
   // §4.1 «Probar también docencia, sociedad y URL directa»: la Sociedad filtra sus extracurriculares igual.
   const soc = await provisionAndActivate(admin, { firstName: 'Sofia', lastName: `Sociedad${L}`, email: correoStaff('soc'), role: 'SCIENTIFIC_SOCIETY' });
@@ -237,7 +250,170 @@ async function batch1(ctx) {
     'V7.1.26 Sin filtros, la gestión responde como siempre', json({ s: todasGest.status }));
 }
 
-const BATCHES = { batch1 };
+// ===========================================================================
+//  BATCH V7-2 — Aprobar = publicar y abrir (D02), lectura de Administración,
+//  asistencia con la lista abierta y regla D04
+// ===========================================================================
+async function batch2(ctx) {
+  objective('BATCH V7-2 · Aprobar publica y abre; Admin en solo lectura; asistencia hasta cerrar la lista; «Sin resultado» no es trayectoria');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Dora', lastName: `Aprueba${L}`, email: correoStaff('b2dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Carlos', lastName: `Propone${L}`, email: correoStaff('b2doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const base = { type: 'academica', categoryId: cat?.id, activityDate: en(72), endAt: en(74), modality: 'presencial', location: 'Aula 210', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8] };
+  const ver = async (id, token = admin) => (await req('GET', `/activities/${id}`, { token })).data;
+  const propuesta = async (titulo) => {
+    const p = await req('POST', '/activities', { token: docente.token, body: { ...base, title: `${titulo} ${L}`, status: 'draft' } });
+    if (p.status !== 201) throw new Error(`No se pudo crear la propuesta (${p.status}): ${json(p.data)}`);
+    const s = await req('POST', `/activities/${p.data.id}/submit`, { token: docente.token, body: {} });
+    if (s.status !== 200 && s.status !== 201) throw new Error(`No se pudo enviar a revisión (${s.status}): ${json(s.data)}`);
+    return p.data;
+  };
+  const aprobar = (id, token = director.token) => req('POST', `/activities/${id}/review`, { token, body: { decision: 'approve' } });
+
+  // --- A03 / A13: aprobar publica y abre en la misma operación.
+  const a1 = await propuesta('Taller aprobado');
+  const aprobada = await aprobar(a1.id);
+  const cambioAuditado = psql(`select count(*) from audit_events where entity_id = '${a1.id}' and event_type = 'ACTIVITY_STATUS_CHANGED' and metadata->>'automatico' = 'aprobacion'`);
+  check(aprobada.status === 200 && aprobada.data?.status === 'open' && aprobada.data?.reviewStatus === 'approved' && cambioAuditado === '1',
+    'V7.2.1 A03/A13 Dirección aprueba y, en la misma operación, queda publicada con inscripciones abiertas (auditado)', json({ s: aprobada.status, st: aprobada.data?.status, r: aprobada.data?.reviewStatus, a: cambioAuditado }));
+
+  // --- A05: aprobar otra vez no repite efectos ni avisos.
+  const otraVez = await aprobar(a1.id);
+  const bandeja = (await req('GET', '/notifications/me', { token: docente.token })).data;
+  const avisos = (Array.isArray(bandeja) ? bandeja : bandeja?.items ?? [])
+    .filter((n) => (n.type ?? n.kind) === 'ACTIVITY_APPROVED' && (n.entityId ?? n.entity_id) === a1.id);
+  check(otraVez.status === 409 && avisos.length === 1 && /publicada/.test(avisos[0]?.body ?? ''),
+    'V7.2.2 A05 Una segunda aprobación es 409; el docente recibe un solo aviso, que dice que ya está publicada', json({ s: otraVez.status, n: avisos.length, b: avisos[0]?.body }));
+
+  // --- A04: observar o rechazar no publica.
+  const a2 = await propuesta('Taller observado');
+  const observada = await req('POST', `/activities/${a2.id}/review`, { token: director.token, body: { decision: 'observe', comment: 'Falta la bibliografía.' } });
+  const a3 = await propuesta('Taller rechazado');
+  const rechazada = await req('POST', `/activities/${a3.id}/review`, { token: director.token, body: { decision: 'reject', comment: 'No corresponde a la carrera.' } });
+  check(observada.data?.status === 'draft' && observada.data?.reviewStatus === 'observed' && rechazada.data?.status === 'draft' && rechazada.data?.reviewStatus === 'rejected',
+    'V7.2.3 A04 Observar o rechazar deja la actividad en borrador, con su decisión', json({ o: [observada.data?.status, observada.data?.reviewStatus], r: [rechazada.data?.status, rechazada.data?.reviewStatus] }));
+
+  // --- A16: una propuesta que empezó o terminó mientras esperaba no se abre.
+  const a4 = await propuesta('Taller que ya empezo');
+  psql(`update activities set event_date = now() - interval '1 hour' where id = '${a4.id}'`);
+  const empezada = await aprobar(a4.id);
+  const a4d = await ver(a4.id);
+  check(empezada.status === 409 && empezada.data?.code === 'ACTIVITY_APPROVAL_STARTED' && a4d?.status === 'draft' && a4d?.reviewStatus === 'pending',
+    'V7.2.4 A16 Si ya empezó, aprobar es 409 con el motivo; sigue pendiente y en borrador para corregir la fecha', json({ s: empezada.status, c: empezada.data?.code, st: a4d?.status, r: a4d?.reviewStatus }));
+  const a5 = await propuesta('Taller vencido');
+  psql(`update activities set event_date = now() - interval '3 hours', end_at = now() - interval '1 hour' where id = '${a5.id}'`);
+  const vencida = await aprobar(a5.id);
+  const a5d = await ver(a5.id);
+  check(vencida.status === 409 && vencida.data?.code === 'ACTIVITY_APPROVAL_EXPIRED' && a5d?.status === 'draft' && a5d?.reviewStatus === 'pending',
+    'V7.2.5 A16 Una propuesta vencida no se publica ni se revive', json({ s: vencida.status, c: vencida.data?.code, st: a5d?.status }));
+
+  // --- A01: Administración consulta lo enviado a Dirección, en solo lectura.
+  const gestAdmin = await req('GET', '/activities/managed?review=pending', { token: admin });
+  const fila = (gestAdmin.data ?? []).find((a) => a.id === a4.id);
+  const detalle = await req('GET', `/activities/${a4.id}`, { token: admin });
+  check(gestAdmin.status === 200 && fila?.soloLectura === true && detalle.status === 200,
+    'V7.2.6 A01 Administración ve la propuesta enviada a Dirección, marcada como solo lectura', json({ s: gestAdmin.status, l: fila?.soloLectura, d: detalle.status }));
+  const privado = await req('POST', '/activities', { token: docente.token, body: { ...base, title: `Borrador privado ${L}`, status: 'draft' } });
+  const gestTodas = await req('GET', '/activities/managed', { token: admin });
+  const verPrivado = await req('GET', `/activities/${privado.data?.id}`, { token: admin });
+  check(privado.status === 201 && !ids(gestTodas.data).includes(privado.data?.id) && verPrivado.status === 404,
+    'V7.2.7 A01 El borrador que el docente no envió no existe para Administración', json({ s: verPrivado.status }));
+
+  // --- A02: ni por la API. Aprobar, cancelar o editar una propuesta ajena es 403.
+  const aprobarAdmin = await aprobar(a4.id, admin);
+  const cancelarAdmin = await req('PATCH', `/activities/${a4.id}`, { token: admin, body: { status: 'cancelled', cancellationReason: 'Prueba de solo lectura.' } });
+  const editarAdmin = await req('PATCH', `/activities/${a4.id}`, { token: admin, body: { title: `Cambiado por admin ${L}` } });
+  const intacta = await ver(a4.id);
+  check(aprobarAdmin.status === 403 && cancelarAdmin.status === 403 && cancelarAdmin.data?.code === 'ACTIVITY_PROPOSAL_READ_ONLY' && editarAdmin.status === 403
+    && intacta?.status === 'draft' && intacta?.reviewStatus === 'pending' && intacta?.title === a4.title,
+  'V7.2.8 A02 Administración no aprueba, ni cancela, ni edita una propuesta ajena (403); nada cambia', json({ a: aprobarAdmin.status, c: [cancelarAdmin.status, cancelarAdmin.data?.code], e: editarAdmin.status, st: intacta?.status }));
+
+  // --- A14 / A15: la propia de Dirección se publica abierta; desde el inicio no hay inscripción nueva.
+  const est1 = await provisionStudent(admin, { firstName: 'Lia', lastName: `Inscribe${L}`, email: correoEst('b2e1'), semester: 1 });
+  const est2 = await provisionStudent(admin, { firstName: 'Teo', lastName: `Inscribe${L}`, email: correoEst('b2e2'), semester: 1 });
+  const propia = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Taller de Direccion ${L}`, responsibleUserIds: [docente.userId], status: 'open' } });
+  const antes = await req('POST', `/activities/${propia.data?.id}/register`, { token: est1.token, body: {} });
+  psql(`update activities set event_date = now() - interval '1 second' where id = '${propia.data?.id}'`);
+  const despues = await req('POST', `/activities/${propia.data?.id}/register`, { token: est2.token, body: {} });
+  check(propia.status === 201 && propia.data?.status === 'open' && [200, 201].includes(antes.status) && despues.status === 400,
+    'V7.2.9 A14/A15 Lo propio de Dirección se publica abierto; desde el inicio la API ya no admite inscripciones', json({ c: [propia.status, propia.data?.status], antes: antes.status, despues: [despues.status, despues.data?.message] }));
+
+  // --- A06: el backend cierra al inicio y finaliza al fin, sin que nadie abra la web.
+  const cierra = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Cierra sola ${L}`, responsibleUserIds: [docente.userId], status: 'open' } });
+  const termina = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Termina sola ${L}`, responsibleUserIds: [docente.userId], status: 'open' } });
+  psql(`update activities set event_date = now() - interval '1 minute' where id = '${cierra.data?.id}'`);
+  psql(`update activities set event_date = now() - interval '2 hours', end_at = now() - interval '1 minute' where id = '${termina.data?.id}'`);
+  const esperarEstado = async (id, estado) => {
+    for (let i = 0; i < 30; i++) {
+      if ((await ver(id))?.status === estado) return true;
+      await espera(3000);
+    }
+    return false;
+  };
+  const [cerrada, terminada] = await Promise.all([esperarEstado(cierra.data?.id, 'closed'), esperarEstado(termina.data?.id, 'finished')]);
+  check(cerrada && terminada, 'V7.2.10 A06 El backend cierra al llegar el inicio y finaliza al llegar el fin (trabajador de ciclo de vida)', json({ cerrada, terminada }));
+
+  // --- A10 / A11: con FINISHED y la lista abierta se corrige; cerrada la lista, no.
+  const asis = await req('POST', '/activities', { token: director.token, body: { ...base, title: `Asistencia abierta ${L}`, responsibleUserIds: [docente.userId], status: 'open' } });
+  const est3 = await provisionStudent(admin, { firstName: 'Ivo', lastName: `Asiste${L}`, email: correoEst('b2e3'), semester: 1 });
+  await req('POST', `/activities/${asis.data?.id}/register`, { token: est3.token, body: {} });
+  const confirma = await req('PATCH', `/activities/${asis.data?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est3.profileId, status: 'confirmed' } });
+  psql(`update activities set status = 'finished' where id = '${asis.data?.id}'`);
+  const corrige = await req('PATCH', `/activities/${asis.data?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est3.profileId, status: 'absent' } });
+  const vuelve = await req('PATCH', `/activities/${asis.data?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est3.profileId, status: 'confirmed' } });
+  check(confirma.status === 200 && corrige.status === 200 && vuelve.status === 200,
+    'V7.2.11 A10 Finalizada con la lista abierta, el responsable todavía corrige presente o ausente', json({ c: confirma.status, corrige: [corrige.status, corrige.data?.code], vuelve: vuelve.status }));
+  const cierre = await req('POST', `/activities/${asis.data?.id}/attendance/close`, { token: docente.token, body: {} });
+  const trasCierre = await req('PATCH', `/activities/${asis.data?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est3.profileId, status: 'absent' } });
+  check([200, 201].includes(cierre.status) && trasCierre.status === 409 && trasCierre.data?.code === 'ATTENDANCE_LOCKED',
+    'V7.2.12 A11 Cerrada la lista, la API bloquea la corrección ordinaria del responsable', json({ cierre: cierre.status, tras: [trasCierre.status, trasCierre.data?.code] }));
+
+  // --- D04 (I01, I10, I11): «Sin resultado» es asistencia operativa; «Solo participación» cuenta una vez.
+  const area = await req('POST', '/academic-areas', { token: admin, body: { name: `Area resultado ${L}`, tags: [`res${L}`] } });
+  const skNinguno = await req('POST', '/skills', { token: admin, body: { name: `Sinresultado ${L} Uno`, academicAreaId: area.data?.id } });
+  const skParticipa = await req('POST', '/skills', { token: admin, body: { name: `Conresultado ${L} Dos`, academicAreaId: area.data?.id } });
+  const crear = (titulo, outcomePolicy, skillId) => req('POST', '/activities', {
+    token: director.token,
+    body: { ...base, title: `${titulo} ${L}`, areaIds: [area.data?.id], skillIds: [skillId], outcomePolicy, responsibleUserIds: [docente.userId], status: 'open' },
+  });
+  const sinResultado = await crear('Charla sin resultado', 'none', skNinguno.data?.id);
+  const conResultado = await crear('Taller con participacion', 'participation_only', skParticipa.data?.id);
+  const est4 = await provisionStudent(admin, { firstName: 'Noa', lastName: `Resultado${L}`, email: correoEst('b2e4'), semester: 1 });
+  for (const a of [sinResultado, conResultado]) {
+    await req('POST', `/activities/${a.data?.id}/register`, { token: est4.token, body: {} });
+    await req('PATCH', `/activities/${a.data?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est4.profileId, status: 'confirmed' } });
+  }
+  const registro = (a) => psql(`select id from activity_registrations where activity_id = '${a.data?.id}' and student_profile_id = '${est4.profileId}'`);
+  const regNinguno = registro(sinResultado);
+  const regParticipa = registro(conResultado);
+  const puntos = (regId) => Number(psql(`select coalesce(max(points), -1) from affinity_contributions where source_id = '${regId}'`));
+  let ptsNinguno = -1;
+  let ptsParticipa = -1;
+  for (let i = 0; i < 10 && ptsParticipa <= 0; i++) {
+    ptsNinguno = puntos(regNinguno);
+    ptsParticipa = puntos(regParticipa);
+    if (ptsParticipa <= 0) await espera(1000);
+  }
+  const version = psql(`select coalesce(min(engine_version), 0) from affinity_results where student_profile_id = '${est4.profileId}'`);
+  check(sinResultado.status === 201 && conResultado.status === 201 && ptsNinguno === 0 && ptsParticipa > 0 && version === '6',
+    'V7.2.13 I01/I11 Afinidad (motor v6): la de «Sin resultado» aporta 0; la de «Solo participación» aporta una vez', json({ ptsNinguno, ptsParticipa, version }));
+
+  const resumen = await req('GET', '/profiles/me/summary', { token: est4.token });
+  const nombres = (resumen.data?.skills ?? []).map((s) => s.skill ?? s.name);
+  check(nombres.includes(skParticipa.data?.name) && !nombres.includes(skNinguno.data?.name),
+    'V7.2.14 I10 Tecnologías respaldadas: no incluyen las de una actividad «Sin resultado»', json(nombres));
+
+  const items = await req('GET', '/trajectory-summary/items', { token: est4.token });
+  const elegibles = (items.data?.sections ?? []).flatMap((s) => s.items ?? []).map((i) => i.id);
+  const asistencia = psql(`select status from activity_registrations where id = '${regNinguno}'`);
+  check(elegibles.includes(conResultado.data?.id) && !elegibles.includes(sinResultado.data?.id) && asistencia === 'confirmed',
+    'V7.2.15 I10 El resumen exportable no incluye «Sin resultado»; su asistencia se conserva', json({ elegibles: elegibles.length, asistencia }));
+}
+
+const BATCHES = { batch1, batch2 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

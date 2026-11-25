@@ -25,7 +25,8 @@ export interface BackedSkill {
  *     (§33, §34), en proyectos con respaldo (`SUPPORTED` o mejor; ni
  *     `DECLARED` ni `FLAGGED`, §36);
  *   - **actividades**: las tecnologías de actividades con participación
- *     `CONFIRMED` (§29);
+ *     `CONFIRMED` (§29) y con resultado: «Sin resultado» no respalda nada
+ *     (V7.1 D04);
  *   - **certificados** (V2 §41): las tecnologías de un certificado externo
  *     cuya validación lo dejó `SUPPORTED` o `CORROBORATED`. Uno solo
  *     declarado no respalda nada.
@@ -63,10 +64,13 @@ export class BackedSkillsService {
        SELECT r.student_profile_id AS profile_id, s.id AS skill_id, s.name, s.academic_area_id,
               'activity' AS source, r.activity_id AS source_id
          FROM activity_registrations r
+         JOIN activities act ON act.id = r.activity_id
          JOIN activity_skills a_s ON a_s.activity_id = r.activity_id
          JOIN skills s ON s.id = a_s.skill_id
         WHERE r.student_profile_id = ANY($1)
           AND r.status = 'confirmed'
+          -- V7.1 D04: una actividad «Sin resultado» no respalda tecnologías.
+          AND act.outcome_policy <> 'none'
        UNION ALL
        SELECT c.student_profile_id AS profile_id, s.id AS skill_id, s.name, s.academic_area_id,
               'certificate' AS source, c.id AS source_id

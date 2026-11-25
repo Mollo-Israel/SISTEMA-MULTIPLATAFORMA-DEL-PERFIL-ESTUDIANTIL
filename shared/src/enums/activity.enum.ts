@@ -41,6 +41,21 @@ export const INTERNAL_OUTCOME_POLICIES: readonly ActivityOutcomePolicy[] = [
   ActivityOutcomePolicy.EXTERNAL_CREDENTIAL_EXPECTED,
 ];
 
+/**
+ * V7.1 D04: qué participación confirmada cuenta como experiencia de la
+ * trayectoria.
+ *
+ * Con «Sin resultado» la asistencia es solo operativa: se registra y se
+ * conserva, pero no suma afinidad ni respaldo, no respalda tecnologías y no
+ * entra al resumen exportable. «Solo participación» y el certificado
+ * institucional cuentan una única experiencia. La constancia interna
+ * histórica se lee como «Solo participación», que es lo que ya decía la
+ * interfaz («la asistencia registrada queda en tu trayectoria»).
+ */
+export function cuentaComoTrayectoria(policy: ActivityOutcomePolicy | string | null | undefined): boolean {
+  return policy !== ActivityOutcomePolicy.NONE;
+}
+
 export const OUTCOME_POLICY_LABEL: Record<ActivityOutcomePolicy, string> = {
   [ActivityOutcomePolicy.NONE]: 'Sin resultado',
   [ActivityOutcomePolicy.PARTICIPATION_ONLY]: 'Solo participación',

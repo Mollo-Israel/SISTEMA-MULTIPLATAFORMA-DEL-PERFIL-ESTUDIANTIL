@@ -14,6 +14,7 @@ import {
   CV_TEMPLATES,
   CvTemplate,
   ConstancyStatus,
+  cuentaComoTrayectoria,
   ProjectStatus,
   RegistrationStatus,
   TRAJECTORY_DISCLAIMER,
@@ -155,6 +156,8 @@ function entradaDeProyecto(p: FuentesDeTrayectoria['proyectos'][number]): Trajec
 
 /** Una inscripción, en palabras del estado en que quedó; `null` si no cuenta en la trayectoria. */
 function entradaDeInscripcion(r: FuentesDeTrayectoria['inscripciones'][number]): TrajectoryEntry | null {
+  // V7.1 D04: una actividad «Sin resultado» es asistencia operativa, no trayectoria.
+  if (!cuentaComoTrayectoria(r.activity?.outcomePolicy)) return null;
   const l = registrationLevel(r.status);
   if (!l) return null;
   const externa = r.activity?.originType === ActivityOrigin.EXTERNAL;
@@ -178,7 +181,7 @@ function entradaDeInscripcion(r: FuentesDeTrayectoria['inscripciones'][number]):
     detail: externa && r.status === RegistrationStatus.CONFIRMED
       ? 'Participación registrada. Para afirmar que completaste el curso, adjunta tu credencial.'
       : detalle[r.status] ?? '',
-    cvEligible: activityCvEligible(r.status, r.activity?.originType),
+    cvEligible: activityCvEligible(r.status, r.activity?.originType, r.activity?.outcomePolicy),
   };
 }
 
@@ -351,11 +354,13 @@ export class TrajectorySummaryService {
     const conConstancia = this.respaldoPorActividad(f.constancias);
 
     const proyectos = f.proyectos.filter((p) => projectCvEligible(p.project.status, p.project.backingTier));
-    const confirmadas = f.inscripciones.filter((r) => activityCvEligible(r.status, r.activity?.originType));
+    const confirmadas = f.inscripciones.filter((r) => activityCvEligible(r.status, r.activity?.originType, r.activity?.outcomePolicy));
     const academicas = confirmadas.filter((r) => r.activity?.type !== ActivityType.EXTRACURRICULAR);
     const extra = confirmadas.filter((r) => r.activity?.type === ActivityType.EXTRACURRICULAR);
     const pendientesInternas = f.inscripciones.filter((r) =>
       (r.activity?.originType ?? ActivityOrigin.INTERNAL) === ActivityOrigin.INTERNAL
+      // V7.1 D04: una «Sin resultado» nunca llega a la trayectoria; no queda «pendiente».
+      && cuentaComoTrayectoria(r.activity?.outcomePolicy)
       // V5 §6: admitido tampoco es asistir; sigue pendiente de la asistencia.
       && [RegistrationStatus.REGISTERED, RegistrationStatus.ACCEPTED, RegistrationStatus.INTERESTED].includes(r.status));
     const certs = f.certs.filter((c) => certificateCvEligible(f.tierDe(c.id)));
@@ -552,7 +557,7 @@ export class TrajectorySummaryService {
     // V3 §44: una participación confirmada es una experiencia institucional;
     // si además tiene constancia, se dice en la misma línea y no se duplica.
     const conConstancia = this.respaldoPorActividad(f.constancias);
-    const confirmadas = f.inscripciones.filter((r) => activityCvEligible(r.status, r.activity?.originType));
+    const confirmadas = f.inscripciones.filter((r) => activityCvEligible(r.status, r.activity?.originType, r.activity?.outcomePolicy));
     const vistaActividad = (r: ActivityRegistration) => ({
       id: r.activityId,
       title: r.activity?.title ?? 'Actividad',

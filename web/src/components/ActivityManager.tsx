@@ -651,7 +651,7 @@ export default function ActivityManager({
    */
   const soloOpera = (a: Activity) => a.creatorId !== user?.id && !esAutoridad
     && ['CAREER_DIRECTOR', 'ADMIN'].includes(a.creator?.role?.name ?? '');
-  const editable = (a: Activity) => !soloOpera(a) && !(necesitaRevision && a.requiresReview && a.reviewStatus === 'approved');
+  const editable = (a: Activity) => !a.soloLectura && !soloOpera(a) && !(necesitaRevision && a.requiresReview && a.reviewStatus === 'approved');
 
   const enviarARevision = async (a: Activity) => {
     try {
@@ -702,9 +702,22 @@ export default function ActivityManager({
   const [entrega, setEntrega] = useState<{ ids: string[]; nombre: string } | null>(null);
   /** V6 §3.6: detalle de solo lectura para quien opera una actividad que no edita. */
   const [detalle, setDetalle] = useState<Activity | null>(null);
+  /*
+   * Se abre al instante con lo que trae la lista y se completa con el detalle.
+   * Si quien mira ya lo cerró (Escape, ×) cuando llega el detalle, la
+   * respuesta se descarta: un pedido viejo no vuelve a abrir el diálogo.
+   */
+  const detalleAbierto = useRef<string | null>(null);
   const verDetalles = (a: Activity) => {
+    detalleAbierto.current = a.id;
     setDetalle(a);
-    activityService.get(a.id).then(setDetalle).catch(() => {});
+    activityService.get(a.id)
+      .then((completo) => { if (detalleAbierto.current === a.id) setDetalle(completo); })
+      .catch(() => {});
+  };
+  const cerrarDetalle = () => {
+    detalleAbierto.current = null;
+    setDetalle(null);
   };
   /** V4.1 A41-011: corrección excepcional en curso. */
   const [correccion, setCorreccion] = useState<{ row: Participant; status: 'confirmed' | 'absent' } | null>(null);
@@ -915,9 +928,11 @@ export default function ActivityManager({
   const okStatus: 'confirmed' | 'accepted' = esExterna ? 'accepted' : 'confirmed';
   const okLabel = esExterna ? 'Registrar aceptación' : 'Presente';
   const full = !!(selectedActivity?.capacity && allConfirmed.length >= selectedActivity.capacity);
-  // V4.1 A41-011: acta cerrada y participación consolidada (la actividad ya terminó).
+  // V4.1 A41-011 y V7.1 §6.1: la participación se consolida al cerrar la lista,
+  // no al terminar el evento. Con la lista abierta (dentro de la ventana de
+  // asistencia) el responsable todavía corrige presente o ausente.
   const actaCerrada = selectedActivity?.attendanceStatus === 'locked';
-  const consolidada = selectedActivity?.status === 'finished' || actaCerrada;
+  const consolidada = actaCerrada;
   const tipo = activityType === 'academica' ? 'académica' : 'extracurricular';
 
 
@@ -1611,6 +1626,9 @@ export default function ActivityManager({
                         {a.originType === 'external' && (
                           <div><Badge tone="gray">Externa{a.provider ? ` · ${a.provider}` : ''}</Badge></div>
                         )}
+                        {a.soloLectura && (
+                          <div data-testid="solo-lectura"><Badge tone="gray">Solo lectura · la decide Dirección</Badge></div>
+                        )}
                         {a.location && <div className="muted">{a.location}</div>}
                       </td>
                       <td className="muted">{a.category?.name ?? '—'}</td>
@@ -1635,7 +1653,7 @@ export default function ActivityManager({
                           opciones para que el servidor rechace cinco no es una
                           interfaz, es una trampa.
                         */}
-                        {ACTIVITY_TRANSITIONS[a.status]?.length ? (
+                        {ACTIVITY_TRANSITIONS[a.status]?.length && !a.soloLectura ? (
                         <select
                           className="status-select"
                           value={a.status}
@@ -1660,7 +1678,7 @@ export default function ActivityManager({
                         {a.reviewComment && ['observed', 'rejected', null].includes(a.reviewStatus ?? null) && (
                           <div className="muted small" style={{ maxWidth: 240 }}>«{a.reviewComment}»</div>
                         )}
-                        {a.requiresReview && a.status === 'draft'
+                        {a.requiresReview && a.status === 'draft' && !a.soloLectura
                           && (a.reviewStatus === null || a.reviewStatus === undefined || a.reviewStatus === 'observed') && (
                           <div style={{ marginTop: '0.3rem' }}>
                             <Button size="sm" icon={<FiSend size={13} />} onClick={() => enviarARevision(a)}>
@@ -1719,21 +1737,26 @@ export default function ActivityManager({
                               <FiTrash2 />
                             </button>
                           )}
-                          {/* V4.1 A41-010: repetir una actividad (también una finalizada) es duplicarla. */}
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => siPuedeSalir(() => void duplicar(a))}
-                            title="Duplicar como borrador nuevo"
-                            aria-label={`Duplicar ${a.title}`}
-                          >
-                            <FiCopy />
-                          </button>
-                          <button
-                            className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`}
-                            onClick={() => openParticipants(a.id)}
-                          >
-                            <FiUsers /> Participación
-                          </button>
+                          {/* V4.1 A41-010: repetir una actividad (también una finalizada) es duplicarla.
+                              V7.1 §4.1: una propuesta en solo lectura solo se consulta. */}
+                          {!a.soloLectura && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => siPuedeSalir(() => void duplicar(a))}
+                              title="Duplicar como borrador nuevo"
+                              aria-label={`Duplicar ${a.title}`}
+                            >
+                              <FiCopy />
+                            </button>
+                          )}
+                          {!a.soloLectura && (
+                            <button
+                              className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`}
+                              onClick={() => openParticipants(a.id)}
+                            >
+                              <FiUsers /> Participación
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -2005,7 +2028,7 @@ export default function ActivityManager({
         </div>
       )}
       {detalle && (
-        <Modal title={detalle.title} subtitle="Detalles de la actividad (solo lectura)" onClose={() => setDetalle(null)} width={620}>
+        <Modal title={detalle.title} subtitle="Detalles de la actividad (solo lectura)" onClose={cerrarDetalle} width={620}>
           <DetalleActividad a={detalle} yo={user?.id} />
         </Modal>
       )}

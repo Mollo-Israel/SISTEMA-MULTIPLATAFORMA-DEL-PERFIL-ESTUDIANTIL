@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { Buffer } from 'node:buffer';
-import { aprobarActividad, codigoUniversitario, leerCorreo, provisionAndActivate, ajustarCuerpoActividad } from './lib/fixtures.mjs';
+import { aprobarActividad, codigoUniversitario, leerCorreo, loginAdmin, provisionAndActivate, ajustarCuerpoActividad } from './lib/fixtures.mjs';
 
 const API = process.env.API_URL ?? 'http://localhost:3010/api';
 const TS = Date.now();
@@ -32,7 +32,12 @@ const studentEmail = (n) => `e2e.${n}.${TS}@est.univalle.edu`;
 let directorParaRevision = null;
 async function crearConRevision({ token, body }) {
   const { status: deseado = 'draft', ...resto } = body;
-  const creada = await req('POST', '/activities', { token, body: resto });
+  // V7.1 D02: Dirección no abre una actividad que ya empezó. Para probar una
+  // «fecha pasada» se aprueba con fecha futura y Administración mueve después
+  // la fecha, que es lo que ocurre de verdad (igual que la asistencia en fixtures).
+  const fechaPedida = resto.activityDate;
+  const pasada = deseado !== 'draft' && !!fechaPedida && new Date(fechaPedida).getTime() <= Date.now();
+  const creada = await req('POST', '/activities', { token, body: pasada ? { ...resto, activityDate: undefined } : resto });
   if (creada.status !== 201 || deseado === 'draft') return creada;
   const id = creada.data.id;
   if (deseado === 'cancelled') {
@@ -41,6 +46,7 @@ async function crearConRevision({ token, body }) {
     await aprobarActividad(token, directorParaRevision, id, { abrir: false });
     await req('PATCH', `/activities/${id}`, { token, body: { status: deseado === 'published' ? 'published' : 'open' } });
     if (deseado === 'closed') await req('PATCH', `/activities/${id}`, { token, body: { status: 'closed' } });
+    if (pasada) await req('PATCH', `/activities/${id}`, { token: await loginAdmin(), body: { activityDate: fechaPedida } });
   }
   const final = await req('GET', `/activities/${id}`, { token });
   return { status: creada.status, data: final.data };

@@ -29,6 +29,7 @@ import {
   diminishingFactor,
   ProjectStatus,
   ProjectSkillEvidenceStatus,
+  cuentaComoTrayectoria,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
@@ -350,6 +351,35 @@ export class AffinityEngineService {
    * reproducir no se puede defender.
    */
   async recalculate(studentProfileId: string): Promise<AffinityResult[]> {
+    const { senales, rulesVersion } = await this.reunirSenales(studentProfileId);
+    const resultado = await this.persist(studentProfileId, senales, rulesVersion);
+    // V3 §65: queda constancia de cada recálculo (sin puntajes: solo cuántas áreas).
+    await this.audit?.record({
+      actorUserId: null,
+      eventType: AuditEventType.AFFINITY_RECALCULATED,
+      entityType: 'student_profile',
+      entityId: studentProfileId,
+      metadata: { areas: resultado.length, reglas: rulesVersion },
+    });
+    return resultado;
+  }
+
+  /**
+   * V7.1 §6.2: el mismo cálculo, sin guardar nada.
+   *
+   * Sirve para medir el impacto de un cambio de reglas (D04) antes de un
+   * recálculo autorizado: compara lo guardado con lo que daría la regla
+   * vigente. No escribe resultados, instantáneas ni auditoría.
+   */
+  async simulate(studentProfileId: string): Promise<{ academicAreaId: string; score: number; level: string; supportScore: number }[]> {
+    const { senales } = await this.reunirSenales(studentProfileId);
+    return this.puntuar(senales).areas
+      .filter((a) => a.rawPoints > 0 || a.supportScore > 0)
+      .map((a) => ({ academicAreaId: a.academicAreaId, score: a.score, level: a.level, supportScore: a.supportScore }));
+  }
+
+  /** Todas las señales de un estudiante, con la versión de reglas que las pesa. */
+  private async reunirSenales(studentProfileId: string): Promise<{ senales: Senal[]; rulesVersion: string }> {
     const profile = await this.profiles.findOne({ where: { id: studentProfileId } });
     if (!profile) {
       throw new NotFoundException('Perfil no encontrado.');
@@ -430,16 +460,7 @@ export class AffinityEngineService {
       );
     });
 
-    const resultado = await this.persist(studentProfileId, senales, rulesVersion);
-    // V3 §65: queda constancia de cada recálculo (sin puntajes: solo cuántas áreas).
-    await this.audit?.record({
-      actorUserId: null,
-      eventType: AuditEventType.AFFINITY_RECALCULATED,
-      entityType: 'student_profile',
-      entityId: studentProfileId,
-      metadata: { areas: resultado.length, reglas: rulesVersion },
-    });
-    return resultado;
+    return { senales, rulesVersion };
   }
 
   /** §51.1: intereses y áreas de mejora (se registran, no suman afinidad). */
@@ -514,6 +535,23 @@ export class AffinityEngineService {
           reason:
             `${r.activity?.title ?? 'Actividad'}: `
             + `${AFFINITY_EXCLUDED_REASON[code] ?? 'no suma afinidad'}`,
+        });
+        continue;
+      }
+
+      // V7.1 D04 (motor v6): con «Sin resultado», la asistencia es operativa.
+      // Se muestra en el desglose como «no suma» y no ocupa lugar en los
+      // rendimientos decrecientes de las demás actividades.
+      if (!cuentaComoTrayectoria(r.activity?.outcomePolicy)) {
+        add({
+          areaId,
+          family: AffinitySignalFamily.ACTIVITY,
+          weightCode: AffinityWeightCode.ACTIVITY_CONFIRMED,
+          matchType: AffinityMatchType.INHERITED,
+          sourceEntityType: AffinitySourceEntityType.ACTIVITY_REGISTRATION,
+          sourceId: r.id,
+          base: 0,
+          reason: `${r.activity?.title ?? 'Actividad'}: asistencia registrada en una actividad sin resultado; no suma afinidad`,
         });
         continue;
       }
@@ -1133,7 +1171,9 @@ export class AffinityEngineService {
 
   /** Tecnologías de actividades con participación confirmada. */
   private async respaldadasEnActividades(studentProfileId: string, sumar: SumarTecnologia): Promise<void> {
-    const regs = await this.registrations.find({ where: { studentProfileId, status: RegistrationStatus.CONFIRMED }, relations: { activity: true } });
+    // V7.1 D04: una actividad «Sin resultado» no respalda tecnologías.
+    const regs = (await this.registrations.find({ where: { studentProfileId, status: RegistrationStatus.CONFIRMED }, relations: { activity: true } }))
+      .filter((r) => cuentaComoTrayectoria(r.activity?.outcomePolicy));
     if (regs.length) {
       const filas = await this.activitySkills.find({ where: { activityId: In(regs.map((r) => r.activityId)) }, relations: { skill: true } });
       const titulo = new Map(regs.map((r) => [r.activityId, r.activity?.title ?? '']));

@@ -40,8 +40,22 @@
 /**
  * V3.2 BATCH 15 · versión 5: el área de cada experiencia sale de su contexto
  * explícito (área + habilidad) y nunca de etiquetas ni de texto (§12.3, §50).
+ *
+ * V7.1 D04 · versión 6: la participación confirmada en una actividad «Sin
+ * resultado» queda como asistencia operativa. No suma afinidad ni respaldo.
+ * Pesos, topes y rendimientos no cambian.
  */
-export const AFFINITY_ENGINE_VERSION = 5;
+export const AFFINITY_ENGINE_VERSION = 6;
+
+/**
+ * V7.1 §6.2: el recálculo automático al arrancar la API solo migra
+ * estructura (resultados de versiones anteriores a esta). Un cambio de
+ * reglas —como D04— no se aplica en silencio a todo el padrón. Se recalcula
+ * a pedido, con autorización y después de revisar su impacto. Mientras
+ * tanto, cada estudiante pasa a la versión nueva cuando su propia
+ * trayectoria cambia.
+ */
+export const AFFINITY_BOOT_BACKFILL_BELOW_VERSION = 5;
 
 /**
  * Familia de señal para el respaldo y la regla de diversidad (§53, §54).
