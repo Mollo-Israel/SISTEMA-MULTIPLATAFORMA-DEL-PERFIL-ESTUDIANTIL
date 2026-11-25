@@ -1,5 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   FiAlertTriangle, FiCheck, FiClock, FiEdit2, FiMail, FiPlus, FiSearch, FiSend, FiSliders, FiSlash,
   FiUserPlus, FiUsers, FiXCircle,
@@ -7,9 +7,10 @@ import {
 import { apiError } from '../../api/client';
 import { adminService, mailService } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import { useParametrosUrl } from '../../hooks/useFiltroUrl';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion,
-  VerTambien,
+  AsyncView, Badge, Button, Card, EmptyState, FiltroEstado, GrillaEnCarga, Modal, PageHeader, SearchInput, SkeletonTable,
+  FILAS_POR_PAGINA, Paginacion, ThOrden,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
@@ -115,18 +116,80 @@ function describirInvitacion(inv?: InvitationView): { tono: 'ok' | 'warn' | 'err
   return { tono: 'ok', texto: `Invitación enviada a ${inv.sentTo}. El titular elegirá su contraseña desde ese correo.` };
 }
 
+/** V7.1 §4.1: un estado a la vez; por omisión, las activas. */
+const ESTADOS_DE_CUENTA = [
+  { value: 'active', label: 'Activas' },
+  { value: 'pending_activation', label: 'Pendientes de activación' },
+  { value: 'suspended', label: 'Suspendidas' },
+  { value: 'inactive', label: 'Inactivas' },
+  { value: 'all', label: 'Todas' },
+] as const;
+type EstadoFiltro = (typeof ESTADOS_DE_CUENTA)[number]['value'];
+const ESTADOS_VALIDOS: readonly EstadoFiltro[] = ESTADOS_DE_CUENTA.map((o) => o.value);
+const ROLES_VALIDOS: readonly string[] = ['', ...Object.keys(ROLE_LABEL)];
+const ORDENES_VALIDOS = ['', 'name', 'email', 'role', 'semester', 'status'] as const;
+type OrdenUsuarios = (typeof ORDENES_VALIDOS)[number];
+
+/** Qué decir cuando el filtro no trae ninguna cuenta. */
+const VACIO_POR_ESTADO: Record<EstadoFiltro, string> = {
+  active: 'No hay cuentas activas.',
+  pending_activation: 'No hay cuentas pendientes de activación.',
+  suspended: 'No hay cuentas suspendidas.',
+  inactive: 'No hay cuentas inactivas.',
+  all: 'Todavía no hay usuarios registrados.',
+};
+
 export default function AdminUsersPage() {
-  const [search, setSearch] = useState('');
-  const [applied, setApplied] = useState('');
-  // V3 §8.2: el alcance docente vive aquí; ?role=TEACHER filtra los docentes y cada
-  // docente muestra y edita sus semestres habilitados.
-  const [params, setParams] = useSearchParams();
-  const rol = params.get('role') ?? '';
+  /*
+   * V7.1 §4.1: los filtros viven en la URL (búsqueda, estado, rol, apellidos
+   * por separar, orden y página). Se conservan al recargar y al volver, y el
+   * Inicio puede traer aquí la grilla ya filtrada. El servidor filtra antes de
+   * paginar: el total es siempre el del filtro.
+   */
+  const { leer, actualizar } = useParametrosUrl();
+  const q = leer<string>('q', '');
+  const estado = leer<EstadoFiltro>('status', 'active', ESTADOS_VALIDOS);
+  // V3 §8.2: ?role=TEACHER filtra los docentes y cada docente muestra y edita sus semestres.
+  const rol = leer<string>('role', '', ROLES_VALIDOS);
+  const soloApellidos = leer<string>('surnames', '', ['', 'pending']) === 'pending';
+  const sort = leer<OrdenUsuarios>('sort', '', ORDENES_VALIDOS);
+  const dir = leer<'asc' | 'desc'>('dir', 'asc', ['asc', 'desc']);
+  const pagina = Math.max(1, Math.trunc(Number(leer<string>('page', '1'))) || 1);
+  const [search, setSearch] = useState(q);
+  // Si la URL cambia desde fuera (Limpiar, un enlace), el buscador la sigue.
+  useEffect(() => {
+    if (q !== search.trim()) setSearch(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
   const { data, loading, error, reload } = useAsync(
-    () => adminService.listUsers(applied || undefined),
-    [applied],
+    () => adminService.usersPage({
+      search: q || undefined,
+      role: rol || undefined,
+      status: estado,
+      surnames: soloApellidos ? 'pending' : undefined,
+      sort: sort || undefined,
+      dir: sort ? dir : undefined,
+      limit: FILAS_POR_PAGINA,
+      offset: (pagina - 1) * FILAS_POR_PAGINA,
+    }),
+    [q, rol, estado, soloApellidos, sort, dir, pagina],
   );
   const correo = useAsync(() => mailService.status(), []);
+
+  /** Cambiar un filtro vuelve a la página 1. */
+  const filtrar = (cambios: Record<string, string | null>) =>
+    actualizar({ ...cambios, page: null }, { status: 'active' });
+  const hayFiltros = !!q || estado !== 'active' || !!rol || soloApellidos;
+  const limpiar = () => {
+    setSearch('');
+    actualizar({ q: null, status: null, role: null, surnames: null, sort: null, dir: null, page: null });
+  };
+  // Si la página quedó vacía (por ejemplo, tras suspender su última cuenta), se vuelve a la última que tiene filas.
+  useEffect(() => {
+    if (data && data.items.length === 0 && data.total > 0 && pagina > 1) {
+      actualizar({ page: String(Math.ceil(data.total / FILAS_POR_PAGINA)) });
+    }
+  }, [data, pagina, actualizar]);
 
   const [form, setForm] = useState(emptyForm);
   /** V6 §5.3: escribir el correo completo en vez de la parte local. */
@@ -181,9 +244,13 @@ export default function AdminUsersPage() {
       errores.reset();
       const aviso = describirInvitacion(creado.invitation);
       const titulo = `Cuenta creada: ${creado.firstName} ${creado.lastName}`;
-      if (aviso.tono === 'error') toast.error(titulo, aviso.texto);
-      else if (aviso.tono === 'warn') toast.info(titulo, aviso.texto);
-      else toast.success(titulo, aviso.texto);
+      // V7.1 §4.1: una cuenta nueva está pendiente; con otro filtro no se ve en la grilla.
+      const donde = estado === 'pending_activation' || estado === 'all'
+        ? ''
+        : ' Mientras no la active, está en «Pendientes de activación».';
+      if (aviso.tono === 'error') toast.error(titulo, aviso.texto + donde);
+      else if (aviso.tono === 'warn') toast.info(titulo, aviso.texto + donde);
+      else toast.success(titulo, aviso.texto + donde);
       reload();
     } catch (error_) {
       errores.fromApi(error_);
@@ -239,15 +306,30 @@ export default function AdminUsersPage() {
 
   // La tabla no se vuelve a dibujar al escribir en el formulario: recibe
   // acciones con identidad estable que siempre llaman a la versión vigente.
-  const vigentes = useRef({ editar: setEditing, docente: setSemesterTarget, reenviar, cambiarEstado, filtrarRol: (r: string) => setParams(r ? { role: r } : {}, { replace: true }) });
-  vigentes.current = { editar: setEditing, docente: setSemesterTarget, reenviar, cambiarEstado, filtrarRol: (r: string) => setParams(r ? { role: r } : {}, { replace: true }) };
+  const vigentes = useRef({ editar: setEditing, docente: setSemesterTarget, reenviar, cambiarEstado });
+  vigentes.current = { editar: setEditing, docente: setSemesterTarget, reenviar, cambiarEstado };
   const acciones = useMemo<AccionesTabla>(() => ({
     editar: (u) => vigentes.current.editar(u),
     docente: (u) => vigentes.current.docente(u),
     reenviar: (u) => vigentes.current.reenviar(u),
     cambiarEstado: (u, st) => vigentes.current.cambiarEstado(u, st),
-    filtrarRol: (r) => vigentes.current.filtrarRol(r),
   }), []);
+  /** Un clic en la columna ordena; otro invierte el sentido. Vuelve a la página 1. */
+  const alternarOrden = useCallback((clave: string) => {
+    const misma = sort === clave;
+    actualizar({ sort: clave, dir: misma && dir === 'asc' ? 'desc' : 'asc', page: null });
+  }, [sort, dir, actualizar]);
+  const orden = useMemo(() => (sort ? { clave: sort, dir } : null), [sort, dir]);
+  const total = data?.total ?? 0;
+  const paginas = Math.max(1, Math.ceil(total / FILAS_POR_PAGINA));
+  const pie = {
+    pagina,
+    paginas,
+    total,
+    desde: total === 0 ? 0 : (pagina - 1) * FILAS_POR_PAGINA + 1,
+    hasta: Math.min(pagina * FILAS_POR_PAGINA, total),
+    ir: (n: number) => actualizar({ page: n <= 1 ? null : String(Math.min(n, paginas)) }),
+  };
 
   const simulado = correo.data?.transport === 'console';
 
@@ -423,54 +505,69 @@ export default function AdminUsersPage() {
             <SearchInput
               value={search}
               onChange={setSearch}
-              onDebouncedChange={(v) => setApplied(v.trim())}
+              onDebouncedChange={(v) => { if (v.trim() !== q) filtrar({ q: v.trim() }); }}
               placeholder="Buscar por nombre, correo o código…"
             />
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={!search && !applied}
-              onClick={() => {
-                setSearch('');
-                setApplied('');
-              }}
-            >
+            <Button type="button" variant="secondary" size="sm" disabled={!hayFiltros && !search} onClick={limpiar}>
               Limpiar
             </Button>
           </div>
         }
       >
-        <AsyncView
-          loading={loading}
-          error={error}
-          data={data}
-          skeleton={<SkeletonTable rows={6} columns={6} />}
-          isEmpty={(d) => d.length === 0}
-          empty={
-            applied ? (
-              <EmptyState
-                icon={<FiSearch size={22} />}
-                message={`Ningún usuario coincide con “${applied}”.`}
-                action={
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setSearch('');
-                      setApplied('');
-                    }}
-                  >
-                    Limpiar búsqueda
-                  </Button>
-                }
-              />
-            ) : undefined
-          }
-          emptyMessage="Todavía no hay usuarios registrados."
-        >
-          {(todos) => <TablaUsuarios todos={todos} rol={rol} acciones={acciones} />}
-        </AsyncView>
+        <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <FiltroEstado
+            etiqueta="Estado de la cuenta"
+            valor={estado}
+            opciones={ESTADOS_DE_CUENTA}
+            onChange={(v) => filtrar({ status: v })}
+          />
+          <select
+            value={rol}
+            aria-label="Filtrar por rol"
+            onChange={(e) => filtrar({ role: e.target.value })}
+            style={{ maxWidth: 220 }}
+          >
+            <option value="">Todos los roles</option>
+            {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          {/* V6 §5.2 (V5-04): solo si quedan apellidos heredados por separar en este filtro. La
+              corrección sigue disponible en cada cuenta que lo necesite. */}
+          {((data?.surnamesPending ?? 0) > 0 || soloApellidos) && (
+            <label className="flex" style={{ gap: '0.35rem', alignItems: 'center' }} data-testid="apellidos-por-separar">
+              <input type="checkbox" checked={soloApellidos} onChange={(e) => filtrar({ surnames: e.target.checked ? 'pending' : null })} />
+              Apellidos por separar ({data?.surnamesPending ?? 0})
+            </label>
+          )}
+          {rol === RolNombre.TEACHER && (
+            <span className="muted small">Cada docente ve solo a los estudiantes de los semestres que tiene habilitados.</span>
+          )}
+        </div>
+        <GrillaEnCarga cargando={loading && !!data}>
+          <AsyncView
+            loading={loading}
+            error={error}
+            data={data}
+            skeleton={<SkeletonTable rows={6} columns={6} />}
+            isEmpty={(d) => d.items.length === 0}
+            empty={
+              q || rol || soloApellidos ? (
+                <EmptyState
+                  icon={<FiSearch size={22} />}
+                  message={q ? `Ninguna cuenta coincide con “${q}” en este filtro.` : 'Ninguna cuenta coincide con los filtros.'}
+                  action={<Button variant="secondary" size="sm" onClick={limpiar}>Limpiar filtros</Button>}
+                />
+              ) : undefined
+            }
+            emptyMessage={VACIO_POR_ESTADO[estado]}
+          >
+            {(p) => (
+              <>
+                <TablaUsuarios usuarios={p.items} orden={orden} alternar={alternarOrden} acciones={acciones} />
+                <Paginacion {...pie} noun="usuarios" />
+              </>
+            )}
+          </AsyncView>
+        </GrillaEnCarga>
       </Card>
 
       {editing && (
@@ -512,84 +609,42 @@ interface AccionesTabla {
   docente: (u: PublicUser) => void;
   reenviar: (u: PublicUser) => void;
   cambiarEstado: (u: PublicUser, status: UserStatus) => void;
-  filtrarRol: (rol: string) => void;
 }
 
 /**
- * La lista de cuentas, aparte del formulario.
+ * La página de cuentas, aparte del formulario.
  *
- * Con miles de usuarios, dibujarlos todos en cada tecla que se escribe en
- * «Crear una cuenta» trababa la pantalla. Memorizada, solo se vuelve a dibujar
- * cuando cambian los datos o el filtro; y muestra las filas por tandas.
+ * V7.1 §4.1: filtrar, ordenar y paginar lo hace el servidor; aquí solo se
+ * dibujan las diez filas que llegan. Memorizada, no se vuelve a dibujar en
+ * cada tecla que se escribe en «Crear una cuenta».
  */
 const TablaUsuarios = memo(function TablaUsuarios({
-  todos,
-  rol,
+  usuarios,
+  orden,
+  alternar,
   acciones,
 }: {
-  todos: PublicUser[];
-  rol: string;
+  usuarios: PublicUser[];
+  orden: { clave: string; dir: 'asc' | 'desc' } | null;
+  alternar: (clave: string) => void;
   acciones: AccionesTabla;
 }) {
-  // V5-04 (A02): las cuentas con un apellido heredado que falta separar.
-  const [soloPendientes, setSoloPendientes] = useState(false);
-  // V6 §5.1: por omisión, sin las cuentas suspendidas.
-  const [verSuspendidas, setVerSuspendidas] = useState(false);
-  const porSeparar = todos.filter((u) => u.surnamesPending).length;
-  const users = useMemo(
-    () => todos.filter((u) => (!rol || u.role === rol) && (!soloPendientes || u.surnamesPending)
-      && (verSuspendidas || u.status !== 'suspended')),
-    [todos, rol, soloPendientes, verSuspendidas],
-  );
-  // V3.2 §6.1: 10 filas por página, ordenables, con contador.
-  const { ordenados, orden, alternar } = useOrden(users, {
-    nombre: (u) => `${u.lastName} ${u.firstName}`,
-    correo: (u) => u.email,
-    rol: (u) => ROLE_LABEL[u.role] ?? u.role,
-    semestre: (u) => u.semester ?? null,
-    estado: (u) => estadoCuenta(u).label,
-  });
-  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [todos, rol, orden, soloPendientes, verSuspendidas]);
   return (
     <>
-      <div className="flex" style={{ marginBottom: '0.6rem', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <ResultCount shown={users.length} total={todos.length} noun="usuarios" />
-        <select
-          value={rol}
-          aria-label="Filtrar por rol"
-          onChange={(e) => acciones.filtrarRol(e.target.value)}
-          style={{ maxWidth: 220 }}
-        >
-          <option value="">Todos los roles</option>
-          {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <VerTambien checked={verSuspendidas} onChange={setVerSuspendidas}>Mostrar también las suspendidas</VerTambien>
-        {/* V6 §5.2 (V5-04): solo si quedan apellidos heredados por separar. La
-            corrección sigue disponible en cada cuenta que lo necesite. */}
-        {(porSeparar > 0 || soloPendientes) && (
-          <label className="flex" style={{ gap: '0.35rem', alignItems: 'center' }} data-testid="apellidos-por-separar">
-            <input type="checkbox" checked={soloPendientes} onChange={(e) => setSoloPendientes(e.target.checked)} />
-            Apellidos por separar ({porSeparar})
-          </label>
-        )}
-        {rol === RolNombre.TEACHER && (
-          <span className="muted small">Cada docente ve solo a los estudiantes de los semestres que tiene habilitados.</span>
-        )}
-      </div>
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <ThOrden clave="nombre" orden={orden} alternar={alternar}>Nombre</ThOrden>
-              <ThOrden clave="correo" orden={orden} alternar={alternar}>Correo</ThOrden>
-              <ThOrden clave="rol" orden={orden} alternar={alternar}>Rol</ThOrden>
-              <ThOrden clave="semestre" orden={orden} alternar={alternar}>Semestre</ThOrden>
-              <ThOrden clave="estado" orden={orden} alternar={alternar}>Estado</ThOrden>
+              <ThOrden clave="name" orden={orden} alternar={alternar}>Nombre</ThOrden>
+              <ThOrden clave="email" orden={orden} alternar={alternar}>Correo</ThOrden>
+              <ThOrden clave="role" orden={orden} alternar={alternar}>Rol</ThOrden>
+              <ThOrden clave="semester" orden={orden} alternar={alternar}>Semestre</ThOrden>
+              <ThOrden clave="status" orden={orden} alternar={alternar}>Estado</ThOrden>
               <th><span className="sr-only">Acciones</span></th>
             </tr>
           </thead>
           <tbody>
-            {pag.visibles.map((u) => (
+            {usuarios.map((u) => (
               <tr key={u.id}>
                 <td>
                   {u.firstName} {u.lastName}
@@ -635,7 +690,6 @@ const TablaUsuarios = memo(function TablaUsuarios({
           </tbody>
         </table>
       </div>
-      <Paginacion {...pag} noun="usuarios" />
     </>
   );
 });

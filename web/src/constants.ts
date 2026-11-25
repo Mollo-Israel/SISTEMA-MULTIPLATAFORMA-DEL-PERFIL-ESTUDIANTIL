@@ -52,6 +52,17 @@ export const PROVISIONABLE_ROLES = [
 export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /**
+ * V7.1 §4.1: estado excluyente de un catálogo (áreas, habilidades,
+ * categorías). La primera opción es la de omisión.
+ */
+export const ESTADOS_DE_CATALOGO = [
+  { value: 'active', label: 'Vigentes' },
+  { value: 'inactive', label: 'Dadas de baja' },
+  { value: 'all', label: 'Todas' },
+] as const;
+export const ESTADOS_DE_CATALOGO_VALIDOS = ['active', 'inactive', 'all'] as const;
+
+/**
  * Hechos que dan puntos (§66). Solo los vigentes se pueden premiar; los
  * retirados se muestran en gris en los criterios antiguos que los usan.
  */

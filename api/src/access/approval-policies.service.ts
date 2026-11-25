@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, IsNull, Repository } from 'typeorm';
+import { EntityManager, In, IsNull, Not, Repository } from 'typeorm';
 import { RolNombre } from '@perfil/shared';
 import { ApprovalModule, ApprovalPolicy } from '../entities/approval-policy.entity';
 import { User } from '../entities/user.entity';
@@ -9,6 +9,10 @@ import { AuditEventType, AuditService } from '../audit/audit.service';
 
 /** Módulos en los que Dirección puede conceder una excepción hoy (§9.2). */
 export const MODULOS_CON_EXCEPCION: ApprovalModule[] = ['RESOURCE', 'GAMIFICATION'];
+
+/** V7.1 §4.1: el listado de excepciones se filtra por un único estado. */
+export type EstadoDeAutonomia = 'active' | 'revoked' | 'all';
+export const ESTADOS_DE_AUTONOMIA: readonly EstadoDeAutonomia[] = ['active', 'revoked', 'all'];
 
 const NOMBRE_MODULO: Record<ApprovalModule, string> = {
   RESOURCE: 'recursos', GAMIFICATION: 'puntos', ACTIVITY: 'actividades',
@@ -69,10 +73,12 @@ export class ApprovalPoliciesService {
   }
 
   /** Dirección y Administración: todas, vigentes primero. */
-  async list(user: AuthenticatedUser, incluirRevocadas = false) {
+  /** V7.1 §4.1: vigentes, revocadas o todas, filtradas aquí y no en la página. */
+  async list(user: AuthenticatedUser, estado: EstadoDeAutonomia = 'active') {
     this.assertPuedeVer(user);
+    const where = { active: { revokedAt: IsNull() }, revoked: { revokedAt: Not(IsNull()) }, all: {} }[estado];
     const filas = await this.policies.find({
-      where: incluirRevocadas ? {} : { revokedAt: IsNull() },
+      where,
       relations: { teacher: true },
       order: { grantedAt: 'DESC' },
       take: 500,

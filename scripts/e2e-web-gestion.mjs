@@ -405,7 +405,8 @@ async function autonomia(ctx, browser) {
   await modal.locator('#revocar-motivo').fill('Cambió la coordinación de la materia.');
   await modal.getByRole('button', { name: 'Revocar' }).click();
   const revocada = await aparece(page.getByText('Autonomía revocada.'), 8000);
-  await page.getByRole('checkbox', { name: 'Ver también las revocadas' }).check();
+  // V7.1 §4.1: un estado a la vez; la revocada se ve en «Revocadas».
+  await page.getByLabel('Estado', { exact: true }).selectOption('revoked');
   const conRevocadas = await aparece(page.locator('[data-testid="politica"]', { hasText: 'Revocada: Cambió la coordinación de la materia.' }), 8000);
   check(sinMotivo && revocada && conRevocadas && errores.length === 0, 'WG.4.5 Revocar pide motivo, avisa y la revocación queda a la vista', json({ sinMotivo, revocada, conRevocadas, e: errores }));
   await c1.close();
@@ -502,7 +503,8 @@ async function recursos(ctx, browser) {
   await filaRecurso.getByRole('button', { name: 'Retirar' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Retirar' }).click();
   const retirado = await aparece(page.getByText('Recurso retirado.'), 8000);
-  await page.getByRole('checkbox', { name: 'Ver también los retirados' }).check();
+  // V7.1 §4.1: el retirado sale de «Vigentes» y se repone desde «Retirados».
+  await page.getByLabel('Estado', { exact: true }).selectOption('inactive');
   await filaRecurso.getByRole('button', { name: 'Reponer' }).click();
   const repuesto = await aparece(page.getByText('Recurso repuesto en el catálogo.'), 8000);
   const final = ((await req('GET', '/learning-resources', { token: director.token })).data ?? []).find((r) => r.title === titulo);

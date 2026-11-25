@@ -347,33 +347,33 @@ async function batch5(ctx, browser) {
   await pa.locator('tbody tr').first().waitFor({ timeout: 30000 }).catch(() => {});
   await buscarEn(`Area de baja ${L}`);
   const sinBaja = await filaVisible(`Area de baja ${L}`);
-  await pa.getByLabel('Mostrar también las dadas de baja').first().check();
-  await espera(300);
+  // V7.1 §4.1: la casilla «Mostrar también…» pasó a un selector de un solo estado.
+  await pa.getByLabel('Estado', { exact: true }).first().selectOption('inactive');
+  await pa.locator('[aria-busy="false"] tbody tr', { hasText: `Area de baja ${L}` }).first().waitFor({ timeout: 15000 }).catch(() => {});
   check(area.status === 201 && !sinBaja && await filaVisible(`Area de baja ${L}`),
-    'V6W.5.8 §5.1 Áreas: la dada de baja no aparece por omisión; «Mostrar también las dadas de baja» la trae', json5({ s: area.status, sinBaja }));
+    'V6W.5.8 §5.1 Áreas: la dada de baja no aparece en «Vigentes»; «Dadas de baja» la trae (V7.1 §4.1)', json5({ s: area.status, sinBaja }));
 
   await pa.goto(`${WEB}/admin/activity-categories`);
   await pa.locator('tbody tr').first().waitFor({ timeout: 30000 }).catch(() => {});
   await buscarEn(`Categoria de baja ${L}`);
   const catOculta = !(await filaVisible(`Categoria de baja ${L}`));
-  await pa.getByLabel('Mostrar también las dadas de baja').first().check();
-  await espera(300);
+  await pa.getByLabel('Estado', { exact: true }).first().selectOption('inactive');
+  await pa.locator('[aria-busy="false"] tbody tr', { hasText: `Categoria de baja ${L}` }).first().waitFor({ timeout: 15000 }).catch(() => {});
   check(cat.status === 201 && catOculta && await filaVisible(`Categoria de baja ${L}`),
     'V6W.5.9 Categorías: igual, vigentes por omisión', json5({ s: cat.status, catOculta }));
 
   await pa.goto(`${WEB}/admin/users`);
   await pa.locator('tbody tr').first().waitFor({ timeout: 45000 }).catch(() => {});
-  // §5.2: «Apellidos por separar» solo si hay alguno (se mira sin búsqueda: cuenta lo listado).
-  const usuarios = (await req('GET', '/users', { token: ctx.admin })).data ?? [];
-  const pendientes = usuarios.filter((u) => u.surnamesPending).length;
+  // §5.2: «Apellidos por separar» solo si hay alguno en el filtro visible (por omisión, las activas).
+  const pendientes = (await req('GET', '/users?status=active&limit=1', { token: ctx.admin })).data?.surnamesPending ?? 0;
   const boton = await pa.locator('[data-testid="apellidos-por-separar"]').count();
   check((pendientes > 0) === (boton === 1), `V6W.5.11 §5.2 «Apellidos por separar» se muestra solo si hay (hay ${pendientes})`, `botón=${boton}`);
   await buscarEn(`Pendida${L}`);
   await espera(1500);
   const susOculto = !(await filaVisible(`Pendida${L}`));
-  await pa.getByLabel('Mostrar también las suspendidas').first().check();
-  await espera(300);
-  check(susOculto && await filaVisible(`Pendida${L}`), 'V6W.5.10 Usuarios: las suspendidas solo con «Mostrar también las suspendidas»', json5({ susOculto }));
+  await pa.getByLabel('Estado de la cuenta').selectOption('suspended');
+  await pa.locator('[aria-busy="false"] tbody tr', { hasText: `Pendida${L}` }).first().waitFor({ timeout: 15000 }).catch(() => {});
+  check(susOculto && await filaVisible(`Pendida${L}`), 'V6W.5.10 Usuarios: la suspendida no está en «Activas»; está en «Suspendidas» (V7.1 §4.1)', json5({ susOculto }));
 
   const sinPendientes = await pa.locator('[data-testid="apellidos-por-separar"]').count();
   check(sinPendientes === 0, 'V6W.5.11b Con una búsqueda sin apellidos por separar, el botón no aparece', `botón=${sinPendientes}`);

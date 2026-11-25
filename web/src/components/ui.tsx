@@ -736,15 +736,42 @@ export function Paginacion({
 }
 
 /**
- * V6 §5.1: los listados muestran por omisión solo lo vigente; esta casilla
- * suma lo dado de baja o suspendido. Filtrar no borra nada.
+ * V7.1 §4.1: un estado a la vez. Sustituye a las casillas «Mostrar
+ * también…», que sumaban estados distintos en la misma lista. La primera
+ * opción es la de omisión (lo vigente). Filtrar no borra nada.
  */
-export function VerTambien({ checked, onChange, children }: Readonly<{ checked: boolean; onChange: (v: boolean) => void; children: ReactNode }>) {
+export function FiltroEstado<T extends string>({
+  etiqueta,
+  valor,
+  opciones,
+  onChange,
+}: Readonly<{
+  etiqueta: string;
+  valor: T;
+  opciones: readonly { value: T; label: string }[];
+  onChange: (valor: T) => void;
+}>) {
+  const id = useId();
   return (
-    <label className="flex ver-tambien" style={{ gap: '0.4rem', fontSize: '0.82rem', alignItems: 'center' }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <span className="filtro-estado">
+      <label htmlFor={id}>{etiqueta}</label>
+      <select id={id} value={valor} onChange={(e) => onChange(e.target.value as T)}>
+        {opciones.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </span>
+  );
+}
+
+/**
+ * V7.1 §4.1: mientras llega el resultado de otro filtro, la grilla anterior
+ * se atenúa y se marca ocupada. Así no se lee como si ya fuera del filtro
+ * nuevo.
+ */
+export function GrillaEnCarga({ cargando, children }: Readonly<{ cargando: boolean; children: ReactNode }>) {
+  return (
+    <div className={cargando ? 'grilla-en-carga' : undefined} aria-busy={cargando}>
       {children}
-    </label>
+    </div>
   );
 }
 

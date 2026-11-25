@@ -1,7 +1,9 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsString, IsUUID, MaxLength } from 'class-validator';
 import { RolNombre } from '@perfil/shared';
+import { leerFiltro } from '../common/estado-de-listado';
+import { ESTADOS_DE_AUTONOMIA } from './approval-policies.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
@@ -34,8 +36,17 @@ export class ApprovalPoliciesController {
   @Get()
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   @ApiOperation({ summary: 'Excepciones concedidas por Dirección.' })
-  list(@CurrentUser() user: AuthenticatedUser, @Query('includeRevoked') includeRevoked?: string) {
-    return this.policies.list(user, includeRevoked === 'true');
+  @ApiQuery({
+    name: 'status', required: false, enum: ESTADOS_DE_AUTONOMIA,
+    description: 'V7.1 §4.1: vigentes (por omisión), revocadas o todas. `includeRevoked=true` equivale a «all».',
+  })
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('includeRevoked') includeRevoked?: string,
+    @Query('status') status?: string,
+  ) {
+    const estado = leerFiltro(status, ESTADOS_DE_AUTONOMIA) ?? (includeRevoked === 'true' ? 'all' : 'active');
+    return this.policies.list(user, estado);
   }
 
   @Get('teachers')

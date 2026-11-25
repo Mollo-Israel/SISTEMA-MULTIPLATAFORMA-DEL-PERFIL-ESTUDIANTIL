@@ -4,13 +4,27 @@ import { useEffect, useMemo, useState } from 'react';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { FiBookOpen, FiExternalLink, FiFileText, FiPlus, FiSave, FiSearch, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { catalogService, gamificationService, learningResourceService, uploadService, type LearningResource, activityService, approvalPolicyService } from '../../services';
+import { catalogService, gamificationService, learningResourceService, uploadService, type LearningResource, activityService, approvalPolicyService, type EstadoDeCatalogo } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import { useFiltroUrl } from '../../hooks/useFiltroUrl';
+import { ESTADOS_DE_CATALOGO_VALIDOS } from '../../constants';
 import type { AcademicArea, Skill } from '../../services/types';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, PageHeader, Paginacion, ResultCount, SearchInput,
+  AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, FiltroEstado, GrillaEnCarga, PageHeader, Paginacion, ResultCount, SearchInput,
   SkeletonTable, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
+
+/** V7.1 §4.1: un estado a la vez; por omisión, lo vigente. */
+const ESTADOS_DE_RECURSO = [
+  { value: 'active', label: 'Vigentes' },
+  { value: 'inactive', label: 'Retirados' },
+  { value: 'all', label: 'Todos' },
+] as const;
+const VACIO_RECURSOS: Record<EstadoDeCatalogo, string> = {
+  active: 'El catálogo todavía está vacío. Incorpora el primer recurso arriba.',
+  inactive: 'No hay recursos retirados.',
+  all: 'El catálogo todavía está vacío. Incorpora el primer recurso arriba.',
+};
 import { useConfirm, useToast } from '../../components/feedback';
 import { useAuth } from '../../auth/AuthContext';
 
@@ -292,10 +306,12 @@ export default function DirectorLearningResourcesPage() {
     if (esDocente) activityService.myScope().then((r) => setSemestresDocente(r.semesters)).catch(() => {});
     if (esDocente) approvalPolicyService.mine().then((p) => setDirecto(p.RESOURCE === 'DIRECT_ALLOWED')).catch(() => {});
   }, [esDocente]);
-  const [verRetirados, setVerRetirados] = useState(false);
+  // V7.1 §4.1: vigentes, retirados o todos, uno a la vez y en la URL; lo filtra la API.
+  // El docente solo ve lo vigente (la API no le entrega lo retirado).
+  const [estado, setEstado] = useFiltroUrl<EstadoDeCatalogo>('status', 'active', ESTADOS_DE_CATALOGO_VALIDOS);
   const state = useAsync(
-    () => learningResourceService.list({ includeInactive: verRetirados }),
-    [verRetirados],
+    () => learningResourceService.list({ status: esDocente ? 'active' : estado }),
+    [estado, esDocente],
   );
   const [areas, setAreas] = useState<AcademicArea[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -330,7 +346,7 @@ export default function DirectorLearningResourcesPage() {
     tipo: (r) => TIPO_LABEL[r.resourceType] ?? r.resourceType,
     estado: (r) => (r.status === 'active' ? 0 : 1),
   }, { clave: 'recurso', dir: 'asc' });
-  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [query, verRetirados, orden]);
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [query, estado, orden]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -664,19 +680,15 @@ export default function DirectorLearningResourcesPage() {
         title={esDocente ? 'Mis propuestas y el catálogo' : 'Recursos del catálogo'}
         actions={
           <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
-            <label className="flex" style={{ gap: '0.4rem', fontSize: '0.82rem' }}>
-              <input
-                type="checkbox"
-                checked={verRetirados}
-                onChange={(e) => setVerRetirados(e.target.checked)}
-              />
-              <span>Ver también los retirados</span>
-            </label>
+            {!esDocente && (
+              <FiltroEstado etiqueta="Estado" valor={estado} opciones={ESTADOS_DE_RECURSO} onChange={setEstado} />
+            )}
             <SearchInput value={query} onChange={setQuery} placeholder="Buscar recurso…" />
             <ResultCount shown={visible.length} total={(state.data ?? []).length} noun="recursos" />
           </div>
         }
       >
+        <GrillaEnCarga cargando={state.loading && !!state.data}>
         <AsyncView
           loading={state.loading}
           error={state.error}
@@ -690,7 +702,7 @@ export default function DirectorLearningResourcesPage() {
                 message={
                   query
                     ? `Ningún recurso coincide con “${query}”.`
-                    : 'El catálogo todavía está vacío. Incorpora el primer recurso arriba.'
+                    : VACIO_RECURSOS[esDocente ? 'active' : estado]
                 }
               />
             ) : (
@@ -718,6 +730,7 @@ export default function DirectorLearningResourcesPage() {
             )
           }
         </AsyncView>
+        </GrillaEnCarga>
       </Card>
     </div>
   );

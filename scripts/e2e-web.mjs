@@ -25,7 +25,8 @@ import { ADMIN_CREDENTIALS, API, asegurarGithubSimulado, loginAdmin, provisionAn
 import { medirCobertura } from './lib/cobertura-navegador.mjs';
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const WEB = 'http://localhost:5173';
+// V7.1: como las demás suites, admite el entorno aislado (WEB_URL=http://localhost:5180).
+const WEB = process.env.WEB_URL ?? 'http://localhost:5173';
 const TS = Date.now();
 const C = { r: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[90m', ok: '\x1b[32m', bad: '\x1b[31m', head: '\x1b[36m' };
 let passed = 0;

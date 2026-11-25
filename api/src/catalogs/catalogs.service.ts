@@ -34,6 +34,7 @@ import {
   UpdateLearningResourceDto,
 } from './dto/learning-resource.dto';
 import { slugCode } from '../common/validation';
+import { condicionDeVigencia, EstadoDeCatalogo } from '../common/estado-de-listado';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { analyzeAreaTags, AreaTagAnalysis, classifySkill, Classification, normalizeTerm } from './skill-classification';
 
@@ -74,9 +75,10 @@ export class CatalogsService {
    * Solo el administrador ve las categorias dadas de baja; el resto trabaja con
    * el catalogo vigente, para no ofrecer opciones retiradas.
    */
-  findActivityCategories(includeInactive = false): Promise<ActivityCategory[]> {
+  /** V7.1 §4.1: vigentes, dadas de baja o todas; el controlador decide qué puede pedir cada rol. */
+  findActivityCategories(estado: EstadoDeCatalogo = 'active'): Promise<ActivityCategory[]> {
     return this.activityCategories.find({
-      where: includeInactive ? {} : { isActive: true },
+      where: condicionDeVigencia(estado),
       order: { name: 'ASC' },
     });
   }
@@ -149,9 +151,10 @@ export class CatalogsService {
    * Solo el administrador ve las areas dadas de baja: el resto de los roles
    * trabaja con el catalogo vigente, para no ofrecer opciones retiradas.
    */
-  findAreas(includeInactive = false): Promise<AcademicArea[]> {
+  /** V7.1 §4.1: vigentes, dadas de baja o todas; el controlador decide qué puede pedir cada rol. */
+  findAreas(estado: EstadoDeCatalogo = 'active'): Promise<AcademicArea[]> {
     return this.areas.find({
-      where: includeInactive ? {} : { isActive: true },
+      where: condicionDeVigencia(estado),
       order: { name: 'ASC' },
     });
   }
@@ -238,9 +241,10 @@ export class CatalogsService {
   // Habilidades
   // ------------------------------------------------------------------
 
-  async findSkills(includeInactive = false): Promise<Skill[]> {
+  /** V7.1 §4.1: vigentes, dadas de baja o todas; el controlador decide qué puede pedir cada rol. */
+  async findSkills(estado: EstadoDeCatalogo = 'active'): Promise<Skill[]> {
     const lista = await this.skills.find({
-      where: includeInactive ? {} : { isActive: true },
+      where: condicionDeVigencia(estado),
       relations: { academicArea: true },
       order: { name: 'ASC' },
     });
@@ -574,12 +578,15 @@ export class CatalogsService {
    * retirados, porque conservarlos es justamente el punto.
    */
   async findLearningResources(opciones: {
-    includeInactive?: boolean;
+    /** V7.1 §4.1: vigentes (por omisión), retirados o todos. */
+    estado?: EstadoDeCatalogo;
     academicAreaId?: string;
     viewer?: AuthenticatedUser;
   } = {}): Promise<LearningResource[]> {
     const where: Record<string, unknown> = {};
-    if (!opciones.includeInactive) where.status = LearningResourceStatus.ACTIVE;
+    const estado = opciones.estado ?? 'active';
+    if (estado === 'active') where.status = LearningResourceStatus.ACTIVE;
+    else if (estado === 'inactive') where.status = LearningResourceStatus.INACTIVE;
     if (opciones.academicAreaId) where.academicAreaId = opciones.academicAreaId;
 
     const lista = await this.learningResources.find({

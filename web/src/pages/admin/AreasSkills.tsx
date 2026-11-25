@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { FiAlertTriangle, FiEdit2, FiGrid, FiPlus, FiSearch, FiTool } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { adminService, catalogService } from '../../services';
+import { adminService, catalogService, type EstadoDeCatalogo } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import { useFiltroUrl, useParametrosUrl } from '../../hooks/useFiltroUrl';
+import { ESTADOS_DE_CATALOGO, ESTADOS_DE_CATALOGO_VALIDOS } from '../../constants';
 import type { AcademicArea, Skill, SkillClassification } from '../../services/types';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, Tabs, FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion, VerTambien,
+  AsyncView, Badge, Button, Card, EmptyState, FiltroEstado, GrillaEnCarga, Modal, PageHeader, ResultCount, SearchInput, SkeletonTable, Tabs,
+  FILAS_POR_PAGINA, Paginacion, ThOrden, useOrden, usePaginacion,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import AiAssist from '../../components/AiAssist';
@@ -26,8 +28,10 @@ const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-�
  * quien organiza, y lo que respaldan se demuestra), y siguen aparte.
  */
 export default function AdminAreasSkillsPage() {
-  const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') === 'skills' ? 'skills' : 'areas';
+  const { leer, actualizar } = useParametrosUrl();
+  const tab = leer('tab', 'areas', ['areas', 'skills']);
+  // Todas, vigentes y dadas de baja: los selectores del formulario y el contador
+  // de cada pestaña. Cada grilla pide aparte solo el estado elegido (V7.1 §4.1).
   const areas = useAsync(() => catalogService.areas(), []);
   const skills = useAsync(() => catalogService.skills(), []);
 
@@ -43,18 +47,28 @@ export default function AdminAreasSkillsPage() {
           { key: 'skills', label: 'Habilidades', count: skills.data?.length },
         ]}
         value={tab}
-        onChange={(k) => setParams(k === 'skills' ? { tab: 'skills' } : {}, { replace: true })}
+        onChange={(k) => actualizar({ tab: k === 'skills' ? 'skills' : null })}
       />
       {tab === 'areas' ? (
-        <AreasPanel state={areas} onChanged={() => { areas.reload(); skills.reload(); }} />
+        <AreasPanel onChanged={() => { areas.reload(); skills.reload(); }} />
       ) : (
-        <SkillsPanel state={skills} areas={areas.data ?? []} onChanged={skills.reload} />
+        <SkillsPanel areas={areas.data ?? []} onChanged={skills.reload} />
       )}
     </div>
   );
 }
 
-type Estado<T> = ReturnType<typeof useAsync<T>>;
+/** Qué decir cuando el estado elegido no tiene filas. */
+const VACIO_AREAS: Record<EstadoDeCatalogo, string> = {
+  active: 'No hay áreas académicas vigentes.',
+  inactive: 'No hay áreas dadas de baja.',
+  all: 'Todavía no hay áreas académicas.',
+};
+const VACIO_HABILIDADES: Record<EstadoDeCatalogo, string> = {
+  active: 'No hay habilidades vigentes en el catálogo.',
+  inactive: 'No hay habilidades dadas de baja.',
+  all: 'Todavía no hay habilidades en el catálogo.',
+};
 
 // ===========================================================================
 //  Áreas
@@ -174,8 +188,12 @@ async function confirmarEtiquetas(
   });
 }
 
-function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[]>; onChanged: () => void }>) {
+function AreasPanel({ onChanged }: Readonly<{ onChanged: () => void }>) {
+  // V7.1 §4.1: un estado a la vez, en la URL; lo filtra la API.
+  const [estado, setEstado] = useFiltroUrl<EstadoDeCatalogo>('status', 'active', ESTADOS_DE_CATALOGO_VALIDOS);
+  const state = useAsync(() => catalogService.areas(estado), [estado]);
   const { data, loading, error } = state;
+  const cambio = () => { state.reload(); onChanged(); };
   const [form, setForm] = useState(areaVacia);
   const [codeTouched, setCodeTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -185,16 +203,14 @@ function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[
   const toast = useToast();
   const confirm = useConfirm();
 
-  // V6 §5.1: por omisión, solo las vigentes.
-  const [verBajas, setVerBajas] = useState(false);
   const visible = useMemo(() => {
     const q = normalize(query.trim());
-    const rows = (data ?? []).filter((a) => verBajas || a.isActive);
+    const rows = data ?? [];
     if (!q) return rows;
     return rows.filter((a) =>
       [a.name, a.code, a.description ?? '', (a.tags ?? []).join(' ')].some((f) => normalize(f).includes(q)),
     );
-  }, [data, query, verBajas]);
+  }, [data, query]);
   // V3.2 §6.1: 10 filas por página, ordenables.
   const { ordenados, orden, alternar } = useOrden(visible, {
     nombre: (a) => a.name,
@@ -223,7 +239,7 @@ function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[
       setForm(areaVacia);
       setCodeTouched(false);
       errores.reset();
-      onChanged();
+      cambio();
     } catch (error_) {
       errores.fromApi(error_);
     } finally {
@@ -246,7 +262,7 @@ function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[
     try {
       await adminService.updateArea(area.id, { isActive: !area.isActive });
       toast.success(area.isActive ? 'Área dada de baja.' : 'Área reactivada.');
-      onChanged();
+      cambio();
     } catch (error_) {
       toast.error(apiError(error_));
     }
@@ -274,22 +290,25 @@ function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[
       <Card
         title="Áreas registradas"
         actions={
-          (data ?? []).length > 0 ? (
-            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
-              <VerTambien checked={verBajas} onChange={setVerBajas}>Mostrar también las dadas de baja</VerTambien>
-              <SearchInput value={query} onChange={setQuery} placeholder="Buscar nombre, código o etiqueta…" />
-              <ResultCount shown={visible.length} total={(data ?? []).length} noun="áreas" />
-            </div>
-          ) : undefined
+          <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+            <FiltroEstado etiqueta="Estado" valor={estado} opciones={ESTADOS_DE_CATALOGO} onChange={setEstado} />
+            {(data ?? []).length > 0 && (
+              <>
+                <SearchInput value={query} onChange={setQuery} placeholder="Buscar nombre, código o etiqueta…" />
+                <ResultCount shown={visible.length} total={(data ?? []).length} noun="áreas" />
+              </>
+            )}
+          </div>
         }
       >
+        <GrillaEnCarga cargando={loading && !!data}>
         <AsyncView
           loading={loading}
           error={error}
           data={data}
           skeleton={<SkeletonTable rows={5} columns={5} />}
           isEmpty={(d) => d.length === 0}
-          empty={<EmptyState icon={<FiGrid size={22} />} message="Todavía no hay áreas académicas." />}
+          empty={<EmptyState icon={<FiGrid size={22} />} message={VACIO_AREAS[estado]} />}
         >
           {() =>
             visible.length === 0 ? (
@@ -351,6 +370,7 @@ function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[
             )
           }
         </AsyncView>
+        </GrillaEnCarga>
       </Card>
 
       {editing && (
@@ -360,7 +380,7 @@ function AreasPanel({ state, onChanged }: Readonly<{ state: Estado<AcademicArea[
           onSaved={() => {
             setEditing(null);
             toast.success('Área actualizada.');
-            onChanged();
+            cambio();
           }}
         />
       )}
@@ -613,15 +633,17 @@ function SkillForm({
 }
 
 function SkillsPanel({
-  state,
   areas,
   onChanged,
 }: Readonly<{
-  state: Estado<Skill[]>;
   areas: AcademicArea[];
   onChanged: () => void;
 }>) {
+  // V7.1 §4.1: un estado a la vez, en la URL; lo filtra la API.
+  const [estado, setEstado] = useFiltroUrl<EstadoDeCatalogo>('status', 'active', ESTADOS_DE_CATALOGO_VALIDOS);
+  const state = useAsync(() => catalogService.skills(estado), [estado]);
   const { data, loading, error } = state;
+  const cambio = () => { state.reload(); onChanged(); };
   const [form, setForm] = useState(skillVacia);
   const [codeTouched, setCodeTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -631,14 +653,12 @@ function SkillsPanel({
   const toast = useToast();
   const confirm = useConfirm();
 
-  // V6 §5.1: por omisión, solo las vigentes.
-  const [verBajas, setVerBajas] = useState(false);
   const visible = useMemo(() => {
     const q = normalize(query.trim());
-    const rows = (data ?? []).filter((s) => verBajas || s.isActive);
+    const rows = data ?? [];
     if (!q) return rows;
     return rows.filter((s) => [s.name, s.code, s.academicArea?.name ?? ''].some((f) => normalize(f).includes(q)));
-  }, [data, query, verBajas]);
+  }, [data, query]);
 
   const sinArea = (data ?? []).filter((s) => !s.academicAreaId).length;
   const nombreArea = useMemo(() => new Map(areas.map((a) => [a.id, a.name])), [areas]);
@@ -664,7 +684,7 @@ function SkillsPanel({
       setForm({ ...skillVacia, academicAreaId: form.academicAreaId });
       setCodeTouched(false);
       errores.reset();
-      onChanged();
+      cambio();
     } catch (error_) {
       errores.fromApi(error_);
     } finally {
@@ -685,7 +705,7 @@ function SkillsPanel({
     try {
       await adminService.updateSkill(skill.id, { isActive: !skill.isActive });
       toast.success(skill.isActive ? 'Habilidad dada de baja.' : 'Habilidad reactivada.');
-      onChanged();
+      cambio();
     } catch (error_) {
       toast.error(apiError(error_));
     }
@@ -723,22 +743,25 @@ function SkillsPanel({
       <Card
         title="Habilidades registradas"
         actions={
-          (data ?? []).length > 0 ? (
-            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
-              <VerTambien checked={verBajas} onChange={setVerBajas}>Mostrar también las dadas de baja</VerTambien>
-              <SearchInput value={query} onChange={setQuery} placeholder="Buscar habilidad, código o área…" />
-              <ResultCount shown={visible.length} total={(data ?? []).length} noun="habilidades" />
-            </div>
-          ) : undefined
+          <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+            <FiltroEstado etiqueta="Estado" valor={estado} opciones={ESTADOS_DE_CATALOGO} onChange={setEstado} />
+            {(data ?? []).length > 0 && (
+              <>
+                <SearchInput value={query} onChange={setQuery} placeholder="Buscar habilidad, código o área…" />
+                <ResultCount shown={visible.length} total={(data ?? []).length} noun="habilidades" />
+              </>
+            )}
+          </div>
         }
       >
+        <GrillaEnCarga cargando={loading && !!data}>
         <AsyncView
           loading={loading}
           error={error}
           data={data}
           skeleton={<SkeletonTable rows={6} columns={5} />}
           isEmpty={(d) => d.length === 0}
-          empty={<EmptyState icon={<FiTool size={22} />} message="Todavía no hay habilidades en el catálogo." />}
+          empty={<EmptyState icon={<FiTool size={22} />} message={VACIO_HABILIDADES[estado]} />}
         >
           {() =>
             visible.length === 0 ? (
@@ -803,6 +826,7 @@ function SkillsPanel({
             )
           }
         </AsyncView>
+        </GrillaEnCarga>
       </Card>
 
       {editing && (
@@ -813,7 +837,7 @@ function SkillsPanel({
           onSaved={() => {
             setEditing(null);
             toast.success('Habilidad actualizada.');
-            onChanged();
+            cambio();
           }}
         />
       )}

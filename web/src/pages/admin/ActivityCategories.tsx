@@ -1,16 +1,23 @@
 import { useMemo, useState } from 'react';
 import { FiEdit2, FiLayers, FiPlus, FiSearch } from 'react-icons/fi';
 import { apiError } from '../../api/client';
-import { adminService, catalogService } from '../../services';
+import { adminService, catalogService, type EstadoDeCatalogo } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import { useFiltroUrl } from '../../hooks/useFiltroUrl';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, Modal, PageHeader, Paginacion, ResultCount, SearchInput,
+  AsyncView, Badge, Button, Card, EmptyState, FILAS_POR_PAGINA, FiltroEstado, GrillaEnCarga, Modal, PageHeader, Paginacion, ResultCount, SearchInput,
   SkeletonTable, ThOrden, useOrden, usePaginacion,
-  VerTambien,
 } from '../../components/ui';
 import { FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useConfirm, useToast } from '../../components/feedback';
-import { ACTIVITY_TYPE_LABEL, lbl } from '../../constants';
+import { ACTIVITY_TYPE_LABEL, ESTADOS_DE_CATALOGO, ESTADOS_DE_CATALOGO_VALIDOS, lbl } from '../../constants';
+
+/** Qué decir cuando el estado elegido no tiene filas (V7.1 §4.1). */
+const VACIO_CATEGORIAS: Record<EstadoDeCatalogo, string> = {
+  active: 'No hay categorías vigentes.',
+  inactive: 'No hay categorías dadas de baja.',
+  all: 'Todavía no hay categorías registradas.',
+};
 import type { ActivityCategoryItem } from '../../services/types';
 import { catalogName, optionalText, suggestCode, validate, type Validator } from '../../lib/validators';
 
@@ -112,9 +119,11 @@ function CategoriaForm({
  * constancia. Por eso tienen pantalla propia.
  */
 export default function AdminActivityCategoriesPage() {
+  // V7.1 §4.1: un estado a la vez, en la URL; lo filtra la API.
+  const [estado, setEstado] = useFiltroUrl<EstadoDeCatalogo>('status', 'active', ESTADOS_DE_CATALOGO_VALIDOS);
   const { data, loading, error, reload } = useAsync<ActivityCategoryItem[]>(
-    () => catalogService.activityCategories(),
-    [],
+    () => catalogService.activityCategories(estado),
+    [estado],
   );
   const [form, setForm] = useState(vacia);
   const [codigoTocado, setCodigoTocado] = useState(false);
@@ -125,16 +134,14 @@ export default function AdminActivityCategoriesPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  // V6 §5.1: por omisión, solo las vigentes.
-  const [verBajas, setVerBajas] = useState(false);
   const visible = useMemo(() => {
     const q = suggestCode(query.trim()).replace(/_/g, ' ');
-    const rows = (data ?? []).filter((c) => verBajas || c.isActive);
+    const rows = data ?? [];
     if (!q) return rows;
     return rows.filter((c) =>
       [c.name, c.code, c.description ?? ''].some((f) => suggestCode(f).replace(/_/g, ' ').includes(q)),
     );
-  }, [data, query, verBajas]);
+  }, [data, query]);
   // V4.1 A41-003: orden por columna y 10 filas por página, como en Usuarios.
   const { ordenados, orden, alternar } = useOrden(visible, {
     nombre: (c) => c.name,
@@ -142,7 +149,7 @@ export default function AdminActivityCategoriesPage() {
     aplica: (c) => (c.appliesTo ? lbl(ACTIVITY_TYPE_LABEL, c.appliesTo) : 'Ambos tipos'),
     estado: (c) => (c.isActive ? 0 : 1),
   }, { clave: 'nombre', dir: 'asc' });
-  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [query, orden]);
+  const pag = usePaginacion(ordenados, FILAS_POR_PAGINA, [query, orden, estado]);
 
   const crear = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,22 +226,25 @@ export default function AdminActivityCategoriesPage() {
       <Card
         title="Categorías registradas"
         actions={
-          (data ?? []).length > 0 ? (
-            <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
-              <VerTambien checked={verBajas} onChange={setVerBajas}>Mostrar también las dadas de baja</VerTambien>
-              <SearchInput value={query} onChange={setQuery} placeholder="Buscar categoría o código…" />
-              <ResultCount shown={visible.length} total={(data ?? []).length} noun="categorías" />
-            </div>
-          ) : undefined
+          <div className="flex" style={{ gap: '0.6rem', flexWrap: 'wrap' }}>
+            <FiltroEstado etiqueta="Estado" valor={estado} opciones={ESTADOS_DE_CATALOGO} onChange={setEstado} />
+            {(data ?? []).length > 0 && (
+              <>
+                <SearchInput value={query} onChange={setQuery} placeholder="Buscar categoría o código…" />
+                <ResultCount shown={visible.length} total={(data ?? []).length} noun="categorías" />
+              </>
+            )}
+          </div>
         }
       >
+        <GrillaEnCarga cargando={loading && !!data}>
         <AsyncView
           loading={loading}
           error={error}
           data={data}
           skeleton={<SkeletonTable rows={5} columns={6} />}
           isEmpty={(d) => d.length === 0}
-          empty={<EmptyState icon={<FiLayers size={22} />} message="Todavía no hay categorías registradas." />}
+          empty={<EmptyState icon={<FiLayers size={22} />} message={VACIO_CATEGORIAS[estado]} />}
         >
           {() =>
             visible.length === 0 ? (
@@ -288,6 +298,7 @@ export default function AdminActivityCategoriesPage() {
             )
           }
         </AsyncView>
+        </GrillaEnCarga>
       </Card>
 
       {editing && (

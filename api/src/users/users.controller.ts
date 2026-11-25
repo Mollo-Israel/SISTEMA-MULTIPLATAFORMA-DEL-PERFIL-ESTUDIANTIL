@@ -11,12 +11,13 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { CreateUserDto } from './dto/create-user.dto';
+import { QueryUsersDto } from './dto/query-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SetStatusDto } from './dto/set-status.dto';
 import { SetTeacherSemestersDto } from './dto/set-semesters.dto';
@@ -36,11 +37,13 @@ export class UsersController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar usuarios, con búsqueda opcional por nombre o correo.' })
-  @ApiQuery({ name: 'search', required: false, description: 'Nombre, apellido o correo' })
-  @ApiQuery({ name: 'role', required: false, enum: RolNombre })
-  findAll(@Query('search') search?: string, @Query('role') role?: RolNombre) {
-    return this.usersService.findAll(search, role);
+  @ApiOperation({
+    summary: 'Listar usuarios: búsqueda, rol y estado exclusivo; con limit, una página filtrada en el servidor.',
+  })
+  findAll(@Query() query: QueryUsersDto) {
+    // V7.1 §4.1: con `limit`, una página cuyo total es el del filtro.
+    if (query.limit !== undefined) return this.usersService.findPage(query);
+    return this.usersService.findAll(query.search, query.role, query.status);
   }
 
   @Get(':id')

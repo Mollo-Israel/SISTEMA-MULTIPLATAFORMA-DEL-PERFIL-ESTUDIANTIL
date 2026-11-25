@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
+import { ESTADOS_DE_CATALOGO, estadoDeCatalogoPara, leerFiltro } from '../common/estado-de-listado';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
@@ -35,8 +36,12 @@ export class CatalogsController {
   @ApiOperation({
     summary: 'Categorías de actividad vigentes. El administrador ve también las dadas de baja.',
   })
-  findActivityCategories(@CurrentUser() user: AuthenticatedUser) {
-    return this.catalogsService.findActivityCategories(user.role === RolNombre.ADMIN);
+  @ApiQuery({
+    name: 'status', required: false, enum: ESTADOS_DE_CATALOGO,
+    description: 'V7.1 §4.1: vigentes, dadas de baja o todas. Solo Administración ve las dadas de baja; sin filtro recibe todas.',
+  })
+  findActivityCategories(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: string) {
+    return this.catalogsService.findActivityCategories(estadoDeCatalogoPara(user.role, leerFiltro(status, ESTADOS_DE_CATALOGO)));
   }
 
   @Post('activity-categories')
@@ -67,8 +72,12 @@ export class CatalogsController {
 
   @Get('academic-areas')
   @ApiOperation({ summary: 'Áreas académicas vigentes. El administrador ve también las inactivas.' })
-  findAreas(@CurrentUser() user: AuthenticatedUser) {
-    return this.catalogsService.findAreas(user.role === RolNombre.ADMIN);
+  @ApiQuery({
+    name: 'status', required: false, enum: ESTADOS_DE_CATALOGO,
+    description: 'V7.1 §4.1: vigentes, dadas de baja o todas. Solo Administración ve las dadas de baja; sin filtro recibe todas.',
+  })
+  findAreas(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: string) {
+    return this.catalogsService.findAreas(estadoDeCatalogoPara(user.role, leerFiltro(status, ESTADOS_DE_CATALOGO)));
   }
 
   @Post('academic-areas')
@@ -102,8 +111,12 @@ export class CatalogsController {
 
   @Get('skills')
   @ApiOperation({ summary: 'Habilidades vigentes. El administrador ve también las inactivas.' })
-  findSkills(@CurrentUser() user: AuthenticatedUser) {
-    return this.catalogsService.findSkills(user.role === RolNombre.ADMIN);
+  @ApiQuery({
+    name: 'status', required: false, enum: ESTADOS_DE_CATALOGO,
+    description: 'V7.1 §4.1: vigentes, dadas de baja o todas. Solo Administración ve las dadas de baja; sin filtro recibe todas.',
+  })
+  findSkills(@CurrentUser() user: AuthenticatedUser, @Query('status') status?: string) {
+    return this.catalogsService.findSkills(estadoDeCatalogoPara(user.role, leerFiltro(status, ESTADOS_DE_CATALOGO)));
   }
 
   @Get('skills/classify')
@@ -153,15 +166,21 @@ export class CatalogsController {
       'El estudiante ve los vigentes. La dirección puede pedir también los retirados, '
       + 'que se conservan históricamente aunque ya no se recomienden.',
   })
+  @ApiQuery({
+    name: 'status', required: false, enum: ESTADOS_DE_CATALOGO,
+    description: 'V7.1 §4.1: vigentes, retirados o todos (Dirección y Administración). `includeInactive=true` equivale a «all».',
+  })
   findLearningResources(
     @CurrentUser() user: AuthenticatedUser,
     @Query('includeInactive') includeInactive?: string,
     @Query('academicAreaId') academicAreaId?: string,
+    @Query('status') status?: string,
   ) {
     const administra =
       user.role === RolNombre.ADMIN || user.role === RolNombre.CAREER_DIRECTOR;
+    const pedido = leerFiltro(status, ESTADOS_DE_CATALOGO) ?? (includeInactive === 'true' ? 'all' : 'active');
     return this.catalogsService.findLearningResources({
-      includeInactive: administra && includeInactive === 'true',
+      estado: administra ? pedido : 'active',
       academicAreaId,
       viewer: user,
     });

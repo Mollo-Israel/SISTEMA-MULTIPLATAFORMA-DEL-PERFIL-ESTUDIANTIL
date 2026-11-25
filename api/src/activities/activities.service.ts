@@ -73,6 +73,7 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivitiesDto } from './dto/query-activities.dto';
+import { condicionesDeGestion, QueryManagedActivitiesDto } from './dto/query-managed-activities.dto';
 import { escaparComodinesLike } from '../common/texto';
 import {
   TRAJECTORY_RECALCULATION,
@@ -1772,9 +1773,16 @@ export class ActivitiesService {
       : conConteos;
   }
 
-  /** Actividades cuyo responsable es el usuario (panel de gestion). */
-  async findManagedBy(user: AuthenticatedUser): Promise<ActivityWithCounts[]> {
+  /**
+   * Actividades cuyo responsable es el usuario (panel de gestion).
+   *
+   * V7.1 §4.1: los filtros se aplican en SQL antes de decidir qué gestiona
+   * cada quien. Solo restringen: nunca dejan ver algo que sin filtro no se
+   * vería, porque el permiso se sigue comprobando fila por fila.
+   */
+  async findManagedBy(user: AuthenticatedUser, filtros: QueryManagedActivitiesDto = {}): Promise<ActivityWithCounts[]> {
     const activities = await this.activities.find({
+      where: condicionesDeGestion(filtros),
       // V4.1 A41-005: el formulario de edición se hidrata desde esta fila;
       // sin las habilidades abría vacío y guardar podía borrarlas.
       relations: {

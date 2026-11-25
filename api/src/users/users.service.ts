@@ -30,6 +30,31 @@ import { MailService, maskEmail } from '../mail/mail.service';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { deliveryStateOf, InvitationView, PublicUser, toPublicUser } from './types/public-user';
 import { resolverApellidos } from './surnames';
+import { escaparComodinesLike } from '../common/texto';
+import type { EstadoDeCuenta, OrdenDeUsuarios, QueryUsersDto } from './dto/query-users.dto';
+
+/** V7.1 §4.1: una página del listado de cuentas, con el total del filtro. */
+export interface PaginaDeUsuarios {
+  items: PublicUser[];
+  total: number;
+  limit: number;
+  offset: number;
+  /** Cuántas cuentas del mismo filtro tienen un apellido heredado por separar. */
+  surnamesPending: number;
+}
+
+/**
+ * Orden de cada columna de la grilla. Rol y estado ordenan por la palabra
+ * que se lee en pantalla, no por el código interno.
+ */
+const ORDEN_DE_USUARIOS: Record<OrdenDeUsuarios, string> = {
+  created: 'u.createdAt',
+  name: "LOWER(u.lastName || ' ' || u.firstName)",
+  email: 'LOWER(u.email)',
+  role: "CASE r.name WHEN 'ADMIN' THEN 1 WHEN 'CAREER_DIRECTOR' THEN 2 WHEN 'TEACHER' THEN 3 WHEN 'STUDENT' THEN 4 ELSE 5 END",
+  semester: 'u.semester',
+  status: "CASE u.status WHEN 'active' THEN 1 WHEN 'inactive' THEN 2 WHEN 'pending_activation' THEN 3 ELSE 4 END",
+};
 
 /** Lo que el alta espera al correo antes de responder. Después, «en cola». */
 const ESPERA_INVITACION_MS = 6_000;
@@ -248,25 +273,56 @@ export class UsersService {
   }
 
   /** Listado administrativo con busqueda por nombre, apellido o correo. */
-  async findAll(search?: string, role?: RolNombre): Promise<PublicUser[]> {
-    const qb = this.usersRepository
-      .createQueryBuilder('u')
-      .leftJoinAndSelect('u.role', 'r')
-      .orderBy('u.createdAt', 'DESC');
+  async findAll(search?: string, role?: RolNombre, status?: EstadoDeCuenta): Promise<PublicUser[]> {
+    const users = await this.consultaDeUsuarios({ search, role, status })
+      .orderBy('u.createdAt', 'DESC')
+      .getMany();
+    return this.completarListado(users.map(toPublicUser));
+  }
 
-    const term = search?.trim();
+  /**
+   * V7.1 §4.1: una página del listado. Filtra en SQL antes de paginar, así
+   * que `total` es el del filtro y no el de la página. El orden termina en el
+   * id para que dos cuentas iguales no salten de una página a otra.
+   */
+  async findPage(f: QueryUsersDto): Promise<PaginaDeUsuarios> {
+    const limit = f.limit ?? 10;
+    const offset = f.offset ?? 0;
+    const consulta = this.consultaDeUsuarios(f);
+    const [total, surnamesPending] = await Promise.all([
+      consulta.clone().getCount(),
+      this.consultaDeUsuarios({ ...f, surnames: 'pending' }).getCount(),
+    ]);
+    const sort = f.sort ?? 'created';
+    const dir = (f.dir ?? (sort === 'created' ? 'desc' : 'asc')) === 'asc' ? 'ASC' : 'DESC';
+    const users = await consulta
+      .orderBy(ORDEN_DE_USUARIOS[sort], dir, 'NULLS LAST')
+      .addOrderBy('u.id', 'ASC')
+      .offset(offset)
+      .limit(limit)
+      .getMany();
+    return { items: await this.completarListado(users.map(toPublicUser)), total, limit, offset, surnamesPending };
+  }
+
+  /** Búsqueda, rol, estado y apellidos por separar, sin orden ni página. */
+  private consultaDeUsuarios(f: { search?: string; role?: RolNombre; status?: EstadoDeCuenta; surnames?: 'pending' }) {
+    const qb = this.usersRepository.createQueryBuilder('u').leftJoinAndSelect('u.role', 'r');
+    const term = f.search?.trim();
     if (term) {
       qb.andWhere(
         "(u.firstName ILIKE :s OR u.lastName ILIKE :s OR u.email ILIKE :s OR u.universityCode ILIKE :s"
           + " OR CONCAT(u.firstName, ' ', u.lastName) ILIKE :s)",
-        { s: `%${term}%` },
+        { s: `%${escaparComodinesLike(term)}%` },
       );
     }
-    if (role) {
-      qb.andWhere('r.name = :role', { role });
-    }
-    const users = await qb.getMany();
-    const result = users.map(toPublicUser);
+    if (f.role) qb.andWhere('r.name = :role', { role: f.role });
+    if (f.status && f.status !== 'all') qb.andWhere('u.status = :status', { status: f.status });
+    if (f.surnames === 'pending') qb.andWhere("(u.firstSurname IS NULL OR u.firstSurname = '')");
+    return qb;
+  }
+
+  /** Semestres de los docentes y estado de la invitación, en lote. */
+  private async completarListado(result: PublicUser[]): Promise<PublicUser[]> {
     await this.agregarSemestresDocentes(result);
     await this.agregarEstadoDeInvitacion(result);
     return result;

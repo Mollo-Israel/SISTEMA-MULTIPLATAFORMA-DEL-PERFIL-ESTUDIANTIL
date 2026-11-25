@@ -169,12 +169,16 @@ export const onboardingService = {
       .then((r) => r.data),
 };
 
+/** V7.1 §4.1: estado excluyente de un catálogo. Sin él, la respuesta de siempre. */
+export type EstadoDeCatalogo = 'active' | 'inactive' | 'all';
+const conEstado = (status?: EstadoDeCatalogo) => (status ? { params: { status } } : undefined);
+
 export const catalogService = {
-  areas: () => api.get<AcademicArea[]>('/academic-areas').then((r) => r.data),
-  skills: () => api.get<Skill[]>('/skills').then((r) => r.data),
+  areas: (status?: EstadoDeCatalogo) => api.get<AcademicArea[]>('/academic-areas', conEstado(status)).then((r) => r.data),
+  skills: (status?: EstadoDeCatalogo) => api.get<Skill[]>('/skills', conEstado(status)).then((r) => r.data),
   /** Catálogo administrable de categorías de actividad (RF4). */
-  activityCategories: () =>
-    api.get<ActivityCategoryItem[]>('/activity-categories').then((r) => r.data),
+  activityCategories: (status?: EstadoDeCatalogo) =>
+    api.get<ActivityCategoryItem[]>('/activity-categories', conEstado(status)).then((r) => r.data),
 };
 
 /**
@@ -326,8 +330,9 @@ export interface DirectActionView {
 
 export const approvalPolicyService = {
   mine: () => api.get<Record<ApprovalModule, ApprovalDecision>>('/approval-policies/me').then((r) => r.data),
-  list: (includeRevoked = false) =>
-    api.get<ApprovalPolicyView[]>('/approval-policies', { params: includeRevoked ? { includeRevoked: 'true' } : {} }).then((r) => r.data),
+  /** V7.1 §4.1: vigentes (por omisión), revocadas o todas. */
+  list: (status: 'active' | 'revoked' | 'all' = 'active') =>
+    api.get<ApprovalPolicyView[]>('/approval-policies', { params: { status } }).then((r) => r.data),
   grant: (data: { teacherUserId: string; module: ApprovalModule; justification: string }) =>
     api.post<ApprovalPolicyView>('/approval-policies', data).then((r) => r.data),
   revoke: (id: string, reason: string) =>
@@ -342,11 +347,12 @@ export const learningResourceService = {
   pending: () => api.get<LearningResource[]>('/learning-resources/reviews/pending').then((r) => r.data),
   review: (id: string, decision: 'approve' | 'observe' | 'reject', comment?: string) =>
     api.post<LearningResource>(`/learning-resources/${id}/review`, { decision, comment }).then((r) => r.data),
-  list: (params?: { includeInactive?: boolean; academicAreaId?: string }) =>
+  /** V7.1 §4.1: `status` vigentes / retirados / todos (Dirección y Administración). */
+  list: (params?: { status?: EstadoDeCatalogo; academicAreaId?: string }) =>
     api
       .get<LearningResource[]>('/learning-resources', {
         params: {
-          ...(params?.includeInactive ? { includeInactive: 'true' } : {}),
+          ...(params?.status ? { status: params.status } : {}),
           ...(params?.academicAreaId ? { academicAreaId: params.academicAreaId } : {}),
         },
       })
@@ -889,7 +895,14 @@ export const activityService = {
   correctParticipation: (id: string, studentProfileId: string, status: 'confirmed' | 'absent' | 'registered', reason: string) =>
     api.post(`/activities/${id}/participation-correction`, { studentProfileId, status, reason }).then((r) => r.data),
   /** Actividades que el usuario gestiona, incluidos sus borradores. */
-  managed: () => api.get<Activity[]>('/activities/managed').then((r) => r.data),
+  /**
+   * V7.1 §4.1: lo que gestiona quien consulta. Tipo, origen, estado y
+   * revisión son opcionales y los filtra el servidor.
+   */
+  managed: (filtros: { type?: string; originType?: string; status?: string; review?: string } = {}) =>
+    api.get<Activity[]>('/activities/managed', {
+      params: Object.fromEntries(Object.entries(filtros).filter(([, v]) => !!v)),
+    }).then((r) => r.data),
   /** V2 §27: enviar a Dirección, decidir, pendientes e historia. */
   submit: (id: string, comment?: string) =>
     api.post<Activity>(`/activities/${id}/submit`, { comment }).then((r) => r.data),
@@ -1363,9 +1376,34 @@ export interface AdminOverview {
   mail: { mode: 'simulated' | 'smtp' };
 }
 
+/** V7.1 §4.1: filtros de la grilla de cuentas; el servidor filtra y pagina. */
+export type EstadoDeCuenta = UserStatus | 'all';
+export interface FiltrosDeUsuarios {
+  search?: string;
+  role?: string;
+  status?: EstadoDeCuenta;
+  surnames?: 'pending';
+  sort?: 'created' | 'name' | 'email' | 'role' | 'semester' | 'status';
+  dir?: 'asc' | 'desc';
+  limit: number;
+  offset: number;
+}
+export interface PaginaDeUsuarios {
+  items: PublicUser[];
+  total: number;
+  limit: number;
+  offset: number;
+  surnamesPending: number;
+}
+
 export const adminService = {
   listUsers: (search?: string) =>
     api.get<PublicUser[]>('/users', { params: search ? { search } : undefined }).then((r) => r.data),
+  /** V7.1 §4.1: una página de cuentas con el total del filtro. */
+  usersPage: (f: FiltrosDeUsuarios) =>
+    api.get<PaginaDeUsuarios>('/users', {
+      params: Object.fromEntries(Object.entries(f).filter(([, v]) => v !== undefined && v !== '')),
+    }).then((r) => r.data),
   /** Cuentas de un rol (para elegir responsable, V3 §12.2). */
   listUsersByRole: (role: string) => api.get<PublicUser[]>('/users', { params: { role } }).then((r) => r.data),
   createUser: (data: Record<string, unknown>) => api.post<PublicUser>('/users', data).then((r) => r.data),

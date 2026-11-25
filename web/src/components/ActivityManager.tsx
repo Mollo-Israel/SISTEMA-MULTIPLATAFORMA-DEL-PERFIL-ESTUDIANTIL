@@ -18,12 +18,13 @@ import type {
 } from '../services/types';
 import AreaSkillPicker from './AreaSkillPicker';
 import {
-  Badge, Button, Card, Diferido, EmptyState, FILAS_POR_PAGINA, Modal, Paginacion, ResultCount, SearchInput,
+  Badge, Button, Card, Diferido, EmptyState, FILAS_POR_PAGINA, FiltroEstado, Modal, Paginacion, ResultCount, SearchInput,
   SkeletonTable, Stagger, ThOrden, useOrden, usePaginacion,
 } from './ui';
 import { useConfirm, useToast } from './feedback';
 import { useCambiosSinGuardar } from './CambiosSinGuardar';
-import { ACTIVITY_REVIEW_LABEL, ACTIVITY_TRANSITIONS } from '../services/types';
+import { useParametrosUrl } from '../hooks/useFiltroUrl';
+import { ACTIVITY_REVIEW_LABEL, ACTIVITY_TRANSITIONS, type ActivityReviewStatus } from '../services/types';
 import {
   ACTIVITY_MODALITIES,
   ACTIVITY_STATUS_LABEL,
@@ -109,13 +110,32 @@ function asignacionesDe(responsables: ActivityPerson[]): Record<string, number[]
   return Object.fromEntries(responsables.filter(esDocenteResponsable).map((p) => [p.id, p.assignedSemesters ?? []]));
 }
 
+/**
+ * Estado de revisión de una actividad, el mismo que filtra la API (V7.1 §4.1):
+ * sin revisión requerida es «No requiere revisión» aunque la fila guarde otro.
+ */
+function claveRevision(a: Activity): ActivityReviewStatus | 'unsubmitted' {
+  if (!a.requiresReview) return 'not_required';
+  return a.reviewStatus ?? 'unsubmitted';
+}
+
 /** Estado de revisión (V2 §27) en palabras y color. */
 function revision(a: Activity): { label: string; tone: string } {
-  if (!a.requiresReview) return { label: ACTIVITY_REVIEW_LABEL.not_required, tone: 'gray' };
-  const k = a.reviewStatus ?? 'unsubmitted';
+  const k = claveRevision(a);
   const tone = { unsubmitted: 'gray', pending: 'amber', observed: 'amber', approved: 'green', rejected: 'red', not_required: 'gray' }[k];
   return { label: ACTIVITY_REVIEW_LABEL[k], tone };
 }
+
+/** V7.1 §4.1: dos filtros independientes; nunca se mezclan los dos estados. */
+const OPCIONES_ESTADO_ACTIVIDAD = [
+  { value: '', label: 'Todos' },
+  ...ACTIVITY_STATUSES.map((s) => ({ value: s, label: lbl(ACTIVITY_STATUS_LABEL, s) })),
+];
+const REVISIONES = ['unsubmitted', 'pending', 'observed', 'approved', 'rejected', 'not_required'] as const;
+const OPCIONES_REVISION = [
+  { value: '', label: 'Todas' },
+  ...REVISIONES.map((r) => ({ value: r, label: ACTIVITY_REVIEW_LABEL[r] })),
+];
 
 /** V3.2 §28: lo que ofrece una actividad interna al terminar. */
 const RESULTADOS: { value: OutcomePolicy; label: string; hint: string }[] = [
@@ -195,7 +215,21 @@ export default function ActivityManager({
   const [busyRow, setBusyRow] = useState<string | null>(null);
 
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  /*
+   * V7.1 §4.1: estado de la actividad y estado de revisión, cada uno en su
+   * selector y los dos en la URL (?status=draft&review=pending): se conservan
+   * al recargar, al volver y al llegar desde el Inicio.
+   */
+  const filtrosUrl = useParametrosUrl();
+  const statusFilter = filtrosUrl.leer<string>('status', '', ['', ...ACTIVITY_STATUSES]);
+  const reviewFilter = filtrosUrl.leer<string>('review', '', ['', ...REVISIONES]);
+  const setStatusFilter = (v: string) => filtrosUrl.actualizar({ status: v });
+  const setReviewFilter = (v: string) => filtrosUrl.actualizar({ review: v });
+  const hayFiltros = !!query || !!statusFilter || !!reviewFilter;
+  const quitarFiltros = () => {
+    setQuery('');
+    filtrosUrl.actualizar({ status: null, review: null });
+  };
   const [partQuery, setPartQuery] = useState('');
 
   // Del catálogo administrable: las que aplican a este tipo o a ambos (RF4).
@@ -205,11 +239,13 @@ export default function ActivityManager({
 
   const notify = (t: string, detail?: string) => toast.success(t, detail);
 
+  // V7.1 §4.1: el tipo y el origen de la pestaña los filtra la API. Es la lista
+  // completa de la pestaña (la usan también Participantes y el detalle).
   const load = useCallback(async () => {
-    const list = await activityService.managed();
-    setActivities(list.filter((a) => (filtroOrigen === 'external'
-      ? a.originType === 'external'
-      : a.type === activityType && (!filtroOrigen || (a.originType ?? 'internal') === filtroOrigen))));
+    const list = await activityService.managed(filtroOrigen === 'external'
+      ? { originType: 'external' }
+      : { type: activityType, originType: filtroOrigen });
+    setActivities(list);
   }, [activityType, filtroOrigen]);
 
   // V4.1 A41-016 (§9.2): los puntos salen de un criterio vigente; no se escriben a mano.
@@ -236,12 +272,13 @@ export default function ActivityManager({
     const q = normalize(query.trim());
     return activities.filter((a) => {
       if (statusFilter && a.status !== statusFilter) return false;
+      if (reviewFilter && claveRevision(a) !== reviewFilter) return false;
       if (!q) return true;
       return [a.title, a.description ?? '', a.location ?? '', a.category?.name ?? '',
         a.academicArea?.name ?? '', (a.searchKeywords ?? []).join(' ')]
         .some((field) => normalize(field).includes(q));
     });
-  }, [activities, query, statusFilter]);
+  }, [activities, query, statusFilter, reviewFilter]);
 
   // V3.2 §6.1: 10 por página. V4.1 A41-003: orden por columna.
   const { ordenados: gestionOrdenada, orden: ordenGestion, alternar: alternarGestion } = useOrden(visible, {
@@ -253,7 +290,7 @@ export default function ActivityManager({
     confirmados: (a) => a.confirmedCount ?? 0,
     pendientes: (a) => (a.registrationCount ?? 0) - (a.confirmedCount ?? 0),
   });
-  const pagGestion = usePaginacion(gestionOrdenada, FILAS_POR_PAGINA, [query, statusFilter, activities.length, ordenGestion]);
+  const pagGestion = usePaginacion(gestionOrdenada, FILAS_POR_PAGINA, [query, statusFilter, reviewFilter, activities.length, ordenGestion]);
 
   const resetForm = () => {
     setForm({ ...emptyForm, categoryId: usableCategories[0]?.id ?? '' });
@@ -1519,19 +1556,11 @@ export default function ActivityManager({
               onChange={setQuery}
               placeholder="Buscar por título, lugar, categoría o etiqueta…"
             />
-            <select
-              className="status-select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filtrar por estado"
-            >
-              <option value="">Todos los estados</option>
-              {ACTIVITY_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {lbl(ACTIVITY_STATUS_LABEL, s)}
-                </option>
-              ))}
-            </select>
+            <FiltroEstado etiqueta="Estado de la actividad" valor={statusFilter} opciones={OPCIONES_ESTADO_ACTIVIDAD} onChange={setStatusFilter} />
+            <FiltroEstado etiqueta="Revisión" valor={reviewFilter} opciones={OPCIONES_REVISION} onChange={setReviewFilter} />
+            {hayFiltros && (
+              <Button variant="ghost" size="sm" onClick={quitarFiltros}>Limpiar</Button>
+            )}
             <ResultCount shown={visible.length} total={activities.length} noun="actividades" />
           </div>
         )}
@@ -1550,14 +1579,7 @@ export default function ActivityManager({
             icon={<FiSearch size={22} />}
             message="Ninguna actividad coincide con los filtros aplicados."
             action={
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  setQuery('');
-                  setStatusFilter('');
-                }}
-              >
+              <Button variant="secondary" size="sm" onClick={quitarFiltros}>
                 Quitar filtros
               </Button>
             }

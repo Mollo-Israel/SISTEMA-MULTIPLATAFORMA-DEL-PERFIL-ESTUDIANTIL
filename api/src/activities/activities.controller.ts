@@ -21,6 +21,7 @@ import { ActivitiesService } from './activities.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivitiesDto } from './dto/query-activities.dto';
+import { QueryManagedActivitiesDto } from './dto/query-managed-activities.dto';
 import { ConfirmParticipationDto, CorrectParticipationDto } from './dto/confirm-participation.dto';
 import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
 
@@ -76,9 +77,12 @@ export class ActivitiesController {
 
   @Get('managed')
   @Roles(...MANAGER_ROLES)
-  @ApiOperation({ summary: 'Actividades que el usuario gestiona, incluidos sus borradores.' })
-  findManaged(@CurrentUser() user: AuthenticatedUser) {
-    return this.activitiesService.findManagedBy(user);
+  @ApiOperation({
+    summary: 'Actividades que el usuario gestiona, incluidos sus borradores.',
+    description: 'V7.1 §4.1: filtros opcionales por tipo, origen, estado de la actividad y estado de revisión, aplicados en el servidor.',
+  })
+  findManaged(@CurrentUser() user: AuthenticatedUser, @Query() filtros: QueryManagedActivitiesDto) {
+    return this.activitiesService.findManagedBy(user, filtros);
   }
 
   @Get('my-scope')

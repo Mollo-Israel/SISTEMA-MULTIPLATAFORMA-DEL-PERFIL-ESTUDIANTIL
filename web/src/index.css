@@ -1241,6 +1241,12 @@ button.chip { cursor: pointer; font-family: var(--font); }
 /* --- V3 §67: error de validación propio, debajo del campo --- */
 [aria-invalid="true"] { border-color: var(--danger, #b42318) !important; box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.12); }
 
+/* --- V7.1 §4.1 · Estado excluyente de las grillas --- */
+.filtro-estado { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; }
+.filtro-estado label { color: var(--gray-700); white-space: nowrap; }
+.filtro-estado select { width: auto; min-width: 10.5rem; }
+.grilla-en-carga { opacity: 0.55; transition: opacity 0.15s ease; }
+
 /* --- V3.2 §6.1 · Paginación y orden de grillas --- */
 .paginacion { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.75rem; }
 .paginacion-botones { display: flex; gap: 0.25rem; flex-wrap: wrap; align-items: center; }

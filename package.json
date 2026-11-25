@@ -50,6 +50,8 @@
     "test:v5": "node scripts/e2e-v5.mjs",
     "test:v6": "node scripts/e2e-v6.mjs",
     "test:v6-web": "node scripts/e2e-v6-web.mjs",
+    "test:v7": "node scripts/e2e-v7.mjs",
+    "test:v7-web": "node scripts/e2e-v7-web.mjs",
     "test:web-gestion": "node scripts/e2e-web-gestion.mjs",
     "test:unit": "npm --prefix api run test:unit",
     "test:web": "npm --prefix web run build && node scripts/e2e-web.mjs",

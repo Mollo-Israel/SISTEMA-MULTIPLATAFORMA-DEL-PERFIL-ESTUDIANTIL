@@ -4,9 +4,23 @@ import { apiError } from '../../api/client';
 import { approvalPolicyService } from '../../services';
 import type { ApprovalModule, ApprovalPolicyView } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import { useFiltroUrl } from '../../hooks/useFiltroUrl';
 import {
-  AsyncView, Badge, Button, Card, EmptyState, Modal, PageHeader, SkeletonTable,
+  AsyncView, Badge, Button, Card, EmptyState, FiltroEstado, GrillaEnCarga, Modal, PageHeader, SkeletonTable,
 } from '../../components/ui';
+
+/** V7.1 §4.1: un estado a la vez; por omisión, las vigentes. */
+type EstadoDeAutonomia = 'active' | 'revoked' | 'all';
+const ESTADOS_DE_AUTONOMIA = [
+  { value: 'active', label: 'Vigentes' },
+  { value: 'revoked', label: 'Revocadas' },
+  { value: 'all', label: 'Todas' },
+] as const;
+const VACIO_AUTONOMIA: Record<EstadoDeAutonomia, string> = {
+  active: 'Ningún docente tiene autonomía: todo pasa por revisión.',
+  revoked: 'No hay excepciones revocadas.',
+  all: 'Todavía no se concedió ninguna excepción.',
+};
 import { FieldError, FormAlert, FormField, useFormErrors } from '../../components/form';
 import { useToast } from '../../components/feedback';
 import { useAuth } from '../../auth/AuthContext';
@@ -42,8 +56,9 @@ function semestresDeDocente(semestres: number[]): string {
 export default function TeacherAutonomyPage() {
   const { user } = useAuth();
   const esDireccion = user?.role === 'CAREER_DIRECTOR';
-  const [verRevocadas, setVerRevocadas] = useState(false);
-  const politicas = useAsync(() => approvalPolicyService.list(verRevocadas), [verRevocadas]);
+  // V7.1 §4.1: vigentes, revocadas o todas, una a la vez y en la URL; lo filtra la API.
+  const [estado, setEstado] = useFiltroUrl<EstadoDeAutonomia>('status', 'active', ['active', 'revoked', 'all']);
+  const politicas = useAsync(() => approvalPolicyService.list(estado), [estado]);
   const docentes = useAsync(() => approvalPolicyService.teachers(), []);
   const [filtroDocente, setFiltroDocente] = useState('');
   const historial = useAsync(() => approvalPolicyService.directActions(filtroDocente || undefined), [filtroDocente]);
@@ -154,20 +169,16 @@ export default function TeacherAutonomyPage() {
 
       <Card
         title="Excepciones"
-        actions={
-          <label className="flex" style={{ gap: '0.4rem', fontSize: '0.82rem' }}>
-            <input type="checkbox" checked={verRevocadas} onChange={(e) => setVerRevocadas(e.target.checked)} />
-            <span>Ver también las revocadas</span>
-          </label>
-        }
+        actions={<FiltroEstado etiqueta="Estado" valor={estado} opciones={ESTADOS_DE_AUTONOMIA} onChange={setEstado} />}
       >
+        <GrillaEnCarga cargando={politicas.loading && !!politicas.data}>
         <AsyncView
           loading={politicas.loading}
           error={politicas.error}
           data={politicas.data}
           skeleton={<SkeletonTable rows={3} columns={5} />}
           isEmpty={(d) => d.length === 0}
-          empty={<EmptyState icon={<FiUnlock size={22} />} message="Ningún docente tiene autonomía: todo pasa por revisión." />}
+          empty={<EmptyState icon={<FiUnlock size={22} />} message={VACIO_AUTONOMIA[estado]} />}
         >
           {(lista) => (
             <div className="table-scroll">
@@ -206,6 +217,7 @@ export default function TeacherAutonomyPage() {
             </div>
           )}
         </AsyncView>
+        </GrillaEnCarga>
       </Card>
 
       <Card
