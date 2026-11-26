@@ -631,31 +631,4 @@ export const recommendationService = {
 
 
 
-/** V8 · Registros verificables (Open Badges): los del estudiante. */
-export interface RegistroVerificable {
-  id: string;
-  code: string;
-  sourceType: 'participation' | 'institution_certificate' | 'internal_constancy';
-  sourceLabel: string;
-  achievementName: string;
-  occurredAt: string | null;
-  issuedAt: string;
-  status: 'active' | 'suspended' | 'without_effect' | 'revoked';
-  revocationReason: string | null;
-  suspensionReason: string | null;
-  verifyUrl: string;
-  linkedInUrl: string | null;
-}
-
-export interface MisRegistros {
-  policy: { enabled: boolean; configured: boolean };
-  items: RegistroVerificable[];
-  pending: { sourceType: string; sourceLabel: string; title: string; occurredAt: string | null }[];
-}
-
-export const credentialService = {
-  mine: () => api.get<MisRegistros>('/credentials/mine').then((r) => r.data),
-  issueMine: () => api.post<{ issued: number }>('/credentials/mine/issue').then((r) => r.data),
-  /** Ruta protegida de una descarga, para abrirla con `abrirArchivo`. */
-  downloadPath: (id: string, formato: 'pdf' | 'png' | 'json') => `/api/credentials/${id}/download/${formato}`,
-};
+/* V7.1 §7: los registros verificables propios de Afinia se retiraron; no hay servicio. */

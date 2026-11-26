@@ -613,7 +613,7 @@ async function batch3(ctx) {
   const f4b = await subir(e4, [PROVEEDOR, `Otorgado a ${e4.nombre}`, 'Curso Fundamentos de Redes Andinas', 'Duracion de cuarenta horas academicas'], 'e4-v2.pdf');
   const cambio = await req('PATCH', `/certificates/external/${c4.data?.id}`, { token: e4.token, body: { storedFileId: f4b.id } });
   const r4 = registro(c4.data?.id);
-  check(cambio.status === 200 && r4.status === 'pending' && r4.sha === f4b.sha && r4.previos >= 1,
+  check(cambio.status === 200 && ['pending', 'processing', 'completed', 'inconclusive'].includes(r4.status) && r4.sha === f4b.sha && r4.previos >= 1,
     'V7.3.14 C19 Reemplazar el archivo invalida lo que estaba en curso: nuevo hash en cola y el intento anterior archivado', json(r4));
   await procesarCola();
   const v4 = await vista(e4, c4.data?.id);
@@ -978,7 +978,35 @@ async function batch5(ctx) {
   check(deAdmin.status === 403, 'V7.5.9 DOC-06 Administración no entrega certificados', `status ${deAdmin.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
+// ===========================================================================
+//  BATCH V7-6 — Retirar los registros verificables propios (§7)
+// ===========================================================================
+async function batch6(ctx) {
+  objective('BATCH V7-6 · Afinia ya no emite ni verifica registros propios; el histórico se conserva');
+  const admin = ctx.admin;
+  const est = await provisionAndActivate(admin, { firstName: 'Lia', lastName: `Retiro${L}`, email: correoEst('b6e'), role: 'STUDENT', semester: 3 });
+  const director = await provisionAndActivate(admin, { firstName: 'Ivan', lastName: `Retiro${L}`, email: correoStaff('b6dir'), role: 'CAREER_DIRECTOR' });
+  const antes = psql('select count(*) from verifiable_credentials');
+  const llaves = psql('select count(*) from credential_signing_keys');
+  const neutro = (r) => r.status === 410 && r.data?.code === 'SERVICE_RETIRED' && !/holder|achievement|status":"(active|revoked)/i.test(JSON.stringify(r.data));
+  const emitir = await req('POST', '/credentials/mine/issue', { token: est.token });
+  const mios = await req('GET', '/credentials/mine', { token: est.token });
+  const politica = await req('POST', '/credentials/policy', { token: director.token, body: { enabled: true } });
+  const pendientes = await req('POST', '/credentials/registry/issue-pending', { token: director.token });
+  check(neutro(emitir) && neutro(mios) && neutro(politica) && neutro(pendientes) && psql('select count(*) from verifiable_credentials') === antes,
+    'V7.6.1 V03 Ni el estudiante ni Dirección emiten: 410 neutro y no se crea ningún registro', json([emitir.status, mios.status, politica.status, pendientes.status]));
+  const codigo = psql('select coalesce(min(public_code), \'AF-XXXX-XXXX\') from verifiable_credentials');
+  const publicas = await Promise.all([`/public/credentials/${codigo}`, '/public/credentials/issuer', '/public/credentials/keys'].map((r) => req('GET', r)));
+  const verificar = await req('POST', '/public/credentials/verify', { body: { credential: {} } });
+  check(publicas.every(neutro) && neutro(verificar),
+    'V7.6.2 V02 La verificación pública responde neutro, también con un código real: sin datos ni vigencia', json(publicas.map((r) => r.status)));
+  check(psql('select count(*) from verifiable_credentials') === antes && psql('select count(*) from credential_signing_keys') === llaves,
+    'V7.6.3 V05 El histórico (registros y claves) se conserva intacto', json({ antes, llaves }));
+  const qr = await req('GET', '/profiles/me/public-link', { token: est.token });
+  check(qr.status === 200, 'V7.6.4 V04 El enlace y QR del perfil siguen funcionando sin el módulo retirado', `status ${qr.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

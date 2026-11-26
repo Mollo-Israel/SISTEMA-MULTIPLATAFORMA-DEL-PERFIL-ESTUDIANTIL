@@ -1,4 +1,3 @@
-import RegistrosVerificables from '../../components/RegistrosVerificables';
 import CorreosComprobados from '../../components/CorreosComprobados';
 import EstadosDeRespaldo from '../../components/EstadosDeRespaldo';
 import { FieldError } from '../../components/form';
@@ -67,13 +66,13 @@ const VALIDACION_TONO: Record<string, string> = {
   APPROVED: 'green',
 };
 
-type PestanaEvidencias = 'proyectos' | 'credenciales' | 'constancias' | 'verificables';
+type PestanaEvidencias = 'proyectos' | 'credenciales' | 'constancias';
 
 export default function StudentEvidencesPage() {
   // V4.1 A41-025 (§15): tres pestañas sobre los mismos datos; nada se duplica.
   const [params, setParams] = useSearchParams();
   const pedida = params.get('tab');
-  const pestana: PestanaEvidencias = pedida === 'proyectos' || pedida === 'constancias' || pedida === 'verificables' ? pedida : 'credenciales';
+  const pestana: PestanaEvidencias = pedida === 'proyectos' || pedida === 'constancias' ? pedida : 'credenciales';
   const evidences = useAsync<Evidence[]>(() => evidenceService.mine(), []);
   const certificates = useAsync<ExternalCertificate[]>(() => certificateService.mine(), []);
   const constancies = useAsync(() => constancyService.mine(), []);
@@ -139,8 +138,6 @@ export default function StudentEvidencesPage() {
           { key: 'proyectos', label: 'Evidencias de proyectos', count: evidences.data?.length },
           { key: 'credenciales', label: 'Credenciales externas', count: certificates.data?.length },
           { key: 'constancias', label: 'Certificados institucionales recibidos', count: (constancies.data as unknown[] | undefined)?.length },
-          // V8: lo registrado, firmado digitalmente y verificable por terceros.
-          { key: 'verificables', label: 'Registros verificables' },
         ]}
         value={pestana}
         onChange={(k) => setParams(k === 'credenciales' ? {} : { tab: k }, { replace: true })}
@@ -386,7 +383,6 @@ export default function StudentEvidencesPage() {
       </Card>
       </>)}
 
-      {pestana === 'verificables' && <RegistrosVerificables />}
 
       {pestana === 'constancias' && (
       <Card title="Certificados institucionales recibidos">

@@ -27,7 +27,6 @@ import {
 } from '../../components/ui';
 import { useConfirm, useToast } from '../../components/feedback';
 import { colors } from '../../theme';
-import RegistrosVerificables from '../../components/RegistrosVerificables';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -342,8 +341,6 @@ export default function EvidencesScreen() {
         )}
       </Card>
 
-      {/* V8: lo registrado, firmado y verificable por terceros. */}
-      <RegistrosVerificables />
     </Screen>
   );
 }

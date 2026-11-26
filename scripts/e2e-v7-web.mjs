@@ -478,7 +478,41 @@ async function batch5(ctx, browser) {
   await ce.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
+async function batch6(ctx, browser) {
+  objective('BATCH V7-6 · Sin «Registros verificables» ni «Verificar»; los enlaces viejos no muestran nada');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Ivan', lastName: `Webretiro${L}`, email: correoStaff('b6dir'), role: 'CAREER_DIRECTOR' });
+
+  const ctxPub = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const pub = await ctxPub.newPage();
+  await pub.goto(`${WEB}/`);
+  await pub.waitForLoadState('networkidle').catch(() => {});
+  const enLanding = await pub.locator('a[href="/verificar"], a', { hasText: /Verificar un registro/ }).count();
+  const codigo = psql('select coalesce(min(public_code), \'AF-XXXX-XXXX\') from verifiable_credentials');
+  await pub.goto(`${WEB}/verificar/${codigo}`);
+  const aviso = await pub.locator('[data-testid="servicio-retirado"]').textContent({ timeout: 15000 }).catch(() => '');
+  const cuerpo = await pub.locator('body').innerText().catch(() => '');
+  check(enLanding === 0 && /ya no está disponible/.test(aviso ?? '') && !/vigente|revocad|Titular/i.test(cuerpo),
+    'W7.6.1 V01 V02 La landing no enlaza «Verificar»; un enlace /verificar viejo muestra un aviso neutro, sin datos', json({ enLanding, aviso: (aviso ?? '').slice(0, 60) }));
+  await ctxPub.close();
+
+  const { ctx: cd, page: pd, errores: ed } = await entrar(browser, director.email);
+  const menuDir = (await pd.locator('nav').allInnerTexts()).join(' ');
+  await pd.goto(`${WEB}/director/credentials`);
+  await pd.waitForLoadState('networkidle').catch(() => {});
+  const paginaVieja = await pd.getByRole('heading', { name: /Registros verificables/ }).count();
+  check(!/Registros verificables/.test(menuDir) && paginaVieja === 0,
+    'W7.6.2 V01 Dirección no tiene «Registros verificables» en el menú ni por URL directa', json({ paginaVieja }));
+  check(ed.length === 0, 'W7.6.3 Sin errores de JavaScript', ed.join(' | '));
+  await cd.close();
+
+  const { ctx: ca, page: pa } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  const menuAdmin = (await pa.locator('nav').allInnerTexts()).join(' ');
+  check(!/Registros verificables/.test(menuAdmin), 'W7.6.4 V01 Administración no tiene «Registros verificables» en el menú');
+  await ca.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

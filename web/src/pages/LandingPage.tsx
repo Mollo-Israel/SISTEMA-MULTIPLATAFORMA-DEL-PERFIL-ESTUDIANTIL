@@ -199,8 +199,6 @@ export default function LandingPage() {
           {enlace('para-quien', 'Para quién')}
           {enlace('como', 'Cómo funciona')}
           {enlace('preguntas', 'Preguntas')}
-          {/* V8: cualquiera verifica un registro, sin cuenta. */}
-          <a href="/verificar">Verificar</a>
           {user
             ? <button className="lp-btn lp-btn-solid" onClick={goPanel}>Ir a mi panel <FiArrowRight /></button>
             : <button className="lp-btn lp-btn-solid" onClick={goLogin}><FiLogIn /> Iniciar sesión</button>}
@@ -506,7 +504,6 @@ export default function LandingPage() {
             {enlace('funciones', 'Funciones')}
             {enlace('como', 'Cómo funciona')}
             {enlace('preguntas', 'Preguntas frecuentes')}
-            <a href="/verificar">Verificar un registro</a>
           </div>
           <div>
             <h5>Contacto</h5>
