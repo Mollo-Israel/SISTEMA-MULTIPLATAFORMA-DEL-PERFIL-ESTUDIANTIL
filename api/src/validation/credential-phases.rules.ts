@@ -29,7 +29,9 @@ export type EstadoDeFase =
   /** Fase 3: falta la evidencia mínima, así que no llegó a Dirección. */
   | 'sin_solicitud'
   /** Fase 3: Dirección ya decidió. */
-  | 'decidida';
+  | 'decidida'
+  /** Fase 3: Dirección pidió una corrección; el estudiante la reenvía. */
+  | 'observada';
 
 export interface FaseDeCredencial {
   fase: 1 | 2 | 3;
@@ -158,13 +160,20 @@ function fase3(r: Registro, cert: { storedFileId: string | null; certificateUrl:
       };
   }
   const motivo = r.manualReviewReason ? [`Motivo: ${r.manualReviewReason}`] : [];
-  const resumen = {
-    [ManualReviewStatus.CORROBORATED]: 'Dirección la aceptó tras contrastarla con una fuente externa.',
-    [ManualReviewStatus.REJECTED]: 'Dirección la rechazó.',
+  if (s === ManualReviewStatus.OBSERVED) {
+    return {
+      fase: 3, titulo, estado: 'observada', detalles: motivo, fecha: iso(r.manualReviewedAt),
+      resumen: 'Dirección la observó: corrígela según el motivo y vuelve a enviarla. Mientras tanto no cuenta.',
+    };
+  }
+  const resumen: Record<string, string> = {
+    [ManualReviewStatus.CORROBORATED]: 'Aprobada por Dirección tras contrastarla con una fuente externa.',
+    [ManualReviewStatus.APPROVED]: 'Aprobada por Dirección revisando el documento (respaldo parcial, no una certificación).',
+    [ManualReviewStatus.REJECTED]: 'Rechazada por Dirección.',
     [ManualReviewStatus.INCONCLUSIVE]: 'Dirección la revisó, pero no pudo contrastarla con una fuente externa.',
     [ManualReviewStatus.NOT_CORROBORATED]: 'Dirección la revisó, pero no pudo contrastarla con una fuente externa.',
-  }[s];
-  return { fase: 3, titulo, estado: 'decidida', resumen, detalles: motivo, fecha: iso(r.manualReviewedAt) };
+  };
+  return { fase: 3, titulo, estado: 'decidida', resumen: resumen[s] ?? 'Dirección la revisó.', detalles: motivo, fecha: iso(r.manualReviewedAt) };
 }
 
 export function fasesDeCredencial(

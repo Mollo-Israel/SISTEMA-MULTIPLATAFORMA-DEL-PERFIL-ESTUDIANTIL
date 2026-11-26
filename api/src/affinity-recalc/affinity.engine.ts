@@ -30,6 +30,8 @@ import {
   ProjectStatus,
   ProjectSkillEvidenceStatus,
   cuentaComoTrayectoria,
+  credencialCuenta,
+  ManualReviewStatus,
 } from '@perfil/shared';
 import { StudentProfile } from '../entities/student-profile.entity';
 import { StudentInterest } from '../entities/student-interest.entity';
@@ -814,9 +816,11 @@ export class AffinityEngineService {
       for (const f of filas) areasPorCertificado.set(f.certificate_id, [...(areasPorCertificado.get(f.certificate_id) ?? []), f.academic_area_id]);
     }
     certs.forEach((c) => {
-      const { tier, duplicado } = certTiers.get(c.id)
-        ?? { tier: BackingTier.DECLARED, duplicado: false };
+      const { tier, duplicado, revision } = certTiers.get(c.id)
+        ?? { tier: BackingTier.DECLARED, duplicado: false, revision: null };
       const code = CERTIFICATE_CODE[tier];
+      // V7.1 D01 §5.1: sin la aprobación de Dirección no suma (pendiente, observada o rechazada).
+      const cuenta = credencialCuenta(revision);
       // V3.2 §12.3, §33: las áreas explícitas de la credencial; sin área
       // declarada no se adivina por el nombre del curso.
       const destinos = [...new Set([
@@ -832,14 +836,15 @@ export class AffinityEngineService {
           matchType: AffinityMatchType.DECLARED,
           sourceEntityType: AffinitySourceEntityType.EXTERNAL_CERTIFICATE,
           sourceId: c.id,
-          base: tier === BackingTier.FLAGGED ? 0 : (weightOf.get(code) ?? 0),
-          supportBase: CERTIFICATE_SUPPORT[tier],
+          base: !cuenta || tier === BackingTier.FLAGGED ? 0 : (weightOf.get(code) ?? 0),
+          supportBase: cuenta ? CERTIFICATE_SUPPORT[tier] : 0,
           affinityBucket: 'certificate',
           supportBucket: 'certificate',
           scale: DIMINISHING.PROJECT,
           reason:
             `Certificado externo ${CERTIFICATE_TIER_LABEL[tier]}: ${c.certificateName}`
-            + (duplicado ? ' · contenido repetido, no vuelve a respaldar (§28)' : ''),
+            + (duplicado ? ' · contenido repetido, no vuelve a respaldar (§28)' : '')
+            + (cuenta ? '' : ' · espera la decisión de Dirección (o fue observada o rechazada): todavía no cuenta'),
         }),
       );
     });
@@ -1465,7 +1470,7 @@ export class AffinityEngineService {
     resourceType: ValidationResourceType,
     ids: string[],
     conDuplicados: true,
-  ): Promise<Map<string, { tier: BackingTier; duplicado: boolean }>>;
+  ): Promise<Map<string, { tier: BackingTier; duplicado: boolean; revision: ManualReviewStatus | null }>>;
   private async backingTiersOf(
     resourceType: ValidationResourceType,
     ids: string[],
@@ -1483,7 +1488,7 @@ export class AffinityEngineService {
       // desglose con su motivo.
       const duplicado = !!r.duplicateOfId;
       const tier = duplicado ? BackingTier.DECLARED : r.backingTier;
-      salida.set(r.resourceId, conDuplicados ? { tier, duplicado } : tier);
+      salida.set(r.resourceId, conDuplicados ? { tier, duplicado, revision: r.manualReviewStatus ?? null } : tier);
     });
     return salida;
   }

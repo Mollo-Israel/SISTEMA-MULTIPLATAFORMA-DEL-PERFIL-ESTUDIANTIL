@@ -49,7 +49,7 @@ describe('V7.1 D04 resumen exportable', () => {
 
 describe('V7.1 §6.2 versión del motor y recálculo', () => {
   it('D04 cambia la elegibilidad, no los pesos', () => {
-    assert.equal(AFFINITY_ENGINE_VERSION, 6);
+    assert.ok(AFFINITY_ENGINE_VERSION >= 6); // D04 llegó en la 6; V7-4 (D01) sube a la 7
     assert.equal(AFFINITY_POINTS_V4.ACTIVITY_CONFIRMED, 10);
   });
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -20,6 +21,7 @@ import {
   ManualReviewMethod,
   ManualReviewStatus,
   ProcessingSkipReason,
+  RolNombre,
   ValidationResourceType,
   ValidationStatus,
 } from '@perfil/shared';
@@ -37,6 +39,7 @@ import {
   tieneEvidenciaMinima,
 } from './credential-route.rules';
 import { compararConModelo } from './document-comparison.rules';
+import { fasesDeCredencial } from './credential-phases.rules';
 import { ModeloVigente, modeloVigente } from './reference-model';
 import { credentialPatternToRegExp } from '../activities/credential-pattern';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
@@ -122,15 +125,23 @@ function exigirPruebaExterna(method: ManualReviewMethod | null | undefined, prue
 function respaldoTrasRevision(decision: ManualReviewStatus, actual: BackingTier): BackingTier {
   if (decision === ManualReviewStatus.CORROBORATED) return BackingTier.CORROBORATED;
   if (decision === ManualReviewStatus.REJECTED) return BackingTier.FLAGGED;
-  if (decision === ManualReviewStatus.INCONCLUSIVE && actual === BackingTier.CORROBORATED) return BackingTier.SUPPORTED;
-  return actual;
+  // V7.1 C22: aceptada revisando el documento: respaldo parcial, nunca corroboración fuerte.
+  if (decision === ManualReviewStatus.APPROVED) return BackingTier.SUPPORTED;
+  return sinCorroboracionDeMaquina(actual);
+}
+
+/** V7.1 §5.1: la máquina deja hallazgos; CORROBORATED solo lo da Dirección con prueba externa. */
+function sinCorroboracionDeMaquina(tier: BackingTier): BackingTier {
+  return tier === BackingTier.CORROBORATED ? BackingTier.SUPPORTED : tier;
 }
 
 /** El aviso al estudiante según la decisión de Dirección. */
 function avisoDeRevision(decision: ManualReviewStatus, nombre: string, motivo: string | null): string {
-  if (decision === ManualReviewStatus.CORROBORATED) return `Dirección verificó «${nombre}» con una prueba externa.`;
+  if (decision === ManualReviewStatus.CORROBORATED) return `Dirección aprobó «${nombre}» tras contrastarla con una prueba externa.`;
+  if (decision === ManualReviewStatus.APPROVED) return `Dirección aprobó «${nombre}» revisando el documento (respaldo parcial).`;
+  if (decision === ManualReviewStatus.OBSERVED) return `Dirección observó «${nombre}»: ${motivo} Corrígela y vuelve a enviarla.`;
   if (decision === ManualReviewStatus.REJECTED) return `Dirección rechazó «${nombre}»: ${motivo}`;
-  return `Dirección revisó «${nombre}», pero no pudo verificarla con una fuente externa. Queda inconclusa.`;
+  return `Dirección revisó «${nombre}», pero no pudo contrastarla con una fuente externa.`;
 }
 
 /**
@@ -141,7 +152,12 @@ function avisoDeRevision(decision: ManualReviewStatus, nombre: string, motivo: s
 function ajustarPorRevisionManual(tier: BackingTier, revision: ManualReviewStatus | null | undefined): BackingTier {
   if (revision === ManualReviewStatus.CORROBORATED && tier !== BackingTier.FLAGGED) return BackingTier.CORROBORATED;
   if (revision === ManualReviewStatus.REJECTED) return BackingTier.FLAGGED;
-  if (revision === ManualReviewStatus.INCONCLUSIVE && tier === BackingTier.CORROBORATED) return BackingTier.SUPPORTED;
+  // V7.1: la decisión de Dirección manda sobre un resultado tardío.
+  if (revision === ManualReviewStatus.APPROVED) return BackingTier.SUPPORTED;
+  // V7.1 §5.1: pendiente u observada, la máquina no corrobora. Una credencial
+  // anterior a V7.1 (sin revisión pedida) conserva su comportamiento (C23).
+  if (revision === ManualReviewStatus.REQUESTED || revision === ManualReviewStatus.OBSERVED
+    || revision === ManualReviewStatus.INCONCLUSIVE) return sinCorroboracionDeMaquina(tier);
   return tier;
 }
 
@@ -1092,31 +1108,83 @@ export class ValidationService {
     return { status, label: CREDENTIAL_VALIDATION_LABEL[status] };
   }
 
-  /** Pendientes de revisión, para Dirección. */
-  async pendingManualReviews() {
+  /**
+   * V7.1 §5.3 fase 3 · Bandeja de Dirección: **todas** las credenciales
+   * presentadas, las pendientes primero, con lo que hace falta para decidir:
+   * origen, oportunidad, áreas y tecnologías, emisor, fecha, archivo, las tres
+   * fases y la decisión anterior si la hubo. Administración la consulta en
+   * solo lectura (D01).
+   */
+  async pendingManualReviews(estado: 'pendientes' | 'observadas' | 'decididas' | 'todas' = 'todas', limite = 200) {
+    const decididas = [
+      ManualReviewStatus.CORROBORATED, ManualReviewStatus.APPROVED, ManualReviewStatus.REJECTED,
+      ManualReviewStatus.INCONCLUSIVE, ManualReviewStatus.NOT_CORROBORATED,
+    ];
+    const filtro = {
+      pendientes: [ManualReviewStatus.REQUESTED],
+      observadas: [ManualReviewStatus.OBSERVED],
+      decididas,
+      todas: [ManualReviewStatus.REQUESTED, ManualReviewStatus.OBSERVED, ...decididas],
+    }[estado];
     const filas = await this.records
       .createQueryBuilder('v')
       .innerJoin(ExternalCertificate, 'c', 'c.id = v.resource_id')
       .innerJoin(StudentProfile, 'p', 'p.id = c.student_profile_id')
       .innerJoin('p.user', 'u')
+      .leftJoin(Activity, 'a', 'a.id = c.activity_id')
       .select([
         'c.id AS "certificateId"', 'c.certificate_name AS "certificateName"', 'c.issuer AS issuer',
         'c.issue_date AS "issueDate"', 'c.credential_id AS "credentialId"', 'c.certificate_url AS "certificateUrl"',
-        'c.file_url AS "fileUrl"', 'p.semester AS semester',
+        'c.file_url AS "fileUrl"', 'c.stored_file_id AS "storedFileId"', 'p.semester AS semester',
         `u.first_name || ' ' || u.last_name AS "studentName"`,
         `v.credential_check ->> 'status' AS "credentialCheck"`,
         'v.manual_review_note AS "requestNote"', 'v.manual_review_requested_at AS "requestedAt"',
-        // V7.1 §5.2: origen y estado técnico, para que Dirección sepa qué se comprobó y qué no.
-        'c.source AS source', 'a.title AS "activityTitle"',
+        'c.source AS source', 'a.id AS "activityId"', 'a.title AS "activityTitle"', 'a.provider AS "activityProvider"',
         'v.status AS "processingStatus"', 'v.skipped_reason AS "skippedReason"',
+        'v.manual_review_status AS "reviewStatus"', 'v.manual_review_reason AS "reviewReason"',
+        'v.manual_reviewed_at AS "reviewedAt"', 'v.manual_review_method AS "reviewMethod"',
+        'v.backing_tier AS "backingTier"', 'v.credential_check AS "check"', 'v.link_check AS "linkCheck"',
+        'v.identity_match_status AS "identity"', 'v.extracted_data AS "extracted"', 'v.finished_at AS "finishedAt"',
+        'jsonb_array_length(v.previous_results) AS "previousAttempts"',
       ])
-      .leftJoin(Activity, 'a', 'a.id = c.activity_id')
       .where('v.resource_type = :t', { t: ValidationResourceType.EXTERNAL_CERTIFICATE })
-      .andWhere('v.manual_review_status = :r', { r: ManualReviewStatus.REQUESTED })
-      .orderBy('v.manual_review_requested_at', 'ASC')
-      .limit(200)
+      .andWhere('v.manual_review_status IN (:...estados)', { estados: filtro })
+      .orderBy(`CASE v.manual_review_status WHEN 'requested' THEN 0 WHEN 'observed' THEN 1 ELSE 2 END`, 'ASC')
+      .addOrderBy('COALESCE(v.manual_reviewed_at, v.manual_review_requested_at)', 'DESC')
+      .limit(Math.min(Math.max(limite, 1), 500))
       .getRawMany();
-    return filas;
+
+    // Dentro de las pendientes, la más antigua primero: es la que más espera.
+    filas.sort((x, y) => (x.reviewStatus === ManualReviewStatus.REQUESTED && y.reviewStatus === ManualReviewStatus.REQUESTED
+      ? new Date(x.requestedAt).getTime() - new Date(y.requestedAt).getTime() : 0));
+
+    const ids = filas.map((f) => f.certificateId);
+    const [areas, skills] = ids.length
+      ? await Promise.all([
+        this.records.manager.query(
+          `SELECT ca.certificate_id AS id, a.name FROM external_certificate_areas ca JOIN academic_areas a ON a.id = ca.academic_area_id WHERE ca.certificate_id = ANY($1::uuid[])`, [ids]),
+        this.records.manager.query(
+          `SELECT cs.certificate_id AS id, s.name FROM external_certificate_skills cs JOIN skills s ON s.id = cs.skill_id WHERE cs.certificate_id = ANY($1::uuid[])`, [ids]),
+      ])
+      : [[], []];
+    const nombres = (lista: { id: string; name: string }[], id: string) => lista.filter((x) => x.id === id).map((x) => x.name);
+
+    return filas.map(({ check, linkCheck, identity, extracted, finishedAt, storedFileId, ...f }) => ({
+      ...f,
+      previousAttempts: Number(f.previousAttempts ?? 0),
+      areas: nombres(areas, f.certificateId),
+      skills: nombres(skills, f.certificateId),
+      validationStatus: this.validationStatusView({
+        status: f.processingStatus, credentialCheck: check, manualReviewStatus: f.reviewStatus, backingTier: f.backingTier,
+      } as ValidationRecord),
+      contradictions: check?.contradictions ?? [],
+      phases: fasesDeCredencial({
+        status: f.processingStatus, skippedReason: f.skippedReason, credentialCheck: check, linkCheck,
+        identityMatchStatus: identity, extractedData: extracted, finishedAt,
+        manualReviewStatus: f.reviewStatus, manualReviewRequestedAt: f.requestedAt,
+        manualReviewedAt: f.reviewedAt, manualReviewReason: f.reviewReason,
+      } as never, { storedFileId, certificateUrl: f.certificateUrl }),
+    }));
   }
 
   /**
@@ -1137,6 +1205,10 @@ export class ValidationService {
     method?: ManualReviewMethod | null,
     proof?: string | null,
   ): Promise<ValidationRecord> {
+    // V7.1 D01: Dirección es la única autoridad de revisión. Administración consulta.
+    if (reviewer.role !== RolNombre.CAREER_DIRECTOR) {
+      throw new ForbiddenException({ code: 'CREDENTIAL_REVIEW_DIRECTION_ONLY', message: 'Solo Dirección decide la revisión de una credencial externa.' });
+    }
     const record = await this.findForOrFail(ValidationResourceType.EXTERNAL_CERTIFICATE, certificateId);
     if (record.manualReviewStatus !== ManualReviewStatus.REQUESTED) {
       throw new ConflictException({ code: 'MANUAL_REVIEW_NOT_REQUESTED', message: 'Esta credencial no tiene una revisión pendiente.' });
@@ -1180,10 +1252,15 @@ export class ValidationService {
       await this.notifications.emit({
         userId: cert.studentProfile.userId,
         kind: 'EXTERNAL_CREDENTIAL_MANUAL_REVIEWED',
-        title: decision === ManualReviewStatus.CORROBORATED ? 'Credencial verificada' : 'Revisión de credencial',
+        title: ({
+          [ManualReviewStatus.CORROBORATED]: 'Credencial aprobada',
+          [ManualReviewStatus.APPROVED]: 'Credencial aprobada',
+          [ManualReviewStatus.OBSERVED]: 'Credencial observada: corrígela',
+          [ManualReviewStatus.REJECTED]: 'Credencial rechazada',
+        } as Record<string, string>)[decision] ?? 'Revisión de credencial',
         body: avisoDeRevision(decision, cert.certificateName, record.manualReviewReason),
         link: '/student/evidences',
-        dedupeKey: `credential-manual-review:${certificateId}:${decision}`,
+        dedupeKey: `credential-manual-review:${certificateId}:${decision}:${record.manualReviewedAt?.getTime() ?? ''}`,
       });
     } catch {
       // La notificación nunca deshace la decisión.

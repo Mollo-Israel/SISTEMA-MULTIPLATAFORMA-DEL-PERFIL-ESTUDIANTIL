@@ -121,6 +121,29 @@ export enum ManualReviewStatus {
   INCONCLUSIVE = 'inconclusive',
   /** V4.1 A41-018: contradicción fuerte documentada (p. ej., credencial de otra persona). */
   REJECTED = 'rejected',
+  /**
+   * V7.1 §5.3 fase 3: Dirección pide una corrección con su motivo. El
+   * estudiante corrige y la reenvía; mientras tanto no cuenta.
+   */
+  OBSERVED = 'observed',
+  /**
+   * V7.1 §5.3 fase 3 (C22): Dirección la acepta tras revisar el documento y
+   * las fuentes disponibles, sin una prueba externa independiente. Cuenta con
+   * respaldo parcial; no es una corroboración fuerte ni una certificación.
+   */
+  APPROVED = 'approved',
+}
+
+/**
+ * V7.1 §5.1: ¿la credencial cuenta para afinidad, tecnologías respaldadas y
+ * trayectoria? No mientras espera a Dirección, ni observada, ni rechazada.
+ * Las que no pasaron por la revisión (anteriores a V7.1) conservan su
+ * comportamiento: C23 prohíbe revocarlas en silencio.
+ */
+export function credencialCuenta(revision: ManualReviewStatus | null | undefined): boolean {
+  return revision !== ManualReviewStatus.REQUESTED
+    && revision !== ManualReviewStatus.OBSERVED
+    && revision !== ManualReviewStatus.REJECTED;
 }
 
 /**
@@ -157,15 +180,25 @@ export enum CredentialValidationStatus {
   MANUALLY_VERIFIED = 'MANUALLY_VERIFIED',
   INCONCLUSIVE = 'INCONCLUSIVE',
   REJECTED = 'REJECTED',
+  /** V7.1: Dirección pidió una corrección. */
+  OBSERVED = 'OBSERVED',
+  /** V7.1 (C22): aceptada por Dirección revisando el documento, sin prueba externa. */
+  APPROVED = 'APPROVED',
 }
 
+/**
+ * V7.1 §5.1, §5.3: la plataforma no declara autenticidad. «Aprobada» es una
+ * decisión de Dirección con su alcance, no una certificación de Afinia.
+ */
 export const CREDENTIAL_VALIDATION_LABEL: Record<CredentialValidationStatus, string> = {
   [CredentialValidationStatus.PENDING]: 'En comprobación',
-  [CredentialValidationStatus.AUTO_VERIFIED]: 'Verificada por la fuente oficial',
-  [CredentialValidationStatus.MANUAL_REVIEW_REQUIRED]: 'Necesita revisión',
-  [CredentialValidationStatus.MANUALLY_VERIFIED]: 'Verificada por Dirección con prueba externa',
-  [CredentialValidationStatus.INCONCLUSIVE]: 'Inconclusa: no se pudo verificar',
-  [CredentialValidationStatus.REJECTED]: 'Rechazada: la fuente oficial la contradice',
+  [CredentialValidationStatus.AUTO_VERIFIED]: 'Comprobada por la fuente oficial (anterior a la revisión obligatoria)',
+  [CredentialValidationStatus.MANUAL_REVIEW_REQUIRED]: 'Pendiente de revisión de Dirección',
+  [CredentialValidationStatus.MANUALLY_VERIFIED]: 'Aprobada por Dirección con una prueba externa',
+  [CredentialValidationStatus.INCONCLUSIVE]: 'Revisada sin poder contrastarla con una fuente externa',
+  [CredentialValidationStatus.REJECTED]: 'Rechazada por Dirección',
+  [CredentialValidationStatus.OBSERVED]: 'Observada: corrígela y vuelve a enviarla',
+  [CredentialValidationStatus.APPROVED]: 'Aprobada por Dirección (revisión del documento, respaldo parcial)',
 };
 
 /**

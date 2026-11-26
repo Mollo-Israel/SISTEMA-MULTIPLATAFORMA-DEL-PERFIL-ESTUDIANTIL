@@ -44,8 +44,13 @@
  * V7.1 D04 · versión 6: la participación confirmada en una actividad «Sin
  * resultado» queda como asistencia operativa. No suma afinidad ni respaldo.
  * Pesos, topes y rendimientos no cambian.
+ *
+ * V7.1 D01 · versión 7: una credencial externa pendiente de Dirección,
+ * observada o rechazada no suma afinidad ni respaldo; cuenta al aprobarla.
+ * Las anteriores a la revisión obligatoria conservan su comportamiento (C23).
+ * Pesos, topes y rendimientos no cambian.
  */
-export const AFFINITY_ENGINE_VERSION = 6;
+export const AFFINITY_ENGINE_VERSION = 7;
 
 /**
  * V7.1 §6.2: el recálculo automático al arrancar la API solo migra

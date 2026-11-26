@@ -606,6 +606,11 @@ export function deriveCredentialValidationStatus(i: ValidationStatusInput): Cred
         : CredentialValidationStatus.MANUALLY_VERIFIED;
     case ManualReviewStatus.REJECTED:
       return CredentialValidationStatus.REJECTED;
+    // V7.1 §5.3 fase 3: las dos decisiones nuevas de Dirección.
+    case ManualReviewStatus.OBSERVED:
+      return CredentialValidationStatus.OBSERVED;
+    case ManualReviewStatus.APPROVED:
+      return CredentialValidationStatus.APPROVED;
     case ManualReviewStatus.INCONCLUSIVE:
     case ManualReviewStatus.NOT_CORROBORATED:
       return CredentialValidationStatus.INCONCLUSIVE;

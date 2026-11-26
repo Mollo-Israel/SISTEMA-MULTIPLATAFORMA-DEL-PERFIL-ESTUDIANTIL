@@ -401,8 +401,8 @@ async function batch2(ctx) {
     if (ptsParticipa <= 0) await espera(1000);
   }
   const version = psql(`select coalesce(min(engine_version), 0) from affinity_results where student_profile_id = '${est4.profileId}'`);
-  check(sinResultado.status === 201 && conResultado.status === 201 && ptsNinguno === 0 && ptsParticipa > 0 && version === '6',
-    'V7.2.13 I01/I11 Afinidad (motor v6): la de «Sin resultado» aporta 0; la de «Solo participación» aporta una vez', json({ ptsNinguno, ptsParticipa, version }));
+  check(sinResultado.status === 201 && conResultado.status === 201 && ptsNinguno === 0 && ptsParticipa > 0 && Number(version) >= 6,
+    'V7.2.13 I01/I11 Afinidad (motor v6 o posterior): la de «Sin resultado» aporta 0; la de «Solo participación» aporta una vez', json({ ptsNinguno, ptsParticipa, version }));
 
   const resumen = await req('GET', '/profiles/me/summary', { token: est4.token });
   const nombres = (resumen.data?.skills ?? []).map((s) => s.skill ?? s.name);
@@ -673,7 +673,195 @@ async function batch3(ctx) {
   check(ajena.status === 400 && ajena.data?.code === 'CREDENTIAL_OPPORTUNITY_NOT_ELIGIBLE', 'V7.3.23 C05 Un estudiante no aceptado no adjunta a esa oportunidad', `status ${ajena.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3 };
+// ===========================================================================
+//  BATCH V7-4 — Revisión humana obligatoria (§5.1, §5.3 fase 3, D01)
+// ===========================================================================
+async function batch4(ctx) {
+  objective('BATCH V7-4 · Solo Dirección decide; la máquina no aprueba; solo lo aprobado cuenta');
+  const admin = ctx.admin;
+  const { createServer } = await import('node:http');
+  const BASE = 'http://verificador.afinia-pruebas.org:3997';
+  const director = await provisionAndActivate(admin, { firstName: 'Olga', lastName: `Revisora${L}`, email: correoStaff('b4dir'), role: 'CAREER_DIRECTOR' });
+  const nombres = ['Andrea', 'Bruno', 'Celia', 'Diego', 'Elisa'];
+  const est = [];
+  for (const [i, n] of nombres.entries()) {
+    const e = await provisionAndActivate(admin, { firstName: n, lastName: `Revision${L}`, email: correoEst(`b4e${i}`), role: 'STUDENT', semester: 5 });
+    e.nombre = `${n} Revision${L}`;
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    est.push(e);
+  }
+  const [e1, e2, e3, e4, e5] = est;
+  const server = createServer((rq, rs) => {
+    const html = (c) => { rs.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); rs.end(`<html><body>${c}</body></html>`); };
+    const m = /^\/v74\/ok\/(\d)$/.exec(rq.url ?? '');
+    if (m) return html(`Credential NA-2026-AA${m[1]} issued to ${est[Number(m[1])].nombre} for CCNA Introduction to Networks by Cisco Networking Academy`);
+    if (rq.url === '/v74/otra') return html('Credential NA-2026-ZZ9 issued to Persona Distinta for CCNA Introduction to Networks by Cisco Networking Academy');
+    if (rq.url === '/v74/curso') return html('CCNA Introduction to Networks. Inscríbete en el curso de Cisco Networking Academy.');
+    rs.writeHead(404); rs.end();
+  });
+  await new Promise((r) => server.listen(3997, '127.0.0.1', r));
+  try {
+    const area = (await req('POST', '/academic-areas', { token: admin, body: { name: `Redes revision ${L}`, tags: [`rv${L}`] } })).data;
+    const sk = (await req('POST', '/skills', { token: admin, body: { name: `Tecrevision ${L} Uno`, academicAreaId: area.id } })).data;
+    const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+    const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
+    const op = (await req('POST', '/activities', {
+      token: director.token,
+      body: {
+        title: `CCNA revision ${L}`, type: 'academica', categoryId: cat.id, status: 'open', originType: 'external',
+        provider: 'Cisco Networking Academy', externalUrl: `${BASE}/v74/curso`, outcomePolicy: 'external_credential_expected',
+        expectedIssuerDomains: ['afinia-pruebas.org'], activityDate: en(48), endAt: en(72), semesterScope: [1, 2, 3, 4, 5, 6, 7, 8],
+        areaIds: [area.id], skillIds: [sk.id],
+      },
+    })).data;
+    if (!op?.id) throw new Error('No se pudo crear la oportunidad');
+    const modelo = await subirArchivo(director.token, pdfConTexto(['Cisco Networking Academy', 'CCNA Introduction to Networks', 'Otorgado a Persona Modelo']), 'modelo.pdf');
+    await req('PUT', `/activities/${op.id}/validation-reference`, { token: director.token, body: { expectedCourseName: 'CCNA Introduction to Networks', sampleStoredFileId: modelo.data?.id } });
+    for (const e of est) {
+      await req('POST', `/activities/${op.id}/register`, { token: e.token });
+      await req('PATCH', `/activities/${op.id}/confirm-participation`, { token: director.token, body: { studentProfileId: e.profileId, status: 'accepted' } });
+    }
+    await req('PATCH', `/activities/${op.id}`, { token: director.token, body: { status: 'finished' } });
+
+    const vista = async (e, id) => (await req('GET', `/validation/external_certificate/${id}`, { token: e.token })).data;
+    const procesar = async () => { for (let i = 0; i < 3; i++) await req('POST', '/validation/run?limit=50', { token: admin }); };
+    const enviar = async (e, i, extra = {}) => {
+      const f = await subirArchivo(e.token, pdfConTexto(['Cisco Networking Academy', 'CCNA Introduction to Networks', `Otorgado a ${e.nombre}`, `Folio ${i}-${Date.now()}`]), `e${i}.pdf`);
+      const r = await req('POST', '/certificates/external', {
+        token: e.token, body: { activityId: op.id, storedFileId: f.data?.id, issueDate: '2026-11-10', credentialId: `NA-2026-AA${i}`, certificateUrl: `${BASE}/v74/ok/${i}`, ...extra },
+      });
+      if (r.status !== 201) throw new Error(`No se pudo enviar la credencial (${r.status}): ${json(r.data)}`);
+      return r.data.id;
+    };
+    // La afinidad se recalcula aparte: se espera el resultado, no un tiempo fijo.
+    const puntos = async (certId, esperado) => {
+      let p = -1;
+      for (let i = 0; i < 20; i++) {
+        p = Number(psql(`select coalesce(max(points), 0) from affinity_contributions where source_id = '${certId}'`));
+        if (esperado === undefined || esperado(p)) return p;
+        await espera(500);
+      }
+      return p;
+    };
+    const respaldo = async (certId, esperado) => {
+      let p = -1;
+      for (let i = 0; i < 20; i++) {
+        p = Number(psql(`select coalesce(max(support_points), 0) from affinity_contributions where source_id = '${certId}'`));
+        if (esperado(p)) return p;
+        await espera(500);
+      }
+      return p;
+    };
+    const exportables = async (e) => ((await req('GET', '/trajectory-summary/items', { token: e.token })).data?.sections ?? []).flatMap((s) => s.items ?? []).map((x) => x.id);
+    const respaldadas = async (e) => ((await req('GET', '/profiles/me/summary', { token: e.token })).data?.skills ?? []).map((s) => s.skill ?? s.name);
+    const decidir = (token, id, body) => req('POST', `/validation/manual-reviews/${id}`, { token, body });
+
+    // --- C11 / C14: fuente oficial individual que coincide; la máquina no aprueba.
+    const c1 = await enviar(e1, 0);
+    await procesar();
+    const v1 = await vista(e1, c1);
+    check(v1?.credentialCheck?.status === 'verified_match' && v1?.manualReview?.status === 'requested'
+      && v1?.validationStatus?.status === 'MANUAL_REVIEW_REQUIRED' && v1?.backingTier !== 'corroborated',
+    'V7.4.1 C11/C14 Una fuente oficial que coincide queda como hallazgo: sin CORROBORATED ni AUTO_VERIFIED, pendiente de Dirección', json({ c: v1?.credentialCheck?.status, s: v1?.validationStatus?.status, t: v1?.backingTier }));
+    check(await puntos(c1) === 0 && !(await exportables(e1)).includes(c1) && !(await respaldadas(e1)).includes(sk.name),
+      'V7.4.2 §5.1 Pendiente: no suma afinidad, no respalda tecnologías ni se exporta', json({ p: await puntos(c1) }));
+
+    // --- C24: Administración no decide, ni por API.
+    const deAdmin = await decidir(admin, c1, { decision: 'corroborated', reason: 'Administración intenta aprobar la credencial.', method: 'issuer_official_lookup', proof: 'https://otra-fuente.example.org/registro/1' });
+    const sinCambio = psql(`select manual_review_status || '|' || backing_tier from validation_records where resource_id = '${c1}'`);
+    const auditadas = psql(`select count(*) from audit_events where entity_id = '${c1}' and event_type = 'EXTERNAL_CREDENTIAL_MANUAL_REVIEWED'`);
+    check(deAdmin.status === 403 && sinCambio.startsWith('requested|') && auditadas === '0',
+      'V7.4.3 C24 D01 Administración intenta aprobar por API: 403, sin cambios ni decisión auditada', json({ s: deAdmin.status, sinCambio, auditadas }));
+    const bandejaAdmin = await req('GET', '/validation/manual-reviews', { token: admin });
+    check(bandejaAdmin.status === 200 && (bandejaAdmin.data?.items ?? bandejaAdmin.data ?? []).some((x) => x.certificateId === c1),
+      'V7.4.4 D01 Administración consulta la bandeja (solo lectura)', `status ${bandejaAdmin.status}`);
+
+    // --- C17: el estudiante no puede forzar el resultado.
+    const forzado = await req('PATCH', `/certificates/external/${c1}`, {
+      token: e1.token, body: { backingTier: 'corroborated', validationStatus: 'AUTO_VERIFIED', manualReviewStatus: 'corroborated' },
+    });
+    const trasForzar = psql(`select manual_review_status || '|' || backing_tier from validation_records where resource_id = '${c1}'`);
+    check(forzado.status === 400 && trasForzar.startsWith('requested|') && !trasForzar.endsWith('corroborated'),
+      'V7.4.5 C17 Enviar AUTO_VERIFIED o CORROBORATED en el cuerpo se rechaza y no cambia nada', json({ s: forzado.status, trasForzar }));
+
+    // --- C20: Dirección aprueba con prueba externa.
+    const aprobada = await decidir(director.token, c1, {
+      decision: 'corroborated', reason: 'Consulté el registro individual del emisor: código y nombre coinciden.',
+      method: 'issuer_official_lookup', proof: 'Registro oficial NA-2026-AA0 consultado el 26/11 en el portal del emisor.',
+    });
+    const v1b = await vista(e1, c1);
+    check(aprobada.status === 200 && v1b?.validationStatus?.status === 'MANUALLY_VERIFIED' && v1b?.backingTier === 'corroborated'
+      && v1b?.credentialCheck?.status === 'verified_match' && v1b?.manualReview?.method === 'issuer_official_lookup',
+    'V7.4.6 C20 Dirección aprueba con prueba externa: corroborada, con método y prueba; los hallazgos se conservan', json({ s: v1b?.validationStatus, t: v1b?.backingTier }));
+    check(await puntos(c1, (p) => p > 0) > 0 && (await exportables(e1)).includes(c1),
+      'V7.4.7 C20 Recién aprobada cuenta: suma afinidad y se exporta', json({ p: await puntos(c1) }));
+
+    // --- C28: con decisión, no se recomprueba.
+    const recheck = await req('POST', `/validation/manual-reviews/${c1}/recheck`, { token: director.token });
+    check(recheck.status === 409 && recheck.data?.code === 'RECHECK_AFTER_DECISION' && psql(`select manual_review_status from validation_records where resource_id = '${c1}'`) === 'corroborated',
+      'V7.4.8 C28 Una aprobada no se vuelve a comprobar: la decisión queda intacta', json({ s: recheck.status, c: recheck.data?.code }));
+
+    // --- C21: observar y reenviar.
+    const c2 = await enviar(e2, 1);
+    await procesar();
+    const observada = await decidir(director.token, c2, { decision: 'observed', reason: 'Falta la página con el código: sube el certificado completo.' });
+    const v2 = await vista(e2, c2);
+    const bandejaE2 = (await req('GET', '/notifications/me', { token: e2.token })).data;
+    const aviso = (Array.isArray(bandejaE2) ? bandejaE2 : bandejaE2?.items ?? []).some((n) => /observ|corr[ií]g/i.test(`${n.title} ${n.body}`));
+    check(observada.status === 200 && v2?.validationStatus?.status === 'OBSERVED' && /certificado completo/.test(v2?.manualReview?.reason ?? '')
+      && aviso && await puntos(c2) === 0,
+    'V7.4.9 C21 Observada: el motivo se ve, el estudiante recibe el aviso y no suma', json({ s: v2?.validationStatus, aviso }));
+    const corrige = await req('PATCH', `/certificates/external/${c2}`, { token: e2.token, body: { description: 'Subo el certificado completo con la página del código.' } });
+    const v2b = await vista(e2, c2);
+    check(corrige.status === 200 && v2b?.manualReview?.status === 'requested' && v2b?.previousAttempts >= 1,
+      'V7.4.10 C21 Corregida, vuelve a la revisión y la observación queda en el historial', json({ m: v2b?.manualReview?.status, p: v2b?.previousAttempts }));
+
+    // --- C21: rechazar con motivo.
+    const c3 = await enviar(e3, 2);
+    const rechazo = await decidir(director.token, c3, { decision: 'rejected', reason: 'El emisor informó que ese código pertenece a otra persona.' });
+    const v3 = await vista(e3, c3);
+    check(rechazo.status === 200 && v3?.validationStatus?.status === 'REJECTED' && v3?.backingTier === 'flagged' && await puntos(c3) === 0,
+      'V7.4.11 C21 Rechazada con motivo: señalada, no suma y sigue registrada', json({ s: v3?.validationStatus, t: v3?.backingTier }));
+
+    // --- C22: aprobación revisando solo el documento.
+    const c4 = await enviar(e4, 3);
+    const doc = await decidir(director.token, c4, { decision: 'approved', reason: 'Revisé el documento y los datos de la oportunidad; no consulté al emisor.', method: 'document_only' });
+    const v4 = await vista(e4, c4);
+    check(doc.status === 200 && v4?.validationStatus?.status === 'APPROVED' && v4?.backingTier === 'supported'
+      && !/verificad|autentic/i.test(v4?.validationStatus?.label ?? '') && await respaldo(c4, (p) => p > 0) > 0 && (await exportables(e4)).includes(c4),
+    'V7.4.12 C22 Aprobada solo con el documento: cuenta con respaldo parcial (pesos vigentes, D06), sin «verificada» ni corroboración fuerte', json({ s: v4?.validationStatus, t: v4?.backingTier }));
+
+    // --- C12: el enlace nombra a otra persona; la máquina no decide.
+    const c5 = await enviar(e5, 4, { certificateUrl: `${BASE}/v74/otra`, credentialId: 'NA-2026-ZZ9' });
+    await procesar();
+    const v5 = await vista(e5, c5);
+    check((v5?.credentialCheck?.contradictions ?? []).includes('official_holder_mismatch') && v5?.manualReview?.status === 'requested'
+      && v5?.validationStatus?.status === 'MANUAL_REVIEW_REQUIRED',
+    'V7.4.13 C12 Fuente con otro titular: la discrepancia se ve y la decide Dirección, no la máquina', json({ c: v5?.credentialCheck?.contradictions, s: v5?.validationStatus?.status }));
+
+    // --- Bandeja: todas las presentadas, pendientes primero.
+    const bandeja = await req('GET', '/validation/manual-reviews', { token: director.token });
+    const items = bandeja.data?.items ?? bandeja.data ?? [];
+    const mias = items.filter((x) => [c1, c2, c3, c4, c5].includes(x.certificateId));
+    const primerDecidido = items.findIndex((x) => x.reviewStatus !== 'requested');
+    const ultimoPendiente = items.map((x) => x.reviewStatus).lastIndexOf('requested');
+    const soloPendientes = (await req('GET', '/validation/manual-reviews?estado=pendientes', { token: director.token })).data;
+    check(mias.length === 5 && (primerDecidido === -1 || ultimoPendiente < primerDecidido)
+      && (soloPendientes?.items ?? soloPendientes ?? []).every((x) => x.reviewStatus === 'requested') && mias.every((x) => Array.isArray(x.phases)),
+    'V7.4.14 §5.3 Fase 3 La bandeja muestra todas las presentadas con sus fases, las pendientes primero; filtra por estado', json(mias.map((x) => x.reviewStatus)));
+
+    // --- C23: una antigua corroborada por la máquina no se revoca al desplegar.
+    const c6 = await enviar(e1, 0, { activityId: undefined, certificateName: `Antigua corroborada ${L}`, issuer: 'Cisco Networking Academy' });
+    psql(`update validation_records set manual_review_status = null, manual_review_requested_at = null, backing_tier = 'corroborated', status = 'completed', skipped_reason = null, credential_check = '{"status":"verified_match","contradictions":[],"pipeline":[],"qr":"qr_absent","aiUsed":false}'::jsonb where resource_id = '${c6}'`);
+    const v6 = await vista(e1, c6);
+    check(v6?.backingTier === 'corroborated' && v6?.validationStatus?.status === 'AUTO_VERIFIED' && v6?.manualReview?.status === null,
+      'V7.4.15 C23 Una credencial antigua corroborada por la máquina conserva su estado: no se revoca en silencio', json({ t: v6?.backingTier, s: v6?.validationStatus }));
+  } finally {
+    server.close();
+  }
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

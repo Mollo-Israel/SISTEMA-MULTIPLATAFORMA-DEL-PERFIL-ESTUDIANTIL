@@ -4,6 +4,7 @@ import {
   BackingTier,
   cuentaComoTrayectoria,
   ManualReviewStatus,
+  credencialCuenta,
   ProjectBackingTier,
   ProjectStatus,
   RegistrationStatus,
@@ -44,7 +45,10 @@ export function activityCvEligible(
  * §43.3 / §45: credencial externa CORROBORATED. La oportunidad en sí, o una
  * credencial SUPPORTED, sigue en la trayectoria, pero no afirma finalización.
  */
-export function certificateCvEligible(tier: BackingTier | null | undefined): boolean {
+export function certificateCvEligible(tier: BackingTier | null | undefined, revision?: ManualReviewStatus | null): boolean {
+  // V7.1 D01: sin la aprobación de Dirección no entra; aprobada por ella, sí.
+  if (!credencialCuenta(revision)) return false;
+  if (revision === ManualReviewStatus.CORROBORATED || revision === ManualReviewStatus.APPROVED) return true;
   return tier === BackingTier.CORROBORATED;
 }
 
@@ -64,7 +68,9 @@ export function certificateLevel(
   tier: BackingTier | null | undefined,
   manual: ManualReviewStatus | null | undefined,
 ): TrajectoryLevel {
-  if (manual === ManualReviewStatus.CORROBORATED) return TrajectoryLevel.REVIEWED;
+  if (manual === ManualReviewStatus.CORROBORATED || manual === ManualReviewStatus.APPROVED) return TrajectoryLevel.REVIEWED;
+  // V7.1 D01: esperando a Dirección, observada o rechazada: le falta un paso para contar.
+  if (!credencialCuenta(manual)) return TrajectoryLevel.INCOMPLETE;
   switch (tier) {
     case BackingTier.CORROBORATED: return TrajectoryLevel.CORROBORATED;
     case BackingTier.SUPPORTED: return TrajectoryLevel.SUPPORTED;

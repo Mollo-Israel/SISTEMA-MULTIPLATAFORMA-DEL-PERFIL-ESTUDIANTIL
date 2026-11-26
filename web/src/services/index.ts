@@ -1125,8 +1125,10 @@ export const certificateService = {
 
 /** V3 §16/§19: revisión manual excepcional (Dirección). */
 export const manualReviewService = {
-  pending: () => api.get<ManualReviewItem[]>('/validation/manual-reviews').then((r) => r.data),
-  decide: (certificateId: string, body: { decision: 'corroborated' | 'inconclusive' | 'rejected'; reason: string; method?: string; proof?: string }) =>
+  /** V7.1 §5.3 fase 3: todas las presentadas (pendientes primero) o filtradas por estado. */
+  pending: (estado: 'pendientes' | 'observadas' | 'decididas' | 'todas' = 'todas') =>
+    api.get<ManualReviewItem[]>('/validation/manual-reviews', { params: { estado } }).then((r) => r.data),
+  decide: (certificateId: string, body: { decision: 'corroborated' | 'approved' | 'observed' | 'rejected'; reason: string; method?: string; proof?: string }) =>
     api.post(`/validation/manual-reviews/${certificateId}`, body).then((r) => r.data),
   /** V7.1 §5.5: vuelve a comprobar una pendiente con el modelo vigente. */
   recheck: (certificateId: string) =>

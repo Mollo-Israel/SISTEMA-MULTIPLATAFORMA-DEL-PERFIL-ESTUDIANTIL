@@ -1081,7 +1081,7 @@ export interface VerifiedEmail {
 }
 
 export interface ManualReviewState {
-  status: 'requested' | 'corroborated' | 'not_corroborated' | 'inconclusive' | 'rejected' | null;
+  status: 'requested' | 'corroborated' | 'not_corroborated' | 'inconclusive' | 'rejected' | 'observed' | 'approved' | null;
   reason: string | null;
   reviewedAt: string | null;
   method?: string | null;
@@ -1091,10 +1091,28 @@ export interface ManualReviewState {
 
 /** V4.1 A41-018: estado de validación, eje aparte del respaldo. */
 export type CredentialValidationStatus =
-  | 'PENDING' | 'AUTO_VERIFIED' | 'MANUAL_REVIEW_REQUIRED' | 'MANUALLY_VERIFIED' | 'INCONCLUSIVE' | 'REJECTED';
+  | 'PENDING' | 'AUTO_VERIFIED' | 'MANUAL_REVIEW_REQUIRED' | 'MANUALLY_VERIFIED' | 'INCONCLUSIVE' | 'REJECTED'
+  /** V7.1 §5.3 fase 3: observada (corregir y reenviar) y aprobada revisando el documento. */
+  | 'OBSERVED' | 'APPROVED';
 
-/** Credencial esperando la revisión excepcional de Dirección. */
+/** V7.1 §5.3 fase 3: una credencial presentada, en la bandeja de Dirección. */
 export interface ManualReviewItem {
+  reviewStatus: NonNullable<ManualReviewState['status']>;
+  reviewReason: string | null;
+  reviewedAt: string | null;
+  reviewMethod: string | null;
+  source: 'opportunity' | 'historical_external';
+  activityTitle: string | null;
+  activityProvider: string | null;
+  processingStatus: ValidationStatus;
+  skippedReason: 'historical' | 'no_reference_model' | null;
+  backingTier: BackingTier;
+  areas: string[];
+  skills: string[];
+  contradictions: string[];
+  previousAttempts: number;
+  validationStatus: { status: CredentialValidationStatus; label: string };
+  phases: CredentialPhase[];
   certificateId: string;
   certificateName: string;
   issuer: string;
@@ -1190,7 +1208,7 @@ export interface ValidationVerdict {
 export interface CredentialPhase {
   fase: 1 | 2 | 3;
   titulo: string;
-  estado: 'no_aplica' | 'omitida' | 'pendiente' | 'procesando' | 'completada' | 'inconclusa' | 'error' | 'sin_solicitud' | 'decidida';
+  estado: 'no_aplica' | 'omitida' | 'pendiente' | 'procesando' | 'completada' | 'inconclusa' | 'error' | 'sin_solicitud' | 'decidida' | 'observada';
   resumen: string;
   detalles: string[];
   fecha: string | null;

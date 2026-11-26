@@ -63,6 +63,8 @@ const VALIDACION_TONO: Record<string, string> = {
   MANUAL_REVIEW_REQUIRED: 'amber',
   INCONCLUSIVE: 'gray',
   REJECTED: 'red',
+  OBSERVED: 'amber',
+  APPROVED: 'green',
 };
 
 type PestanaEvidencias = 'proyectos' | 'credenciales' | 'constancias' | 'verificables';
@@ -1014,8 +1016,9 @@ const ESTADO_DE_FASE: Record<CredentialPhase['estado'], string> = {
   error: 'Error técnico',
   sin_solicitud: 'Sin solicitud',
   decidida: 'Decidida',
+  observada: 'Observada',
 };
 const TONO_DE_FASE: Record<CredentialPhase['estado'], string> = {
   no_aplica: 'gray', omitida: 'gray', pendiente: 'amber', procesando: 'gray', completada: 'bordo',
-  inconclusa: 'gray', error: 'red', sin_solicitud: 'gray', decidida: 'bordo',
+  inconclusa: 'gray', error: 'red', sin_solicitud: 'gray', decidida: 'bordo', observada: 'amber',
 };

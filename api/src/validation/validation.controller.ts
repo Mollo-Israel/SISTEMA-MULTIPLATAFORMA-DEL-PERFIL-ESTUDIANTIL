@@ -84,17 +84,20 @@ export class ValidationController {
   }
 
   @Get('manual-reviews')
-  // V4.1 A41-018: Administración, como soporte excepcional auditado.
+  // V7.1 D01: Administración consulta la bandeja en solo lectura; decide Dirección.
   @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
   @ApiOperation({
-    summary: 'Credenciales históricas esperando revisión manual excepcional (V3 §16).',
+    summary: 'V7.1 §5.3 fase 3: bandeja de todas las credenciales presentadas, pendientes primero.',
+    description: '?estado=pendientes|observadas|decididas|todas (por omisión, todas).',
   })
-  pendingManualReviews() {
-    return this.validation.pendingManualReviews();
+  pendingManualReviews(@Query('estado') estado?: string, @Query('limit') limit?: string) {
+    const e = (['pendientes', 'observadas', 'decididas', 'todas'] as const).find((x) => x === estado) ?? 'todas';
+    return this.validation.pendingManualReviews(e, Number(limit) || 200);
   }
 
   @Post('manual-reviews/:certificateId')
-  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN)
+  // V7.1 D01: solo Dirección. Administración recibe 403 también por API.
+  @Roles(RolNombre.CAREER_DIRECTOR)
   @HttpCode(200)
   @ApiOperation({
     summary: 'Dirección decide la revisión excepcional: es la única vía para corroborar una histórica sin verificador.',

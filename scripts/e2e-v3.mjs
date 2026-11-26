@@ -863,8 +863,9 @@ async function batch9(ctx) {
       activityId: op1.id, certificateName: `CCNA Introduction to Networks 1 ${TS}`, issuer: 'Cisco Networking Academy',
       certificateUrl: `${BASE_VERIFICADOR}/cert/ok`, credentialId: 'NA-2026-AB7',
     });
-    check(ok.v?.credentialCheck?.status === 'verified_match' && ok.v?.backingTier === 'corroborated',
-      'V3.9.1 §18.2 URL oficial que identifica la credencial y nombra al estudiante: VERIFIED_MATCH → CORROBORATED',
+    // V7.1 §5.1 (D01): el hallazgo queda; corroborar lo decide Dirección.
+    check(ok.v?.credentialCheck?.status === 'verified_match' && ok.v?.backingTier !== 'corroborated' && ok.v?.manualReview?.status === 'requested',
+      'V3.9.1 §18.2 V7.1 URL oficial que identifica la credencial y nombra al estudiante: VERIFIED_MATCH como hallazgo, pendiente de Dirección',
       json({ c: ok.v?.credentialCheck?.status, t: ok.v?.backingTier }));
     check((ok.v?.credentialCheck?.pipeline ?? []).join(',').includes('ai:not_used')
       && ok.v?.credentialCheck?.aiUsed === false,
@@ -922,8 +923,8 @@ async function batch9(ctx) {
       activityId: op3.id, certificateName: `CCNA Introduction to Networks 3 ${TS}`, issuer: 'Cisco Networking Academy',
       storedFileId: subidaQr2.data?.id, credentialId: 'NA-2026-AB7',
     });
-    check(porQr.v?.credentialCheck?.status === 'verified_match' && porQr.v?.backingTier === 'corroborated',
-      'V3.9.11 §19 QR a la verificación oficial que coincide: CORROBORATED', json({ c: porQr.v?.credentialCheck?.status, t: porQr.v?.backingTier }));
+    check(porQr.v?.credentialCheck?.status === 'verified_match' && porQr.v?.backingTier !== 'corroborated' && porQr.v?.manualReview?.status === 'requested',
+      'V3.9.11 §19 V7.1 QR a la verificación oficial que coincide: hallazgo favorable, pendiente de Dirección', json({ c: porQr.v?.credentialCheck?.status, t: porQr.v?.backingTier }));
 
     const sinQrPdf = await subirArchivo(est.token, pdfConTexto([`Certificado otorgado a ${est.nombre}`, 'Curso de Fotografia Digital', 'Academia Lumen']), 'sin-qr.pdf', 'application/pdf');
     const sinQr = await credencial({ certificateName: `Curso de Fotografia Digital ${TS}`, issuer: 'Academia Lumen', storedFileId: sinQrPdf.data?.id });
@@ -938,8 +939,8 @@ async function batch9(ctx) {
       certificateUrl: `${BASE_VERIFICADOR}/badge/ok.json`,
     });
     check(insignia.v?.credentialCheck?.openBadge?.format === 'open_badges_2' && insignia.v?.credentialCheck?.openBadge?.recipientMatch === true
-      && insignia.v?.backingTier === 'corroborated',
-    'V3.9.13 §18.3 Open Badge 2.0 hosted del emisor con destinatario propio: CORROBORATED', json(insignia.v?.credentialCheck?.openBadge));
+      && insignia.v?.backingTier !== 'corroborated' && insignia.v?.manualReview?.status === 'requested',
+    'V3.9.13 §18.3 V7.1 Open Badge 2.0 hosted del emisor con destinatario propio: hallazgo favorable, pendiente de Dirección', json(insignia.v?.credentialCheck?.openBadge));
     const insigniaAjena = await credencial({
       certificateName: `Insignia ajena ${TS}`, issuer: 'Academia Z', certificateUrl: `${BASE_VERIFICADOR}/badge/otra.json`,
     });

@@ -958,14 +958,18 @@ async function batch8(ctx) {
     const h3 = await historica('tres');
     const docente = await provisionAndActivate(ctx.admin, { firstName: 'Tito', lastName: `Credencial${L}`, email: correoStaff('b8doc'), role: 'TEACHER' });
     const docDecide = await decidir(docente.token, h3.id, { decision: 'rejected', reason: 'No corresponde a la persona registrada.' });
-    const adminRechaza = await decidir(ctx.admin, h3.id, {
+    // V7.1 D01: Dirección es la única autoridad; Administración ya no decide como excepción.
+    const deAdmin = await decidir(ctx.admin, h3.id, {
+      decision: 'rejected', reason: 'Administración intenta rechazar la credencial.', method: 'issuer_confirmation', proof: 'Respuesta del club del 13/10.',
+    });
+    const adminRechaza = await decidir(director.token, h3.id, {
       decision: 'rejected', reason: 'El club informó que ese diploma corresponde a otra persona.', method: 'issuer_confirmation', proof: 'Respuesta del club del 13/10.',
     });
-    check(docDecide.status === 403 && adminRechaza.status === 200 && adminRechaza.data?.validationStatus?.status === 'REJECTED' && adminRechaza.data?.backingTier === 'flagged',
-      'V41.8.11 §6.2 Rechazo con contradicción documentada: REJECTED y FLAGGED. Administración puede como excepción; el docente no', json([docDecide.status, adminRechaza.data?.validationStatus]));
+    check(docDecide.status === 403 && deAdmin.status === 403 && adminRechaza.status === 200 && adminRechaza.data?.validationStatus?.status === 'REJECTED' && adminRechaza.data?.backingTier === 'flagged',
+      'V41.8.11 §6.2 V7.1 D01 Rechazo con contradicción documentada: REJECTED y FLAGGED. Decide Dirección; ni Administración ni el docente', json([docDecide.status, deAdmin.status, adminRechaza.data?.validationStatus]));
     const aud = await req('GET', `/audit/events?eventType=EXTERNAL_CREDENTIAL_MANUAL_REVIEWED&entityId=${h3.id}`, { token: ctx.admin });
     const fila = (aud.data?.items ?? aud.data ?? [])[0];
-    check(JSON.stringify(fila ?? {}).includes('ADMIN') && JSON.stringify(fila ?? {}).includes('issuer_confirmation'),
+    check(JSON.stringify(fila ?? {}).includes('CAREER_DIRECTOR') && JSON.stringify(fila ?? {}).includes('issuer_confirmation'),
       'V41.8.12 A.8 La auditoría guarda decisión, método, prueba y el rol de quien decidió', json(fila?.metadata ?? fila));
   } finally {
     server.close();

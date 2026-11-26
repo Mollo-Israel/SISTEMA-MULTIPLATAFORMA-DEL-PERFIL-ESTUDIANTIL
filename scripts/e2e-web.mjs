@@ -787,18 +787,13 @@ async function pruebas(browser) {
   await p53.goto(`${WEB}/admin/credential-reviews`);
   await p53.getByRole('heading', { name: 'Revisión de credenciales' }).first().waitFor({ timeout: 8000 }).catch(() => {});
   const textoRevision = await p53.locator('.content').first().innerText().catch(() => '');
-  check(navAdmin.some((e) => e.includes('Revisión de credenciales')) && /prueba externa independiente/.test(textoRevision),
-    'WEB.47.1 A41-018 Administración tiene la revisión como excepción y la página exige prueba externa independiente', navAdmin.join(' | '));
-  const revisar = p53.getByRole('button', { name: 'Revisar' }).first();
-  if (await revisar.count()) {
-    await revisar.click();
-    await p53.locator('select[id^="metodo-"]').first().selectOption('document_only');
-    await p53.locator('textarea[id^="motivo-"]').first().fill('El documento parece auténtico y tiene el logo del emisor.');
-    const bloqueado = await p53.getByRole('button', { name: 'Verificada con prueba externa' }).first().isDisabled();
-    check(bloqueado, 'WEB.47.2 B32 «Solo revisé el documento» no permite marcarla como verificada');
-  } else {
-    check(true, 'WEB.47.2 B32 (sin pendientes: la regla se cubre en e2e-v4-1 batch8)');
-  }
+  // V7.1 D01: Administración consulta la bandeja en solo lectura; decide Dirección.
+  check(navAdmin.some((e) => e.includes('Revisión de credenciales')) && /Solo lectura/.test(textoRevision),
+    'WEB.47.1 A41-018 V7.1 D01 Administración consulta la revisión de credenciales en solo lectura', navAdmin.join(' | '));
+  await p53.getByRole('tab', { name: 'Todas' }).click().catch(() => {});
+  await p53.waitForTimeout(800);
+  check(await p53.getByRole('button', { name: 'Revisar' }).count() === 0,
+    'WEB.47.2 V7.1 D01 Administración no tiene «Revisar» (la regla de prueba externa B32 se cubre en e2e-v4-1 batch8)');
   check(fallos53.length === 0, 'WEB.47.3 Sin errores de JavaScript en V4.1-8', fallos53.join(' | '));
   await c53.close();
 

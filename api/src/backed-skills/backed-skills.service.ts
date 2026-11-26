@@ -81,7 +81,9 @@ export class BackedSkillsService {
           AND EXISTS (
             SELECT 1 FROM validation_records vr
              WHERE vr.resource_type = 'external_certificate' AND vr.resource_id = c.id
-               AND vr.backing_tier IN ('supported', 'corroborated'))`,
+               AND vr.backing_tier IN ('supported', 'corroborated')
+               -- V7.1 D01: pendiente, observada o rechazada por Dirección no respalda.
+               AND (vr.manual_review_status IS NULL OR vr.manual_review_status NOT IN ('requested', 'observed', 'rejected')))`,
       [profileIds],
     );
 

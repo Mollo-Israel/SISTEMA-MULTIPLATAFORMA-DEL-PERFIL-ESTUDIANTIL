@@ -363,7 +363,7 @@ export class TrajectorySummaryService {
       && cuentaComoTrayectoria(r.activity?.outcomePolicy)
       // V5 §6: admitido tampoco es asistir; sigue pendiente de la asistencia.
       && [RegistrationStatus.REGISTERED, RegistrationStatus.ACCEPTED, RegistrationStatus.INTERESTED].includes(r.status));
-    const certs = f.certs.filter((c) => certificateCvEligible(f.tierDe(c.id)));
+    const certs = f.certs.filter((c) => certificateCvEligible(f.tierDe(c.id), f.validacionDe.get(c.id)?.manualReviewStatus ?? null));
     const skills = await this.backedSkills.forProfile(studentProfileId);
     const insignias = await this.badges.find({ where: { studentProfileId }, relations: { badge: true }, order: { awardedAt: 'ASC' } });
 
@@ -587,7 +587,7 @@ export class TrajectorySummaryService {
     if (incluye.has(TrajectorySection.CERTIFICATES)) {
       // V3 §45: completar un curso externo se afirma solo con la credencial
       // corroborada. §105: metadata seleccionada, nunca el archivo.
-      const elegibles = f.certs.filter((c) => certificateCvEligible(f.tierDe(c.id)));
+      const elegibles = f.certs.filter((c) => certificateCvEligible(f.tierDe(c.id), f.validacionDe.get(c.id)?.manualReviewStatus ?? null));
       salida.certificates = this.elegir(TrajectorySection.CERTIFICATES, elegibles, (c) => c.id, opts).map((c) => ({
         id: c.id,
         name: c.certificateName,
@@ -678,7 +678,7 @@ export class TrajectorySummaryService {
         level: l,
         levelLabel: etiquetaDeNivel(l),
         detail: `${c.issuer}. ${TRAJECTORY_LEVEL_LABEL[l].explain}`,
-        cvEligible: certificateCvEligible(f.tierDe(c.id)),
+        cvEligible: certificateCvEligible(f.tierDe(c.id), f.validacionDe.get(c.id)?.manualReviewStatus ?? null),
       });
     }
 

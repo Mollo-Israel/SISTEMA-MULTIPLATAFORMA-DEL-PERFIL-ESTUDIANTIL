@@ -348,7 +348,71 @@ async function batch3(ctx, browser) {
   await ct.close();
 }
 
-const BATCHES = { batch1, batch2, batch3 };
+async function batch4(ctx, browser) {
+  objective('BATCH V7-4 · Bandeja de Dirección: todas las presentadas, decide solo Dirección, observar y reenviar');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Olga', lastName: `Webrevisora${L}`, email: correoStaff('b4dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionStudent(admin, { firstName: 'Andrea', lastName: `Webrevision${L}`, email: correoEst('b4est'), semester: 5 });
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: est.token, body: {} });
+  const unaSkill = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => s.isActive !== false);
+  await req('PUT', '/profiles/me/skill-interests', { token: est.token, body: { items: [{ skillId: unaSkill?.id, kind: 'interest' }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: est.token, body: { peerDiscoverable: true, publicProfileEnabled: false } });
+  await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
+  const nombre = `Robotica web ${L}`;
+  const cert = await req('POST', '/certificates/external', {
+    token: est.token, body: { certificateName: nombre, issuer: 'Club Andino', certificateUrl: `https://club.example.org/c/${L}`, issueDate: '2025-05-02' },
+  });
+  if (cert.status !== 201) throw new Error(`No se pudo registrar la credencial (${cert.status}): ${json(cert.data)}`);
+
+  // D01: Administración consulta en solo lectura.
+  const { ctx: ca, page: pa, errores: ea } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  await pa.goto(`${WEB}/admin/credential-reviews`);
+  const tarjetaA = pa.locator('.card', { hasText: nombre });
+  await tarjetaA.waitFor({ timeout: 30000 }).catch(() => {});
+  const nota = await pa.locator('[data-testid="revision-solo-lectura"]').count();
+  const revisarAdmin = await tarjetaA.getByRole('button', { name: 'Revisar' }).count();
+  check(nota === 1 && (await tarjetaA.count()) === 1 && revisarAdmin === 0,
+    'W7.4.1 D01 C24 Administración ve la credencial en la bandeja, sin poder decidir (solo lectura)', json({ nota, tarjeta: await tarjetaA.count(), revisarAdmin }));
+  check(ea.length === 0, 'W7.4.2 Sin errores de JavaScript en la bandeja de Administración', ea.join(' | '));
+  await ca.close();
+
+  // Dirección observa con motivo.
+  const { ctx: cd, page: pd, errores: ed } = await entrar(browser, director.email);
+  await pd.goto(`${WEB}/director/credential-reviews`);
+  const tarjeta = pd.locator('.card', { hasText: nombre });
+  await tarjeta.waitFor({ timeout: 30000 }).catch(() => {});
+  const pendiente = (await tarjeta.locator('[data-testid="estado-revision-item"]').textContent().catch(() => '')) ?? '';
+  await tarjeta.locator('summary', { hasText: 'Comprobaciones' }).click().catch(() => {});
+  const fases = (await tarjeta.locator('.fases-credencial').textContent().catch(() => '')) ?? '';
+  await tarjeta.getByRole('button', { name: 'Revisar' }).click();
+  await tarjeta.locator('textarea').fill('Falta la página con el código: sube el diploma completo, por favor.');
+  await tarjeta.getByRole('button', { name: 'Observar (pedir corrección)' }).click();
+  await pd.waitForTimeout(800);
+  const estadoApi = (await req('GET', `/validation/external_certificate/${cert.data.id}`, { token: est.token })).data;
+  check(/Pendiente de revisión/.test(pendiente) && /No aplica comparación automática/.test(fases) && estadoApi?.validationStatus?.status === 'OBSERVED',
+    'W7.4.3 §5.3 Dirección ve la pendiente con sus fases y la observa con su motivo', json({ pendiente, s: estadoApi?.validationStatus?.status }));
+  await pd.getByRole('tab', { name: 'Observadas' }).click();
+  const enObservadas = await pd.locator('.card', { hasText: nombre }).waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+  check(enObservadas, 'W7.4.4 La observada pasa a la pestaña «Observadas»');
+  check(ed.length === 0, 'W7.4.5 Sin errores de JavaScript en la bandeja de Dirección', ed.join(' | '));
+  await cd.close();
+
+  // El estudiante ve la observación arriba, con el motivo.
+  const { ctx: ce, page: pe, errores: ee } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/student/evidences`);
+  const fila = pe.locator('tr, .card, li', { hasText: nombre }).last();
+  await fila.locator('[data-testid="estado-revision"]').waitFor({ timeout: 20000 }).catch(() => {});
+  const revision = (await fila.locator('[data-testid="estado-revision"]').textContent().catch(() => '')) ?? '';
+  await fila.locator('[data-testid="fases-credencial"] summary').click().catch(() => {});
+  const detalle = (await fila.locator('[data-testid="fases-credencial"]').textContent().catch(() => '')) ?? '';
+  check(/observó/.test(revision) && /diploma completo/.test(detalle),
+    'W7.4.6 C21 El estudiante ve arriba que fue observada y, en el detalle, qué corregir', json({ revision, detalle: detalle.slice(0, 160) }));
+  check(ee.length === 0, 'W7.4.7 Sin errores de JavaScript en «Mis credenciales»', ee.join(' | '));
+  await ce.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

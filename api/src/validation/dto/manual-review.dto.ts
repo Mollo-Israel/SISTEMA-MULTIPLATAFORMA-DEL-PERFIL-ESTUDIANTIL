@@ -16,6 +16,9 @@ export class RequestManualReviewDto {
 
 export const MANUAL_DECISIONS = [
   ManualReviewStatus.CORROBORATED,
+  // V7.1 §5.3 fase 3: aprobar revisando el documento (C22) y observar para que la corrija (C21).
+  ManualReviewStatus.APPROVED,
+  ManualReviewStatus.OBSERVED,
   ManualReviewStatus.INCONCLUSIVE,
   ManualReviewStatus.REJECTED,
   // Anterior a V4.1: se registra como «inconclusa».
@@ -32,7 +35,7 @@ export type ManualDecision = (typeof MANUAL_DECISIONS)[number];
 export class DecideManualReviewDto {
   @ApiProperty({ enum: MANUAL_DECISIONS })
   @IsIn(MANUAL_DECISIONS as unknown as string[], {
-    message: 'La decisión es verificada con prueba externa, inconclusa o rechazada.',
+    message: 'La decisión es aprobar (con prueba externa o revisando el documento), observar o rechazar.',
   })
   decision: ManualDecision;
 
