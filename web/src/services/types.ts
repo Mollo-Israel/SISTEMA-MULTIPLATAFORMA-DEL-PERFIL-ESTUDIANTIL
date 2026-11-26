@@ -565,6 +565,8 @@ export interface Activity {
   cancellationReason?: string | null;
   /** V3.2 §28.3: emisor real del certificado institucional. */
   certificateIssuer?: string | null;
+  /** V7.1 D05 */
+  certificateMode?: 'general' | 'individual' | null;
   cancelledAt?: string | null;
   /** V4.1 A41-011 (§5): acta de asistencia; `open` también tras FINISHED. */
   attendanceStatus?: 'open' | 'locked';
@@ -1304,6 +1306,21 @@ export interface EligibleParticipant {
   semester: number | null;
   registrationId: string;
   hasConstancy: boolean;
+  /** V7.1 §6.3: entregado (con fecha) en lugar del botón de entregar. */
+  deliveredAt?: string | null;
+  version?: number | null;
+  hasFile?: boolean;
+}
+
+/** V7.1 D05: estado del certificado institucional de una actividad. */
+export interface InstitutionCertificateStatus {
+  mode: 'general' | 'individual' | null;
+  issuer: string | null;
+  confirmed: number;
+  delivered: number;
+  generalFileName: string | null;
+  pending: 'no_es_general' | 'falta_fin_o_cierre' | 'falta_archivo' | 'falta_emisor' | null;
+  pendingMessage: string | null;
 }
 
 export interface InternalConstancy {
@@ -1320,6 +1337,9 @@ export interface InternalConstancy {
   issuerName?: string | null;
   certificateCode?: string | null;
   fileUrl?: string | null;
+  /** V7.1 §6.3 */
+  deliveredAt?: string | null;
+  version?: number;
 }
 
 /** Integrante aceptado de un proyecto (RF14). */

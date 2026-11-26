@@ -935,6 +935,13 @@ async function batch8(ctx) {
   check(elegibles.status === 200 && (elegibles.data ?? []).length === 1 && elegibles.data[0].studentProfileId === est.profileId,
     'V32.8.5 §28.3 El responsable ve a los confirmados que pueden recibirlo', json(elegibles.data));
 
+  // V7.1 §6.3 (DOC-03): antes de terminar no se entrega; luego, sí.
+  const antesDeTerminar = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
+    token: docente.token, body: { profileIds: [est.profileId] },
+  });
+  check(antesDeTerminar.status === 409 && antesDeTerminar.data?.code === 'CERTIFICATE_ACTIVITY_NOT_FINISHED',
+    'V32.8.5b V7.1 DOC-03 El certificado no se entrega antes de que la actividad termine', `status ${antesDeTerminar.status}`);
+  await req('PATCH', `/activities/${id}`, { token: ctx.admin, body: { status: 'finished' } });
   const noConfirmado = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
     token: docente.token, body: { profileIds: [est2.profileId] },
   });
@@ -964,13 +971,17 @@ async function batch8(ctx) {
   const texto = json(resumen.data);
   check(resumen.status === 200 && /Emitido por Universidad del Valle/.test(JSON.stringify(resumen.data ?? {})),
     'V32.8.12 §28.3 La trayectoria lo muestra como emitido por la institución, no por Afinia', texto.slice(0, 120));
-  const otraVez = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
+  // V7.1 §6.3 (I05): lo entregado no cambia en silencio; con motivo, se versiona.
+  const sinMotivo = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
     token: docente.token, body: { profileIds: [est.profileId], certificateCode: 'UV-2026-0043' },
   });
+  const otraVez = await req('POST', `/constancies/internal/institution-certificates/${id}`, {
+    token: docente.token, body: { profileIds: [est.profileId], certificateCode: 'UV-2026-0043', replaceReason: 'El emisor corrigió el código impreso.' },
+  });
   const mis2 = await req('GET', '/constancies/internal/my', { token: est.token });
-  check(otraVez.status === 201 && (mis2.data ?? []).filter((c) => c.activityId === id).length === 1
+  check(sinMotivo.status === 409 && otraVez.status === 201 && (mis2.data ?? []).filter((c) => c.activityId === id).length === 1
       && (mis2.data ?? []).find((c) => c.activityId === id)?.certificateCode === 'UV-2026-0043',
-    'V32.8.13 §28.3 Volver a entregar actualiza el código, sin duplicar', `${(mis2.data ?? []).filter((c) => c.activityId === id).length}`);
+    'V32.8.13 §28.3 V7.1 Cambiar lo entregado exige motivo; con motivo actualiza el código, sin duplicar', `${sinMotivo.status} / ${otraVez.status}`);
   const admin = await req('POST', `/constancies/internal/institution-certificates/${id}`, { token: ctx.admin, body: { profileIds: [est.profileId] } });
   check(admin.status === 403, 'V32.8.14 §6.5 Administración no entrega documentos académicos', `status ${admin.status}`);
 

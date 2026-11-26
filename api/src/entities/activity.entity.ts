@@ -196,6 +196,18 @@ export class Activity {
   @Column({ name: 'certificate_issuer', type: 'varchar', length: 200, nullable: true })
   certificateIssuer: string | null;
 
+  /**
+   * V7.1 D05: con certificado institucional, GENERAL (un archivo real común,
+   * entrega automática al finalizar con la lista cerrada) o INDIVIDUAL (un
+   * archivo por estudiante). `null` en lo anterior a V7.1.
+   */
+  @Column({ name: 'certificate_mode', type: 'varchar', length: 12, nullable: true })
+  certificateMode: 'general' | 'individual' | null;
+
+  /** V7.1 D05: archivo común del modo GENERAL; privado hasta la entrega. */
+  @Column({ name: 'general_certificate_file_id', type: 'uuid', nullable: true })
+  generalCertificateFileId: string | null;
+
   /** V3.2 §21.6: cancelar exige motivo; el estudiante lo ve. */
   @Column({ name: 'cancellation_reason', type: 'varchar', length: 500, nullable: true })
   cancellationReason: string | null;

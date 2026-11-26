@@ -861,7 +861,124 @@ async function batch4(ctx) {
   }
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4 };
+// ===========================================================================
+//  BATCH V7-5 — Documentos institucionales: general / individual (§6.3, §6.4, D05)
+// ===========================================================================
+async function batch5(ctx) {
+  objective('BATCH V7-5 · Certificado general automático, individual por estudiante, sin reemplazos silenciosos, abrir lo recibido');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Nora', lastName: `Certifica${L}`, email: correoStaff('b5dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Raul', lastName: `Entrega${L}`, email: correoStaff('b5doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const est = [];
+  for (const [i, n] of ['Ana', 'Beto', 'Cora', 'Dani'].entries()) {
+    const e = await provisionAndActivate(admin, { firstName: n, lastName: `Documento${L}`, email: correoEst(`b5e${i}`), role: 'STUDENT', semester: 4 });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    est.push(e);
+  }
+  const [e1, e2, e3] = est;
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const actividad = async (titulo, modo) => {
+    const r = await req('POST', '/activities', {
+      token: director.token,
+      body: {
+        title: `${titulo} ${L}`, type: 'academica', categoryId: cat?.id, status: 'open', activityDate: en(48), endAt: en(50),
+        modality: 'presencial', location: 'Aula 300', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], responsibleUserIds: [docente.userId],
+        outcomePolicy: 'institution_issued_certificate', certificateIssuer: 'Universidad del Valle', certificateMode: modo,
+      },
+    });
+    if (r.status !== 201) throw new Error(`No se pudo crear la actividad (${r.status}): ${json(r.data)}`);
+    for (const e of est) await req('POST', `/activities/${r.data.id}/register`, { token: e.token, body: {} });
+    for (const e of [e1, e2]) await req('PATCH', `/activities/${r.data.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: e.profileId, status: 'confirmed' } });
+    await req('PATCH', `/activities/${r.data.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: e3.profileId, status: 'absent' } });
+    return r.data;
+  };
+  const terminar = (a) => req('PATCH', `/activities/${a.id}`, { token: director.token, body: { status: 'finished' } });
+  const cerrar = (a) => req('POST', `/activities/${a.id}/attendance/close`, { token: docente.token });
+  const entregados = (a) => Number(psql(`select count(*) from internal_constancies where activity_id = '${a.id}'`));
+  const estado = async (a) => (await req('GET', `/constancies/internal/institution-certificates/${a.id}/status`, { token: docente.token })).data;
+  const subirPdf = async (token, texto) => (await subirArchivo(token, pdfConTexto([texto, `${L}-${Date.now()}`]), 'certificado.pdf')).data?.id;
+  const entregar = (a, body, token = docente.token) => req('POST', `/constancies/internal/institution-certificates/${a.id}`, { token, body });
+
+  // --- I03: general sin archivo: pendiente, sin fabricar nada.
+  const G1 = await actividad('Seminario general', 'general');
+  await terminar(G1);
+  await cerrar(G1);
+  const s1 = await estado(G1);
+  check(entregados(G1) === 0 && s1?.pending === 'falta_archivo' && /no se fabrica/.test(s1?.pendingMessage ?? ''),
+    'V7.5.1 I03 General sin archivo: queda pendiente y lo dice; no se fabrica ningún documento', json(s1));
+
+  // --- I02 / I09: al subir el archivo real (ya terminada y cerrada) se entrega a los confirmados, no al ausente.
+  const archivoG1 = await subirPdf(docente.token, 'Certificado general del seminario');
+  const subida = await req('PUT', `/constancies/internal/institution-certificates/${G1.id}/general-file`, { token: docente.token, body: { storedFileId: archivoG1 } });
+  const filasG1 = psql(`select string_agg(student_profile_id::text || ':' || stored_file_id::text, ',') from internal_constancies where activity_id = '${G1.id}'`);
+  check(subida.status === 200 && entregados(G1) === 2 && filasG1.includes(`${e1.profileId}:${archivoG1}`) && filasG1.includes(`${e2.profileId}:${archivoG1}`)
+    && !filasG1.includes(e3.profileId),
+  'V7.5.2 I02/I09 General con archivo real, terminada y lista cerrada: se entrega solo a los confirmados, nunca al ausente', json({ s: subida.status, n: entregados(G1) }));
+
+  // --- Idempotencia: otra vuelta no duplica ni repite avisos.
+  const otra = await entregar(G1, {});
+  const avisos = Number(psql(`select count(*) from notifications n join users u on u.id = n.recipient_user_id where u.email = '${e1.email}' and n.type = 'CERTIFICATE_DELIVERED'`));
+  check(otra.status === 201 && otra.data?.delivered === 0 && otra.data?.alreadyDelivered === 2 && entregados(G1) === 2 && avisos === 1,
+    'V7.5.3 I05/I09 Volver a entregar el general no duplica certificados ni avisos', json({ s: otra.status, d: otra.data, avisos }));
+
+  // --- Orden de los disparadores: archivo antes de terminar; termina con la lista abierta; al cerrarla, se entrega.
+  const G2 = await actividad('Taller general', 'general');
+  await req('PUT', `/constancies/internal/institution-certificates/${G2.id}/general-file`, { token: docente.token, body: { storedFileId: await subirPdf(docente.token, 'Certificado general del taller') } });
+  const antes = entregados(G2);
+  await terminar(G2);
+  const terminadaAbierta = entregados(G2);
+  const sAbierta = await estado(G2);
+  await cerrar(G2);
+  check(antes === 0 && terminadaAbierta === 0 && sAbierta?.pending === 'falta_fin_o_cierre' && entregados(G2) === 2,
+    'V7.5.4 D05 Con el archivo listo, se entrega sola cuando se cumplen el fin y el cierre de la lista, sin otro clic', json({ antes, terminadaAbierta, p: sAbierta?.pending, despues: entregados(G2) }));
+
+  // --- DOC-03: no se entrega antes de terminar.
+  const I = await actividad('Curso individual', 'individual');
+  const temprano = await entregar(I, { profileIds: [e1.profileId], storedFileId: await subirPdf(docente.token, 'Certificado de Ana') });
+  check(temprano.status === 409 && temprano.data?.code === 'CERTIFICATE_ACTIVITY_NOT_FINISHED',
+    'V7.5.5 DOC-03 Un certificado no se entrega antes de que la actividad termine', json({ s: temprano.status, c: temprano.data?.code }));
+
+  // --- I04: individual, un archivo por estudiante.
+  await terminar(I);
+  const fAna = await subirPdf(docente.token, 'Certificado de Ana');
+  const fBeto = await subirPdf(docente.token, 'Certificado de Beto');
+  const aAna = await entregar(I, { profileIds: [e1.profileId], storedFileId: fAna });
+  const masivo = await entregar(I, { profileIds: [e1.profileId, e2.profileId], storedFileId: fBeto });
+  const mismo = await entregar(I, { profileIds: [e2.profileId], storedFileId: fAna });
+  const aBeto = await entregar(I, { profileIds: [e2.profileId], storedFileId: fBeto });
+  const filasI = psql(`select string_agg(student_profile_id::text || ':' || stored_file_id::text, ',') from internal_constancies where activity_id = '${I.id}'`);
+  check(aAna.status === 201 && masivo.status === 400 && mismo.status === 409 && mismo.data?.code === 'INDIVIDUAL_FILE_REUSED' && aBeto.status === 201
+    && filasI.includes(`${e1.profileId}:${fAna}`) && filasI.includes(`${e2.profileId}:${fBeto}`),
+  'V7.5.6 I04 Individual: cada estudiante recibe su archivo; no se entrega el mismo a todos ni el de otro', json({ s: [aAna.status, masivo.status, mismo.status, aBeto.status] }));
+
+  // --- I05: repetir no cambia nada; reemplazar exige motivo y versiona.
+  const repite = await entregar(I, { profileIds: [e1.profileId], storedFileId: fAna });
+  const fAna2 = await subirPdf(docente.token, 'Certificado de Ana corregido');
+  const sinMotivo = await entregar(I, { profileIds: [e1.profileId], storedFileId: fAna2 });
+  const conMotivo = await entregar(I, { profileIds: [e1.profileId], storedFileId: fAna2, replaceReason: 'El emisor corrigió el número de horas.' });
+  const fila = psql(`select version || '|' || jsonb_array_length(previous_versions) || '|' || stored_file_id from internal_constancies where activity_id = '${I.id}' and student_profile_id = '${e1.profileId}'`);
+  check(repite.status === 201 && repite.data?.alreadyDelivered === 1 && sinMotivo.status === 409 && sinMotivo.data?.code === 'CERTIFICATE_ALREADY_DELIVERED'
+    && conMotivo.status === 201 && fila === `2|1|${fAna2}`,
+  'V7.5.7 I05 Repetir no duplica; reemplazar sin motivo es 409; con motivo queda la versión 2 y la anterior en el historial', json({ s: [repite.status, sinMotivo.status, conMotivo.status], fila }));
+
+  // --- I06 / I07: abrir lo recibido, autenticado; nadie más lo abre.
+  const mio = ((await req('GET', '/constancies/internal/my', { token: e1.token })).data ?? []).find((c) => c.activityId === I.id);
+  const url = `${process.env.API_URL?.replace(/\/api$/, '') ?? 'http://localhost:3020'}${mio?.fileUrl ?? ''}`;
+  const abrir = (token) => fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const propio = await abrir(e1.token);
+  const ajeno = await abrir(e2.token);
+  const sinSesion = await abrir(null);
+  check(!!mio?.fileUrl && propio.status === 200 && /pdf/.test(propio.headers.get('content-type') ?? '') && [403, 404].includes(ajeno.status) && sinSesion.status === 401,
+    'V7.5.8 I06/I07 El estudiante abre su certificado (PDF, con su sesión); otro estudiante y sin sesión no', json({ propio: propio.status, ajeno: ajeno.status, sinSesion: sinSesion.status }));
+
+  // --- DOC-06: Administración no entrega documentos académicos.
+  const deAdmin = await entregar(I, { profileIds: [e2.profileId], storedFileId: fBeto }, admin);
+  check(deAdmin.status === 403, 'V7.5.9 DOC-06 Administración no entrega certificados', `status ${deAdmin.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

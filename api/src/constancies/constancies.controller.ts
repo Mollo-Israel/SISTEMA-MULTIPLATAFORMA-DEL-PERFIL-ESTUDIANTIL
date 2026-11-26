@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RolNombre } from '@perfil/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ConstanciesService } from './constancies.service';
-import { CreateInternalConstancyDto, DeliverInstitutionCertificateDto } from './dto/create-internal-constancy.dto';
+import { CreateInternalConstancyDto, DeliverInstitutionCertificateDto, GeneralCertificateFileDto } from './dto/create-internal-constancy.dto';
 
 /**
  * Constancias internas (RF12).
@@ -54,6 +54,27 @@ export class ConstanciesController {
     @Body() dto: DeliverInstitutionCertificateDto,
   ) {
     return this.constanciesService.deliverInstitutionCertificates(user, activityId, dto);
+  }
+
+  @Put('institution-certificates/:activityId/general-file')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY)
+  @ApiOperation({
+    summary: 'V7.1 D05: archivo real común del certificado GENERAL.',
+    description: 'Privado hasta la entrega. Se entrega solo a los confirmados al terminar la actividad con la lista cerrada (o en el acto, si ya se cumplió).',
+  })
+  generalFile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('activityId', ParseUUIDPipe) activityId: string,
+    @Body() dto: GeneralCertificateFileDto,
+  ) {
+    return this.constanciesService.setGeneralCertificateFile(user, activityId, dto.storedFileId);
+  }
+
+  @Get('institution-certificates/:activityId/status')
+  @Roles(RolNombre.CAREER_DIRECTOR, RolNombre.ADMIN, RolNombre.TEACHER, RolNombre.SCIENTIFIC_SOCIETY)
+  @ApiOperation({ summary: 'V7.1 D05: modo, entregados y qué falta para entregar el certificado institucional.' })
+  institutionStatus(@CurrentUser() user: AuthenticatedUser, @Param('activityId', ParseUUIDPipe) activityId: string) {
+    return this.constanciesService.estadoInstitucional(user, activityId);
   }
 
   @Get('activity/:activityId')

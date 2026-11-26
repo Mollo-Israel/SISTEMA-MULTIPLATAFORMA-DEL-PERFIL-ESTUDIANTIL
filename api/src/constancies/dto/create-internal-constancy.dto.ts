@@ -35,12 +35,13 @@ export class CreateInternalConstancyDto {
 
 /** V3.2 §28.3: entrega del certificado institucional a confirmados. */
 export class DeliverInstitutionCertificateDto {
-  @ApiProperty({ type: [String], description: 'Perfiles de los participantes confirmados que lo reciben.' })
+  /** En el modo GENERAL no hace falta: se entrega a todos los confirmados (V7.1 D05). */
+  @ApiProperty({ type: [String], required: false, description: 'Perfiles de los participantes confirmados que lo reciben.' })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1, { message: 'Elige al menos un participante confirmado.' })
   @ArrayMaxSize(500)
   @IsUUID('4', { each: true })
-  profileIds: string[];
+  profileIds?: string[];
 
   @ApiProperty({ required: false, nullable: true, description: 'Archivo del certificado (subido por quien entrega).' })
   @IsOptional()
@@ -54,4 +55,22 @@ export class DeliverInstitutionCertificateDto {
   @IsString()
   @MaxLength(80, { message: 'El código no puede superar 80 caracteres.' })
   certificateCode?: string | null;
+
+  /**
+   * V7.1 §6.3: reemplazar un certificado ya entregado es excepcional. Exige
+   * motivo; la versión anterior queda en el historial.
+   */
+  @ApiProperty({ required: false, description: 'Motivo del reemplazo de un certificado ya entregado.' })
+  @IsOptional()
+  @IsString()
+  @MinLength(10, { message: 'Explica el motivo del reemplazo (al menos 10 caracteres).' })
+  @MaxLength(300)
+  replaceReason?: string;
+}
+
+/** V7.1 D05: archivo real común del certificado GENERAL. */
+export class GeneralCertificateFileDto {
+  @ApiProperty({ description: 'Archivo del certificado general (subido por quien lo configura).' })
+  @IsUUID('4', { message: 'El archivo no es válido.' })
+  storedFileId: string;
 }

@@ -80,6 +80,21 @@ export class InternalConstancy {
   @JoinColumn({ name: 'authorized_by' })
   authorizedBy: User | null;
 
+  /** V7.1 §6.3: versión del documento entregado; sube solo con un reemplazo justificado. */
+  @Column({ type: 'smallint', default: 1 })
+  version: number;
+
+  /** V7.1 §6.3: lo entregado antes de un reemplazo, con su motivo. Nada se pisa en silencio. */
+  @Column({ name: 'previous_versions', type: 'jsonb', default: () => "'[]'::jsonb" })
+  previousVersions: {
+    version: number; storedFileId: string | null; certificateCode: string | null;
+    deliveredAt: string | null; replacedAt: string; replacedById: string; reason: string;
+  }[];
+
+  /** V7.1 §6.3: cuándo se entregó (lo ve el estudiante y el responsable). */
+  @Column({ name: 'delivered_at', type: 'timestamptz', nullable: true })
+  deliveredAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

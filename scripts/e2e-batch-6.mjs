@@ -141,6 +141,8 @@ async function sinDobleConteo(ctx) {
   const antes = await resumen(est.token);
 
   // V5 §7: el documento lo emite la institución; Afinia lo registra con su emisor.
+  // V7.1 §6.3 (DOC-03): se entrega con la actividad terminada.
+  await req('PATCH', `/activities/${ctx.actividades[0].id}`, { token: ctx.admin, body: { status: 'finished' } });
   const emitida = await req('POST', `/constancies/internal/institution-certificates/${ctx.actividades[0].id}`, {
     token: ctx.docente.token,
     body: { profileIds: [est.profileId] },

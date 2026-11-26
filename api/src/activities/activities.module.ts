@@ -22,6 +22,7 @@ import { ActivityLifecycleWorker } from './activity-lifecycle.worker';
 import { ActivityResponsible } from '../entities/activity-responsible.entity';
 import { ActivityContact } from '../entities/activity-contact.entity';
 import { ActivitiesController } from './activities.controller';
+import { CertificadoGeneralModule } from '../constancies/certificado-general.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ActivitiesController } from './activities.controller';
     TrajectoryModule,
     AccessModule,
     StorageModule,
+    CertificadoGeneralModule,
   ],
   controllers: [ActivitiesController],
   providers: [ActivitiesService, CredentialEligibilityService, ActivityLifecycleWorker],

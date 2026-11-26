@@ -1,5 +1,5 @@
 import { api, SESSION_REQUEST } from '../api/client';
-import type { AcademicArea, InstitutionalPortfolio, ProjectFeedbackItem, ProjectMemberItem, ActivityCategoryItem, ActivityPerson, LibraryPage, FreeInterest, EligibleParticipant, Evidence, ExternalCertificate, CredentialOpportunity, ValidationReference, ManualReviewItem, ProjectReadiness, PublicProjectView, GamificationCriterion, GamificationProposal, InternalConstancy, StoredFile, StudentDirectory, Activity, AffinityResult, AuthResult, ImportApplyResult, ImportBatchDetail, ImportBatchSummary, ImportCounts, ImportKind, ImportPreview, ImportRowStatus, OnboardingRun, ProjectChecks, ProjectEventItem, ProjectMemberDetailed, ValidationVerdict, VerifiedEmail, Questionnaire, AreaTagAnalysis, SkillClassification, SkillInterest, SkillInterestKind, UserStatus, VisibilitySettings, ProfileSummary, Project, PublicUser, Participant, Skill, StudentProfile, InvitationView, MailRequestResult, MailStatus, TokenCheck, OnboardingState, OnboardingStepKey, Wallet, ScopePoints } from './types';
+import type { AcademicArea, InstitutionalPortfolio, ProjectFeedbackItem, ProjectMemberItem, ActivityCategoryItem, ActivityPerson, LibraryPage, FreeInterest, EligibleParticipant, Evidence, ExternalCertificate, CredentialOpportunity, ValidationReference, ManualReviewItem, ProjectReadiness, PublicProjectView, GamificationCriterion, GamificationProposal, InternalConstancy, InstitutionCertificateStatus, StoredFile, StudentDirectory, Activity, AffinityResult, AuthResult, ImportApplyResult, ImportBatchDetail, ImportBatchSummary, ImportCounts, ImportKind, ImportPreview, ImportRowStatus, OnboardingRun, ProjectChecks, ProjectEventItem, ProjectMemberDetailed, ValidationVerdict, VerifiedEmail, Questionnaire, AreaTagAnalysis, SkillClassification, SkillInterest, SkillInterestKind, UserStatus, VisibilitySettings, ProfileSummary, Project, PublicUser, Participant, Skill, StudentProfile, InvitationView, MailRequestResult, MailStatus, TokenCheck, OnboardingState, OnboardingStepKey, Wallet, ScopePoints } from './types';
 
 export const authService = {
   login: (email: string, password: string) =>
@@ -1154,8 +1154,14 @@ export const constancyService = {
   create: (data: { profileId: string; activityId: string; description: string }) =>
     api.post<InternalConstancy>('/constancies/internal', data).then((r) => r.data),
   /** V3.2 §28.3: entregar el certificado institucional a confirmados. */
-  deliverInstitutionCertificates: (activityId: string, data: { profileIds: string[]; storedFileId?: string | null; certificateCode?: string | null }) =>
-    api.post<{ delivered: number }>(`/constancies/internal/institution-certificates/${activityId}`, data).then((r) => r.data),
+  deliverInstitutionCertificates: (activityId: string, data: { profileIds?: string[]; storedFileId?: string | null; certificateCode?: string | null; replaceReason?: string }) =>
+    api.post<{ delivered: number; alreadyDelivered?: number; message?: string }>(`/constancies/internal/institution-certificates/${activityId}`, data).then((r) => r.data),
+  /** V7.1 D05: modo, entregados y qué falta. */
+  institutionStatus: (activityId: string) =>
+    api.get<InstitutionCertificateStatus>(`/constancies/internal/institution-certificates/${activityId}/status`).then((r) => r.data),
+  /** V7.1 D05: archivo real común del certificado general (se entrega solo al cumplirse fin y cierre). */
+  setGeneralFile: (activityId: string, storedFileId: string) =>
+    api.put<InstitutionCertificateStatus & { delivered: number }>(`/constancies/internal/institution-certificates/${activityId}/general-file`, { storedFileId }).then((r) => r.data),
   mine: () => api.get<InternalConstancy[]>('/constancies/internal/my').then((r) => r.data),
 };
 

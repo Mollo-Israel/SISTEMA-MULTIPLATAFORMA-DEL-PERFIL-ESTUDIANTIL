@@ -414,12 +414,13 @@ export default function StudentEvidencesPage() {
                     <div className="activity-meta">
                       {c.kind === 'institution_certificate' && <span>Emitido por {c.issuerName ?? 'la institución'}</span>}
                       {c.certificateCode && <span>Código: {c.certificateCode}</span>}
+                      {/* V7.1 §6.4 (DOC-04): se abre con la sesión del estudiante, no con un enlace suelto. */}
                       {c.fileUrl && (
-                        <a href={c.fileUrl} target="_blank" rel="noreferrer">Ver certificado</a>
+                        <BotonArchivo src={c.fileUrl} nombre="certificado" className="link-button">Ver certificado</BotonArchivo>
                       )}
                       {c.activity && <span>Actividad: {c.activity.title}</span>}
                       <span>
-                        {new Date(c.createdAt).toLocaleDateString('es-BO', {
+                        {c.deliveredAt ? 'Entregado el ' : ''}{new Date(c.deliveredAt ?? c.createdAt).toLocaleDateString('es-BO', {
                           day: '2-digit',
                           month: 'long',
                           year: 'numeric',

@@ -18,6 +18,7 @@ import type {
 } from '../services/types';
 import AreaSkillPicker from './AreaSkillPicker';
 import ModeloDeReferencia from './ModeloDeReferencia';
+import CertificadoInstitucional from './CertificadoInstitucional';
 import {
   Badge, Button, Card, Diferido, EmptyState, FILAS_POR_PAGINA, FiltroEstado, Modal, Paginacion, ResultCount, SearchInput,
   SkeletonTable, Stagger, ThOrden, useOrden, usePaginacion,
@@ -79,6 +80,8 @@ const emptyForm = {
   imagenes: [] as { fileId: string; url: string }[],
   /** V3.2 §28.3: emisor real del certificado institucional. */
   certificateIssuer: '',
+  /** V7.1 D05: tipo de certificado institucional. */
+  certificateMode: '' as '' | 'general' | 'individual',
   capacity: '',
   /** V5 §6.1: abierta (admite sola si no hay cupo) o por aprobación del responsable. */
   registrationMode: 'open' as 'open' | 'approval',
@@ -591,6 +594,7 @@ export default function ActivityManager({
       resourceLinks: a.resourceLinks ?? [],
       imagenes: imagenesDeLaActividad(a),
       certificateIssuer: a.certificateIssuer ?? '',
+      certificateMode: a.certificateMode ?? '',
       capacity: a.capacity ? String(a.capacity) : '',
       registrationMode: a.registrationMode ?? 'open',
       status: a.status,
@@ -708,7 +712,6 @@ export default function ActivityManager({
   };
 
   /** V3.2 §28.3: entrega del certificado que emitió la institución. */
-  const [entrega, setEntrega] = useState<{ ids: string[]; nombre: string } | null>(null);
   /** V6 §3.6: detalle de solo lectura para quien opera una actividad que no edita. */
   const [detalle, setDetalle] = useState<Activity | null>(null);
   /*
@@ -738,26 +741,6 @@ export default function ActivityManager({
   const [motivoCorr, setMotivoCorr] = useState('');
   const [errorCorr, setErrorCorr] = useState<string | null>(null);
   const [corrigiendo, setCorrigiendo] = useState(false);
-  const [codigo, setCodigo] = useState('');
-  const [archivoCert, setArchivoCert] = useState<{ id: string; nombre: string } | null>(null);
-  const [entregando, setEntregando] = useState(false);
-  const entregarCertificado = async () => {
-    if (!entrega || !selected) return;
-    setEntregando(true);
-    try {
-      const r = await constancyService.deliverInstitutionCertificates(selected, {
-        profileIds: entrega.ids,
-        ...(archivoCert ? { storedFileId: archivoCert.id } : {}),
-        ...(codigo.trim() ? { certificateCode: codigo.trim() } : {}),
-      });
-      notify('Certificado entregado.', `${r.delivered} estudiante(s) lo tienen en su trayectoria.`);
-      setEntrega(null);
-    } catch (e) {
-      toast.error(apiError(e));
-    } finally {
-      setEntregando(false);
-    }
-  };
 
   const confirmarCancelacion = async () => {
     if (!cancelando) return;
@@ -1548,6 +1531,20 @@ export default function ActivityManager({
                       maxLength={200}
                     />
                     <FieldError message={errores.errors.certificateIssuer} />
+                    <label htmlFor="activity-manager-modo-certificado" style={{ marginTop: '0.5rem' }}>Tipo de certificado</label>
+                    <select id="activity-manager-modo-certificado" value={form.certificateMode}
+                      onChange={(e) => setForm({ ...form, certificateMode: e.target.value as '' | 'general' | 'individual' })}>
+                      <option value="">Elige…</option>
+                      <option value="general">General: un mismo documento para todos los asistentes</option>
+                      <option value="individual">Individual: un documento a nombre de cada estudiante</option>
+                    </select>
+                    <span className="field-hint">
+                      {form.certificateMode === 'general'
+                        ? 'Subes el documento real una vez; se entrega solo a los confirmados cuando la actividad termina y cierras la lista.'
+                        : form.certificateMode === 'individual'
+                          ? 'Entregas a cada estudiante su propio archivo. Un documento con el nombre de una persona no se reparte a todos.'
+                          : 'Sin elegir, se conserva la entrega manual de siempre.'}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1968,12 +1965,6 @@ export default function ActivityManager({
                 empty={esExterna ? 'Todavía no registras aceptados.' : 'Todavía no registras asistencia.'}
                 render={(r) => (
                   <div className="flex" style={{ gap: '0.35rem', flexWrap: 'wrap' }}>
-                    {selectedActivity.outcomePolicy === 'institution_issued_certificate' && r.status === 'confirmed' && (
-                      <Button size="sm" variant="secondary" icon={<FiAward size={14} />}
-                        onClick={() => { setEntrega({ ids: [r.studentProfileId], nombre: r.studentName ?? 'el estudiante' }); setCodigo(''); setArchivoCert(null); }}>
-                        Entregar certificado
-                      </Button>
-                    )}
                     {!consolidada && (
                       <Button
                         variant="secondary"
@@ -1995,20 +1986,9 @@ export default function ActivityManager({
                   </div>
                 )}
               />
-              {selectedActivity.outcomePolicy === 'institution_issued_certificate' && confirmed.some((r) => r.status === 'confirmed') && (
-                <div style={{ marginTop: '0.5rem' }}>
-                  <Button size="sm" icon={<FiAward size={14} />}
-                    onClick={() => {
-                      setEntrega({ ids: confirmed.filter((r) => r.status === 'confirmed').map((r) => r.studentProfileId), nombre: 'todos los confirmados' });
-                      setCodigo('');
-                      setArchivoCert(null);
-                    }}>
-                    Entregar a todos los confirmados
-                  </Button>
-                  <span className="muted small" style={{ marginLeft: '0.5rem' }}>
-                    Emite: {selectedActivity.certificateIssuer ?? '—'}. Afinia lo registra; no se atribuye la autoría.
-                  </span>
-                </div>
+              {/* V7.1 D05: general automático o individual por estudiante, con «Entregado» y reemplazo con motivo. */}
+              {selectedActivity.outcomePolicy === 'institution_issued_certificate' && (
+                <CertificadoInstitucional key={selectedActivity.id} activity={selectedActivity} />
               )}
 
               {rejected.length > 0 && (
@@ -2074,35 +2054,6 @@ export default function ActivityManager({
         </Modal>
       )}
 
-      {entrega && (
-        <Modal title="Entregar certificado" subtitle={`A ${entrega.nombre}`} onClose={() => setEntrega(null)} width={520}>
-          <p className="muted">
-            Lo emite <strong>{selectedActivity?.certificateIssuer ?? 'la institución'}</strong>. Afinia lo registra y lo deja en la
-            trayectoria del estudiante, que no tiene que volver a subirlo.
-          </p>
-          <div className="field">
-            <label htmlFor="cert-archivo">Archivo del certificado (opcional)</label>
-            <input id="cert-archivo" type="file" accept="application/pdf,image/png,image/jpeg,image/webp"
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                try {
-                  const subido = await uploadService.upload(f);
-                  setArchivoCert({ id: subido.id, nombre: f.name });
-                } catch (err) { toast.error(apiError(err)); }
-              }} />
-            {archivoCert && <span className="field-hint">Adjunto: {archivoCert.nombre}</span>}
-          </div>
-          <div className="field">
-            <label htmlFor="cert-codigo">Código de verificación del emisor (opcional)</label>
-            <input id="cert-codigo" value={codigo} maxLength={80} onChange={(e) => setCodigo(e.target.value)} placeholder="UV-2026-0042" />
-          </div>
-          <div className="form-actions">
-            <Button variant="secondary" onClick={() => setEntrega(null)}>Cancelar</Button>
-            <Button loading={entregando} icon={<FiAward size={14} />} onClick={() => void entregarCertificado()}>Entregar</Button>
-          </div>
-        </Modal>
-      )}
       {rechazo && selectedActivity && (
         <Modal title={rechazo.status === 'accepted' ? 'Retirar la admisión' : 'No admitir la solicitud'} subtitle={rechazo.studentName ?? 'Solicitud'} onClose={() => setRechazo(null)} width={520}>
           <p className="muted">
@@ -2449,6 +2400,8 @@ function datosDeResultado(form: typeof emptyForm, externa: boolean): Record<stri
   if (!externa) datos.outcomePolicy = form.outcomePolicy;
   if (!externa && form.outcomePolicy === 'institution_issued_certificate') {
     datos.certificateIssuer = form.certificateIssuer.trim();
+    // V7.1 D05: general o individual.
+    if (form.certificateMode) datos.certificateMode = form.certificateMode;
   }
   if (externa || form.outcomePolicy === 'external_credential_expected') {
     datos.provider = form.provider.trim();

@@ -61,6 +61,7 @@ import { ActivityResponsible } from '../entities/activity-responsible.entity';
 import { ActivityContact } from '../entities/activity-contact.entity';
 import { StoredFileRecord } from '../entities/stored-file.entity';
 import { modeloVigente, registrarVersion, versionesDelModelo } from '../validation/reference-model';
+import { CertificadoGeneralService } from '../constancies/certificado-general.service';
 import { ActivityImage } from '../entities/activity-image.entity';
 import { GamificationEvent, StudentPoints } from '../entities/gamification.entity';
 import { effectiveSemesters, TeacherScopeService } from '../access/teacher-scope.service';
@@ -300,6 +301,8 @@ function avisoDeDecision(
 function aplicarCamposDeEdicion(activity: Activity, dto: UpdateActivityDto): void {
   if (dto.meetingUrl !== undefined) activity.meetingUrl = dto.meetingUrl ?? null;
   if (dto.certificateIssuer !== undefined) activity.certificateIssuer = dto.certificateIssuer?.trim() || null;
+  // V7.1 D05: general o individual, solo con certificado institucional.
+  if (dto.certificateMode !== undefined) activity.certificateMode = dto.certificateMode ?? null;
   if (dto.resourceLinks !== undefined) activity.resourceLinks = dto.resourceLinks ?? [];
   if (dto.title !== undefined) activity.title = dto.title;
   if (dto.description !== undefined) activity.description = dto.description;
@@ -364,6 +367,7 @@ export class ActivitiesService {
     @InjectRepository(ExternalOpportunityValidationReference)
     private readonly references: Repository<ExternalOpportunityValidationReference>,
     private readonly eligibility: CredentialEligibilityService,
+    private readonly certificadoGeneral: CertificadoGeneralService,
     private readonly uploads: UploadsService,
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
   ) {}
@@ -1070,6 +1074,8 @@ export class ActivitiesService {
         });
         await this.eligibility.announce(activity, habilitadas, activity.responsibleUserId ?? activity.creatorId);
       }
+      // V7.1 D05: si la lista ya estaba cerrada, terminar también entrega el certificado general.
+      await this.certificadoGeneral.entregarSiCorresponde(f.id, null);
     }
     const cerradas: { id: string; status: ActivityStatus }[] = await this.activities.query(
       `UPDATE "activities" SET "status" = 'closed', "updated_at" = now()
@@ -1592,6 +1598,7 @@ export class ActivitiesService {
       externalUrl: dto.externalUrl ?? null,
       meetingUrl: dto.meetingUrl ?? null,
       certificateIssuer: dto.certificateIssuer?.trim() || null,
+      certificateMode: dto.certificateMode ?? null,
       resourceLinks: dto.resourceLinks ?? [],
       imageFileId: imagenes[0] ?? null,
       updatedById: user.userId,
@@ -2260,6 +2267,8 @@ export class ActivitiesService {
    * es interna con credencial de un tercero) ya pueden adjuntar su credencial.
    */
   private async anunciarSiFinaliza(activity: Activity, status: ActivityStatus, actorUserId: string): Promise<void> {
+    // V7.1 D05: si la lista ya estaba cerrada, terminar entrega el certificado general.
+    if (status === ActivityStatus.FINISHED) await this.certificadoGeneral.entregarSiCorresponde(activity.id, actorUserId);
     if (status !== ActivityStatus.FINISHED || !CredentialEligibilityService.esperaCredencial(activity)) return;
     const habilitadas = await this.registrations.find({
       where: { activityId: activity.id, status: CredentialEligibilityService.estadoQueHabilita(activity) },
@@ -2557,6 +2566,8 @@ export class ActivitiesService {
       entityId: activity.id,
       metadata: { activityId: activity.id },
     });
+    // V7.1 D05: terminada y con la lista cerrada, el certificado general se entrega solo.
+    await this.certificadoGeneral.entregarSiCorresponde(activity.id, user.userId);
     return this.findOne(activity.id);
   }
 

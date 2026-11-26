@@ -6,6 +6,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsISO8601,
   IsNotEmpty,
@@ -328,6 +329,16 @@ export class CreateActivityDto {
   @IsString()
   @MaxLength(200, { message: 'El emisor no puede superar 200 caracteres.' })
   certificateIssuer?: string;
+
+  /**
+   * V7.1 D05: GENERAL (un archivo real común, entrega automática al finalizar
+   * con la lista cerrada) o INDIVIDUAL (un archivo por estudiante). Solo con
+   * certificado institucional.
+   */
+  @ApiProperty({ required: false, enum: ['general', 'individual'], nullable: true })
+  @IsOptional()
+  @IsIn(['general', 'individual'], { message: 'El certificado es general o individual.' })
+  certificateMode?: 'general' | 'individual' | null;
 
   /** V3.2 §21.6: motivo de la cancelación (obligatorio al cancelar). */
   @ApiProperty({ required: false })

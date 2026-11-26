@@ -9,7 +9,7 @@
  */
 import { execSync } from 'node:child_process';
 import { chromium } from 'playwright-core';
-import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req, ADMIN_CREDENTIALS, PWD } from './lib/fixtures.mjs';
+import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req, ADMIN_CREDENTIALS, PWD, pdfConTexto, subirArchivo } from './lib/fixtures.mjs';
 
 const WEB = process.env.WEB_URL ?? 'http://localhost:5180';
 const TS = Date.now();
@@ -412,7 +412,73 @@ async function batch4(ctx, browser) {
   await ce.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4 };
+async function batch5(ctx, browser) {
+  objective('BATCH V7-5 · Certificado institucional: pendiente explicado, «Entregado» y abrir lo recibido con la sesión');
+  const admin = ctx.admin;
+  const docente = await provisionAndActivate(admin, { firstName: 'Raul', lastName: `Webentrega${L}`, email: correoStaff('b5doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const director = await provisionAndActivate(admin, { firstName: 'Nora', lastName: `Webcertifica${L}`, email: correoStaff('b5dir'), role: 'CAREER_DIRECTOR' });
+  const est = await provisionStudent(admin, { firstName: 'Ana', lastName: `Webdocumento${L}`, email: correoEst('b5est'), semester: 4 });
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: est.token, body: {} });
+  const unaSkill = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => s.isActive !== false);
+  await req('PUT', '/profiles/me/skill-interests', { token: est.token, body: { items: [{ skillId: unaSkill?.id, kind: 'interest' }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: est.token, body: { peerDiscoverable: true, publicProfileEnabled: false } });
+  await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const actividad = async (titulo, modo) => {
+    const r = await req('POST', '/activities', {
+      token: director.token,
+      body: {
+        title: `${titulo} ${L}`, type: 'academica', categoryId: cat?.id, status: 'open', activityDate: en(48), endAt: en(50),
+        modality: 'presencial', location: 'Aula 300', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], responsibleUserIds: [docente.userId],
+        outcomePolicy: 'institution_issued_certificate', certificateIssuer: 'Universidad del Valle', certificateMode: modo,
+      },
+    });
+    await req('POST', `/activities/${r.data.id}/register`, { token: est.token, body: {} });
+    await req('PATCH', `/activities/${r.data.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
+    await req('PATCH', `/activities/${r.data.id}`, { token: director.token, body: { status: 'finished' } });
+    await req('POST', `/activities/${r.data.id}/attendance/close`, { token: docente.token });
+    return r.data;
+  };
+  const G = await actividad('Webseminario general', 'general');
+  const I = await actividad('Webcurso individual', 'individual');
+  const archivo = (await subirArchivo(docente.token, pdfConTexto(['Certificado de Ana', `${L}`]), 'ana.pdf')).data?.id;
+  await req('POST', `/constancies/internal/institution-certificates/${I.id}`, { token: docente.token, body: { profileIds: [est.profileId], storedFileId: archivo } });
+
+  // El responsable: el general sin archivo dice qué falta; el individual entregado muestra «Entregado».
+  const { ctx: cd, page: pd, errores: ed } = await entrar(browser, docente.email);
+  await pd.goto(`${WEB}/teacher/my-activities?actividad=${G.id}`);
+  const pendiente = await pd.locator('[data-testid="certificado-pendiente"]').textContent({ timeout: 20000 }).catch(() => '');
+  check(/no se fabrica/.test(pendiente ?? ''), 'W7.5.1 I03 El certificado general sin archivo muestra qué falta (no se fabrica ningún documento)', pendiente ?? '');
+  await pd.goto(`${WEB}/teacher/my-activities?actividad=${I.id}`);
+  const panel = pd.locator('[data-testid="certificado-institucional"]');
+  await panel.waitFor({ timeout: 20000 }).catch(() => {});
+  const entregado = await panel.locator('[data-testid="entregado"]').count();
+  const botonEntregar = await panel.getByRole('button', { name: 'Entregar certificado' }).count();
+  check(entregado === 1 && botonEntregar === 0, 'W7.5.2 I05 Lo ya entregado muestra «Entregado» con su fecha, no el botón de entregar', json({ entregado, botonEntregar }));
+  check(ed.length === 0, 'W7.5.3 Sin errores de JavaScript en la entrega del responsable', ed.join(' | '));
+  await cd.close();
+
+  // El estudiante abre su certificado con su sesión.
+  const { ctx: ce, page: pe, errores: ee } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/student/evidences?tab=constancias`);
+  const ver = pe.getByRole('button', { name: 'Ver certificado' }).first();
+  await ver.waitFor({ timeout: 20000 }).catch(() => {});
+  const enlacesSueltos = await pe.locator('a', { hasText: 'Ver certificado' }).count();
+  const respuesta = pe.waitForResponse((r) => r.url().includes('/files/'), { timeout: 15000 }).catch(() => null);
+  const popup = pe.context().waitForEvent('page', { timeout: 8000 }).catch(() => null);
+  await ver.click().catch(() => {});
+  const r = await respuesta;
+  await popup;
+  check(r?.status() === 200 && /pdf/.test(r?.headers()['content-type'] ?? '') && enlacesSueltos === 0,
+    'W7.5.4 I06 DOC-04 «Ver certificado» abre el PDF con la sesión del estudiante (ya no es un enlace suelto)', json({ s: r?.status(), t: r?.headers()['content-type'], enlacesSueltos }));
+  check(ee.length === 0, 'W7.5.5 Sin errores de JavaScript en los certificados recibidos', ee.join(' | '));
+  await ce.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

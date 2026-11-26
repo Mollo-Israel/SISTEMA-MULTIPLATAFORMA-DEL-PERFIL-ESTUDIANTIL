@@ -1967,6 +1967,8 @@ async function batch18(ctx) {
   for (const [a, quien] of [[acad1, director], [acad2, director], [extra, sociedad]]) {
     await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: quien.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
   }
+  // V7.1 §6.3 (DOC-03): el certificado se entrega con la actividad terminada.
+  await req('PATCH', `/activities/${acad1.id}`, { token: director.token, body: { status: 'finished' } });
   await req('POST', `/constancies/internal/institution-certificates/${acad1.id}`, { token: director.token, body: { profileIds: [est.profileId] } });
   const constancia = { status: ((await req('GET', '/constancies/internal/my', { token: est.token })).data ?? []).some((c) => c.activityId === acad1.id) ? 201 : 404 };
 

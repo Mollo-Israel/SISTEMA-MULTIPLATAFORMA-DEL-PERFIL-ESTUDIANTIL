@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -30,6 +31,7 @@ import {
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
+import { CertificadoGeneralService } from './certificado-general.service';
 
 
 @Injectable()
@@ -46,6 +48,7 @@ export class ConstanciesService {
     private readonly trajectory: TrajectoryRecalculationPort,
     private readonly audit: AuditService,
     @Inject(NOTIFICATION_EMITTER) private readonly notifications: NotificationEmitter,
+    private readonly certificadoGeneral: CertificadoGeneralService,
   ) {}
 
   /**
@@ -215,14 +218,21 @@ export class ConstanciesService {
       order: { createdAt: 'ASC' },
     });
     const existing = await this.constancies.find({ where: { activityId: activity.id } });
-    const conDocumento = new Set(existing.map((c) => c.studentProfileId));
-    return confirmed.map((r) => ({
-      studentProfileId: r.studentProfileId,
-      studentName: r.studentProfile?.user ? `${r.studentProfile.user.firstName} ${r.studentProfile.user.lastName}` : null,
-      semester: r.studentProfile?.semester ?? null,
-      registrationId: r.id,
-      hasConstancy: conDocumento.has(r.studentProfileId),
-    }));
+    const deEstudiante = new Map(existing.map((c) => [c.studentProfileId, c]));
+    return confirmed.map((r) => {
+      const doc = deEstudiante.get(r.studentProfileId);
+      return {
+        studentProfileId: r.studentProfileId,
+        studentName: r.studentProfile?.user ? `${r.studentProfile.user.firstName} ${r.studentProfile.user.lastName}` : null,
+        semester: r.studentProfile?.semester ?? null,
+        registrationId: r.id,
+        hasConstancy: !!doc,
+        // V7.1 §6.3: «Entregado» con su fecha en lugar del botón de entregar.
+        deliveredAt: doc ? doc.deliveredAt ?? doc.createdAt : null,
+        version: doc?.version ?? null,
+        hasFile: !!doc?.storedFileId,
+      };
+    });
   }
 
   /**
@@ -240,8 +250,9 @@ export class ConstanciesService {
     if (activity.outcomePolicy !== ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE) {
       throw new BadRequestException('Esta actividad no entrega un certificado institucional.');
     }
-    if (activity.status === ActivityStatus.DRAFT || activity.status === ActivityStatus.CANCELLED) {
-      throw new BadRequestException('Solo se entrega en una actividad publicada y no cancelada.');
+    // V7.1 §6.3 (DOC-03): el certificado se entrega cuando la actividad terminó.
+    if (activity.status !== ActivityStatus.FINISHED) {
+      throw new ConflictException({ code: 'CERTIFICATE_ACTIVITY_NOT_FINISHED', message: 'El certificado se entrega cuando la actividad terminó.' });
     }
     if (!activity.certificateIssuer?.trim()) {
       throw new BadRequestException({
@@ -263,17 +274,50 @@ export class ConstanciesService {
     }
   }
 
+  /**
+   * V3.2 §28.3 y V7.1 D05: el responsable entrega el certificado que emitió la
+   * institución. Afinia lo registra con su emisor real (no se atribuye la
+   * autoría) y el estudiante no lo vuelve a subir.
+   *
+   *  - GENERAL: no se elige a nadie ni se sube nada aquí. Se entrega el
+   *    archivo común a todos los confirmados, si la actividad terminó y la
+   *    lista está cerrada (lo mismo que hace solo el sistema).
+   *  - INDIVIDUAL: un estudiante y su propio archivo por entrega. El mismo
+   *    archivo no se entrega a dos personas.
+   *  - Sin modo (anterior a V7.1): como antes, a los confirmados elegidos.
+   *
+   * Reintentar no duplica. Un certificado ya entregado no cambia en silencio:
+   * reemplazarlo exige motivo y deja la versión anterior en el historial.
+   */
   async deliverInstitutionCertificates(
     user: AuthenticatedUser,
     activityId: string,
-    dto: { profileIds: string[]; storedFileId?: string | null; certificateCode?: string | null },
+    dto: { profileIds?: string[]; storedFileId?: string | null; certificateCode?: string | null; replaceReason?: string },
   ) {
     const activity = await this.activities.findOne({ where: { id: activityId } });
     if (!activity || !(await this.gestiona(user, activity))) throw new NotFoundException('Actividad no encontrada.');
     this.assertEntregaPosible(user, activity);
+
+    if (activity.certificateMode === 'general') {
+      const r = await this.certificadoGeneral.entregarSiCorresponde(activityId, user.userId);
+      if (r.pendiente) throw new ConflictException({ code: 'GENERAL_CERTIFICATE_PENDING', message: r.mensaje, pending: r.pendiente });
+      return { delivered: r.entregados, alreadyDelivered: r.yaTenian, items: [], message: r.mensaje };
+    }
+
     if (dto.storedFileId) await this.assertArchivoPropio(user, dto.storedFileId);
-    const ids = [...new Set(dto.profileIds)];
+    const ids = [...new Set(dto.profileIds ?? [])];
     if (ids.length === 0) throw new BadRequestException('Elige al menos un participante confirmado.');
+    if (activity.certificateMode === 'individual') {
+      if (ids.length !== 1 || !dto.storedFileId) {
+        const m = 'En el modo individual se entrega a un estudiante por vez, con su propio archivo.';
+        throw new BadRequestException({ code: 'INDIVIDUAL_ONE_BY_ONE', message: m, fields: { storedFileId: [m] } });
+      }
+      const deOtro = await this.constancies.findOne({ where: { activityId, storedFileId: dto.storedFileId } });
+      if (deOtro && deOtro.studentProfileId !== ids[0]) {
+        const m = 'Ese archivo ya se entregó a otro estudiante: en el modo individual cada uno recibe el suyo.';
+        throw new ConflictException({ code: 'INDIVIDUAL_FILE_REUSED', message: m, fields: { storedFileId: [m] } });
+      }
+    }
     const confirmadas = await this.registrations.find({
       where: { activityId, status: RegistrationStatus.CONFIRMED, studentProfileId: In(ids) },
       relations: { studentProfile: true },
@@ -281,9 +325,26 @@ export class ConstanciesService {
     if (confirmadas.length !== ids.length) {
       throw new BadRequestException('Solo se entrega a participantes con la participación confirmada.');
     }
+
     const entregados: InternalConstancy[] = [];
+    let sinCambios = 0;
     for (const reg of confirmadas) {
       const previo = await this.constancies.findOne({ where: { studentProfileId: reg.studentProfileId, activityId } });
+      const archivoNuevo = dto.storedFileId !== undefined ? dto.storedFileId ?? null : previo?.storedFileId ?? null;
+      const codigoNuevo = dto.certificateCode !== undefined ? dto.certificateCode?.trim() || null : previo?.certificateCode ?? null;
+      if (previo && previo.storedFileId === archivoNuevo && (previo.certificateCode ?? null) === codigoNuevo) {
+        // Reintento: ya está entregado y no cambia nada. Sin aviso repetido.
+        sinCambios += 1;
+        entregados.push(previo);
+        continue;
+      }
+      if (previo && !dto.replaceReason?.trim()) {
+        throw new ConflictException({
+          code: 'CERTIFICATE_ALREADY_DELIVERED',
+          message: 'Ese estudiante ya recibió su certificado. Reemplazarlo es excepcional: indica el motivo y quedará la versión anterior.',
+          fields: { replaceReason: ['Indica el motivo del reemplazo.'] },
+        });
+      }
       const doc = previo ?? this.constancies.create({
         studentProfileId: reg.studentProfileId,
         activityId,
@@ -292,37 +353,107 @@ export class ConstanciesService {
         status: ConstancyStatus.AUTHORIZED,
         issuedById: user.userId,
         authorizedById: user.role === RolNombre.CAREER_DIRECTOR ? user.userId : activity.reviewedById ?? null,
+        version: 1,
+        previousVersions: [],
       });
+      if (previo) {
+        doc.previousVersions = [...(previo.previousVersions ?? []), {
+          version: previo.version ?? 1, storedFileId: previo.storedFileId, certificateCode: previo.certificateCode,
+          deliveredAt: previo.deliveredAt?.toISOString() ?? previo.createdAt?.toISOString() ?? null,
+          replacedAt: new Date().toISOString(), replacedById: user.userId, reason: dto.replaceReason!.trim().slice(0, 300),
+        }];
+        doc.version = (previo.version ?? 1) + 1;
+      }
       doc.kind = 'institution_certificate';
       doc.description = `Certificado de «${activity.title}»`.slice(0, 300);
       doc.issuerName = activity.certificateIssuer;
-      if (dto.storedFileId !== undefined) doc.storedFileId = dto.storedFileId ?? null;
-      if (dto.certificateCode !== undefined) doc.certificateCode = dto.certificateCode?.trim() || null;
-      entregados.push(await this.constancies.save(doc));
+      doc.storedFileId = archivoNuevo;
+      doc.certificateCode = codigoNuevo;
+      doc.deliveredAt = new Date();
+      const guardado = await this.constancies.save(doc);
+      entregados.push(guardado);
       await this.audit.record({
         actorUserId: user.userId,
         eventType: AuditEventType.CONSTANCY_ISSUED,
         entityType: 'internal_constancy',
-        entityId: doc.id,
-        metadata: { kind: 'institution_certificate', activityId, issuer: activity.certificateIssuer },
+        entityId: guardado.id,
+        metadata: {
+          kind: 'institution_certificate', modo: activity.certificateMode ?? 'anterior', activityId, issuer: activity.certificateIssuer,
+          version: guardado.version, reemplazo: previo ? dto.replaceReason?.trim() : undefined,
+        },
       });
       try {
         await this.notifications.emit({
           userId: reg.studentProfile.userId,
           kind: 'CERTIFICATE_DELIVERED',
-          title: 'Recibiste un certificado',
-          body: `${activity.certificateIssuer} emitió tu certificado de «${activity.title}». Ya está en tu trayectoria.`,
-          link: '/student/evidences',
+          title: previo ? 'Se reemplazó tu certificado' : 'Recibiste un certificado',
+          body: previo
+            ? `${activity.certificateIssuer} reemplazó tu certificado de «${activity.title}»: ${dto.replaceReason?.trim()}`
+            : `${activity.certificateIssuer} emitió tu certificado de «${activity.title}». Ya está en tu trayectoria.`,
+          link: '/student/evidences?tab=constancias',
           entityType: 'internal_constancy',
-          entityId: doc.id,
-          dedupeKey: `certificate:${doc.id}`,
+          entityId: guardado.id,
+          dedupeKey: `certificate:${guardado.id}:v${guardado.version}`,
         });
       } catch {
         // el aviso no frena la entrega
       }
       await this.trajectory.requestRecalculation(reg.studentProfileId);
     }
-    return { delivered: entregados.length, items: entregados };
+    return { delivered: entregados.length - sinCambios, alreadyDelivered: sinCambios, items: entregados };
+  }
+
+  /**
+   * V7.1 D05: el archivo real común del modo GENERAL. Queda privado hasta la
+   * entrega. Si la actividad ya terminó con la lista cerrada, se entrega en el
+   * acto; si no, se entregará solo al cumplirse. Una vez entregado no se cambia
+   * por aquí: cada certificado se reemplaza con su motivo.
+   */
+  async setGeneralCertificateFile(user: AuthenticatedUser, activityId: string, storedFileId: string) {
+    const activity = await this.activities.findOne({ where: { id: activityId } });
+    if (!activity || !(await this.gestiona(user, activity))) throw new NotFoundException('Actividad no encontrada.');
+    if (user.role === RolNombre.ADMIN) {
+      throw new ForbiddenException('Administración no entrega documentos académicos: lo hace el responsable o Dirección.');
+    }
+    if (activity.outcomePolicy !== ActivityOutcomePolicy.INSTITUTION_ISSUED_CERTIFICATE || activity.certificateMode !== 'general') {
+      throw new BadRequestException({ code: 'NOT_GENERAL_CERTIFICATE', message: 'Esta actividad no entrega un certificado general.' });
+    }
+    await this.assertArchivoPropio(user, storedFileId);
+    const yaEntregados = await this.constancies.count({ where: { activityId, kind: 'institution_certificate' } });
+    if (yaEntregados > 0 && activity.generalCertificateFileId !== storedFileId) {
+      throw new ConflictException({
+        code: 'GENERAL_CERTIFICATE_ALREADY_DELIVERED',
+        message: 'El certificado general ya se entregó: no se cambia en silencio. Reemplaza el de cada estudiante con su motivo.',
+      });
+    }
+    await this.activities.update({ id: activityId }, { generalCertificateFileId: storedFileId });
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.CONSTANCY_ISSUED,
+      entityType: 'activity',
+      entityId: activityId,
+      metadata: { kind: 'institution_certificate', modo: 'general', archivoComun: storedFileId, accion: 'archivo_configurado' },
+    });
+    const r = await this.certificadoGeneral.entregarSiCorresponde(activityId, user.userId);
+    return { ...(await this.estadoInstitucional(user, activityId)), delivered: r.entregados };
+  }
+
+  /** V7.1 D05: modo, si falta algo y cuántos ya lo recibieron, para la interfaz del responsable. */
+  async estadoInstitucional(user: AuthenticatedUser, activityId: string) {
+    const activity = await this.activities.findOne({ where: { id: activityId } });
+    if (!activity || !(await this.gestiona(user, activity))) throw new NotFoundException('Actividad no encontrada.');
+    const confirmados = await this.registrations.count({ where: { activityId, status: RegistrationStatus.CONFIRMED } });
+    const entregados = await this.constancies.count({ where: { activityId, kind: 'institution_certificate' } });
+    const general = activity.certificateMode === 'general' ? await this.certificadoGeneral.estado(activity) : null;
+    return {
+      mode: activity.certificateMode,
+      issuer: activity.certificateIssuer,
+      confirmed: confirmados,
+      delivered: entregados,
+      generalFileName: general?.archivo ?? null,
+      pending: general?.pendiente ?? null,
+      pendingMessage: general?.mensaje ?? null,
+    };
   }
 
   async findMine(userId: string): Promise<InternalConstancy[]> {

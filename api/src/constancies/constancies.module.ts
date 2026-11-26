@@ -8,6 +8,7 @@ import { TrajectoryModule } from '../trajectory/trajectory.module';
 import { AccessModule } from '../access/access.module';
 import { ConstanciesService } from './constancies.service';
 import { ConstanciesController } from './constancies.controller';
+import { CertificadoGeneralModule } from './certificado-general.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ConstanciesController } from './constancies.controller';
     ]),
     TrajectoryModule,
     AccessModule,
+    CertificadoGeneralModule,
   ],
   controllers: [ConstanciesController],
   providers: [ConstanciesService],
