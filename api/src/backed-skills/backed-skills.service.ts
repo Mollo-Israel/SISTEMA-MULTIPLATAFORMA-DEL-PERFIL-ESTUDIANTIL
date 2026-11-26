@@ -23,13 +23,14 @@ export interface BackedSkill {
  *
  *   - **proyectos**: las `skills_used` que el propio integrante confirmó
  *     (§33, §34), en proyectos con respaldo (`SUPPORTED` o mejor; ni
- *     `DECLARED` ni `FLAGGED`, §36);
+ *     `DECLARED` ni `FLAGGED`, §36) que no son borrador, y solo si esa
+ *     tecnología tiene respaldo técnico en el proyecto (V7.1 §9);
  *   - **actividades**: las tecnologías de actividades con participación
  *     `CONFIRMED` (§29) y con resultado: «Sin resultado» no respalda nada
  *     (V7.1 D04);
- *   - **certificados** (V2 §41): las tecnologías de un certificado externo
- *     cuya validación lo dejó `SUPPORTED` o `CORROBORATED`. Uno solo
- *     declarado no respalda nada.
+ *   - **certificados** (V2 §41, V7.1 §9): las tecnologías de un certificado
+ *     externo `CORROBORATED` cuya revisión de Dirección no está pendiente,
+ *     observada ni rechazada: la misma regla con la que suma afinidad.
  *
  * No es una certificación: dice dónde aparece la tecnología en la trayectoria
  * respaldada, no cuánto se domina (§5.2).
@@ -60,6 +61,14 @@ export class BackedSkillsService {
         WHERE sp.id = ANY($1)
           AND pm.contribution_confirmed_at IS NOT NULL
           AND p.backing_tier IN ('supported', 'corroborated', 'reviewed')
+          -- V7.1 §9 (PERF-03): el borrador todavía no es trayectoria (mismo
+          -- criterio que el motor de afinidad), y la tecnología necesita
+          -- respaldo técnico en ESE proyecto: repositorio o revisión docente.
+          AND p.status <> 'draft'
+          AND EXISTS (
+            SELECT 1 FROM project_skills ps
+             WHERE ps.project_id = p.id AND ps.skill_id = pms.skill_id
+               AND ps.evidence_status <> 'declared')
        UNION ALL
        SELECT r.student_profile_id AS profile_id, s.id AS skill_id, s.name, s.academic_area_id,
               'activity' AS source, r.activity_id AS source_id
@@ -81,7 +90,9 @@ export class BackedSkillsService {
           AND EXISTS (
             SELECT 1 FROM validation_records vr
              WHERE vr.resource_type = 'external_certificate' AND vr.resource_id = c.id
-               AND vr.backing_tier IN ('supported', 'corroborated')
+               -- V7.1 §9 (PERF-02, M08): la misma regla que la afinidad. El
+               -- respaldo solo automático («supported») ya no basta.
+               AND vr.backing_tier = 'corroborated'
                -- V7.1 D01: pendiente, observada o rechazada por Dirección no respalda.
                AND (vr.manual_review_status IS NULL OR vr.manual_review_status NOT IN ('requested', 'observed', 'rejected')))`,
       [profileIds],

@@ -1532,3 +1532,9 @@ output.ai-assist-card { display: block; }
 .correo-codigo input { width: 6.5rem; letter-spacing: 0.18em; text-align: center; padding: 0.35rem 0.5rem; border: 1px solid var(--gray-300); border-radius: var(--radius); font: inherit; }
 .correo-nuevo { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; }
 .correo-nuevo input { flex: 1 1 14rem; min-width: 0; padding: 0.5rem 0.65rem; border: 1px solid var(--gray-300); border-radius: var(--radius); font: inherit; }
+
+/* --- V7.1 §9 · Afinidad explicada en palabras; reglas técnicas aparte --- */
+.como-se-calcula h4 { margin: 0.9rem 0 0.3rem; font-size: 0.95rem; }
+.como-se-calcula ul { margin: 0.2rem 0 0.4rem; padding-left: 1.1rem; }
+.detalle-tecnico { margin-top: 1rem; }
+.detalle-tecnico > summary { cursor: pointer; font-weight: 600; color: var(--gray-700); margin-bottom: 0.6rem; }

@@ -70,7 +70,7 @@ export default function InterestsScreen() {
       );
       toast.success(
         'Intereses guardados.',
-        `${chosen} área${chosen === 1 ? '' : 's'} con prioridad.`,
+        `${chosen} área${chosen === 1 ? '' : 's'} con interés declarado.`,
       );
     } catch (e) {
       toast.error(apiError(e));
@@ -94,7 +94,7 @@ export default function InterestsScreen() {
         description="Indica qué tanto te interesa cada área de la carrera. Lo que declares aquí alimenta tus áreas de afinidad y las recomendaciones que recibes."
       />
 
-      <Card title={`Áreas académicas (${chosen} con prioridad)`}>
+      <Card title={`Áreas académicas (${chosen} con interés)`}>
         <Muted>Prioridad de 1 a 5 (— para ninguna).</Muted>
 
         <View style={{ marginTop: 10 }}>

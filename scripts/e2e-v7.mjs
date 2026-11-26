@@ -1083,7 +1083,163 @@ async function batch7(ctx) {
     'V7.7.5 P12 Un borrador ajeno no se abre ni aparece en los proyectos de la carrera', json({ s: ajeno.status }));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
+// ===========================================================================
+//  BATCH V7-8 — Afinidad y recomendador: el motor real con fixtures (§9, §10, D06)
+// ===========================================================================
+async function batch8(ctx) {
+  objective('BATCH V7-8 · Ejemplos ejecutados del motor real: rendimiento decreciente, tope, corrección, intensidad y favoritos');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Ruth', lastName: `Motor${L}`, email: correoStaff('b8dir'), role: 'CAREER_DIRECTOR' });
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const area = async (n) => (await req('POST', '/academic-areas', { token: admin, body: { name: `${n} ${L}`, tags: [`${n.toLowerCase().slice(0, 3)}${L}`] } })).data;
+  const aMotor = await area('Motorarea');
+  const actividad = async (titulo, areaId, extra = {}) => {
+    const r = await req('POST', '/activities', {
+      token: director.token,
+      body: {
+        title: `${titulo} ${L}`, type: 'academica', categoryId: cat?.id, status: 'open', activityDate: en(48), endAt: en(50),
+        modality: 'presencial', location: 'Aula 1', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], areaIds: [areaId], outcomePolicy: 'participation_only', ...extra,
+      },
+    });
+    if (r.status !== 201) throw new Error(`No se pudo crear la actividad (${r.status}): ${json(r.data)}`);
+    return r.data;
+  };
+  const puntaje = async (perfil, areaId, esperado) => {
+    let s = -1;
+    for (let i = 0; i < 20; i++) {
+      s = Number(psql(`select coalesce(max(score), 0) from affinity_results where student_profile_id = '${perfil}' and academic_area_id = '${areaId}'`));
+      if (esperado === undefined || s === esperado) return s;
+      await espera(400);
+    }
+    return s;
+  };
+
+  // --- M06: 1, 2, 3, 4 y 5 asistencias confirmadas en la misma área.
+  const est = await provisionAndActivate(admin, { firstName: 'Ines', lastName: `Motor${L}`, email: correoEst('b8e1'), role: 'STUDENT', semester: 4 });
+  est.profileId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  const serie = [];
+  const esperados = [10, 17, 22, 25, 25];
+  const hechas = [];
+  for (let i = 0; i < 5; i++) {
+    const a = await actividad(`Seminario motor ${i + 1}`, aMotor.id);
+    hechas.push(a);
+    await req('POST', `/activities/${a.id}/register`, { token: est.token, body: {} });
+    await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'confirmed' } });
+    serie.push(await puntaje(est.profileId, aMotor.id, esperados[i]));
+  }
+  check(json(serie) === json(esperados),
+    'V7.8.1 M06 Motor real: 10, 17, 22 y 25 con 1 a 4 asistencias (rendimiento decreciente); la quinta ya no sube (tope de actividades)', json(serie));
+
+  // --- M07: corregir una participación hace bajar, con auditoría; sin decaimiento por tiempo.
+  const est2 = await provisionAndActivate(admin, { firstName: 'Ivo', lastName: `Motor${L}`, email: correoEst('b8e2'), role: 'STUDENT', semester: 4 });
+  est2.profileId = (await req('GET', '/profiles/me', { token: est2.token })).data?.id;
+  const inscripciones = [];
+  const propias = [await actividad('Coloquio motor uno', aMotor.id), await actividad('Coloquio motor dos', aMotor.id)];
+  for (const a of propias) {
+    inscripciones.push((await req('POST', `/activities/${a.id}/register`, { token: est2.token, body: {} })).status);
+    inscripciones.push((await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est2.profileId, status: 'confirmed' } })).status);
+  }
+  const antes = await puntaje(est2.profileId, aMotor.id, 17);
+  psql(`update activities set status = 'finished' where id = '${propias[1].id}'`);
+  const corr = await req('POST', `/activities/${propias[1].id}/participation-correction`, {
+    token: director.token, body: { studentProfileId: est2.profileId, status: 'absent', reason: 'La lista firmada muestra que no asistió.' },
+  });
+  const despues = await puntaje(est2.profileId, aMotor.id, 10);
+  const auditada = psql(`select count(*) from audit_events where event_type = 'PARTICIPATION_CORRECTED' and metadata::text like '%${est2.profileId}%'`);
+  check(antes === 17 && [200, 201].includes(corr.status) && despues === 10 && Number(auditada) >= 1,
+    'V7.8.2 M07 Corregir una asistencia vuelve a calcular con las mismas reglas (17 → 10) y queda auditado', json({ inscripciones, antes, s: corr.status, c: corr.data?.code ?? corr.data?.message, despues, auditada }));
+
+  // --- M04: guardar como favorita diez veces no cambia ni la afinidad ni el orden.
+  const recos = async (e) => ((await req('GET', '/recommendations/me', { token: e.token })).data?.groups ?? []).flatMap((g) => g.items).map((i) => i.targetId);
+  const otra = await actividad('Taller favorito', aMotor.id);
+  const ordenAntes = await recos(est);
+  for (let i = 0; i < 10; i++) {
+    await req('PUT', `/activities/${otra.id}/favorite`, { token: est.token });
+    await req('DELETE', `/activities/${otra.id}/favorite`, { token: est.token });
+  }
+  await req('PUT', `/activities/${otra.id}/favorite`, { token: est.token });
+  check(await puntaje(est.profileId, aMotor.id) === 25 && json(await recos(est)) === json(ordenAntes),
+    'V7.8.3 M04 Guardar como favorita diez veces no cambia la afinidad ni el orden de las recomendaciones');
+
+  // --- M01: Mucho > Bastante > Un poco, con razones en palabras.
+  const estI = await provisionAndActivate(admin, { firstName: 'Olga', lastName: `Intensidad${L}`, email: correoEst('b8e3'), role: 'STUDENT', semester: 4 });
+  const [aMucho, aBastante, aPoco] = [await area('Muchoarea'), await area('Bastantearea'), await area('Pocoarea')];
+  const [xM, xB, xP] = [await actividad('Taller de mucho', aMucho.id), await actividad('Taller de bastante', aBastante.id), await actividad('Taller de poco', aPoco.id)];
+  await req('PUT', '/profiles/me/interests', {
+    token: estI.token, body: { items: [{ academicAreaId: aMucho.id, priority: 1 }, { academicAreaId: aBastante.id, priority: 3 }, { academicAreaId: aPoco.id, priority: 5 }] },
+  });
+  const listaI = ((await req('GET', '/recommendations/me', { token: estI.token })).data?.groups ?? []).flatMap((g) => g.items);
+  const pos = (id) => listaI.findIndex((i) => i.targetId === id);
+  const razones = JSON.stringify(listaI.filter((i) => [xM.id, xB.id, xP.id].includes(i.targetId)).map((i) => i.reasons));
+  check(pos(xM.id) >= 0 && pos(xM.id) < pos(xB.id) && pos(xB.id) < pos(xP.id) && !/prioridad/i.test(razones),
+    'V7.8.4 M01 «Mucho» se recomienda antes que «Bastante» y este antes que «Un poco»; las razones no muestran prioridades', json({ m: pos(xM.id), b: pos(xB.id), p: pos(xP.id) }));
+
+  // --- M02 / M03: solo una tecnología de interés, o solo una de mejora.
+  const aTec = await area('Tecarea');
+  const skI = (await req('POST', '/skills', { token: admin, body: { name: `Recotec ${L} Uno`, academicAreaId: aTec.id } })).data;
+  const skM = (await req('POST', '/skills', { token: admin, body: { name: `Recotec ${L} Dos`, academicAreaId: aTec.id } })).data;
+  const conSkI = await actividad('Laboratorio con tecnologia uno', aTec.id, { skillIds: [skI.id] });
+  const conSkM = await actividad('Laboratorio con tecnologia dos', aTec.id, { skillIds: [skM.id] });
+  const estT = await provisionAndActivate(admin, { firstName: 'Abel', lastName: `Tecnologia${L}`, email: correoEst('b8e4'), role: 'STUDENT', semester: 4 });
+  await req('PUT', '/profiles/me/skill-interests', { token: estT.token, body: { items: [{ skillId: skI.id, kind: 'interest' }, { skillId: skM.id, kind: 'improve' }] } });
+  const listaT = ((await req('GET', '/recommendations/me', { token: estT.token })).data?.groups ?? []).flatMap((g) => g.items);
+  const rI = listaT.find((i) => i.targetId === conSkI.id);
+  const rM = listaT.find((i) => i.targetId === conSkM.id);
+  check((rI?.reasons ?? []).some((r) => r.label.includes(skI.name)) && (rM?.reasons ?? []).some((r) => /quieres mejorar/.test(r.label) && r.label.includes(skM.name)),
+    'V7.8.5 M02/M03 Solo con una tecnología de interés, o solo de mejora, se recomienda y la razón la nombra', json({ i: rI?.reasons, m: rM?.reasons }));
+
+  // --- Cambio de nivel: «Un poco» → «Mucho» sube el mismo taller de 24 a 40 (pesos 1 / 0,8 / 0,6 de 40).
+  const puntoDe = async (e, id) => ((await req('GET', '/recommendations/me', { token: e.token })).data?.groups ?? []).flatMap((g) => g.items).find((i) => i.targetId === id)?.score;
+  const antesNivel = Number(await puntoDe(estI, xP.id));
+  await req('PUT', '/profiles/me/interests', {
+    token: estI.token, body: { items: [{ academicAreaId: aMucho.id, priority: 1 }, { academicAreaId: aBastante.id, priority: 3 }, { academicAreaId: aPoco.id, priority: 1 }] },
+  });
+  const despuesNivel = Number(await puntoDe(estI, xP.id));
+  check(Number(await puntoDe(estI, xM.id)) === 40 && antesNivel === 24 && despuesNivel === 40,
+    'V7.8.6 M01 Valores ejecutados: Mucho 40, Un poco 24; al cambiar «Un poco» por «Mucho» el mismo taller pasa de 24 a 40', json({ antesNivel, despuesNivel }));
+
+  // --- Sin preferencias declaradas no hay «Para ti» de actividades: no se inventan intereses.
+  const estV = await provisionAndActivate(admin, { firstName: 'Noe', lastName: `Vacio${L}`, email: correoEst('b8e5'), role: 'STUDENT', semester: 4 });
+  const gruposV = (await req('GET', '/recommendations/me', { token: estV.token })).data?.groups ?? [];
+  const elementosV = gruposV.filter((g) => ['activity', 'opportunity'].includes(g.type)).flatMap((g) => g.items);
+  check(elementosV.length === 0, 'V7.8.7 Sin intereses, mejoras ni tecnologías declaradas no se recomienda ninguna actividad', json(elementosV.map((i) => i.title)));
+
+  // --- M08 / M09: tecnologías respaldadas solo desde fuentes elegibles; sin skill no se inventa ninguna.
+  const skConRes = (await req('POST', '/skills', { token: admin, body: { name: `Respaldotec ${L} Valida`, academicAreaId: aMotor.id } })).data;
+  const skSinRes = (await req('POST', '/skills', { token: admin, body: { name: `Respaldotec ${L} Nula`, academicAreaId: aMotor.id } })).data;
+  const estR = await provisionAndActivate(admin, { firstName: 'Rita', lastName: `Respaldo${L}`, email: correoEst('b8e6'), role: 'STUDENT', semester: 4 });
+  estR.profileId = (await req('GET', '/profiles/me', { token: estR.token })).data?.id;
+  const conResultado = await actividad('Practica con resultado', aMotor.id, { skillIds: [skConRes.id] });
+  const sinResultado = await actividad('Charla sin resultado', aMotor.id, { skillIds: [skSinRes.id], outcomePolicy: 'none' });
+  const sinSkill = await actividad('Jornada general', aMotor.id, { skillIds: [] });
+  for (const a of [conResultado, sinResultado, sinSkill]) {
+    await req('POST', `/activities/${a.id}/register`, { token: estR.token, body: {} });
+    await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: estR.profileId, status: 'confirmed' } });
+  }
+  const chips = (await req('GET', '/profiles/me/summary', { token: estR.token })).data?.skills ?? [];
+  const chip = chips.find((c) => c.skillId === skConRes.id);
+  check(chip && json(chip.sources) === json(['activity']) && !chips.some((c) => c.skillId === skSinRes.id),
+    'V7.8.8 M08 La tecnología de una actividad con resultado aparece con su procedencia; la de una actividad «Sin resultado» no', json(chips));
+  check(chips.length === 1, 'V7.8.9 M09 Una actividad del área sin tecnología no crea ninguna tecnología en el perfil', json(chips.map((c) => c.skill)));
+
+  // --- M05 (REC-H1): interés que viene del test ya confirmado. Se reproduce y se informa (D06).
+  const estO = await provisionAndActivate(admin, { firstName: 'Olivia', lastName: `Orientada${L}`, email: correoEst('b8e7'), role: 'STUDENT', semester: 4 });
+  const cuestionario = (await req('GET', '/onboarding/questionnaire', { token: estO.token })).data;
+  const corrida = await req('POST', '/onboarding/runs', {
+    token: estO.token, body: { answers: (cuestionario?.questions ?? []).map((x) => ({ questionCode: x.code, optionCodes: [x.options[0].code] })) },
+  });
+  const sugerida = corrida.data?.suggestedAreas?.[0];
+  if (sugerida) {
+    await req('POST', `/onboarding/runs/${corrida.data.id}/confirm`, { token: estO.token, body: { academicAreaIds: [sugerida.academicAreaId] } });
+    const delTest = await actividad('Taller del test', sugerida.academicAreaId);
+    const item = ((await req('GET', '/recommendations/me', { token: estO.token })).data?.groups ?? []).flatMap((g) => g.items).find((i) => i.targetId === delTest.id);
+    const desglose = (item?.reasons ?? []).filter((r) => r.points > 0).map((r) => `${r.code}:${r.points}`).join(' + ');
+    console.log(`  ${C.dim}ℹ M05 / REC-H1 (pendiente D06, no es PASS): un área confirmada desde el test puntúa ${item?.score} = ${desglose}${C.r}`);
+  }
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

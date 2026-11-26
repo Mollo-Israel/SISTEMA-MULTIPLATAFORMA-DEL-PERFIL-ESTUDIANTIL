@@ -548,7 +548,76 @@ async function batch7(ctx, browser) {
   await ce.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
+async function batch8(ctx, browser) {
+  objective('BATCH V7-8 · Afinidad explicada en palabras, detalle técnico aparte e intereses sin «prioridad N»');
+  const admin = ctx.admin;
+  const est = await provisionStudent(admin, { firstName: 'Lia', lastName: `Webafinidad${L}`, email: correoEst('b8est'), semester: 5 });
+  const area = (await req('POST', '/academic-areas', { token: admin, body: { name: `Webafarea ${L}`, tags: [`wa8${L}`] } })).data;
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: est.token, body: {} });
+  const unaSkill = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => s.isActive !== false);
+  await req('PUT', '/profiles/me/skill-interests', { token: est.token, body: { items: [{ skillId: unaSkill?.id, kind: 'interest' }] } });
+  await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: area.id, priority: 1 }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: est.token, body: { peerDiscoverable: true, publicProfileEnabled: false } });
+  await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
+
+  // PERF-07: una actividad con tecnología y asistencia confirmada da un chip con su procedencia real.
+  const director = await provisionAndActivate(admin, { firstName: 'Rosa', lastName: `Webafinidad${L}`, email: correoStaff('b8dir'), role: 'CAREER_DIRECTOR' });
+  const skChip = (await req('POST', '/skills', { token: admin, body: { name: `Chiptec ${L}`, academicAreaId: area.id } })).data;
+  const cats = (await req('GET', '/activity-categories?status=active', { token: admin })).data ?? [];
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const act = (await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      title: `Practica de chips ${L}`, type: 'academica', categoryId: cat?.id, status: 'open', activityDate: en(48), endAt: en(50), modality: 'presencial',
+      location: 'Aula 2', semesterScope: [5], areaIds: [area.id], skillIds: [skChip.id], outcomePolicy: 'participation_only',
+    },
+  })).data;
+  const perfilId = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  await req('POST', `/activities/${act?.id}/register`, { token: est.token, body: {} });
+  await req('PATCH', `/activities/${act?.id}/confirm-participation`, { token: director.token, body: { studentProfileId: perfilId, status: 'confirmed' } });
+
+  const { ctx: ce, page: pe, errores: ee } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/student/affinity`);
+  await pe.getByRole('tab', { name: 'Cómo se calcula' }).or(pe.getByRole('button', { name: 'Cómo se calcula' })).first().click({ timeout: 20000 });
+  const explicacion = pe.locator('[data-testid="como-se-calcula"]');
+  await explicacion.waitFor({ timeout: 20000 }).catch(() => {});
+  const texto = ((await explicacion.textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ');
+  const detalle = pe.locator('[data-testid="detalle-tecnico"]');
+  const cerrado = await detalle.evaluate((d) => !d.open).catch(() => null);
+  const antesDelDetalle = await pe.evaluate(() => {
+    const a = document.querySelector('[data-testid="como-se-calcula"]');
+    const b = document.querySelector('[data-testid="detalle-tecnico"]');
+    return !!a && !!b && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  check(/No mide cuánto sabes/.test(texto) && /10, la segunda 7, la tercera 5/.test(texto) && /no baja por no usar/i.test(texto) && /No significa dominio/.test(texto),
+    'W7.8.1 PERF-05 «Cómo se calcula» explica en palabras qué suma, qué no, cuándo baja y qué significa el tope', texto.slice(0, 160));
+  check(cerrado === true && antesDelDetalle, 'W7.8.2 PERF-05 Las ponderaciones técnicas quedan en «Detalle técnico», cerrado y después de la explicación', json({ cerrado, antesDelDetalle }));
+  check(!/prioridad \d/i.test(texto), 'W7.8.3 La explicación no muestra prioridades numéricas');
+  check(ee.length === 0, 'W7.8.4 Sin errores de JavaScript en Afinidad', ee.join(' | '));
+  await pe.goto(`${WEB}/student/profile?tab=intereses`);
+  const chipPerfil = pe.locator('[data-testid="tecnologia-respaldada"]', { hasText: `Chiptec ${L}` }).first();
+  await chipPerfil.waitFor({ timeout: 20000 }).catch(() => {});
+  const chipTxt = ((await chipPerfil.textContent().catch(() => '')) ?? '').trim();
+  check(/relacionada con tu participación en una actividad/.test(chipTxt), 'W7.8.7 PERF-07 El chip de tecnología respaldada dice de dónde viene, en palabras', chipTxt);
+  await ce.close();
+
+  const docente = await provisionAndActivate(admin, { firstName: 'Tito', lastName: `Webafinidad${L}`, email: correoStaff('b8doc'), role: 'TEACHER' });
+  // Un docente ve los estudiantes de los semestres que tiene asignados.
+  await req('PUT', `/users/${docente.userId ?? docente.id}/semesters`, { token: admin, body: { semesters: [5] } });
+  const { ctx: cd, page: pd, errores: ed } = await entrar(browser, docente.email);
+  await pd.goto(`${WEB}/teacher?tab=estudiantes`);
+  await pd.getByPlaceholder('Buscar por nombre, correo o semestre…').fill(`Webafinidad${L}`, { timeout: 20000 });
+  await pd.locator('tr', { hasText: est.email }).getByRole('button', { name: 'Ver perfil' }).click({ timeout: 20000 });
+  const chip = pd.locator('.badge, [class*="badge"]', { hasText: `Webafarea ${L}` }).first();
+  await chip.waitFor({ timeout: 20000 }).catch(() => {});
+  const chipTexto = ((await chip.textContent().catch(() => '')) ?? '').trim();
+  check(/mucho/i.test(chipTexto) && !/prioridad/i.test(chipTexto), 'W7.8.5 PERF-08 El docente ve el interés del estudiante como «mucho», sin «prioridad 1»', chipTexto);
+  check(ed.length === 0, 'W7.8.6 Sin errores de JavaScript en Estudiantes del docente', ed.join(' | '));
+  await cd.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

@@ -620,16 +620,20 @@ function InteresesTab({
       </Card>
       <Card title="Tecnologías respaldadas por tu trayectoria">
         <p className="muted" style={{ marginTop: 0 }}>
-          Aparecen solas cuando confirmas tu contribución en un proyecto con respaldo o cuando se confirma
-          tu participación en una actividad. No se declaran: se construyen.
+          Aparecen solas cuando confirmas tu contribución en un proyecto cuyo repositorio o revisión docente
+          respalda esa tecnología, cuando se confirma tu participación en una actividad que la trabaja o cuando
+          Dirección aprueba una credencial externa. No se declaran: se construyen. Indican dónde aparece la
+          tecnología en tu trayectoria, no cuánto la dominas.
         </p>
         {respaldadas.length === 0 ? (
           <p className="muted">Todavía ninguna. Registra un proyecto o inscríbete en una actividad.</p>
         ) : (
           <div className="tag-chips">
             {respaldadas.map((r) => (
-              <span key={r.skillId} className="tag-chip" title={r.sources.map((x) => (x === 'project' ? 'proyecto' : 'actividad')).join(' y ')}>
-                {r.skill} · {r.evidenceCount}
+              // V7.1 §9 (PERF-07): la procedencia real de cada chip, en palabras.
+              <span key={r.skillId} className="tag-chip" data-testid="tecnologia-respaldada"
+                title={`${r.evidenceCount} ${r.evidenceCount === 1 ? 'experiencia' : 'experiencias'}`}>
+                {r.skill} · relacionada con {r.sources.map((x) => ORIGEN_RESPALDO[x] ?? x).join(', ')}
               </span>
             ))}
           </div>
@@ -640,6 +644,13 @@ function InteresesTab({
 }
 
 // ===========================================================================
+
+/** V7.1 §9 (PERF-07): de dónde sale una tecnología respaldada. */
+const ORIGEN_RESPALDO: Record<string, string> = {
+  project: 'tu proyecto',
+  activity: 'tu participación en una actividad',
+  certificate: 'una credencial aprobada',
+};
 
 function CuestionarioTab() {
   const [run, setRun] = useCachedState<OnboardingRun | null>('cuestionario', null);

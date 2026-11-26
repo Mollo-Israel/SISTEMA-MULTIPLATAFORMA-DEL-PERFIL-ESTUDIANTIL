@@ -1069,12 +1069,15 @@ async function batch7(ctx) {
   const antes = await respaldadas();
   check(!antes.some((s) => s.skillId === s1.id), 'V2.7.4 §41 §22 Un certificado solo declarado no respalda tecnologías', json(antes));
 
-  // Con respaldo (lo que daría la validación con un documento legible y coherente).
+  // V7.1 §9 (M08): el respaldo solo automático ya no basta; hace falta la
+  // misma condición con la que la credencial suma afinidad (corroborada).
   psql(`update validation_records set backing_tier='supported' where resource_type='external_certificate' and resource_id='${cert.data?.id}'`);
+  const soloAutomatico = (await respaldadas()).some((s) => s.skillId === s1.id);
+  psql(`update validation_records set backing_tier='corroborated' where resource_type='external_certificate' and resource_id='${cert.data?.id}'`);
   const despues = await respaldadas();
   const conCert = despues.find((s) => s.skillId === s1.id);
-  check(!!conCert && (conCert.sources ?? []).includes('certificate'),
-    'V2.7.5 §41 Con respaldo, sus tecnologías cuentan como respaldadas, con su procedencia', json(conCert));
+  check(!soloAutomatico && !!conCert && (conCert.sources ?? []).includes('certificate'),
+    'V2.7.5 §41 V7.1 M08 Corroborada, sus tecnologías cuentan como respaldadas con su procedencia; con respaldo solo automático, no', json({ soloAutomatico, conCert }));
 
   const cambio = await req('PATCH', `/certificates/external/${cert.data?.id}`, { token: est.token, body: { skillIds: [s2.id] } });
   const ahora = ((await req('GET', '/certificates/external/my', { token: est.token })).data ?? []).find((c) => c.id === cert.data?.id);

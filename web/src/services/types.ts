@@ -289,7 +289,7 @@ export interface BackedSkill {
   skillId: string;
   skill: string | null;
   academicAreaId?: string | null;
-  sources: ('project' | 'activity')[];
+  sources: ('project' | 'activity' | 'certificate')[];
   evidenceCount: number;
 }
 

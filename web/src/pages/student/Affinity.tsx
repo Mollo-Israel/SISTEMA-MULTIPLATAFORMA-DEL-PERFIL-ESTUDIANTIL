@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { FiActivity, FiRefreshCw, FiSearch, FiSliders } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { affinityService, AffinityEngineRules, AffinitySnapshotView } from '../../services';
+import ComoSeCalculaAfinidad from '../../components/ComoSeCalculaAfinidad';
 import { useAsync } from '../../hooks/useAsync';
 import {
   AsyncView, Badge, Button, Card, EmptyState, PageHeader, ResultCount, SearchInput,
@@ -246,6 +247,11 @@ export default function StudentAffinityPage() {
       )}
 
       {tab === 'rules' && (
+        <>
+        {/* V7.1 §9 (PERF-05): primero en palabras; las reglas técnicas, aparte. */}
+        <ComoSeCalculaAfinidad areas={summaryState.data?.status === 'insufficient_data' ? [] : (summaryState.data?.areas ?? []).map((a) => ({ area: a.area ?? null, score: a.score, level: a.level }))} />
+        <details className="detalle-tecnico" data-testid="detalle-tecnico">
+        <summary>Detalle técnico del motor</summary>
         <Card
           title="Ponderaciones del motor"
           actions={
@@ -367,6 +373,8 @@ export default function StudentAffinityPage() {
             </div>
           )}
         </Card>
+        </details>
+        </>
       )}
     </div>
   );

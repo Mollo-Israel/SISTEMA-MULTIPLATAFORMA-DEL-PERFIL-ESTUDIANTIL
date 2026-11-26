@@ -17,6 +17,7 @@ import {
 } from '../../components/affinity';
 import { PROFILE_STATUS_LABEL, lbl } from '../../constants';
 import type { StudentDirectory } from '../../services/types';
+import { NIVEL_INTERES, nivelDeInteres } from '../../components/Declarations';
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -228,7 +229,8 @@ export default function TeacherStudentsPage() {
                 <div className="tag-list mt">
                   {view.interests.map((i: any) => (
                     <Badge key={i.academicAreaId} tone="bordo">
-                      {i.area} · prioridad {i.priority}
+                      {/* V7.1 §9 (PERF-08): en palabras, nunca «prioridad N». */}
+                      {i.area} · {NIVEL_INTERES.find((n) => n.prioridad === nivelDeInteres(i.priority))?.label.toLowerCase() ?? 'interés'}
                     </Badge>
                   ))}
                 </div>
