@@ -170,13 +170,25 @@ export class ProjectsService {
    * y las sugerencias: lo aceptado deja de figurar «no añadido» y de sugerirse.
    */
   private async senalesVigentes(project: Project, check: ProjectRepositoryCheck | null): Promise<TechnologySignal[]> {
-    if (!check) return [];
+    // V7.1 §8.2 (P09): la señal de un repositorio anterior no es vigente.
+    if (!check || check.repositoryUrl !== project.repositoryUrl) return [];
+    const filas = await this.projectSkills.find({ where: { projectId: project.id }, relations: { skill: true } });
     const declaradas = unirTecnologias(
-      (await this.projectSkills.find({ where: { projectId: project.id }, relations: { skill: true } }))
-        .map((x) => x.skill?.name).filter((n): n is string => !!n),
+      filas.map((x) => x.skill?.name).filter((n): n is string => !!n),
       project.technologies ?? [],
     );
-    return this.repositoryInspector.recruzar(check.technologySignals ?? [], declaradas);
+    return this.repositoryInspector.recruzar(check.technologySignals ?? [], declaradas, this.aliasDe(filas));
+  }
+
+  /** Alias exactos del catálogo de cada tecnología declarada → su nombre (normalizados). */
+  private aliasDe(filas: ProjectSkill[]): Record<string, string> {
+    const n = (t: string) => this.repositoryInspector.normalizar(t);
+    const salida: Record<string, string> = {};
+    for (const f of filas) {
+      if (!f.skill) continue;
+      for (const a of f.skill.aliases ?? []) if (n(a) && n(a) !== n(f.skill.name)) salida[n(a)] = n(f.skill.name);
+    }
+    return salida;
   }
 
   private normSenal(t: string): string {
@@ -543,11 +555,19 @@ export class ProjectsService {
     if (!project) return;
     const check = await this.repoChecks.findOne({ where: { projectId }, order: { checkedAt: 'DESC' } });
     const vigente = check?.repositoryUrl === project.repositoryUrl ? check : null;
-    const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
-    const senales = new Map((vigente?.technologySignals ?? []).map((t) => [norm(t.name), t]));
+    const norm = (t: string) => this.repositoryInspector.normalizar(t);
+    // V7.1 §8.2 (P07, P08): cuenta toda señal con fuente del repositorio ACTUAL,
+    // aunque se haya detectado antes de declarar la tecnología («detectada»
+    // y no «ambas»), y también por un alias exacto del catálogo.
+    const senales = new Map<string, TechnologySignal>();
+    for (const t of vigente?.technologySignals ?? []) {
+      if (t.status !== TechnologyStatus.DECLARED && t.source) senales.set(norm(t.name), t);
+    }
     const filas = await this.projectSkills.find({ where: { projectId }, relations: { skill: true } });
     for (const f of filas) {
-      const e = skillEvidenceFromSignal(senales.get(norm(f.skill?.name ?? '')), !!f.academicReviewedAt);
+      const nombres = [f.skill?.name, ...(f.skill?.aliases ?? [])].filter((x): x is string => !!x);
+      const senal = nombres.map((x) => senales.get(norm(x))).find((x) => !!x);
+      const e = skillEvidenceFromSignal(senal ? { status: TechnologyStatus.BOTH, source: senal.source } : undefined, !!f.academicReviewedAt);
       if (f.evidenceStatus !== e.status || f.evidenceSource !== e.source) {
         await this.projectSkills.update({ projectId, skillId: f.skillId }, { evidenceStatus: e.status, evidenceSource: e.source });
       }

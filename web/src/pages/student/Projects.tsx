@@ -696,7 +696,7 @@ export default function StudentProjectsPage() {
               )}
 
               {p.status === 'draft' && (
-                <ProjectReadiness projectId={p.id} canActivate={p.isOwner === true} onActivated={load} />
+                <ProjectReadiness projectId={p.id} canActivate={p.isOwner === true} onActivated={load} refreshKey={JSON.stringify(p)} />
               )}
 
               {p.isOwner && (
@@ -927,11 +927,11 @@ export default function StudentProjectsPage() {
                 {(p.evidences ?? []).length > 0 && (
                   <ul className="plain-list">
                     {(p.evidences ?? []).map((ev) => (
-                      <li key={ev.id} className="flex between">
+                      // V7.1 §8 (PROY-07, P11): aquí solo se listan. La evidencia es privada
+                      // y se abre, con la sesión, desde «Evidencias».
+                      <li key={ev.id} className="flex between" data-testid="evidencia-proyecto">
                         <span>{ev.description || ev.evidenceType}</span>
-                        <a href={ev.externalUrl ?? ev.fileUrl ?? '#'} target="_blank" rel="noreferrer">
-                          <FiLink size={13} /> Abrir
-                        </a>
+                        <span className="muted small">Se consulta en «Evidencias»</span>
                       </li>
                     ))}
                   </ul>

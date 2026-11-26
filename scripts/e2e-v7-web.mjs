@@ -512,7 +512,43 @@ async function batch6(ctx, browser) {
   await ca.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
+async function batch7(ctx, browser) {
+  objective('BATCH V7-7 · La lista para activar muestra la falta concreta; las evidencias no tienen «Abrir»');
+  const admin = ctx.admin;
+  const est = await provisionStudent(admin, { firstName: 'Paz', lastName: `Webproyecto${L}`, email: correoEst('b7est'), semester: 6 });
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: est.token, body: {} });
+  const unaSkill = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => s.isActive !== false);
+  await req('PUT', '/profiles/me/skill-interests', { token: est.token, body: { items: [{ skillId: unaSkill?.id, kind: 'interest' }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: est.token, body: { peerDiscoverable: true, publicProfileEnabled: false } });
+  await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
+  const a1 = (await req('POST', '/academic-areas', { token: admin, body: { name: `Webproyarea ${L} Uno`, tags: [`wp1${L}`] } })).data;
+  const a2 = (await req('POST', '/academic-areas', { token: admin, body: { name: `Webproyarea ${L} Dos`, tags: [`wp2${L}`] } })).data;
+  const sk = (await req('POST', '/skills', { token: admin, body: { name: `Webproybase ${L}`, academicAreaId: a1.id } })).data;
+  const titulo = `Webproyecto dos areas ${L}`;
+  const p = await req('POST', '/projects', {
+    token: est.token,
+    body: { title: titulo, areaIds: [a1.id, a2.id], skillIds: [sk.id], repositoryUrl: `https://github.com/afinia-pruebas/lenguaje-x${L}--w${Date.now().toString(36)}`, status: 'draft' },
+  });
+  await req('POST', `/projects/${p.data?.id}/evidences`, {
+    token: est.token, body: { evidenceType: 'link', externalUrl: `https://capturas.example.org/${L}.png`, description: 'Captura del funcionamiento.' },
+  });
+
+  const { ctx: ce, page: pe, errores: ee } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/student/projects`);
+  const tarjeta = pe.locator('.card', { hasText: titulo }).first();
+  await tarjeta.waitFor({ timeout: 30000 }).catch(() => {});
+  await tarjeta.locator('.readiness-list').waitFor({ timeout: 15000 }).catch(() => {});
+  const fila = (await tarjeta.locator('.readiness-list li.falta', { hasText: 'Cada área con al menos una tecnología' }).textContent().catch(() => '')) ?? '';
+  const abrir = await tarjeta.getByRole('link', { name: /Abrir/ }).count();
+  const listadas = await tarjeta.locator('[data-testid="evidencia-proyecto"]').count();
+  check(new RegExp(`Webproyarea ${L} Dos`).test(fila), 'W7.7.1 P01 PROY-01 La fila «Cada área con al menos una tecnología» aparece en rojo con el área que falta', fila.slice(0, 160));
+  check(abrir === 0 && listadas === 1, 'W7.7.2 P11 PROY-07 Las evidencias del proyecto se listan sin el enlace «Abrir»', json({ abrir, listadas }));
+  check(ee.length === 0, 'W7.7.3 Sin errores de JavaScript en Proyectos', ee.join(' | '));
+  await ce.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

@@ -11,7 +11,7 @@
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  codigoUniversitario, loginAdmin, pdfConTexto, provisionAndActivate, provisionStudent, req, subirArchivo,
+  asegurarGithubSimulado, codigoUniversitario, loginAdmin, pdfConTexto, provisionAndActivate, provisionStudent, repoDePrueba, req, subirArchivo,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -1006,7 +1006,84 @@ async function batch6(ctx) {
   check(qr.status === 200, 'V7.6.4 V04 El enlace y QR del perfil siguen funcionando sin el módulo retirado', `status ${qr.status}`);
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6 };
+// ===========================================================================
+//  BATCH V7-7 — Proyectos: activación y coherencia de tecnologías (§8)
+// ===========================================================================
+async function batch7(ctx) {
+  objective('BATCH V7-7 · Señal detectada antes de declarar, alias del catálogo, repositorio que cambia y requisitos visibles');
+  const admin = ctx.admin;
+  await asegurarGithubSimulado();
+  const est = await provisionAndActivate(admin, { firstName: 'Paz', lastName: `Proyecto${L}`, email: correoEst('b7e'), role: 'STUDENT', semester: 6 });
+  const area1 = (await req('POST', '/academic-areas', { token: admin, body: { name: `Proyarea ${L} Uno`, tags: [`pa1${L}`] } })).data;
+  const area2 = (await req('POST', '/academic-areas', { token: admin, body: { name: `Proyarea ${L} Dos`, tags: [`pa2${L}`] } })).data;
+  const nueva = async (body) => {
+    const r = await req('POST', '/skills', { token: admin, body: { academicAreaId: area1.id, ...body } });
+    if (r.status !== 201) throw new Error(`No se pudo crear la tecnología (${r.status}): ${json(r.data)}`);
+    return r.data;
+  };
+  const base = await nueva({ name: `Proybase ${L}` });
+  const senal = await nueva({ name: `Tecsenal${L}` });
+  const canonica = await nueva({ name: `Canonica${L}`, aliases: [`aliasq${L}`] });
+  const estado = (proyecto, skill) => psql(`select evidence_status from project_skills where project_id = '${proyecto}' and skill_id = '${skill}'`);
+  const esperarCheck = async (id, repo) => {
+    for (let i = 0; i < 30; i++) {
+      if (psql(`select count(*) from project_repository_checks where project_id = '${id}' and repository_url = '${repo}'`) !== '0') return true;
+      await espera(500);
+    }
+    return false;
+  };
+
+  // --- P07: GitHub detecta la tecnología antes de que se declare; al declararla, se reconcilia sin otro escaneo.
+  const repo1 = repoDePrueba(`lenguaje-tecsenal${L}--${Date.now().toString(36)}`);
+  const p1 = await req('POST', '/projects', {
+    token: est.token, body: { title: `Proyecto señal ${L}`, areaIds: [area1.id], skillIds: [base.id], repositoryUrl: repo1, status: 'draft' },
+  });
+  if (p1.status !== 201) throw new Error(`No se pudo crear el proyecto (${p1.status}): ${json(p1.data)}`);
+  await esperarCheck(p1.data.id, repo1);
+  const detectada = psql(`select technology_signals::text from project_repository_checks where project_id = '${p1.data.id}' order by checked_at desc limit 1`);
+  const escaneosAntes = psql(`select count(*) from project_repository_checks where project_id = '${p1.data.id}'`);
+  await req('PATCH', `/projects/${p1.data.id}`, { token: est.token, body: { skillIds: [base.id, senal.id] } });
+  const escaneosDespues = psql(`select count(*) from project_repository_checks where project_id = '${p1.data.id}'`);
+  check(/tecsenal/i.test(detectada) && estado(p1.data.id, senal.id).startsWith('corroborated') && escaneosDespues === escaneosAntes,
+    'V7.7.1 P07 Detectada antes de declararla: al elegirla queda respaldada por el repositorio, sin escanear de nuevo', json({ e: estado(p1.data.id, senal.id), escaneosAntes, escaneosDespues }));
+
+  // --- P08: un alias exacto del catálogo cuenta; no por subcadena.
+  const repo2 = repoDePrueba(`lenguaje-aliasq${L}--${Date.now().toString(36)}`);
+  const p2 = await req('POST', '/projects', {
+    token: est.token, body: { title: `Proyecto alias ${L}`, areaIds: [area1.id], skillIds: [base.id], repositoryUrl: repo2, status: 'draft' },
+  });
+  await esperarCheck(p2.data.id, repo2);
+  await req('PATCH', `/projects/${p2.data.id}`, { token: est.token, body: { skillIds: [base.id, canonica.id] } });
+  const tabla = (await req('GET', `/projects/${p2.data.id}/checks`, { token: est.token })).data;
+  const filaTabla = JSON.stringify(tabla ?? {});
+  check(estado(p2.data.id, canonica.id).startsWith('corroborated') && estado(p2.data.id, base.id) === 'declared',
+    'V7.7.2 P08 La señal con un alias exacto del catálogo respalda su tecnología; las demás siguen declaradas', json({ c: estado(p2.data.id, canonica.id), b: estado(p2.data.id, base.id), t: filaTabla.slice(0, 160) }));
+
+  // --- P09: cambia el repositorio: la señal del anterior ya no vale.
+  const repo3 = repoDePrueba(`lenguaje-otrolenguaje${L}--${Date.now().toString(36)}`);
+  await req('PATCH', `/projects/${p1.data.id}`, { token: est.token, body: { repositoryUrl: repo3 } });
+  await esperarCheck(p1.data.id, repo3);
+  check(estado(p1.data.id, senal.id) === 'declared',
+    'V7.7.3 P09 Con otro repositorio, la señal del anterior no respalda: la tecnología vuelve a «declarada»', json({ e: estado(p1.data.id, senal.id) }));
+
+  // --- P01: un área sin tecnología: el motivo concreto llega a la lista de requisitos.
+  const p3 = await req('POST', '/projects', {
+    token: est.token, body: { title: `Proyecto dos areas ${L}`, areaIds: [area1.id, area2.id], skillIds: [base.id], repositoryUrl: repoDePrueba(`lenguaje-x${L}--${Date.now().toString(36)}`), status: 'draft' },
+  });
+  const listo = (await req('GET', `/projects/${p3.data?.id}/readiness`, { token: est.token })).data;
+  const motivo = (listo?.missing ?? []).find((m) => m.code === 'skill_per_area');
+  check(listo?.ready === false && /Proyarea .* Dos/.test(motivo?.message ?? ''),
+    'V7.7.4 P01 Si un área no tiene tecnología, la lista lo dice con el nombre del área (no todo en verde)', json(listo?.missing));
+
+  // --- P12: un tercero no ve evidencias ni el repositorio de un borrador ajeno.
+  const otro = await provisionAndActivate(admin, { firstName: 'Teo', lastName: `Tercero${L}`, email: correoEst('b7o'), role: 'STUDENT', semester: 6 });
+  const ajeno = await req('GET', `/projects/${p1.data.id}`, { token: otro.token });
+  const galeria = JSON.stringify((await req('GET', '/projects/community', { token: otro.token })).data ?? {});
+  check([403, 404].includes(ajeno.status) && !galeria.includes(p1.data.id),
+    'V7.7.5 P12 Un borrador ajeno no se abre ni aparece en los proyectos de la carrera', json({ s: ajeno.status }));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

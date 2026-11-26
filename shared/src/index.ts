@@ -21,3 +21,4 @@ export * from './enums/skill-interest.enum';
 export * from './enums/ai.enum';
 export * from './enums/university-code';
 export * from './enums/avatar';
+export * from './enums/project-readiness';

@@ -241,13 +241,21 @@ export class RepositoryInspectorService {
    * («La usé») la muestra enseguida como «declarada · detectada en el
    * repositorio», en lugar de seguir «no declarada» hasta la próxima comprobación.
    */
-  recruzar(guardadas: TechnologySignal[], declaradas: string[]): TechnologySignal[] {
+  recruzar(guardadas: TechnologySignal[], declaradas: string[], alias: Record<string, string> = {}): TechnologySignal[] {
     const encontradas = new Map<string, { nombre: string; source: string }>();
     for (const s of guardadas) {
       if (s.status === TechnologyStatus.DECLARED || !s.source) continue;
-      encontradas.set(this.norm(s.name), { nombre: s.name, source: s.source });
+      // V7.1 §8.2 (P08): un alias exacto del catálogo («Postgres») cuenta para la
+      // tecnología declarada («PostgreSQL»). Nunca por subcadena.
+      const clave = this.norm(s.name);
+      encontradas.set(alias[clave] ?? clave, { nombre: s.name, source: s.source });
     }
     return this.marcar(declaradas, encontradas);
+  }
+
+  /** La misma normalización con la que se cruzan señales y tecnologías. */
+  normalizar(valor: string): string {
+    return this.norm(valor);
   }
 
   /** Lo declarado con su señal, si la hay, y lo detectado que nadie declaró. */
