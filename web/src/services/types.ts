@@ -1110,9 +1110,10 @@ export interface ManualReviewItem {
 }
 
 export type ValidationStatus =
-  | 'pending' | 'processing' | 'completed' | 'inconclusive' | 'failed';
+  | 'pending' | 'processing' | 'completed' | 'inconclusive' | 'failed' | 'not_applicable';
 
 export const VALIDATION_STATUS_LABEL: Record<ValidationStatus, string> = {
+  not_applicable: 'No aplica',
   pending: 'En cola',
   processing: 'Procesando',
   completed: 'Verificado',
@@ -1176,6 +1177,23 @@ export interface ValidationVerdict {
   errorCode: string | null;
   finishedAt: string | null;
   disclaimer: string;
+  /** V7.1 §5.2: por qué no se procesó (histórica o sin modelo). */
+  skippedReason?: 'historical' | 'no_reference_model' | null;
+  /** V7.1 §5.4: las tres fases, tal como pasaron. */
+  phases?: CredentialPhase[] | null;
+  /** V7.1 §5.3: puede pedir «Comprobar información». */
+  canRecheck?: boolean;
+  previousAttempts?: number;
+}
+
+/** V7.1 §5.4: una fase de ayuda a la revisión de una credencial. */
+export interface CredentialPhase {
+  fase: 1 | 2 | 3;
+  titulo: string;
+  estado: 'no_aplica' | 'omitida' | 'pendiente' | 'procesando' | 'completada' | 'inconclusa' | 'error' | 'sin_solicitud' | 'decidida';
+  resumen: string;
+  detalles: string[];
+  fecha: string | null;
 }
 
 export interface Evidence {
@@ -1226,6 +1244,17 @@ export interface CredentialOpportunity {
   endAt: string | null;
   originType: 'internal' | 'external';
   expectedCourseName: string | null;
+  /**
+   * V7.1 §5.2: lo que la credencial hereda de la oportunidad. El estudiante
+   * lo ve, no lo edita; el servidor lo deriva y no confía en el formulario.
+   */
+  expectedName?: string;
+  /** Proveedor o emisor esperado; `null` si la oportunidad no lo define (lo escribe el estudiante). */
+  expectedIssuer?: string | null;
+  areas?: { id: string; name: string }[];
+  skills?: { id: string; name: string; areaId: string | null }[];
+  /** V7.1 D03: hay certificado modelo; sin él, la credencial va directo a revisión de Dirección. */
+  hasModel?: boolean;
 }
 
 /** V3 §17: referencia de validación de una oportunidad externa. */
@@ -1239,6 +1268,16 @@ export interface ValidationReference {
   provider: string | null;
   expectedIssuerDomains: string[];
   expectedKeywords: string[];
+  /** V7.1 D03: quien consulta ya no la edita (aprobada o publicada). */
+  locked?: boolean;
+  /** V7.1 D03: cambiar el modelo exige la acción con motivo. */
+  modelRequiresAction?: boolean;
+  /** V7.1 D03: solo Dirección adjunta o actualiza el modelo después. */
+  canUpdateModel?: boolean;
+  modelVersions?: {
+    version: number; fileName: string | null; fileSha256: string | null; origin: 'responsable' | 'direccion' | 'previo';
+    reason: string | null; createdAt: string; createdById: string | null; current: boolean;
+  }[];
 }
 
 export interface EligibleParticipant {

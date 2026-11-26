@@ -700,3 +700,90 @@ export async function crearProyectoBorrador(token, body = {}) {
   const repo = repositoryUrl === null ? {} : { repositoryUrl: repositoryUrl ?? repoDePrueba(`borrador-${slug}`) };
   return req('POST', '/projects', { token, body: { ...resto, ...repo, status: 'draft' } });
 }
+
+/**
+ * PDF mínimo con texto nativo legible, una línea por elemento (§18.4).
+ * Lo usan las suites que prueban la lectura y la comparación de documentos.
+ */
+export function pdfConTexto(lineas) {
+  const esc = (l) => l.replace(/([()\\])/g, '\\$1');
+  const contenido = `BT\n/F1 14 Tf\n72 720 Td\n${lineas.map((l, i) => `${i === 0 ? '' : '0 -24 Td\n'}(${esc(l)}) Tj\n`).join('')}ET\n`;
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(contenido, 'latin1')} >>\nstream\n${contenido}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objetos.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = Buffer.byteLength(out, 'latin1');
+  out += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  out += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
+/** Sube un archivo propio (POST /uploads) y devuelve la respuesta. */
+export async function subirArchivo(token, buffer, nombre, tipo = 'application/pdf') {
+  const form = new FormData();
+  form.append('file', new Blob([buffer], { type: tipo }), nombre);
+  return req('POST', '/uploads', { token, raw: form });
+}
+
+let directorDeCredenciales = null;
+let categoriaExterna = null;
+let oportunidadesCreadas = 0;
+/**
+ * V7.1 §5.2 (BATCH V7-3): una histórica ya no pasa por la lectura ni por la
+ * consulta automáticas. Las suites que prueban ese procesamiento registran
+ * la credencial como **vinculada** a una oportunidad externa finalizada con
+ * certificado modelo, que es la ruta que hoy se comprueba.
+ *
+ * Crea la oportunidad (título = nombre del certificado, proveedor = emisor),
+ * acepta al estudiante y la finaliza. Si no se da un archivo, sube uno con
+ * texto propio (la vinculada lo exige). Devuelve la respuesta del POST.
+ */
+export async function credencialVinculada(adminToken, est, body, { conModelo = true } = {}) {
+  const t0 = Date.now();
+  directorDeCredenciales ??= await provisionAndActivate(adminToken, {
+    firstName: 'Dora', lastName: 'Credenciales', email: `fixture.cred.${t0}@univalle.edu`, role: 'CAREER_DIRECTOR',
+  });
+  const d = directorDeCredenciales.token;
+  if (!categoriaExterna) {
+    const cats = (await req('GET', '/activity-categories', { token: d })).data ?? [];
+    categoriaExterna = (cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0])?.id;
+  }
+  oportunidadesCreadas += 1;
+  const titulo = body.certificateName ?? `Credencial de prueba ${t0}-${oportunidadesCreadas}`;
+  const proveedor = body.issuer ?? 'Proveedor de prueba';
+  const a = await req('POST', '/activities', {
+    token: d,
+    body: {
+      title: titulo, type: 'academica', categoryId: categoriaExterna, status: 'open', originType: 'external',
+      provider: proveedor, externalUrl: 'https://proveedor.example.org/curso', outcomePolicy: 'external_credential_expected',
+      activityDate: new Date(t0 + 86_400_000).toISOString(), semesterScope: [1, 2, 3, 4, 5, 6, 7, 8],
+    },
+  });
+  if (a.status !== 201) return a;
+  const profileId = est.profileId ?? (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  await req('POST', `/activities/${a.data.id}/register`, { token: est.token });
+  const acepta = await req('PATCH', `/activities/${a.data.id}/confirm-participation`, { token: d, body: { studentProfileId: profileId, status: 'accepted' } });
+  if (acepta.status !== 200) return acepta;
+  if (conModelo) {
+    const modelo = await subirArchivo(d, pdfConTexto([proveedor, titulo, 'Otorgado a Persona Modelo']), 'modelo.pdf');
+    await req('PUT', `/activities/${a.data.id}/validation-reference`, { token: d, body: { sampleStoredFileId: modelo.data?.id } });
+  }
+  const fin = await req('PATCH', `/activities/${a.data.id}`, { token: d, body: { status: 'finished' } });
+  if (fin.status !== 200) return fin;
+  let storedFileId = body.storedFileId;
+  if (!storedFileId) {
+    // Un PDF sin texto: la vinculada exige archivo, y uno ilegible no agrega
+    // respaldo, así que no cambia lo que prueba un caso que no tenía documento.
+    const sinTexto = Buffer.from(`%PDF-1.4\n%caso-${t0}-${oportunidadesCreadas}\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`, 'latin1');
+    const propio = await subirArchivo(est.token, sinTexto, 'credencial.pdf');
+    storedFileId = propio.data?.id;
+  }
+  const { certificateName: _n, issuer: _e, areaIds: _a, skillIds: _s, academicAreaId: _p, skillContexts: _c, ...resto } = body;
+  return req('POST', '/certificates/external', { token: est.token, body: { ...resto, activityId: a.data.id, storedFileId } });
+}

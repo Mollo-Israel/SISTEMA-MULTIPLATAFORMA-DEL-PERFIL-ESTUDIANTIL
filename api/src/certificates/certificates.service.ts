@@ -7,8 +7,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, In, Repository } from 'typeorm';
-import { ExternalCredentialSource, ValidationResourceType } from '@perfil/shared';
+import { In, Repository } from 'typeorm';
+import { ExternalCredentialSource } from '@perfil/shared';
+import { normalizarTexto } from '../validation/document-comparison.rules';
 import { AuditEventType, AuditService } from '../audit/audit.service';
 import { CredentialEligibilityService } from '../activities/credential-eligibility.service';
 import { ExternalCertificate, ExternalCertificateArea, ExternalCertificateSkill } from '../entities/external-certificate.entity';
@@ -25,6 +26,15 @@ import {
   TRAJECTORY_RECALCULATION,
   TrajectoryRecalculationPort,
 } from '../trajectory/trajectory-recalculation.port';
+
+/** Lo que se guarda como identidad y clasificación de la credencial. */
+interface DatosDeCredencial {
+  certificateName: string;
+  issuer: string;
+  areaIds: string[];
+  skillIds: string[];
+  contextos: { skillId: string; areaId: string | null }[];
+}
 
 @Injectable()
 export class CertificatesService {
@@ -54,49 +64,33 @@ export class CertificatesService {
 
   async create(userId: string, dto: CreateExternalCertificateDto): Promise<ExternalCertificate> {
     const profile = await this.requireProfile(userId);
-    const duplicate = await this.certificates.findOne({
-      where: { studentProfileId: profile.id, certificateName: ILike(dto.certificateName) },
-    });
-    if (duplicate) {
-      throw new ConflictException('Ya registraste un certificado con ese nombre.');
-    }
-    await this.assertAreaExists(dto.academicAreaId);
-    await this.assertSkillsExist(dto.skillIds);
-    const areasCert = await this.areasDeCredencial(dto.academicAreaId ?? null, dto.areaIds);
-    if (dto.areaIds !== undefined) {
-      await assertSkillsBelongToAreas(this.certificates.manager, dto.skillIds, areasCert);
-    }
-    const contextos = await resolveSkillContexts(this.certificates.manager, dto.skillIds ?? [], areasCert, dto.skillContexts);
 
-    // V3 §15/§16: el origen lo decide el servidor. Con oportunidad, solo si
-    // de verdad es elegible para este estudiante: no basta con conocer un id.
-    if (dto.activityId) {
-      if (await this.eligibility.alreadyAttached(profile.id, dto.activityId)) {
-        const m = 'Ya adjuntaste la credencial de esta oportunidad.';
-        throw new ConflictException({ code: 'CREDENTIAL_ALREADY_ATTACHED', message: m, fields: { activityId: [m] } });
-      }
-      if (!(await this.eligibility.assertEligible(profile.id, dto.activityId))) {
-        const m = 'Esta oportunidad no admite todavía tu credencial: debe haber terminado y el responsable '
-          + 'debe haber registrado tu aceptación (o tu participación, si es interna).';
-        throw new BadRequestException({ code: 'CREDENTIAL_OPPORTUNITY_NOT_ELIGIBLE', message: m, fields: { activityId: [m] } });
-      }
-    }
+    // V3 §15/§16 y V7.1 §5.2: el origen lo decide el servidor. En una
+    // vinculada, nombre, emisor, áreas y tecnologías salen de la oportunidad;
+    // lo que traiga el cuerpo para esos campos se ignora.
+    const datos = dto.activityId
+      ? await this.datosDeVinculada(profile.id, dto as CreateExternalCertificateDto & { activityId: string })
+      : await this.datosDeHistorica(dto);
 
     // §27: solo se adjunta un archivo propio, y sus metadatos los resuelve
     // el servidor a partir del registro.
     const archivo = dto.storedFileId
       ? await this.uploads.requireOwned(userId, dto.storedFileId)
       : null;
+    await this.assertNoDuplicada(profile.id, {
+      certificateName: datos.certificateName, issuer: datos.issuer, issueDate: dto.issueDate ?? null,
+      sha256: archivo?.sha256 ?? null, vinculada: !!dto.activityId,
+    });
 
     const certificate = this.certificates.create({
       studentProfileId: profile.id,
-      certificateName: dto.certificateName,
-      issuer: dto.issuer,
+      certificateName: datos.certificateName,
+      issuer: datos.issuer,
       certificateUrl: dto.certificateUrl ?? null,
       issueDate: dto.issueDate ?? null,
       credentialId: dto.credentialId ?? null,
       description: dto.description ?? null,
-      academicAreaId: areasCert[0] ?? null,
+      academicAreaId: datos.areaIds[0] ?? null,
       storedFileId: archivo?.id ?? null,
       fileUrl: archivo ? `${FILES_ROUTE}/${archivo.storageKey}` : null,
       fileName: archivo?.originalFilename ?? null,
@@ -106,26 +100,108 @@ export class CertificatesService {
       source: dto.activityId ? ExternalCredentialSource.OPPORTUNITY : ExternalCredentialSource.HISTORICAL_EXTERNAL,
     });
     const saved = await this.certificates.save(certificate);
-    await this.replaceAreas(saved.id, areasCert);
-    if (dto.skillIds?.length) await this.replaceSkills(saved.id, dto.skillIds, contextos);
+    await this.replaceAreas(saved.id, datos.areaIds);
+    if (datos.skillIds.length) await this.replaceSkills(saved.id, datos.skillIds, datos.contextos);
 
     await this.audit.record({
       actorUserId: userId,
       eventType: AuditEventType.EXTERNAL_CREDENTIAL_CREATED,
       entityType: 'external_certificate',
       entityId: saved.id,
-      metadata: { source: saved.source, activityId: saved.activityId },
+      metadata: { source: saved.source, activityId: saved.activityId, derivadaDeLaOportunidad: !!dto.activityId },
     });
 
-    // §26: el certificado existe desde ya; lo que puede corroborarse se
-    // averigua aparte y sin hacer esperar a nadie.
-    await this.validation.enqueue({
-      resourceType: ValidationResourceType.EXTERNAL_CERTIFICATE,
-      resourceId: saved.id,
-    });
+    // §26 y V7.1 §5.2–§5.3: el certificado existe desde ya. Según su origen,
+    // se comprueba aparte (sin hacer esperar a nadie) o va directo a Dirección.
+    await this.validation.encaminarCredencial(saved, userId, null);
 
     await this.trajectory.requestRecalculation(profile.id);
     return saved;
+  }
+
+  /**
+   * V7.1 §5.2 · Vinculada: lo que la credencial hereda de la oportunidad.
+   * Solo si de verdad es elegible para este estudiante; el archivo es
+   * obligatorio en las nuevas.
+   */
+  private async datosDeVinculada(profileId: string, dto: CreateExternalCertificateDto & { activityId: string }): Promise<DatosDeCredencial> {
+    if (await this.eligibility.alreadyAttached(profileId, dto.activityId)) {
+      const m = 'Ya adjuntaste la credencial de esta oportunidad.';
+      throw new ConflictException({ code: 'CREDENTIAL_ALREADY_ATTACHED', message: m, fields: { activityId: [m] } });
+    }
+    const oportunidad = await this.eligibility.oportunidadPara(profileId, dto.activityId);
+    if (!oportunidad) {
+      const m = 'Esta oportunidad no admite todavía tu credencial: debe haber terminado y el responsable '
+        + 'debe haber registrado tu aceptación (o tu participación, si es interna).';
+      throw new BadRequestException({ code: 'CREDENTIAL_OPPORTUNITY_NOT_ELIGIBLE', message: m, fields: { activityId: [m] } });
+    }
+    if (!dto.storedFileId) {
+      const m = 'Adjunta el archivo del certificado: es obligatorio en una credencial de una oportunidad.';
+      throw new BadRequestException({ code: 'CREDENTIAL_FILE_REQUIRED', message: m, fields: { storedFileId: [m] } });
+    }
+    const issuer = oportunidad.expectedIssuer ?? dto.issuer?.trim() ?? '';
+    if (!issuer) {
+      const m = 'La oportunidad no indica el emisor: escribe quién emitió el certificado.';
+      throw new BadRequestException({ code: 'CREDENTIAL_ISSUER_REQUIRED', message: m, fields: { issuer: [m] } });
+    }
+    return {
+      certificateName: oportunidad.expectedName.slice(0, 200),
+      issuer: issuer.slice(0, 160),
+      areaIds: oportunidad.areas.map((a) => a.id),
+      skillIds: oportunidad.skills.map((s) => s.id),
+      contextos: oportunidad.skills.map((s) => ({ skillId: s.id, areaId: s.areaId })),
+    };
+  }
+
+  /** Histórica: lo declara el estudiante, con las validaciones del catálogo de siempre. */
+  private async datosDeHistorica(dto: CreateExternalCertificateDto): Promise<DatosDeCredencial> {
+    await this.assertAreaExists(dto.academicAreaId);
+    await this.assertSkillsExist(dto.skillIds);
+    const areasCert = await this.areasDeCredencial(dto.academicAreaId ?? null, dto.areaIds);
+    if (dto.areaIds !== undefined) {
+      await assertSkillsBelongToAreas(this.certificates.manager, dto.skillIds, areasCert);
+    }
+    const contextos = await resolveSkillContexts(this.certificates.manager, dto.skillIds ?? [], areasCert, dto.skillContexts);
+    return {
+      certificateName: dto.certificateName!,
+      issuer: dto.issuer!,
+      areaIds: areasCert,
+      skillIds: dto.skillIds ?? [],
+      contextos,
+    };
+  }
+
+  /**
+   * V7.1 §5.2: evita duplicados por reintento sin prohibir certificados
+   * legítimos distintos que solo comparten el título. Es el mismo certificado
+   * si coinciden el nombre, el emisor y la fecha, o si es el mismo archivo
+   * (SHA-256) del mismo estudiante. El hash dice que el archivo es idéntico;
+   * no dice nada de su autenticidad, y nunca se compara entre estudiantes aquí.
+   */
+  private async assertNoDuplicada(
+    studentProfileId: string,
+    c: { certificateName: string; issuer: string; issueDate: string | null; sha256: string | null; vinculada: boolean; excepto?: string },
+  ): Promise<void> {
+    const propias = await this.certificates.find({
+      where: { studentProfileId },
+      relations: { storedFile: true },
+      select: { id: true, activityId: true, certificateName: true, issuer: true, issueDate: true, storedFileId: true, storedFile: { id: true, sha256: true } },
+    });
+    const n = normalizarTexto;
+    const fecha = (d: string | Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : null);
+    // En una vinculada, la identidad es la oportunidad (una por estudiante, ya
+    // controlada): dos oportunidades distintas pueden esperar el mismo nombre.
+    const mismo = propias.find((p) => p.id !== c.excepto && (
+      (!c.vinculada && !p.activityId && n(p.certificateName) === n(c.certificateName) && n(p.issuer) === n(c.issuer)
+        && fecha(p.issueDate) === fecha(c.issueDate))
+      || (!!c.sha256 && p.storedFile?.sha256 === c.sha256)
+    ));
+    if (mismo) {
+      throw new ConflictException({
+        code: 'CREDENTIAL_DUPLICATE',
+        message: `Ya registraste esta credencial («${mismo.certificateName}»): mismo nombre, emisor y fecha, o el mismo archivo.`,
+      });
+    }
   }
 
   async findMine(userId: string) {
@@ -148,18 +224,39 @@ export class CertificatesService {
     dto: UpdateExternalCertificateDto,
   ): Promise<ExternalCertificate> {
     const certificate = await this.requireOwned(userId, id);
-    if (dto.certificateName !== undefined) certificate.certificateName = dto.certificateName;
-    if (dto.issuer !== undefined) certificate.issuer = dto.issuer;
+    const vinculada = certificate.source === ExternalCredentialSource.OPPORTUNITY;
+    if (vinculada) {
+      // V7.1 §5.2: nombre, áreas y tecnologías son de la oportunidad (copia
+      // fija tomada al enviarla); el emisor también, si la oportunidad lo
+      // define. Aquí no se editan: se ignoran. Y el archivo no se quita.
+      if (dto.storedFileId === null) {
+        const m = 'Una credencial de una oportunidad necesita su archivo: puedes reemplazarlo, no quitarlo.';
+        throw new BadRequestException({ code: 'CREDENTIAL_FILE_REQUIRED', message: m, fields: { storedFileId: [m] } });
+      }
+      const oportunidad = certificate.activityId ? await this.eligibility.descripcionDe(certificate.activityId) : null;
+      if (dto.issuer !== undefined && !oportunidad?.expectedIssuer) certificate.issuer = dto.issuer;
+    } else {
+      if (dto.certificateName !== undefined) certificate.certificateName = dto.certificateName;
+      if (dto.issuer !== undefined) certificate.issuer = dto.issuer;
+      if (dto.academicAreaId !== undefined) {
+        await this.assertAreaExists(dto.academicAreaId);
+        certificate.academicAreaId = dto.academicAreaId ?? null;
+      }
+      await this.actualizarAreasYTecnologias(certificate, dto);
+    }
     if (dto.certificateUrl !== undefined) certificate.certificateUrl = dto.certificateUrl ?? null;
     if (dto.issueDate !== undefined) certificate.issueDate = dto.issueDate ?? null;
     if (dto.description !== undefined) certificate.description = dto.description ?? null;
-    if (dto.academicAreaId !== undefined) {
-      await this.assertAreaExists(dto.academicAreaId);
-      certificate.academicAreaId = dto.academicAreaId ?? null;
-    }
     if (dto.credentialId !== undefined) certificate.credentialId = dto.credentialId ?? null;
-    await this.actualizarAreasYTecnologias(certificate, dto);
+    const anterior = certificate.storedFileId;
     const reemplazado = dto.storedFileId === undefined ? null : await this.cambiarArchivo(userId, certificate, dto.storedFileId);
+    const nuevo = certificate.storedFileId && certificate.storedFileId !== anterior
+      ? await this.uploads.requireOwned(userId, certificate.storedFileId)
+      : null;
+    await this.assertNoDuplicada(certificate.studentProfileId, {
+      certificateName: certificate.certificateName, issuer: certificate.issuer, issueDate: certificate.issueDate,
+      sha256: nuevo?.sha256 ?? null, vinculada, excepto: certificate.id,
+    });
 
     const saved = await this.certificates.save(certificate);
 
@@ -167,13 +264,9 @@ export class CertificatesService {
     // el certificado se habria quedado sin archivo y sin vuelta atras.
     if (reemplazado) await this.uploads.remove(reemplazado);
 
-    // Lo declarado cambio, asi que el veredicto anterior ya no describe
-    // este certificado: se vuelve a validar.
-    await this.validation.enqueue({
-      resourceType: ValidationResourceType.EXTERNAL_CERTIFICATE,
-      resourceId: saved.id,
-      force: true,
-    });
+    // V7.1 §5.2–§5.3: lo declarado cambió. Se vuelve a encaminar (reenvío a
+    // Dirección); el resultado y la decisión anteriores quedan archivados.
+    await this.validation.encaminarCredencial(saved, userId, reemplazado || nuevo ? 'file_replaced' : 'resubmitted');
 
     await this.trajectory.requestRecalculation(certificate.studentProfileId);
     return saved;
@@ -206,6 +299,16 @@ export class CertificatesService {
     certificate.mimeType = archivo?.mimeTypeDetected ?? null;
     certificate.fileSize = archivo?.sizeBytes ?? null;
     return anterior && anterior !== certificate.storedFileId ? anterior : null;
+  }
+
+  /**
+   * V7.1 §5.3 · «Comprobar información»: vuelve a pasar la vinculada por las
+   * fases 1 y 2 con su archivo actual. El envío a Dirección no depende de esto.
+   */
+  async check(userId: string, id: string) {
+    const certificate = await this.requireOwned(userId, id);
+    const r = await this.validation.recomprobarPorEstudiante(userId, certificate);
+    return { certificateId: id, status: r.status, previousAttempts: r.previousResults?.length ?? 0 };
   }
 
   /** V3 §16: pide la revisión manual excepcional de una histórica. */

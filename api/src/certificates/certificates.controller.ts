@@ -70,6 +70,16 @@ export class CertificatesController {
     return this.certificatesService.requestManualReview(user.userId, id, dto.note ?? null);
   }
 
+  @Post(':id/check')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'V7.1 §5.3 · «Comprobar información» de una credencial de una oportunidad con certificado modelo.',
+    description: 'Vuelve a ejecutar las fases 1 y 2 con el archivo actual. El intento anterior se conserva; el envío a Dirección no depende de esto.',
+  })
+  check(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.certificatesService.check(user.userId, id);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Elimina un certificado propio y su archivo.' })
   @HttpCode(204)

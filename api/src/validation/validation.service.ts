@@ -19,10 +19,25 @@ import {
   INDEPENDENT_REVIEW_METHODS,
   ManualReviewMethod,
   ManualReviewStatus,
+  ProcessingSkipReason,
   ValidationResourceType,
   ValidationStatus,
 } from '@perfil/shared';
+import { Activity } from '../entities/activity.entity';
 import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
+import type { DocumentComparison, PreviousValidationResult } from '../entities/validation-record.entity';
+import {
+  RutaDeCredencial,
+  archivar,
+  fotoDelResultado,
+  hayResultadoQueArchivar,
+  resultadoVigente,
+  revisionDecidida,
+  rutaDeCredencial,
+  tieneEvidenciaMinima,
+} from './credential-route.rules';
+import { compararConModelo } from './document-comparison.rules';
+import { ModeloVigente, modeloVigente } from './reference-model';
 import { credentialPatternToRegExp } from '../activities/credential-pattern';
 import { NOTIFICATION_EMITTER, NotificationEmitter } from '../notifications/notification.port';
 import { CredentialVerifierService } from './credential-verifier.service';
@@ -130,6 +145,30 @@ function ajustarPorRevisionManual(tier: BackingTier, revision: ManualReviewStatu
   return tier;
 }
 
+/** Columnas de la revisión humana: el worker nunca las escribe (§5.3, C28). */
+const CAMPOS_DE_REVISION = [
+  'manualReviewStatus', 'manualReviewNote', 'manualReviewRequestedAt', 'manualReviewerId',
+  'manualReviewedAt', 'manualReviewReason', 'manualReviewMethod', 'manualReviewProof',
+] as const;
+
+/** Lo que produjo una comprobación anterior: no describe un archivo nuevo. */
+function limpiarResultado(r: ValidationRecord): void {
+  r.extractedData = null;
+  r.credentialCheck = null;
+  r.linkCheck = null;
+  r.identityMatchStatus = IdentityMatchStatus.UNKNOWN;
+  r.duplicateOfId = null;
+  r.errorCode = null;
+  r.errorDetail = null;
+  r.attempts = 0;
+  r.claimedBy = null;
+  r.startedAt = null;
+}
+
+function limpiarRevision(r: ValidationRecord): void {
+  for (const k of CAMPOS_DE_REVISION) (r as unknown as Record<string, unknown>)[k] = null;
+}
+
 @Injectable()
 export class ValidationService {
   private readonly logger = new Logger(ValidationService.name);
@@ -167,6 +206,11 @@ export class ValidationService {
    * Si ya hay veredicto y no se fuerza, no se vuelve a procesar.
    */
   async enqueue({ resourceType, resourceId, force = false }: EnqueueInput): Promise<ValidationRecord> {
+    // V7.1 §5.3: una credencial externa sigue su ruta (histórica o sin modelo:
+    // no se procesa) y una comprobación nueva nunca borra la decisión de Dirección.
+    if (resourceType === ValidationResourceType.EXTERNAL_CERTIFICATE) {
+      return this.recomprobarCredencial(resourceId, { actorUserId: null, explicita: false, force });
+    }
     const existente = await this.records.findOne({ where: { resourceType, resourceId } });
 
     if (existente) {
@@ -206,6 +250,162 @@ export class ValidationService {
         nextAttemptAt: new Date(),
       }),
     );
+  }
+
+  // ====================================================================
+  //  V7.1 §5.2–§5.3 · Envío de una credencial externa
+  // ====================================================================
+
+  /**
+   * Decide qué pasa con una credencial al enviarse o corregirse.
+   *
+   *  - Histórica, o vinculada sin certificado modelo: las fases 1 y 2 no
+   *    aplican. No se lee el archivo ni se consulta ninguna fuente.
+   *  - Vinculada con modelo: se encola la comprobación (fases 1 y 2).
+   *
+   * En los tres casos, con la evidencia mínima de D08 (archivo o enlace), la
+   * credencial queda pendiente de la revisión de Dirección: el envío no
+   * depende de lo que digan las comprobaciones. Lo que había antes
+   * (resultados, una decisión) se archiva como intento anterior; no se pisa.
+   */
+  async encaminarCredencial(
+    cert: ExternalCertificate,
+    actorUserId: string | null,
+    motivo: PreviousValidationResult['reason'] | null,
+  ): Promise<ValidationRecord> {
+    const modelo = await this.modeloDe(cert);
+    const ruta = rutaDeCredencial(cert.source, !!modelo);
+
+    let record = await this.findFor(ValidationResourceType.EXTERNAL_CERTIFICATE, cert.id);
+    if (record && hayResultadoQueArchivar(record)) {
+      record.previousResults = archivar(record.previousResults, fotoDelResultado(record, motivo ?? 'rerouted'));
+    }
+    record ??= this.records.create({
+      resourceType: ValidationResourceType.EXTERNAL_CERTIFICATE,
+      resourceId: cert.id,
+      previousResults: [],
+    });
+
+    limpiarResultado(record);
+    record.fileSha256 = await this.shaDe(cert.storedFileId);
+    record.validatorVersion = VALIDATOR_VERSION;
+    record.backingTier = BackingTier.DECLARED;
+    if (ruta.procesar) {
+      record.status = ValidationStatus.PENDING;
+      record.skippedReason = null;
+      record.referenceVersionId = modelo!.version.id;
+      record.nextAttemptAt = new Date();
+      record.finishedAt = null;
+    } else {
+      record.status = ValidationStatus.NOT_APPLICABLE;
+      record.skippedReason = ruta.motivo;
+      record.referenceVersionId = null;
+      record.finishedAt = new Date();
+    }
+
+    const pedirRevision = tieneEvidenciaMinima(cert);
+    limpiarRevision(record);
+    if (pedirRevision) {
+      record.manualReviewStatus = ManualReviewStatus.REQUESTED;
+      record.manualReviewRequestedAt = new Date();
+    }
+    const guardado = await this.records.save(record);
+
+    if (pedirRevision) {
+      await this.audit.record({
+        actorUserId,
+        eventType: AuditEventType.EXTERNAL_CREDENTIAL_MANUAL_REVIEW_REQUESTED,
+        entityType: ValidationResourceType.EXTERNAL_CERTIFICATE,
+        entityId: cert.id,
+        metadata: {
+          automatico: true,
+          ruta: ruta.procesar ? 'comprobacion' : ruta.motivo,
+          motivo,
+          referenceVersionId: guardado.referenceVersionId,
+          fileSha256: guardado.fileSha256,
+        },
+      });
+    }
+    return guardado;
+  }
+
+  /**
+   * Vuelve a comprobar una credencial ya enviada, con su archivo actual
+   * («Comprobar información», o Dirección sobre una pendiente).
+   *
+   *  - Solo se procesan las vinculadas con modelo. Las demás no cambian.
+   *  - El resultado vigente se archiva como intento anterior; no se pisa.
+   *  - La revisión de Dirección no se toca, y una ya decidida no se vuelve a
+   *    comprobar (C28).
+   *
+   * `explicita` = la pidió una persona: si no corresponde, se le dice por qué.
+   * Si la pide el sistema (p. ej., cambió un correo comprobado), se omite sin error.
+   */
+  async recomprobarCredencial(
+    certificateId: string,
+    opts: { actorUserId: string | null; explicita: boolean; force?: boolean },
+  ): Promise<ValidationRecord> {
+    const cert = await this.certificates.findOne({ where: { id: certificateId } });
+    if (!cert) throw new NotFoundException('Credencial no encontrada.');
+    const record = await this.findFor(ValidationResourceType.EXTERNAL_CERTIFICATE, certificateId);
+    if (!record) return this.encaminarCredencial(cert, opts.actorUserId, null);
+
+    const modelo = await this.modeloDe(cert);
+    const ruta = rutaDeCredencial(cert.source, !!modelo);
+    const noCorresponde = (code: string, message: string): ValidationRecord => {
+      if (opts.explicita) throw new ConflictException({ code, message });
+      return record;
+    };
+    if (!ruta.procesar) {
+      return noCorresponde('RECHECK_NOT_APPLICABLE', ruta.motivo === ProcessingSkipReason.HISTORICAL
+        ? 'Una credencial obtenida fuera de Afinia no se compara automáticamente: la revisa Dirección.'
+        : 'La oportunidad no tiene certificado modelo: la credencial la revisa Dirección directamente.');
+    }
+    if (revisionDecidida(record.manualReviewStatus)) {
+      return noCorresponde('RECHECK_AFTER_DECISION', 'Dirección ya decidió esta credencial. Una comprobación nueva no cambia esa decisión.');
+    }
+    if (record.status === ValidationStatus.PENDING || record.status === ValidationStatus.PROCESSING) {
+      return noCorresponde('RECHECK_IN_PROGRESS', 'La comprobación ya está en curso.');
+    }
+    if (!opts.explicita && !opts.force) return record;
+    if (!cert.storedFileId && !cert.certificateUrl) {
+      return noCorresponde('RECHECK_NOTHING_TO_CHECK', 'La credencial no tiene archivo ni enlace que comprobar.');
+    }
+
+    if (hayResultadoQueArchivar(record)) {
+      record.previousResults = archivar(record.previousResults, fotoDelResultado(record, 'rechecked'));
+    }
+    limpiarResultado(record);
+    record.status = ValidationStatus.PENDING;
+    record.skippedReason = null;
+    record.referenceVersionId = modelo!.version.id;
+    record.fileSha256 = await this.shaDe(cert.storedFileId);
+    record.nextAttemptAt = new Date();
+    record.finishedAt = null;
+    const guardado = await this.records.save(record);
+
+    if (opts.explicita) {
+      await this.audit.record({
+        actorUserId: opts.actorUserId,
+        eventType: AuditEventType.EXTERNAL_CREDENTIAL_RECHECK_REQUESTED,
+        entityType: ValidationResourceType.EXTERNAL_CERTIFICATE,
+        entityId: certificateId,
+        metadata: { referenceVersionId: guardado.referenceVersionId, fileSha256: guardado.fileSha256 },
+      });
+    }
+    return guardado;
+  }
+
+  /** Modelo vigente de la oportunidad de una vinculada; `null` en las demás. */
+  private async modeloDe(cert: Pick<ExternalCertificate, 'source' | 'activityId'>): Promise<ModeloVigente | null> {
+    if (cert.source !== ExternalCredentialSource.OPPORTUNITY || !cert.activityId) return null;
+    return modeloVigente(this.records.manager, cert.activityId);
+  }
+
+  private async shaDe(storedFileId: string | null): Promise<string | null> {
+    if (!storedFileId) return null;
+    const f = await this.files.findOne({ where: { id: storedFileId }, select: { id: true, sha256: true } });
+    return f?.sha256 ?? null;
   }
 
   /**
@@ -282,12 +482,17 @@ export class ValidationService {
       if (!contexto) {
         // El recurso desaparecio mientras estaba en cola. No es un fallo: ya
         // no hay nada que validar.
-        return this.finish(record, {
+        return (await this.finish(record, {
           status: ValidationStatus.INCONCLUSIVE,
           errorCode: 'RESOURCE_GONE',
           errorDetail: 'El recurso ya no existe.',
-        });
+        })) ?? record;
       }
+
+      // V7.1 §5.2: una histórica, o una vinculada sin modelo, no se procesa
+      // aunque haya llegado a la cola (p. ej., encolada antes de esta versión).
+      const cred = contexto.credential;
+      if (cred && !cred.ruta.procesar) return await this.omitirFases(record, cred.ruta.motivo, cred.evidenciaMinima);
 
       return await this.evaluate(record, contexto);
     } catch (error) {
@@ -360,6 +565,7 @@ export class ValidationService {
           ? 'No se pudo leer texto suficiente ni comprobar un enlace. El recurso se conserva.'
           : null,
     });
+    if (!guardado) return record;
 
     await this.audit.record({
       actorUserId: null,
@@ -397,6 +603,7 @@ export class ValidationService {
       errorCode: null,
       errorDetail: null,
     });
+    if (!guardado) return record;
     await this.audit.record({
       actorUserId: null,
       eventType: AuditEventType.VALIDATION_COMPLETED,
@@ -499,6 +706,10 @@ export class ValidationService {
     pipeline.push(`qr:${check.qr}`);
     if (check.url) pipeline.push(`verification:${check.urlSource}`);
     if (check.openBadge) pipeline.push(`open_badge:${check.openBadge.format}`);
+    // V7.1 §5.3 · Fase 1: el archivo frente al certificado modelo vigente.
+    // Es ayuda para Dirección: no cambia el respaldo ni decide nada.
+    const comparacion = cred.modelo ? await this.compararConElModelo(cred.modelo, texto, extracted, identity) : null;
+    if (comparacion) pipeline.push(`model_comparison:${comparacion.modelReadable && comparacion.fileReadable ? 'done' : 'unreadable'}`);
     pipeline.push('comparison', 'ai:not_used', 'backing:deterministic');
 
     const legible = texto.length >= MIN_USEFUL_TEXT;
@@ -567,12 +778,15 @@ export class ValidationService {
         forensics: forense,
         sharing: compartida,
         qrCodeMismatch: qrVsTexto,
+        documentComparison: comparacion,
       },
       errorCode: sinConclusion ? 'NO_CONCLUSIVE_SIGNAL' : null,
       errorDetail: sinConclusion
         ? 'No se pudo leer el documento ni comprobar una fuente oficial. La credencial se conserva.'
         : null,
     });
+    // C19: el archivo cambió mientras se procesaba. Este resultado no es de él.
+    if (!guardado) return record;
 
     await this.audit.record({
       actorUserId: null,
@@ -655,6 +869,77 @@ export class ValidationService {
     };
   }
 
+  /**
+   * V7.1 §5.3 · Fase 1: compara el archivo con el certificado modelo. Primero
+   * el texto nativo del PDF y OCR solo si hace falta (lo resuelve la
+   * extracción). El titular del modelo es otra persona: sus líneas no cuentan,
+   * y el del archivo se compara con el estudiante (`identity`).
+   */
+  private async compararConElModelo(
+    modelo: ModeloVigente,
+    textoArchivo: string,
+    extracted: ValidationRecord['extractedData'],
+    identity: IdentityMatchStatus,
+  ): Promise<DocumentComparison> {
+    const base = { referenceVersionId: modelo.version.id, holder: identity };
+    const archivo = await this.loadFile(modelo.version.storedFileId);
+    if (!archivo) {
+      return {
+        ...base, modelReadable: false, fileReadable: textoArchivo.length >= MIN_USEFUL_TEXT,
+        matched: [], variations: [], missing: [],
+        limitations: ['El certificado modelo ya no está disponible: la comparación no se hizo.'],
+      };
+    }
+    try {
+      const delModelo = await this.extraction.extractFull(archivo.buffer, archivo.mimeType);
+      return {
+        ...base,
+        ...compararConModelo(delModelo.text, textoArchivo, {
+          titularModelo: delModelo.data.holderName,
+          modeloPorOcr: delModelo.data.source === 'ocr',
+          archivoPorOcr: extracted?.source === 'ocr',
+        }),
+      };
+    } catch (e) {
+      this.logger.warn(`No se pudo leer el certificado modelo ${modelo.version.id}: ${(e as Error).message}`);
+      return {
+        ...base, modelReadable: false, fileReadable: textoArchivo.length >= MIN_USEFUL_TEXT,
+        matched: [], variations: [], missing: [],
+        limitations: ['No se pudo leer el certificado modelo: la comparación no se hizo.'],
+      };
+    }
+  }
+
+  /**
+   * V7.1 §5.2: cierra sin procesar un trabajo que no corresponde (histórica o
+   * vinculada sin modelo). Archiva lo que hubiera y, con la evidencia mínima,
+   * deja pedida la revisión de Dirección si nadie la había pedido.
+   */
+  private async omitirFases(record: ValidationRecord, motivo: ProcessingSkipReason, evidenciaMinima: boolean): Promise<ValidationRecord> {
+    const guardado = await this.aplicarSiVigente(record, {
+      status: ValidationStatus.NOT_APPLICABLE,
+      skippedReason: motivo,
+      referenceVersionId: null,
+      extractedData: null,
+      credentialCheck: null,
+      linkCheck: null,
+      identityMatchStatus: IdentityMatchStatus.UNKNOWN,
+      duplicateOfId: null,
+      errorCode: null,
+      errorDetail: null,
+      finishedAt: new Date(),
+      claimedBy: null,
+    }, 'rerouted');
+    if (!guardado) return (await this.records.findOne({ where: { id: record.id } })) ?? record;
+    if (evidenciaMinima && guardado.manualReviewStatus === null) {
+      await this.records.update(
+        { id: record.id, manualReviewStatus: IsNull() },
+        { manualReviewStatus: ManualReviewStatus.REQUESTED, manualReviewRequestedAt: new Date() },
+      );
+    }
+    return (await this.records.findOne({ where: { id: record.id } })) ?? guardado;
+  }
+
   /** Avisa al estudiante que una credencial quedó señalada; el aviso nunca deshace el veredicto. */
   private async avisarCredencialSenalada(userId: string, resourceId: string, guardado: ValidationRecord): Promise<void> {
     try {
@@ -719,6 +1004,11 @@ export class ValidationService {
 
   /** ¿Puede pedirse? Histórica, ya comprobada, sin verificador que concluya, sin contradicciones. */
   canRequestManualReview(record: ValidationRecord, cert: Pick<ExternalCertificate, 'source' | 'storedFileId' | 'certificateUrl'>): boolean {
+    // V7.1 §5.2: lo enviado desde esta versión ya llega pedido a Dirección. Si
+    // no lo está, es porque faltaba la evidencia mínima: con ella, se pide.
+    if (record.status === ValidationStatus.NOT_APPLICABLE) {
+      return record.manualReviewStatus === null && tieneEvidenciaMinima(cert);
+    }
     return cert.source === ExternalCredentialSource.HISTORICAL_EXTERNAL
       && (record.status === ValidationStatus.COMPLETED || record.status === ValidationStatus.INCONCLUSIVE)
       && record.validatorVersion >= VALIDATOR_VERSION
@@ -728,6 +1018,32 @@ export class ValidationService {
       && record.backingTier !== BackingTier.FLAGGED
       && record.manualReviewStatus === null
       && !!(cert.storedFileId || cert.certificateUrl);
+  }
+
+  /**
+   * V7.1 §5.3: ¿el estudiante puede pedir «Comprobar información»? Solo una
+   * vinculada que ya va por la ruta de comprobación (tenía modelo al
+   * enviarse), terminada, sin decisión de Dirección y con algo que comprobar.
+   */
+  puedeRecomprobar(record: ValidationRecord, cert: Pick<ExternalCertificate, 'source' | 'storedFileId' | 'certificateUrl'>): boolean {
+    return cert.source === ExternalCredentialSource.OPPORTUNITY
+      && [ValidationStatus.COMPLETED, ValidationStatus.INCONCLUSIVE, ValidationStatus.FAILED].includes(record.status)
+      && !revisionDecidida(record.manualReviewStatus)
+      && tieneEvidenciaMinima(cert);
+  }
+
+  /** «Comprobar información» del estudiante: con las mismas reglas que la UI. */
+  async recomprobarPorEstudiante(ownerUserId: string, cert: ExternalCertificate): Promise<ValidationRecord> {
+    const record = await this.findForOrFail(ValidationResourceType.EXTERNAL_CERTIFICATE, cert.id);
+    if (record.status === ValidationStatus.NOT_APPLICABLE) {
+      throw new ConflictException({
+        code: 'RECHECK_NOT_APPLICABLE',
+        message: record.skippedReason === ProcessingSkipReason.HISTORICAL
+          ? 'Una credencial obtenida fuera de Afinia no se compara automáticamente: la revisa Dirección.'
+          : 'La oportunidad no tenía certificado modelo cuando la enviaste: la revisa Dirección directamente.',
+      });
+    }
+    return this.recomprobarCredencial(cert.id, { actorUserId: ownerUserId, explicita: true });
   }
 
   async requestManualReview(
@@ -790,7 +1106,11 @@ export class ValidationService {
         `u.first_name || ' ' || u.last_name AS "studentName"`,
         `v.credential_check ->> 'status' AS "credentialCheck"`,
         'v.manual_review_note AS "requestNote"', 'v.manual_review_requested_at AS "requestedAt"',
+        // V7.1 §5.2: origen y estado técnico, para que Dirección sepa qué se comprobó y qué no.
+        'c.source AS source', 'a.title AS "activityTitle"',
+        'v.status AS "processingStatus"', 'v.skipped_reason AS "skippedReason"',
       ])
+      .leftJoin(Activity, 'a', 'a.id = c.activity_id')
       .where('v.resource_type = :t', { t: ValidationResourceType.EXTERNAL_CERTIFICATE })
       .andWhere('v.manual_review_status = :r', { r: ManualReviewStatus.REQUESTED })
       .orderBy('v.manual_review_requested_at', 'ASC')
@@ -878,11 +1198,24 @@ export class ValidationService {
    * recalcule con las reglas vigentes.
    */
   async reprocessOutdated(limit: number): Promise<{ encolados: number; pendientes: number }> {
-    const viejos = await this.records.find({
-      where: { validatorVersion: LessThan(VALIDATOR_VERSION), status: Not(ValidationStatus.PROCESSING) },
-      order: { createdAt: 'ASC' },
-      take: limit,
-    });
+    // V7.1 §5.1–§5.2: no se reprocesan las credenciales que hoy no se procesan
+    // (históricas y vinculadas sin modelo). Reabrirlas alteraría su respaldo y
+    // la afinidad histórica sin informe de impacto.
+    const viejos = await this.records
+      .createQueryBuilder('v')
+      .where('v.validator_version < :version', { version: VALIDATOR_VERSION })
+      .andWhere('v.status NOT IN (:...omitidos)', { omitidos: [ValidationStatus.PROCESSING, ValidationStatus.NOT_APPLICABLE] })
+      .andWhere(`NOT (v.resource_type = :cert AND EXISTS (
+        SELECT 1 FROM external_certificates c
+          LEFT JOIN external_opportunity_validation_references r ON r.activity_id = c.activity_id
+         WHERE c.id = v.resource_id
+           AND (c.source <> :vinculada OR r.sample_stored_file_id IS NULL)))`, {
+        cert: ValidationResourceType.EXTERNAL_CERTIFICATE,
+        vinculada: ExternalCredentialSource.OPPORTUNITY,
+      })
+      .orderBy('v.created_at', 'ASC')
+      .take(limit)
+      .getMany();
     for (const r of viejos) {
       r.status = ValidationStatus.PENDING;
       r.attempts = 0;
@@ -920,18 +1253,64 @@ export class ValidationService {
   //  Escritura del veredicto
   // ====================================================================
 
+  /**
+   * Escribe el veredicto. `null` si ya no corresponde aplicarlo (ver
+   * `aplicarSiVigente`): quien llama no debe auditarlo ni avisar nada.
+   */
   private async finish(
     record: ValidationRecord,
     cambios: Partial<ValidationRecord>,
-  ): Promise<ValidationRecord> {
-    Object.assign(record, cambios, {
+  ): Promise<ValidationRecord | null> {
+    const guardado = await this.aplicarSiVigente(record, {
+      ...cambios,
       finishedAt: new Date(),
       claimedBy: null,
       validatorVersion: VALIDATOR_VERSION,
     });
-    const guardado = await this.records.save(record);
-    await this.recalcularDueno(guardado);
+    if (guardado) await this.recalcularDueno(guardado);
     return guardado;
+  }
+
+  /**
+   * V7.1 §5.3 (C19, C28) · Aplica lo que produjo el worker solo si el trabajo
+   * sigue siendo suyo: la fila en proceso, reclamada por él y con el mismo
+   * archivo. La fila queda bloqueada mientras tanto.
+   *
+   * Nunca escribe la revisión humana. Si Dirección decidió mientras se
+   * procesaba, el respaldo se ajusta a su decisión, que es la que manda. Antes
+   * se guardaba la entidad entera leída al reclamar, y un resultado tardío
+   * podía devolver la revisión a su estado anterior.
+   */
+  private async aplicarSiVigente(
+    record: ValidationRecord,
+    valores: Partial<ValidationRecord>,
+    archivarComo?: PreviousValidationResult['reason'],
+  ): Promise<ValidationRecord | null> {
+    const aplicado = await this.records.manager.transaction(async (em) => {
+      const actual = await em.findOne(ValidationRecord, { where: { id: record.id }, lock: { mode: 'pessimistic_write' } });
+      if (!actual || !resultadoVigente(actual, record)) return null;
+      const limpio: Record<string, unknown> = { ...valores };
+      for (const k of CAMPOS_DE_REVISION) delete limpio[k];
+      if (valores.backingTier !== undefined) {
+        limpio.backingTier = ajustarPorRevisionManual(valores.backingTier, actual.manualReviewStatus);
+      }
+      if (archivarComo && hayResultadoQueArchivar(actual)) {
+        limpio.previousResults = archivar(actual.previousResults, fotoDelResultado(actual, archivarComo));
+      }
+      await em.update(ValidationRecord, { id: record.id }, limpio as never);
+      return em.findOne(ValidationRecord, { where: { id: record.id } });
+    });
+    if (!aplicado) {
+      this.logger.log(`Resultado descartado (${record.resourceType}/${record.resourceId}): el archivo o el trabajo cambió mientras se procesaba.`);
+      await this.audit.record({
+        actorUserId: null,
+        eventType: AuditEventType.VALIDATION_RESULT_DISCARDED,
+        entityType: record.resourceType,
+        entityId: record.resourceId,
+        metadata: { claimedBy: record.claimedBy, fileSha256: record.fileSha256 ?? null },
+      });
+    }
+    return aplicado;
   }
 
   /**
@@ -998,19 +1377,22 @@ export class ValidationService {
 
     if (record.attempts < MAX_ATTEMPTS) {
       const espera = BACKOFF_SECONDS[Math.min(record.attempts - 1, BACKOFF_SECONDS.length - 1)];
-      record.status = ValidationStatus.PENDING;
-      record.claimedBy = null;
-      record.nextAttemptAt = new Date(Date.now() + espera * 1000);
-      record.errorCode = 'RETRY';
-      record.errorDetail = detalle;
-      return this.records.save(record);
+      // Igual que un veredicto: solo si el trabajo sigue siendo este (C19).
+      const reintento = await this.aplicarSiVigente(record, {
+        status: ValidationStatus.PENDING,
+        claimedBy: null,
+        nextAttemptAt: new Date(Date.now() + espera * 1000),
+        errorCode: 'RETRY',
+        errorDetail: detalle,
+      });
+      return reintento ?? record;
     }
 
-    return this.finish(record, {
+    return (await this.finish(record, {
       status: ValidationStatus.FAILED,
       errorCode: 'MAX_ATTEMPTS',
       errorDetail: detalle,
-    });
+    })) ?? record;
   }
 
   // ====================================================================
@@ -1028,6 +1410,8 @@ export class ValidationService {
         ? await this.references.findOne({ where: { activityId: cert.activityId } })
         : null;
       const a = cert.activity;
+      const modelo = await this.modeloDe(cert);
+      const ruta = rutaDeCredencial(cert.source, !!modelo);
       // V9: además del institucional, los correos personales que el
       // estudiante demostró controlar (Credly y Open Badges usan esos).
       const personales = await this.verifiedEmails.find({ where: { userId: cert.studentProfile.userId, verifiedAt: Not(IsNull()) } });
@@ -1038,8 +1422,12 @@ export class ValidationService {
         declaredDate: cert.issueDate,
         declaredUrl: cert.certificateUrl,
         studentProfileId: cert.studentProfileId,
-        file: await this.loadFile(cert.storedFileId),
+        // Sin procesamiento, el archivo ni siquiera se lee del almacenamiento.
+        file: ruta.procesar ? await this.loadFile(cert.storedFileId) : null,
         credential: {
+          ruta,
+          modelo,
+          evidenciaMinima: tieneEvidenciaMinima(cert),
           ownerUserId: cert.studentProfile.userId,
           emails: [
             ...(cert.studentProfile.user?.email ? [cert.studentProfile.user.email] : []),
@@ -1152,6 +1540,7 @@ export class ValidationService {
         completed: porEstado[ValidationStatus.COMPLETED] ?? 0,
         inconclusive: porEstado[ValidationStatus.INCONCLUSIVE] ?? 0,
         failed: porEstado[ValidationStatus.FAILED] ?? 0,
+        notApplicable: porEstado[ValidationStatus.NOT_APPLICABLE] ?? 0,
       },
       readyNow: pendientesVencidos,
       inFlight: huerfanos,
@@ -1171,6 +1560,12 @@ interface LoadedFile {
 
 /** Lo propio de una credencial externa (V3 §18). */
 interface CredentialContext {
+  /** V7.1 §5.2: si se procesa o por qué no. */
+  ruta: RutaDeCredencial;
+  /** V7.1 D03: certificado modelo vigente, para la fase 1. */
+  modelo: ModeloVigente | null;
+  /** D08: archivo o enlace individual. */
+  evidenciaMinima: boolean;
   ownerUserId: string;
   /** V9: para buscar la misma credencial en otros perfiles. */
   certificateId: string;

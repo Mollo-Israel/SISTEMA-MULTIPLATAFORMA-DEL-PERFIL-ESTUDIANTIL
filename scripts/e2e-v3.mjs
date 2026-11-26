@@ -635,9 +635,11 @@ async function batch8(ctx) {
   });
   check(ajena.status === 400, 'V3.8.26 §15 Ni puede adjuntar una credencial a esa oportunidad', `status ${ajena.status}`);
 
+  // V7.1 §5.2: la vinculada exige su archivo; nombre y emisor salen de la oportunidad.
+  const archivoCcna = await subirArchivo(est.token, pdfConTexto([`Certificate of completion ${TS}`, 'CCNA Introduction to Networks', 'Cisco Networking Academy']), 'ccna.pdf', 'application/pdf');
   const credencial = await req('POST', '/certificates/external', {
     token: est.token,
-    body: { certificateName: `CCNA ITN ${TS}`, issuer: 'Cisco Networking Academy', activityId: ccna.id, credentialId: 'NA-2026-AB7' },
+    body: { certificateName: `CCNA ITN ${TS}`, issuer: 'Cisco Networking Academy', activityId: ccna.id, credentialId: 'NA-2026-AB7', storedFileId: archivoCcna.data?.id },
   });
   check(credencial.status === 201 && credencial.data?.source === 'opportunity' && credencial.data?.activityId === ccna.id,
     'V3.8.27 §15 Adjunta la credencial de la oportunidad (source = opportunity)', json({ s: credencial.status, src: credencial.data?.source }));
@@ -773,6 +775,9 @@ async function batch9(ctx) {
   const servidor = await levantarVerificador(est);
 
   try {
+    const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+    const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
+    const dia = 86_400_000;
     const veredicto = async (id) => {
       for (let i = 0; i < 40; i++) {
         await req('POST', '/validation/run?limit=50', { token: ctx.admin });
@@ -782,16 +787,45 @@ async function batch9(ctx) {
       }
       return null;
     };
-    const credencial = async (body) => {
-      const r = await req('POST', '/certificates/external', { token: est.token, body: { issueDate: '2025-06-01', ...body } });
+    /**
+     * V7.1 §5.2 (BATCH V7-3): una histórica ya no se lee ni se consulta sola.
+     * Para probar el procesamiento, cada caso va como vinculada a una
+     * oportunidad finalizada con certificado modelo (proveedor = emisor
+     * declarado). Si el caso no tenía archivo, lleva un PDF sin texto: la
+     * vinculada exige archivo, y uno ilegible no cambia lo que se prueba.
+     * `historica: true` registra una histórica de verdad.
+     */
+    let nCaso = 0;
+    const modeloPdf = async (lineas) => (await subirArchivo(director.token, pdfConTexto(lineas), 'modelo.pdf', 'application/pdf')).data?.id;
+    const opGenerica = async (issuer, titulo) => {
+      const a = (await req('POST', '/activities', {
+        token: director.token,
+        body: {
+          title: titulo, type: 'academica', categoryId: cat.id, status: 'open', originType: 'external', provider: issuer,
+          externalUrl: 'https://proveedor.example.org/curso', outcomePolicy: 'external_credential_expected',
+          activityDate: new Date(Date.now() + dia).toISOString(), endAt: new Date(Date.now() + 2 * dia).toISOString(),
+        },
+      })).data;
+      await req('PUT', `/activities/${a.id}/validation-reference`, { token: director.token, body: { sampleStoredFileId: await modeloPdf([issuer, titulo]) } });
+      await req('POST', `/activities/${a.id}/register`, { token: est.token });
+      await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'accepted' } });
+      await req('PATCH', `/activities/${a.id}`, { token: director.token, body: { status: 'finished' } });
+      return a;
+    };
+    const credencial = async (body, { historica = false } = {}) => {
+      const datos = { issueDate: '2025-06-01', ...body };
+      if (!historica && !datos.activityId) datos.activityId = (await opGenerica(datos.issuer, datos.certificateName)).id;
+      if (datos.activityId && !datos.storedFileId) {
+        nCaso += 1;
+        const sinTexto = Buffer.from(`%PDF-1.4\n%caso-${TS}-${nCaso}\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`, 'latin1');
+        datos.storedFileId = (await subirArchivo(est.token, sinTexto, `caso-${nCaso}.pdf`, 'application/pdf')).data?.id;
+      }
+      const r = await req('POST', '/certificates/external', { token: est.token, body: datos });
       if (r.status !== 201) throw new Error(`no se creó la credencial: ${json(r.data)}`);
       return { id: r.data.id, v: await veredicto(r.data.id) };
     };
 
     // ----- Oportunidad externa con referencia (§15, §17)
-    const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
-    const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
-    const dia = 86_400_000;
     const crearExterna = async (titulo) => {
       const a = (await req('POST', '/activities', {
         token: director.token,
@@ -804,7 +838,11 @@ async function batch9(ctx) {
         },
       })).data;
       await req('PUT', `/activities/${a.id}/validation-reference`, {
-        token: director.token, body: { expectedCourseName: 'CCNA Introduction to Networks', credentialIdPattern: 'NA-####-@@#' },
+        token: director.token,
+        body: {
+          expectedCourseName: 'CCNA Introduction to Networks', credentialIdPattern: 'NA-####-@@#',
+          sampleStoredFileId: await modeloPdf(['Cisco Networking Academy', 'CCNA Introduction to Networks']),
+        },
       });
       await req('POST', `/activities/${a.id}/register`, { token: est.token });
       await req('PATCH', `/activities/${a.id}/confirm-participation`, {
@@ -839,8 +877,9 @@ async function batch9(ctx) {
     });
     // V4.1 B30 / 23.9: la página oficial individual que nombra a otra persona ya no es «sin prueba»: contradice.
     check(ajena.v?.credentialCheck?.status === 'mismatch' && ajena.v?.backingTier === 'flagged'
-      && (ajena.v?.credentialCheck?.contradictions ?? []).includes('official_holder_mismatch') && ajena.v?.validationStatus?.status === 'REJECTED',
-      'V3.9.3 §19 V4.1 B30 La página oficial de otra persona no corrobora: contradice (FLAGGED, REJECTED)',
+      // V7.1 §5.1: la contradicción queda registrada y señalada, pero el rechazo lo decide Dirección.
+      && (ajena.v?.credentialCheck?.contradictions ?? []).includes('official_holder_mismatch') && ajena.v?.validationStatus?.status === 'MANUAL_REVIEW_REQUIRED',
+      'V3.9.3 §19 V4.1 B30 V7.1 La página oficial de otra persona contradice (FLAGGED) y queda para la decisión de Dirección',
       json({ c: ajena.v?.credentialCheck?.status, t: ajena.v?.backingTier, v: ajena.v?.validationStatus }));
 
     const spa = sonda.v;
@@ -933,24 +972,22 @@ async function batch9(ctx) {
 
     // ----- Revisión manual excepcional (§16)
     const historicaPdf = await subirArchivo(est.token, pdfConTexto([`Diploma ${est.nombre}`, 'Taller de Robotica Educativa', 'Club Andino de Robotica']), 'historica.pdf', 'application/pdf');
-    const historica = await credencial({ certificateName: `Taller de Robotica Educativa ${TS}`, issuer: 'Club Andino de Robotica', storedFileId: historicaPdf.data?.id });
-    check(historica.v?.credentialCheck?.status === 'no_verifier' && historica.v?.manualReview?.canRequest === true
+    const historica = await credencial({ certificateName: `Taller de Robotica Educativa ${TS}`, issuer: 'Club Andino de Robotica', storedFileId: historicaPdf.data?.id }, { historica: true });
+    // V7.1 §5.2: la histórica no se lee ni se consulta sola; llega pedida a Dirección.
+    check(historica.v?.status === 'not_applicable' && historica.v?.manualReview?.status === 'requested'
       && historica.v?.backingTier !== 'corroborated',
-    'V3.9.18 §16 Histórica sin verificador digital: puede pedirse la revisión excepcional', json({ c: historica.v?.credentialCheck?.status, m: historica.v?.manualReview }));
-    check(ok.v?.manualReview?.canRequest === false, 'V3.9.19 §16 Una credencial de oportunidad no la necesita (se valida con su referencia)');
+    'V3.9.18 §16 V7.1 Histórica: fases técnicas «no aplica» y directo a revisión de Dirección', json({ s: historica.v?.status, m: historica.v?.manualReview }));
+    check(ok.v?.manualReview?.canRequest === false, 'V3.9.19 §16 Una credencial de oportunidad ya llega pedida: no hay que pedirla');
     const pedirOp = await req('POST', `/certificates/external/${ok.id}/manual-review`, { token: est.token, body: {} });
-    check(pedirOp.status === 400, 'V3.9.20 §16 Y la API lo impide', `status ${pedirOp.status}`);
+    check(pedirOp.status === 400 || pedirOp.status === 409, 'V3.9.20 §16 Y la API no crea un segundo pedido', `status ${pedirOp.status}`);
 
     const archivoUrl = (await req('GET', '/certificates/external/my', { token: est.token })).data?.find((c) => c.id === historica.id)?.fileUrl;
     const bajar = (token) => fetch(`${API.replace(/\/api$/, '')}${archivoUrl}`, { headers: { Authorization: `Bearer ${token}` } });
-    check((await bajar(director.token)).status === 404, 'V3.9.21 §16 Antes de pedirla, Dirección no ve el documento del estudiante');
+    check((await bajar(docente.token)).status === 404, 'V3.9.21 §16 Un docente ajeno no ve el documento del estudiante');
 
-    const pedir = await req('POST', `/certificates/external/${historica.id}/manual-review`, {
-      token: est.token, body: { note: 'El club confirma por correo a robotica@club.example.' },
-    });
-    check(pedir.status === 200 && pedir.data?.manualReview?.status === 'requested', 'V3.9.22 §16 El estudiante la pide', json(pedir.data));
-    const otraVez = await req('POST', `/certificates/external/${historica.id}/manual-review`, { token: est.token, body: {} });
-    check(otraVez.status === 409, 'V3.9.23 No se pide dos veces', `status ${otraVez.status}`);
+    const otraVez = await req('POST', `/certificates/external/${historica.id}/manual-review`, { token: est.token, body: { note: 'El club confirma por correo.' } });
+    check(otraVez.status === 409, 'V3.9.22 V7.1 Ya está pedida: no se pide dos veces', `status ${otraVez.status}`);
+    check(historica.v?.manualReview?.canRequest === false, 'V3.9.23 Y la vista no ofrece pedirla otra vez');
 
     const deDocente = await req('GET', '/validation/manual-reviews', { token: docente.token });
     const deEst = await req('GET', '/validation/manual-reviews', { token: est.token });
@@ -960,8 +997,8 @@ async function batch9(ctx) {
       'V3.9.24 §6.5 V4.1 Revisan Dirección y, como excepción auditada, Administración; ni docente ni estudiante', json([deDocente.status, deEst.status, deAdmin.status]));
     const pendientes = await req('GET', '/validation/manual-reviews', { token: director.token });
     const fila = (pendientes.data ?? []).find((x) => x.certificateId === historica.id);
-    check(!!fila && fila.studentName === est.nombre && fila.requestNote?.includes('robotica'),
-      'V3.9.25 §16 Dirección ve la solicitud con su nota', json(fila));
+    check(!!fila && fila.studentName === est.nombre && fila.source === 'historical_external' && fila.processingStatus === 'not_applicable',
+      'V3.9.25 §16 V7.1 Dirección ve la solicitud con su origen y sin procesamiento técnico', json(fila));
     check((await bajar(director.token)).status === 200, 'V3.9.26 §16 Con la revisión pedida, Dirección abre el documento');
 
     const corta = await req('POST', `/validation/manual-reviews/${historica.id}`, { token: director.token, body: { decision: 'corroborated', reason: 'ok' } });
@@ -980,8 +1017,8 @@ async function batch9(ctx) {
 
     await req('PATCH', `/certificates/external/${historica.id}`, { token: est.token, body: { issuer: 'Club Andino de Robotica Educativa' } });
     const tras = await veredicto(historica.id);
-    check(tras?.manualReview?.status === null && tras?.backingTier !== 'corroborated',
-      'V3.9.30 §19 Si cambia lo declarado, la revisión anterior ya no vale y se vuelve a comprobar', json({ m: tras?.manualReview?.status, t: tras?.backingTier }));
+    check(tras?.manualReview?.status === 'requested' && tras?.backingTier !== 'corroborated' && tras?.previousAttempts >= 1,
+      'V3.9.30 §19 V7.1 Si cambia lo declarado, la revisión anterior queda archivada y se reenvía a Dirección', json({ m: tras?.manualReview?.status, t: tras?.backingTier, p: tras?.previousAttempts }));
 
     const reproc = await req('POST', '/validation/reprocess-outdated?limit=1', { token: ctx.admin });
     check(reproc.status === 200 && typeof reproc.data?.pendientes === 'number',

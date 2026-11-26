@@ -13,27 +13,38 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { cleanLine, cleanText, IsNotFutureDate, trim } from '../../common/validation';
 
 import { SkillContextDto } from '../../activities/dto/create-activity.dto';
 export class CreateExternalCertificateDto {
-  @ApiProperty({ example: 'Certified JavaScript Developer' })
+  /**
+   * Obligatorio en una histórica. En una vinculada (V7.1 §5.2) el nombre lo
+   * pone el servidor a partir de la oportunidad, y lo que venga aquí se ignora.
+   */
+  @ApiProperty({ required: false, example: 'Certified JavaScript Developer' })
+  @ValidateIf((o: CreateExternalCertificateDto) => !o.activityId)
   @Transform(cleanLine)
   @IsString()
   @IsNotEmpty({ message: 'El nombre del certificado es obligatorio.' })
   @MinLength(3, { message: 'El nombre debe tener al menos 3 caracteres.' })
   @MaxLength(200, { message: 'El nombre no puede superar 200 caracteres.' })
-  certificateName: string;
+  certificateName?: string;
 
-  @ApiProperty({ example: 'Plataforma Externa', description: 'Entidad emisora (externa al sistema)' })
+  /**
+   * Obligatorio en una histórica. En una vinculada se usa el proveedor de la
+   * oportunidad; solo si la oportunidad no lo define, lo escribe el estudiante.
+   */
+  @ApiProperty({ required: false, example: 'Plataforma Externa', description: 'Entidad emisora (externa al sistema)' })
+  @ValidateIf((o: CreateExternalCertificateDto) => !o.activityId || (o.issuer !== undefined && o.issuer !== null))
   @Transform(cleanLine)
   @IsString()
   @IsNotEmpty({ message: 'La entidad emisora es obligatoria.' })
   @MinLength(2, { message: 'La entidad emisora debe tener al menos 2 caracteres.' })
   @MaxLength(160, { message: 'La entidad emisora no puede superar 160 caracteres.' })
-  issuer: string;
+  issuer?: string;
 
   /**
    * Enlace de verificación del emisor (§30).

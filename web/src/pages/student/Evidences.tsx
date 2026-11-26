@@ -41,6 +41,7 @@ import type {
   Skill,
   StoredFile,
   ValidationVerdict,
+  CredentialPhase,
 } from '../../services/types';
 
 /** §27.3: máximo por archivo. */
@@ -514,15 +515,15 @@ function CertificateForm({
   onSaved: () => void;
   onError: (m: string) => void;
 }>) {
-  const [form, setForm] = useState({
+  const vacio = {
     certificateName: '',
     issuer: '',
     issueDate: '',
     description: '',
-    academicAreaId: '',
     certificateUrl: '',
     credentialId: '',
-  });
+  };
+  const [form, setForm] = useState(vacio);
   // V3 §15/§16: viene de una oportunidad terminada en la que participó, o
   // es histórica (anterior a Afinia o de algo que no pasó por aquí).
   const [oportunidades, setOportunidades] = useState<CredentialOpportunity[]>([]);
@@ -530,16 +531,17 @@ function CertificateForm({
   useEffect(() => {
     certificateService.eligibleOpportunities().then(setOportunidades).catch(() => setOportunidades([]));
   }, []);
+  /**
+   * V7.1 §5.2: en una vinculada, el nombre esperado, el emisor, las áreas y
+   * las tecnologías vienen de la oportunidad. Se muestran, no se editan: el
+   * servidor los deriva de la oportunidad y no del formulario.
+   */
+  const oportunidad = oportunidades.find((x) => x.activityId === activityId) ?? null;
+  const vinculada = !!oportunidad;
+  const [errores, setErrores] = useState<Record<string, string>>({});
   const elegirOportunidad = (id: string) => {
     setActivityId(id);
-    const o = oportunidades.find((x) => x.activityId === id);
-    if (o) {
-      setForm((f) => ({
-        ...f,
-        certificateName: f.certificateName || o.expectedCourseName || o.title,
-        issuer: f.issuer || o.provider || '',
-      }));
-    }
+    setErrores({});
   };
   const [file, setFile] = useState<StoredFile | null>(null);
   const [saving, setSaving] = useState(false);
@@ -553,34 +555,55 @@ function CertificateForm({
     catalogService.skills().then((s) => setCatalogo(s.filter((x) => x.isActive !== false))).catch(() => {});
   }, []);
 
+  /** Lo que se comprueba antes de enviar; el servidor vuelve a comprobarlo todo. */
+  const erroresLocales = (): Record<string, string> => {
+    const e: Record<string, string> = {};
+    if (vinculada) {
+      if (!file) e.file = 'Adjunta el certificado que recibiste: en una credencial de una oportunidad es obligatorio.';
+      if (!oportunidad?.expectedIssuer && form.issuer.trim().length < 2) e.issuer = 'Indica quién emitió el certificado.';
+      return e;
+    }
+    if (form.certificateName.trim().length < 3) e.certificateName = 'Escribe el nombre del certificado (al menos 3 letras).';
+    if (form.issuer.trim().length < 2) e.issuer = 'Indica la entidad que lo emitió.';
+    return e;
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const locales = erroresLocales();
+    setErrores(locales);
+    if (Object.keys(locales).length) return;
     setSaving(true);
     try {
-      await certificateService.create({
-        certificateName: form.certificateName,
-        issuer: form.issuer,
-        issueDate: form.issueDate || undefined,
-        description: form.description || undefined,
-        ...(areaIds.length ? { areaIds } : {}),
+      const verificacion = {
         certificateUrl: form.certificateUrl || undefined,
         credentialId: form.credentialId || undefined,
-        storedFileId: file?.id,
-        skillIds: skillIds.length ? skillIds : undefined,
-        skillContexts: skillIds
-          .filter((id) => contextos[id] && areaIds.includes(contextos[id]))
-          .map((id) => ({ skillId: id, areaId: contextos[id] })),
-        activityId: activityId || undefined,
-      });
-      setForm({
-        certificateName: '',
-        issuer: '',
-        issueDate: '',
-        description: '',
-        academicAreaId: '',
-        certificateUrl: '',
-        credentialId: '',
-      });
+      };
+      await certificateService.create(vinculada
+        ? {
+          // V7.1 §5.2: nombre, áreas y tecnologías los pone el servidor desde la oportunidad.
+          activityId,
+          ...(oportunidad?.expectedIssuer ? {} : { issuer: form.issuer }),
+          issueDate: form.issueDate || undefined,
+          description: form.description || undefined,
+          ...verificacion,
+          storedFileId: file?.id,
+        }
+        : {
+          certificateName: form.certificateName,
+          issuer: form.issuer,
+          issueDate: form.issueDate || undefined,
+          description: form.description || undefined,
+          ...(areaIds.length ? { areaIds } : {}),
+          ...verificacion,
+          storedFileId: file?.id,
+          skillIds: skillIds.length ? skillIds : undefined,
+          skillContexts: skillIds
+            .filter((id) => contextos[id] && areaIds.includes(contextos[id]))
+            .map((id) => ({ skillId: id, areaId: contextos[id] })),
+        });
+      setForm(vacio);
+      setErrores({});
       setFile(null);
       setSkillIds([]);
       setAreaIds([]);
@@ -614,28 +637,50 @@ function CertificateForm({
               : 'Cuando termine una oportunidad externa en la que te acepten, aparecerá aquí.'}
           </span>
         </div>
-        <div className="row">
-          <div className="field">
-            <label htmlFor="cert-nombre">Nombre del certificado</label>
-            <input
-              id="cert-nombre"
-              value={form.certificateName}
-              onChange={(e) => setForm({ ...form, certificateName: e.target.value })}
-              placeholder="Fundamentos de pruebas automatizadas"
-              required
-            />
+        {oportunidad ? (
+          <DatosDeLaOportunidad o={oportunidad} />
+        ) : (
+          <div className="row">
+            <div className="field">
+              <label htmlFor="cert-nombre">Nombre del certificado</label>
+              <input
+                id="cert-nombre"
+                value={form.certificateName}
+                onChange={(e) => setForm({ ...form, certificateName: e.target.value })}
+                placeholder="Fundamentos de pruebas automatizadas"
+                aria-invalid={!!errores.certificateName}
+                required
+              />
+              {errores.certificateName && <span className="field-error">{errores.certificateName}</span>}
+            </div>
+            <div className="field">
+              <label htmlFor="cert-emisor">Entidad emisora</label>
+              <input
+                id="cert-emisor"
+                value={form.issuer}
+                onChange={(e) => setForm({ ...form, issuer: e.target.value })}
+                placeholder="Plataforma externa de formación"
+                aria-invalid={!!errores.issuer}
+                required
+              />
+              {errores.issuer && <span className="field-error">{errores.issuer}</span>}
+            </div>
           </div>
+        )}
+        {oportunidad && !oportunidad.expectedIssuer && (
           <div className="field">
             <label htmlFor="cert-emisor">Entidad emisora</label>
             <input
               id="cert-emisor"
               value={form.issuer}
               onChange={(e) => setForm({ ...form, issuer: e.target.value })}
-              placeholder="Plataforma externa de formación"
-              required
+              placeholder="Quién firmó el certificado"
+              aria-invalid={!!errores.issuer}
             />
+            <span className="field-hint">La oportunidad no indica un emisor: escribe el que figura en tu certificado.</span>
+            {errores.issuer && <span className="field-error">{errores.issuer}</span>}
           </div>
-        </div>
+        )}
         <div className="row">
           <div className="field">
             <label htmlFor="evidences-fecha-de-emision">Fecha de emisión</label>
@@ -656,56 +701,102 @@ function CertificateForm({
             maxLength={300}
           />
         </div>
-        <div className="row">
-          <div className="field">
-            <label htmlFor="evidences-enlace-de-verificacion-opcional">Enlace de verificación (opcional)</label>
-            <input id="evidences-enlace-de-verificacion-opcional"
-              type="url"
-              value={form.certificateUrl}
-              onChange={(e) => setForm({ ...form, certificateUrl: e.target.value })}
-              placeholder="https://emisor.example.com/cert/123"
-            />
-            <span className="field-hint">
-              Si el emisor publica una página para verificar el certificado, este es el
-              dato que más lo respalda.
-            </span>
+        {/*
+          V7.1 §5.2: enlace y código son opcionales y van plegados. Se explica
+          la diferencia: la página del curso no prueba quién lo cursó; el
+          enlace individual y el código, sí pueden.
+        */}
+        <details className="verificacion-plegable" open={!!(form.certificateUrl || form.credentialId)}>
+          <summary>Si tu certificado incluye enlace o código de verificación</summary>
+          <p className="field-hint">
+            La <strong>página del curso</strong> solo muestra que el curso existe. El <strong>enlace individual</strong> de tu
+            certificado (el que abre tu registro, a veces desde un QR) y el <strong>código de credencial</strong> son los
+            que identifican el tuyo. Si no los tienes, no pasa nada: igual se revisa.
+          </p>
+          <div className="row">
+            <div className="field">
+              <label htmlFor="evidences-enlace-de-verificacion-opcional">Enlace individual de verificación (opcional)</label>
+              <input id="evidences-enlace-de-verificacion-opcional"
+                type="url"
+                value={form.certificateUrl}
+                onChange={(e) => setForm({ ...form, certificateUrl: e.target.value })}
+                placeholder="https://emisor.example.com/cert/123"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="evidences-codigo-de-credencial-opcional">Código de credencial (opcional)</label>
+              <input id="evidences-codigo-de-credencial-opcional"
+                value={form.credentialId}
+                onChange={(e) => setForm({ ...form, credentialId: e.target.value })}
+                placeholder="AF-2026-00417"
+                maxLength={80}
+              />
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor="evidences-codigo-de-credencial-opcional">Código de credencial (opcional)</label>
-            <input id="evidences-codigo-de-credencial-opcional"
-              value={form.credentialId}
-              onChange={(e) => setForm({ ...form, credentialId: e.target.value })}
-              placeholder="AF-2026-00417"
-              maxLength={80}
+        </details>
+        {!vinculada && (
+          <>
+            {/* V3.2 §33: áreas de la credencial y, en cada una, las tecnologías que acredita. */}
+            <AreaSkillPicker
+              areas={areas}
+              skills={catalogo}
+              value={{ areaIds, skillIds, contexts: contextos }}
+              onChange={(v) => { setAreaIds(v.areaIds); setSkillIds(v.skillIds); setContextos(v.contexts ?? {}); }}
+              areaLabel="Áreas de la credencial"
+              skillLabel="Tecnologías que acredita (opcional)"
+              maxAreas={6}
+              maxSkills={15}
             />
-          </div>
-        </div>
-        {/* V3.2 §33: áreas de la credencial y, en cada una, las tecnologías que acredita. */}
-        <AreaSkillPicker
-          areas={areas}
-          skills={catalogo}
-          value={{ areaIds, skillIds, contexts: contextos }}
-          onChange={(v) => { setAreaIds(v.areaIds); setSkillIds(v.skillIds); setContextos(v.contexts ?? {}); }}
-          areaLabel="Áreas de la credencial"
-          skillLabel="Tecnologías que acredita (opcional)"
-          maxAreas={6}
-          maxSkills={15}
-        />
-        <p className="field-hint" style={{ marginTop: '-0.3rem' }}>
-          Cuentan como tecnologías respaldadas solo si la credencial queda con respaldo.
-        </p>
+            <p className="field-hint" style={{ marginTop: '-0.3rem' }}>
+              Lo que declaras aquí lo revisa Dirección: no cuenta como respaldado por el solo hecho de registrarlo.
+            </p>
+          </>
+        )}
         <FilePicker
           file={file}
-          onPicked={setFile}
+          onPicked={(f) => { setFile(f); setErrores((x) => ({ ...x, file: '' })); }}
           onError={onError}
-          label="Archivo del certificado (opcional)"
+          label={vinculada ? 'Archivo del certificado (obligatorio)' : 'Archivo del certificado (o indica el enlace de verificación)'}
         />
+        {errores.file && <p className="field-error" data-testid="falta-archivo">{errores.file}</p>}
+        <p className="field-hint" data-testid="ruta-de-revision">{rutaDeRevision(oportunidad)}</p>
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? 'Guardando…' : 'Adjuntar credencial'}
+          {saving ? 'Guardando…' : 'Enviar a revisión'}
         </button>
       </form>
     </Card>
   );
+}
+
+/**
+ * V7.1 §5.2: lo que la credencial vinculada hereda de su oportunidad. Se lee,
+ * no se edita: el servidor lo toma de la oportunidad.
+ */
+function DatosDeLaOportunidad({ o }: Readonly<{ o: CredentialOpportunity }>) {
+  return (
+    <div className="datos-oportunidad" data-testid="datos-oportunidad">
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Estos datos vienen de la oportunidad y no se editan. Si tu certificado dice otra cosa, Dirección lo verá al revisarlo.
+      </p>
+      <dl>
+        <dt>Nombre esperado</dt>
+        <dd>{o.expectedName ?? o.expectedCourseName ?? o.title}</dd>
+        <dt>Emisor esperado</dt>
+        <dd>{o.expectedIssuer ?? 'No indicado por la oportunidad'}</dd>
+        <dt>Áreas</dt>
+        <dd>{o.areas?.length ? o.areas.map((a) => a.name).join(', ') : 'Sin áreas'}</dd>
+        <dt>Tecnologías</dt>
+        <dd>{o.skills?.length ? o.skills.map((s) => s.name).join(', ') : 'Sin tecnologías configuradas'}</dd>
+      </dl>
+    </div>
+  );
+}
+
+/** V7.1 §5.3: qué pasa después de enviar, en palabras. */
+function rutaDeRevision(o: CredentialOpportunity | null): string {
+  if (!o) return 'Una credencial histórica no se compara automáticamente: va directo a la revisión de Dirección. Necesita el archivo o el enlace de verificación.';
+  if (o.hasModel) return 'Al enviarla se compara con el certificado modelo de la oportunidad (texto, código y enlace) y luego la revisa Dirección. Si alguna comprobación no se puede hacer, igual se revisa.';
+  return 'Esta oportunidad no tiene certificado modelo: va directo a la revisión de Dirección.';
 }
 
 /**
@@ -726,6 +817,10 @@ function RespaldoDelCertificado({ certificateId }: Readonly<{ certificateId: str
   const [notaRevision, setNotaRevision] = useState<string | null>(null);
   const [errorRevision, setErrorRevision] = useState<string | null>(null);
 
+  const [comprobando, setComprobando] = useState(false);
+  const [errorComprobar, setErrorComprobar] = useState<string | null>(null);
+  const enCurso = verdict?.status === 'pending' || verdict?.status === 'processing';
+
   useEffect(() => {
     let vivo = true;
     validationService
@@ -736,12 +831,35 @@ function RespaldoDelCertificado({ certificateId }: Readonly<{ certificateId: str
     return () => { vivo = false; };
   }, [certificateId]);
 
-  if (cargando) return <span className="muted" style={{ fontSize: '0.76rem' }}>Comprobando…</span>;
-  if (!verdict) return <span className="muted" style={{ fontSize: '0.76rem' }}>Sin comprobar</span>;
+  // V7.1 §5.3: mientras se comprueba, el resultado llega solo; no hace falta recargar.
+  useEffect(() => {
+    if (!enCurso) return;
+    let vueltas = 0;
+    const t = window.setInterval(() => {
+      vueltas += 1;
+      validationService.forResource('external_certificate', certificateId).then(setVerdict).catch(() => {});
+      if (vueltas >= 15) window.clearInterval(t);
+    }, 4000);
+    return () => window.clearInterval(t);
+  }, [enCurso, certificateId]);
 
-  if (verdict.status === 'pending' || verdict.status === 'processing') {
-    return <Badge tone="gray">En cola</Badge>;
-  }
+  if (cargando) return <span className="muted" style={{ fontSize: '0.76rem' }}>Cargando…</span>;
+  if (!verdict) return <span className="muted" style={{ fontSize: '0.76rem' }}>Sin datos de revisión</span>;
+
+  const comprobar = async () => {
+    setComprobando(true);
+    setErrorComprobar(null);
+    try {
+      await certificateService.check(certificateId);
+      setVerdict(await validationService.forResource('external_certificate', certificateId));
+    } catch (e) {
+      setErrorComprobar(apiError(e));
+    } finally {
+      setComprobando(false);
+    }
+  };
+  const fases = verdict.phases ?? [];
+  const revisionDeDireccion = fases.find((f) => f.fase === 3);
 
   const tono = TONO_DE_RESPALDO[verdict.backingTier ?? ''] ?? 'gray';
   const chequeo = verdict.credentialCheck;
@@ -763,7 +881,36 @@ function RespaldoDelCertificado({ certificateId }: Readonly<{ certificateId: str
 
   return (
     <div className="respaldo">
-      {verdict.validationStatus && (
+      {/* V7.1 §5.4: primero, en qué está la revisión de Dirección. */}
+      {revisionDeDireccion && (
+        <span data-testid="estado-revision">
+          <Badge tone={TONO_DE_FASE[revisionDeDireccion.estado]}>{revisionDeDireccion.resumen}</Badge>
+        </span>
+      )}
+      {fases.length > 0 && (
+        <details className="fases-credencial" data-testid="fases-credencial">
+          <summary>Detalle de la comprobación{enCurso ? ' (en curso)' : ''}</summary>
+          <ol>
+            {fases.map((f) => (
+              <li key={f.fase} data-fase={f.fase} data-estado={f.estado}>
+                <strong>{f.fase}. {f.titulo}</strong>{' '}
+                <Badge tone={TONO_DE_FASE[f.estado]}>{ESTADO_DE_FASE[f.estado]}</Badge>
+                {f.fecha && <span className="muted"> · {new Date(f.fecha).toLocaleDateString('es-BO')}</span>}
+                <p>{f.resumen}</p>
+                {f.detalles.length > 0 && <ul>{f.detalles.map((d) => <li key={d}>{d}</li>)}</ul>}
+              </li>
+            ))}
+          </ol>
+          {verdict.canRecheck && (
+            <div className="fases-acciones">
+              <Button variant="secondary" loading={comprobando} onClick={() => void comprobar()}>Comprobar información</Button>
+              <span className="muted">Vuelve a leer tu archivo y a consultar la fuente. El resultado anterior se conserva y la revisión de Dirección no depende de esto.</span>
+            </div>
+          )}
+          <FieldError message={errorComprobar} />
+        </details>
+      )}
+      {verdict.validationStatus && !enCurso && (
         <span data-testid="estado-validacion">
           <Badge tone={VALIDACION_TONO[verdict.validationStatus.status]}>{verdict.validationStatus.label}</Badge>
         </span>
@@ -807,21 +954,14 @@ function RespaldoDelCertificado({ certificateId }: Readonly<{ certificateId: str
           Credly no la emitió a tu correo institucional. Si la recibiste en un correo personal, compruébalo arriba en «Correos con los que recibes insignias».
         </span>
       )}
-      {revision?.status === 'requested' && <span className="muted">Revisión excepcional pedida a Dirección.</span>}
-      {revision?.status === 'corroborated' && <span className="muted">Dirección la revisó con una prueba externa (revisión administrativa, no una certificación de Afinia).</span>}
-      {(revision?.status === 'not_corroborated' || revision?.status === 'inconclusive') && (
-        <span className="muted">Dirección la revisó, pero no pudo verificarla con una fuente externa: {revision.reason}</span>
-      )}
-      {revision?.status === 'rejected' && (
-        <span className="respaldo-aviso">Dirección la rechazó: {revision.reason}</span>
-      )}
+      {revision?.status === 'corroborated' && <span className="muted">Es una revisión administrativa de Dirección, no una certificación de Afinia.</span>}
       {revision?.canRequest && (
         <button type="button" className="link-button" disabled={pidiendo} onClick={() => { setNotaRevision(''); setErrorRevision(null); }}>
-          {pidiendo ? 'Enviando…' : 'Pedir revisión excepcional'}
+          {pidiendo ? 'Enviando…' : 'Pedir revisión a Dirección'}
         </button>
       )}
       {notaRevision !== null && (
-        <Modal title="Pedir revisión excepcional" subtitle="La revisa Dirección" onClose={() => setNotaRevision(null)} width={500}>
+        <Modal title="Pedir revisión a Dirección" subtitle="La revisa Dirección" onClose={() => setNotaRevision(null)} width={500}>
           <div className={`field ${errorRevision ? 'has-error' : ''}`}>
             <label htmlFor="revision-nota">Cuéntale a Dirección cómo puede comprobar esta credencial (opcional)</label>
             <textarea id="revision-nota" value={notaRevision} maxLength={500}
@@ -859,3 +999,23 @@ function RespaldoDelCertificado({ certificateId }: Readonly<{ certificateId: str
 }
 
 const TONO_DE_RESPALDO: Record<string, string> = { corroborated: 'green', supported: 'bordo', flagged: 'red' };
+
+/**
+ * V7.1 §5.4: cada fase con su estado real. Una fase terminada no es «verde»:
+ * es un resultado que ayuda a Dirección, no una aprobación.
+ */
+const ESTADO_DE_FASE: Record<CredentialPhase['estado'], string> = {
+  no_aplica: 'No aplica',
+  omitida: 'Omitida',
+  pendiente: 'Pendiente',
+  procesando: 'Comprobando',
+  completada: 'Con resultado',
+  inconclusa: 'Inconclusa',
+  error: 'Error técnico',
+  sin_solicitud: 'Sin solicitud',
+  decidida: 'Decidida',
+};
+const TONO_DE_FASE: Record<CredentialPhase['estado'], string> = {
+  no_aplica: 'gray', omitida: 'gray', pendiente: 'amber', procesando: 'gray', completada: 'bordo',
+  inconclusa: 'gray', error: 'red', sin_solicitud: 'gray', decidida: 'bordo',
+};

@@ -9,7 +9,10 @@
  *   API_URL=http://localhost:3020/api node scripts/e2e-v7.mjs [batch1 …]
  */
 import { execSync } from 'node:child_process';
-import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req } from './lib/fixtures.mjs';
+import { createHash } from 'node:crypto';
+import {
+  codigoUniversitario, loginAdmin, pdfConTexto, provisionAndActivate, provisionStudent, req, subirArchivo,
+} from './lib/fixtures.mjs';
 
 const TS = Date.now();
 // Solo letras: los nombres de persona no admiten dígitos.
@@ -413,7 +416,264 @@ async function batch2(ctx) {
     'V7.2.15 I10 El resumen exportable no incluye «Sin resultado»; su asistencia se conserva', json({ elegibles: elegibles.length, asistencia }));
 }
 
-const BATCHES = { batch1, batch2 };
+// ===========================================================================
+//  BATCH V7-3 — Credenciales: formulario, origen y procesamiento técnico (§5.2–§5.5, D03, D08)
+// ===========================================================================
+async function batch3(ctx) {
+  objective('BATCH V7-3 · Vinculada derivada de la oportunidad, histórica directo a Dirección, fases y modelo versionado');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Irene', lastName: `Modelo${L}`, email: correoStaff('b3dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Tomas', lastName: `Responsable${L}`, email: correoStaff('b3doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const nombres = ['Valeria', 'Rodrigo', 'Camila', 'Esteban', 'Lucia', 'Mateo'];
+  const est = [];
+  for (const [i, n] of nombres.entries()) {
+    const e = await provisionAndActivate(admin, { firstName: n, lastName: `Credencial${L}`, email: correoEst(`b3e${i}`), role: 'STUDENT', semester: 5 });
+    e.nombre = `${n} Credencial${L}`;
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    est.push(e);
+  }
+  const [e1, e2, e3, e4, e5, e6] = est;
+
+  const crearCatalogo = async (ruta, body) => {
+    const r = await req('POST', ruta, { token: admin, body });
+    if (r.status !== 201) throw new Error(`No se pudo crear ${ruta} «${body.name}» (${r.status}): ${json(r.data)}`);
+    return r.data;
+  };
+  const area1 = await crearCatalogo('/academic-areas', { name: `Redes credencial ${L}`, tags: [`rc${L}`] });
+  const area2 = await crearCatalogo('/academic-areas', { name: `Otra area credencial ${L}`, tags: [`oc${L}`] });
+  const sk1 = await crearCatalogo('/skills', { name: `Tecandina ${L} Uno`, academicAreaId: area1.id });
+  const sk2 = await crearCatalogo('/skills', { name: `Tecandina ${L} Dos`, academicAreaId: area2.id });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats.find((c) => c.code === 'taller_academico') ?? cats[0];
+  const PROVEEDOR = 'Academia Andina de Redes';
+  const oportunidad = async (titulo, extra = {}) => {
+    const r = await req('POST', '/activities', {
+      token: director.token,
+      body: {
+        title: `${titulo} ${L}`, type: 'academica', categoryId: cat.id, status: 'open', originType: 'external',
+        provider: PROVEEDOR, externalUrl: 'https://andina.example.org/cursos', outcomePolicy: 'external_credential_expected',
+        activityDate: en(48), endAt: en(72), semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], areaIds: [area1.id], skillIds: [sk1.id], responsibleUserIds: [docente.userId], ...extra,
+      },
+    });
+    if (r.status !== 201) throw new Error(`No se pudo crear la oportunidad (${r.status}): ${json(r.data)}`);
+    return r.data;
+  };
+  const aceptar = async (a, alumnos) => {
+    for (const e of alumnos) {
+      await req('POST', `/activities/${a.id}/register`, { token: e.token });
+      const r = await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: e.profileId, status: 'accepted' } });
+      if (r.status !== 200) throw new Error(`No se pudo aceptar a ${e.nombre} (${r.status}): ${json(r.data)}`);
+    }
+  };
+  const terminar = async (a) => {
+    const r = await req('PATCH', `/activities/${a.id}`, { token: director.token, body: { status: 'finished' } });
+    if (r.status !== 200) throw new Error(`No se pudo finalizar (${r.status}): ${json(r.data)}`);
+  };
+  const subir = async (e, lineas, nombre) => {
+    const buffer = pdfConTexto(lineas);
+    const r = await subirArchivo(e.token, buffer, nombre);
+    if (r.status !== 201) throw new Error(`No se pudo subir ${nombre} (${r.status})`);
+    return { id: r.data.id, sha: createHash('sha256').update(buffer).digest('hex') };
+  };
+  const registro = (certId) => {
+    const fila = psql(`select status || '|' || coalesce(skipped_reason,'') || '|' || coalesce(manual_review_status::text,'') || '|' || coalesce(file_sha256,'') || '|' || jsonb_array_length(previous_results) || '|' || (extracted_data is null) from validation_records where resource_id = '${certId}'`);
+    const [status, skipped, revision, sha, previos, sinLectura] = fila.split('|');
+    return { status, skipped, revision, sha, previos: Number(previos), sinLectura: sinLectura === 'true' };
+  };
+  const vista = async (e, certId) => (await req('GET', `/validation/external_certificate/${certId}`, { token: e.token })).data;
+  const procesarCola = async () => { for (let i = 0; i < 3; i++) await req('POST', '/validation/run?limit=50', { token: admin }); };
+  const elegibles = async (e) => (await req('GET', '/certificates/external/eligible-opportunities', { token: e.token })).data ?? [];
+  const crear = (e, body) => req('POST', '/certificates/external', { token: e.token, body });
+
+  // --- Oportunidades: A con certificado modelo; B sin modelo.
+  const A = await oportunidad('Fundamentos de redes andinas');
+  const B = await oportunidad('Taller de cableado estructurado');
+  await aceptar(A, [e1, e2, e4, e5]);
+  await aceptar(B, [e1, e2]);
+  const modelo = await subirArchivo(director.token, pdfConTexto([
+    PROVEEDOR, 'Certificado de finalizacion', 'Otorgado a Juan Modelo Perez', 'Curso Fundamentos de Redes Andinas',
+    'Duracion de cuarenta horas academicas', 'Fecha 12 de marzo de 2025',
+  ]), 'modelo-andina.pdf');
+  const ref = await req('PUT', `/activities/${A.id}/validation-reference`, {
+    token: director.token, body: { expectedCourseName: 'Fundamentos de Redes Andinas', sampleStoredFileId: modelo.data?.id },
+  });
+  if (ref.status !== 200) throw new Error(`No se pudo guardar la referencia (${ref.status}): ${json(ref.data)}`);
+  await terminar(A);
+  await terminar(B);
+
+  // --- C03: la oportunidad trae lo que hereda la credencial.
+  const lista = await elegibles(e1);
+  const oA = lista.find((o) => o.activityId === A.id);
+  const oB = lista.find((o) => o.activityId === B.id);
+  check(oA?.expectedName === 'Fundamentos de Redes Andinas' && oA?.expectedIssuer === PROVEEDOR
+    && json(oA?.areas?.map((a) => a.id)) === json([area1.id]) && json(oA?.skills?.map((s) => s.id)) === json([sk1.id])
+    && oA?.hasModel === true && oB?.expectedName === B.title && oB?.hasModel === false,
+  'V7.3.1 C03 La oportunidad elegible trae nombre esperado, emisor, áreas, tecnologías y si tiene modelo', json({ oA, oB: { n: oB?.expectedName, m: oB?.hasModel } }));
+
+  // --- C06: vinculada sin archivo.
+  const sinArchivo = await crear(e1, { activityId: A.id, issueDate: '2026-11-01' });
+  const filasSinArchivo = psql(`select count(*) from external_certificates where student_profile_id = '${e1.profileId}' and activity_id = '${A.id}'`);
+  check(sinArchivo.status === 400 && sinArchivo.data?.code === 'CREDENTIAL_FILE_REQUIRED' && !!sinArchivo.data?.fields?.storedFileId && filasSinArchivo === '0',
+    'V7.3.2 C06 Una vinculada sin archivo no se crea: 400 con el error en el campo del archivo', json({ s: sinArchivo.status, c: sinArchivo.data?.code }));
+
+  // --- C04: el cuerpo intenta cambiar nombre, emisor, áreas y tecnologías.
+  const f1 = await subir(e1, [PROVEEDOR, 'Certificado de finalizacion', `Otorgado a ${e1.nombre}`, 'Curso Fundamentos de Redes Andinas',
+    'Duracion de cuarenta horas academicas', 'Fecha 3 de noviembre de 2026'], 'e1-andina.pdf');
+  const c1 = await crear(e1, {
+    activityId: A.id, storedFileId: f1.id, issueDate: '2026-11-03', certificateName: 'Nombre inventado', issuer: 'Emisor inventado',
+    areaIds: [area2.id], skillIds: [sk2.id], academicAreaId: area2.id,
+  });
+  const mias = (await req('GET', '/certificates/external/my', { token: e1.token })).data ?? [];
+  const guardada = mias.find((c) => c.id === c1.data?.id);
+  const areasC1 = psql(`select string_agg(academic_area_id::text, ',') from external_certificate_areas where certificate_id = '${c1.data?.id}'`);
+  const skillsC1 = psql(`select string_agg(skill_id::text, ',') from external_certificate_skills where certificate_id = '${c1.data?.id}'`);
+  check(c1.status === 201 && guardada?.certificateName === 'Fundamentos de Redes Andinas' && guardada?.issuer === PROVEEDOR
+    && areasC1 === area1.id && skillsC1 === sk1.id,
+  'V7.3.3 C04 El servidor deriva nombre, emisor, áreas y tecnologías de la oportunidad e ignora el cuerpo', json({ s: c1.status, n: guardada?.certificateName, i: guardada?.issuer, areasC1, skillsC1 }));
+
+  // --- C18: reintento.
+  const otraVez = await crear(e1, { activityId: A.id, storedFileId: f1.id, issueDate: '2026-11-03' });
+  const filas = psql(`select count(*) from external_certificates where student_profile_id = '${e1.profileId}' and activity_id = '${A.id}'`);
+  check(otraVez.status === 409 && filas === '1', 'V7.3.4 C18 Reintentar el envío no crea otra credencial (409)', json({ s: otraVez.status, filas }));
+
+  // --- Con modelo: se encola, con el hash del archivo, y queda pedida a Dirección.
+  const r1 = registro(c1.data?.id);
+  check(['pending', 'processing', 'completed', 'inconclusive'].includes(r1.status) && r1.sha === f1.sha && r1.revision === 'requested',
+    'V7.3.5 §5.3 Con modelo: va a comprobación con el hash del archivo y ya pedida a Dirección', json(r1));
+
+  // --- C09: otra versión del certificado (e2).
+  const f2 = await subir(e2, [PROVEEDOR, 'Constancia de aprobacion', `Otorgado a ${e2.nombre}`,
+    'Curso Fundamentos de Redes Andinas edicion virtual', 'Fecha 4 de noviembre de 2026'], 'e2-andina.pdf');
+  const c2 = await crear(e2, { activityId: A.id, storedFileId: f2.id, issueDate: '2026-11-04' });
+
+  // --- C16: enlace a una dirección interna (e5).
+  const f5 = await subir(e5, [PROVEEDOR, `Otorgado a ${e5.nombre}`, 'Curso Fundamentos de Redes Andinas'], 'e5-andina.pdf');
+  const c5 = await crear(e5, { activityId: A.id, storedFileId: f5.id, issueDate: '2026-11-05', certificateUrl: 'http://127.0.0.1:3020/api/health' });
+
+  await procesarCola();
+  const v1 = await vista(e1, c1.data?.id);
+  const comp1 = v1?.credentialCheck?.documentComparison;
+  check(['completed', 'inconclusive'].includes(v1?.status) && comp1?.matched?.includes('Curso Fundamentos de Redes Andinas')
+    && comp1?.missing?.length === 0 && !JSON.stringify(comp1).includes('Juan Modelo') && comp1?.holder === 'match',
+  'V7.3.6 C08 Fase 1: coinciden los textos estables; el titular del modelo no cuenta y el del archivo es el estudiante', json(comp1));
+  check(v1?.phases?.[2]?.estado === 'pendiente' && registro(c1.data?.id).revision === 'requested',
+    'V7.3.7 C14 Aunque la comparación coincida, la revisión de Dirección sigue pendiente', json(v1?.phases?.map((f) => f.estado)));
+  const comp2 = (await vista(e2, c2.data?.id))?.credentialCheck?.documentComparison;
+  check(c2.status === 201 && comp2?.missing?.includes('Duracion de cuarenta horas academicas') && comp2?.matched?.includes(PROVEEDOR)
+    && registro(c2.data?.id).revision === 'requested',
+  'V7.3.8 C09 Otra versión: se explican faltantes y variaciones, sin porcentaje, y se envía igual', json(comp2));
+  const v5 = await vista(e5, c5.data?.id);
+  check(c5.status === 201 && v5?.linkCheck?.status === 'blocked' && registro(c5.data?.id).revision === 'requested',
+    'V7.3.9 C16 Un enlace a una dirección interna no se consulta (bloqueado); la credencial se envía igual', json({ s: c5.status, l: v5?.linkCheck }));
+
+  // --- C07 / C25: vinculada sin modelo.
+  const fB = await subir(e1, ['Cableado estructurado', `Otorgado a ${e1.nombre}`, PROVEEDOR], 'e1-cableado.pdf');
+  const cB = await crear(e1, { activityId: B.id, storedFileId: fB.id, issueDate: '2026-11-06' });
+  await procesarCola();
+  const rB = registro(cB.data?.id);
+  const vB = await vista(e1, cB.data?.id);
+  check(cB.status === 201 && rB.status === 'not_applicable' && rB.skipped === 'no_reference_model' && rB.revision === 'requested' && rB.sinLectura
+    && json(vB?.phases?.map((f) => f.estado)) === json(['omitida', 'omitida', 'pendiente']),
+  'V7.3.10 C07/C25 Sin modelo: fases 1 y 2 omitidas, sin leer el archivo, y directo a Dirección', json({ rB, f: vB?.phases?.map((f) => f.estado) }));
+
+  // --- C01: histórica con archivo sin QR.
+  const fH = await subir(e3, ['Diploma de Robotica Educativa', `Otorgado a ${e3.nombre}`, 'Club Andino de Robotica'], 'e3-robotica.pdf');
+  const cH = await crear(e3, { certificateName: 'Robotica Educativa', issuer: 'Club Andino de Robotica', issueDate: '2025-06-10', storedFileId: fH.id, areaIds: [area1.id] });
+  await procesarCola();
+  const rH = registro(cH.data?.id);
+  const vH = await vista(e3, cH.data?.id);
+  check(cH.status === 201 && rH.status === 'not_applicable' && rH.skipped === 'historical' && rH.revision === 'requested' && rH.sinLectura
+    && /fuera de Afinia/.test(vH?.phases?.[0]?.resumen ?? ''),
+  'V7.3.11 C01 Histórica: sin OCR ni QR («no aplica»), directo a revisión de Dirección', json({ rH, r: vH?.phases?.[0]?.resumen }));
+
+  // --- C02 (D08): histórica solo con enlace; y sin evidencia mínima.
+  const cU = await crear(e3, { certificateName: 'Seguridad en la nube', issuer: 'Nube Abierta', certificateUrl: `https://nube.example.org/c/${L}` });
+  const cN = await crear(e3, { certificateName: 'Taller sin respaldo', issuer: 'Comunidad Local' });
+  const rU = registro(cU.data?.id);
+  const rN = registro(cN.data?.id);
+  const vN = await vista(e3, cN.data?.id);
+  check(cU.status === 201 && rU.status === 'not_applicable' && rU.revision === 'requested' && cN.status === 201 && rN.revision === ''
+    && vN?.phases?.[2]?.estado === 'sin_solicitud',
+  'V7.3.12 C02 D08 vigente: el enlace solo basta para pedir revisión; sin archivo ni enlace queda declarada, sin solicitud', json({ rU, rN }));
+
+  // --- CRED-10 §5.2: título común no es duplicado; el mismo archivo sí.
+  const p1 = await crear(e3, { certificateName: 'Introduccion a Python', issuer: 'Coursera', issueDate: '2025-01-10' });
+  const p2 = await crear(e3, { certificateName: 'Introducción a Python', issuer: 'edX', issueDate: '2025-03-01' });
+  const p3 = await crear(e3, { certificateName: 'INTRODUCCION A PYTHON', issuer: 'coursera', issueDate: '2025-01-10' });
+  const copia = await subir(e3, ['Diploma de Robotica Educativa', `Otorgado a ${e3.nombre}`, 'Club Andino de Robotica'], 'copia.pdf');
+  const p4 = await crear(e3, { certificateName: 'Otro nombre', issuer: 'Otro emisor', storedFileId: copia.id });
+  check(p1.status === 201 && p2.status === 201 && p3.status === 409 && p4.status === 409,
+    'V7.3.13 §5.2 Un título común no bloquea certificados distintos; mismo nombre+emisor+fecha o el mismo archivo sí', json([p1.status, p2.status, p3.status, p4.status]));
+
+  // --- C19: reemplazar el archivo mientras el worker procesaba.
+  const f4 = await subir(e4, [PROVEEDOR, `Otorgado a ${e4.nombre}`, 'Curso Fundamentos de Redes Andinas'], 'e4-v1.pdf');
+  const c4 = await crear(e4, { activityId: A.id, storedFileId: f4.id, issueDate: '2026-11-07' });
+  psql(`update validation_records set status = 'processing', claimed_by = 'sonda-v73', started_at = now() where resource_id = '${c4.data?.id}'`);
+  const f4b = await subir(e4, [PROVEEDOR, `Otorgado a ${e4.nombre}`, 'Curso Fundamentos de Redes Andinas', 'Duracion de cuarenta horas academicas'], 'e4-v2.pdf');
+  const cambio = await req('PATCH', `/certificates/external/${c4.data?.id}`, { token: e4.token, body: { storedFileId: f4b.id } });
+  const r4 = registro(c4.data?.id);
+  check(cambio.status === 200 && r4.status === 'pending' && r4.sha === f4b.sha && r4.previos >= 1,
+    'V7.3.14 C19 Reemplazar el archivo invalida lo que estaba en curso: nuevo hash en cola y el intento anterior archivado', json(r4));
+  await procesarCola();
+  const v4 = await vista(e4, c4.data?.id);
+  check(v4?.fileSha256 === f4b.sha && v4?.credentialCheck?.documentComparison?.matched?.includes('Duracion de cuarenta horas academicas'),
+    'V7.3.15 C19 El resultado corresponde al archivo nuevo', json({ sha: v4?.fileSha256 === f4b.sha, m: v4?.credentialCheck?.documentComparison?.matched }));
+  const sinQuitar = await req('PATCH', `/certificates/external/${c4.data?.id}`, { token: e4.token, body: { storedFileId: null } });
+  check(sinQuitar.status === 400 && sinQuitar.data?.code === 'CREDENTIAL_FILE_REQUIRED', 'V7.3.16 C06 A una vinculada no se le puede quitar el archivo', `status ${sinQuitar.status}`);
+
+  // --- «Comprobar información»: conserva el intento; no aplica a una histórica.
+  const recheck = await req('POST', `/certificates/external/${c1.data?.id}/check`, { token: e1.token });
+  const recheckHist = await req('POST', `/certificates/external/${cH.data?.id}/check`, { token: e3.token });
+  check(recheck.status === 200 && recheck.data?.status === 'pending' && recheck.data?.previousAttempts >= 1
+    && recheckHist.status === 409 && recheckHist.data?.code === 'RECHECK_NOT_APPLICABLE',
+  'V7.3.17 §5.3 «Comprobar información» vuelve a comprobar y archiva el intento; en una histórica no aplica', json({ a: recheck.data, h: recheckHist.data?.code }));
+
+  // --- C26: Dirección adjunta el modelo a B ya finalizada.
+  const antes = (await req('GET', `/activities/${B.id}`, { token: director.token })).data;
+  const modeloB = await subirArchivo(director.token, pdfConTexto(['Cableado estructurado', 'Certificado oficial', PROVEEDOR]), 'modelo-cableado.pdf');
+  const sinMotivo = await req('PUT', `/activities/${B.id}/validation-reference/model`, { token: director.token, body: { storedFileId: modeloB.data?.id, reason: 'corto' } });
+  const adjunto = await req('PUT', `/activities/${B.id}/validation-reference/model`, {
+    token: director.token, body: { storedFileId: modeloB.data?.id, reason: 'El docente entregó el modelo oficial después de finalizar.' },
+  });
+  const despues = (await req('GET', `/activities/${B.id}`, { token: director.token })).data;
+  const versiones = adjunto.data?.modelVersions ?? [];
+  const rBdespues = registro(cB.data?.id);
+  const material = (a) => json([a?.title, a?.status, a?.provider, a?.activityDate, a?.endAt, a?.capacity, (a?.areas ?? a?.activityAreas ?? []).length]);
+  check(sinMotivo.status === 400 && adjunto.status === 200 && versiones[0]?.origin === 'direccion' && versiones[0]?.version === 1
+    && !!versiones[0]?.fileSha256 && /después de finalizar/.test(versiones[0]?.reason ?? '') && material(antes) === material(despues),
+  'V7.3.18 C26 Dirección adjunta el modelo tras finalizar: versión con hash, autor y motivo, sin cambiar datos materiales', json({ s: [sinMotivo.status, adjunto.status], v: versiones[0] }));
+  check(rBdespues.status === 'not_applicable' && rBdespues.revision === 'requested',
+    'V7.3.19 C26 Adjuntar el modelo no reprocesa ni cambia las credenciales ya enviadas', json(rBdespues));
+  const oB2 = (await elegibles(e2)).find((o) => o.activityId === B.id);
+  const fB2 = await subir(e2, ['Cableado estructurado', `Otorgado a ${e2.nombre}`, PROVEEDOR], 'e2-cableado.pdf');
+  const cB2 = await crear(e2, { activityId: B.id, storedFileId: fB2.id, issueDate: '2026-11-08' });
+  check(oB2?.hasModel === true && ['pending', 'processing'].includes(registro(cB2.data?.id).status),
+    'V7.3.20 C26 Los envíos nuevos usan el modelo vigente', json({ m: oB2?.hasModel, r: registro(cB2.data?.id) }));
+  const recheckDir = await req('POST', `/validation/manual-reviews/${cB.data?.id}/recheck`, { token: director.token });
+  check(recheckDir.status === 200 && recheckDir.data?.status === 'pending' && recheckDir.data?.previousResults >= 1,
+    'V7.3.21 §5.5 Dirección puede volver a comprobar una pendiente con el modelo nuevo; el intento anterior se conserva', json(recheckDir.data));
+
+  // --- C27: el docente responsable no cambia el modelo después de publicada.
+  const otroModelo = await subirArchivo(docente.token, pdfConTexto(['Modelo del docente', PROVEEDOR]), 'modelo-docente.pdf');
+  const general = await req('PUT', `/activities/${A.id}/validation-reference`, { token: docente.token, body: { sampleStoredFileId: otroModelo.data?.id } });
+  const especifica = await req('PUT', `/activities/${A.id}/validation-reference/model`, {
+    token: docente.token, body: { storedFileId: otroModelo.data?.id, reason: 'Quiero cambiar el modelo de la oportunidad.' },
+  });
+  const deAdmin = await req('PUT', `/activities/${A.id}/validation-reference/model`, {
+    token: admin, body: { storedFileId: otroModelo.data?.id, reason: 'Administración intenta cambiar el modelo.' },
+  });
+  const modeloA = psql(`select sample_stored_file_id from external_opportunity_validation_references where activity_id = '${A.id}'`);
+  check(general.status === 403 && general.data?.code === 'VALIDATION_REFERENCE_LOCKED' && especifica.status === 403 && deAdmin.status === 403
+    && modeloA === modelo.data?.id,
+  'V7.3.22 C27 Ni el docente (por la edición general o la acción) ni Administración cambian el modelo; sigue el de antes', json({ g: [general.status, general.data?.code], e: especifica.status, a: deAdmin.status }));
+
+  // --- C05: otra cuenta no adjunta a una oportunidad ajena.
+  const ajena = await crear(e6, { activityId: A.id, storedFileId: (await subir(e6, ['x y z'], 'e6.pdf')).id });
+  check(ajena.status === 400 && ajena.data?.code === 'CREDENTIAL_OPPORTUNITY_NOT_ELIGIBLE', 'V7.3.23 C05 Un estudiante no aceptado no adjunta a esa oportunidad', `status ${ajena.status}`);
+}
+
+const BATCHES = { batch1, batch2, batch3 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

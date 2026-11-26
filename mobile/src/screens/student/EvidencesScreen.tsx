@@ -441,12 +441,8 @@ function CertificateForm({
   onSaved: () => void;
   onError: (m: string) => void;
 }>) {
-  const [form, setForm] = useState({
-    certificateName: '',
-    issuer: '',
-    issueDate: '',
-    description: '',
-  });
+  const vacio = { certificateName: '', issuer: '', issueDate: '', description: '', certificateUrl: '', credentialId: '' };
+  const [form, setForm] = useState(vacio);
   const [areaId, setAreaId] = useState('');
   const [saving, setSaving] = useState(false);
   const { file, setFile, pick, busy } = useFilePicker(onError);
@@ -456,31 +452,41 @@ function CertificateForm({
   useEffect(() => {
     certificateService.eligibleOpportunities().then(setOportunidades).catch(() => setOportunidades([]));
   }, []);
-  const elegir = (id: string) => {
-    setActivityId(id);
-    const o = oportunidades.find((x) => x.activityId === id);
-    if (o) {
-      setForm((f) => ({
-        ...f,
-        certificateName: f.certificateName || o.expectedCourseName || o.title,
-        issuer: f.issuer || o.provider || '',
-      }));
-    }
-  };
+  // V7.1 §5.2: en una vinculada, nombre, emisor, áreas y tecnologías vienen de
+  // la oportunidad: se muestran, no se editan (el servidor los deriva).
+  const oportunidad = oportunidades.find((x) => x.activityId === activityId) ?? null;
+  const elegir = (id: string) => setActivityId(id);
 
   const submit = async () => {
+    if (oportunidad && !file) {
+      onError('Adjunta el certificado que recibiste: en una credencial de una oportunidad es obligatorio.');
+      return;
+    }
     setSaving(true);
     try {
-      await certificateService.create({
-        activityId: activityId || undefined,
-        certificateName: form.certificateName,
-        issuer: form.issuer,
-        issueDate: form.issueDate || undefined,
-        description: form.description || undefined,
-        academicAreaId: areaId || undefined,
-        storedFileId: file?.id,
-      });
-      setForm({ certificateName: '', issuer: '', issueDate: '', description: '' });
+      const verificacion = {
+        certificateUrl: form.certificateUrl.trim() || undefined,
+        credentialId: form.credentialId.trim() || undefined,
+      };
+      await certificateService.create(oportunidad
+        ? {
+          activityId,
+          ...(oportunidad.expectedIssuer ? {} : { issuer: form.issuer }),
+          issueDate: form.issueDate || undefined,
+          description: form.description || undefined,
+          ...verificacion,
+          storedFileId: file?.id,
+        }
+        : {
+          certificateName: form.certificateName,
+          issuer: form.issuer,
+          issueDate: form.issueDate || undefined,
+          description: form.description || undefined,
+          academicAreaId: areaId || undefined,
+          ...verificacion,
+          storedFileId: file?.id,
+        });
+      setForm(vacio);
       setAreaId('');
       setFile(null);
       setActivityId('');
@@ -505,18 +511,38 @@ function CertificateForm({
           label: o.provider ? `${o.title} · ${o.provider}` : o.title,
         }))}
       />
-      <Field
-        label="Nombre del certificado"
-        value={form.certificateName}
-        onChangeText={(t) => setForm({ ...form, certificateName: t })}
-        placeholder="Fundamentos de pruebas automatizadas"
-      />
-      <Field
-        label="Entidad emisora"
-        value={form.issuer}
-        onChangeText={(t) => setForm({ ...form, issuer: t })}
-        placeholder="Plataforma externa de formación"
-      />
+      {oportunidad ? (
+        <View style={styles.oportunidad} testID="datos-oportunidad">
+          <Text style={styles.hint}>Estos datos vienen de la oportunidad y no se editan.</Text>
+          <Text style={styles.dato}>Nombre esperado: {oportunidad.expectedName ?? oportunidad.expectedCourseName ?? oportunidad.title}</Text>
+          <Text style={styles.dato}>Emisor esperado: {oportunidad.expectedIssuer ?? 'no indicado'}</Text>
+          <Text style={styles.dato}>Áreas: {(oportunidad.areas ?? []).map((a: any) => a.name).join(', ') || 'sin áreas'}</Text>
+          <Text style={styles.dato}>Tecnologías: {(oportunidad.skills ?? []).map((s: any) => s.name).join(', ') || 'sin tecnologías'}</Text>
+        </View>
+      ) : (
+        <>
+          <Field
+            label="Nombre del certificado"
+            value={form.certificateName}
+            onChangeText={(t) => setForm({ ...form, certificateName: t })}
+            placeholder="Fundamentos de pruebas automatizadas"
+          />
+          <Field
+            label="Entidad emisora"
+            value={form.issuer}
+            onChangeText={(t) => setForm({ ...form, issuer: t })}
+            placeholder="Plataforma externa de formación"
+          />
+        </>
+      )}
+      {oportunidad && !oportunidad.expectedIssuer && (
+        <Field
+          label="Entidad emisora"
+          value={form.issuer}
+          onChangeText={(t) => setForm({ ...form, issuer: t })}
+          placeholder="Quién firmó el certificado"
+        />
+      )}
       <Field
         label="Fecha de emisión (aaaa-mm-dd)"
         value={form.issueDate}
@@ -530,15 +556,30 @@ function CertificateForm({
         placeholder="Curso de 40 horas con evaluación final"
         multiline
       />
-      <Picker
-        label="Área académica"
-        emptyLabel="Sin área"
-        value={areaId}
-        onChange={setAreaId}
-        options={areas.map((a) => ({ id: a.id, label: a.name }))}
+      {!oportunidad && (
+        <Picker
+          label="Área académica"
+          emptyLabel="Sin área"
+          value={areaId}
+          onChange={setAreaId}
+          options={areas.map((a) => ({ id: a.id, label: a.name }))}
+        />
+      )}
+      {/* V7.1 §5.2: opcionales; el enlace individual o el código identifican el certificado. */}
+      <Field
+        label="Enlace individual de verificación (opcional)"
+        value={form.certificateUrl}
+        onChangeText={(t) => setForm({ ...form, certificateUrl: t })}
+        placeholder="https://emisor.example.com/cert/123"
+      />
+      <Field
+        label="Código de credencial (opcional)"
+        value={form.credentialId}
+        onChangeText={(t) => setForm({ ...form, credentialId: t })}
+        placeholder="AF-2026-00417"
       />
       <View style={{ marginBottom: 12 }}>
-        <Text style={styles.label}>Archivo del certificado (opcional)</Text>
+        <Text style={styles.label}>{oportunidad ? 'Archivo del certificado (obligatorio)' : 'Archivo del certificado (o el enlace de verificación)'}</Text>
         <Button
           title={tituloDeAdjunto(busy, !!file)}
           variant="secondary"
@@ -551,8 +592,13 @@ function CertificateForm({
           </Text>
         )}
       </View>
+      <Text style={styles.hint}>
+        {!oportunidad && 'Una credencial histórica va directo a la revisión de Dirección (sin comparación automática).'}
+        {oportunidad?.hasModel && 'Se compara con el certificado modelo de la oportunidad y luego la revisa Dirección.'}
+        {oportunidad && !oportunidad.hasModel && 'Sin certificado modelo: va directo a la revisión de Dirección.'}
+      </Text>
       <Button
-        title="Adjuntar credencial"
+        title="Enviar a revisión"
         icon="award"
         onPress={submit}
         loading={saving}
@@ -563,6 +609,10 @@ function CertificateForm({
 }
 
 const styles = StyleSheet.create({
+  // V7.1 §5.2: datos heredados de la oportunidad (solo lectura) y ayudas del envío.
+  oportunidad: { borderWidth: 1, borderColor: colors.gray200, borderRadius: 8, padding: 10, marginBottom: 12, backgroundColor: colors.gray50 },
+  dato: { fontSize: 13, color: colors.gray700, marginTop: 4 },
+  hint: { fontSize: 12, color: colors.gray500, marginBottom: 10 },
   tabs: { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 4 },
   tab: {
     flex: 1,

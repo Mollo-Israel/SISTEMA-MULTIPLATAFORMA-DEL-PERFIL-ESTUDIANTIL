@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { cleanLine, cleanText } from '../../common/validation';
 
 /**
@@ -36,4 +36,21 @@ export class SaveValidationReferenceDto {
   @IsString()
   @MaxLength(300, { message: 'Las notas no pueden superar 300 caracteres.' })
   notes?: string | null;
+}
+
+/**
+ * V7.1 D03 · «Adjuntar/actualizar certificado modelo» (solo Dirección).
+ * El archivo lo sube Dirección; el motivo queda en la versión y en la auditoría.
+ */
+export class UpdateReferenceModelDto {
+  @ApiProperty({ description: 'Certificado modelo: id devuelto por POST /uploads' })
+  @IsUUID('4', { message: 'El modelo debe identificarse por el id que devolvió la subida.' })
+  storedFileId: string;
+
+  @ApiProperty({ example: 'El docente entregó el modelo oficial después de la aprobación.' })
+  @Transform(cleanText)
+  @IsString()
+  @MinLength(10, { message: 'Explica el motivo (al menos 10 caracteres).' })
+  @MaxLength(500, { message: 'El motivo no puede superar 500 caracteres.' })
+  reason: string;
 }

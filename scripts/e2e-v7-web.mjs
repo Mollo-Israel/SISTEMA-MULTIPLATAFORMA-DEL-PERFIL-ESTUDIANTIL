@@ -256,7 +256,99 @@ async function batch2(ctx, browser) {
   await ct.close();
 }
 
-const BATCHES = { batch1, batch2 };
+async function batch3(ctx, browser) {
+  objective('BATCH V7-3 · Formulario de credencial vinculada en solo lectura, tres fases y certificado modelo de Dirección');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Irene', lastName: `Webmodelo${L}`, email: correoStaff('b3dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Tomas', lastName: `Webresponsable${L}`, email: correoStaff('b3doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const est = await provisionStudent(admin, { firstName: 'Valeria', lastName: `Webcredencial${L}`, email: correoEst('b3est'), semester: 5 });
+  // La bienvenida se completa por API para que entre directo a sus credenciales.
+  await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: est.token, body: {} });
+  const unaSkill = ((await req('GET', '/skills', { token: est.token })).data ?? []).find((s) => s.isActive !== false);
+  await req('PUT', '/profiles/me/skill-interests', { token: est.token, body: { items: [{ skillId: unaSkill?.id, kind: 'interest' }] } });
+  await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+  await req('POST', '/profiles/me/onboarding/privacy', { token: est.token, body: { peerDiscoverable: true, publicProfileEnabled: false } });
+  await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
+  const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+  const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
+  const area = (await req('POST', '/academic-areas', { token: admin, body: { name: `Webredes credencial ${L}`, tags: [`wrc${L}`] } })).data;
+  const PROVEEDOR = 'Academia Andina de Redes';
+  const op = await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      title: `Webfundamentos andinos ${L}`, type: 'academica', categoryId: cat.id, status: 'open', originType: 'external', provider: PROVEEDOR,
+      externalUrl: 'https://andina.example.org/cursos', outcomePolicy: 'external_credential_expected', activityDate: en(48), endAt: en(72),
+      semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], areaIds: [area.id], responsibleUserIds: [docente.userId],
+    },
+  });
+  if (op.status !== 201) throw new Error(`No se pudo crear la oportunidad (${op.status}): ${json(op.data)}`);
+  const A = op.data;
+  await req('POST', `/activities/${A.id}/register`, { token: est.token });
+  await req('PATCH', `/activities/${A.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'accepted' } });
+  await req('PUT', `/activities/${A.id}/validation-reference`, { token: director.token, body: { expectedCourseName: 'Fundamentos de Redes Andinas' } });
+  await req('PATCH', `/activities/${A.id}`, { token: director.token, body: { status: 'finished' } });
+  // Una histórica ya enviada, para ver sus fases.
+  const historica = await req('POST', '/certificates/external', {
+    token: est.token, body: { certificateName: `Robotica educativa ${L}`, issuer: 'Club Andino', certificateUrl: `https://club.example.org/c/${L}` },
+  });
+
+  const { ctx: ce, page: pe, errores: ee } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/student/evidences`);
+  await pe.locator('#cert-origen').waitFor({ timeout: 30000 });
+  await pe.locator('#cert-origen').selectOption(A.id);
+  const datos = pe.locator('[data-testid="datos-oportunidad"]');
+  await datos.waitFor({ timeout: 10000 }).catch(() => {});
+  const texto = (await datos.textContent().catch(() => '')) ?? '';
+  const camposLibres = await pe.locator('#cert-nombre').count();
+  const plegada = await pe.locator('details', { hasText: 'Si tu certificado incluye enlace o código de verificación' }).evaluate((d) => !d.open).catch(() => false);
+  check(texto.includes('Fundamentos de Redes Andinas') && texto.includes(PROVEEDOR) && texto.includes(area.name) && camposLibres === 0 && plegada,
+    'W7.3.1 C03 Al elegir la oportunidad, nombre, emisor y áreas se muestran en solo lectura; enlace y código van plegados', json({ texto: texto.slice(0, 120), camposLibres, plegada }));
+
+  await pe.getByRole('button', { name: 'Enviar a revisión' }).click();
+  const faltaArchivo = await pe.locator('[data-testid="falta-archivo"]').waitFor({ timeout: 5000 }).then(() => true).catch(() => false);
+  const creadas = psql(`select count(*) from external_certificates c join student_profiles p on p.id = c.student_profile_id where p.id = '${est.profileId}' and c.activity_id = '${A.id}'`);
+  check(faltaArchivo && creadas === '0', 'W7.3.2 C06 Sin archivo, el error aparece en el campo y no se envía nada', json({ faltaArchivo, creadas }));
+
+  const fila = pe.locator('tr, .card, li', { hasText: `Robotica educativa ${L}` }).last();
+  await fila.locator('[data-testid="estado-revision"]').waitFor({ timeout: 15000 }).catch(() => {});
+  const revision = (await fila.locator('[data-testid="estado-revision"]').textContent().catch(() => '')) ?? '';
+  await fila.locator('[data-testid="fases-credencial"] summary').click().catch(() => {});
+  const fases = (await fila.locator('[data-testid="fases-credencial"]').textContent().catch(() => '')) ?? '';
+  check(historica.status === 201 && /Pendiente de revisión de Dirección/.test(revision) && /No aplica comparación automática/.test(fases) && !/verificad/i.test(fases),
+    'W7.3.3 C01 §5.4 La histórica muestra arriba la revisión pendiente y, desplegadas, sus fases «no aplica» (sin checks ficticios)', json({ revision, fases: fases.slice(0, 160) }));
+  check(ee.length === 0, 'W7.3.4 Sin errores de JavaScript en «Mis credenciales»', ee.join(' | '));
+  await ce.close();
+
+  // D03: solo Dirección ve la acción del modelo; con la oportunidad finalizada.
+  const { ctx: cd, page: pd, errores: ed } = await entrar(browser, director.email);
+  await pd.goto(`${WEB}/director/activities?status=finished`);
+  await pd.getByRole('tab', { name: 'Externas' }).click({ timeout: 10000 }).catch(() => pd.getByText('Externas', { exact: true }).first().click().catch(() => {}));
+  await grillaLista(pd);
+  await pd.locator('.search-input input, input[type=search]').first().fill(A.title).catch(() => {});
+  const boton = pd.getByRole('button', { name: `Certificado modelo de ${A.title}` });
+  await boton.waitFor({ timeout: 20000 }).catch(() => {});
+  const veBoton = await boton.count();
+  if (veBoton) await boton.click();
+  const vigente = (await pd.locator('[data-testid="modelo-vigente"]').textContent({ timeout: 10000 }).catch(() => '')) ?? '';
+  const pideMotivo = await pd.locator('#modelo-motivo').count();
+  check(veBoton === 1 && /sin modelo/.test(vigente) && pideMotivo === 1,
+    'W7.3.5 C26 Dirección abre «Certificado modelo» de una oportunidad finalizada: ve el vigente y debe indicar un motivo', json({ veBoton, vigente, pideMotivo }));
+  check(ed.length === 0, 'W7.3.6 Sin errores de JavaScript en la gestión de Dirección', ed.join(' | '));
+  await cd.close();
+
+  const { ctx: ct, page: pt } = await entrar(browser, docente.email);
+  await pt.goto(`${WEB}/teacher/my-activities?status=finished`);
+  await pt.getByRole('tab', { name: 'Externas' }).click({ timeout: 5000 }).catch(() => pt.getByText('Externas', { exact: true }).first().click({ timeout: 3000 }).catch(() => {}));
+  await grillaLista(pt);
+  await pt.locator('tbody tr', { hasText: A.title }).first().waitFor({ timeout: 20000 }).catch(() => {});
+  const filaDocente = await pt.locator('tbody tr', { hasText: A.title }).count();
+  const botonDocente = await pt.getByRole('button', { name: `Certificado modelo de ${A.title}` }).count();
+  check(filaDocente >= 1 && botonDocente === 0, 'W7.3.7 C27 El docente responsable no tiene la acción del certificado modelo', json({ filaDocente, botonDocente }));
+  await ct.close();
+}
+
+const BATCHES = { batch1, batch2, batch3 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

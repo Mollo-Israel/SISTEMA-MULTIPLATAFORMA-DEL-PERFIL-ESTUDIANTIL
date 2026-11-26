@@ -17,6 +17,7 @@ import type {
   AcademicArea, Activity, ActivityCategoryItem, ActivityPerson, OutcomePolicy, Participant, ResourceLink, Skill,
 } from '../services/types';
 import AreaSkillPicker from './AreaSkillPicker';
+import ModeloDeReferencia from './ModeloDeReferencia';
 import {
   Badge, Button, Card, Diferido, EmptyState, FILAS_POR_PAGINA, FiltroEstado, Modal, Paginacion, ResultCount, SearchInput,
   SkeletonTable, Stagger, ThOrden, useOrden, usePaginacion,
@@ -60,6 +61,10 @@ const emptyForm = {
   credentialIdPattern: '',
   sampleStoredFileId: '',
   sampleFileName: '',
+  /** V7.1 D03: aprobada o publicada, quien edita ya no cambia la referencia. */
+  referenciaBloqueada: false,
+  /** V7.1 D03: el modelo ya existe y se cambia con la acción de Dirección (con motivo). */
+  modeloPorAccion: false,
   /** V3.2 §16–§17: responsables (el primero es el principal) y contactos. */
   responsables: [] as ActivityPerson[],
   contactos: [] as ActivityPerson[],
@@ -362,7 +367,7 @@ export default function ActivityManager({
     else if (accion === 'publish' && editing.status === 'draft') payload.status = 'open';
     const conReferencia = externa || form.outcomePolicy === 'external_credential_expected';
     const guardarReferencia = async (id: string) => {
-      if (!conReferencia) return;
+      if (!conReferencia || form.referenciaBloqueada) return;
       if (!editing && !form.expectedCourseName.trim() && !form.credentialIdPattern.trim() && !form.sampleStoredFileId) return;
       await validationReferenceService.save(id, {
         expectedCourseName: form.expectedCourseName.trim() || null,
@@ -597,6 +602,8 @@ export default function ActivityManager({
       credentialIdPattern: '',
       sampleStoredFileId: '',
       sampleFileName: '',
+      referenciaBloqueada: false,
+      modeloPorAccion: false,
     });
     if (a.originType === 'external' || a.outcomePolicy === 'external_credential_expected') {
       validationReferenceService.get(a.id).then((r) => completarCarga((f) => ({
@@ -605,6 +612,8 @@ export default function ActivityManager({
         credentialIdPattern: r.credentialIdPattern ?? '',
         sampleStoredFileId: r.sampleStoredFileId ?? '',
         sampleFileName: r.sampleFileName ?? '',
+        referenciaBloqueada: !!r.locked,
+        modeloPorAccion: !!r.modelRequiresAction,
       }))).catch(() => {});
     }
     errores.reset();
@@ -719,6 +728,8 @@ export default function ActivityManager({
     detalleAbierto.current = null;
     setDetalle(null);
   };
+  /** V7.1 D03: oportunidad cuyo certificado modelo está adjuntando Dirección. */
+  const [modeloDe, setModeloDe] = useState<Activity | null>(null);
   /** V4.1 A41-011: corrección excepcional en curso. */
   const [correccion, setCorreccion] = useState<{ row: Participant; status: 'confirmed' | 'absent' } | null>(null);
   const [rechazo, setRechazo] = useState<Participant | null>(null);
@@ -1167,12 +1178,19 @@ export default function ActivityManager({
                   Referencia de validación (opcional): ayuda a leer y comparar la credencial que adjunte el
                   estudiante. Parecerse al ejemplo no prueba que una credencial sea auténtica.
                 </p>
+                {form.referenciaBloqueada && (
+                  <p className="inline-note" data-testid="referencia-bloqueada">
+                    La oportunidad ya está aprobada: la referencia no se edita. Si tienes el certificado modelo,
+                    entrégalo a Dirección por el canal institucional para que lo adjunte.
+                  </p>
+                )}
                 <div className="row">
                   <div className="field">
                     <label htmlFor="op-curso">Nombre esperado del curso</label>
                     <input
                       id="op-curso"
                       value={form.expectedCourseName}
+                      disabled={form.referenciaBloqueada}
                       onChange={(e) => setForm({ ...form, expectedCourseName: e.target.value })}
                       placeholder="CCNA: Introduction to Networks"
                       maxLength={200}
@@ -1183,6 +1201,7 @@ export default function ActivityManager({
                     <input
                       id="op-patron"
                       value={form.credentialIdPattern}
+                      disabled={form.referenciaBloqueada}
                       onChange={(e) => setForm({ ...form, credentialIdPattern: e.target.value })}
                       placeholder="NA-####-@@*"
                       maxLength={80}
@@ -1190,6 +1209,12 @@ export default function ActivityManager({
                     <span className="field-hint"># = dígito · @ = letra · * = varios caracteres; el resto se copia tal cual.</span>
                   </div>
                 </div>
+                {(form.referenciaBloqueada || form.modeloPorAccion) ? (
+                  <p className="field-hint" data-testid="modelo-por-accion">
+                    Certificado modelo: {form.sampleFileName || 'sin modelo'}.
+                    {form.modeloPorAccion && !form.referenciaBloqueada && ' Para cambiarlo usa «Certificado modelo» en la lista e indica el motivo.'}
+                  </p>
+                ) : (
                 <div className="field">
                   <label htmlFor="op-ejemplo">Certificado de ejemplo (PDF o imagen)</label>
                   <input
@@ -1220,6 +1245,7 @@ export default function ActivityManager({
                     </span>
                   )}
                 </div>
+                )}
               </div>
             )}
 
@@ -1749,6 +1775,18 @@ export default function ActivityManager({
                               <FiCopy />
                             </button>
                           )}
+                          {/* V7.1 D03: solo Dirección adjunta o actualiza el modelo, también después de aprobada o finalizada. */}
+                          {user?.role === 'CAREER_DIRECTOR' && !a.soloLectura
+                            && (a.originType === 'external' || a.outcomePolicy === 'external_credential_expected') && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setModeloDe(a)}
+                              title="Adjuntar o actualizar el certificado modelo"
+                              aria-label={`Certificado modelo de ${a.title}`}
+                            >
+                              <FiAward /> Modelo
+                            </button>
+                          )}
                           {!a.soloLectura && (
                             <button
                               className={`btn btn-sm ${selected === a.id ? 'btn-primary' : 'btn-secondary'}`}
@@ -2026,6 +2064,9 @@ export default function ActivityManager({
             Seleccione “Participación” en una actividad para registrar la asistencia.
           </p>
         </div>
+      )}
+      {modeloDe && (
+        <ModeloDeReferencia activityId={modeloDe.id} titulo={modeloDe.title} onClose={() => setModeloDe(null)} />
       )}
       {detalle && (
         <Modal title={detalle.title} subtitle="Detalles de la actividad (solo lectura)" onClose={cerrarDetalle} width={620}>

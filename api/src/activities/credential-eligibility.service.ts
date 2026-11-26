@@ -1,8 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ActivityOrigin, ActivityOutcomePolicy, RegistrationStatus } from '@perfil/shared';
 import { Activity } from '../entities/activity.entity';
+import { ActivityArea } from '../entities/activity-area.entity';
+import { ActivitySkill } from '../entities/activity-skill.entity';
+import { conModelo } from '../validation/reference-model';
 import { ActivityRegistration } from '../entities/activity-registration.entity';
 import { ExternalCertificate } from '../entities/external-certificate.entity';
 import { ExternalOpportunityValidationReference } from '../entities/external-opportunity-validation-reference.entity';
@@ -19,6 +22,18 @@ export interface CredentialOpportunity {
   endAt: Date | null;
   originType: ActivityOrigin;
   expectedCourseName: string | null;
+  /**
+   * V7.1 §5.2: lo que la credencial hereda de la oportunidad. El estudiante lo
+   * ve en solo lectura y el servidor lo usa al guardar, sin confiar en el cuerpo.
+   * Nombre esperado del certificado; si no hay, el título de la actividad.
+   */
+  expectedName: string;
+  /** Proveedor o emisor esperado; `null` si la oportunidad no lo define. */
+  expectedIssuer: string | null;
+  areas: { id: string; name: string }[];
+  skills: { id: string; name: string; areaId: string | null }[];
+  /** V7.1 D03: con certificado modelo, la credencial se compara; sin él, va directo a Dirección. */
+  hasModel: boolean;
 }
 
 /**
@@ -85,19 +100,7 @@ export class CredentialEligibilityService {
 
     const elegibles = filas.filter((r) => CredentialEligibilityService.elegible(r.activity, r.status));
     if (!elegibles.length) return [];
-
-    const refs = await this.references.find({
-      where: elegibles.map((r) => ({ activityId: r.activityId })),
-    });
-    const refDe = new Map(refs.map((x) => [x.activityId, x]));
-    return elegibles.map((r) => ({
-      activityId: r.activityId,
-      title: r.activity.title,
-      provider: r.activity.provider,
-      endAt: r.activity.endAt ?? r.activity.eventDate,
-      originType: r.activity.originType,
-      expectedCourseName: refDe.get(r.activityId)?.expectedCourseName ?? null,
-    }));
+    return this.describir(elegibles.map((r) => r.activity));
   }
 
   /** ¿Puede este perfil adjuntar ahora la credencial de esta oportunidad? */
@@ -108,6 +111,59 @@ export class CredentialEligibilityService {
     });
     if (!r || !CredentialEligibilityService.elegible(r.activity, r.status)) return null;
     return r.activity;
+  }
+
+  /**
+   * V7.1 §5.2: la oportunidad tal como la hereda la credencial, si este perfil
+   * puede adjuntarla ahora. `null` si no es elegible (otra cuenta, no
+   * aceptado, sin terminar): un id conocido no basta.
+   */
+  async oportunidadPara(studentProfileId: string, activityId: string): Promise<CredentialOpportunity | null> {
+    const actividad = await this.assertEligible(studentProfileId, activityId);
+    if (!actividad) return null;
+    return (await this.describir([actividad]))[0] ?? null;
+  }
+
+  /** Lo que hereda una credencial de esa oportunidad, sin mirar la elegibilidad (para editar una ya enviada). */
+  async descripcionDe(activityId: string): Promise<CredentialOpportunity | null> {
+    const actividad = await this.registrations.manager.findOne(Activity, { where: { id: activityId } });
+    return actividad ? (await this.describir([actividad]))[0] ?? null : null;
+  }
+
+  /** Nombre esperado, emisor, áreas, tecnologías y modelo de cada oportunidad. */
+  private async describir(actividades: Activity[]): Promise<CredentialOpportunity[]> {
+    const ids = actividades.map((a) => a.id);
+    const em = this.registrations.manager;
+    const [refs, areas, skills, modelos] = await Promise.all([
+      this.references.find({ where: { activityId: In(ids) } }),
+      em.find(ActivityArea, { where: { activityId: In(ids) }, relations: { academicArea: true } }),
+      em.find(ActivitySkill, { where: { activityId: In(ids) }, relations: { skill: true }, order: { createdAt: 'ASC' } }),
+      conModelo(em, ids),
+    ]);
+    const refDe = new Map(refs.map((x) => [x.activityId, x]));
+    return actividades.map((a) => {
+      const esperado = refDe.get(a.id)?.expectedCourseName?.trim() || null;
+      // La principal primero, como en el resto del catálogo (V3 §12.1).
+      const suyas = areas
+        .filter((x) => x.activityId === a.id && x.academicArea)
+        .sort((x, y) => Number(y.academicAreaId === a.academicAreaId) - Number(x.academicAreaId === a.academicAreaId))
+        .map((x) => ({ id: x.academicAreaId, name: x.academicArea.name }));
+      return {
+        activityId: a.id,
+        title: a.title,
+        provider: a.provider,
+        endAt: a.endAt ?? a.eventDate,
+        originType: a.originType,
+        expectedCourseName: esperado,
+        expectedName: esperado ?? a.title,
+        expectedIssuer: a.provider?.trim() || null,
+        areas: suyas,
+        skills: skills
+          .filter((x) => x.activityId === a.id && x.skill)
+          .map((x) => ({ id: x.skillId, name: x.skill.name, areaId: x.academicAreaId })),
+        hasModel: modelos.has(a.id),
+      };
+    });
   }
 
   /**

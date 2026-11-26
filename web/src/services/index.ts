@@ -1112,6 +1112,9 @@ export const certificateService = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch<ExternalCertificate>(`/certificates/external/${id}`, data).then((r) => r.data),
   remove: (id: string) => api.delete(`/certificates/external/${id}`).then((r) => r.data),
+  /** V7.1 §5.3: «Comprobar información» (vinculada con certificado modelo). */
+  check: (id: string) =>
+    api.post<{ certificateId: string; status: string; previousAttempts: number }>(`/certificates/external/${id}/check`).then((r) => r.data),
   /** V3 §16: pide a Dirección la revisión excepcional de una histórica sin verificador. */
   requestManualReview: (id: string, note: string) =>
     api.post(`/certificates/external/${id}/manual-review`, { note }).then((r) => r.data),
@@ -1125,6 +1128,9 @@ export const manualReviewService = {
   pending: () => api.get<ManualReviewItem[]>('/validation/manual-reviews').then((r) => r.data),
   decide: (certificateId: string, body: { decision: 'corroborated' | 'inconclusive' | 'rejected'; reason: string; method?: string; proof?: string }) =>
     api.post(`/validation/manual-reviews/${certificateId}`, body).then((r) => r.data),
+  /** V7.1 §5.5: vuelve a comprobar una pendiente con el modelo vigente. */
+  recheck: (certificateId: string) =>
+    api.post<{ status: string; previousResults: number }>(`/validation/manual-reviews/${certificateId}/recheck`).then((r) => r.data),
 };
 
 export const validationReferenceService = {
@@ -1132,6 +1138,9 @@ export const validationReferenceService = {
     api.get<ValidationReference>(`/activities/${activityId}/validation-reference`).then((r) => r.data),
   save: (activityId: string, data: Record<string, unknown>) =>
     api.put<ValidationReference>(`/activities/${activityId}/validation-reference`, data).then((r) => r.data),
+  /** V7.1 D03: «Adjuntar/actualizar certificado modelo» (solo Dirección), con motivo. */
+  updateModel: (activityId: string, data: { storedFileId: string; reason: string }) =>
+    api.put<ValidationReference>(`/activities/${activityId}/validation-reference/model`, data).then((r) => r.data),
 };
 
 export const constancyService = {

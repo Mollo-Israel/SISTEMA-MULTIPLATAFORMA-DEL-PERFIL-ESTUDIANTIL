@@ -1241,6 +1241,23 @@ button.chip { cursor: pointer; font-family: var(--font); }
 /* --- V3 §67: error de validación propio, debajo del campo --- */
 [aria-invalid="true"] { border-color: var(--danger, #b42318) !important; box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.12); }
 
+/* --- V7.1 §5.2 · Credencial vinculada: datos de la oportunidad y verificación plegable --- */
+.datos-oportunidad { border: 1px solid var(--gray-200); border-radius: 8px; padding: 0.7rem 0.9rem; margin-bottom: 0.9rem; background: var(--gray-50); }
+.datos-oportunidad dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 0.9rem; margin: 0; font-size: 0.88rem; }
+.datos-oportunidad dt { color: var(--gray-700); font-weight: 600; }
+.datos-oportunidad dd { margin: 0; }
+.verificacion-plegable { margin: 0.4rem 0 0.9rem; }
+.verificacion-plegable summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--gray-700); }
+@media (max-width: 560px) { .datos-oportunidad dl { grid-template-columns: 1fr; } }
+
+/* --- V7.1 §5.4 · Tres fases de ayuda a la revisión (sin checks ficticios) --- */
+.fases-credencial { width: 100%; margin-top: 0.35rem; font-size: 0.84rem; }
+.fases-credencial summary { cursor: pointer; font-weight: 600; color: var(--gray-700); }
+.fases-credencial ol { margin: 0.5rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.55rem; }
+.fases-credencial p { margin: 0.2rem 0 0; }
+.fases-credencial ul { margin: 0.25rem 0 0; padding-left: 1rem; color: var(--gray-700); }
+.fases-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.7rem; }
+
 /* --- V7.1 §4.1 · Estado excluyente de las grillas --- */
 .filtro-estado { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; }
 .filtro-estado label { color: var(--gray-700); white-space: nowrap; }

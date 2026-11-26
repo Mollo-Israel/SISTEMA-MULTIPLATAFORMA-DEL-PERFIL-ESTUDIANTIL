@@ -12,7 +12,7 @@
 
 import { Buffer } from 'node:buffer';
 import { deflateSync } from 'node:zlib';
-import { API, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
+import { API, credencialVinculada, loginAdmin, provisionAndActivate, req } from './lib/fixtures.mjs';
 
 const TS = Date.now();
 
@@ -324,15 +324,12 @@ async function extraccion(ctx) {
   objective('§29 y §30 · Qué dice el documento y cuánto respalda');
 
   section('PDF legible cuyo nombre coincide');
-  const cert = await req('POST', '/certificates/external', {
-    token: ctx.est.token,
-    body: {
-      certificateName: 'CERTIFICADO DE PARTICIPACION',
-      issuer: 'Universidad Privada del Valle',
-      issueDate: '2026-03-15',
-      credentialId: 'AF-2026-00417',
-      storedFileId: ctx.archivo.id,
-    },
+  const cert = await credencialVinculada(ctx.admin, ctx.est, {
+    certificateName: 'CERTIFICADO DE PARTICIPACION',
+    issuer: 'Universidad Privada del Valle',
+    issueDate: '2026-03-15',
+    credentialId: 'AF-2026-00417',
+    storedFileId: ctx.archivo.id,
   });
   check(cert.status === 201, 'B3.18 Se registra el certificado con su archivo', msgOf(cert));
   ctx.certId = cert.data?.id;
@@ -401,13 +398,10 @@ async function extraccion(ctx) {
     'Emitido por: Universidad Privada del Valle',
   ]);
   const subidaAjena = await subir(ctx.est.token, deOtraPersona, 'de-otro.pdf', 'application/pdf');
-  const certAjeno = await req('POST', '/certificates/external', {
-    token: ctx.est.token,
-    body: {
-      certificateName: `Curso de otra persona ${TS}`,
-      issuer: 'Universidad Privada del Valle',
-      storedFileId: subidaAjena.data?.id,
-    },
+  const certAjeno = await credencialVinculada(ctx.admin, ctx.est, {
+    certificateName: `Curso de otra persona ${TS}`,
+    issuer: 'Universidad Privada del Valle',
+    storedFileId: subidaAjena.data?.id,
   });
   const vAjeno = await esperarVeredicto(ctx, 'external_certificate', certAjeno.data?.id);
   check(
@@ -423,13 +417,10 @@ async function extraccion(ctx) {
 
   section('Documento ilegible');
   const ilegible = await subir(ctx.est.token, construirPng(), 'escaneo.png', 'image/png');
-  const certIlegible = await req('POST', '/certificates/external', {
-    token: ctx.est.token,
-    body: {
-      certificateName: `Escaneo sin texto ${TS}`,
-      issuer: 'Emisor Externo',
-      storedFileId: ilegible.data?.id,
-    },
+  const certIlegible = await credencialVinculada(ctx.admin, ctx.est, {
+    certificateName: `Escaneo sin texto ${TS}`,
+    issuer: 'Emisor Externo',
+    storedFileId: ilegible.data?.id,
   });
   const vIlegible = await esperarVeredicto(ctx, 'external_certificate', certIlegible.data?.id);
   check(
@@ -450,13 +441,10 @@ async function extraccion(ctx) {
   );
 
   section('§28 · El duplicado se reconoce');
-  const certDuplicado = await req('POST', '/certificates/external', {
-    token: ctx.est.token,
-    body: {
-      certificateName: `Copia del mismo documento ${TS}`,
-      issuer: 'Universidad Privada del Valle',
-      storedFileId: ctx.duplicado.id,
-    },
+  const certDuplicado = await credencialVinculada(ctx.admin, ctx.est, {
+    certificateName: `Copia del mismo documento ${TS}`,
+    issuer: 'Universidad Privada del Valle',
+    storedFileId: ctx.duplicado.id,
   });
   const vDuplicado = await esperarVeredicto(ctx, 'external_certificate', certDuplicado.data?.id);
   check(
@@ -495,13 +483,10 @@ async function enlaces(ctx) {
 
   let n = 36;
   for (const [url, , nota] of casos) {
-    const creado = await req('POST', '/certificates/external', {
-      token: ctx.est.token,
-      body: {
-        certificateName: `Enlace ${nota} ${TS}`,
-        issuer: 'Emisor Externo',
-        certificateUrl: url,
-      },
+    const creado = await credencialVinculada(ctx.admin, ctx.est, {
+      certificateName: `Enlace ${nota} ${TS}`,
+      issuer: 'Emisor Externo',
+      certificateUrl: url,
     });
 
     // Hay dos barreras y cualquiera de las dos sirve: el DTO rechaza de
@@ -525,13 +510,10 @@ async function enlaces(ctx) {
   }
 
   section('Un dominio que no existe está caído, no bloqueado');
-  const inexistente = await req('POST', '/certificates/external', {
-    token: ctx.est.token,
-    body: {
-      certificateName: `Dominio inexistente ${TS}`,
-      issuer: 'Emisor Externo',
-      certificateUrl: `https://no-existe-${TS}.invalid/verificar`,
-    },
+  const inexistente = await credencialVinculada(ctx.admin, ctx.est, {
+    certificateName: `Dominio inexistente ${TS}`,
+    issuer: 'Emisor Externo',
+    certificateUrl: `https://no-existe-${TS}.invalid/verificar`,
   });
   const vInexistente = await esperarVeredicto(ctx, 'external_certificate', inexistente.data?.id);
   check(

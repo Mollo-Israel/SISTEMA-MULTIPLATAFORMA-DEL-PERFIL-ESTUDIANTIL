@@ -31,6 +31,20 @@ export enum ValidationStatus {
   INCONCLUSIVE = 'inconclusive',
   /** Error tecnico tras agotar los reintentos. */
   FAILED = 'failed',
+  /**
+   * V7.1 §5.2–§5.3: no corresponde procesarla. Es el caso de una histórica o
+   * de una vinculada sin certificado modelo: van directo a la revisión de
+   * Dirección. Es una omisión, no un fallo ni un resultado favorable.
+   */
+  NOT_APPLICABLE = 'not_applicable',
+}
+
+/** V7.1 §5.3: por qué las fases técnicas 1 y 2 no se ejecutaron. */
+export enum ProcessingSkipReason {
+  /** Obtenida antes o fuera de Afinia: no hay con qué compararla. */
+  HISTORICAL = 'historical',
+  /** La oportunidad no tiene certificado modelo. */
+  NO_REFERENCE_MODEL = 'no_reference_model',
 }
 
 /**

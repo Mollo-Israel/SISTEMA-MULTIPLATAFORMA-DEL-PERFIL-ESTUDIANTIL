@@ -60,6 +60,7 @@ import { User } from '../entities/user.entity';
 import { ActivityResponsible } from '../entities/activity-responsible.entity';
 import { ActivityContact } from '../entities/activity-contact.entity';
 import { StoredFileRecord } from '../entities/stored-file.entity';
+import { modeloVigente, registrarVersion, versionesDelModelo } from '../validation/reference-model';
 import { ActivityImage } from '../entities/activity-image.entity';
 import { GamificationEvent, StudentPoints } from '../entities/gamification.entity';
 import { effectiveSemesters, TeacherScopeService } from '../access/teacher-scope.service';
@@ -2767,7 +2768,7 @@ export class ActivitiesService {
     return this.vistaReferencia(activity, await this.references.findOne({
       where: { activityId },
       relations: { sampleStoredFile: true },
-    }));
+    }), user);
   }
 
   async saveValidationReference(user: AuthenticatedUser, activityId: string, dto: SaveValidationReferenceDto) {
@@ -2783,19 +2784,51 @@ export class ActivitiesService {
     let ref = await this.references.findOne({ where: { activityId } });
     ref ??= this.references.create({ activityId });
 
-    if (dto.sampleStoredFileId !== undefined) {
+    const cambiaModelo = dto.sampleStoredFileId !== undefined && (dto.sampleStoredFileId ?? null) !== (ref.sampleStoredFileId ?? null);
+    const cambiaTexto = (dto.expectedCourseName !== undefined && (dto.expectedCourseName || null) !== (ref.expectedCourseName ?? null))
+      || (dto.credentialIdPattern !== undefined && (dto.credentialIdPattern || null) !== (ref.credentialIdPattern ?? null))
+      || (dto.notes !== undefined && (dto.notes || null) !== (ref.notes ?? null));
+    // La web reenvía la referencia entera en cada edición: sin cambios reales, no hay nada que hacer.
+    if (!cambiaModelo && !cambiaTexto && ref.id) {
+      return this.vistaReferencia(activity, await this.references.findOne({ where: { id: ref.id }, relations: { sampleStoredFile: true } }), user);
+    }
+    // V7.1 D03: aprobada o publicada, la referencia ya no la cambia un
+    // responsable ordinario. Dirección registra el primer modelo por aquí;
+    // reemplazarlo después va por la acción específica, con versión y motivo.
+    if (this.referenciaBloqueadaPara(activity, user)) {
+      throw new ForbiddenException({
+        code: 'VALIDATION_REFERENCE_LOCKED',
+        message: 'La oportunidad ya está aprobada: su referencia de validación no se edita. Si hay un certificado modelo, entrégalo a Dirección por el canal institucional para que lo adjunte.',
+      });
+    }
+    if (cambiaModelo && ref.sampleStoredFileId && this.referenciaBloqueada(activity) && user.role === RolNombre.CAREER_DIRECTOR) {
+      throw new ConflictException({
+        code: 'VALIDATION_MODEL_USE_ACTION',
+        message: 'Para cambiar el certificado modelo de una oportunidad aprobada usa «Adjuntar/actualizar certificado modelo» e indica el motivo.',
+      });
+    }
+
+    let archivoModelo: StoredFileRecord | null = null;
+    if (cambiaModelo && dto.sampleStoredFileId) {
       // §27: solo un archivo propio. Si no cambia, no se vuelve a exigir:
       // otro responsable puede editar el resto sin ser dueño del ejemplo.
-      if (dto.sampleStoredFileId && dto.sampleStoredFileId !== ref.sampleStoredFileId) {
-        await this.uploads.requireOwned(user.userId, dto.sampleStoredFileId);
-      }
-      ref.sampleStoredFileId = dto.sampleStoredFileId ?? null;
+      archivoModelo = await this.uploads.requireOwned(user.userId, dto.sampleStoredFileId);
     }
+    if (cambiaModelo) ref.sampleStoredFileId = dto.sampleStoredFileId ?? null;
     if (dto.expectedCourseName !== undefined) ref.expectedCourseName = dto.expectedCourseName || null;
     if (dto.credentialIdPattern !== undefined) ref.credentialIdPattern = dto.credentialIdPattern || null;
     if (dto.notes !== undefined) ref.notes = dto.notes || null;
     ref.updatedById = user.userId;
-    const saved = await this.references.save(ref);
+    const saved = await this.references.manager.transaction(async (em) => {
+      const guardada = await em.save(ref);
+      if (cambiaModelo) {
+        await registrarVersion(em, {
+          activityId, archivo: archivoModelo, origin: user.role === RolNombre.CAREER_DIRECTOR ? 'direccion' : 'responsable', actorUserId: user.userId,
+          reason: archivoModelo ? 'Modelo registrado con la oportunidad.' : 'Modelo retirado antes de la aprobación.',
+        });
+      }
+      return guardada;
+    });
 
     await this.audit.record({
       actorUserId: user.userId,
@@ -2812,7 +2845,77 @@ export class ActivitiesService {
     return this.vistaReferencia(activity, await this.references.findOne({
       where: { id: saved.id },
       relations: { sampleStoredFile: true },
-    }));
+    }), user);
+  }
+
+  /**
+   * V7.1 D03 · «Adjuntar/actualizar certificado modelo», solo Dirección.
+   *
+   * Sirve también después de aprobada o finalizada la oportunidad, para
+   * apoyar revisiones. No cambia título, emisor, fechas, áreas, tecnologías,
+   * cupo, aprobación, asistencia ni trayectoria, y no reprocesa nada: los
+   * envíos nuevos usan el modelo vigente; una pendiente puede volver a
+   * comprobarse si Dirección lo pide. Queda una versión con hash, autor,
+   * fecha y motivo.
+   */
+  async actualizarModeloDeReferencia(user: AuthenticatedUser, activityId: string, dto: { storedFileId: string; reason: string }) {
+    if (user.role !== RolNombre.CAREER_DIRECTOR) {
+      throw new ForbiddenException({ code: 'VALIDATION_MODEL_DIRECTION_ONLY', message: 'Solo Dirección adjunta o actualiza el certificado modelo.' });
+    }
+    const activity = await this.findOne(activityId);
+    this.assertEsperaCredencial(activity);
+    if (activity.status === ActivityStatus.CANCELLED) {
+      throw new ConflictException({ code: 'ACTIVITY_CANCELLED', message: 'La oportunidad está cancelada.' });
+    }
+    const motivo = dto.reason.trim();
+    const archivo = await this.uploads.requireOwned(user.userId, dto.storedFileId);
+    const anterior = await this.references.findOne({ where: { activityId } });
+    if (anterior?.sampleStoredFileId === archivo.id) {
+      throw new ConflictException({ code: 'VALIDATION_MODEL_UNCHANGED', message: 'Ese archivo ya es el certificado modelo vigente.' });
+    }
+
+    const version = await this.references.manager.transaction(async (em) => {
+      // La fila de la referencia se bloquea: dos cambios a la vez no compiten por el mismo número de versión.
+      let ref = await em.findOne(ExternalOpportunityValidationReference, { where: { activityId }, lock: { mode: 'pessimistic_write' } });
+      ref ??= em.create(ExternalOpportunityValidationReference, { activityId });
+      // Un modelo cargado antes del versionado queda registrado como su versión previa.
+      if (ref.id && ref.sampleStoredFileId) await modeloVigente(em, activityId);
+      ref.sampleStoredFileId = archivo.id;
+      ref.updatedById = user.userId;
+      await em.save(ref);
+      return registrarVersion(em, { activityId, archivo, origin: 'direccion', reason: motivo, actorUserId: user.userId });
+    });
+
+    await this.audit.record({
+      actorUserId: user.userId,
+      eventType: AuditEventType.VALIDATION_REFERENCE_MODEL_VERSIONED,
+      entityType: 'activity',
+      entityId: activity.id,
+      metadata: {
+        version: version.version, versionId: version.id, fileSha256: version.fileSha256,
+        reason: motivo, activityStatus: activity.status, reemplaza: anterior?.sampleStoredFileId ?? null,
+      },
+    });
+    return this.vistaReferencia(activity, await this.references.findOne({ where: { activityId }, relations: { sampleStoredFile: true } }), user);
+  }
+
+  /** V7.1 D03: aprobada (si pasó por revisión) o ya publicada. */
+  private referenciaBloqueada(activity: Activity): boolean {
+    if (activity.reviewStatus === ActivityReviewStatus.APPROVED) return true;
+    return activity.status !== ActivityStatus.DRAFT;
+  }
+
+  /**
+   * ¿Quien consulta ya no edita la referencia? Dirección nunca queda fuera (el
+   * modelo lo reemplaza con la acción específica). Quien creó y publicó la
+   * oportunidad sin pasar por revisión sigue siendo su autoridad. El resto
+   * (el docente de una propuesta aprobada, un responsable asignado) no la
+   * cambia después de aprobada o publicada.
+   */
+  private referenciaBloqueadaPara(activity: Activity, user: AuthenticatedUser): boolean {
+    if (user.role === RolNombre.CAREER_DIRECTOR) return false;
+    if (!this.referenciaBloqueada(activity)) return false;
+    return activity.requiresReview || activity.creatorId !== user.userId;
   }
 
   private assertEsperaCredencial(activity: Activity): void {
@@ -2824,9 +2927,19 @@ export class ActivitiesService {
     }
   }
 
-  private vistaReferencia(activity: Activity, ref: ExternalOpportunityValidationReference | null) {
+  private async vistaReferencia(activity: Activity, ref: ExternalOpportunityValidationReference | null, user: AuthenticatedUser) {
     const archivo = ref?.sampleStoredFile ?? null;
+    const bloqueada = this.referenciaBloqueada(activity);
+    const versiones = await versionesDelModelo(this.references.manager, activity.id);
     return {
+      // V7.1 D03: qué puede hacer quien consulta, y la historia del modelo.
+      locked: this.referenciaBloqueadaPara(activity, user),
+      modelRequiresAction: bloqueada && !!ref?.sampleStoredFileId,
+      canUpdateModel: user.role === RolNombre.CAREER_DIRECTOR,
+      modelVersions: versiones.map((v) => ({
+        version: v.version, fileName: v.fileName, fileSha256: v.fileSha256, origin: v.origin,
+        reason: v.reason, createdAt: v.createdAt, createdById: v.createdById, current: !!v.storedFileId && v.storedFileId === ref?.sampleStoredFileId,
+      })),
       activityId: activity.id,
       expectedCourseName: ref?.expectedCourseName ?? null,
       credentialIdPattern: ref?.credentialIdPattern ?? null,

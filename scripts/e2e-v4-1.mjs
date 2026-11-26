@@ -810,13 +810,48 @@ async function batch8(ctx) {
       }
       return null;
     };
-    const credencial = async (body) => {
-      const r = await req('POST', '/certificates/external', { token: est.token, body: { issueDate: '2025-06-01', ...body } });
+    const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
+    const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
+    /**
+     * V7.1 §5.2 (BATCH V7-3): la histórica ya no se procesa sola. Los casos
+     * que prueban el procesamiento van como vinculadas a una oportunidad con
+     * certificado modelo (proveedor = emisor declarado). Sin archivo propio
+     * llevan un PDF sin texto, porque la vinculada lo exige.
+     */
+    let nCaso = 0;
+    const modeloPdf = async (lineas) => {
+      const form = new FormData();
+      form.append('file', new Blob([pdfConTexto(lineas)], { type: 'application/pdf' }), 'modelo.pdf');
+      return (await (await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${director.token}` }, body: form })).json())?.id;
+    };
+    const opGenerica = async (issuer, titulo) => {
+      const a = (await req('POST', '/activities', {
+        token: director.token,
+        body: {
+          title: titulo, type: 'academica', categoryId: cat.id, status: 'open', originType: 'external', provider: issuer,
+          externalUrl: 'https://proveedor.example.org/curso', outcomePolicy: 'external_credential_expected', activityDate: en(24), endAt: en(48),
+        },
+      })).data;
+      await req('PUT', `/activities/${a.id}/validation-reference`, { token: director.token, body: { sampleStoredFileId: await modeloPdf([issuer, titulo]) } });
+      await req('POST', `/activities/${a.id}/register`, { token: est.token });
+      await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'accepted' } });
+      await req('PATCH', `/activities/${a.id}`, { token: director.token, body: { status: 'finished' } });
+      return a;
+    };
+    const credencial = async (body, { historica: esHistorica = false } = {}) => {
+      const datos = { issueDate: '2025-06-01', ...body };
+      if (!esHistorica && !datos.activityId) datos.activityId = (await opGenerica(datos.issuer, datos.certificateName)).id;
+      if (datos.activityId && !datos.storedFileId) {
+        nCaso += 1;
+        const form = new FormData();
+        const sinTexto = `%PDF-1.4\n%caso-${TS}-${nCaso}\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`;
+        form.append('file', new Blob([sinTexto], { type: 'application/pdf' }), `caso-${nCaso}.pdf`);
+        datos.storedFileId = (await (await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${est.token}` }, body: form })).json())?.id;
+      }
+      const r = await req('POST', '/certificates/external', { token: est.token, body: datos });
       if (r.status !== 201) throw new Error(`no se creó la credencial: ${json(r.data)}`);
       return { id: r.data.id, v: await veredicto(r.data.id) };
     };
-    const cats = (await req('GET', '/activity-categories', { token: director.token })).data ?? [];
-    const cat = cats.find((c) => c.code === 'curso_externo_recomendado') ?? cats[0];
     const externa = async (titulo) => {
       const a = (await req('POST', '/activities', {
         token: director.token,
@@ -828,7 +863,11 @@ async function batch8(ctx) {
         },
       })).data;
       await req('PUT', `/activities/${a.id}/validation-reference`, {
-        token: director.token, body: { expectedCourseName: 'CCNA Introduction to Networks', credentialIdPattern: 'NA-####-@@#' },
+        token: director.token,
+        body: {
+          expectedCourseName: 'CCNA Introduction to Networks', credentialIdPattern: 'NA-####-@@#',
+          sampleStoredFileId: await modeloPdf(['Cisco Networking Academy', 'CCNA Introduction to Networks']),
+        },
       });
       await req('POST', `/activities/${a.id}/register`, { token: est.token });
       await req('PATCH', `/activities/${a.id}/confirm-participation`, { token: director.token, body: { studentProfileId: est.profileId, status: 'accepted' } });
@@ -842,8 +881,9 @@ async function batch8(ctx) {
       activityId: (await externa('CCNA verificada')).id, certificateName: `CCNA Introduction to Networks A ${L}`,
       issuer: 'Cisco Networking Academy', certificateUrl: `${BASE}/v41/ok`, credentialId: 'NA-2026-CD8',
     });
-    check(estado(ok.v) === 'AUTO_VERIFIED' && ok.v?.backingTier === 'corroborated' && !!ok.v?.validationStatus?.label,
-      'V41.8.1 §6.2 Fuente oficial individual con titular y código: AUTO_VERIFIED, con respaldo CORROBORATED (dos ejes)', json({ s: ok.v?.validationStatus, t: ok.v?.backingTier }));
+    // V7.1 §5.1: ninguna comprobación aprueba sola. La fuente oficial deja su resultado y la credencial queda para Dirección.
+    check(estado(ok.v) === 'MANUAL_REVIEW_REQUIRED' && ok.v?.manualReview?.status === 'requested' && ok.v?.credentialCheck?.status === 'verified_match',
+      'V41.8.1 §6.2 V7.1 Fuente oficial individual con titular y código: el resultado queda, pero la revisión de Dirección sigue pendiente (dos ejes)', json({ s: ok.v?.validationStatus, t: ok.v?.backingTier }));
 
     // ----- B29: el enlace lleva al curso general
     const generico = await credencial({
@@ -858,18 +898,19 @@ async function batch8(ctx) {
       activityId: (await externa('CCNA de otra persona')).id, certificateName: `CCNA Introduction to Networks C ${L}`,
       issuer: 'Cisco Networking Academy', certificateUrl: `${BASE}/v41/otra`, credentialId: 'NA-2026-CD8',
     });
-    check(estado(otra.v) === 'REJECTED' && otra.v?.backingTier === 'flagged'
+    // V7.1 §5.1: la máquina registra la contradicción y señala; rechazar lo decide Dirección.
+    check(estado(otra.v) === 'MANUAL_REVIEW_REQUIRED' && otra.v?.backingTier === 'flagged'
       && (otra.v?.credentialCheck?.contradictions ?? []).includes('official_holder_mismatch'),
-      'V41.8.3 B30 23.9 Documento propio y verificador oficial con otro titular: REJECTED y FLAGGED, con su motivo', json({ s: estado(otra.v), c: otra.v?.credentialCheck?.contradictions }));
+      'V41.8.3 B30 23.9 V7.1 Verificador oficial con otro titular: FLAGGED con su motivo, y el rechazo queda para Dirección', json({ s: estado(otra.v), c: otra.v?.credentialCheck?.contradictions }));
     const sigue = ((await req('GET', '/certificates/external/my', { token: est.token })).data ?? []).some((c) => c.id === otra.id);
     check(sigue, 'V41.8.4 La credencial rechazada no se borra: queda registrada y señalada');
 
     // ----- B31: proveedor caído, página que necesita JavaScript
     const caido = await credencial({ certificateName: `Curso sin respuesta ${L}`, issuer: 'Academia Sin Catalogo', certificateUrl: `${BASE}/v41/caido` });
     const spa = await credencial({ certificateName: `Curso con JavaScript ${L}`, issuer: 'Academia Sin Catalogo', certificateUrl: `${BASE}/v41/spa` });
-    check(estado(caido.v) === 'INCONCLUSIVE' && !['flagged', 'corroborated'].includes(caido.v?.backingTier)
-      && estado(spa.v) === 'MANUAL_REVIEW_REQUIRED' && spa.v?.backingTier !== 'corroborated',
-      'V41.8.5 B31 Proveedor caído: INCONCLUSIVE (no falso); página ilegible: revisión, nunca CORROBORATED', json([estado(caido.v), caido.v?.backingTier, estado(spa.v)]));
+    check(caido.v?.status === 'inconclusive' && caido.v?.credentialCheck?.status === 'unreachable' && !['flagged', 'corroborated'].includes(caido.v?.backingTier)
+      && estado(caido.v) === 'MANUAL_REVIEW_REQUIRED' && estado(spa.v) === 'MANUAL_REVIEW_REQUIRED' && spa.v?.backingTier !== 'corroborated',
+      'V41.8.5 B31 V7.1 Proveedor caído: comprobación inconclusa (no falso) y revisión pendiente; página ilegible: revisión, nunca CORROBORATED', json([estado(caido.v), caido.v?.backingTier, estado(spa.v)]));
 
     // ----- §6.3: proveedores reconocidos, declarados sin verificador integrado
     const huawei = await credencial({ certificateName: `HCIA Datacom ${L}`, issuer: 'Huawei ICT Academy' });
@@ -888,9 +929,8 @@ async function batch8(ctx) {
       const form = new FormData();
       form.append('file', new Blob([Buffer.concat([pdf, Buffer.from(`%${TS}-${n}`)])], { type: 'application/pdf' }), `hist-${n}.pdf`);
       const sub = await (await fetch(`${API}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${est.token}` }, body: form })).json();
-      const c = await credencial({ certificateName: `Taller de Electronica ${n} ${L}`, issuer: 'Club Andino de Electronica', storedFileId: sub?.id, certificateUrl: `${BASE}/v41/spa?${n}` });
-      await req('POST', `/certificates/external/${c.id}/manual-review`, { token: est.token, body: { note: 'El club confirma por correo.' } });
-      return c;
+      // V7.1 §5.2: la histórica llega pedida a Dirección al enviarla; no hace falta pedirla aparte.
+      return credencial({ certificateName: `Taller de Electronica ${n} ${L}`, issuer: 'Club Andino de Electronica', storedFileId: sub?.id, certificateUrl: `${BASE}/v41/spa?${n}` }, { historica: true });
     };
     const decidir = (quien, id, body) => req('POST', `/validation/manual-reviews/${id}`, { token: quien, body });
     const h1 = await historica('uno');

@@ -51,6 +51,26 @@ function imagen(extra: [string, string][] = []): Buffer {
   return Buffer.concat([base.subarray(0, iend), ...bloques, base.subarray(iend)]);
 }
 
+/** Certificado modelo en PDF con texto nativo (la fase 1 no necesita OCR). */
+function pdfModelo(proveedor: string): Buffer {
+  const lineas = [proveedor, 'Certificado de finalizacion', 'Otorgado a Persona Modelo', `Curso de prueba V9 ${RUN}`];
+  const contenido = `BT\n/F1 14 Tf\n72 720 Td\n${lineas.map((l, i) => `${i ? '0 -24 Td\n' : ''}(${l}) Tj\n`).join('')}ET\n`;
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(contenido, 'latin1')} >>\nstream\n${contenido}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objetos.forEach((o, i) => { offsets.push(Buffer.byteLength(out, 'latin1')); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = Buffer.byteLength(out, 'latin1');
+  out += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  out += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
 /** PNG con un QR que lleva `texto`, como el de un certificado escaneado. */
 function imagenConQr(texto: string): Buffer {
   const qr = encodeQr(texto);
@@ -85,15 +105,58 @@ describe('V9 · Validación reforzada (API)', () => {
     return r.body.id as string;
   };
 
-  /** Registra la credencial y corre el validador sobre ella (el worker está apagado en pruebas). */
+  /**
+   * V7.1 §5.2 (BATCH V7-3): una histórica ya no pasa por el procesamiento
+   * automático, así que las señales de V9 se prueban con credenciales
+   * vinculadas a una oportunidad con certificado modelo, que es la ruta que
+   * hoy se comprueba. Cada registro usa una oportunidad nueva (una credencial
+   * por estudiante y oportunidad) en la que Ana y Luis fueron aceptados.
+   */
   let n = 0;
+  let tDir: string;
+  let categoria: string;
+  let area: string;
+  const oportunidad = async (proveedor: string) => {
+    const a = await con(http().post('/api/activities'), tDir).send({
+      title: `Oportunidad V9 ${RUN} ${n}`, type: 'academica', categoryId: categoria, status: 'open', originType: 'external',
+      provider: proveedor, externalUrl: 'https://oportunidad.example.org', outcomePolicy: 'external_credential_expected',
+      activityDate: new Date(Date.now() + 864e5).toISOString(), endAt: new Date(Date.now() + 2 * 864e5).toISOString(),
+      modality: 'presencial', location: 'Aula de pruebas', areaIds: [area], semesterScope: [1, 2, 3, 4, 5, 6, 7, 8],
+    });
+    expect(a.status).toBe(201);
+    for (const t of [tAna, tLuis]) {
+      await con(http().post(`/api/activities/${a.body.id}/register`), t);
+      const perfil = await con(http().get('/api/profiles/me'), t);
+      const ok = await con(http().patch(`/api/activities/${a.body.id}/confirm-participation`), tDir).send({ studentProfileId: perfil.body.id, status: 'accepted' });
+      expect(ok.status).toBe(200);
+    }
+    const modelo = await subir(tDir, pdfModelo(proveedor), 'modelo.pdf');
+    expect((await con(http().put(`/api/activities/${a.body.id}/validation-reference`), tDir).send({ sampleStoredFileId: modelo })).status).toBe(200);
+    expect((await con(http().patch(`/api/activities/${a.body.id}`), tDir).send({ status: 'finished' })).status).toBe(200);
+    return a.body.id as string;
+  };
+  const ultimaPorProveedor = new Map<string, { id: string; usada: Set<string> }>();
+  /** Registra la credencial y corre el validador sobre ella (el worker está apagado en pruebas). */
   const registrar = async (t: string, cuerpo: Record<string, unknown>) => {
     n += 1;
-    const r = await con(http().post('/api/certificates/external'), t).send({ certificateName: `Curso V9 ${RUN} ${n}`, issuer: 'Huawei ICT Academy', ...cuerpo });
+    const proveedor = (cuerpo.issuer as string | undefined) ?? 'Huawei ICT Academy';
+    // Ana y Luis comparten oportunidad: así «el mismo X por otro estudiante» es literal.
+    let op = ultimaPorProveedor.get(proveedor);
+    if (!op || op.usada.has(t)) {
+      op = { id: await oportunidad(proveedor), usada: new Set() };
+      ultimaPorProveedor.set(proveedor, op);
+    }
+    op.usada.add(t);
+    const { issuer: _ignorado, ...resto } = cuerpo;
+    const archivo = resto.storedFileId ?? await subir(t, imagen());
+    const r = await con(http().post('/api/certificates/external'), t).send({ activityId: op.id, ...resto, storedFileId: archivo });
     expect(r.status).toBe(201);
     const id = r.body.id as string;
-    const reg = await validacion.enqueue({ resourceType: ValidationResourceType.EXTERNAL_CERTIFICATE, resourceId: id, force: true });
-    const hecho = await validacion.process(reg);
+    // El trabajo se reclama como lo haría el worker: un resultado solo se aplica a un trabajo reclamado (C19).
+    await db(app).query(
+      `UPDATE validation_records SET status = 'processing', claimed_by = 'jest-v9', started_at = now(), attempts = attempts + 1 WHERE resource_id = $1`, [id],
+    );
+    const hecho = await validacion.process(await validacion.findForOrFail(ValidationResourceType.EXTERNAL_CERTIFICATE, id));
     return { id, v: hecho };
   };
 
@@ -102,6 +165,11 @@ describe('V9 · Validación reforzada (API)', () => {
     validacion = app.get(ValidationService);
     tAna = await entrar(app, ANA);
     tLuis = await entrar(app, LUIS);
+    tDir = await entrar(app, 'jorge.vargas@univalle.edu');
+    const cats = await con(http().get('/api/activity-categories'), tDir);
+    categoria = (cats.body.find((c: { code: string }) => c.code === 'curso_externo_recomendado') ?? cats.body[0]).id;
+    const areas = await con(http().get('/api/academic-areas'), tDir);
+    area = (areas.body.find((x: { code: string }) => x.code === 'ingenieria_de_software') ?? areas.body[0]).id;
   });
 
   afterAll(async () => {

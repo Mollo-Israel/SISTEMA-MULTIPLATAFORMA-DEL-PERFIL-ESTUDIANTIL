@@ -12,6 +12,7 @@ import {
   IdentityMatchStatus,
   LinkCheckStatus,
   ManualReviewStatus,
+  ProcessingSkipReason,
   QrPresence,
   ValidationResourceType,
   ValidationStatus,
@@ -76,6 +77,60 @@ export interface CredentialCheckResult {
   sharing?: SharedCredentialResult | null;
   /** V9: el QR lleva un código distinto del impreso. */
   qrCodeMismatch?: { impreso: string; enQr: string } | null;
+  /** V7.1 §5.3 · Fase 1: comparación con el certificado modelo. */
+  documentComparison?: DocumentComparison | null;
+}
+
+/**
+ * V7.1 §5.3 · Fase 1: lo que el archivo comparte con el certificado modelo.
+ *
+ * Solo textos estables del modelo (curso, proveedor, estructura). El titular
+ * del modelo es otra persona y no cuenta como diferencia: el del archivo se
+ * compara con la identidad institucional del estudiante. No hay porcentaje de
+ * autenticidad: se dice qué coincide, qué falta y qué varía.
+ */
+export interface DocumentComparison {
+  referenceVersionId: string | null;
+  modelReadable: boolean;
+  fileReadable: boolean;
+  matched: string[];
+  variations: { expected: string; found: string }[];
+  missing: string[];
+  /** Titular leído en el archivo frente al estudiante (no frente al del modelo). */
+  holder: IdentityMatchStatus;
+  limitations: string[];
+}
+
+/**
+ * V7.1 §5.3: un resultado anterior, archivado tal como quedó.
+ *
+ * Reemplazar el archivo, reenviar tras una corrección o volver a comprobar no
+ * pisa lo anterior: lo guarda aquí, con su hash y su decisión, si la hubo.
+ */
+export interface PreviousValidationResult {
+  archivedAt: string;
+  reason: 'file_replaced' | 'resubmitted' | 'rechecked' | 'rerouted';
+  status: ValidationStatus;
+  backingTier: BackingTier;
+  fileSha256: string | null;
+  skippedReason: string | null;
+  referenceVersionId: string | null;
+  finishedAt: string | null;
+  identityMatchStatus: IdentityMatchStatus;
+  extractedData: ExtractedDocumentData | null;
+  credentialCheck: CredentialCheckResult | null;
+  linkCheck: LinkCheckResult | null;
+  errorCode: string | null;
+  manualReview: {
+    status: ManualReviewStatus | null;
+    requestedAt: string | null;
+    note: string | null;
+    reviewerId: string | null;
+    reviewedAt: string | null;
+    reason: string | null;
+    method: string | null;
+    proof: string | null;
+  } | null;
 }
 
 /** Lo que se pudo averiguar del enlace de verificacion (§31). */
@@ -189,6 +244,28 @@ export class ValidationRecord {
   /** Version del validador que produjo el veredicto, para poder reprocesar. */
   @Column({ name: 'validator_version', type: 'smallint', default: 1 })
   validatorVersion: number;
+
+  // ------------------------------------------- V7.1 §5.3 · procedencia
+
+  /**
+   * Hash del archivo evaluado o por evaluar. Un resultado solo se aplica si
+   * el archivo sigue siendo este: reemplazarlo invalida lo que estaba en
+   * curso (C19).
+   */
+  @Column({ name: 'file_sha256', type: 'char', length: 64, nullable: true })
+  fileSha256: string | null;
+
+  /** Por qué no se ejecutaron las fases 1 y 2 (histórica, sin modelo). */
+  @Column({ name: 'skipped_reason', type: 'varchar', length: 40, nullable: true })
+  skippedReason: ProcessingSkipReason | null;
+
+  /** Versión del certificado modelo con la que se comparó (D03). */
+  @Column({ name: 'reference_version_id', type: 'uuid', nullable: true })
+  referenceVersionId: string | null;
+
+  /** Resultados y decisiones anteriores, archivados (ver `PreviousValidationResult`). */
+  @Column({ name: 'previous_results', type: 'jsonb', default: () => "'[]'::jsonb" })
+  previousResults: PreviousValidationResult[];
 
   // ------------------------------------------------------------------ cola
 

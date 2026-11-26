@@ -23,7 +23,7 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 import { QueryActivitiesDto } from './dto/query-activities.dto';
 import { QueryManagedActivitiesDto } from './dto/query-managed-activities.dto';
 import { ConfirmParticipationDto, CorrectParticipationDto } from './dto/confirm-participation.dto';
-import { SaveValidationReferenceDto } from './dto/validation-reference.dto';
+import { SaveValidationReferenceDto, UpdateReferenceModelDto } from './dto/validation-reference.dto';
 
 /**
  * Actividades academicas y extracurriculares (Objetivo 3) y registro de
@@ -321,5 +321,19 @@ export class ActivitiesController {
     @Body() dto: SaveValidationReferenceDto,
   ) {
     return this.activitiesService.saveValidationReference(user, id, dto);
+  }
+
+  @Put(':id/validation-reference/model')
+  @Roles(...MANAGER_ROLES)
+  @ApiOperation({
+    summary: 'V7.1 D03 · Adjuntar/actualizar certificado modelo (solo Dirección).',
+    description: 'También después de aprobada o finalizada. Registra versión, hash, autor y motivo. No cambia datos de la oportunidad ni reprocesa credenciales.',
+  })
+  updateReferenceModel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateReferenceModelDto,
+  ) {
+    return this.activitiesService.actualizarModeloDeReferencia(user, id, dto);
   }
 }

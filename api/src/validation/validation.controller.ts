@@ -24,6 +24,7 @@ import { ValidationService } from './validation.service';
 import { ValidationWorker } from './validation.worker';
 import { DecideManualReviewDto } from './dto/manual-review.dto';
 import { providerSupportFor } from './credential-check.rules';
+import { fasesDeCredencial } from './credential-phases.rules';
 
 /**
  * Consulta del Motor de Validación (§26, §76).
@@ -117,6 +118,21 @@ export class ValidationController {
     };
   }
 
+  @Post('manual-reviews/:certificateId/recheck')
+  @Roles(RolNombre.CAREER_DIRECTOR)
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'V7.1 §5.5: Dirección vuelve a comprobar una credencial pendiente con el modelo vigente.',
+    description: 'Solo una vinculada con modelo, con la revisión aún pendiente. El intento anterior se conserva; la decisión sigue siendo de Dirección.',
+  })
+  async recheck(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('certificateId', ParseUUIDPipe) certificateId: string,
+  ) {
+    const r = await this.validation.recomprobarCredencial(certificateId, { actorUserId: user.userId, explicita: true });
+    return { certificateId, status: r.status, referenceVersionId: r.referenceVersionId, previousResults: r.previousResults.length };
+  }
+
   @Get(':resourceType/:resourceId')
   @Roles(RolNombre.STUDENT, RolNombre.ADMIN)
   @ApiOperation({
@@ -148,9 +164,16 @@ export class ValidationController {
       isDuplicate: record.duplicateOfId !== null,
       validatorVersion: record.validatorVersion,
       attempts: record.attempts,
-      errorCode: record.errorCode,
+      // V7.1 §5.4: los códigos internos no se muestran al estudiante.
+      errorCode: user.role === RolNombre.ADMIN ? record.errorCode : null,
       finishedAt: record.finishedAt,
       credentialCheck: record.credentialCheck,
+      // V7.1 §5.2–§5.4: origen, por qué no se procesó y las tres fases.
+      skippedReason: record.skippedReason,
+      fileSha256: record.fileSha256,
+      previousAttempts: record.previousResults?.length ?? 0,
+      phases: cert ? fasesDeCredencial(record, cert) : null,
+      canRecheck: cert ? this.validation.puedeRecomprobar(record, cert) : false,
       // V4.1 A41-018: eje de validación aparte del respaldo, y el estado real de los verificadores de proveedor.
       validationStatus: cert ? this.validation.validationStatusView(record) : null,
       providerSupport: cert ? providerSupportFor(cert.issuer, record.credentialCheck?.url ?? cert.certificateUrl) : null,
