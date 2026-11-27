@@ -1,4 +1,5 @@
 import { HomeOverviewService } from './home-overview.service';
+import { AdminHomeService } from './admin-home.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StudentProfile } from '../entities/student-profile.entity';
@@ -36,7 +37,7 @@ import { ReportsController } from './reports.controller';
     AccessModule,
   ],
   controllers: [ReportsController],
-  providers: [ReportsService, AnalyticsService, AnalyticsPrivacyService, HomeOverviewService],
+  providers: [ReportsService, AnalyticsService, AnalyticsPrivacyService, HomeOverviewService, AdminHomeService],
   // El asistente de IA redacta sobre estas cifras; no las calcula (V2 §63).
   exports: [AnalyticsService],
 })

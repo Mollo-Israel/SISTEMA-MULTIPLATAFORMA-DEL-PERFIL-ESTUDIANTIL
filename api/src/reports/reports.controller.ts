@@ -7,6 +7,7 @@ import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { ReportsService } from './reports.service';
 import { AnalyticsService } from './analytics.service';
 import { HomeOverviewService } from './home-overview.service';
+import { AdminHomeService } from './admin-home.service';
 
 @ApiTags('reports')
 @ApiBearerAuth()
@@ -16,6 +17,7 @@ export class ReportsController {
     private readonly reportsService: ReportsService,
     private readonly analytics: AnalyticsService,
     private readonly home: HomeOverviewService,
+    private readonly inicioAdmin: AdminHomeService,
   ) {}
 
   // ---------- Inicio (V3 §52, §54) ----------
@@ -25,6 +27,27 @@ export class ReportsController {
   @Roles(RolNombre.ADMIN)
   adminOverview() {
     return this.home.admin();
+  }
+
+  /** V7.1 §3: resumen de cada tarjeta del Inicio; una tarjeta que falla no apaga a las demás. */
+  @Get('admin/home')
+  @ApiOperation({ summary: 'V7.1 §3: Inicio de Administración, totales reales por tarjeta (cada una con su propio error).' })
+  @Roles(RolNombre.ADMIN)
+  adminHome(@CurrentUser() user: AuthenticatedUser) {
+    return this.inicioAdmin.resumen(user.userId);
+  }
+
+  /** V7.1 §3.1: «Detalles» de solo lectura, total real y los últimos 10 del conjunto. */
+  @Get('admin/home/:tarjeta/:segmento')
+  @ApiOperation({ summary: 'V7.1 §3.1: detalle de solo lectura de una tarjeta del Inicio (máximo 10 filas y el total real).' })
+  @Roles(RolNombre.ADMIN)
+  adminHomeDetail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('tarjeta') tarjeta: string,
+    @Param('segmento') segmento: string,
+    @Query('estado') estado?: string,
+  ) {
+    return this.inicioAdmin.detalle(user.userId, tarjeta, segmento, estado);
   }
 
   @Get('director/pending')

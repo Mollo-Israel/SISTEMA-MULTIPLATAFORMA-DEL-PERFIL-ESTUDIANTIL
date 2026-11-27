@@ -805,7 +805,147 @@ async function batch10(ctx, browser) {
   await c1.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
+// ===========================================================================
+//  BATCH V7-11 — Inicio de Administración: «Detalles», filtros y menú (§3)
+// ===========================================================================
+async function batch11(ctx, browser) {
+  objective('BATCH V7-11 · Inicio de Administración: tarjetas con «Detalles», destinos filtrados, menú por subtítulos');
+  const admin = ctx.admin;
+  await cuentaPendiente(admin, { firstName: 'Ines', lastName: `Webinicio${L}`, k: 'b11pen' });
+
+  const { ctx: c1, page, errores } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  await page.goto(`${WEB}/admin`);
+  await page.locator('[data-testid="tarjeta-cuentas"]').waitFor({ timeout: 20000 });
+  const tarjetas = await page.locator('[data-testid^="tarjeta-"]').count();
+  const texto = ((await page.locator('.content').textContent()) ?? '').replace(/\s+/g, ' ');
+  const detalles = await page.getByRole('button', { name: 'Detalles', exact: true }).count();
+  const enlacesIr = await page.locator('.content a', { hasText: /^\s*Ir\s*$/ }).count();
+  const rol = await page.locator('[data-testid="cuentas-por-rol"] tbody tr').count();
+  // A01 y A03–A15 (14) más «Actividades en revisión» global; A02 es la tabla por rol.
+  check(tarjetas === 15 && detalles === 15 && enlacesIr === 0 && rol === 5
+    && !/Envío real \(SMTP\)|Simulado: los correos no salen/.test(texto) && !/\bCorreo\b/.test(texto),
+  'W7.11.1 §3 El Inicio muestra las tarjetas con «Detalles» (no «Ir»), «Cuentas por rol» y ya no la tarjeta Correo',
+  json({ tarjetas, detalles, enlacesIr, rol }));
+
+  // H14: teclado, foco dentro, Escape y regreso al botón.
+  const boton = page.locator('[data-testid="tarjeta-cuentas"] button', { hasText: 'Detalles' });
+  await boton.focus();
+  await page.keyboard.press('Enter');
+  const dialogo = page.getByRole('dialog');
+  await dialogo.waitFor({ timeout: 10000 });
+  await page.locator('[data-testid="detalles-filas"], .detalles-vacio').first().waitFor({ timeout: 15000 }).catch(() => {});
+  const focoDentro = await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'));
+  const nFilas = await page.locator('[data-testid="detalles-filas"] li').count();
+  const totalTexto = ((await page.locator('[data-testid="detalles-total"]').textContent()) ?? '').replace(/\s+/g, ' ');
+  const sinAcciones = (await dialogo.getByRole('button', { name: /Aprobar|Reenviar|Dar de baja|Eliminar|Suspender/i }).count()) === 0;
+  await page.keyboard.press('Escape');
+  await dialogo.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  const cerrado = (await page.getByRole('dialog').count()) === 0;
+  const focoVuelve = await page.evaluate(() => document.activeElement?.textContent?.trim() === 'Detalles'
+    && !!document.activeElement?.closest('[data-testid="tarjeta-cuentas"]'));
+  check(focoDentro && nFilas >= 1 && nFilas <= 10 && /más recientes de \d+|registro/.test(totalTexto) && sinAcciones && cerrado && focoVuelve,
+    'W7.11.2 H14 «Detalles» se abre con el teclado, el foco queda dentro, no ofrece acciones; Escape cierra y el foco vuelve al botón',
+    json({ focoDentro, nFilas, totalTexto, sinAcciones, cerrado, focoVuelve }));
+
+  // H01/H02: «Ir a gestionar» lleva a Usuarios solo con las pendientes de activación.
+  await boton.click();
+  await page.getByTestId('detalles-ir').click();
+  await page.waitForURL((u) => u.pathname === '/admin/users', { timeout: 15000 });
+  await grillaLista(page);
+  const filtro = await page.getByLabel('Estado de la cuenta').inputValue();
+  const filasUsuarios = await filas(page);
+  check(param(page, 'status') === 'pending_activation' && filtro === 'pending_activation' && filasUsuarios.length > 0
+    && filasUsuarios.every((f) => /pendiente|sin activar/i.test(f)),
+  'W7.11.3 H02 «Ir a cuentas sin activar» abre Usuarios filtrado solo a las pendientes de activación', json({ url: page.url(), filtro, n: filasUsuarios.length }));
+
+  // H03: una celda de «Cuentas por rol» abre ese rol con su métrica y su destino filtrado.
+  await page.goto(`${WEB}/admin`);
+  await page.locator('[data-testid="cuentas-por-rol"]').waitFor({ timeout: 20000 });
+  await page.getByRole('button', { name: /^Docente: \d+ sin activar/ }).click();
+  await page.getByRole('dialog').waitFor({ timeout: 10000 });
+  const tituloRol = (await page.getByRole('dialog').locator('h2, h3').first().textContent()) ?? '';
+  await page.getByTestId('detalles-ir').click();
+  await page.waitForURL((u) => u.pathname === '/admin/users', { timeout: 15000 });
+  await grillaLista(page);
+  check(/Docente/.test(tituloRol) && /sin activar/i.test(tituloRol) && param(page, 'role') === 'TEACHER' && param(page, 'status') === 'pending_activation',
+    'W7.11.4 H03 La fila Docente / Sin activar abre su detalle y lleva a Usuarios con el rol y el estado', json({ tituloRol, url: page.url() }));
+
+  // Credenciales: vista elegida en el modal → la misma pestaña en la bandeja.
+  await page.goto(`${WEB}/admin`);
+  await page.locator('[data-testid="tarjeta-credenciales"] button', { hasText: 'Detalles' }).click();
+  await page.getByRole('dialog').getByRole('tab', { name: 'Observadas' }).click();
+  await page.getByTestId('detalles-ir').click();
+  await page.waitForURL((u) => u.pathname === '/admin/credential-reviews', { timeout: 15000 });
+  const pestana = await page.getByRole('tab', { selected: true }).first().textContent().catch(() => '');
+  const soloLectura = await page.getByTestId('revision-solo-lectura').count();
+  check(param(page, 'estado') === 'observadas' && /Observadas/.test(pestana ?? '') && soloLectura === 1,
+    'W7.11.5 A11 «Observadas» lleva a la revisión de credenciales en esa pestaña, en solo lectura para Administración', json({ url: page.url(), pestana }));
+
+  // §3.3: menú por subtítulos, sin «Registros verificables»; /admin/mail sigue por URL (H11).
+  const secciones = (await page.locator('.nav-section').allTextContents()).map((t) => t.trim());
+  const menu = ((await page.locator('nav').first().textContent()) ?? '');
+  await page.goto(`${WEB}/admin/mail`);
+  await page.waitForLoadState('networkidle').catch(() => {});
+  const correo = ((await page.locator('.content').textContent().catch(() => '')) ?? '');
+  check(['Identidad', 'Catálogos', 'Gestión', 'Seguimiento', 'Ayuda'].every((s) => secciones.map((x) => x.toLowerCase()).includes(s.toLowerCase()))
+    && !/Registros verificables|Correo/.test(menu) && /correo/i.test(correo) && !/no encontrada|404/i.test(correo),
+  'W7.11.6 §3.3/H11 Menú con Identidad, Catálogos, Gestión y Seguimiento, sin Registros verificables ni Correo; /admin/mail sigue por URL',
+  json({ secciones }));
+
+  // H13: si un detalle falla, se dice y se puede reintentar; una tarjeta con error no muestra un cero.
+  await page.route('**/reports/admin/home/academicas/**', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"code":"INTERNAL_ERROR"}' }));
+  await page.route('**/reports/admin/home', async (r) => {
+    const res = await r.fetch();
+    const cuerpo = await res.json();
+    cuerpo.tarjetas.recursos = { error: 'No se pudo cargar este resumen.' };
+    await r.fulfill({ response: res, json: cuerpo });
+  });
+  await page.goto(`${WEB}/admin`);
+  await page.locator('[data-testid="tarjeta-recursos"]').waitFor({ timeout: 20000 });
+  const recursos = ((await page.locator('[data-testid="tarjeta-recursos"]').textContent()) ?? '');
+  const otraBien = await page.getByTestId('total-proyectos').count();
+  await page.locator('[data-testid="tarjeta-academicas"] button', { hasText: 'Detalles' }).click();
+  const alerta = page.getByRole('dialog').getByRole('alert');
+  await alerta.waitFor({ timeout: 10000 }).catch(() => {});
+  const conError = ((await alerta.textContent().catch(() => '')) ?? '');
+  const ceroFalso = await page.getByRole('dialog').getByTestId('detalles-total').count();
+  check(/No se pudo cargar/.test(recursos) && !(await page.getByTestId('total-recursos').count()) && otraBien === 1
+    && /No se pudo cargar/.test(conError) && /Reintentar/.test(conError) && ceroFalso === 0,
+  'W7.11.7 H13 Una tarjeta o un detalle que fallan lo dicen con «Reintentar», sin mostrar ceros; las demás tarjetas siguen',
+  json({ recursos: recursos.slice(0, 80), otraBien, conError: conError.slice(0, 80), ceroFalso }));
+  await page.keyboard.press('Escape');
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  check(errores.length === 0, 'W7.11.8 Sin errores de JavaScript en el Inicio de Administración', errores.join(' | '));
+  await c1.close();
+
+  // H14: en el teléfono el modal entra en la pantalla y se cierra.
+  const movil = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pm = await movil.newPage();
+  await pm.goto(`${WEB}/login`);
+  await pm.fill('input[type=email]', ADMIN_CREDENTIALS.email);
+  await pm.fill('input[autocomplete=current-password]', ADMIN_CREDENTIALS.password);
+  await pm.press('input[autocomplete=current-password]', 'Enter');
+  await pm.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 20000 });
+  await pm.getByRole('button', { name: 'Omitir' }).click({ timeout: 3000 }).catch(() => {});
+  await pm.goto(`${WEB}/admin`);
+  await pm.getByRole('button', { name: 'Omitir' }).click({ timeout: 3000 }).catch(() => {});
+  await pm.locator('[data-testid="tarjeta-externas"] button', { hasText: 'Detalles' }).click({ timeout: 20000 });
+  await pm.getByRole('dialog').waitFor({ timeout: 10000 });
+  await pm.getByRole('dialog').getByRole('tab', { name: 'Cobertura' }).click();
+  await pm.locator('[data-testid="detalles-filas"], .detalles-vacio').first().waitFor({ timeout: 15000 }).catch(() => {});
+  const medidas = await pm.evaluate(() => {
+    const d = document.querySelector('[role="dialog"]')?.getBoundingClientRect();
+    return { ancho: d?.width ?? 0, izq: d?.left ?? -1, der: d?.right ?? 9999, scroll: document.documentElement.scrollWidth, vista: window.innerWidth };
+  });
+  const irVisible = await pm.getByTestId('detalles-ir').isVisible();
+  await pm.getByRole('dialog').getByRole('button', { name: 'Cerrar', exact: true }).last().click();
+  const cerradoMovil = (await pm.getByRole('dialog').count()) === 0;
+  check(medidas.izq >= 0 && medidas.der <= medidas.vista && medidas.scroll <= medidas.vista && irVisible && cerradoMovil,
+    'W7.11.9 H14 En el teléfono el detalle entra en la pantalla, sin desplazamiento lateral, y se cierra', json(medidas));
+  await movil.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

@@ -200,7 +200,7 @@ export default function Layout() {
         <nav>
           {groups.map((group) => (
             <div key={group.section}>
-              <div className="nav-section">{group.section}</div>
+              {group.section && <div className="nav-section">{group.section}</div>}
               {group.items.map((item) => {
                 const Icon = ICONS[item.to] ?? FiClock;
                 const todos = groups.flatMap((g) => g.items.map((i) => i.to));

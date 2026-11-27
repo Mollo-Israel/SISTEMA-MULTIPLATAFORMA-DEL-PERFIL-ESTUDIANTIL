@@ -1379,7 +1379,39 @@ export const reportService = {
   directorPending: () => api.get<DirectorPending>('/reports/director/pending').then((r) => r.data),
   /** V3 §54: Inicio de Administración. */
   adminOverview: () => api.get<AdminOverview>('/reports/admin/overview').then((r) => r.data),
+  /** V7.1 §3: totales reales de cada tarjeta del Inicio de Administración. */
+  adminHome: () => api.get<InicioAdmin>('/reports/admin/home').then((r) => r.data),
+  /** V7.1 §3.1: «Detalles» de solo lectura (total real y los últimos 10). */
+  adminHomeDetail: (tarjeta: string, segmento: string, estado?: string) =>
+    api.get<DetalleTarjeta>(`/reports/admin/home/${tarjeta}/${segmento}`, { params: estado ? { estado } : undefined }).then((r) => r.data),
 };
+
+/** V7.1 §3.1: una fila del modal de detalles, ya legible (sin códigos técnicos). */
+export interface FilaDetalle {
+  id: string;
+  titulo: string;
+  detalle?: string | null;
+  fecha: string | null;
+  estado?: { texto: string; tono: 'green' | 'amber' | 'red' | 'gray' | 'blue' } | null;
+  datos?: { campo: string; valor: string }[];
+  actividadId?: string;
+}
+
+export interface DetalleTarjeta {
+  tarjeta: string;
+  segmento: string;
+  total: number;
+  filas: FilaDetalle[];
+  nota?: string;
+}
+
+/** Cada tarjeta llega con sus totales o con su propio error (§3.1, H13). */
+export type ResumenTarjeta = { error: string } | ({ total: number } & Record<string, unknown>);
+
+export interface InicioAdmin {
+  generatedAt: string;
+  tarjetas: Record<string, ResumenTarjeta>;
+}
 
 export interface DirectorPending {
   activitiesPendingReview: number;

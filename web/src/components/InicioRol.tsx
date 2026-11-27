@@ -53,6 +53,15 @@ const CONFIG: Record<string, Config> = {
       { to: '/director/autonomy', icon: <FiUnlock />, t: 'Autonomía docente', d: 'Qué aprueba cada docente.' },
     ],
   },
+  // V7.1 §3.3: Administración con la misma jerarquía y color que los demás
+  // inicios. Sus tarjetas viven en su propia página; aquí solo el saludo.
+  [RolNombre.ADMIN]: {
+    kicker: 'Administración',
+    texto: 'Lo que requiere tu atención y el estado de la plataforma. Aquí solo se consulta: cada cambio se hace en su módulo.',
+    principal: { to: '/admin/users', label: 'Gestionar usuarios', icon: <FiUsers /> },
+    secundario: { to: '/admin/imports', label: 'Importar padrón' },
+    atajos: [],
+  },
   [RolNombre.SCIENTIFIC_SOCIETY]: {
     kicker: 'Tu sociedad científica',
     texto: 'Organiza actividades, mira quién se inscribe y cuánto alcance tienen.',
@@ -99,7 +108,7 @@ export function AtajosRol() {
   const { user } = useAuth();
   const primera = useContext(PrimeraVisita);
   const c = user ? CONFIG[user.role] : undefined;
-  if (!c) return null;
+  if (!c?.atajos.length) return null;
   return (
     <>
       <h2 className="rol-atajos-t">¿Qué quieres hacer?</h2>

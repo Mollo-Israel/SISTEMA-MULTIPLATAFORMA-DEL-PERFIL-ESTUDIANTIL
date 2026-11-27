@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useFiltroUrl } from '../../hooks/useFiltroUrl';
 import { BotonArchivo } from '../../components/ArchivoProtegido';
 import { FiAlertCircle, FiAward, FiCheck, FiFile, FiLink, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
@@ -43,7 +44,8 @@ const ORIGEN = { opportunity: 'De una oportunidad', historical_external: 'Histó
 export default function CredentialReviewsPage() {
   const { user } = useAuth();
   const soloLectura = user?.role !== 'CAREER_DIRECTOR';
-  const [estado, setEstado] = useState<Estado>('pendientes');
+  // V7.1 §3.1: la vista vive en la URL (?estado=), para llegar filtrado desde el Inicio.
+  const [estado, setEstado] = useFiltroUrl<Estado>('estado', 'pendientes', ['pendientes', 'observadas', 'decididas', 'todas']);
   const [items, setItems] = useState<ManualReviewItem[] | null>(null);
   const [error, setError] = useState('');
   const [abierto, setAbierto] = useState<string | null>(null);

@@ -11,7 +11,7 @@
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, loginAdmin, pdfConTexto, provisionAndActivate, provisionStudent, repoDePrueba, req, subirArchivo,
+  asegurarGithubSimulado, codigoUniversitario, credencialVinculada, crearProyectoActivo, crearProyectoBorrador, loginAdmin, pdfConTexto, provisionAndActivate, provisionStudent, repoDePrueba, req, subirArchivo,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -1459,7 +1459,223 @@ async function batch10(ctx) {
     json({ fuera: fueraDeAlcance.status, p1: postula1.status, tercera: `${tercera.status} ${tercera.data?.code}`, pendiente: deAna2?.status }));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
+// ===========================================================================
+//  BATCH V7-11 — Inicio de Administración: «Detalles» de solo lectura (§3)
+// ===========================================================================
+async function batch11(ctx) {
+  objective('BATCH V7-11 · Inicio de Administración: totales reales, últimos 10, conjuntos filtrados y sin acciones');
+  const admin = ctx.admin;
+  const detalle = (t, s, estado) => req('GET', `/reports/admin/home/${t}/${s}${estado ? `?estado=${estado}` : ''}`, { token: admin });
+  const resumen = async () => (await req('GET', '/reports/admin/home', { token: admin })).data?.tarjetas ?? {};
+  /** Ordenadas por fecha descendente, sin IDs repetidos y con 10 como máximo. */
+  const bienFormado = (d) => {
+    const fechas = (d?.filas ?? []).map((f) => (f.fecha ? new Date(f.fecha).getTime() : 0));
+    return (d?.filas ?? []).length <= 10
+      && new Set(ids(d?.filas)).size === (d?.filas ?? []).length
+      && fechas.every((t, i) => i === 0 || fechas[i - 1] >= t);
+  };
+
+  // --- H01: 0, 1 y 11 en el mismo conjunto (cuentas sin activar), con su total real.
+  const t0 = (await detalle('cuentas', 'pendientes')).data?.total;
+  const primera = await cuentaPendiente(admin, { firstName: 'Uno', lastName: `Inicio${L}`, k: 'b11p0' });
+  const conUna = (await detalle('cuentas', 'pendientes')).data;
+  for (let i = 1; i <= 10; i++) await cuentaPendiente(admin, { firstName: 'Varios', lastName: `Inicio${L}`, k: `b11p${i}` });
+  const conOnce = (await detalle('cuentas', 'pendientes')).data;
+  const enBase = Number(psql(`select count(*) from users where status = 'pending_activation'`));
+  const vacio = (await detalle('gamificacion', 'extras')).data;
+  // En una sola línea: psql por la consola de Windows corta el texto en el salto de línea.
+  const hoyBo = `(now() at time zone 'America/La_Paz')::date`;
+  const extrasEnBase = Number(psql(`select count(*) from gamification_criteria where is_active and is_bonus and (valid_from is null or valid_from <= ${hoyBo}) and (valid_until is null or valid_until >= ${hoyBo})`));
+  check(conUna?.total === t0 + 1 && conUna?.filas?.[0]?.id === primera.id
+    && conOnce?.total === t0 + 11 && conOnce?.filas?.length === 10 && conOnce.total === enBase
+    && !ids(conOnce.filas).includes(primera.id) && bienFormado(conOnce)
+    && vacio?.total === extrasEnBase && (extrasEnBase > 0 || vacio?.filas?.length === 0),
+  'V7.11.1 H01 Con 1 se ve esa fila; con 11, las 10 más recientes y el total real; un conjunto vacío llega vacío',
+  json({ t0, una: conUna?.total, once: conOnce?.total, filas: conOnce?.filas?.length, enBase, vacio: vacio?.total, extrasEnBase }));
+
+  // --- H02: A01 solo pendientes, sin tokens ni códigos.
+  const filasCuenta = conOnce?.filas ?? [];
+  const soloPermitidos = filasCuenta.every((f) => Object.keys(f).every((k) => ['id', 'titulo', 'detalle', 'fecha', 'estado', 'datos'].includes(k)));
+  const texto = JSON.stringify(conOnce ?? {});
+  check(filasCuenta.every((f) => f.estado?.texto === 'Sin activar') && soloPermitidos
+    && !/token|password|hash|university_code|universityCode/i.test(texto) && filasCuenta[0]?.detalle?.includes('@'),
+  'V7.11.2 H02 «Cuentas sin activar» lista solo pendientes, con correo institucional y sin tokens ni códigos', json(filasCuenta[0]));
+
+  // --- H03: una fila de rol, filtrada por su métrica.
+  const roles = (await resumen()).roles?.roles ?? [];
+  const docentes = roles.find((r) => r.role === 'TEACHER');
+  const docPend = (await detalle('roles', 'TEACHER', 'pending_activation')).data;
+  const docTodas = (await detalle('roles', 'TEACHER', 'todas')).data;
+  const estPend = (await detalle('roles', 'STUDENT', 'pending_activation')).data;
+  check(typeof docPend?.total === 'number' && docPend.total === docentes?.pendingActivation && docTodas?.total === docentes?.total
+    && (docPend?.filas ?? []).every((f) => f.estado?.texto === 'Sin activar' && f.datos?.some((d) => d.campo === 'Rol' && d.valor === 'Docente'))
+    && (estPend?.filas ?? []).every((f) => f.datos?.some((d) => d.valor === 'Estudiante'))
+    && !ids(estPend?.filas).includes(primera.id),
+  'V7.11.3 H03 Cada fila de «Cuentas por rol» abre su rol con la métrica elegida (total o sin activar)',
+  json({ resumen: docentes, pend: docPend?.total, todas: docTodas?.total }));
+
+  // --- H04 (D07): padrón con resumen; el original no se guarda ni se ofrece.
+  const padron = (await detalle('padron', 'aplicadas')).data;
+  const aplicadas = Number(psql(`select count(*) from import_batches where status = 'applied'`));
+  check(padron?.total === aplicadas && /no el archivo original/.test(padron?.nota ?? '')
+    && !/https?:|storage|\/files\//i.test(JSON.stringify(padron?.filas ?? [])) && bienFormado(padron),
+  'V7.11.4 H04 Padrón: últimas importaciones aplicadas con su resumen; sin descarga inventada del original', json({ total: padron?.total, aplicadas, nota: padron?.nota }));
+
+  // --- H06: un certificado general con 1 archivo para 8 son 8 destinatarios y 1 archivo.
+  const director = await provisionAndActivate(admin, { firstName: 'Irma', lastName: `Tablero${L}`, email: correoStaff('b11dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Omar', lastName: `Tablero${L}`, email: correoStaff('b11doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const general = (await req('POST', '/activities', {
+    token: director.token,
+    body: {
+      title: `Seminario del tablero ${L}`, type: 'academica', categoryId: cat?.id, status: 'open', activityDate: en(48), endAt: en(50),
+      modality: 'presencial', location: 'Aula 301', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], responsibleUserIds: [docente.userId],
+      outcomePolicy: 'institution_issued_certificate', certificateIssuer: 'Universidad del Valle', certificateMode: 'general',
+    },
+  })).data;
+  const asistentes = [];
+  for (let i = 0; i < 9; i++) {
+    const e = await provisionAndActivate(admin, { firstName: 'Asis', lastName: `Tablero${L}`, email: correoEst(`b11a${i}`), role: 'STUDENT', semester: 4 });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    await req('POST', `/activities/${general.id}/register`, { token: e.token, body: {} });
+    asistentes.push(e);
+  }
+  for (const [i, e] of asistentes.entries()) {
+    await req('PATCH', `/activities/${general.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: e.profileId, status: i < 8 ? 'confirmed' : 'absent' } });
+  }
+  const archivo = (await subirArchivo(docente.token, pdfConTexto(['Certificado general del seminario', `${L}-${Date.now()}`]), 'certificado.pdf')).data?.id;
+  await req('PUT', `/constancies/internal/institution-certificates/${general.id}/general-file`, { token: docente.token, body: { storedFileId: archivo } });
+  await req('PATCH', `/activities/${general.id}`, { token: director.token, body: { status: 'finished' } });
+  await req('POST', `/activities/${general.id}/attendance/close`, { token: docente.token });
+  const entrega = (await detalle('academicas', 'entrega')).data;
+  const fila = (entrega?.filas ?? []).find((f) => f.id === general.id);
+  const dato = (campo) => fila?.datos?.find((d) => d.campo === campo)?.valor;
+  check(dato('Asistentes confirmados') === '8' && dato('Destinatarios con documento') === '8' && dato('Archivos distintos') === '1'
+    && dato('Sin entrega') === '0' && fila?.estado?.texto === 'Todos los confirmados lo recibieron' && /General/.test(fila?.detalle ?? ''),
+  'V7.11.5 H06 Certificado general entregado a 8: 8 destinatarios y 1 archivo, sin confundir las métricas', json(fila));
+
+  // --- H07: externa vinculada pendiente; histórica aparte; nada «verificado» antes de Dirección.
+  const est = await provisionAndActivate(admin, { firstName: 'Ruth', lastName: `Tablero${L}`, email: correoEst('b11ext'), role: 'STUDENT', semester: 5 });
+  const vinc = await credencialVinculada(admin, est, { certificateName: `Curso del tablero ${L}`, issuer: 'Proveedor del tablero' });
+  const actividadVinc = vinc.data?.activityId ?? psql(`select activity_id from external_certificates where id = '${vinc.data?.id}'`);
+  const hist = await req('POST', '/certificates/external', {
+    token: est.token, body: { certificateName: `Historica del tablero ${L}`, issuer: 'Instituto previo', issueDate: '2025-05-10', certificateUrl: `https://instituto.example.org/${L}` },
+  });
+  const cobertura = (await detalle('externas', 'cobertura')).data;
+  const op = (cobertura?.filas ?? []).find((f) => f.id === actividadVinc);
+  const opDato = (campo) => op?.datos?.find((d) => d.campo === campo)?.valor;
+  const historicas = (await detalle('externas', 'historicas')).data;
+  const vinculadas = (await detalle('externas', 'vinculadas')).data;
+  const histFila = (historicas?.filas ?? []).find((f) => f.id === hist.data?.id);
+  const vincFila = (vinculadas?.filas ?? []).find((f) => f.id === vinc.data?.id);
+  check(vinc.status === 201 && opDato('Admitidos por el proveedor') === '1' && opDato('Credenciales registradas') === '1'
+    && opDato('Aprobadas') === '0' && opDato('Admitidos sin registro') === '0'
+    && hist.status === 201 && !!histFila && !(cobertura?.filas ?? []).some((f) => f.id === hist.data?.id)
+    && !!vincFila && !/verificad|auténtic/i.test(JSON.stringify([op, vincFila, histFila])),
+  'V7.11.6 H07 Cobertura por oportunidad: registrada y no aprobada; la histórica va aparte; nada se rotula verificado antes de Dirección',
+  json({ op: op?.datos, vinc: vincFila?.estado, hist: hist.status }));
+
+  // --- H08: vistas de trabajo solo con pendientes.
+  const area = ((await req('GET', '/academic-areas', { token: admin })).data ?? []).find((a) => a.isActive !== false);
+  const propuesta = await req('POST', '/learning-resources', {
+    token: docente.token,
+    body: { title: `Guia del tablero ${L}`, provider: 'Docente de la carrera', url: `https://example.org/tablero-${L}`, academicAreaId: area?.id, resourceType: 'guide' },
+  });
+  const recursos = (await detalle('recursos', 'propuestas')).data;
+  const puntos = (await detalle('puntos', 'propuestas')).data;
+  const pedidos = (await detalle('pedidos', 'pendientes')).data;
+  const pendRec = Number(psql(`select count(*) from learning_resources where review_status = 'pending'`));
+  const pendPts = Number(psql(`select count(*) from gamification_proposals where status = 'pending'`));
+  const pendPed = Number(psql(`select count(*) from skill_requests where status = 'pending'`));
+  check(recursos?.total === pendRec && puntos?.total === pendPts && pedidos?.total === pendPed
+    && (recursos?.filas ?? []).every((f) => f.estado?.texto === 'Pendiente de decisión')
+    && (puntos?.filas ?? []).every((f) => f.estado?.texto === 'Pendiente de decisión')
+    && (pedidos?.filas ?? []).every((f) => f.estado?.texto === 'Sin decidir')
+    && propuesta.status === 201 && propuesta.data?.reviewStatus === 'pending' && ids(recursos?.filas).includes(propuesta.data.id),
+  'V7.11.7 H08 Propuestas de recursos y puntos, y pedidos de tecnologías: la vista de trabajo muestra solo lo pendiente',
+  json({ rec: [recursos?.total, pendRec], pts: [puntos?.total, pendPts], ped: [pedidos?.total, pendPed], prop: propuesta.status }));
+
+  // --- H09: temporada: vacía honesta o con sus fechas reales.
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+  const pasado = new Date(Date.now() + 10 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+  const futuroDesde = new Date(Date.now() + 20 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+  const futuroHasta = new Date(Date.now() + 30 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/La_Paz' });
+  // Los extras van en un área propia y se retiran al terminar: un extra vigente
+  // de «participación confirmada» sumaría puntos en las suites que corren después.
+  const areaBono = (await req('POST', '/academic-areas', {
+    token: admin, body: { name: `Area del tablero ${L}`, description: 'Área aislada para los extras de temporada del Inicio.', tags: [`tablero${L}`] },
+  })).data;
+  const bono = await req('POST', '/gamification-criteria', {
+    token: director.token, body: { code: `bono_tab_${TS}`, name: `Extra del tablero ${L}`, trigger: 'participacion_confirmada', points: 4, academicAreaId: areaBono?.id, isBonus: true, validFrom: hoy, validUntil: pasado },
+  });
+  const futuro = await req('POST', '/gamification-criteria', {
+    token: director.token, body: { code: `bono_fut_${TS}`, name: `Extra futuro ${L}`, trigger: 'participacion_confirmada', points: 4, academicAreaId: areaBono?.id, isBonus: true, validFrom: futuroDesde, validUntil: futuroHasta },
+  });
+  const extras = (await detalle('gamificacion', 'extras')).data;
+  for (const b of [bono, futuro]) {
+    if (b.data?.id) await req('PATCH', `/gamification-criteria/${b.data.id}`, { token: director.token, body: { isActive: false } });
+  }
+  const retirados = Number(psql(`select count(*) from gamification_criteria where id in ('${bono.data?.id}', '${futuro.data?.id}') and not is_active`));
+  const filaBono = (extras?.filas ?? []).find((f) => f.id === bono.data?.id);
+  const fechaBo = (iso) => iso.split('-').reverse().join('/');
+  check(bono.status === 201 && futuro.status === 201 && !!filaBono && retirados === 2
+    && filaBono.datos?.some((d) => d.campo === 'Desde' && d.valor === fechaBo(hoy)) && filaBono.datos?.some((d) => d.campo === 'Hasta' && d.valor === fechaBo(pasado))
+    && !ids(extras?.filas).includes(futuro.data?.id) && vacio?.filas?.length === Math.min(10, extrasEnBase),
+  'V7.11.8 H09 Extras de temporada: el vigente con sus fechas reales; el que empieza después no aparece; sin temporada, vacío',
+  json({ bono: bono.status, futuro: futuro.status, fila: filaBono?.datos }));
+
+  // --- H10: un borrador o un proyecto privado no son «proyectos compartidos».
+  const autor = await provisionStudent(admin, { firstName: 'Teo', lastName: `Tablero${L}`, email: correoEst('b11proy'), semester: 5 });
+  const compartido = (await crearProyectoActivo(autor.token, { title: `Proyecto compartido ${L}`, visibility: 'profile' })).data;
+  const privado = (await crearProyectoActivo(autor.token, { title: `Proyecto privado ${L}`, visibility: 'private' })).data;
+  const borrador = (await crearProyectoBorrador(autor.token, { title: `Proyecto borrador ${L}`, description: 'Un borrador que nadie más ve todavía.', visibility: 'profile' })).data;
+  const proyectos = (await detalle('proyectos', 'recientes')).data;
+  const compartidosEnBase = Number(psql(`select count(*) from projects where status = 'active' and visibility in ('profile', 'public_link', 'teachers')`));
+  const listados = ids(proyectos?.filas);
+  check(proyectos?.total === compartidosEnBase && listados.includes(compartido?.id) && !!privado?.id && !!borrador?.id
+    && !listados.includes(privado?.id) && !listados.includes(borrador?.id) && !/evidenc/i.test(JSON.stringify(proyectos?.filas ?? [])),
+  'V7.11.9 H10 Proyectos de la carrera: el activo compartido sí; el privado y el borrador no; sin evidencias',
+  json({ total: proyectos?.total, compartidosEnBase, c: !!compartido?.id, p: privado?.id ? listados.includes(privado.id) : 'sin', b: borrador?.id ? listados.includes(borrador.id) : 'sin' }));
+
+  // --- H11: sin tarjeta Correo; la ruta técnica sigue, solo para Administración.
+  const tarjetas = await resumen();
+  const correo = await req('GET', '/mail/status', { token: admin });
+  const correoDir = await req('GET', '/mail/status', { token: director.token });
+  check(Object.keys(tarjetas).length >= 15 && !('mail' in tarjetas) && !('correo' in tarjetas) && correo.status === 200 && correoDir.status === 403,
+    'V7.11.10 H11 El Inicio ya no trae el correo; /mail sigue disponible solo para Administración', json({ claves: Object.keys(tarjetas), s: [correo.status, correoDir.status] }));
+
+  // --- §3.1: las 15 tarjetas, cada una con su total; conjuntos desconocidos y otros roles, rechazados.
+  const esperadas = ['cuentas', 'roles', 'padron', 'auditoria', 'catalogo', 'pedidos', 'categorias', 'academicas', 'extracurriculares', 'externas', 'credenciales', 'recursos', 'puntos', 'gamificacion', 'proyectos'];
+  const todas = esperadas.every((k) => typeof tarjetas[k]?.total === 'number');
+  const desconocida = await detalle('cualquiera', 'recientes');
+  const segmentoMalo = await detalle('cuentas', 'todas');
+  const comoDirector = await req('GET', '/reports/admin/home', { token: director.token });
+  const comoEstudiante = await req('GET', '/reports/admin/home/cuentas/pendientes', { token: est.token });
+  check(todas && desconocida.status === 404 && segmentoMalo.status === 404 && comoDirector.status === 403 && comoEstudiante.status === 403,
+    'V7.11.11 §3.1 Quince resúmenes con total real; un conjunto inventado da 404 y otro rol no entra (403)',
+    json({ faltan: esperadas.filter((k) => typeof tarjetas[k]?.total !== 'number'), s: [desconocida.status, segmentoMalo.status, comoDirector.status, comoEstudiante.status] }));
+
+  // --- A11: credenciales pendientes; el total coincide con la bandeja de Dirección.
+  const cred = (await detalle('credenciales', 'pendientes')).data;
+  const bandeja = (await req('GET', '/validation/manual-reviews?estado=pendientes&limit=500', { token: director.token })).data ?? [];
+  const pendCred = Number(psql(`select count(*) from validation_records v join external_certificates x on x.id = v.resource_id where v.resource_type = 'external_certificate' and v.manual_review_status = 'requested'`));
+  check(cred?.total === pendCred && (pendCred > 500 || bandeja.length === pendCred)
+    && (cred?.filas ?? []).every((f) => f.estado?.texto === 'Pendiente de decisión') && bienFormado(cred),
+  'V7.11.12 A11 «Credenciales en revisión»: solo pendientes de decisión, el mismo total que la bandeja de Dirección', json({ total: cred?.total, pendCred, bandeja: bandeja.length }));
+
+  // --- Solo lectura: ninguna ruta del Inicio cambia datos.
+  const intentos = await Promise.all([
+    req('POST', '/reports/admin/home/cuentas/pendientes', { token: admin, body: {} }),
+    req('PATCH', '/reports/admin/home/credenciales/pendientes', { token: admin, body: {} }),
+    req('DELETE', '/reports/admin/home/recursos/propuestas', { token: admin }),
+  ]);
+  check(intentos.every((r) => r.status === 404 || r.status === 405),
+    'V7.11.13 §3.1 El Inicio es de solo lectura: no hay ruta para aprobar, reenviar ni borrar', json(intentos.map((r) => r.status)));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

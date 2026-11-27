@@ -36,7 +36,8 @@ export const MODO_TECNICO = import.meta.env.DEV || import.meta.env.VITE_TECHNICA
  * V7: los nombres de cada opción son los del contrato (las pruebas los
  * verifican); lo que cambia es cómo se agrupan para Estudiante, Docente,
  * Dirección y Sociedad —por lo que la persona quiere hacer, no por módulo— y
- * una pista corta de qué hay en cada una. Administración conserva su menú.
+ * una pista corta de qué hay en cada una. Administración agrupa su menú
+ * por subtítulos desde V7.1 §3.3.
  */
 export const NAV: Record<string, NavGroup[]> = {
   [RolNombre.STUDENT]: [
@@ -167,29 +168,49 @@ export const NAV: Record<string, NavGroup[]> = {
       items: [{ to: '/ayuda', label: 'Ayuda', hint: 'Preguntas frecuentes y tutorial' }],
     },
   ],
+  // V7.1 §3.3: el menú de Administración con subtítulos, como los demás roles.
   [RolNombre.ADMIN]: [
     {
-      section: 'Administración',
+      // Sin subtítulo: Inicio va solo, arriba (§3.3).
+      section: '',
+      items: [{ to: '/admin', label: 'Inicio', hint: 'Lo que requiere tu atención' }],
+    },
+    {
+      section: 'Identidad',
       items: [
         // V3 §54. Los semestres del docente se gestionan dentro de Usuarios.
-        { to: '/admin', label: 'Inicio' },
-        { to: '/admin/users', label: 'Usuarios' },
-        { to: '/admin/imports', label: 'Importar padrón' },
-        { to: '/admin/areas', label: 'Áreas y habilidades' },
-        { to: '/admin/skill-requests', label: 'Pedidos de tecnologías' },
-        { to: '/admin/activity-categories', label: 'Categorías' },
-        { to: '/admin/activities', label: 'Actividades / oportunidades' },
-        { to: '/admin/resources', label: 'Recursos' },
-        { to: '/admin/gamification', label: 'Gamificación' },
-        { to: '/admin/points', label: 'Puntos de estudiantes' },
-        { to: '/admin/credential-reviews', label: 'Revisión de credenciales' },
-        { to: '/admin/audit', label: 'Auditoría' },
-        { to: '/proyectos', label: 'Proyectos de la carrera' },
+        { to: '/admin/users', label: 'Usuarios', hint: 'Cuentas, roles y activación' },
+        { to: '/admin/imports', label: 'Importar padrón', hint: 'Altas desde la lista oficial' },
+      ],
+    },
+    {
+      section: 'Catálogos',
+      items: [
+        { to: '/admin/areas', label: 'Áreas y habilidades', hint: 'Áreas académicas y tecnologías' },
+        { to: '/admin/skill-requests', label: 'Pedidos de tecnologías', hint: 'Tecnologías que piden agregar' },
+        { to: '/admin/activity-categories', label: 'Categorías', hint: 'Tipos de actividad' },
+      ],
+    },
+    {
+      section: 'Gestión',
+      items: [
+        { to: '/admin/activities', label: 'Actividades / oportunidades', hint: 'Internas y externas' },
+        { to: '/admin/resources', label: 'Recursos', hint: 'Material de aprendizaje' },
+        { to: '/proyectos', label: 'Proyectos de la carrera', hint: 'La galería de la carrera' },
+      ],
+    },
+    {
+      section: 'Seguimiento',
+      items: [
+        { to: '/admin/gamification', label: 'Gamificación', hint: 'Cómo se ganan los puntos' },
+        { to: '/admin/points', label: 'Puntos de estudiantes', hint: 'Concesiones y propuestas' },
+        { to: '/admin/credential-reviews', label: 'Revisión de credenciales', hint: 'Consulta en solo lectura' },
+        { to: '/admin/audit', label: 'Auditoría', hint: 'Qué pasó y quién lo hizo' },
       ],
     },
     {
       section: 'Ayuda',
-      items: [{ to: '/ayuda', label: 'Ayuda' }],
+      items: [{ to: '/ayuda', label: 'Ayuda', hint: 'Preguntas frecuentes y tutorial' }],
     },
   ],
 };
