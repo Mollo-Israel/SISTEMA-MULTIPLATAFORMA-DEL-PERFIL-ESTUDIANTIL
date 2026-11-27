@@ -25,7 +25,14 @@
       "apiUrl": "http://localhost:3010/api"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Afinia usa la cámara solo para leer el código QR del perfil compartible de otra persona.",
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }

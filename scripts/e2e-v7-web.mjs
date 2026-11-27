@@ -715,7 +715,97 @@ async function batch9(ctx, browser) {
   await cp.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
+// ===========================================================================
+//  BATCH V7-10 — Contactos por nombre, QR al perfil y equipos en vistas (§12)
+// ===========================================================================
+async function batch10(ctx, browser) {
+  objective('BATCH V7-10 · Contactos por nombre y apellidos, solicitud desde el perfil del QR y equipos en cuatro vistas');
+  const admin = ctx.admin;
+  const area = (await req('POST', '/academic-areas', { token: admin, body: { name: `Webcontacto ${L}`, tags: [`wc0${L}`] } })).data;
+  const listo = async (k, firstName, lastName) => {
+    const e = await provisionStudent(admin, { firstName, lastName, email: correoEst(k), semester: 6 });
+    await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: e.token, body: {} });
+    await req('PUT', '/profiles/me/interests', { token: e.token, body: { items: [{ academicAreaId: area.id, priority: 1 }] } });
+    await req('PATCH', '/profiles/me', { token: e.token, body: { availability: 'open' } });
+    await req('POST', '/profiles/me/onboarding/privacy', { token: e.token, body: { peerDiscoverable: true, publicProfileEnabled: true } });
+    await req('POST', '/profiles/me/onboarding/complete', { token: e.token });
+    e.slug = (await req('GET', '/profiles/me/public-link', { token: e.token })).data?.slug;
+    return e;
+  };
+  const yo = await listo('b10yo', 'Leo', `Webbusca${L}`);
+  const ana = await listo('b10ana', 'Ána', `Quíspe${L}`);
+  const eva = await listo('b10eva', 'Eva', `Webqr${L}`);
+  const duena = await listo('b10due', 'Rosa', `Webequipo${L}`);
+  for (let i = 1; i <= 11; i++) {
+    await req('POST', '/team-needs', { token: duena.token, body: { purpose: `Webnecesidad ${String(i).padStart(2, '0')} ${L}`, maxMembers: 3, targetSemesters: [6] } });
+  }
+
+  const { ctx: c1, page, errores } = await entrar(browser, yo.email);
+  await page.goto(`${WEB}/student/collaboration`);
+  const caja = page.getByLabel('Nombre y apellidos');
+  await caja.waitFor({ timeout: 30000 }).catch(() => {});
+  const sinIdentificador = (await page.getByLabel('Identificador del perfil').count()) === 0
+    && !/identificador/i.test((await page.locator('main').textContent().catch(() => '')) ?? '');
+  await caja.fill(`quispe${L}, ana`);
+  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
+  const resultados = page.locator('[data-testid="resultados-busqueda"]');
+  await resultados.waitFor({ timeout: 10000 }).catch(() => {});
+  const texto = ((await resultados.textContent().catch(() => '')) ?? '').replace(/\s+/g, ' ');
+  await resultados.getByRole('button', { name: 'Solicitar contacto' }).first().click({ timeout: 10000 }).catch(() => {});
+  const pendiente = await resultados.getByText('Solicitud pendiente').waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+  check(sinIdentificador && texto.includes(`Ána Quíspe${L}`) && !texto.includes('@') && pendiente,
+    'W7.10.1 T01/T03 Sin formulario de identificador: «quispe, ana» encuentra a Ána Quíspe y se le solicita contacto',
+    json({ sinIdentificador, texto: texto.slice(0, 120), pendiente }));
+
+  // T03: el enlace y el QR de Mi perfil siguen intactos.
+  await page.goto(`${WEB}/student/profile?tab=visibilidad`);
+  await page.locator('.qr-lienzo svg').first().waitFor({ timeout: 15000 }).catch(() => {});
+  const qr = await page.locator('.qr-lienzo svg').count();
+  const enlace = ((await page.locator('code.enlace-publico').first().textContent().catch(() => '')) ?? '').includes(yo.slug);
+  check(qr > 0 && enlace, 'W7.10.2 T03 Mi perfil → Visibilidad conserva el QR y el enlace compartible', json({ qr, enlace }));
+
+  // El QR lleva al perfil: desde ahí se solicita, sin agregar a nadie.
+  await page.goto(`${WEB}/p/${eva.slug}`);
+  const accion = page.locator('[data-testid="solicitar-desde-perfil"]');
+  await accion.waitFor({ timeout: 15000 }).catch(() => {});
+  await accion.getByRole('button', { name: 'Solicitar contacto' }).click({ timeout: 10000 }).catch(() => {});
+  const enviada = await accion.getByText('Solicitud enviada.', { exact: false }).waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+  const sinContacto = ((await req('GET', '/contacts', { token: eva.token })).data ?? []).length === 0;
+  const pedida = ((await req('GET', '/contacts/requests/received', { token: eva.token })).data ?? []).length === 1;
+  await page.goto(`${WEB}/p/${yo.slug}`);
+  await page.waitForLoadState('networkidle').catch(() => {});
+  const enElPropio = await page.locator('[data-testid="solicitar-desde-perfil"]').count();
+  check(enviada && sinContacto && pedida && enElPropio === 0,
+    'W7.10.3 T04 Desde el perfil abierto por el enlace o QR se solicita contacto; no agrega solo y en el propio perfil no se ofrece',
+    json({ enviada, sinContacto, pedida, enElPropio }));
+  const anon = await browser.newContext();
+  const pa = await anon.newPage();
+  await pa.goto(`${WEB}/p/${eva.slug}`);
+  await pa.waitForLoadState('networkidle').catch(() => {});
+  const sinSesion = await pa.locator('[data-testid="solicitar-desde-perfil"]').count();
+  const ve = ((await pa.locator('body').textContent().catch(() => '')) ?? '').includes(`Webqr${L}`);
+  await anon.close();
+  check(ve && sinSesion === 0, 'W7.10.4 Sin sesión el perfil compartible se ve, pero sin acciones autenticadas', json({ ve, sinSesion }));
+
+  // T09: equipos en cuatro vistas, de a 10.
+  await page.goto(`${WEB}/student/collaboration?tab=equipos`);
+  await page.getByRole('tab', { name: /^Mis equipos/ }).waitFor({ timeout: 20000 }).catch(() => {});
+  const pestanas = (await page.getByRole('tab').allTextContents()).map((t) => t.replace(/\s*\(\d+\)$/, ''));
+  await page.getByRole('tab', { name: /^Todas las necesidades/ }).click({ timeout: 15000 });
+  const totalVisibles = await page.locator('[data-testid="equipos-todas"] .necesidad').count();
+  await page.getByRole('button', { name: /Siguiente/i }).first().click({ timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  const enSegunda = await page.locator('[data-testid="equipos-todas"] .necesidad').count();
+  const nuestrasTotal = ((await req('GET', '/team-needs', { token: yo.token })).data ?? []).filter((n) => !n.isOwner).length;
+  check(['Para ti', 'Todas las necesidades', 'Mis necesidades', 'Mis equipos'].every((t) => pestanas.includes(t))
+    && totalVisibles === Math.min(10, nuestrasTotal) && enSegunda === Math.min(10, nuestrasTotal - 10) && nuestrasTotal >= 11,
+    'W7.10.5 T09 Equipos: «Para ti / Todas / Mis necesidades / Mis equipos», 10 por página',
+    json({ pestanas, totalVisibles, enSegunda, nuestrasTotal}));
+  check(errores.length === 0, 'W7.10.6 Sin errores de JavaScript en Colaboración y en el perfil compartible', errores.join(' | '));
+  await c1.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

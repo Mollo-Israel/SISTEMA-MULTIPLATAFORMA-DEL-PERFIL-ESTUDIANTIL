@@ -477,6 +477,12 @@ export const collaborationService = {
     api.post<PublicLinkView>('/profiles/me/public-link/rotate').then((r) => r.data),
   requestContact: (body: { slug: string; message?: string; source?: string }) =>
     api.post('/contacts/requests', body).then((r) => r.data),
+  /** V7.1 §12.1: el perfil al que lleva un QR; la API decide si existe y qué campos se ven. */
+  publicProfile: (slug: string) =>
+    api.get<{ slug: string; name: string; semester: number | null; bio?: string | null; availability?: string }>(`/public/profiles/${encodeURIComponent(slug)}`).then((r) => r.data),
+  /** V7.1 §12.1: por nombre y apellidos (sin tildes, coma ni orden), mínimo 3 letras, hasta 10, sin correos. */
+  searchPeople: (q: string) =>
+    api.get<{ name: string; semester: number | null; slug: string; isContact: boolean; pending: boolean }[]>('/contacts/search', { params: { q } }).then((r) => r.data),
   receivedRequests: () => api.get<any[]>('/contacts/requests/received').then((r) => r.data),
   decideContactRequest: (id: string, decision: 'accept' | 'reject') =>
     api.patch(`/contacts/requests/${id}`, { decision }).then((r) => r.data),

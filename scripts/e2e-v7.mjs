@@ -1369,7 +1369,97 @@ async function batch9(ctx) {
     json({ integrante: porIntegrante?.total, busqueda: combinadaP?.total, area: porArea?.total }));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
+// ===========================================================================
+//  BATCH V7-10 — Contactos por nombre, solicitudes y equipos (§12)
+// ===========================================================================
+async function batch10(ctx) {
+  objective('BATCH V7-10 · Buscar contactos por nombre y apellidos sin depender de la coma; solicitudes y equipos');
+  const admin = ctx.admin;
+  const visible = async (k, firstName, lastName, { encontrable = true, semester = 5 } = {}) => {
+    const e = await provisionStudent(admin, { firstName, lastName, email: correoEst(k), semester });
+    await req('POST', '/profiles/me/onboarding/privacy', { token: e.token, body: { peerDiscoverable: encontrable, publicProfileEnabled: true } });
+    e.slug = (await req('GET', '/profiles/me/public-link', { token: e.token })).data?.slug;
+    return e;
+  };
+  const ana1 = await visible('b10a1', 'Ana', `Quíspe${L}`);
+  const ana2 = await visible('b10a2', 'Ana', `Quíspe${L}`);
+  const oculta = await visible('b10oc', 'Ana', `Quíspe${L}oculta`, { encontrable: false });
+  const yo = await visible('b10yo', 'Ana', `Quíspe${L}yo`);
+  const buscar = (texto, token = yo.token) => req('GET', `/contacts/search?${q({ q: texto })}`, { token });
+  const slugs = (r) => (Array.isArray(r.data) ? r.data : []).map((p) => p.slug).sort();
+
+  const directa = await buscar(`Ana Quispe${L}`);
+  const conComa = await buscar(`Quíspe${L}, Ana`);
+  const desorden = await buscar(`  QUISPE${L}   ana `);
+  const esperados = [ana1.slug, ana2.slug].sort();
+  check(directa.status === 200 && json(slugs(directa)) === json(esperados) && json(slugs(conComa)) === json(esperados) && json(slugs(desorden)) === json(esperados),
+    'V7.10.1 T01 «Ana Quispe», «Quíspe, Ana» y «QUISPE ana» encuentran los mismos perfiles: sin tildes, sin coma, en cualquier orden',
+    json({ directa: slugs(directa).length, coma: slugs(conComa).length, desorden: slugs(desorden).length }));
+  const nombres = (directa.data ?? []).map((p) => p.name);
+  check(slugs(directa).length === 2 && new Set(slugs(directa)).size === 2 && nombres.every((n) => n === `Ana Quíspe${L}`)
+    && !slugs(directa).includes(oculta.slug) && !slugs(directa).includes(yo.slug) && !/@/.test(JSON.stringify(directa.data ?? null)),
+    'V7.10.2 T02 Los homónimos siguen siendo dos personas distintas; no aparecen quien no aceptó ser encontrada ni una misma, ni correos',
+    json(directa.data));
+  const corta = await buscar('an');
+  const solo = await buscar(' , - ;');
+  check(corta.status === 400 && corta.data?.code === 'SEARCH_TOO_SHORT' && solo.status === 400,
+    'V7.10.3 Se conserva el mínimo de 3 caracteres; comas, guiones y signos sueltos no cuentan', `${corta.status} ${corta.data?.code} / ${solo.status}`);
+  const porIdentificador = await buscar(ana1.slug);
+  check(porIdentificador.status === 200 && (porIdentificador.data ?? []).length === 0,
+    'V7.10.4 T03 El buscador ya no resuelve identificadores: el identificador viaja solo en el enlace o el QR', json(porIdentificador.data));
+
+  // T06: la solicitud se resuelve por la persona elegida, no por el nombre.
+  const pedir = (slug, token = yo.token) => req('POST', '/contacts/requests', { token, body: { slug, source: 'directory' } });
+  const primera = await pedir(ana1.slug);
+  const repetida = await pedir(ana1.slug);
+  const contraria = await pedir(yo.slug, ana1.token);
+  const aMiMisma = await pedir(yo.slug);
+  const tras = await buscar(`Ana Quispe${L}`);
+  const estado = Object.fromEntries((tras.data ?? []).map((p) => [p.slug, p.pending]));
+  check(primera.status === 201 && repetida.status === 409 && contraria.status === 409 && aMiMisma.status === 400
+    && estado[ana1.slug] === true && estado[ana2.slug] === false,
+    'V7.10.5 T06 Solicitud única: repetirla o la contraria da 409, a una misma 400; el homónimo no queda afectado',
+    json({ p: primera.status, r: repetida.status, c: contraria.status, m: aMiMisma.status, estado }));
+
+  // T07 / T08: los canales los abre el cliente externo; sin canales, nada privado.
+  const recibida = ((await req('GET', '/contacts/requests/received', { token: ana1.token })).data ?? [])[0];
+  await req('PATCH', `/contacts/requests/${recibida?.id}`, { token: ana1.token, body: { decision: 'accept' } });
+  await req('PUT', '/profiles/me/contact-channels', { token: yo.token, body: { channels: [
+    { channel: 'email', value: `ana.contacto.${TS}@correo.com`, isPublic: false },
+    { channel: 'whatsapp', value: '+591 71234567', isPublic: false },
+  ] } });
+  const deAna1 = ((await req('GET', '/contacts', { token: ana1.token })).data ?? []).find((c) => c.name === `Ana Quíspe${L}yo`);
+  const deYo = ((await req('GET', '/contacts', { token: yo.token })).data ?? []).find((c) => c.name === `Ana Quíspe${L}`);
+  const hrefs = (deAna1?.channels ?? []).map((c) => c.href ?? '');
+  check(hrefs.some((h) => h.startsWith('mailto:')) && hrefs.some((h) => h.startsWith('https://wa.me/591'))
+    && !!deYo && (deYo.channels ?? []).length === 0 && !/@|\+591/.test(JSON.stringify(deYo)),
+    'V7.10.8 T07/T08 El correo y WhatsApp compartidos abren el cliente externo (mailto:, wa.me); quien no compartió canales no expone correo ni teléfono',
+    json({ hrefs, sinCanales: deYo?.channels }));
+
+  // T09 / T10: necesidades de equipo paginables, cupo y semestre.
+  const duena = await visible('b10due', 'Eva', `Equipos${L}`);
+  const necesidades = [];
+  for (let i = 1; i <= 11; i++) {
+    const r = await req('POST', '/team-needs', { token: duena.token, body: { purpose: `Necesidad ${i} ${L}`, maxMembers: 2, targetSemesters: [5] } });
+    if (r.status !== 201) throw new Error(`No se pudo crear la necesidad ${i} (${r.status}): ${json(r.data)}`);
+    necesidades.push(r.data);
+  }
+  const abiertas = ((await req('GET', '/team-needs', { token: ana2.token })).data ?? []).filter((n) => n.purpose.endsWith(` ${L}`));
+  check(abiertas.length === 11, 'V7.10.6 T09 Las 11 necesidades abiertas llegan a quien puede verlas (la web pagina de a 10)', `${abiertas.length}`);
+  const otroSemestre = await visible('b10s3', 'Iris', `Equipos${L}`, { semester: 3 });
+  const fueraDeAlcance = await req('POST', `/team-needs/${necesidades[0].id}/applications`, { token: otroSemestre.token, body: {} });
+  const postula1 = await req('POST', `/team-needs/${necesidades[0].id}/applications`, { token: ana1.token, body: {} });
+  const postula2 = await req('POST', `/team-needs/${necesidades[0].id}/applications`, { token: ana2.token, body: {} });
+  await req('PATCH', `/team-applications/${postula1.data?.id}`, { token: duena.token, body: { decision: 'accept' } });
+  const tercera = await req('POST', `/team-needs/${necesidades[0].id}/applications`, { token: yo.token, body: {} });
+  const mias = (await req('GET', '/team-applications/mine', { token: ana2.token })).data ?? [];
+  const deAna2 = mias.find((a) => a.id === postula2.data?.id);
+  check(fueraDeAlcance.status === 404 && postula1.status === 201 && tercera.status === 409 && tercera.data?.code === 'TEAM_NEED_CLOSED' && deAna2?.status === 'rejected',
+    'V7.10.7 T10 Fuera de su semestre no se ve (404); con el cupo lleno la necesidad se cierra y no admite más postulaciones',
+    json({ fuera: fueraDeAlcance.status, p1: postula1.status, tercera: `${tercera.status} ${tercera.data?.code}`, pendiente: deAna2?.status }));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

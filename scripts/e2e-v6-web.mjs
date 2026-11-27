@@ -539,7 +539,8 @@ async function batch13(ctx, browser) {
   await req('PUT', '/profiles/me/visibility', { token: otra.token, body: { publicProfileEnabled: true } });
   const { ctx: c1, page, errores } = await entrar(browser, yo.email);
   await page.goto(`${WEB}/student/collaboration`);
-  const caja = page.getByLabel('Nombre o identificador');
+  // V7.1 §12.1: el buscador es por nombre y apellidos (ya no por identificador).
+  const caja = page.getByLabel('Nombre y apellidos');
   await caja.waitFor({ timeout: 30000 }).catch(() => {});
   await caja.fill(`Vera${L}`);
   await page.getByRole('button', { name: 'Buscar', exact: true }).click();

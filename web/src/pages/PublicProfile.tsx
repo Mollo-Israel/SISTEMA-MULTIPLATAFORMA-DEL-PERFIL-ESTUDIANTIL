@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { FiAlertCircle, FiShield, FiUser } from 'react-icons/fi';
+import { FiAlertCircle, FiShield, FiUser, FiUserPlus } from 'react-icons/fi';
+import { RolNombre } from '../constants';
 import { collaborationService, uploadService, type PublicProfileView } from '../services';
-import { Badge, Card, Loading } from '../components/ui';
+import { Badge, Button, Card, Loading } from '../components/ui';
+import { useAuth } from '../auth/AuthContext';
+import { apiError } from '../api/client';
 
 const NIVEL: Record<string, string> = { high: 'alto', medium: 'medio', low: 'bajo' };
 const DISPONIBILIDAD: Record<string, string> = {
@@ -18,6 +21,62 @@ const RESPALDO: Record<string, string> = {
   reviewed: 'Revisado por un docente',
   flagged: 'Marcado por inconsistencia',
 };
+
+/**
+ * V7.1 §12.1: desde el perfil que abrió un enlace o un QR, un estudiante con
+ * sesión puede solicitar contacto. No agrega a nadie: la otra persona acepta o
+ * rechaza. Sin sesión, o en el propio perfil, no se ofrece ninguna acción.
+ */
+function SolicitarContacto({ slug }: Readonly<{ slug: string }>) {
+  const { user } = useAuth();
+  const esEstudiante = user?.role === RolNombre.STUDENT;
+  const [propio, setPropio] = useState<boolean | null>(null);
+  const [mensaje, setMensaje] = useState('');
+  const [estado, setEstado] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    if (!esEstudiante) return;
+    collaborationService.myPublicLink()
+      .then((l) => setPropio(l.slug === slug))
+      .catch(() => setPropio(false));
+  }, [esEstudiante, slug]);
+
+  if (!esEstudiante || propio !== false) return null;
+  const enviar = async () => {
+    setEnviando(true);
+    try {
+      await collaborationService.requestContact({ slug, message: mensaje.trim() || undefined, source: 'qr' });
+      setEstado({ tipo: 'ok', texto: 'Solicitud enviada. La otra persona decide si la acepta.' });
+    } catch (e) {
+      setEstado({ tipo: 'error', texto: apiError(e) });
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return (
+    <Card title="¿Se conocen?">
+      <div data-testid="solicitar-desde-perfil">
+        <p className="muted" style={{ marginTop: 0 }}>
+          Solicitar contacto no te agrega: la otra persona la acepta o la rechaza. Si acepta, verán los canales que cada uno compartió.
+        </p>
+        {estado?.tipo === 'ok' ? (
+          <div className="alert alert-success" role="status">{estado.texto}</div>
+        ) : (
+          <>
+            <div className="field">
+              <label htmlFor="perfil-presentacion">Presentación (opcional)</label>
+              <input id="perfil-presentacion" value={mensaje} maxLength={300} onChange={(e) => setMensaje(e.target.value)}
+                placeholder="Nos vimos en el taller de redes." />
+            </div>
+            {estado?.tipo === 'error' && <div className="alert alert-error" role="alert">{estado.texto}</div>}
+            <Button icon={<FiUserPlus size={15} />} loading={enviando} onClick={() => void enviar()}>Solicitar contacto</Button>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 /**
  * Perfil compartible de un estudiante (§43, §44).
@@ -70,6 +129,7 @@ export default function PublicProfilePage() {
   return (
     <div className="public-page">
       <PerfilPublicoVista perfil={perfil} />
+      <SolicitarContacto slug={slug} />
       <p className="muted" style={{ textAlign: 'center', fontSize: '0.8rem' }}>
         Afinia · Perfil compartible. Solo se muestra lo que su dueño decidió publicar.
       </p>

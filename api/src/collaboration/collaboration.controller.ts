@@ -239,7 +239,7 @@ export class CollaborationController {
   @Get('contacts/search')
   @Roles(RolNombre.STUDENT)
   @ApiOperation({
-    summary: 'V6 §8.4: buscar por nombre o identificador entre quienes aceptaron ser encontrados.',
+    summary: 'V6 §8.4, V7.1 §12.1: buscar por nombre y apellidos (sin tildes, coma ni orden) entre quienes aceptaron ser encontrados.',
     description: 'Mínimo 3 caracteres, hasta 10 resultados, sin correos. Encontrar no agrega: se solicita contacto.',
   })
   async searchContacts(@CurrentUser() user: AuthenticatedUser, @Query('q') q: string) {

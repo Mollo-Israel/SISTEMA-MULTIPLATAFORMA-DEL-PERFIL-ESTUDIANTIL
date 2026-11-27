@@ -25,6 +25,8 @@ export default function TeamNeedsSection() {
   const [postulando, setPostulando] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState('');
   const [ocupado, setOcupado] = useState<string | null>(null);
+  // V7.1 §12.3: de a 10, sin dibujar la lista completa.
+  const [mostradas, setMostradas] = useState(10);
   const toast = useToast();
   const recargar = () => { abiertas.reload(); mias.reload(); };
 
@@ -58,10 +60,10 @@ export default function TeamNeedsSection() {
   const necesidades = (abiertas.data ?? []).filter((n: any) => !n.isOwner);
   return (
     <>
-      <Card title="Necesidades abiertas para ti">
+      <Card title="Necesidades abiertas de tu semestre">
         {abiertas.loading && !abiertas.data && <SkeletonCards count={2} />}
         {abiertas.data && necesidades.length === 0 && <EmptyState icon="users" message="Por ahora no hay necesidades abiertas para tu semestre." />}
-        {necesidades.map((n: any) => {
+        {necesidades.slice(0, mostradas).map((n: any) => {
           const mia = n.myApplication;
           return (
             <View key={n.id} style={styles.item}>
@@ -91,6 +93,9 @@ export default function TeamNeedsSection() {
             </View>
           );
         })}
+        {necesidades.length > mostradas && (
+          <Button variant="secondary" icon="chevron-down" title={`Ver ${Math.min(10, necesidades.length - mostradas)} más (${necesidades.length - mostradas} restantes)`} onPress={() => setMostradas((m) => m + 10)} />
+        )}
       </Card>
       {(mias.data ?? []).length > 0 && (
         <Card title="Mis postulaciones">

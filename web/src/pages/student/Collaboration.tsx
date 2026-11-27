@@ -20,7 +20,7 @@ import type { AcademicArea, Skill } from '../../services/types';
 import AreaSkillPicker from '../../components/AreaSkillPicker';
 import { useConfirm, useToast } from '../../components/feedback';
 import {
-  Badge, Button, Card, Diferido, EmptyState, Loading, PageHeader, Tabs,
+  Badge, Button, Card, Diferido, EmptyState, Loading, PageHeader, Paginacion, Tabs,
 } from '../../components/ui';
 
 /** V3 §55: los mismos motivos predefinidos que valida la API. */
@@ -321,16 +321,13 @@ function Contactos({ toast, confirm }: Readonly<{ toast: any; confirm: any }>) {
   const [contactos, setContactos] = useCachedState<ContactView[] | null>('contactos', null);
   const [recibidas, setRecibidas] = useCachedState<any[]>('recibidas', []);
   const [enviadas, setEnviadas] = useCachedState<any[]>('enviadas', []);
-  const [slug, setSlug] = useState('');
-  const [mensaje, setMensaje] = useState('');
-  const [enviando, setEnviando] = useState(false);
   /** V6 §8.4: búsqueda entre perfiles que aceptaron ser encontrados. */
   const [buscar, setBuscar] = useState('');
   const [hallados, setHallados] = useState<Awaited<ReturnType<typeof collaborationService.searchPeople>> | null>(null);
   const [buscando, setBuscando] = useState(false);
   const buscarPersonas = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (buscar.trim().length < 3) { toast.error('Escribe al menos 3 letras.'); return; }
+    if (buscar.trim().length < 3) { toast.error('Escribe al menos 3 letras del nombre o los apellidos.'); return; }
     setBuscando(true);
     try {
       setHallados(await collaborationService.searchPeople(buscar.trim()));
@@ -368,28 +365,6 @@ function Contactos({ toast, confirm }: Readonly<{ toast: any; confirm: any }>) {
   };
 
   useEffect(() => { void cargar(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
-
-  const solicitar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // V3 §67: error debajo de cada campo, no el globo del navegador.
-    if (!validarFormulario(e.currentTarget as HTMLFormElement)) return;
-    setEnviando(true);
-    try {
-      await collaborationService.requestContact({
-        slug: slug.trim(),
-        message: mensaje || undefined,
-        source: 'qr',
-      });
-      toast.success('Solicitud enviada.', 'Le llegará para que la acepte o la rechace.');
-      setSlug('');
-      setMensaje('');
-      await cargar();
-    } catch (err) {
-      toast.error(apiError(err));
-    } finally {
-      setEnviando(false);
-    }
-  };
 
   const decidir = async (id: string, decision: 'accept' | 'reject') => {
     try {
@@ -443,15 +418,16 @@ function Contactos({ toast, confirm }: Readonly<{ toast: any; confirm: any }>) {
 
   return (
     <>
-      {/* V6 §8.4: buscar entre quienes aceptaron ser encontrados; encontrar no agrega. */}
+      {/* V6 §8.4, V7.1 §12.1: buscar por nombre y apellidos entre quienes aceptaron ser encontrados; encontrar no agrega. */}
       <Card title="Buscar a alguien">
         <p className="muted" style={{ marginTop: 0 }}>
-          Por nombre o por el identificador de su perfil. Solo aparecen quienes aceptaron ser encontrados
-          y tienen su perfil compartido activo. Nunca se muestran correos.
+          Escribe su nombre y apellidos, en cualquier orden y con o sin tildes. Solo aparecen quienes aceptaron
+          ser encontrados y tienen su perfil compartido activo. Nunca se muestran correos. Si alguien te
+          compartió su enlace o su QR, ábrelo: desde su perfil también puedes solicitar contacto.
         </p>
         <form noValidate onSubmit={buscarPersonas} className="flex" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
-          <input aria-label="Nombre o identificador" value={buscar} onChange={(e) => setBuscar(e.target.value)}
-            placeholder="Nombre o identificador (mínimo 3 letras)" style={{ flex: 1, minWidth: 0 }} />
+          <input aria-label="Nombre y apellidos" value={buscar} onChange={(e) => setBuscar(e.target.value)}
+            placeholder="Nombre y apellidos (mínimo 3 letras)" style={{ flex: 1, minWidth: 0 }} />
           <Button type="submit" loading={buscando}>Buscar</Button>
         </form>
         {hallados && (
@@ -467,38 +443,6 @@ function Contactos({ toast, confirm }: Readonly<{ toast: any; confirm: any }>) {
             ))}
           </ul>
         )}
-      </Card>
-
-      <Card title="Solicitar contacto">
-        <p className="muted" style={{ marginTop: 0 }}>
-          Escanear un QR te lleva al perfil, pero no establece contacto: eso lo decide la otra
-          persona. Pega aquí el identificador que aparece al final de su enlace.
-        </p>
-        <form noValidate onSubmit={solicitar}>
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor="collaboration-identificador-del-perfil">Identificador del perfil</label>
-              <input id="collaboration-identificador-del-perfil"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="cdwxx59caf76"
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="collaboration-presentacion-opcional">Presentación (opcional)</label>
-              <input id="collaboration-presentacion-opcional"
-                value={mensaje}
-                onChange={(e) => setMensaje(e.target.value)}
-                placeholder="Nos vimos en el taller de redes."
-                maxLength={300}
-              />
-            </div>
-          </div>
-          <Button type="submit" loading={enviando} icon={<FiUserPlus size={15} />}>
-            Enviar solicitud
-          </Button>
-        </form>
       </Card>
 
       {recibidas.length > 0 && (
@@ -657,6 +601,17 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
   const [renombrando, setRenombrando] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const equipoDe = (needId: string) => equipos.find((t) => t.needId === needId) ?? null;
+  /** V7.1 §12.3: cuatro vistas en vez de una pila de tarjetas, y de a 10 por página. */
+  const [vista, setVista] = useState<VistaEquipos>('parati');
+  const [paginas, setPaginas] = useState<Record<'parati' | 'todas', number>>({ parati: 1, todas: 1 });
+  /** Desde «Para ti», «Postular» lleva a la necesidad en «Todas», donde está el formulario. */
+  const irAPostular = (needId: string) => {
+    const i = (abiertas ?? []).findIndex((x) => x.id === needId);
+    setVista('todas');
+    if (i >= 0) setPaginas((p) => ({ ...p, todas: Math.floor(i / POR_PAGINA_EQUIPOS) + 1 }));
+    setPostulando({ needId, message: '' });
+    window.setTimeout(() => document.getElementById(`necesidad-${needId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  };
 
   const cargar = async () => {
     try {
@@ -858,7 +813,19 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
         </Card>
       )}
 
+      <Tabs
+        value={vista}
+        onChange={(k) => setVista(k as VistaEquipos)}
+        items={[
+          { key: 'parati', label: 'Para ti' },
+          { key: 'todas', label: `Todas las necesidades${abiertas ? ` (${abiertas.length})` : ''}` },
+          { key: 'mias', label: `Mis necesidades${necesidades ? ` (${necesidades.length})` : ''}` },
+          { key: 'equipos', label: `Mis equipos (${equipos.length})` },
+        ]}
+      />
+
       {/* V6 §8.5: «Para ti» en Equipos; sugerir no inscribe, se postula y deciden. */}
+      {vista === 'parati' && (
       <Card title="Para ti">
         <div data-testid="equipos-para-ti">
           <p className="muted" style={{ marginTop: 0 }}>
@@ -867,9 +834,9 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
           </p>
           {!paraTi && <Diferido><Loading /></Diferido>}
           {paraTi?.length === 0 && (
-            <EmptyState message="Ahora mismo ninguna necesidad abierta coincide con tu perfil. Revisa todas las de tu semestre más abajo." />
+            <EmptyState message="Ahora mismo ninguna necesidad abierta coincide con tu perfil. Revisa «Todas las necesidades»." />
           )}
-          {(paraTi ?? []).map((n) => (
+          {deLaPagina(paraTi ?? [], paginas.parati).map((n) => (
             <div key={n.id} className="necesidad">
               <div className="flex between" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
                 <strong>{n.purpose}</strong>
@@ -880,18 +847,18 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
                 {n.reasons.map((r) => <li key={r} className="small">{r}</li>)}
               </ul>
               <div>
-                <Button size="sm" icon={<FiUserPlus size={13} />} onClick={() => {
-                  setPostulando({ needId: n.id, message: '' });
-                  document.getElementById(`necesidad-${n.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }}>
+                <Button size="sm" icon={<FiUserPlus size={13} />} onClick={() => irAPostular(n.id)}>
                   Postular
                 </Button>
               </div>
             </div>
           ))}
+          <PaginasEquipos total={(paraTi ?? []).length} pagina={paginas.parati} ir={(n) => setPaginas((p) => ({ ...p, parati: n }))} />
         </div>
       </Card>
+      )}
 
+      {vista === 'todas' && (<>
       <Card title="Todas las necesidades abiertas de tu semestre">
         <p className="muted" style={{ marginTop: 0 }}>
           Equipos que buscan integrantes de tu semestre. Postula a los que te interesen; el responsable
@@ -901,7 +868,8 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
         {abiertas?.length === 0 && (
           <EmptyState message="Por ahora no hay necesidades abiertas para tu semestre." />
         )}
-        {(abiertas ?? []).map((n) => {
+        <div data-testid="equipos-todas">
+        {deLaPagina(abiertas ?? [], paginas.todas).map((n) => {
           const mia = n.myApplication;
           return (
             <div key={n.id} id={`necesidad-${n.id}`} className="necesidad">
@@ -961,6 +929,8 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
             </div>
           );
         })}
+        </div>
+        <PaginasEquipos total={(abiertas ?? []).length} pagina={paginas.todas} ir={(n) => setPaginas((p) => ({ ...p, todas: n }))} />
       </Card>
 
       {misPostulaciones.length > 0 && (
@@ -981,7 +951,9 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
           ))}
         </Card>
       )}
+      </>)}
 
+      {vista === 'mias' && (<>
       <Card title="¿Qué le falta a tu equipo?">
         <p className="muted" style={{ marginTop: 0 }}>
           Declara lo que <strong>falta</strong>, no lo que ya tienes: el sistema busca quien
@@ -1233,7 +1205,9 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
           </div>
         ))}
       </Card>
+      </>)}
 
+      {vista === 'equipos' && (
       <Card title="Mis equipos">
         {equipos.length === 0 && <EmptyState message="Todavía no formas parte de ningún equipo." />}
         {equipos.map((t) => (
@@ -1298,6 +1272,31 @@ function Equipos({ toast }: Readonly<{ toast: any }>) {
           </div>
         ))}
       </Card>
+      )}
     </>
+  );
+}
+
+type VistaEquipos = 'parati' | 'todas' | 'mias' | 'equipos';
+const POR_PAGINA_EQUIPOS = 10;
+
+/** Las de una página (10), sin renderizar la lista completa. */
+function deLaPagina<T>(lista: T[], pagina: number): T[] {
+  return lista.slice((pagina - 1) * POR_PAGINA_EQUIPOS, pagina * POR_PAGINA_EQUIPOS);
+}
+
+function PaginasEquipos({ total, pagina, ir }: Readonly<{ total: number; pagina: number; ir: (n: number) => void }>) {
+  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA_EQUIPOS));
+  if (total <= POR_PAGINA_EQUIPOS) return null;
+  return (
+    <Paginacion
+      pagina={Math.min(pagina, paginas)}
+      paginas={paginas}
+      total={total}
+      desde={(Math.min(pagina, paginas) - 1) * POR_PAGINA_EQUIPOS + 1}
+      hasta={Math.min(total, Math.min(pagina, paginas) * POR_PAGINA_EQUIPOS)}
+      ir={(n) => ir(Math.min(Math.max(1, n), paginas))}
+      noun="necesidades"
+    />
   );
 }

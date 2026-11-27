@@ -5,6 +5,9 @@ import {
   collaborationService, type ContactChannelType, type ContactChannelView, type ContactView,
 } from '../../services';
 import { useAsync } from '../../hooks/useAsync';
+import { useCameraPermissions } from 'expo-camera';
+import { EscanerQr } from '../../components/EscanerQr';
+import { leerQrDePerfil } from '../../qrPerfil';
 import TeamNeedsSection from './TeamNeedsSection';
 import {
   Badge, Button, Card, EmptyState, Field, Muted, SkeletonCards,
@@ -102,8 +105,19 @@ export default function CollaborationScreen() {
   const recibidasState = useAsync(() => collaborationService.receivedRequests(), []);
   const invitacionesState = useAsync(() => collaborationService.myTeamInvitations(), []);
 
-  const [slug, setSlug] = useState('');
-  const [enviando, setEnviando] = useState(false);
+  // V7.1 §12.1: se busca por nombre y apellidos; ya no se pega un identificador.
+  const [buscar, setBuscar] = useState('');
+  const [buscando, setBuscando] = useState(false);
+  const [hallados, setHallados] = useState<Awaited<ReturnType<typeof collaborationService.searchPeople>> | null>(null);
+  const [pidiendo, setPidiendo] = useState<string | null>(null);
+  // V7.1 §12.1 (T04, T05): escanear el QR del perfil de otra persona.
+  const [permiso, pedirPermiso] = useCameraPermissions();
+  const [escaneando, setEscaneando] = useState(false);
+  const [avisoCamara, setAvisoCamara] = useState<{ texto: string; ajustes: boolean } | null>(null);
+  const [avisoQr, setAvisoQr] = useState<string | null>(null);
+  const [escaneado, setEscaneado] = useState<{
+    slug: string; name: string; semester: number | null; bio?: string | null; enviada?: boolean;
+  } | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -133,17 +147,74 @@ export default function CollaborationScreen() {
     }
   };
 
-  const solicitar = async () => {
-    setEnviando(true);
+  const buscarPersonas = async () => {
+    if (buscar.trim().length < 3) { toast.error('Escribe al menos 3 letras del nombre o los apellidos.'); return; }
+    setBuscando(true);
     try {
-      await collaborationService.requestContact({ slug: slug.trim(), source: 'qr' });
-      toast.success('Solicitud enviada.', 'La otra persona decide si la acepta.');
-      setSlug('');
+      setHallados(await collaborationService.searchPeople(buscar.trim()));
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  /** El permiso se pide al tocar «Escanear QR», nunca al abrir la pantalla. */
+  const abrirEscaner = async () => {
+    setAvisoQr(null);
+    setEscaneado(null);
+    const actual = permiso?.granted ? permiso : await pedirPermiso();
+    if (!actual.granted) {
+      setAvisoCamara(actual.canAskAgain
+        ? { texto: 'Sin permiso de cámara no se puede escanear. Puedes buscar a la persona por su nombre.', ajustes: false }
+        : { texto: 'El permiso de cámara está desactivado. Actívalo en los ajustes del teléfono o busca a la persona por su nombre.', ajustes: true });
+      return;
+    }
+    setAvisoCamara(null);
+    setEscaneando(true);
+  };
+
+  const alLeerQr = async (texto: string) => {
+    setEscaneando(false);
+    const lectura = leerQrDePerfil(texto, enlaceState.data?.url);
+    if (lectura.tipo === 'descartado') { setAvisoQr(lectura.mensaje); return; }
+    if (lectura.slug === enlaceState.data?.slug) { setAvisoQr('Es tu propio código: compártelo para que te encuentren.'); return; }
+    try {
+      const perfil = await collaborationService.publicProfile(lectura.slug);
+      setEscaneado({ slug: lectura.slug, name: perfil.name, semester: perfil.semester, bio: perfil.bio });
+    } catch {
+      // Mismo mensaje para un perfil inexistente, privado o con el identificador cambiado.
+      setAvisoQr('Este código no lleva a un perfil compartible: puede que su dueño lo haya desactivado o cambiado.');
+    }
+  };
+
+  const solicitarEscaneado = async () => {
+    if (!escaneado) return;
+    setPidiendo(escaneado.slug);
+    try {
+      await collaborationService.requestContact({ slug: escaneado.slug, source: 'qr' });
+      toast.success('Solicitud enviada.', `${escaneado.name} decide si la acepta.`);
+      setEscaneado({ ...escaneado, enviada: true });
       recargar();
     } catch (e) {
       toast.error(apiError(e));
     } finally {
-      setEnviando(false);
+      setPidiendo(null);
+    }
+  };
+
+  /** Se pide a la persona elegida (por su perfil), nunca por igualdad de nombre. */
+  const solicitarA = async (persona: { slug: string; name: string }) => {
+    setPidiendo(persona.slug);
+    try {
+      await collaborationService.requestContact({ slug: persona.slug, source: 'directory' });
+      toast.success('Solicitud enviada.', `${persona.name} decide si la acepta.`);
+      setHallados((h) => (h ?? []).map((x) => (x.slug === persona.slug ? { ...x, pending: true } : x)));
+      recargar();
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setPidiendo(null);
     }
   };
 
@@ -211,23 +282,56 @@ export default function CollaborationScreen() {
 
       <MisCanales />
 
-      <Card title="Solicitar contacto">
+      <Card title="Buscar a alguien">
         <Muted>
-          Escanear un QR te lleva al perfil, pero no establece contacto: eso lo decide la otra
-          persona.
+          Escribe su nombre y apellidos, en cualquier orden y con o sin tildes. Solo aparecen quienes
+          aceptaron ser encontrados. Encontrar no agrega: la otra persona decide si acepta.
         </Muted>
         <Field
-          label="Identificador del perfil"
-          value={slug}
-          onChangeText={setSlug}
-          placeholder="cdwxx59caf76"
+          label="Nombre y apellidos"
+          value={buscar}
+          onChangeText={setBuscar}
+          placeholder="Mínimo 3 letras"
         />
-        <Button
-          icon="user-plus"
-          title="Enviar solicitud"
-          loading={enviando}
-          onPress={solicitar}
-        />
+        <View style={styles.botones}>
+          <Button icon="search" title="Buscar" loading={buscando} onPress={buscarPersonas} />
+          <Button icon="camera" variant="secondary" title="Escanear QR" onPress={abrirEscaner} />
+        </View>
+        {avisoCamara && (
+          <View style={styles.item}>
+            <Muted>{avisoCamara.texto}</Muted>
+            {avisoCamara.ajustes && <Button small variant="secondary" icon="settings" title="Abrir ajustes" onPress={() => Linking.openSettings()} />}
+          </View>
+        )}
+        {avisoQr && <Muted>{avisoQr}</Muted>}
+        {escaneado && (
+          <View style={styles.item}>
+            <Text style={styles.nombre}>{escaneado.name}</Text>
+            {!!escaneado.semester && <Muted>{`${escaneado.semester}.º semestre`}</Muted>}
+            {!!escaneado.bio && <Muted>{escaneado.bio}</Muted>}
+            <Muted>Solicitar contacto no te agrega: la otra persona la acepta o la rechaza.</Muted>
+            {escaneado.enviada ? (
+              <Badge color={colors.gray500}>Solicitud enviada</Badge>
+            ) : (
+              <Button icon="user-plus" title="Solicitar contacto" loading={pidiendo === escaneado.slug} onPress={solicitarEscaneado} />
+            )}
+          </View>
+        )}
+        <EscanerQr visible={escaneando} onLeido={(t) => void alLeerQr(t)} onCerrar={() => setEscaneando(false)} />
+        {hallados && hallados.length === 0 && (
+          <Muted>Nadie que aceptara ser encontrado coincide con esa búsqueda.</Muted>
+        )}
+        {(hallados ?? []).map((p) => (
+          <View key={p.slug} style={styles.item}>
+            <Text style={styles.nombre}>{p.name}</Text>
+            {!!p.semester && <Muted>{`${p.semester}.º semestre`}</Muted>}
+            {p.isContact && <Badge color={colors.green}>Ya es tu contacto</Badge>}
+            {!p.isContact && p.pending && <Badge color={colors.gray500}>Solicitud pendiente</Badge>}
+            {!p.isContact && !p.pending && (
+              <Button icon="user-plus" title="Solicitar contacto" loading={pidiendo === p.slug} onPress={() => solicitarA(p)} />
+            )}
+          </View>
+        ))}
       </Card>
 
       {recibidas.length > 0 && (

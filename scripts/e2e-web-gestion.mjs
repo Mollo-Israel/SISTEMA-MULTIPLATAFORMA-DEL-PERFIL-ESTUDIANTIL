@@ -867,7 +867,7 @@ async function estudiante(ctx, browser) {
   const canales = (await req('GET', '/collaboration/contact-channels/me', { token: est.token })).data
     ?? (await req('GET', '/profiles/me/contact-channels', { token: est.token })).data;
   await page.goto(`${WEB}/student/collaboration`);
-  await page.getByRole('textbox', { name: 'Nombre o identificador' }).fill(`Rosa Contacto${L}`);
+  await page.getByRole('textbox', { name: 'Nombre y apellidos' }).fill(`Rosa Contacto${L}`);
   await page.getByRole('button', { name: 'Buscar', exact: true }).click();
   const solicitar = page.getByRole('button', { name: 'Solicitar contacto' }).first();
   const encontrada = await aparece(solicitar, 8000);

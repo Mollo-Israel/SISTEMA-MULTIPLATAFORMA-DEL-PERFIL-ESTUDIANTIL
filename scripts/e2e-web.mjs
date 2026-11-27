@@ -201,7 +201,9 @@ async function pruebas(browser) {
   await p3.waitForURL(/tab=equipos/);
   const activos = await p3.locator('nav a.nav-link.active').allInnerTexts();
   check(activos.length === 1 && activos[0].includes('Equipos'), 'WEB.16 §77 Solo «Equipos» queda marcado en el menú', activos.join(' | '));
-  check(await p3.getByText('¿Qué le falta a tu equipo?').isVisible(), 'WEB.17 §77 Y abre directo la pestaña de equipos');
+  // V7.1 §12.3: Equipos se organiza en «Para ti / Todas / Mis necesidades / Mis equipos».
+  check(await p3.getByRole('tab', { name: /^Mis necesidades/ }).isVisible() && await p3.getByRole('tab', { name: 'Para ti' }).isVisible(),
+    'WEB.17 §77 Y abre directo la pestaña de equipos, con sus vistas');
   await p3.click('a[href="/student/progress?tab=resumen"]');
   check(await p3.getByText('Plantilla', { exact: true }).first().isVisible(), 'WEB.18 §61 Resumen de trayectoria abre el generador con plantillas');
   await p3.getByText('Paso 1 · Qué secciones incluir').first().waitFor({ timeout: 8000 }).catch(() => {});

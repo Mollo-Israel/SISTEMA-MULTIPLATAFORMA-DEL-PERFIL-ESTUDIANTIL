@@ -20,7 +20,7 @@ import { Contact, ContactRequest } from '../entities/collaboration.entity';
 import { ContactNote, StudentContactChannel } from '../entities/contact-channel.entity';
 import { channelHref, checkContactChannel } from './contact-channel.rules';
 import { ContactChannelDto, ContactNoteDto } from './dto/collaboration.dto';
-import { escaparComodinesLike } from '../common/texto';
+import { condicionDeNombre, palabrasDeNombre } from '../common/busqueda-nombre';
 
 /** Un canal tal como lo ve otra persona: etiqueta y enlace seguro. */
 export interface ChannelView {
@@ -326,19 +326,24 @@ export class ContactsService {
   }
 
   /**
-   * V6 §8.4: buscar a alguien por nombre o por su identificador, solo entre
+   * V6 §8.4 y V7.1 §12.1: buscar a alguien por nombre y apellidos, solo entre
    * quienes aceptaron ser encontrados (peerDiscoverable) y tienen su perfil
-   * compartido activo (sin él no se le puede solicitar contacto). Mínimo 3
-   * caracteres y como mucho 10 resultados: no sirve para listar la carrera.
-   * Nunca devuelve correos. Encontrar no agrega: se solicita y el otro acepta.
+   * compartido activo (sin él no se le puede solicitar contacto). Las palabras
+   * se comparan sin tildes ni mayúsculas, en cualquier orden y sin importar la
+   * coma («Quispe, Ana» = «Ana Quispe»). Mínimo 3 letras y como mucho 10
+   * resultados: no sirve para listar la carrera. Nunca devuelve correos. El
+   * identificador del perfil ya no se busca aquí: viaja en el enlace o el QR.
+   * Encontrar no agrega: se solicita por el perfil elegido y el otro acepta.
    */
   async search(studentProfileId: string, q: string) {
-    const texto = (q ?? '').trim().replace(/\s+/g, ' ');
-    if (texto.length < 3) {
-      const m = 'Escribe al menos 3 letras del nombre o el identificador de su perfil.';
+    const palabras = palabrasDeNombre(q);
+    // El mínimo de siempre (3 caracteres), contado sobre el texto normalizado:
+    // comas, guiones y espacios sobrantes no cuentan.
+    if (palabras.join(' ').length < 3) {
+      const m = 'Escribe al menos 3 letras del nombre o los apellidos.';
       throw new BadRequestException({ code: 'SEARCH_TOO_SHORT', message: m, fields: { q: [m] } });
     }
-    const patron = `%${escaparComodinesLike(texto.slice(0, 60))}%`;
+    const nombre = condicionDeNombre('u', palabras);
     const filas = await this.profiles.createQueryBuilder('p')
       .innerJoin('p.user', 'u')
       .select(['p.id', 'p.semester', 'p.publicProfileSlug'])
@@ -346,7 +351,7 @@ export class ContactsService {
       .where('p.peer_discoverable = true AND p.public_profile_enabled = true')
       .andWhere('p.id <> :yo', { yo: studentProfileId })
       .andWhere("u.status = 'active'")
-      .andWhere("(CONCAT(u.first_name, ' ', u.last_name) ILIKE :t OR p.public_profile_slug = :exacto)", { t: patron, exacto: texto })
+      .andWhere(nombre.sql, nombre.params)
       .orderBy('u.lastName', 'ASC')
       .addOrderBy('u.firstName', 'ASC')
       .take(10)
