@@ -1384,6 +1384,10 @@ export const reportService = {
   /** V7.1 §3.1: «Detalles» de solo lectura (total real y los últimos 10). */
   adminHomeDetail: (tarjeta: string, segmento: string, estado?: string) =>
     api.get<DetalleTarjeta>(`/reports/admin/home/${tarjeta}/${segmento}`, { params: estado ? { estado } : undefined }).then((r) => r.data),
+  /** V7.1 §13: el Inicio de Dirección, con sus propias rutas y su alcance. */
+  directorHome: () => api.get<InicioRol>('/reports/director/home').then((r) => r.data),
+  directorHomeDetail: (tarjeta: string, segmento: string) =>
+    api.get<DetalleTarjeta>(`/reports/director/home/${tarjeta}/${segmento}`).then((r) => r.data),
 };
 
 /** V7.1 §3.1: una fila del modal de detalles, ya legible (sin códigos técnicos). */
@@ -1395,6 +1399,8 @@ export interface FilaDetalle {
   estado?: { texto: string; tono: 'green' | 'amber' | 'red' | 'gray' | 'blue' } | null;
   datos?: { campo: string; valor: string }[];
   actividadId?: string;
+  /** Fila de totales (p. ej. un semestre): no tiene fecha propia. */
+  agregada?: boolean;
 }
 
 export interface DetalleTarjeta {
@@ -1408,10 +1414,11 @@ export interface DetalleTarjeta {
 /** Cada tarjeta llega con sus totales o con su propio error (§3.1, H13). */
 export type ResumenTarjeta = { error: string } | ({ total: number } & Record<string, unknown>);
 
-export interface InicioAdmin {
+export interface InicioRol {
   generatedAt: string;
   tarjetas: Record<string, ResumenTarjeta>;
 }
+export type InicioAdmin = InicioRol;
 
 export interface DirectorPending {
   activitiesPendingReview: number;

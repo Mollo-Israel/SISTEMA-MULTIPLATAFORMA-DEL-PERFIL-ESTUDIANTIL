@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { FiArrowRight, FiRefreshCw } from 'react-icons/fi';
-import type { DetalleTarjeta } from '../services';
+import type { DetalleTarjeta, ResumenTarjeta } from '../services';
 import { formatearFechaHora } from '../lib/fechas';
 import { Badge, Button, Modal, Tabs } from './ui';
 
@@ -28,6 +28,8 @@ export interface SegmentoDetalle {
   vacio?: string;
   /** Enlace a una fila concreta (p. ej. la actividad), si el módulo lo admite. */
   destinoFila?: (fila: { id: string; actividadId?: string }) => string | null;
+  /** Texto del enlace de cada fila; por omisión «Abrir en el módulo». */
+  destinoFilaLabel?: string;
 }
 
 export function DetallesInicio({ titulo, resumen, segmentos, inicial, cargar, onClose }: Readonly<{
@@ -113,8 +115,8 @@ export function DetallesInicio({ titulo, resumen, segmentos, inicial, cargar, on
                           </dl>
                         )}
                         <div className="df-pie">
-                          <span className="muted">{f.fecha ? formatearFechaHora(f.fecha) : 'Sin fecha'}</span>
-                          {enlace && <Link to={enlace} className="df-abrir">Abrir en el módulo <FiArrowRight size={12} /></Link>}
+                          {f.agregada ? <span /> : <span className="muted">{f.fecha ? formatearFechaHora(f.fecha) : 'Sin fecha'}</span>}
+                          {enlace && <Link to={enlace} className="df-abrir">{segmento.destinoFilaLabel ?? 'Abrir en el módulo'} <FiArrowRight size={12} /></Link>}
                         </div>
                       </li>
                     );
@@ -133,5 +135,57 @@ export function DetallesInicio({ titulo, resumen, segmentos, inicial, cargar, on
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Lo que una tarjeta del Inicio muestra; las rutas y conjuntos los fija cada rol. */
+export interface ConfigTarjeta {
+  titulo: string;
+  icono: ReactNode;
+  /** Qué cuenta el número grande, en una línea. */
+  que: string;
+  /** Línea secundaria con otros totales del resumen. */
+  extra?: (r: Record<string, unknown>) => string | null;
+  resumen: string;
+  segmentos: SegmentoDetalle[];
+  /** Color del icono (paleta compartida con los inicios de los otros roles). */
+  tono: 0 | 1 | 2 | 3 | 4 | 5;
+}
+
+/**
+ * Una tarjeta del Inicio: su total real y «Detalles». Si su resumen falló, lo
+ * dice y ofrece reintentar, sin mostrar un cero (§3.1, H13).
+ */
+export function TarjetaInicio({ id, config: c, r, atencion = false, onDetalles, onReintentar }: Readonly<{
+  id: string;
+  config: ConfigTarjeta;
+  r: ResumenTarjeta | undefined;
+  atencion?: boolean;
+  onDetalles: () => void;
+  onReintentar: () => void;
+}>) {
+  const fallo = !r || 'error' in r;
+  const total = fallo ? 0 : Number(r.total ?? 0);
+  return (
+    <div className={`card ia-tarjeta t${c.tono} ${atencion && !fallo && total > 0 ? 'con' : ''}`} data-testid={`tarjeta-${id}`}>
+      <div className="ia-cabeza">
+        <span className="ia-ico" aria-hidden>{c.icono}</span>
+        <strong className="ia-titulo">{c.titulo}</strong>
+      </div>
+      {fallo ? (
+        <div className="ia-error" role="alert">
+          <span>No se pudo cargar este resumen.</span>
+          <Button variant="ghost" size="sm" icon={<FiRefreshCw />} onClick={onReintentar}>Reintentar</Button>
+        </div>
+      ) : (
+        <>
+          <p className="ia-cifra"><span className="ia-n" data-testid={`total-${id}`}>{total}</span> <span className="muted">{c.que}</span></p>
+          {c.extra && <p className="muted ia-extra">{c.extra(r)}</p>}
+          <button type="button" className="btn btn-secondary btn-sm ia-detalles" aria-haspopup="dialog" onClick={onDetalles}>
+            Detalles
+          </button>
+        </>
+      )}
+    </div>
   );
 }

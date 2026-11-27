@@ -5,15 +5,32 @@ import { BandejaDireccion } from '../staff/StudentPoints';
 import { FiAlertCircle, FiCheck, FiClock, FiX } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { useCachedState } from '../../hooks/viewCache';
+import { useFiltroUrl } from '../../hooks/useFiltroUrl';
 import { activityService, gamificationService, learningResourceService } from '../../services';
 import {
-  Badge, Button, Card, Diferido, EmptyState, PageHeader, SkeletonCards, Stagger, Tabs,
+  Badge, Button, Card, Diferido, EmptyState, FiltroEstado, PageHeader, ResultCount, SkeletonCards, Stagger, Tabs,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
 import type { Activity } from '../../services/types';
 
 type Decision = 'approve' | 'observe' | 'reject';
 type Historia = Awaited<ReturnType<typeof activityService.reviewHistory>>;
+
+/**
+ * V7.1 §13: el Inicio de Dirección lleva aquí con el tipo elegido
+ * (?tipo=academica|extracurricular|externa). Solo filtra la lista: la bandeja
+ * sigue siendo la de las propuestas pendientes.
+ */
+type TipoPropuesta = 'todas' | 'academica' | 'extracurricular' | 'externa';
+const TIPOS_DE_PROPUESTA: readonly { value: TipoPropuesta; label: string }[] = [
+  { value: 'todas', label: 'Todos los tipos' },
+  { value: 'academica', label: 'Académicas' },
+  { value: 'extracurricular', label: 'Extracurriculares' },
+  { value: 'externa', label: 'Externas' },
+];
+const tipoDe = (a: Activity): Exclude<TipoPropuesta, 'todas'> =>
+  ((a.originType ?? 'internal') === 'external' ? 'externa' : a.type === 'academica' ? 'academica' : 'extracurricular');
+const ETIQUETA_TIPO: Record<Exclude<TipoPropuesta, 'todas'>, string> = { academica: 'Académica', extracurricular: 'Extracurricular', externa: 'Externa' };
 
 const ACCION: Record<string, string> = {
   submitted: 'Enviada a revisión',
@@ -78,6 +95,8 @@ function ActividadesPendientes() {
   const [busy, setBusy] = useState(false);
   const [errorCampo, setErrorCampo] = useState<string | null>(null);
   const toast = useToast();
+  const [tipo, setTipo] = useFiltroUrl<TipoPropuesta>('tipo', 'todas', TIPOS_DE_PROPUESTA.map((t) => t.value));
+  const visibles = items && tipo !== 'todas' ? items.filter((a) => tipoDe(a) === tipo) : items;
 
   const load = () =>
     activityService
@@ -134,17 +153,23 @@ function ActividadesPendientes() {
   return (
     <div>
       <p className="muted">Solo las actividades aprobadas pueden publicarse; el criterio de puntos se aprueba junto con ellas.</p>
+      <div className="toolbar" style={{ alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <FiltroEstado etiqueta="Tipo" valor={tipo} opciones={TIPOS_DE_PROPUESTA} onChange={setTipo} />
+        {visibles && items && items.length > 0 && <ResultCount shown={visibles.length} total={items.length} noun="propuestas" />}
+      </div>
 
-      {items === null ? (
+      {visibles === null || items === null ? (
         <Diferido><SkeletonCards count={3} /></Diferido>
-      ) : <>{items.length === 0 ? (
+      ) : <>{visibles.length === 0 ? (
         <EmptyState
           icon={<FiCheck size={28} />}
-          message="No hay nada pendiente. Cuando alguien envíe una actividad a revisión, aparecerá aquí."
+          message={items.length > 0
+            ? 'No hay propuestas pendientes de este tipo. Elige «Todos los tipos» para ver las demás.'
+            : 'No hay nada pendiente. Cuando alguien envíe una actividad a revisión, aparecerá aquí.'}
         />
       ) : (
         <Stagger>
-          {items.map((a) => {
+          {visibles.map((a) => {
             const puntos = a.gamificationRules?.find((r) => r.trigger === 'participacion_confirmada')?.points;
             const open = abierta === a.id;
             return (
@@ -154,7 +179,7 @@ function ActividadesPendientes() {
                 actions={<Badge tone="amber"><FiClock size={12} /> En revisión</Badge>}
               >
                 <p className="muted small" style={{ marginTop: 0 }}>
-                  {a.type === 'academica' ? 'Académica' : 'Extracurricular'}
+                  {ETIQUETA_TIPO[tipoDe(a)]}
                   {a.category?.name ? ` · ${a.category.name}` : ''}
                   {a.academicArea?.name ? ` · ${a.academicArea.name}` : ''}
                   {' · '}Propuesta por {a.creator ? `${a.creator.firstName} ${a.creator.lastName}` : 'sin dato'}

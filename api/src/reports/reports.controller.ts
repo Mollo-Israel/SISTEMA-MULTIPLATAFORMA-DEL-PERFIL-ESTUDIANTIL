@@ -8,6 +8,7 @@ import { ReportsService } from './reports.service';
 import { AnalyticsService } from './analytics.service';
 import { HomeOverviewService } from './home-overview.service';
 import { AdminHomeService } from './admin-home.service';
+import { DirectorHomeService } from './director-home.service';
 
 @ApiTags('reports')
 @ApiBearerAuth()
@@ -18,6 +19,7 @@ export class ReportsController {
     private readonly analytics: AnalyticsService,
     private readonly home: HomeOverviewService,
     private readonly inicioAdmin: AdminHomeService,
+    private readonly inicioDireccion: DirectorHomeService,
   ) {}
 
   // ---------- Inicio (V3 §52, §54) ----------
@@ -48,6 +50,29 @@ export class ReportsController {
     @Query('estado') estado?: string,
   ) {
     return this.inicioAdmin.detalle(user.userId, tarjeta, segmento, estado);
+  }
+
+  /**
+   * V7.1 §13 (H12): Inicio de Dirección con «Detalles». Solo Dirección: el
+   * modal es el mismo componente que el de Administración, pero estas rutas no
+   * se abren a otro rol ni dan acceso a las de Administración.
+   */
+  @Get('director/home')
+  @ApiOperation({ summary: 'V7.1 §13: Inicio de Dirección, totales reales por tarjeta (cada una con su propio error).' })
+  @Roles(RolNombre.CAREER_DIRECTOR)
+  directorHome(@CurrentUser() user: AuthenticatedUser) {
+    return this.inicioDireccion.resumen(user.userId);
+  }
+
+  @Get('director/home/:tarjeta/:segmento')
+  @ApiOperation({ summary: 'V7.1 §13: detalle de solo lectura de una tarjeta del Inicio de Dirección (máximo 10 filas y el total real).' })
+  @Roles(RolNombre.CAREER_DIRECTOR)
+  directorHomeDetail(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('tarjeta') tarjeta: string,
+    @Param('segmento') segmento: string,
+  ) {
+    return this.inicioDireccion.detalle(user.userId, tarjeta, segmento);
   }
 
   @Get('director/pending')

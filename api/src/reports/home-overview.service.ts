@@ -72,7 +72,9 @@ export class HomeOverviewService {
     const [revision, observadas, credenciales, constancias] = await Promise.all([
       q(`SELECT COUNT(*)::int AS count FROM activities WHERE review_status = $1`, [ActivityReviewStatus.PENDING]),
       q(`SELECT COUNT(*)::int AS count FROM activities WHERE review_status = $1`, [ActivityReviewStatus.OBSERVED]),
-      q(`SELECT COUNT(*)::int AS count FROM validation_records WHERE manual_review_status = $1`, [ManualReviewStatus.REQUESTED]),
+      // V7.1 D01 (DIR-02): todas las credenciales que esperan decisión, contadas como la bandeja (con su credencial).
+      q(`SELECT COUNT(*)::int AS count FROM validation_records v JOIN external_certificates x ON x.id = v.resource_id
+          WHERE v.resource_type = 'external_certificate' AND v.manual_review_status = $1`, [ManualReviewStatus.REQUESTED]),
       q(`SELECT COUNT(*)::int AS count FROM internal_constancies WHERE status = $1`, [ConstancyStatus.PENDING]),
     ]);
     return {

@@ -945,7 +945,177 @@ async function batch11(ctx, browser) {
   await movil.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
+// ===========================================================================
+//  BATCH V7-12 — Inicio de Dirección: «Detalles», destinos filtrados, sin permisos de Administración (§13)
+// ===========================================================================
+async function batch12(ctx, browser) {
+  objective('BATCH V7-12 · Inicio de Dirección: tarjetas con «Detalles», destinos con filtro y alcance propio');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Nadia', lastName: `Webdireccion${L}`, email: correoStaff('b12dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Tomas', lastName: `Webdireccion${L}`, email: correoStaff('b12doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  // Una propuesta académica en revisión y una actividad de Dirección con una asistencia confirmada.
+  const propuesta = (await req('POST', '/activities', {
+    token: docente.token,
+    body: { type: 'academica', categoryId: cat?.id, title: `Propuesta web ${L}`, status: 'draft', activityDate: en(96), endAt: en(98), modality: 'presencial', location: 'Aula 4', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8] },
+  })).data;
+  await req('POST', `/activities/${propuesta?.id}/submit`, { token: docente.token, body: {} });
+  const propia = (await req('POST', '/activities', {
+    token: director.token,
+    body: { type: 'academica', categoryId: cat?.id, title: `Seminario web ${L}`, status: 'open', activityDate: en(48), endAt: en(50), modality: 'presencial', location: 'Aula 8', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], responsibleUserIds: [docente.userId] },
+  })).data;
+  const est = await provisionAndActivate(admin, { firstName: 'Pia', lastName: `Webdireccion${L}`, email: correoEst('b12est'), role: 'STUDENT', semester: 4 });
+  const perfil = (await req('GET', '/profiles/me', { token: est.token })).data?.id;
+  await req('POST', `/activities/${propia?.id}/register`, { token: est.token, body: {} });
+  await req('PATCH', `/activities/${propia?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: perfil, status: 'confirmed' } });
+
+  const { ctx: c1, page, errores } = await entrar(browser, director.email ?? correoStaff('b12dir'));
+  await page.goto(`${WEB}/director`);
+  await page.locator('[data-testid="tarjeta-aprobaciones"]').waitFor({ timeout: 20000 });
+  const tarjetas = await page.locator('[data-testid^="tarjeta-"]').count();
+  const detalles = await page.getByRole('button', { name: 'Detalles', exact: true }).count();
+  const contenido = ((await page.locator('.content').textContent()) ?? '').replace(/\s+/g, ' ');
+  const enlacesIr = await page.locator('.content a', { hasText: /^\s*Ir\s*$/ }).count();
+  check(tarjetas === 10 && detalles === 10 && enlacesIr === 0 && !/Revisión manual excepcional/.test(contenido)
+    && !/Cuentas sin activar|Padrón|Auditoría/.test(contenido),
+  'W7.12.1 §13 El Inicio de Dirección muestra sus diez tarjetas con «Detalles» (no «Ir»), sin tarjetas de Administración',
+  json({ tarjetas, detalles, enlacesIr }));
+
+  // H14: teclado, foco dentro, sin acciones; Escape y regreso al botón.
+  const boton = page.locator('[data-testid="tarjeta-aprobaciones"] button', { hasText: 'Detalles' });
+  await boton.focus();
+  await page.keyboard.press('Enter');
+  const dialogo = page.getByRole('dialog');
+  await dialogo.waitFor({ timeout: 10000 });
+  await page.locator('[data-testid="detalles-filas"], .detalles-vacio').first().waitFor({ timeout: 15000 }).catch(() => {});
+  const focoDentro = await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'));
+  const textoModal = ((await dialogo.textContent()) ?? '').replace(/\s+/g, ' ');
+  const sinAcciones = (await dialogo.getByRole('button', { name: /Aprobar|Observar|Rechazar|Revocar|Conceder/i }).count()) === 0;
+  await page.keyboard.press('Escape');
+  await dialogo.waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  const focoVuelve = await page.evaluate(() => document.activeElement?.textContent?.trim() === 'Detalles'
+    && !!document.activeElement?.closest('[data-testid="tarjeta-aprobaciones"]'));
+  check(focoDentro && textoModal.includes(`Propuesta web ${L}`) && /Tomas/.test(textoModal) && sinAcciones && (await page.getByRole('dialog').count()) === 0 && focoVuelve,
+    'W7.12.2 H12/H14 «Actividades por aprobar» se abre con el teclado, lista la propuesta con quién la propone, no decide nada; Escape devuelve el foco',
+    json({ focoDentro, sinAcciones, focoVuelve }));
+
+  // §13: «Ir a Aprobaciones» lleva con el tipo elegido.
+  await boton.click();
+  await page.getByRole('dialog').getByRole('tab', { name: 'Académicas' }).click();
+  await page.getByTestId('detalles-ir').click();
+  await page.waitForURL((u) => u.pathname === '/director/approvals', { timeout: 15000 });
+  await page.getByText(`Propuesta web ${L}`).first().waitFor({ timeout: 15000 }).catch(() => {});
+  const tipo = await page.getByLabel('Tipo').inputValue().catch(() => '');
+  const titulos = (await page.locator('.card-title, .card h3').allTextContents()).map((t) => t.trim());
+  check(param(page, 'tipo') === 'academica' && tipo === 'academica' && titulos.includes(`Propuesta web ${L}`),
+    'W7.12.3 §13 «Ir a Aprobaciones» abre la bandeja filtrada por el tipo elegido en el modal', json({ url: page.url(), tipo }));
+
+  // §13 / D01: credenciales, en su pestaña y con decisión (es Dirección, no solo lectura).
+  await page.goto(`${WEB}/director`);
+  const credTexto = ((await page.locator('[data-testid="tarjeta-credenciales"]').textContent()) ?? '');
+  await page.locator('[data-testid="tarjeta-credenciales"] button', { hasText: 'Detalles' }).click();
+  await page.getByRole('dialog').getByRole('tab', { name: 'Observadas' }).click();
+  await page.getByTestId('detalles-ir').click();
+  await page.waitForURL((u) => u.pathname === '/director/credential-reviews', { timeout: 15000 });
+  const pestana = await page.getByRole('tab', { selected: true }).first().textContent().catch(() => '');
+  check(param(page, 'estado') === 'observadas' && /Observadas/.test(pestana ?? '') && (await page.getByTestId('revision-solo-lectura').count()) === 0
+    && /pendientes de decisión/.test(credTexto) && !/excepcional/i.test(credTexto),
+  'W7.12.4 D01 «Credenciales en revisión» cuenta las pendientes y lleva a la pestaña elegida, donde Dirección decide',
+  json({ url: page.url(), pestana }));
+
+  // §13: una participación abre Participaciones con su actividad ya elegida.
+  await page.goto(`${WEB}/director`);
+  await page.locator('[data-testid="tarjeta-participaciones"] button', { hasText: 'Detalles' }).click();
+  await page.locator('[data-testid="detalles-filas"]').waitFor({ timeout: 15000 });
+  const filaPart = page.locator('.detalles-fila', { hasText: `Seminario web ${L}` }).first();
+  await filaPart.getByRole('link', { name: /Ver la actividad/ }).click();
+  await page.waitForURL((u) => u.pathname === '/director/constancies', { timeout: 15000 });
+  await page.locator('#constancies-actividad').waitFor({ timeout: 15000 });
+  await page.waitForFunction((id) => document.querySelector('#constancies-actividad')?.value === id, propia?.id, { timeout: 15000 }).catch(() => {});
+  const elegida = await page.locator('#constancies-actividad').inputValue();
+  await page.reload();
+  await page.locator('#constancies-actividad').waitFor({ timeout: 15000 });
+  await page.waitForFunction((id) => document.querySelector('#constancies-actividad')?.value === id, propia?.id, { timeout: 15000 }).catch(() => {});
+  const trasRecargar = await page.locator('#constancies-actividad').inputValue();
+  check(param(page, 'actividad') === propia?.id && elegida === propia?.id && trasRecargar === propia?.id,
+    'W7.12.5 §13 Una participación abre Participaciones con su actividad ya elegida, y se conserva al recargar', json({ url: page.url(), elegida, trasRecargar }));
+
+  // §13: Analítica, cada fila abre su pestaña.
+  await page.goto(`${WEB}/director`);
+  await page.locator('[data-testid="tarjeta-analitica"] button', { hasText: 'Detalles' }).click();
+  await page.locator('[data-testid="detalles-filas"]').waitFor({ timeout: 15000 });
+  const filasAna = await page.locator('[data-testid="detalles-filas"] li').count();
+  const sinFecha = (await page.getByRole('dialog').getByText('Sin fecha').count()) === 0;
+  await page.locator('.detalles-fila', { hasText: 'Afinidad' }).first().getByRole('link', { name: /Abrir esta pestaña/ }).click();
+  await page.waitForURL((u) => u.pathname === '/director/analytics', { timeout: 15000 });
+  const pestanaAna = await page.getByRole('tab', { selected: true }).first().textContent().catch(() => '');
+  check(filasAna === 5 && sinFecha && param(page, 'tab') === 'afinidad' && /Afinidad/.test(pestanaAna ?? ''),
+    'W7.12.6 §13 «Cómo va la carrera»: una fila por pestaña de Analítica, sin fechas inventadas, y cada una abre su pestaña', json({ filasAna, sinFecha, url: page.url() }));
+
+  // H13: una tarjeta o un detalle que fallan lo dicen; las demás siguen.
+  await page.route('**/reports/director/home/actividades/**', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"code":"INTERNAL_ERROR"}' }));
+  await page.route('**/reports/director/home', async (r) => {
+    const res = await r.fetch();
+    const cuerpo = await res.json();
+    cuerpo.tarjetas.recursos = { error: 'No se pudo cargar este resumen.' };
+    await r.fulfill({ response: res, json: cuerpo });
+  });
+  await page.goto(`${WEB}/director`);
+  await page.locator('[data-testid="tarjeta-recursos"]').waitFor({ timeout: 20000 });
+  const recursos = ((await page.locator('[data-testid="tarjeta-recursos"]').textContent()) ?? '');
+  const otraBien = await page.getByTestId('total-puntos').count();
+  await page.locator('[data-testid="tarjeta-actividades"] button', { hasText: 'Detalles' }).click();
+  const alerta = page.getByRole('dialog').getByRole('alert');
+  await alerta.waitFor({ timeout: 10000 }).catch(() => {});
+  const conError = ((await alerta.textContent().catch(() => '')) ?? '');
+  check(/No se pudo cargar/.test(recursos) && !(await page.getByTestId('total-recursos').count()) && otraBien === 1
+    && /Reintentar/.test(conError) && (await page.getByRole('dialog').getByTestId('detalles-total').count()) === 0,
+  'W7.12.7 H13 Una tarjeta o un detalle de Dirección que fallan lo dicen con «Reintentar», sin ceros; las demás siguen',
+  json({ recursos: recursos.slice(0, 80), otraBien, conError: conError.slice(0, 80) }));
+  await page.keyboard.press('Escape');
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  check(errores.length === 0, 'W7.12.8 Sin errores de JavaScript en el Inicio de Dirección', errores.join(' | '));
+  await c1.close();
+
+  // H12: Administración no abre el Inicio de Dirección por la URL.
+  const { ctx: c2, page: pa } = await entrar(browser, ADMIN_CREDENTIALS.email, ADMIN_CREDENTIALS.password);
+  await pa.goto(`${WEB}/director`);
+  await pa.waitForLoadState('networkidle').catch(() => {});
+  const tarjetasAdmin = await pa.locator('[data-testid="tarjeta-aprobaciones"], [data-testid="tarjeta-autonomia"]').count();
+  check(tarjetasAdmin === 0 && !new URL(pa.url()).pathname.startsWith('/director'),
+    'W7.12.9 H12 Administración no entra al Inicio de Dirección: reutilizar el componente no le da sus tarjetas', json({ url: pa.url(), tarjetasAdmin }));
+  await c2.close();
+
+  // H14: en el teléfono el modal entra en la pantalla y se cierra.
+  const movil = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const pm = await movil.newPage();
+  await pm.goto(`${WEB}/login`);
+  await pm.fill('input[type=email]', correoStaff('b12dir'));
+  await pm.fill('input[autocomplete=current-password]', PWD);
+  await pm.press('input[autocomplete=current-password]', 'Enter');
+  await pm.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 20000 });
+  await pm.getByRole('button', { name: 'Omitir' }).click({ timeout: 3000 }).catch(() => {});
+  await pm.goto(`${WEB}/director`);
+  await pm.getByRole('button', { name: 'Omitir' }).click({ timeout: 3000 }).catch(() => {});
+  await pm.locator('[data-testid="tarjeta-participaciones"] button', { hasText: 'Detalles' }).click({ timeout: 20000 });
+  await pm.getByRole('dialog').waitFor({ timeout: 10000 });
+  await pm.getByRole('dialog').getByRole('tab', { name: 'Asistencia' }).click();
+  await pm.locator('[data-testid="detalles-filas"], .detalles-vacio').first().waitFor({ timeout: 15000 }).catch(() => {});
+  const medidas = await pm.evaluate(() => {
+    const d = document.querySelector('[role="dialog"]')?.getBoundingClientRect();
+    return { izq: d?.left ?? -1, der: d?.right ?? 9999, scroll: document.documentElement.scrollWidth, vista: window.innerWidth };
+  });
+  const irVisible = await pm.getByTestId('detalles-ir').isVisible();
+  await pm.getByRole('dialog').getByRole('button', { name: 'Cerrar', exact: true }).last().click();
+  const cerradoMovil = (await pm.getByRole('dialog').count()) === 0;
+  check(medidas.izq >= 0 && medidas.der <= medidas.vista && medidas.scroll <= medidas.vista && irVisible && cerradoMovil,
+    'W7.12.10 H14 En el teléfono el detalle de Dirección entra en la pantalla, sin desplazamiento lateral, y se cierra', json(medidas));
+  await movil.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

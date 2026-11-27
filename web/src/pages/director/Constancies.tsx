@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FiAward, FiCalendar, FiCheck, FiSearch, FiUsers } from 'react-icons/fi';
 import { apiError } from '../../api/client';
 import { enMemoria, useCachedState } from '../../hooks/viewCache';
+import { useParametrosUrl } from '../../hooks/useFiltroUrl';
 import { activityService, constancyService } from '../../services';
 import {
   Badge, Button, Card, Diferido, EmptyState, PageHeader, ResultCount, SearchInput, SkeletonCards,
@@ -54,7 +55,16 @@ export default function DirectorConstanciesPage() {
   // V5 §7.2: una oportunidad externa no es una actividad interna de la carrera.
   const internas = useMemo(() => activities.filter((a) => (a.originType ?? 'internal') === 'internal'), [activities]);
 
+  /*
+   * V7.1 §13: la actividad elegida vive en la URL (?actividad=<id>). El Inicio
+   * de Dirección lleva aquí con la actividad ya abierta, y recargar o volver
+   * conserva el contexto.
+   */
+  const filtrosUrl = useParametrosUrl();
+  const pedida = filtrosUrl.leer('actividad', '');
+
   const loadActivity = async (activityId: string) => {
+    filtrosUrl.actualizar({ actividad: activityId || null });
     setSelected(activityId);
     setQuery('');
     setEligible([]);
@@ -74,6 +84,13 @@ export default function DirectorConstanciesPage() {
       setListBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (loading || !pedida || pedida === selected) return;
+    if (internas.some((a) => a.id === pedida)) void loadActivity(pedida);
+    else filtrosUrl.actualizar({ actividad: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, internas, pedida]);
 
   const needle = normalize(query.trim());
   const shown = eligible.filter((e) => !needle || normalize(e.studentName ?? '').includes(needle));

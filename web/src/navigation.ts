@@ -121,7 +121,7 @@ export const NAV: Record<string, NavGroup[]> = {
         // Analítica (Panel, Mapa y Tendencias ya no se repiten).
         { to: '/director', label: 'Inicio', hint: 'Lo que espera tu decisión' },
         { to: '/director/approvals', label: 'Aprobaciones', hint: 'Actividades propuestas por revisar' },
-        { to: '/director/credential-reviews', label: 'Revisión de credenciales', hint: 'Casos especiales que piden tu mirada' },
+        { to: '/director/credential-reviews', label: 'Revisión de credenciales', hint: 'Credenciales externas que esperan tu decisión' },
         // V5 §9.2: excepciones de revisión por docente y módulo.
         { to: '/director/autonomy', label: 'Autonomía docente', hint: 'Qué puede aprobar cada docente' },
       ],

@@ -44,14 +44,8 @@ const CONFIG: Record<string, Config> = {
     texto: 'Lo que espera tu decisión y un vistazo a la carrera, en un solo lugar.',
     principal: { to: '/director/approvals', label: 'Ver lo que espera aprobación', icon: <FiCheckSquare /> },
     secundario: { to: '/director/analytics', label: 'Ver analítica' },
-    atajos: [
-      { to: '/director/approvals', icon: <FiCheckSquare />, t: 'Aprobar actividades', d: 'Lo que proponen docentes y sociedades.' },
-      { to: '/director/credential-reviews', icon: <FiShield />, t: 'Revisar credenciales', d: 'Solo los casos especiales.' },
-      { to: '/director/activities', icon: <FiCalendar />, t: 'Actividades', d: 'Todo lo que ofrece la carrera.' },
-      { to: '/director/constancies', icon: <FiAward />, t: 'Participaciones', d: 'Quién participó y en qué.' },
-      { to: '/director/analytics', icon: <FiBarChart2 />, t: 'Cómo va la carrera', d: 'Participación, afinidad y tendencias.' },
-      { to: '/director/autonomy', icon: <FiUnlock />, t: 'Autonomía docente', d: 'Qué aprueba cada docente.' },
-    ],
+    // V7.1 §13: cada atajo es ahora una tarjeta del Inicio con «Detalles»; no se duplican.
+    atajos: [],
   },
   // V7.1 §3.3: Administración con la misma jerarquía y color que los demás
   // inicios. Sus tarjetas viven en su propia página; aquí solo el saludo.

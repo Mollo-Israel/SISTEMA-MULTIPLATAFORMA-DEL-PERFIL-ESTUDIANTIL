@@ -1675,7 +1675,202 @@ async function batch11(ctx) {
     'V7.11.13 §3.1 El Inicio es de solo lectura: no hay ruta para aprobar, reenviar ni borrar', json(intentos.map((r) => r.status)));
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11 };
+// ===========================================================================
+//  BATCH V7-12 — Inicio de Dirección: «Detalles» con el alcance de Dirección (§13)
+// ===========================================================================
+async function batch12(ctx) {
+  objective('BATCH V7-12 · Inicio de Dirección: mismo patrón de «Detalles», alcance propio y ningún permiso de Administración');
+  const admin = ctx.admin;
+  const director = await provisionAndActivate(admin, { firstName: 'Nora', lastName: `Direccion${L}`, email: correoStaff('b12dir'), role: 'CAREER_DIRECTOR' });
+  const docente = await provisionAndActivate(admin, { firstName: 'Saul', lastName: `Direccion${L}`, email: correoStaff('b12doc'), role: 'TEACHER' });
+  await req('PUT', `/users/${docente.userId}/semesters`, { token: admin, body: { semesters: [1, 2, 3, 4, 5, 6, 7, 8] } });
+  const detalle = (t, s, token = director.token) => req('GET', `/reports/director/home/${t}/${s}`, { token });
+  const resumen = async () => (await req('GET', '/reports/director/home', { token: director.token })).data?.tarjetas ?? {};
+  const bienFormado = (d) => {
+    const fechas = (d?.filas ?? []).map((f) => (f.fecha ? new Date(f.fecha).getTime() : 0));
+    return (d?.filas ?? []).length <= 10
+      && new Set(ids(d?.filas)).size === (d?.filas ?? []).length
+      && fechas.every((t, i) => i === 0 || fechas[i - 1] >= t);
+  };
+
+  // --- H12: las tarjetas de Dirección (§13), cada una con su total; ninguna de Administración.
+  const tarjetas = await resumen();
+  const esperadas = ['aprobaciones', 'credenciales', 'estudiantes', 'proyectos', 'actividades', 'participaciones', 'recursos', 'autonomia', 'puntos', 'analitica'];
+  const deAdmin = ['cuentas', 'roles', 'padron', 'auditoria', 'catalogo', 'pedidos', 'categorias', 'gamificacion'];
+  check(esperadas.every((k) => typeof tarjetas[k]?.total === 'number') && deAdmin.every((k) => !(k in tarjetas)),
+    'V7.12.1 H12 El Inicio de Dirección trae sus diez tarjetas del §13 con total real y ninguna de Administración',
+    json({ faltan: esperadas.filter((k) => typeof tarjetas[k]?.total !== 'number'), claves: Object.keys(tarjetas) }));
+
+  // --- H12: ninguna elevación de permisos en ningún sentido.
+  const est = await provisionAndActivate(admin, { firstName: 'Lia', lastName: `Direccion${L}`, email: correoEst('b12est'), role: 'STUDENT', semester: 3 });
+  const intentos = {
+    adminResumen: (await req('GET', '/reports/director/home', { token: admin })).status,
+    adminDetalle: (await detalle('credenciales', 'pendientes', admin)).status,
+    docente: (await req('GET', '/reports/director/home', { token: docente.token })).status,
+    estudiante: (await detalle('estudiantes', 'recientes', est.token)).status,
+    dirAlAdmin: (await req('GET', '/reports/admin/home', { token: director.token })).status,
+    dirAlDetalleAdmin: (await req('GET', '/reports/admin/home/cuentas/pendientes', { token: director.token })).status,
+    tarjetaDeAdmin: (await detalle('cuentas', 'pendientes')).status,
+    inventada: (await detalle('aprobaciones', encodeURIComponent("academica'; DROP TABLE users; --"))).status,
+    escribir: (await req('POST', '/reports/director/home/aprobaciones/academica', { token: director.token, body: {} })).status,
+  };
+  check(intentos.adminResumen === 403 && intentos.adminDetalle === 403 && intentos.docente === 403 && intentos.estudiante === 403
+    && intentos.dirAlAdmin === 403 && intentos.dirAlDetalleAdmin === 403 && intentos.tarjetaDeAdmin === 404 && intentos.inventada === 404
+    && [404, 405].includes(intentos.escribir),
+  'V7.12.2 H12 Sin elevación: Administración, docente y estudiante no entran; Dirección no abre el Inicio ni las tarjetas de Administración; es solo lectura',
+  json(intentos));
+
+  // --- §13 Actividades por aprobar: el mismo total que la bandeja, por tipo, con creador y fecha.
+  const cats = ((await req('GET', '/activity-categories?status=active', { token: admin })).data ?? []);
+  const cat = cats.find((c) => c.appliesTo === 'academica') ?? cats.find((c) => !c.appliesTo);
+  const propuesta = (await req('POST', '/activities', {
+    token: docente.token,
+    body: { type: 'academica', categoryId: cat?.id, title: `Taller por aprobar ${L}`, status: 'draft', activityDate: en(96), endAt: en(98), modality: 'presencial', location: 'Aula 12', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8] },
+  })).data;
+  const enviada = await req('POST', `/activities/${propuesta?.id}/submit`, { token: docente.token, body: {} });
+  const bandeja = (await req('GET', '/activities/reviews/pending', { token: director.token })).data ?? [];
+  const r1 = await resumen();
+  const acad = (await detalle('aprobaciones', 'academica')).data;
+  const filaProp = (acad?.filas ?? []).find((f) => f.id === propuesta?.id);
+  const porTipo = (t) => bandeja.filter((a) => (t === 'externa' ? a.originType === 'external' : (a.originType ?? 'internal') === 'internal' && a.type === t)).length;
+  check([200, 201].includes(enviada.status) && r1.aprobaciones?.total === bandeja.length && acad?.total === porTipo('academica')
+    && r1.aprobaciones?.extracurricular === porTipo('extracurricular') && r1.aprobaciones?.externa === porTipo('externa')
+    && !!filaProp && /Saul/.test(filaProp.detalle ?? '') && filaProp.datos?.some((d) => d.campo === 'Tipo' && d.valor === 'Académica')
+    && bienFormado(acad),
+  'V7.12.3 §13 «Actividades por aprobar»: el mismo total que la bandeja, por tipo, con quién la propone y su fecha',
+  json({ card: r1.aprobaciones, bandeja: bandeja.length, acad: acad?.total, fila: filaProp?.detalle }));
+
+  // --- D01 (DIR-02): «Credenciales en revisión» cuenta todas las pendientes, como la bandeja.
+  const estCred = await provisionAndActivate(admin, { firstName: 'Rita', lastName: `Direccion${L}`, email: correoEst('b12cred'), role: 'STUDENT', semester: 6 });
+  const vinc = await credencialVinculada(admin, estCred, { certificateName: `Curso de Direccion ${L}`, issuer: 'Proveedor de Direccion' });
+  const cred = (await detalle('credenciales', 'pendientes')).data;
+  const bandejaCred = (await req('GET', '/validation/manual-reviews?estado=pendientes&limit=500', { token: director.token })).data ?? [];
+  const pendiente = (await req('GET', '/reports/director/pending', { token: director.token })).data;
+  const r2 = await resumen();
+  check(vinc.status === 201 && r2.credenciales?.total === cred?.total && (cred?.total > 500 || cred?.total === bandejaCred.length)
+    && pendiente?.credentialsPendingManualReview === cred?.total && ids(cred?.filas).includes(vinc.data?.id)
+    && (cred?.filas ?? []).every((f) => f.estado?.texto === 'Pendiente de decisión'),
+  'V7.12.4 D01 «Credenciales en revisión» cuenta todas las pendientes de decisión, igual que la bandeja (no solo las excepcionales)',
+  json({ card: r2.credenciales?.total, detalle: cred?.total, bandeja: bandejaCred.length, viejo: pendiente?.credentialsPendingManualReview }));
+
+  // --- §13 Actividades: la gestión de Dirección, por vista; un borrador ajeno no cuenta.
+  const borradorAdmin = (await req('POST', '/activities', {
+    token: admin, body: { type: 'academica', categoryId: cat?.id, title: `Borrador ajeno ${L}`, status: 'draft', activityDate: en(120), modality: 'presencial', location: 'Aula 1', semesterScope: [1] },
+  })).data;
+  const propia = (await req('POST', '/activities', {
+    token: director.token, body: { type: 'academica', categoryId: cat?.id, title: `Actividad de Direccion ${L}`, status: 'open', activityDate: en(72), endAt: en(74), modality: 'presencial', location: 'Aula 9', semesterScope: [1, 2, 3, 4, 5, 6, 7, 8], responsibleUserIds: [docente.userId] },
+  })).data;
+  const gestion = async (extra) => ((await req('GET', `/activities/managed?${q(extra)}`, { token: director.token })).data ?? []);
+  const gAcad = await gestion({ type: 'academica', originType: 'internal' });
+  const gExtra = await gestion({ type: 'extracurricular', originType: 'internal' });
+  const gExt = await gestion({ originType: 'external' });
+  const r3 = await resumen();
+  const actAcad = (await detalle('actividades', 'academica')).data;
+  check(!!borradorAdmin?.id && !!propia?.id && r3.actividades?.academica === gAcad.length && r3.actividades?.extracurricular === gExtra.length
+    && r3.actividades?.externa === gExt.length && actAcad?.total === gAcad.length
+    && ids(actAcad?.filas).includes(propia.id) && !ids(actAcad?.filas).includes(borradorAdmin.id) && !ids(actAcad?.filas).includes(propuesta?.id)
+    && bienFormado(actAcad),
+  'V7.12.5 §13 «Actividades»: los mismos totales que la gestión de Dirección por vista; ni el borrador de Administración ni la propuesta en revisión',
+  json({ card: r3.actividades, gestion: [gAcad.length, gExtra.length, gExt.length], det: actAcad?.total }));
+
+  // --- §13 Participaciones: hechos recientes y asistencia abierta o cerrada.
+  const asistentes = [];
+  for (let i = 0; i < 3; i++) {
+    const e = await provisionAndActivate(admin, { firstName: 'Asis', lastName: `Direccion${L}`, email: correoEst(`b12a${i}`), role: 'STUDENT', semester: 2 });
+    e.profileId = (await req('GET', '/profiles/me', { token: e.token })).data?.id;
+    await req('POST', `/activities/${propia?.id}/register`, { token: e.token, body: {} });
+    asistentes.push(e);
+  }
+  await req('PATCH', `/activities/${propia?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: asistentes[0].profileId, status: 'confirmed' } });
+  await req('PATCH', `/activities/${propia?.id}/confirm-participation`, { token: docente.token, body: { studentProfileId: asistentes[1].profileId, status: 'absent' } });
+  // La actividad ya ocurrió: es cuando se registra la asistencia.
+  psql(`update activities set event_date = now() - interval '1 minute', end_at = now() where id = '${propia?.id}'`);
+  const recientes = (await detalle('participaciones', 'recientes')).data;
+  const asis = (await detalle('participaciones', 'asistencia')).data;
+  const filaAsis = (asis?.filas ?? []).find((f) => f.id === propia?.id);
+  const dato = (campo) => filaAsis?.datos?.find((d) => d.campo === campo)?.valor;
+  const confirmadasBase = Number(psql(`select count(*) from activity_registrations r join activities a on a.id = r.activity_id where r.status = 'confirmed' and a.origin_type = 'internal'`));
+  const abierta = filaAsis?.estado?.texto;
+  await req('PATCH', `/activities/${propia?.id}`, { token: director.token, body: { status: 'finished' } });
+  const cierre = await req('POST', `/activities/${propia?.id}/attendance/close`, { token: docente.token });
+  const despues = ((await detalle('participaciones', 'asistencia')).data?.filas ?? []).find((f) => f.id === propia?.id);
+  check(recientes?.total === confirmadasBase && (recientes?.filas ?? [])[0]?.actividadId === propia?.id
+    && dato('Asistieron') === '1' && dato('Ausentes') === '1' && dato('Sin marcar') === '1' && /Asistencia abierta: 1 sin marcar/.test(abierta ?? '')
+    && [200, 201].includes(cierre.status) && despues?.estado?.texto === 'Asistencia cerrada' && bienFormado(recientes),
+  'V7.12.6 §13 «Participaciones»: el último hecho confirmado, y la asistencia abierta (1 sin marcar) que pasa a cerrada',
+  json({ total: recientes?.total, confirmadasBase, abierta, cierre: cierre.status, despues: despues?.estado }));
+
+  // --- §13 Proyectos: los de la galería de Dirección (perfil o enlace), no los «solo docentes».
+  const autor = await provisionStudent(admin, { firstName: 'Ivo', lastName: `Direccion${L}`, email: correoEst('b12proy'), semester: 5 });
+  const publico = (await crearProyectoActivo(autor.token, { title: `Proyecto abierto ${L}`, visibility: 'profile' })).data;
+  const paraDocentes = (await crearProyectoActivo(autor.token, { title: `Proyecto para docentes ${L}`, visibility: 'teachers' })).data;
+  const proy = (await detalle('proyectos', 'recientes')).data;
+  const enBase = Number(psql(`select count(*) from projects where status = 'active' and visibility in ('profile', 'public_link')`));
+  check(proy?.total === enBase && ids(proy?.filas).includes(publico?.id) && !!paraDocentes?.id && !ids(proy?.filas).includes(paraDocentes?.id)
+    && (await resumen()).proyectos?.total === enBase,
+  'V7.12.7 §13 «Proyectos»: lo que Dirección ve en la galería; uno visible solo a docentes no aparece',
+  json({ total: proy?.total, enBase, docentes: paraDocentes?.id ? ids(proy?.filas).includes(paraDocentes.id) : 'sin' }));
+
+  // --- §13 Autonomía docente: vigentes y revocadas, sin cambiar nada desde el modal.
+  const politica = await req('POST', '/approval-policies', {
+    token: director.token, body: { teacherUserId: docente.userId, module: 'RESOURCE', justification: 'Coordina la materia en los tres paralelos.' },
+  });
+  const vigentes = (await detalle('autonomia', 'vigentes')).data;
+  const revoca = await req('POST', `/approval-policies/${politica.data?.id}/revoke`, { token: director.token, body: { reason: 'Terminó la coordinación del semestre.' } });
+  const revocadas = (await detalle('autonomia', 'revocadas')).data;
+  const vigentesDespues = (await detalle('autonomia', 'vigentes')).data;
+  const enBaseVig = Number(psql(`select count(*) from approval_policies where revoked_at is null`));
+  const filaVig = (vigentes?.filas ?? []).find((f) => f.id === politica.data?.id);
+  check(politica.status === 201 && /Saul/.test(filaVig?.titulo ?? '') && /recursos/i.test(filaVig?.detalle ?? '') && filaVig?.estado?.texto === 'Vigente'
+    && [200, 201].includes(revoca.status) && ids(revocadas?.filas).includes(politica.data?.id) && !ids(vigentesDespues?.filas).includes(politica.data?.id)
+    && vigentesDespues?.total === enBaseVig,
+  'V7.12.8 §13 «Autonomía docente»: el docente con su módulo vigente y, al revocarse, en revocadas',
+  json({ p: politica.status, fila: filaVig, r: revoca.status, vig: vigentesDespues?.total, enBaseVig }));
+
+  // --- §13 Recursos y Puntos: propuestas pendientes como sus bandejas.
+  const area = ((await req('GET', '/academic-areas', { token: admin })).data ?? []).find((a) => a.isActive !== false);
+  const recurso = await req('POST', '/learning-resources', {
+    token: docente.token,
+    body: { title: `Guia de Direccion ${L}`, provider: 'Docente de la carrera', url: `https://example.org/direccion-${L}`, academicAreaId: area?.id, resourceType: 'guide' },
+  });
+  const rec = (await detalle('recursos', 'propuestas')).data;
+  const pts = (await detalle('puntos', 'propuestas')).data;
+  const pendRec = (await req('GET', '/learning-resources/reviews/pending', { token: director.token })).data ?? [];
+  const pendPts = (await req('GET', '/gamification/proposals?status=pending', { token: director.token })).data ?? [];
+  check(recurso.status === 201 && ids(rec?.filas).includes(recurso.data?.id) && rec?.total === pendRec.length && pts?.total === pendPts.length
+    && (rec?.filas ?? []).every((f) => f.estado?.texto === 'Pendiente de decisión'),
+  'V7.12.9 §13 «Recursos» y «Puntos»: las propuestas pendientes con el mismo total que las bandejas de Dirección',
+  json({ rec: [rec?.total, pendRec.length], pts: [pts?.total, pendPts.length], s: recurso.status }));
+
+  // --- §13 Estudiantes: totales por semestre y altas recientes, sin correo ni código.
+  const sem = (await detalle('estudiantes', 'semestres')).data;
+  const alt = (await detalle('estudiantes', 'recientes')).data;
+  const perfiles = Number(psql(`select count(*) from student_profiles`));
+  const texto = JSON.stringify([sem, alt]);
+  check(sem?.total === perfiles && alt?.total === perfiles && (sem?.filas ?? []).length > 0 && (sem?.filas ?? []).every((f) => f.agregada && !f.fecha)
+    && !/@|university|token/i.test(texto) && (alt?.filas ?? []).length > 0 && bienFormado(alt),
+  'V7.12.10 §13 «Estudiantes»: totales del alcance por semestre y últimas altas, sin correos ni códigos',
+  json({ sem: sem?.total, alt: alt?.total, perfiles }));
+
+  // --- §13 Analítica: cifras reales por pestaña, sin inventar.
+  const ana = (await detalle('analitica', 'indicadores')).data;
+  const v = (id, campo) => Number((ana?.filas ?? []).find((f) => f.id === id)?.datos?.find((d) => d.campo === campo)?.valor);
+  const compartidos = Number(psql(`select count(*) from projects where status = 'active' and visibility in ('profile', 'public_link')`));
+  check(['panorama', 'afinidad', 'participacion', 'demanda', 'evolucion'].every((k) => ids(ana?.filas).includes(k))
+    && v('panorama', 'Estudiantes') === perfiles && v('participacion', 'Participaciones confirmadas') === confirmadasBase
+    && v('panorama', 'Proyectos compartidos') === compartidos && (ana?.filas ?? []).every((f) => f.datos.every((d) => /^\d+$/.test(d.valor)))
+    && !/https?:|storage|archivo/i.test(JSON.stringify(ana ?? {})),
+  'V7.12.11 §13 «Analítica»: una fila por pestaña con cifras que existen en la base; nada estimado ni archivos',
+  json(ana?.filas?.map((f) => [f.id, f.datos])));
+
+  // --- H01 en Dirección: conjunto vacío honesto y como máximo 10.
+  const ext = (await detalle('aprobaciones', 'externa')).data;
+  const extBase = Number(psql(`select count(*) from activities where origin_type = 'external' and review_status = 'pending'`));
+  check(typeof ext?.total === 'number' && ext.total === extBase && (extBase > 0 || ext?.filas?.length === 0) && (ext?.filas ?? []).length <= 10,
+    'V7.12.12 H01 Un conjunto de Dirección sin elementos llega vacío y con su total real', json({ total: ext?.total, extBase }));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9, batch10, batch11, batch12 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

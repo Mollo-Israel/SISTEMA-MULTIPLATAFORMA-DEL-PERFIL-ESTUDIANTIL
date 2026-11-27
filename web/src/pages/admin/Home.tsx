@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FiAward, FiBookOpen, FiCalendar, FiCheckSquare, FiCompass, FiFileText, FiFolder, FiGlobe, FiLayers,
@@ -9,7 +9,7 @@ import { reportService, type InicioAdmin, type ResumenTarjeta } from '../../serv
 import { formatearFechaHora } from '../../lib/fechas';
 import { AsyncView, Button, Card, SkeletonCards } from '../../components/ui';
 import { SaludoRol } from '../../components/InicioRol';
-import { DetallesInicio, type SegmentoDetalle } from '../../components/DetallesInicio';
+import { DetallesInicio, TarjetaInicio, type ConfigTarjeta, type SegmentoDetalle } from '../../components/DetallesInicio';
 
 /**
  * V7.1 §3 · Inicio de Administración: un tablero de trabajo diario.
@@ -20,19 +20,6 @@ import { DetallesInicio, type SegmentoDetalle } from '../../components/DetallesI
  * baja desde aquí. La tarjeta Correo ya no está: la configuración técnica
  * sigue en /admin/mail, sin entrada en el menú.
  */
-
-interface ConfigTarjeta {
-  titulo: string;
-  icono: ReactNode;
-  /** Qué cuenta el número grande, en una línea. */
-  que: string;
-  /** Línea secundaria con otros totales del resumen. */
-  extra?: (r: Record<string, unknown>) => string | null;
-  resumen: string;
-  segmentos: SegmentoDetalle[];
-  /** Color del icono (paleta compartida con los inicios de los otros roles). */
-  tono: 0 | 1 | 2 | 3 | 4 | 5;
-}
 
 const n = (v: unknown) => Number(v ?? 0);
 const actividad = (vista: string) => (f: { actividadId?: string }) =>
@@ -196,7 +183,7 @@ export default function AdminHomePage() {
             <h2 className="ia-grupo-t">Requiere tu atención</h2>
             <div className="grid cols-4 ia-atencion">
               {['cuentas', 'revision', 'credenciales', 'pedidos'].map((id) => (
-                <Tarjeta key={id} id={id} r={o.tarjetas[id]} atencion onDetalles={() => setAbierto({ tarjeta: id })} onReintentar={state.reload} />
+                <TarjetaInicio key={id} id={id} config={TARJETAS[id]} r={o.tarjetas[id]} atencion onDetalles={() => setAbierto({ tarjeta: id })} onReintentar={state.reload} />
               ))}
             </div>
 
@@ -206,7 +193,7 @@ export default function AdminHomePage() {
               <CuentasPorRol r={o.tarjetas.roles} onAbrir={(rol) => setAbierto({ tarjeta: 'roles', rol })} onReintentar={state.reload} />
               <div className="grid cols-2">
                 {GRUPOS[0].tarjetas.map((id) => (
-                  <Tarjeta key={id} id={id} r={o.tarjetas[id]} onDetalles={() => setAbierto({ tarjeta: id })} onReintentar={state.reload} />
+                  <TarjetaInicio key={id} id={id} config={TARJETAS[id]} r={o.tarjetas[id]} onDetalles={() => setAbierto({ tarjeta: id })} onReintentar={state.reload} />
                 ))}
               </div>
             </section>
@@ -217,7 +204,7 @@ export default function AdminHomePage() {
                 <p className="muted ia-grupo-d">{g.descripcion}</p>
                 <div className="grid cols-3">
                   {g.tarjetas.map((id) => (
-                    <Tarjeta key={id} id={id} r={o.tarjetas[id]} onDetalles={() => setAbierto({ tarjeta: id })} onReintentar={state.reload} />
+                    <TarjetaInicio key={id} id={id} config={TARJETAS[id]} r={o.tarjetas[id]} onDetalles={() => setAbierto({ tarjeta: id })} onReintentar={state.reload} />
                   ))}
                 </div>
               </section>
@@ -251,40 +238,6 @@ export default function AdminHomePage() {
           onClose={cerrar}
         />
       ))}
-    </div>
-  );
-}
-
-function Tarjeta({ id, r, atencion = false, onDetalles, onReintentar }: Readonly<{
-  id: string;
-  r: ResumenTarjeta | undefined;
-  atencion?: boolean;
-  onDetalles: () => void;
-  onReintentar: () => void;
-}>) {
-  const c = TARJETAS[id];
-  const fallo = !r || 'error' in r;
-  const total = fallo ? 0 : n(r.total);
-  return (
-    <div className={`card ia-tarjeta t${c.tono} ${atencion && !fallo && total > 0 ? 'con' : ''}`} data-testid={`tarjeta-${id}`}>
-      <div className="ia-cabeza">
-        <span className="ia-ico" aria-hidden>{c.icono}</span>
-        <strong className="ia-titulo">{c.titulo}</strong>
-      </div>
-      {fallo ? (
-        <div className="ia-error" role="alert">
-          <span>No se pudo cargar este resumen.</span>
-          <Button variant="ghost" size="sm" icon={<FiRefreshCw />} onClick={onReintentar}>Reintentar</Button>
-        </div>
-      ) : (
-        <>
-          <p className="ia-cifra"><span className="ia-n" data-testid={`total-${id}`}>{total}</span> <span className="muted">{c.que}</span></p>
-          {c.extra && <p className="muted ia-extra">{c.extra(r)}</p>}
-          <button type="button" className="btn btn-secondary btn-sm ia-detalles" aria-haspopup="dialog" onClick={onDetalles}>
-            Detalles
-          </button>
-        </>
-      )}
     </div>
   );
 }
