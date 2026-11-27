@@ -10,6 +10,7 @@ import {
   Badge, Button, Diferido, EmptyState, Modal, PageHeader, Paginacion, SearchInput, SkeletonCards,
 } from '../components/ui';
 import { resumen } from '../components/ActivityCard';
+import { FiltroPersona, type PersonaFiltro } from '../components/FiltroPersona';
 
 type EstadoDelListado = 'cargando' | 'error' | 'vacio' | 'lista';
 
@@ -116,6 +117,8 @@ export default function CareerProjectsPage() {
   const [buscado, setBuscado] = useState('');
   const [areaId, setAreaId] = useState('');
   const [skillId, setSkillId] = useState('');
+  // V7.1 §11 (B02): quien lleva el proyecto, no cualquier integrante.
+  const [responsable, setResponsable] = useState<PersonaFiltro | null>(null);
   const [pagina, setPagina] = useState(1);
   const [data, setData] = useState<CommunityProjectsPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,19 +136,21 @@ export default function CareerProjectsPage() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await projectService.community({ q: buscado || undefined, areaId: areaId || undefined, skillId: skillId || undefined, page: pagina }));
+      setData(await projectService.community({
+        q: buscado || undefined, areaId: areaId || undefined, skillId: skillId || undefined, ownerId: responsable?.id, page: pagina,
+      }));
       setError(null);
     } catch (e) {
       setError(apiError(e));
     } finally {
       setLoading(false);
     }
-  }, [buscado, areaId, skillId, pagina]);
+  }, [buscado, areaId, skillId, responsable, pagina]);
   useEffect(() => { void cargar(); }, [cargar]);
-  useEffect(() => { setPagina(1); }, [buscado, areaId, skillId]);
+  useEffect(() => { setPagina(1); }, [buscado, areaId, skillId, responsable]);
 
-  const limpiar = () => { setQuery(''); setBuscado(''); setAreaId(''); setSkillId(''); };
-  const hayFiltros = !!(buscado || areaId || skillId);
+  const limpiar = () => { setQuery(''); setBuscado(''); setAreaId(''); setSkillId(''); setResponsable(null); };
+  const hayFiltros = !!(buscado || areaId || skillId || responsable);
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const porPagina = data?.pageSize ?? 6;
@@ -170,6 +175,7 @@ export default function CareerProjectsPage() {
           <option value="">Todas las tecnologías</option>
           {skillsDelArea.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+        <FiltroPersona label="Responsable" valor={responsable} onChange={setResponsable} buscar={projectService.communityOwners} testId="filtro-responsable" />
         <Button variant="ghost" size="sm" icon={<FiX size={14} />} disabled={!hayFiltros} onClick={limpiar}>Limpiar</Button>
       </div>
 

@@ -258,6 +258,9 @@ textarea { min-height: 80px; resize: vertical; }
 .filters { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; margin-bottom: 1rem; }
 .filters .field { margin-bottom: 0; min-width: 160px; }
 .filters .field label { font-size: 0.72rem; }
+/* V7.1 §11: filtro por persona (publicador, responsable): sugerencias flotantes. */
+.filtro-persona { position: relative; display: flex; flex-direction: column; gap: 0.2rem; min-width: 200px; }
+.filtro-persona-lista { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; margin: 0.2rem 0 0; padding: 0.2rem 0.6rem; background: var(--white); border: 1px solid var(--gray-200); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); max-height: 260px; overflow-y: auto; }
 /* V3.2 §59: filtros de la auditoría y su detalle desplegable. */
 .audit-filters .audit-fecha { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.72rem; color: var(--gray-700); }
 .audit-filters select, .audit-filters .search-input { min-width: 170px; }

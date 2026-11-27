@@ -9,7 +9,7 @@
  */
 import { execSync } from 'node:child_process';
 import { chromium } from 'playwright-core';
-import { codigoUniversitario, loginAdmin, provisionAndActivate, provisionStudent, req, ADMIN_CREDENTIALS, PWD, pdfConTexto, subirArchivo } from './lib/fixtures.mjs';
+import { codigoUniversitario, crearProyectoActivo, loginAdmin, provisionAndActivate, provisionStudent, repoDePrueba, req, ADMIN_CREDENTIALS, PWD, pdfConTexto, subirArchivo } from './lib/fixtures.mjs';
 
 const WEB = process.env.WEB_URL ?? 'http://localhost:5180';
 const TS = Date.now();
@@ -617,7 +617,105 @@ async function batch8(ctx, browser) {
   await cd.close();
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
+// ===========================================================================
+//  BATCH V7-9 — Filtros «Publicado por» y «Responsable» en la web (§11)
+// ===========================================================================
+async function batch9(ctx, browser) {
+  objective('BATCH V7-9 · Biblioteca por publicador y Proyectos de la carrera por responsable, en el navegador');
+  const admin = ctx.admin;
+  const area = (await req('POST', '/academic-areas', { token: admin, body: { name: `Webfiltro ${L}`, tags: [`wf9${L}`] } })).data;
+  const onboarding = async (est) => {
+    await req('POST', '/profiles/me/onboarding/institutional-confirmation', { token: est.token, body: {} });
+    // La bienvenida pide al menos un interés.
+    await req('PUT', '/profiles/me/interests', { token: est.token, body: { items: [{ academicAreaId: area.id, priority: 1 }] } });
+    await req('PATCH', '/profiles/me', { token: est.token, body: { availability: 'open' } });
+    await req('POST', '/profiles/me/onboarding/privacy', { token: est.token, body: { peerDiscoverable: true, publicProfileEnabled: false } });
+    await req('POST', '/profiles/me/onboarding/complete', { token: est.token });
+  };
+  const pubA = await provisionAndActivate(admin, { firstName: 'Bárbara', lastName: `Webpub${L}`, email: correoStaff('b9pa'), role: 'CAREER_DIRECTOR' });
+  const pubB = await provisionAndActivate(admin, { firstName: 'Otto', lastName: `Webotro${L}`, email: correoStaff('b9pb'), role: 'CAREER_DIRECTOR' });
+  const recursos = [];
+  for (const [token, k] of [[pubA.token, 'a1'], [pubA.token, 'a2'], [pubA.token, 'a3'], [pubB.token, 'b1']]) {
+    recursos.push((await req('POST', '/learning-resources', {
+      token, body: { title: `Webrecurso ${k} ${L}`, provider: 'Editorial', url: `https://example.org/w79-${TS}-${k}`, academicAreaId: area.id, resourceType: 'guide' },
+    })).data);
+  }
+  const est = await provisionStudent(admin, { firstName: 'Rita', lastName: `Webfiltro${L}`, email: correoEst('b9est'), semester: 4 });
+  await onboarding(est);
+  await req('PUT', `/library/${recursos[0]?.id}/favorite`, { token: est.token });
+
+  const { ctx: ce, page: pe, errores: ee } = await entrar(browser, est.email);
+  await pe.goto(`${WEB}/student/library`);
+  await pe.getByPlaceholder('Buscar por título, descripción o fuente…').fill(L, { timeout: 20000 });
+  const tarjetas = pe.locator('article.resource-card');
+  const contar = async (n) => {
+    for (let i = 0; i < 40; i++) {
+      if ((await tarjetas.count()) === n) return n;
+      await pe.waitForTimeout(250);
+    }
+    return tarjetas.count();
+  };
+  const sinFiltro = await contar(4);
+  const campo = pe.locator('[data-testid="filtro-publicador"] input');
+  await campo.fill(`zzz${L}`);
+  const nadie = await pe.getByText('Nadie con ese nombre.').waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+  await campo.fill(`webpub${L}, barbara`);
+  await pe.locator('[data-testid="filtro-publicador"]').getByRole('option').first().click({ timeout: 10000 });
+  const filtradas = await contar(3);
+  const publicados = await pe.locator('[data-testid="publicado-por"]').allTextContents();
+  check(sinFiltro === 4 && filtradas === 3 && publicados.length === 3 && publicados.every((t) => t === `Publicado por Bárbara Webpub${L}`),
+    'W7.9.1 B01 «Publicado por» se elige escribiendo el nombre sin tildes y con coma; filtra y cada tarjeta dice quién lo publicó',
+    json({ sinFiltro, filtradas, publicados }));
+  check(nadie, 'W7.9.2 B01 Sin coincidencias se dice «Nadie con ese nombre.» y no se lista a nadie');
+  await pe.getByRole('tab', { name: 'Mis favoritos' }).click();
+  const enFavoritos = await contar(1);
+  await pe.getByRole('button', { name: 'Limpiar', exact: true }).click();
+  await pe.waitForTimeout(600);
+  const pestana = await pe.getByRole('tab', { name: 'Mis favoritos' }).getAttribute('aria-selected');
+  const campoVacio = await campo.inputValue().catch(() => null);
+  check(enFavoritos === 1 && pestana === 'true' && campoVacio === '',
+    'W7.9.3 B01 Se combina con «Mis favoritos» y «Limpiar» quita el publicador sin cambiar de pestaña', json({ enFavoritos, pestana, campoVacio }));
+  check(ee.length === 0, 'W7.9.4 Sin errores de JavaScript en Biblioteca', ee.join(' | '));
+  await ce.close();
+
+  // --- B02 · Proyectos de la carrera
+  const [duena, otra, mira] = await Promise.all([
+    ['b9due', 'Álvaro', `Webresp${L}`], ['b9otra', 'Iris', `Webajena${L}`], ['b9mira', 'Leo', `Webmira${L}`],
+  ].map(([k, firstName, lastName]) => provisionStudent(admin, { firstName, lastName, email: correoEst(k), semester: 4 })));
+  for (const [token, k] of [[duena.token, 'uno'], [duena.token, 'dos'], [otra.token, 'tres']]) {
+    const p = await crearProyectoActivo(token, { title: `Webproyecto ${k} ${L}`, visibility: 'profile', repositoryUrl: repoDePrueba(`w79-${k}-${TS}`) });
+    if (p.status !== 201) throw new Error(`No se pudo activar el proyecto ${k} (${p.status}): ${json(p.data)}`);
+  }
+  await onboarding(mira);
+  const { ctx: cp, page: pp, errores: ep } = await entrar(browser, mira.email);
+  await pp.goto(`${WEB}/proyectos`);
+  await pp.getByPlaceholder('Buscar por título o descripción…').fill(L, { timeout: 20000 });
+  const proyectos = pp.locator('[data-testid="proyectos-carrera"] article');
+  const contarP = async (n) => {
+    for (let i = 0; i < 40; i++) {
+      if ((await proyectos.count()) === n) return n;
+      await pp.waitForTimeout(250);
+    }
+    return proyectos.count();
+  };
+  const todos = await contarP(3);
+  await pp.locator('[data-testid="filtro-responsable"] input').fill(`WEBRESP${L} alvaro`);
+  await pp.locator('[data-testid="filtro-responsable"]').getByRole('option').first().click({ timeout: 10000 });
+  const deElla = await contarP(2);
+  const elegido = await pp.locator('[data-testid="filtro-responsable-elegido"]').textContent().catch(() => null);
+  await pp.getByRole('button', { name: 'Limpiar', exact: true }).click();
+  // «Limpiar» quita también la búsqueda: vuelve la primera página de toda la galería.
+  await pp.locator('[data-testid="filtro-responsable"] input').waitFor({ timeout: 10000 }).catch(() => {});
+  const busqueda = await pp.getByPlaceholder('Buscar por título o descripción…').inputValue();
+  const despues = await contarP(6);
+  check(todos === 3 && deElla === 2 && elegido === `Álvaro Webresp${L}` && busqueda === '' && despues > deElla
+    && (await pp.locator('[data-testid="filtro-responsable-elegido"]').count()) === 0,
+    'W7.9.5 B02 «Responsable» filtra los proyectos de quien los lleva y «Limpiar» restaura todos los filtros', json({ todos, deElla, elegido, busqueda, despues }));
+  check(ep.length === 0, 'W7.9.6 Sin errores de JavaScript en Proyectos de la carrera', ep.join(' | '));
+  await cp.close();
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación en el navegador (${WEB})${C.r}`);

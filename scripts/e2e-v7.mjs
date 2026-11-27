@@ -11,7 +11,7 @@
 import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  asegurarGithubSimulado, codigoUniversitario, loginAdmin, pdfConTexto, provisionAndActivate, provisionStudent, repoDePrueba, req, subirArchivo,
+  asegurarGithubSimulado, codigoUniversitario, crearProyectoActivo, loginAdmin, pdfConTexto, provisionAndActivate, provisionStudent, repoDePrueba, req, subirArchivo,
 } from './lib/fixtures.mjs';
 
 const TS = Date.now();
@@ -1239,7 +1239,137 @@ async function batch8(ctx) {
   }
 }
 
-const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8 };
+// ===========================================================================
+//  BATCH V7-9 — Biblioteca por publicador y Proyectos por responsable (§11)
+// ===========================================================================
+async function batch9(ctx) {
+  objective('BATCH V7-9 · Biblioteca por publicador y Proyectos de la carrera por responsable: en el servidor, por nombre normalizado y sin correos');
+  const admin = ctx.admin;
+  const nuevaArea = async (n) => (await req('POST', '/academic-areas', { token: admin, body: { name: `${n} ${L}`, tags: [`${n.toLowerCase().slice(0, 3)}${L}`] } })).data;
+  const aUno = await nuevaArea('Filtrouno');
+  const aDos = await nuevaArea('Filtrodos');
+  const sinCorreo = (x) => !/@/.test(JSON.stringify(x ?? null));
+  const nombres = (r) => (Array.isArray(r?.data) ? r.data : []).map((p) => p.name).sort((a, b) => a.localeCompare(b));
+
+  // --- B01 · Biblioteca: quién publicó el recurso (created_by)
+  const pubA = await provisionAndActivate(admin, { firstName: 'Bárbara', lastName: `Núñez${L}`, email: correoStaff('b9pa'), role: 'CAREER_DIRECTOR' });
+  const pubB = await provisionAndActivate(admin, { firstName: 'Bruno', lastName: `Núñez${L}otro`, email: correoStaff('b9pb'), role: 'CAREER_DIRECTOR' });
+  const proponente = await provisionAndActivate(admin, { firstName: 'Nadia', lastName: `Núñez${L}`, email: correoStaff('b9doc'), role: 'TEACHER' });
+  const recurso = async (token, i, areaId) => {
+    const r = await req('POST', '/learning-resources', {
+      token,
+      body: { title: `Recurso filtro ${i} ${L}`, provider: 'Editorial de prueba', url: `https://example.org/v79-${TS}-${i}`, academicAreaId: areaId, resourceType: 'guide' },
+    });
+    if (r.status !== 201) throw new Error(`No se pudo crear el recurso ${i} (${r.status}): ${json(r.data)}`);
+    return r.data;
+  };
+  for (let i = 1; i <= 7; i++) await recurso(pubA.token, `a${i}`, aUno.id);
+  await recurso(pubA.token, 'a8', aDos.id);
+  for (let i = 1; i <= 2; i++) await recurso(pubB.token, `b${i}`, aUno.id);
+  const pendiente = await recurso(proponente.token, 'pendiente', aUno.id);
+
+  const est = await provisionStudent(admin, { firstName: 'Olga', lastName: `Lectora${L}`, email: correoEst('b9est'), semester: 3 });
+  const publicadores = (texto, token = est.token) => req('GET', `/library/publishers?${q({ q: texto })}`, { token });
+
+  const porApellido = await publicadores(`nunez${L}`);
+  const conComa = await publicadores(`Núñez${L}, Bárbara`);
+  const alReves = await publicadores(`BARBARA nuñez${L}`);
+  check(porApellido.status === 200 && json(nombres(porApellido)) === json([`Bárbara Núñez${L}`, `Bruno Núñez${L}otro`])
+    && json(nombres(conComa)) === json([`Bárbara Núñez${L}`]) && json(nombres(alReves)) === json([`Bárbara Núñez${L}`]),
+    'V7.9.1 B01 El publicador se busca por nombre y apellidos sin importar tildes, mayúsculas, coma ni orden',
+    json({ s: porApellido.status, a: nombres(porApellido), coma: nombres(conComa), reves: nombres(alReves) }));
+  const idA = (conComa.data ?? [])[0]?.id;
+  const idB = (Array.isArray(porApellido.data) ? porApellido.data : []).find((p) => p.name.startsWith('Bruno'))?.id;
+  check(pendiente.reviewStatus === 'pending' && porApellido.status === 200 && !nombres(porApellido).some((n) => n.startsWith('Nadia'))
+    && sinCorreo(porApellido.data) && (porApellido.data ?? []).every((p) => json(Object.keys(p).sort()) === json(['id', 'name'])),
+    'V7.9.2 B01 Solo se sugiere a quien publicó recursos visibles (no a quien solo tiene uno pendiente), con nombre y sin correo',
+    json(porApellido.data));
+  const corta = await publicadores('n');
+  const nadie = await publicadores(`zzz${L}`);
+  check(corta.status === 200 && Array.isArray(corta.data) && corta.data.length === 0 && Array.isArray(nadie.data) && nadie.data.length === 0,
+    'V7.9.3 B01 Con menos de 2 letras o sin coincidencias no se lista a nadie: no enumera usuarios', `${corta.status} ${json(corta.data)} / ${json(nadie.data)}`);
+
+  const biblio = async (filtros, token = est.token) => (await req('GET', `/library?${q(filtros)}`, { token })).data;
+  const p1 = await biblio({ q: L, publisherId: idA, limit: 5, offset: 0 });
+  const p2 = await biblio({ q: L, publisherId: idA, limit: 5, offset: 5 });
+  const titulos = (p) => (p?.items ?? []).map((r) => r.title);
+  const todos = [...titulos(p1), ...titulos(p2)];
+  check(!!idA && p1?.total === 8 && titulos(p1).length === 5 && titulos(p2).length === 3 && new Set(todos).size === 8
+    && todos.every((t) => t.startsWith('Recurso filtro a')),
+    'V7.9.4 B01 El filtro se aplica en el servidor antes de paginar: 8 del publicador en 5 + 3, sin repetir ni mezclar',
+    json({ id: !!idA, total: p1?.total, p1: titulos(p1).length, p2: titulos(p2).length }));
+  const tarjeta = (p1?.items ?? [])[0];
+  check(tarjeta?.publishedBy === `Bárbara Núñez${L}` && sinCorreo(p1),
+    'V7.9.5 B01 La tarjeta dice «Publicado por» con el nombre real, sin correo', json(tarjeta?.publishedBy));
+  const combinada = await biblio({ q: L, publisherId: idA, areaId: aDos.id });
+  const sinFiltro = await biblio({ q: L, limit: 48 });
+  const vacia = await biblio({ q: L, publisherId: '00000000-0000-4000-8000-000000000009' });
+  check(combinada?.total === 1 && titulos(combinada)[0] === `Recurso filtro a8 ${L}` && titulos(sinFiltro).filter((t) => t.startsWith('Recurso filtro ')).length === 10 && vacia?.total === 0,
+    'V7.9.6 B01 Se combina con área y búsqueda; sin publicador quedan los 10 visibles; un publicador sin recursos da 0',
+    json({ comb: combinada?.total, todos: titulos(sinFiltro).filter((t) => t.startsWith('Recurso filtro ')).length, vacia: vacia?.total }));
+
+  // El filtro no toca preferencias, favoritos ni afinidad.
+  await req('PUT', `/library/${tarjeta?.id}/favorite`, { token: est.token });
+  const huella = () => psql(`select (select count(*) from student_interests where student_profile_id = '${est.profileId}') || '/' || (select count(*) from affinity_results where student_profile_id = '${est.profileId}') || '/' || (select count(*) from learning_resource_favorites where student_profile_id = '${est.profileId}')`);
+  const antes = huella();
+  const favA = await biblio({ favorites: 'true', publisherId: idA });
+  const favB = await biblio({ favorites: 'true', publisherId: idB });
+  const despues = huella();
+  check(!!tarjeta && favA?.total === 1 && favB?.total === 0 && antes === despues,
+    'V7.9.7 B01 Combinado con «Mis favoritos»; filtrar no cambia intereses, favoritos ni afinidad', json({ favA: favA?.total, favB: favB?.total, antes, despues }));
+
+  // --- B02 · Proyectos de la carrera: el responsable (dueño), no cualquier integrante
+  const [duena, integrante, deDocentes, mirona] = await Promise.all([
+    ['b9due', 'Álvaro', `Quíspe${L}`],
+    ['b9mie', 'Ana', `Quíspe${L}miembro`],
+    ['b9doc2', 'Aurora', `Quíspe${L}docentes`],
+    ['b9mir', 'Teo', `Mirador${L}`],
+  ].map(([k, firstName, lastName]) => provisionStudent(admin, { firstName, lastName, email: correoEst(k), semester: 4 })));
+  const proyectos = [];
+  for (let i = 1; i <= 7; i++) {
+    const p = await crearProyectoActivo(duena.token, {
+      title: `Proyecto filtro ${i === 3 ? 'unico' : i} ${L}`, description: 'Proyecto para el filtro por responsable.', visibility: 'profile',
+      areaIds: [i <= 2 ? aDos.id : aUno.id], repositoryUrl: repoDePrueba(`v79-${i}-${TS}`),
+    });
+    if (p.status !== 201) throw new Error(`No se pudo activar el proyecto ${i} (${p.status}): ${json(p.data)}`);
+    proyectos.push(p.data);
+  }
+  await crearProyectoActivo(duena.token, { title: `Proyecto filtro privado ${L}`, visibility: 'private', repositoryUrl: repoDePrueba(`v79-priv-${TS}`) });
+  await crearProyectoActivo(deDocentes.token, { title: `Proyecto filtro docentes ${L}`, visibility: 'teachers', repositoryUrl: repoDePrueba(`v79-doc-${TS}`) });
+  // La integrante confirma su contribución y acepta figurar en la galería.
+  const pid = proyectos[0].id;
+  await req('POST', `/projects/${pid}/invitations`, { token: duena.token, body: { invitedProfileId: integrante.profileId, proposedRole: 'Frontend' } });
+  const inv = ((await req('GET', '/projects/invitations/mine', { token: integrante.token })).data ?? []).find((i) => i.project?.id === pid);
+  await req('PATCH', `/projects/invitations/${inv?.id}`, { token: integrante.token, body: { decision: 'accept' } });
+  const skillId = (await req('GET', `/projects/${pid}`, { token: duena.token })).data?.projectSkills?.[0]?.skillId;
+  await req('PUT', `/projects/${pid}/my-contribution`, { token: integrante.token, body: { contribution: 'Hice la interfaz.', roles: ['Frontend'], skillIds: skillId ? [skillId] : [] } });
+  await req('PUT', `/projects/${pid}/my-gallery-consent`, { token: integrante.token, body: { showInGallery: true } });
+
+  const responsables = (texto, token = mirona.token) => req('GET', `/projects/community/owners?${q({ q: texto })}`, { token });
+  const sugeridos = await responsables(`quispe${L}`);
+  const deAdmin = await responsables(`quispe${L}`, admin);
+  check(sugeridos.status === 200 && json(nombres(sugeridos)) === json([`Álvaro Quíspe${L}`]) && sinCorreo(sugeridos.data)
+    && nombres(deAdmin).includes(`Aurora Quíspe${L}docentes`) && !nombres(deAdmin).includes(`Ana Quíspe${L}miembro`),
+    'V7.9.8 B02 Se sugiere solo al responsable de proyectos que quien busca puede ver: ni la integrante, ni quien solo tiene uno visible a docentes',
+    json({ s: sugeridos.status, est: nombres(sugeridos), admin: nombres(deAdmin) }));
+  const idDuena = ((await responsables(`Quispe${L}, ALVARO`)).data ?? [])[0]?.id;
+  const comunidad = async (filtros, token = mirona.token) => (await req('GET', `/projects/community?${q(filtros)}`, { token })).data;
+  const c1 = await comunidad({ q: L, ownerId: idDuena, page: 1 });
+  const c2 = await comunidad({ q: L, ownerId: idDuena, page: 2 });
+  const titulosP = (p) => (p?.items ?? []).map((x) => x.title);
+  check(!!idDuena && c1?.total === 7 && titulosP(c1).length === 6 && titulosP(c2).length === 1
+    && new Set([...titulosP(c1), ...titulosP(c2)]).size === 7 && [...(c1?.items ?? []), ...(c2?.items ?? [])].every((x) => x.owner === `Álvaro Quíspe${L}`),
+    'V7.9.9 B02 Filtra en el servidor antes de paginar: 7 activos visibles del responsable en 6 + 1; el privado no aparece',
+    json({ id: !!idDuena, total: c1?.total, p1: titulosP(c1).length, p2: titulosP(c2).length }));
+  const porIntegrante = await comunidad({ q: L, ownerId: integrante.userId });
+  const combinadaP = await comunidad({ q: `unico ${L}`, ownerId: idDuena });
+  const porArea = await comunidad({ q: L, ownerId: idDuena, areaId: aDos.id });
+  check(!!integrante.userId && porIntegrante?.total === 0 && combinadaP?.total === 1 && porArea?.total === 2,
+    'V7.9.10 B02 Por la integrante no sale el proyecto ajeno; se combina con búsqueda y área',
+    json({ integrante: porIntegrante?.total, busqueda: combinadaP?.total, area: porArea?.total }));
+}
+
+const BATCHES = { batch1, batch2, batch3, batch4, batch5, batch6, batch7, batch8, batch9 };
 
 async function main() {
   console.log(`${C.bold}Afinia V7.1 — verificación del contrato contra la API${C.r}`);

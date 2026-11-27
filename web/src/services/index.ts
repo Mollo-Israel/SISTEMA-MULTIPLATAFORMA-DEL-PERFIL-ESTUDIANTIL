@@ -935,8 +935,11 @@ export const projectService = {
   updateImage: (id: string, imageId: string, data: { isCover?: boolean; position?: number }) =>
     api.patch<ProjectImageView[]>(`/projects/${id}/images/${imageId}`, data).then((r) => r.data),
   removeImage: (id: string, imageId: string) => api.delete<ProjectImageView[]>(`/projects/${id}/images/${imageId}`).then((r) => r.data),
-  community: (params: { q?: string; areaId?: string; skillId?: string; page?: number }) =>
+  community: (params: { q?: string; areaId?: string; skillId?: string; ownerId?: string; page?: number }) =>
     api.get<CommunityProjectsPage>('/projects/community', { params }).then((r) => r.data),
+  /** V7.1 §11: responsables de proyectos visibles en la galería (nombre, sin correo). */
+  communityOwners: (q: string) =>
+    api.get<{ id: string; name: string }[]>('/projects/community/owners', { params: { q } }).then((r) => r.data),
   /** V5 BATCH 14: puntos que dio el proyecto, con criterio y quién los otorgó. */
   points: (id: string) => api.get<ProjectPointView[]>(`/projects/${id}/points`).then((r) => r.data),
   /** V5 §11.1: analizar un repositorio antes de guardar (no guarda nada). */
@@ -1610,10 +1613,13 @@ export const notificationService = {
 
 /** V3.2 §35: Biblioteca de recursos con favoritos. */
 export const libraryService = {
-  list: (params: { q?: string; areaId?: string; skillId?: string; type?: string; favorites?: boolean; forMe?: boolean; limit?: number; offset?: number }) =>
+  list: (params: { q?: string; areaId?: string; skillId?: string; type?: string; publisherId?: string; favorites?: boolean; forMe?: boolean; limit?: number; offset?: number }) =>
     api.get<LibraryPage>('/library', {
       params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== '')),
     }).then((r) => r.data),
   favorite: (id: string) => api.put(`/library/${id}/favorite`).then((r) => r.data),
   unfavorite: (id: string) => api.delete(`/library/${id}/favorite`).then((r) => r.data),
+  /** V7.1 §11: quiénes publicaron recursos visibles (nombre, sin correo; mínimo 2 letras). */
+  publishers: (q: string) =>
+    api.get<{ id: string; name: string }[]>('/library/publishers', { params: { q } }).then((r) => r.data),
 };

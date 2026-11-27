@@ -8,6 +8,7 @@ import {
   Badge, Button, Diferido, EmptyState, PageHeader, Paginacion, SearchInput, SkeletonCards, Tabs,
 } from '../../components/ui';
 import { useToast } from '../../components/feedback';
+import { FiltroPersona, type PersonaFiltro } from '../../components/FiltroPersona';
 import { resumen } from '../../components/ActivityCard';
 
 const POR_PAGINA = 12;
@@ -28,6 +29,8 @@ export default function StudentLibraryPage() {
   const [buscado, setBuscado] = useState('');
   const [areaId, setAreaId] = useState('');
   const [skillId, setSkillId] = useState('');
+  // V7.1 §11 (B01): quién publicó el recurso.
+  const [publicador, setPublicador] = useState<PersonaFiltro | null>(null);
   const [pagina, setPagina] = useState(1);
   const [data, setData] = useState<LibraryPage | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +44,7 @@ export default function StudentLibraryPage() {
         q: buscado || undefined,
         areaId: areaId || undefined,
         skillId: skillId || undefined,
+        publisherId: publicador?.id,
         favorites: tab === 'favoritos' || undefined,
         forMe: tab === 'parati' || undefined,
         limit: POR_PAGINA,
@@ -52,10 +56,10 @@ export default function StudentLibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [buscado, areaId, skillId, tab, pagina]);
+  }, [buscado, areaId, skillId, publicador, tab, pagina]);
 
   useEffect(() => { void cargar(); }, [cargar]);
-  useEffect(() => setPagina(1), [buscado, areaId, skillId, tab]);
+  useEffect(() => setPagina(1), [buscado, areaId, skillId, publicador, tab]);
 
   const alternarFavorito = async (r: LibraryResource) => {
     setOcupado(r.id);
@@ -71,8 +75,9 @@ export default function StudentLibraryPage() {
     }
   };
 
-  const limpiar = () => { setQuery(''); setBuscado(''); setAreaId(''); setSkillId(''); };
-  const hayFiltros = !!(buscado || areaId || skillId);
+  // Limpiar restaura los filtros sin cambiar de pestaña.
+  const limpiar = () => { setQuery(''); setBuscado(''); setAreaId(''); setSkillId(''); setPublicador(null); };
+  const hayFiltros = !!(buscado || areaId || skillId || publicador);
   const total = data?.total ?? 0;
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
   const desde = total === 0 ? 0 : (pagina - 1) * POR_PAGINA + 1;
@@ -98,6 +103,7 @@ export default function StudentLibraryPage() {
           <option value="">Todas las habilidades</option>
           {(data?.facets.skills ?? []).map((s) => <option key={s.id} value={s.id}>{s.name} ({s.total})</option>)}
         </select>
+        <FiltroPersona label="Publicado por" valor={publicador} onChange={setPublicador} buscar={libraryService.publishers} testId="filtro-publicador" />
         <Button variant="ghost" size="sm" icon={<FiX size={14} />} disabled={!hayFiltros} onClick={limpiar}>Limpiar</Button>
       </div>
 
@@ -161,6 +167,7 @@ function TarjetaDeRecurso({ r, paraTi, ocupado, onFavorito }: Readonly<{
           <Badge tone="bordo">{r.resourceTypeLabel}</Badge>
         </div>
         {r.provider && <span className="muted small">Fuente: {r.provider}</span>}
+        {r.publishedBy && <span className="muted small" data-testid="publicado-por">Publicado por {r.publishedBy}</span>}
         {r.description && <p className="activity-card-desc">{r.description}</p>}
         {paraTi && (r.reasons ?? []).length > 0 && (
           <ul className="reasons" aria-label="Por qué te lo sugerimos">

@@ -30,17 +30,28 @@ const TODOS = [RolNombre.STUDENT, RolNombre.TEACHER, RolNombre.CAREER_DIRECTOR, 
 export class ProjectGalleryController {
   constructor(private readonly gallery: ProjectGalleryService) {}
 
+  @Get('community/owners')
+  @Roles(...TODOS)
+  @ApiOperation({
+    summary: 'Responsables de proyectos visibles en la galería, para filtrar (V7.1 §11).',
+    description: 'Búsqueda por nombre y apellidos (sin tildes, coma ni orden), mínimo 2 letras, hasta 10. Solo quien lleva el proyecto; nunca el correo.',
+  })
+  owners(@CurrentUser() user: AuthenticatedUser, @Query('q') q = '') {
+    return this.gallery.responsables(user, String(q));
+  }
+
   @Get('community')
   @Roles(...TODOS)
-  @ApiOperation({ summary: '«Proyectos de la carrera»: solo ACTIVE y visibles para quien consulta; 6 por página.' })
+  @ApiOperation({ summary: '«Proyectos de la carrera»: solo ACTIVE y visibles para quien consulta; filtros de texto, área, tecnología y responsable; 6 por página.' })
   community(
     @CurrentUser() user: AuthenticatedUser,
     @Query('q') q?: string,
     @Query('areaId') areaId?: string,
     @Query('skillId') skillId?: string,
+    @Query('ownerId') ownerId?: string,
     @Query('page') page?: string,
   ) {
-    return this.gallery.community(user, { q, areaId, skillId, page: Number(page) || 1 });
+    return this.gallery.community(user, { q, areaId, skillId, ownerId, page: Number(page) || 1 });
   }
 
   @Get(':id/images')

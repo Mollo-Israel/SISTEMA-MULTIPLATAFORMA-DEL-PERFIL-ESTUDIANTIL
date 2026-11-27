@@ -8,12 +8,15 @@ import { StudentProfile } from '../entities/student-profile.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { FILES_ROUTE } from '../storage/local-storage.driver';
 import { escaparComodinesLike } from '../common/texto';
+import { condicionDeNombre, palabrasDeNombre } from '../common/busqueda-nombre';
 
 export interface LibraryQuery {
   q?: string;
   areaId?: string;
   skillId?: string;
   type?: string;
+  /** V7.1 §11 (B01): quien publicó el recurso (`created_by`). */
+  publisherId?: string;
   favorites?: boolean;
   /** V4.1 A41-014 (§7): «Para ti», por intereses y metas declaradas. */
   forMe?: boolean;
@@ -43,19 +46,25 @@ export class LibraryService {
     return perfil?.id ?? null;
   }
 
-  async listar(user: AuthenticatedUser, filtros: LibraryQuery) {
-    const perfilId = await this.perfilDe(user);
-    const limit = Math.min(Math.max(Number(filtros.limit) || 12, 1), 48);
-    const offset = Math.max(Number(filtros.offset) || 0, 0);
+  /** Los recursos que esta persona puede ver: vigentes, aprobados y de su semestre. */
+  private visibles(perfil: StudentProfile | null) {
     const qb = this.recursos.createQueryBuilder('r')
       .where('r.status = :activo', { activo: LearningResourceStatus.ACTIVE })
       // V4.1 A41-014: lo propuesto por un docente llega cuando Dirección lo aprueba.
       .andWhere("r.review_status IN ('not_required', 'approved')");
-    const perfil = perfilId ? await this.perfiles.findOne({ where: { id: perfilId } }) : null;
     if (perfil?.semester) {
       // Dirigido a toda la carrera o a su semestre.
       qb.andWhere("(r.semester_scope = '{}' OR :sem = ANY(r.semester_scope))", { sem: perfil.semester });
     }
+    return qb;
+  }
+
+  async listar(user: AuthenticatedUser, filtros: LibraryQuery) {
+    const perfilId = await this.perfilDe(user);
+    const limit = Math.min(Math.max(Number(filtros.limit) || 12, 1), 48);
+    const offset = Math.max(Number(filtros.offset) || 0, 0);
+    const perfil = perfilId ? await this.perfiles.findOne({ where: { id: perfilId } }) : null;
+    const qb = this.visibles(perfil);
     let motivos: Map<string, string[]> | null = null;
     if (filtros.forMe) {
       const pref = await this.preferencias(perfilId, perfil?.improvementAreaIds ?? []);
@@ -77,6 +86,11 @@ export class LibraryService {
     if (filtros.skillId) {
       qb.andWhere('r.id IN (SELECT s.learning_resource_id FROM learning_resource_skills s WHERE s.skill_id = :skill)', { skill: filtros.skillId });
     }
+    if (filtros.publisherId) {
+      // V7.1 §11 (B01): en el servidor y antes de paginar. Solo filtra: no
+      // cambia preferencias, favoritos ni afinidad.
+      qb.andWhere('r.created_by = :publicador', { publicador: filtros.publisherId });
+    }
     if (filtros.type && (Object.values(LearningResourceType) as string[]).includes(filtros.type)) {
       qb.andWhere('r.resource_type = :tipo', { tipo: filtros.type });
     }
@@ -91,6 +105,31 @@ export class LibraryService {
     const items = await this.vista(filas, perfilId);
     if (motivos) for (const it of items) Object.assign(it, { reasons: motivos.get(it.id) ?? [] });
     return { items, total, limit, offset, facets: await this.facetas() };
+  }
+
+  /**
+   * V7.1 §11 (B01): personas que publicaron recursos que quien consulta puede
+   * ver, para elegir una en el filtro «Publicado por». Solo nombre e
+   * identificador, hasta 10, y con al menos 2 letras: no sirve para listar
+   * usuarios ni expone correos. Quien solo propuso un recurso aún no aprobado
+   * no aparece.
+   */
+  async publicadores(user: AuthenticatedUser, texto?: string): Promise<{ id: string; name: string }[]> {
+    const palabras = palabrasDeNombre(texto);
+    if (!palabras.length) return [];
+    const perfilId = await this.perfilDe(user);
+    const perfil = perfilId ? await this.perfiles.findOne({ where: { id: perfilId } }) : null;
+    const nombre = condicionDeNombre('u', palabras);
+    const filas: { id: string; first_name: string; last_name: string }[] = await this.visibles(perfil)
+      .innerJoin('r.creator', 'u')
+      .andWhere(nombre.sql, nombre.params)
+      .select(['u.id AS id', 'u.first_name AS first_name', 'u.last_name AS last_name'])
+      .distinct(true)
+      .orderBy('u.last_name', 'ASC')
+      .addOrderBy('u.first_name', 'ASC')
+      .limit(10)
+      .getRawMany();
+    return filas.map((f) => ({ id: f.id, name: `${f.first_name} ${f.last_name}` }));
   }
 
   /**
@@ -174,7 +213,7 @@ export class LibraryService {
     if (filas.length === 0) return [];
     const ids = filas.map((r) => r.id);
     const m = this.recursos.manager;
-    const [areas, skills, favs, imagenes, archivos] = await Promise.all([
+    const [areas, skills, favs, imagenes, archivos, publicadores] = await Promise.all([
       m.query(
         `SELECT x.rid, ar.id, ar.name FROM (
            SELECT a.learning_resource_id AS rid, a.academic_area_id AS aid FROM learning_resource_areas a WHERE a.learning_resource_id = ANY($1::uuid[])
@@ -194,6 +233,8 @@ export class LibraryService {
       m.query(`SELECT r.id AS rid, f.storage_key FROM learning_resources r JOIN stored_files f ON f.id = r.image_file_id WHERE r.id = ANY($1::uuid[])`, [ids]),
       // V5-13: el archivo del material, si lo tiene.
       m.query(`SELECT r.id AS rid, f.storage_key, f.original_filename FROM learning_resources r JOIN stored_files f ON f.id = r.file_id WHERE r.id = ANY($1::uuid[])`, [ids]),
+      // V7.1 §11: «Publicado por», con el nombre de quien lo incorporó (nunca su correo).
+      m.query(`SELECT r.id AS rid, u.first_name || ' ' || u.last_name AS name FROM learning_resources r JOIN users u ON u.id = r.created_by WHERE r.id = ANY($1::uuid[])`, [ids]),
     ]);
     const favSet = new Set((favs as { rid: string }[]).map((f) => f.rid));
     return filas.map((r) => ({
@@ -214,6 +255,7 @@ export class LibraryService {
         const f = (archivos as { rid: string; storage_key: string; original_filename: string | null }[]).find((a) => a.rid === r.id);
         return { fileUrl: f ? `${FILES_ROUTE}/${f.storage_key}` : null, fileName: f?.original_filename ?? null };
       })(),
+      publishedBy: (publicadores as { rid: string; name: string }[]).find((p) => p.rid === r.id)?.name ?? null,
       isFavorite: favSet.has(r.id),
     }));
   }

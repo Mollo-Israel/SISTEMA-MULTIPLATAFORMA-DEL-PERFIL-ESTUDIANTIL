@@ -8,6 +8,7 @@ import { StoredFileRecord } from '../entities/stored-file.entity';
 import { AuthenticatedUser } from '../auth/types/authenticated-user';
 import { TeacherScopeService, scopeSql } from '../access/teacher-scope.service';
 import { ProjectsService } from './projects.service';
+import { condicionDeNombre, palabrasDeNombre } from '../common/busqueda-nombre';
 
 /** V5 §13.4: hasta cinco imágenes de muestra por proyecto. */
 export const MAX_PROJECT_IMAGES = 5;
@@ -106,14 +107,16 @@ export class ProjectGalleryService {
   }
 
   /** «Proyectos de la carrera»: 6 por página, con búsqueda y filtros por área y tecnología. */
-  async community(user: AuthenticatedUser, q: { q?: string; areaId?: string; skillId?: string; page?: number }) {
-    const pagina = Math.max(1, Math.floor(Number(q.page) || 1));
+  /**
+   * Los proyectos de la galería que esta persona puede ver: solo ACTIVE; la
+   * comunidad y el enlace público para todos; lo visible a docentes, para el
+   * docente de su alcance y para Administración. `u` es quien lo lleva.
+   */
+  private async visibles(user: AuthenticatedUser) {
     const qb = this.projects.createQueryBuilder('p')
       .innerJoin('p.createdByProfile', 'sp')
       .innerJoin('sp.user', 'u')
       .where('p.status = :activo', { activo: ProjectStatus.ACTIVE });
-    // Qué se ve según el rol: la comunidad y el enlace público para todos; lo
-    // visible a docentes, para el docente de su alcance y para Administración.
     const abiertas = [ProjectVisibility.PROFILE, ProjectVisibility.PUBLIC_LINK];
     if (user.role === RolNombre.ADMIN) {
       qb.andWhere('p.visibility IN (:...vis)', { vis: [...abiertas, ProjectVisibility.TEACHERS] });
@@ -129,6 +132,33 @@ export class ProjectGalleryService {
     } else {
       qb.andWhere('p.visibility IN (:...vis)', { vis: abiertas });
     }
+    return qb;
+  }
+
+  /**
+   * V7.1 §11 (B02): responsables de proyectos que quien consulta puede ver en
+   * la galería, para el filtro «Responsable». Es quien lleva el proyecto, no
+   * cualquier integrante. Solo nombre e identificador, hasta 10, con al menos
+   * 2 letras: ni correos ni una lista de usuarios.
+   */
+  async responsables(user: AuthenticatedUser, texto?: string): Promise<{ id: string; name: string }[]> {
+    const palabras = palabrasDeNombre(texto);
+    if (!palabras.length) return [];
+    const nombre = condicionDeNombre('u', palabras);
+    const filas: { id: string; first_name: string; last_name: string }[] = await (await this.visibles(user))
+      .andWhere(nombre.sql, nombre.params)
+      .select(['u.id AS id', 'u.first_name AS first_name', 'u.last_name AS last_name'])
+      .distinct(true)
+      .orderBy('u.last_name', 'ASC')
+      .addOrderBy('u.first_name', 'ASC')
+      .limit(10)
+      .getRawMany();
+    return filas.map((f) => ({ id: f.id, name: `${f.first_name} ${f.last_name}` }));
+  }
+
+  async community(user: AuthenticatedUser, q: { q?: string; areaId?: string; skillId?: string; ownerId?: string; page?: number }) {
+    const pagina = Math.max(1, Math.floor(Number(q.page) || 1));
+    const qb = await this.visibles(user);
     const texto = (q.q ?? '').trim().slice(0, 80).replace(/[%_\\]/g, '');
     if (texto) qb.andWhere('(p.title ILIKE :t OR p.description ILIKE :t)', { t: `%${texto}%` });
     if (q.areaId && /^[0-9a-f-]{36}$/i.test(q.areaId)) {
@@ -136,6 +166,10 @@ export class ProjectGalleryService {
     }
     if (q.skillId && /^[0-9a-f-]{36}$/i.test(q.skillId)) {
       qb.andWhere('EXISTS (SELECT 1 FROM project_skills ps WHERE ps.project_id = p.id AND ps.skill_id = :skill)', { skill: q.skillId });
+    }
+    if (q.ownerId && /^[0-9a-f-]{36}$/i.test(q.ownerId)) {
+      // V7.1 §11 (B02): el responsable, en el servidor y antes de paginar.
+      qb.andWhere('u.id = :responsable', { responsable: q.ownerId });
     }
     const total = await qb.getCount();
     const filas = await qb

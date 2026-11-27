@@ -12,6 +12,7 @@ interface FiltrosDeBiblioteca {
   areaId?: string;
   skillId?: string;
   type?: string;
+  publisherId?: string;
   favorites?: string;
   forMe?: string;
   limit?: string;
@@ -25,23 +26,34 @@ interface FiltrosDeBiblioteca {
 export class LibraryController {
   constructor(private readonly library: LibraryService) {}
 
+  @Get('publishers')
+  @ApiOperation({
+    summary: 'Quiénes publicaron recursos visibles, para el filtro «Publicado por» (V7.1 §11).',
+    description: 'Búsqueda por nombre y apellidos (sin tildes, coma ni orden), mínimo 2 letras, hasta 10. Solo nombre e identificador, nunca el correo.',
+  })
+  @ApiQuery({ name: 'q', required: true })
+  publicadores(@CurrentUser() user: AuthenticatedUser, @Query('q') q = '') {
+    return this.library.publicadores(user, String(q));
+  }
+
   @Get()
   @ApiOperation({
-    summary: 'Recursos vigentes con búsqueda, filtros por área, habilidad y tipo, y favoritos (V3.2 §35.1).',
+    summary: 'Recursos vigentes con búsqueda, filtros por área, habilidad, tipo y publicador, y favoritos (V3.2 §35.1, V7.1 §11).',
   })
   @ApiQuery({ name: 'q', required: false })
   @ApiQuery({ name: 'areaId', required: false })
   @ApiQuery({ name: 'skillId', required: false })
   @ApiQuery({ name: 'type', required: false })
+  @ApiQuery({ name: 'publisherId', required: false })
   @ApiQuery({ name: 'favorites', required: false })
   @ApiQuery({ name: 'forMe', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'offset', required: false })
   listar(@CurrentUser() user: AuthenticatedUser, @Query() f: FiltrosDeBiblioteca) {
-    const { q, areaId, skillId, type, favorites, forMe, limit, offset } = f;
+    const { q, areaId, skillId, type, publisherId, favorites, forMe, limit, offset } = f;
     const uuid = (v?: string) => (v && /^[0-9a-f-]{36}$/i.test(v) ? v : undefined);
     return this.library.listar(user, {
-      q: q?.slice(0, 100), areaId: uuid(areaId), skillId: uuid(skillId), type,
+      q: q?.slice(0, 100), areaId: uuid(areaId), skillId: uuid(skillId), type, publisherId: uuid(publisherId),
       favorites: favorites === 'true' || favorites === '1', forMe: forMe === 'true' || forMe === '1', limit: Number(limit), offset: Number(offset),
     });
   }

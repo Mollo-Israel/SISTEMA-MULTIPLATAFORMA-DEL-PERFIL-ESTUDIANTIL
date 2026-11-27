@@ -505,6 +505,8 @@ export interface LibraryResource {
   areas: { id: string; name: string }[];
   skills: { id: string; name: string }[];
   imageUrl: string | null;
+  /** V7.1 §11: nombre de quien lo incorporó a la biblioteca. */
+  publishedBy?: string | null;
   isFavorite: boolean;
   /** V4.1 A41-014: en «Para ti», por qué se sugiere (intereses o metas declaradas). */
   reasons?: string[];
