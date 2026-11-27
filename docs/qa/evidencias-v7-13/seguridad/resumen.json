@@ -1,0 +1,732 @@
+{
+  "fecha": "2026-11-27T15:13:43.511Z",
+  "jest": {
+    "suites": "3 passed, 3 total",
+    "pruebas": "79 passed, 79 total",
+    "codigo": 0
+  },
+  "npmAudit": {
+    "raiz (api y shared)": {
+      "todas": {
+        "vulnerabilidades": {
+          "info": 0,
+          "low": 3,
+          "moderate": 20,
+          "high": 23,
+          "critical": 1,
+          "total": 47
+        },
+        "dependencias": {
+          "prod": 303,
+          "dev": 604,
+          "optional": 5,
+          "peer": 5,
+          "peerOptional": 0,
+          "total": 908
+        },
+        "graves": [
+          {
+            "paquete": "@faker-js/faker",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "Faker: helpers.fake exploitable into arbritary code execution"
+            ],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "@nestjs/cli",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@nestjs/cli@12.0.15)"
+          },
+          {
+            "paquete": "@nestjs/config",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@nestjs/config@12.1.1)"
+          },
+          {
+            "paquete": "@nestjs/platform-express",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@nestjs/platform-express@12.6.3)"
+          },
+          {
+            "paquete": "@nestjs/swagger",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@nestjs/swagger@12.1.3)"
+          },
+          {
+            "paquete": "body-parser",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "body-parser vulnerable to denial of service when invalid limit value silently disables size enforcement",
+              "body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body"
+            ],
+            "correccion": "cambio mayor (@nestjs/platform-express@12.6.3)"
+          },
+          {
+            "paquete": "flatted",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "flatted vulnerable to unbounded recursion DoS in parse() revive phase",
+              "Prototype Pollution via parse() in NodeJS flatted"
+            ],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "glob",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "glob CLI: Command injection via -c/--cmd executes matches with shell:true",
+              "Glob: AbortSignal cancellation bypass allows post-timeout filesystem traversal"
+            ],
+            "correccion": "cambio mayor (@nestjs/cli@12.0.15)"
+          },
+          {
+            "paquete": "handlebars",
+            "severidad": "critical",
+            "directo": false,
+            "motivo": [
+              "Handlebars.js has JavaScript Injection via AST Type Confusion by tampering @partial-block",
+              "Handlebars.js has JavaScript Injection via AST Type Confusion"
+            ],
+            "correccion": "cambio mayor (newman-reporter-htmlextra@1.22.5)"
+          },
+          {
+            "paquete": "httpntlm",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "js-yaml",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "js-yaml has prototype pollution in merge (<<)",
+              "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases"
+            ],
+            "correccion": "cambio mayor (@nestjs/swagger@12.1.3)"
+          },
+          {
+            "paquete": "lodash",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "lodash vulnerable to Code Injection via `_.template` imports key names",
+              "Lodash has Prototype Pollution Vulnerability in `_.unset`, `_.omit`, and `_.pullAt` functions"
+            ],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "multer",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "Multer vulnerable to Denial of Service via incomplete cleanup",
+              "Multer vulnerable to Denial of Service via resource exhaustion"
+            ],
+            "correccion": "cambio mayor (@nestjs/platform-express@12.6.3)"
+          },
+          {
+            "paquete": "newman",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "newman-reporter-htmlextra",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (newman-reporter-htmlextra@1.22.5)"
+          },
+          {
+            "paquete": "node-forge",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "node-forge has ASN.1 Unbounded Recursion",
+              "node-forge has an Interpretation Conflict vulnerability via its ASN.1 Validator Desynchronization"
+            ],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "picomatch",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+              "Picomatch has a ReDoS vulnerability via extglob quantifiers"
+            ],
+            "correccion": "cambio mayor (@nestjs/cli@12.0.15)"
+          },
+          {
+            "paquete": "postman-collection",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "postman-collection-transformer",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "postman-runtime",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "postman-sandbox",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "tmp",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "tmp allows arbitrary temporary file / directory write via symbolic link `dir` parameter",
+              "tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape"
+            ],
+            "correccion": "cambio mayor (@nestjs/cli@12.0.15)"
+          },
+          {
+            "paquete": "underscore",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "Underscore has unlimited recursion in _.flatten and _.isEqual, potential for DoS attack"
+            ],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          },
+          {
+            "paquete": "uvm",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (newman@4.6.1)"
+          }
+        ]
+      },
+      "ejecucion": {
+        "vulnerabilidades": {
+          "info": 0,
+          "low": 0,
+          "moderate": 10,
+          "high": 7,
+          "critical": 0,
+          "total": 17
+        },
+        "dependencias": {
+          "prod": 303,
+          "dev": 604,
+          "optional": 5,
+          "peer": 5,
+          "peerOptional": 0,
+          "total": 908
+        },
+        "graves": [
+          {
+            "paquete": "@nestjs/config",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@nestjs/config@12.1.1)"
+          },
+          {
+            "paquete": "@nestjs/platform-express",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@nestjs/platform-express@12.6.3)"
+          },
+          {
+            "paquete": "@nestjs/swagger",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@nestjs/swagger@12.1.3)"
+          },
+          {
+            "paquete": "body-parser",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "body-parser vulnerable to denial of service when invalid limit value silently disables size enforcement",
+              "body-parser vulnerable to Denial of Service via trailing bytes after a compressed request body"
+            ],
+            "correccion": "cambio mayor (@nestjs/platform-express@12.6.3)"
+          },
+          {
+            "paquete": "js-yaml",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "js-yaml has prototype pollution in merge (<<)",
+              "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases"
+            ],
+            "correccion": "cambio mayor (@nestjs/swagger@12.1.3)"
+          },
+          {
+            "paquete": "lodash",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "lodash vulnerable to Code Injection via `_.template` imports key names",
+              "Lodash has Prototype Pollution Vulnerability in `_.unset`, `_.omit`, and `_.pullAt` functions"
+            ],
+            "correccion": "cambio mayor (@nestjs/swagger@12.1.3)"
+          },
+          {
+            "paquete": "multer",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "Multer vulnerable to Denial of Service via incomplete cleanup",
+              "Multer vulnerable to Denial of Service via resource exhaustion"
+            ],
+            "correccion": "cambio mayor (@nestjs/platform-express@12.6.3)"
+          }
+        ]
+      }
+    },
+    "web": {
+      "todas": {
+        "vulnerabilidades": {
+          "info": 0,
+          "low": 0,
+          "moderate": 4,
+          "high": 6,
+          "critical": 0,
+          "total": 10
+        },
+        "dependencias": {
+          "prod": 80,
+          "dev": 106,
+          "optional": 49,
+          "peer": 0,
+          "peerOptional": 0,
+          "total": 185
+        },
+        "graves": [
+          {
+            "paquete": "browserslist",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+              "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "follow-redirects",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "follow-redirects array-form headers bypass cross-origin credential stripping",
+              "follow-redirects sensitiveHeaders regex escaping can expose credential headers"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "nanoid",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "nanoid: non-secure generators can loop indefinitely with negative size",
+              "nanoid: custom generators can loop indefinitely when size is zero"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "postcss",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+              "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "source-map-js",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "source-map-js allows event-loop denial of service through indexed source-map section offsets"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "vite",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [
+              "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+              "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows"
+            ],
+            "correccion": "cambio mayor (vite@8.4.0)"
+          }
+        ]
+      },
+      "ejecucion": {
+        "vulnerabilidades": {
+          "info": 0,
+          "low": 0,
+          "moderate": 2,
+          "high": 1,
+          "critical": 0,
+          "total": 3
+        },
+        "dependencias": {
+          "prod": 80,
+          "dev": 106,
+          "optional": 49,
+          "peer": 0,
+          "peerOptional": 0,
+          "total": 185
+        },
+        "graves": [
+          {
+            "paquete": "follow-redirects",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "follow-redirects array-form headers bypass cross-origin credential stripping",
+              "follow-redirects sensitiveHeaders regex escaping can expose credential headers"
+            ],
+            "correccion": "disponible"
+          }
+        ]
+      }
+    },
+    "movil": {
+      "todas": {
+        "vulnerabilidades": {
+          "info": 0,
+          "low": 0,
+          "moderate": 13,
+          "high": 12,
+          "critical": 0,
+          "total": 25
+        },
+        "dependencias": {
+          "prod": 699,
+          "dev": 1,
+          "optional": 12,
+          "peer": 0,
+          "peerOptional": 0,
+          "total": 711
+        },
+        "graves": [
+          {
+            "paquete": "@react-navigation/bottom-tabs",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/bottom-tabs@7.22.0)"
+          },
+          {
+            "paquete": "@react-navigation/core",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "@react-navigation/elements",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/bottom-tabs@7.22.0)"
+          },
+          {
+            "paquete": "@react-navigation/native",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "@react-navigation/native-stack",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native-stack@7.21.1)"
+          },
+          {
+            "paquete": "decode-uri-component",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input",
+              "decode-uri-component vulnerable to denial of service via quadratic replacement of percent-encoded runs"
+            ],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "follow-redirects",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "follow-redirects array-form headers bypass cross-origin credential stripping",
+              "follow-redirects sensitiveHeaders regex escaping can expose credential headers"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "image-size",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+              "image-size: ICNS parser allows denial of service through an infinite loop"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "node-forge",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+              "Forge: ASN.1 OID first arc truncation in asn1.oidToDer"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "postcss",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+              "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments"
+            ],
+            "correccion": "cambio mayor (expo@58.1.0)"
+          },
+          {
+            "paquete": "query-string",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "undici",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+              "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings"
+            ],
+            "correccion": "disponible"
+          }
+        ]
+      },
+      "ejecucion": {
+        "vulnerabilidades": {
+          "info": 0,
+          "low": 0,
+          "moderate": 13,
+          "high": 12,
+          "critical": 0,
+          "total": 25
+        },
+        "dependencias": {
+          "prod": 699,
+          "dev": 1,
+          "optional": 12,
+          "peer": 0,
+          "peerOptional": 0,
+          "total": 711
+        },
+        "graves": [
+          {
+            "paquete": "@react-navigation/bottom-tabs",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/bottom-tabs@7.22.0)"
+          },
+          {
+            "paquete": "@react-navigation/core",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "@react-navigation/elements",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native-stack@7.21.1)"
+          },
+          {
+            "paquete": "@react-navigation/native",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "@react-navigation/native-stack",
+            "severidad": "high",
+            "directo": true,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native-stack@7.21.1)"
+          },
+          {
+            "paquete": "decode-uri-component",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input",
+              "decode-uri-component vulnerable to denial of service via quadratic replacement of percent-encoded runs"
+            ],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "follow-redirects",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "follow-redirects array-form headers bypass cross-origin credential stripping",
+              "follow-redirects sensitiveHeaders regex escaping can expose credential headers"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "image-size",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+              "image-size: ICNS parser allows denial of service through an infinite loop"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "node-forge",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+              "Forge: ASN.1 OID first arc truncation in asn1.oidToDer"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "postcss",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+              "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments"
+            ],
+            "correccion": "disponible"
+          },
+          {
+            "paquete": "query-string",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [],
+            "correccion": "cambio mayor (@react-navigation/native@7.5.2)"
+          },
+          {
+            "paquete": "undici",
+            "severidad": "high",
+            "directo": false,
+            "motivo": [
+              "undici vulnerable to Denial of Service via unbounded memory in the EventSource parser",
+              "undici vulnerable to Denial of Service via unhandled error on excessive content-encodings"
+            ],
+            "correccion": "disponible"
+          }
+        ]
+      }
+    }
+  },
+  "gitleaks": {
+    "codigo": 0,
+    "commitsAnalizados": 212,
+    "hallazgos": 3,
+    "porRegla": {
+      "generic-api-key": 1,
+      "square-access-token": 2
+    }
+  },
+  "estaticas": {
+    "verificaciones": [
+      {
+        "codigo": "PS-EST-01",
+        "descripcion": "El archivo .env no está versionado y git lo ignora",
+        "resultado": "PASS"
+      },
+      {
+        "codigo": "PS-EST-02",
+        "descripcion": "La web no guarda tokens en localStorage (solo una marca sin valor)",
+        "resultado": "PASS"
+      },
+      {
+        "codigo": "PS-EST-03",
+        "descripcion": "La web solo inserta HTML sin escapar en un lugar: el QR que genera el servidor",
+        "resultado": "PASS"
+      },
+      {
+        "codigo": "PS-EST-04",
+        "descripcion": "La app móvil guarda los tokens en el almacenamiento seguro del sistema (SecureStore)",
+        "resultado": "PASS"
+      },
+      {
+        "codigo": "PS-EST-05",
+        "descripcion": "La configuración de la app móvil no habilita tráfico sin cifrar",
+        "resultado": "PASS"
+      },
+      {
+        "codigo": "PS-EST-06",
+        "descripcion": "La API aplica Helmet, validación estricta de entradas y límite del cuerpo",
+        "resultado": "PASS"
+      },
+      {
+        "codigo": "PS-EST-07",
+        "descripcion": "El código de la API no evalúa código dinámico (eval o new Function)",
+        "resultado": "PASS"
+      }
+    ],
+    "observaciones": [
+      {
+        "codigo": "OBS-01",
+        "descripcion": "La API desactiva la Política de Seguridad de Contenido (CSP) de Helmet porque no sirve HTML; la web debe aplicarla en su propio hosting",
+        "presente": true
+      },
+      {
+        "codigo": "OBS-02",
+        "descripcion": "El script de compilación local del APK habilita HTTP sin cifrar para conectarse a la red local",
+        "presente": true
+      }
+    ]
+  }
+}

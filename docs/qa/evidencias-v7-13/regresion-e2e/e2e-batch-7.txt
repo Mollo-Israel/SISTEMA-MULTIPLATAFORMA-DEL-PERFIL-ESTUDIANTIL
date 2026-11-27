@@ -1,0 +1,100 @@
+BATCH 7 — Recomendaciones contra http://localhost:3020/api
+
+§61 · Un recurso entra porque alguien lo revisó, no porque exista
+
+Quién puede tocar el catálogo
+  ✓ B7.1 Un estudiante no incorpora recursos al catálogo -> 403
+  ✓ B7.2 Un docente propone, pero el catálogo lo cura la dirección (queda pendiente; V4.1)
+
+§61 · Nada de URLs arbitrarias
+  ✓ B7.3 Un enlace que no es http ni https se rechaza -> 400
+
+Alta real
+  ✓ B7.4 La dirección incorpora un recurso
+  ✓ B7.5 Y queda registrado quién lo incorporó (§61)
+  ✓ B7.6 Con las habilidades que trabaja (§61, skills[])
+  ✓ B7.7 El mismo enlace dos veces se rechaza -> 409
+
+§60 · Cada recomendación dice cuánto encaja, no solo en qué orden va
+  ✓ B7.8 El estudiante recibe recomendaciones
+  ✓ B7.9 El taller de su área más fuerte está entre ellas
+  ✓ B7.10 El puntaje vive entre 0 y 100 (§60)
+  ✓ B7.11 INVARIANTE: los motivos suman exactamente el puntaje
+  ✓ B7.12 La afinidad y el respaldo nunca aportan más del 10 % (V2 §54)
+  ✓ B7.13 V3 §34 El interés explícito, venga por donde venga, no pasa del 40 %
+  ✓ B7.14 El área o tecnología a mejorar no pasa del 25 % (V2 §54)
+  ✓ B7.15 Y el contexto no pasa del 10 % (V2 §54)
+
+§60 y §92 · Siempre se muestra la razón
+  ✓ B7.16 Ninguna recomendación aparece sin motivos (§60)
+  ✓ B7.17 Todas dicen qué se recomienda y cuánto encaja (§92)
+  ✓ B7.18 Y con qué área se relacionan (§92)
+  ✓ B7.19 Cada motivo declara qué señal lo originó (§92)
+
+§59 · Con la misma afinidad, lo que conviene cambia según el respaldo
+  ✓ B7.20 En su área solo declarada no hay afinidad: lo declarado no suma (V2 §45.1)
+  ✓ B7.21 En la otra, ya construyó respaldo
+
+V2 §54 · Lo que recomienda es lo que el estudiante quiere
+  ✓ B7.22 Un taller de su área de interés se recomienda por ese interés (V2 §54)
+  ✓ B7.23 Y también un laboratorio de prácticas del catálogo (§25)
+  ✓ B7.24 Ya no hay refuerzo de «construir experiencia»: V2 §54 no lo contempla
+
+V2 §54 · El refuerzo de oportunidades avanzadas exige afinidad Y respaldo altos
+  ✓ B7.25 V3 §34 La trayectoria (afinidad) no es motivo del ranking, ni siquiera en el área fuerte
+  ✓ B7.26 Con afinidad o respaldo todavía no altos, no recibe refuerzo de nivel
+
+§59 · El área de mejora se fortalece, pero no suma afinidad
+  ✓ B7.27 El área de mejora se propone como área de fortalecimiento
+  ✓ B7.28 Marcarla NO aumentó su afinidad (§59, §20)
+
+§61 · Retirar un recurso no es borrarlo
+  ✓ B7.29 El recurso se recomienda mientras está vigente
+  ✓ B7.30 La dirección lo retira
+  ✓ B7.31 Deja de recomendarse (§61)
+  ✓ B7.32 Y el estudiante ya no lo ve en el catálogo
+  ✓ B7.33 Pero se conserva históricamente para quien administra (§61)
+  ✓ B7.34 Pedir los retirados sin ser dirección no los revela
+
+§62 · Un equipo se forma por lo que le falta
+  ✓ B7.35 Se sugieren posibles compañeros
+  ✓ B7.36 Entre ellos, quien domina lo que al estudiante le falta
+  ✓ B7.37 Y la primera razón es la habilidad faltante (§62)
+  ✓ B7.38 Con la habilidad nombrada, para que se entienda por qué
+  ✓ B7.39 La disponibilidad declarada también cuenta (§58, §62)
+
+§62 · Visibilidad y consentimiento
+  ✓ B7.40 Quien desactivó aparecer en sugerencias no aparece (§62)
+  ✓ B7.41 Ninguna tarjeta de compañero revela un correo
+  ✓ B7.42 Ni el puntaje del compañero
+
+§109 · Una acción, y todo lo que depende de ella queda al día
+
+Antes de declarar el interés
+  ✓ B7.43 No hay afinidad con el área nueva
+  ✓ B7.44 Ni se recomienda su taller
+
+El estudiante declara el interés
+  ✓ B7.45 Declara un interés más
+  ✓ B7.46 Declarar el interés no crea afinidad (V2 §45.1)
+  ✓ B7.47 Y las recomendaciones también, en la misma acción (§109)
+  ✓ B7.48 La recomendación nueva cita su motivo real: el interés, no una afinidad que no existe
+
+RN-16 · Lo que el estudiante decidió es suyo
+  ✓ B7.49 El estudiante guarda una recomendación
+  ✓ B7.50 Un recálculo no le quita lo que guardó (RN-16)
+
+§58 · Lo que el motor consume está a la vista
+  ✓ B7.51 Las reglas se consultan de solo lectura
+  ✓ B7.52 V6 §9.2 El reparto publicado es solo lo declarado (95: sin el 5 % de clics)
+  ✓ B7.53 V3 §34 / V6 §9.2 Es 40 / 30 / 15 / 10 de lo declarado en el perfil, sin clics ni afinidad
+  ✓ B7.54 V3 §34 / V6 §9.1 Sin refuerzo por afinidad ni efecto de «No me interesa»; se publica qué no cambia el orden
+  ✓ B7.55 Y las prioridades de §62, empezando por la habilidad faltante
+
+El detalle de un recurso apunta al catálogo, no a una actividad
+  ✓ B7.56 El detalle resuelve contra learning_resources (§61)
+  ✓ B7.57 Y dice quién publica el material
+
+------------------------------------------------------------------------------
+  57 verificaciones OK · 0 fallos
+  El BATCH 7 queda demostrado de punta a punta.

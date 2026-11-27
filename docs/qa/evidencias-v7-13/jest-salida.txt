@@ -1,0 +1,30 @@
+
+> @perfil/api@0.1.0 test
+> jest --forceExit
+
+PASS test/jest/api/validacion-reforzada.spec.ts (12.623 s)
+PASS test/jest/unit/titular-de-pagina.spec.ts
+PASS test/jest/api/integridad-negocio.spec.ts
+PASS test/jest/api/autorizacion-alcance.spec.ts
+PASS test/jest/api/afinia-v5-gobernanza.spec.ts
+PASS test/jest/api/autenticacion.spec.ts
+PASS test/jest/api/registros-verificables-retirados.spec.ts
+PASS test/jest/api/afinia-no-certifica.spec.ts
+PASS test/jest/api/integracion-postgres.spec.ts
+PASS test/jest/unit/credenciales-cripto.spec.ts
+PASS test/jest/unit/texto.spec.ts
+PASS test/jest/unit/manifiestos.spec.ts
+PASS test/jest/unit/validacion-reforzada.spec.ts
+PASS test/jest/unit/inscripcion-admision-asistencia.spec.ts
+PASS test/jest/unit/reglas-negocio.spec.ts
+PASS test/jest/unit/afinidad-factores.spec.ts
+PASS test/jest/unit/transicion-actividades.spec.ts
+PASS test/jest/unit/apellidos.spec.ts
+📦 report is created on: C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\pruebas\02-jest-supertest\reporte\reporte-jest.html
+
+Test Suites: 18 passed, 18 total
+Tests:       197 passed, 197 total
+Snapshots:   0 total
+Time:        38.509 s, estimated 43 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

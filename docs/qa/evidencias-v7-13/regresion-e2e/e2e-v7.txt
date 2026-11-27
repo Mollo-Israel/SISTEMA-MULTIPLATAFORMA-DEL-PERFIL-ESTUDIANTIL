@@ -1,0 +1,144 @@
+Afinia V7.1 — verificación del contrato contra la API
+
+BATCH V7-1 · Estado exclusivo, filtrado en el servidor antes de paginar, revisión aparte
+  ✓ V7.1.1 F01 «Suspendidas»: solo la suspendida; ni activas ni pendientes
+  ✓ V7.1.2 F02 «Pendientes de activación»: solo la que no se activó; no se confunde con suspendida
+  ✓ V7.1.3 «Activas»: solo las dos activas
+  ✓ V7.1.4 «Inactivas»: solo la dada de baja
+  ✓ V7.1.5 «Todas» trae los cinco estados juntos (no es la opción por omisión de la web)
+  ✓ V7.1.6 0 / 1 / 11: página de 10, segunda página con 1, filtro vacío con total 0
+  ✓ V7.1.7 Orden asc/desc en el servidor, estable entre páginas
+  ✓ V7.1.8 La página informa cuántas cuentas del filtro tienen apellidos por separar
+  ✓ V7.1.9 Sin «limit» la respuesta sigue siendo la lista de siempre (clientes y suites anteriores)
+  ✓ V7.1.10 Un estado inexistente es 400; un docente no lista usuarios (403)
+  ✓ V7.1.11 F03 Áreas «Dadas de baja»: solo las retiradas, filtradas por la API
+  ✓ V7.1.12 Áreas «Vigentes»: sin las retiradas
+  ✓ V7.1.13 Sin filtro, Administración sigue recibiendo todas (selectores del formulario)
+  ✓ V7.1.14 Quien no administra nunca recibe lo dado de baja, aunque lo pida
+  ✓ V7.1.15 Un estado de catálogo inexistente es 400
+  ✓ V7.1.16 Tecnologías: vigentes y dadas de baja por separado
+  ✓ V7.1.17 Categorías: vigentes y dadas de baja por separado
+  ✓ V7.1.18 Recursos: «Retirados» solo trae los retirados
+  ✓ V7.1.19 Autonomía docente: «Revocadas» y «Vigentes» por separado
+  ✓ V7.1.20 Gestión: estado de la actividad «Borrador» filtrado en la API
+  ✓ V7.1.21 Gestión: «Inscripciones abiertas» no trae borradores
+  ✓ V7.1.22 Revisión aparte: «Sin enviar» y luego «En revisión», combinable con el estado (borrador + pendiente)
+  ✓ V7.1.23 «No requiere revisión»: lo que publica Administración sin pasar por Dirección
+  ✓ V7.1.24 «En revisión» le muestra a Administración la propuesta del docente, en solo lectura (V7-2)
+  ✓ V7.1.27 Sociedad científica: su borrador extracurricular con los mismos filtros; «académicas» no lo trae
+  ✓ V7.1.25 Valores de filtro inexistentes son 400
+  ✓ V7.1.26 Sin filtros, la gestión responde como siempre
+
+BATCH V7-2 · Aprobar publica y abre; Admin en solo lectura; asistencia hasta cerrar la lista; «Sin resultado» no es trayectoria
+  ✓ V7.2.1 A03/A13 Dirección aprueba y, en la misma operación, queda publicada con inscripciones abiertas (auditado)
+  ✓ V7.2.2 A05 Una segunda aprobación es 409; el docente recibe un solo aviso, que dice que ya está publicada
+  ✓ V7.2.3 A04 Observar o rechazar deja la actividad en borrador, con su decisión
+  ✓ V7.2.4 A16 Si ya empezó, aprobar es 409 con el motivo; sigue pendiente y en borrador para corregir la fecha
+  ✓ V7.2.5 A16 Una propuesta vencida no se publica ni se revive
+  ✓ V7.2.6 A01 Administración ve la propuesta enviada a Dirección, marcada como solo lectura
+  ✓ V7.2.7 A01 El borrador que el docente no envió no existe para Administración
+  ✓ V7.2.8 A02 Administración no aprueba, ni cancela, ni edita una propuesta ajena (403); nada cambia
+  ✓ V7.2.9 A14/A15 Lo propio de Dirección se publica abierto; desde el inicio la API ya no admite inscripciones
+  ✓ V7.2.10 A06 El backend cierra al llegar el inicio y finaliza al llegar el fin (trabajador de ciclo de vida)
+  ✓ V7.2.11 A10 Finalizada con la lista abierta, el responsable todavía corrige presente o ausente
+  ✓ V7.2.12 A11 Cerrada la lista, la API bloquea la corrección ordinaria del responsable
+  ✓ V7.2.13 I01/I11 Afinidad (motor v6 o posterior): la de «Sin resultado» aporta 0; la de «Solo participación» aporta una vez
+  ✗ batch2 se interrumpió: fetch failed
+
+BATCH V7-3 · Vinculada derivada de la oportunidad, histórica directo a Dirección, fases y modelo versionado
+  ✓ V7.3.1 C03 La oportunidad elegible trae nombre esperado, emisor, áreas, tecnologías y si tiene modelo
+  ✓ V7.3.2 C06 Una vinculada sin archivo no se crea: 400 con el error en el campo del archivo
+  ✓ V7.3.3 C04 El servidor deriva nombre, emisor, áreas y tecnologías de la oportunidad e ignora el cuerpo
+  ✓ V7.3.4 C18 Reintentar el envío no crea otra credencial (409)
+  ✓ V7.3.5 §5.3 Con modelo: va a comprobación con el hash del archivo y ya pedida a Dirección
+  ✓ V7.3.6 C08 Fase 1: coinciden los textos estables; el titular del modelo no cuenta y el del archivo es el estudiante
+  ✓ V7.3.7 C14 Aunque la comparación coincida, la revisión de Dirección sigue pendiente
+  ✓ V7.3.8 C09 Otra versión: se explican faltantes y variaciones, sin porcentaje, y se envía igual
+  ✓ V7.3.9 C16 Un enlace a una dirección interna no se consulta (bloqueado); la credencial se envía igual
+  ✗ batch3 se interrumpió: fetch failed
+
+BATCH V7-4 · Solo Dirección decide; la máquina no aprueba; solo lo aprobado cuenta
+  ✓ V7.4.1 C11/C14 Una fuente oficial que coincide queda como hallazgo: sin CORROBORATED ni AUTO_VERIFIED, pendiente de Dirección
+  ✓ V7.4.2 §5.1 Pendiente: no suma afinidad, no respalda tecnologías ni se exporta
+  ✓ V7.4.3 C24 D01 Administración intenta aprobar por API: 403, sin cambios ni decisión auditada
+  ✓ V7.4.4 D01 Administración consulta la bandeja (solo lectura)
+  ✓ V7.4.5 C17 Enviar AUTO_VERIFIED o CORROBORATED en el cuerpo se rechaza y no cambia nada
+  ✓ V7.4.6 C20 Dirección aprueba con prueba externa: corroborada, con método y prueba; los hallazgos se conservan
+  ✓ V7.4.7 C20 Recién aprobada cuenta: suma afinidad y se exporta
+  ✓ V7.4.8 C28 Una aprobada no se vuelve a comprobar: la decisión queda intacta
+  ✓ V7.4.9 C21 Observada: el motivo se ve, el estudiante recibe el aviso y no suma
+  ✓ V7.4.10 C21 Corregida, vuelve a la revisión y la observación queda en el historial
+  ✓ V7.4.11 C21 Rechazada con motivo: señalada, no suma y sigue registrada
+  ✓ V7.4.12 C22 Aprobada solo con el documento: cuenta con respaldo parcial (pesos vigentes, D06), sin «verificada» ni corroboración fuerte
+  ✓ V7.4.13 C12 Fuente con otro titular: la discrepancia se ve y la decide Dirección, no la máquina
+  ✓ V7.4.14 §5.3 Fase 3 La bandeja muestra todas las presentadas con sus fases, las pendientes primero; filtra por estado
+  ✓ V7.4.15 C23 Una credencial antigua corroborada por la máquina conserva su estado: no se revoca en silencio
+
+BATCH V7-5 · Certificado general automático, individual por estudiante, sin reemplazos silenciosos, abrir lo recibido
+  ✓ V7.5.1 I03 General sin archivo: queda pendiente y lo dice; no se fabrica ningún documento
+  ✗ batch5 se interrumpió: fetch failed
+
+BATCH V7-6 · Afinia ya no emite ni verifica registros propios; el histórico se conserva
+  ✗ batch6 se interrumpió: fetch failed
+
+BATCH V7-7 · Señal detectada antes de declarar, alias del catálogo, repositorio que cambia y requisitos visibles
+  ✗ batch7 se interrumpió: fetch failed
+
+BATCH V7-8 · Ejemplos ejecutados del motor real: rendimiento decreciente, tope, corrección, intensidad y favoritos
+  ✗ batch8 se interrumpió: fetch failed
+
+BATCH V7-9 · Biblioteca por publicador y Proyectos de la carrera por responsable: en el servidor, por nombre normalizado y sin correos
+  ✓ V7.9.1 B01 El publicador se busca por nombre y apellidos sin importar tildes, mayúsculas, coma ni orden
+  ✓ V7.9.2 B01 Solo se sugiere a quien publicó recursos visibles (no a quien solo tiene uno pendiente), con nombre y sin correo
+  ✓ V7.9.3 B01 Con menos de 2 letras o sin coincidencias no se lista a nadie: no enumera usuarios
+  ✓ V7.9.4 B01 El filtro se aplica en el servidor antes de paginar: 8 del publicador en 5 + 3, sin repetir ni mezclar
+  ✓ V7.9.5 B01 La tarjeta dice «Publicado por» con el nombre real, sin correo
+  ✓ V7.9.6 B01 Se combina con área y búsqueda; sin publicador quedan los 10 visibles; un publicador sin recursos da 0
+  ✓ V7.9.7 B01 Combinado con «Mis favoritos»; filtrar no cambia intereses, favoritos ni afinidad
+  ✓ V7.9.8 B02 Se sugiere solo al responsable de proyectos que quien busca puede ver: ni la integrante, ni quien solo tiene uno visible a docentes
+  ✓ V7.9.9 B02 Filtra en el servidor antes de paginar: 7 activos visibles del responsable en 6 + 1; el privado no aparece
+  ✓ V7.9.10 B02 Por la integrante no sale el proyecto ajeno; se combina con búsqueda y área
+
+BATCH V7-10 · Buscar contactos por nombre y apellidos sin depender de la coma; solicitudes y equipos
+  ✓ V7.10.1 T01 «Ana Quispe», «Quíspe, Ana» y «QUISPE ana» encuentran los mismos perfiles: sin tildes, sin coma, en cualquier orden
+  ✓ V7.10.2 T02 Los homónimos siguen siendo dos personas distintas; no aparecen quien no aceptó ser encontrada ni una misma, ni correos
+  ✓ V7.10.3 Se conserva el mínimo de 3 caracteres; comas, guiones y signos sueltos no cuentan
+  ✓ V7.10.4 T03 El buscador ya no resuelve identificadores: el identificador viaja solo en el enlace o el QR
+  ✓ V7.10.5 T06 Solicitud única: repetirla o la contraria da 409, a una misma 400; el homónimo no queda afectado
+  ✓ V7.10.8 T07/T08 El correo y WhatsApp compartidos abren el cliente externo (mailto:, wa.me); quien no compartió canales no expone correo ni teléfono
+  ✓ V7.10.6 T09 Las 11 necesidades abiertas llegan a quien puede verlas (la web pagina de a 10)
+  ✓ V7.10.7 T10 Fuera de su semestre no se ve (404); con el cupo lleno la necesidad se cierra y no admite más postulaciones
+
+BATCH V7-11 · Inicio de Administración: totales reales, últimos 10, conjuntos filtrados y sin acciones
+  ✓ V7.11.1 H01 Con 1 se ve esa fila; con 11, las 10 más recientes y el total real; un conjunto vacío llega vacío
+  ✓ V7.11.2 H02 «Cuentas sin activar» lista solo pendientes, con correo institucional y sin tokens ni códigos
+  ✓ V7.11.3 H03 Cada fila de «Cuentas por rol» abre su rol con la métrica elegida (total o sin activar)
+  ✓ V7.11.4 H04 Padrón: últimas importaciones aplicadas con su resumen; sin descarga inventada del original
+  ✓ V7.11.5 H06 Certificado general entregado a 8: 8 destinatarios y 1 archivo, sin confundir las métricas
+  ✓ V7.11.6 H07 Cobertura por oportunidad: registrada y no aprobada; la histórica va aparte; nada se rotula verificado antes de Dirección
+  ✓ V7.11.7 H08 Propuestas de recursos y puntos, y pedidos de tecnologías: la vista de trabajo muestra solo lo pendiente
+  ✓ V7.11.8 H09 Extras de temporada: el vigente con sus fechas reales; el que empieza después no aparece; sin temporada, vacío
+  ✗ batch11 se interrumpió: fetch failed
+
+BATCH V7-12 · Inicio de Dirección: mismo patrón de «Detalles», alcance propio y ningún permiso de Administración
+  ✓ V7.12.1 H12 El Inicio de Dirección trae sus diez tarjetas del §13 con total real y ninguna de Administración
+  ✓ V7.12.2 H12 Sin elevación: Administración, docente y estudiante no entran; Dirección no abre el Inicio ni las tarjetas de Administración; es solo lectura
+  ✓ V7.12.3 §13 «Actividades por aprobar»: el mismo total que la bandeja, por tipo, con quién la propone y su fecha
+  ✓ V7.12.4 D01 «Credenciales en revisión» cuenta todas las pendientes de decisión, igual que la bandeja (no solo las excepcionales)
+  ✓ V7.12.5 §13 «Actividades»: los mismos totales que la gestión de Dirección por vista; ni el borrador de Administración ni la propuesta en revisión
+  ✓ V7.12.6 §13 «Participaciones»: el último hecho confirmado, y la asistencia abierta (1 sin marcar) que pasa a cerrada
+  ✓ V7.12.7 §13 «Proyectos»: lo que Dirección ve en la galería; uno visible solo a docentes no aparece
+  ✓ V7.12.8 §13 «Autonomía docente»: el docente con su módulo vigente y, al revocarse, en revocadas
+  ✓ V7.12.9 §13 «Recursos» y «Puntos»: las propuestas pendientes con el mismo total que las bandejas de Dirección
+  ✓ V7.12.10 §13 «Estudiantes»: totales del alcance por semestre y últimas altas, sin correos ni códigos
+  ✓ V7.12.11 §13 «Analítica»: una fila por pestaña con cifras que existen en la base; nada estimado ni archivos
+  ✓ V7.12.12 H01 Un conjunto de Dirección sin elementos llega vacío y con su total real
+
+103 comprobaciones correctas, 7 fallidas
+  - batch2: fetch failed
+  - batch3: fetch failed
+  - batch5: fetch failed
+  - batch6: fetch failed
+  - batch7: fetch failed
+  - batch8: fetch failed
+  - batch11: fetch failed

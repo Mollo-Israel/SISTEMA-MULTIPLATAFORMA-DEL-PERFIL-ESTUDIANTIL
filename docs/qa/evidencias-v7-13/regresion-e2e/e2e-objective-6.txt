@@ -1,0 +1,158 @@
+
+Prueba integral del Objetivo 6 contra http://localhost:3020/api
+
+==============================================================================
+ PREPARACION · Actores y catalogos del escenario
+==============================================================================
+
+Areas y habilidades propias del escenario
+  ✓ P.1 Dos areas academicas creadas para el escenario
+  ✓ P.2 Habilidad asociada al area principal
+
+Cuentas y alcances
+  ✓ P.3 Estudiante A registrado con perfil
+  ✓ P.4 Estudiante B registrado con perfil
+  ✓ P.5 Docente habilitado en 4o semestre
+  ✓ P.6 Docente habilitado solo en 2o semestre
+  ✓ P.7 Director de carrera disponible
+
+==============================================================================
+ RF17 · Calculo de la afinidad V3 — señal por señal
+==============================================================================
+
+Punto de partida
+  ✓ 17.1 Un perfil recien creado no tiene trayectoria que medir
+  ✓ 17.2 Sin areas calculadas al inicio
+
+Lo declarado orienta, no suma (V2 §45.1)
+  ✓ 17.3 El estudiante declara dos intereses
+  ✓ 17.4 Intereses, tecnologías de interés y áreas de mejora no producen afinidad
+  ✓ 17.5 Pero se tuvieron en cuenta: el resumen cuenta las señales consideradas
+
+Proyecto propio: respaldo y tecnologías del integrante (V2 §47.2, §48)
+  ✓ 17.6 El estudiante registra un proyecto
+  ✓ 17.7 Un proyecto DECLARED vale 0, aunque tenga tecnologías confirmadas (§47.2)
+  ✓ 17.8 Adjunta una evidencia al proyecto
+  ✓ 17.9 V4 §35.1 Un borrador SUPPORTED no es trayectoria: no suma
+  ✓ 17.9b §28 V4.1 §12 Activo y CORROBORATED (tecnología corroborada + otra persona que confirma su contribución)
+  ✓ 17.9c V4 §35.3 CORROBORATED suma 18 de afinidad y 15 de respaldo en el área de su tecnología
+
+Evidencia suelta y certificado declarado: no suman (§47.3, §50)
+  ✓ 17.10 El estudiante registra una evidencia
+  ✓ 17.11 El estudiante adjunta un certificado externo
+  ✓ 17.12 Ni la evidencia suelta ni el certificado sin corroborar suman afinidad (V4 §35.1)
+
+Participación confirmada (§47.1)
+  ✓ 17.13 Con trayectoria respaldada el estado pasa a calculado
+  ✓ 17.14 La participación confirmada vale 10 en el área de la actividad (§47.1)
+
+Recalculo explicito e idempotencia
+  ✓ 17.18 El estudiante puede recalcular su afinidad
+  ✓ 17.19 Recalcular sin cambios da el mismo resultado (idempotente)
+  ✓ 17.20 El ranking viene ordenado de mayor a menor puntaje
+  ✓ 17.21 El area mas fuerte ocupa el puesto 1, sin normalizar contra si misma (§47.4)
+  ✓ 17.21b Cada puntaje es round(min(100, suma)): escala directa (§47.4)
+
+==============================================================================
+ RN-14 · Explicabilidad del calculo
+==============================================================================
+
+Desglose del area principal
+  ✓ 17.22 El estudiante consulta el desglose de un area
+  ✓ 17.23 El desglose lista las señales consideradas, sumen o no
+  ✓ 17.24 INVARIANTE: la suma del desglose es exactamente el puntaje del area
+  ✓ 17.25 El desglose distingue las familias de señal
+  ✓ 17.25b El interés figura como «no contribuye» y dice por qué (V2 §45.1)
+  ✓ 17.26 Cada linea dice de donde viene, como se asocio y cuanto aporta
+  ✓ 17.27 Se distingue lo declarado por el estudiante
+  ✓ 17.28 El proyecto propio aparece identificado por su titulo
+
+Deduccion por etiquetas (coincidencias de RN-14)
+  ✓ 17.29 Proyecto registrado sin area academica declarada
+  ✓ 17.30 V4 §35.1 Un borrador no aparece en la afinidad, ni siquiera deducido por etiquetas
+  ✓ 17.31 El invariante tambien se cumple en el area deducida
+
+Ponderaciones expuestas (RN-14)
+  ✓ 17.32 Las ponderaciones del motor son consultables
+  ✓ 17.33 Las ponderaciones estan almacenadas y son consultables
+  ✓ 17.34 Cada ponderacion declara su etiqueta, justificacion y puntos
+  ✓ 17.35 Las ponderaciones cubren las fuentes de la afinidad V4 (§35.1)
+  ✓ 17.35b Y se publican los topes y los rendimientos decrecientes (§47, §49)
+
+==============================================================================
+ RF17 · Clasificacion del nivel de afinidad
+==============================================================================
+  ✓ 17.36 El nivel sale de cortes absolutos, no del ranking interno
+  ✓ 17.37 El area mas fuerte de un perfil incipiente NO es «alta» por ser la primera
+  ✓ 17.38 No hay peso relativo al propio perfil (§47.4)
+  ✓ 17.39 Todos los niveles pertenecen a la escala definida
+  ✓ 17.40 Los puestos del ranking son consecutivos desde 1
+
+Declarar no da nivel
+  ✓ 17.41 Un interés de máxima prioridad no da área ni nivel (V2 §45.1)
+  ✓ 17.41b Y el estado sigue siendo «sin trayectoria»
+
+==============================================================================
+ RF17 · Historial de calculos
+==============================================================================
+  ✓ 17.42 El estudiante consulta el historial de sus calculos
+  ✓ 17.43 Cada recalculo deja una instantanea registrada
+  ✓ 17.44 El historial viene del calculo mas reciente al mas antiguo
+  ✓ 17.45 Cada instantanea registra con que version de reglas se calculo
+  ✓ 17.46 El conteo de areas coincide con el detalle guardado
+  ✓ 17.47 La ultima instantanea refleja el estado vigente
+  ✓ 17.48 La instantanea conserva el orden del ranking
+  ✓ 17.49 El historial respeta el limite solicitado
+
+==============================================================================
+ RF17 · Salida de fallo — informacion insuficiente
+==============================================================================
+
+Perfil sin ninguna senal
+  ✓ 17.50 El estado distingue explicitamente la falta de informacion
+  ✓ 17.51 No se inventan areas cuando no hay datos
+  ✓ 17.52 El sistema informa que hacer, no solo que no hay datos
+  ✓ 17.53 El total es cero, no nulo
+  ✓ 17.54 Recalcular un perfil vacio no falla: devuelve vacio
+
+Consultas invalidas
+  ✓ 17.55 El desglose de un area inexistente responde 404
+  ✓ 17.56 Un identificador mal formado se rechaza con 400
+  ✓ 17.57 Un area sin puntaje devuelve cero y desglose vacio
+
+==============================================================================
+ RN-23 · Permisos y alcance academico
+==============================================================================
+
+Docente dentro de su alcance
+  ✓ 17.58 El docente de su semestre consulta el resumen
+  ✓ 17.59 El docente de su semestre consulta el desglose
+  ✓ 17.60 El desglose que ve el docente cumple el mismo invariante
+
+Docente fuera de su alcance
+  ✓ 17.61 Fuera de alcance: lista de afinidades -> 403
+  ✓ 17.62 Fuera de alcance: resumen -> 403
+  ✓ 17.63 Fuera de alcance: desglose -> 403 (no es una puerta trasera)
+  ✓ 17.64 Fuera de alcance: recalculo ajeno -> 403
+
+Separacion entre estudiantes y roles
+  ✓ 17.65 Un estudiante no usa la ruta institucional -> 403
+  ✓ 17.66 El estudiante no accede al mapa agregado -> 403
+  ✓ 17.67 El docente no accede al mapa agregado -> 403
+  ✓ 17.68 El director consulta el mapa agregado
+  ✓ 17.69 El mapa agrega estudiantes y niveles por area
+  ✓ 17.70 Un docente no tiene afinidad propia que consultar -> 403
+
+==============================================================================
+ RN-15 · Caracter orientativo del resultado
+==============================================================================
+  ✓ 17.71 El resumen no expone nota, calificacion ni aprobacion
+  ✓ 17.72 El desglose tampoco expone campos de evaluacion
+  ✓ 17.73 Las ponderaciones son puntajes acotados, no escalas de nota
+  ✓ 17.74 No existe forma de fijar una afinidad a mano: siempre es calculada
+  ✓ 17.75 Las ponderaciones son configuracion del sistema, no un catalogo editable
+
+------------------------------------------------------------------------------
+  85 verificaciones OK · 0 fallos
+  El Objetivo 6 queda demostrado de punta a punta.
+

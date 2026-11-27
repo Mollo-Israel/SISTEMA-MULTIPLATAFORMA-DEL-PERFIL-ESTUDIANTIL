@@ -1,0 +1,168 @@
+Afinia V5 — verificación del contrato contra la API
+
+BATCH V5-1 · Primer apellido obligatorio, segundo opcional, sin partir apellidos por suposición
+  ✓ V5.1.1 A01 Alta con primer apellido y sin el segundo
+  ✓ V5.1.2 A01 Sin primer apellido no se crea la cuenta (error en su campo)
+  ✓ V5.1.3 Los dos apellidos componen el apellido que se muestra
+  ✓ V5.1.4 A02 «Pérez García» se conserva y queda por separar (no se asigna como dos apellidos)
+  ✓ V5.1.5 A05 Administración lo separa explícitamente; el apellido mostrado no cambia
+  ✓ V5.1.6 A03 Plantilla nueva: el padrón crea la cuenta con sus dos apellidos
+  ✓ V5.1.7 A03 Plantilla anterior: sin desplazar columnas y con el apellido compuesto por separar
+
+BATCH V5-2 · Fechas al minuto, externas validadas y borradores (§5)
+  ✓ V5.2.1 B04 Elegir «ahora» al minuto se publica aunque ya pasaron unos segundos
+  ✓ V5.2.2 B05 Un evento que empezó hace horas no se publica como futuro
+  ✓ V5.2.3 B02 Externa presencial con lugar «1234» se rechaza en su campo
+  ✓ V5.2.4 B02 Externa presencial sin lugar tampoco se publica
+  ✓ V5.2.5 B03 Externa virtual sin ningún enlace se rechaza
+  ✓ V5.2.6 B03 Externa virtual con el enlace oficial del proveedor se publica
+  ✓ V5.2.7 B07 Otra persona no borra mi borrador
+  ✓ V5.2.8 B07 El borrador propio sin historia se borra
+  ✓ V5.2.9 B07 Queda la huella en la auditoría
+  ✓ V5.2.10 B07 Una publicada no se borra: se cancela
+  ✓ V5.2.11 B06 Duplicar una terminada da un borrador nuevo sin participantes
+  ✓ V5.2.12 B07 La copia (borrador sin historia) sí se puede borrar
+  ✓ V5.2.13 B10 Una charla general se publica con un área y sin tecnologías
+
+BATCH V5-3 · Vista docente por páginas, filtro por responsable y favoritos
+  ✓ V5.3.1 V5-01 El docente consulta la oferta por páginas (con total)
+  ✓ V5.3.2 B08 En la consulta del docente no aparecen borradores ajenos
+  ✓ V5.3.3 Cada tarjeta dice si es favorita de quien consulta
+  ✓ V5.3.4 V5-02 El estudiante filtra por responsable (y no ve borradores)
+  ✓ V5.3.5 V5-02 El buscador de responsables da nombre y rol, sin correo
+  ✓ V5.3.6 V5-01 Marcar favorita es idempotente y el filtro «Solo favoritas» la trae
+  ✓ V5.3.7 §14.1 Un favorito no es una inscripción ni reserva lugar
+  ✓ V5.3.8 No se marca como favorito un borrador que no se puede ver
+  ✓ V5.3.9 Quitarla la saca de favoritas
+
+BATCH V5-4 · Solicitar, ser admitido y asistir son tres cosas (§6)
+  ✓ V5.4.1 C06 Abierta y sin cupo: quien se inscribe queda admitido al instante
+  ✓ V5.4.2 C06 Admitido no es haber asistido: no entra al currículo
+  ✓ V5.4.3 C01 Con cupo y por aprobación, cada solicitud queda pendiente (no ocupa plaza ni es asistencia)
+  ✓ V5.4.4 C03 La asistencia no se registra antes de que empiece el evento
+  ✓ V5.4.5 C05 Cupo 1 con dos admisiones simultáneas: una entra y la otra recibe «cupo completo»
+  ✓ V5.4.6 C05 En la base hay exactamente una plaza ocupada
+  ✓ V5.4.7 C08 No admitir sin motivo se rechaza en su campo
+  ✓ V5.4.8 C08 La solicitud queda «No admitida» con su motivo (no «Ausente»)
+  ✓ V5.4.9 C08 El estudiante recibe el aviso con el motivo
+  ✓ V5.4.10 C08 Una solicitud no admitida no se reenvía sola
+  ✓ V5.4.11 §6 Sin admisión no hay asistencia, aunque el evento ya empezó
+  ✓ V5.4.12 C03 Con el evento empezado, el responsable registra la asistencia del admitido
+  ✓ V5.4.13 §6 Registrada la asistencia, la admisión ya no se cambia por la vía ordinaria
+  ✓ V5.4.14 C04 El responsable marca la ausencia de un admitido
+  ✓ V5.4.15 §14.1 «Me interesa» no es una solicitud: no se admite ni reserva cupo
+  ✓ V5.4.16 §6 Darse de baja de una plaza admitida la libera para otro
+  ✓ V5.4.17 El estado final del asistente se conserva
+
+BATCH V5-4 · C07 Dentro de 7 días el responsable regulariza; después, solo Dirección con motivo
+  ✓ V5.4.18 C07 A los 5 días del fin, el responsable todavía registra la asistencia
+  ✓ V5.4.19 C07 Pasados los 7 días, el responsable ya no la registra por la vía ordinaria
+  ✓ V5.4.20 C07 Vencida la ventana, la corrige Dirección con un motivo (el docente no; sin motivo tampoco)
+  ✓ V5.4.21 C07 La corrección queda en la auditoría con su motivo
+
+BATCH V5-5 · Afinia registra la participación; no emite certificados (§1, §7)
+  ✓ V5.5.1 §1.2 Una actividad nueva ya no puede prometer una constancia de Afinia (error en su campo)
+  ✓ V5.5.2 H02 Registrar la asistencia no genera ninguna constancia
+  ✓ V5.5.3 §7.2 Dirección tampoco emite constancias nuevas desde Afinia
+  ✓ V5.5.4 H01 La trayectoria la presenta como registro del responsable, no como certificado
+  ✓ V5.5.5 H04 El PDF dice que es un borrador informativo, con su fecha y el aviso de que no es oficial
+
+BATCH V5-6 · Un recurso tiene un enlace o un archivo; Dirección elige toda la carrera o semestres
+  ✓ V5.6.1 D01 Con enlace y sin archivo: se publica
+  ✓ V5.6.2 D02 Con archivo y sin enlace: se publica
+  ✓ V5.6.3 D02 En la Biblioteca se abre el material con la sesión; los bytes vienen del almacenamiento, no de PostgreSQL
+  ✓ V5.6.4 D02 El recurso guarda solo la referencia y el nombre del archivo
+  ✓ V5.6.5 El material no se abre por ruta pública, sin sesión
+  ✓ V5.6.6 D03 Sin enlace ni archivo: error en el campo
+  ✓ V5.6.7 D03 Al editar tampoco se puede dejar sin enlace ni archivo
+  ✓ V5.6.8 D04 Un video no se sube (se usa su enlace)
+  ✓ V5.6.9 No se publica como material un archivo que subió otra persona
+  ✓ V5.6.10 D05 Dirección elige 3.º y 5.º: solo esos estudiantes lo ven
+  ✓ V5.6.11 D05 Y puede pasarlo a toda la carrera después
+  ✓ V5.6.12 D06 Un docente de 2.º no publica para 8.º (403)
+  ✓ V5.6.13 El archivo de una propuesta que Dirección no aprobó no lo abre un estudiante
+  ✓ V5.6.14 §8 Un curso libre se rotula «Curso de autoaprendizaje (sin acreditación automática)»
+  ✓ V5.6.15 D07 Guardar en favoritos y abrir el material no da puntos ni afinidad
+
+BATCH V5-7 · REQUIRE_REVIEW por defecto; Dirección concede y revoca autonomía por docente y módulo
+  ✓ V5.7.1 E01 Sin excepción, el recurso del docente queda pendiente y va a la bandeja
+  ✓ V5.7.2 §10.2 Solo Dirección concede: Administración y el propio docente no
+  ✓ V5.7.3 §9.2 Las actividades siguen con revisión obligatoria: no se concede excepción
+  ✓ V5.7.4 E08 La sociedad científica no recibe ni hereda excepciones docentes
+  ✓ V5.7.5 La excepción exige un motivo, en su campo
+  ✓ V5.7.6 Dirección concede autonomía en recursos (con quién y cuándo); no se duplica
+  ✓ V5.7.7 E02 Con la excepción publica directo: llega a la Biblioteca y no a la bandeja; puntos sigue con revisión
+  ✓ V5.7.8 §9.3 Dirección ve la acción directa en su historial, auditada con actor y excepción
+  ✓ V5.7.9 Ajusta lo que publicó con su autonomía sin volver a la bandeja
+  ✓ V5.7.10 E02 Con autonomía en puntos, el docente otorga directo: entran una vez y no van a la bandeja
+  ✓ V5.7.11 E06 Otorgar puntos no cambia el respaldo del proyecto
+  ✓ V5.7.12 E03 Al revocar, lo nuevo vuelve a revisión; lo ya publicado se conserva y la revocación queda registrada
+  ✓ V5.7.13 E03 Sin la excepción, ajustar lo publicado vuelve a pasar por Dirección
+  ✓ V5.7.14 Una excepción revocada no se revoca dos veces
+  ✓ V5.7.15 E04 Dirección filtra el historial por docente (recursos y puntos, con estudiante); un estudiante no lo ve
+
+BATCH V5-8 · Tres familias de puntos; cada punto dice criterio, origen, quién otorgó y quién aprobó
+  ✓ V5.8.1 §10 Un criterio nuevo solo usa las tres familias: «colaboración aceptada» está retirada; «recurso completado» sí
+  ✓ V5.8.2 El docente ve los criterios vigentes de recurso completado
+  ✓ V5.8.3 E05 Confirmar dos veces la misma asistencia da un solo evento de puntos
+  ✓ V5.8.4 §10.3 El evento dice quién confirmó la asistencia, con qué criterio y que está aplicado
+  ✓ V5.8.5 §8.3 El recurso lleva un criterio opcional, y solo de «recurso completado»
+  ✓ V5.8.6 E07 Guardar en favoritos y descargar el recurso no lo da por completado
+  ✓ V5.8.7 D08 Solo un docente con el estudiante en su alcance, con sustento y sobre un recurso con criterio
+  ✓ V5.8.8 D08 Sin autonomía, el docente propone: queda pendiente y figura como «pendiente» en el historial
+  ✓ V5.8.9 §10.3 Aprobado: suma una vez, y el historial dice criterio, recurso, quién dio fe y quién aprobó
+  ✓ V5.8.10 §10.3 El mismo recurso no se premia dos veces al mismo estudiante
+  ✓ V5.8.11 §10.3 El docente ve el historial de su alcance; otro docente y el propio estudiante no (sin ranking)
+  ✓ V5.8.12 §10 Al estudiante se le explican solo las tres familias que dan puntos
+
+BATCH V5-9 · «Analizar repositorio» ofrece; el borrador nunca depende de GitHub
+  ✓ V5.9.1 F01 Sin repositorio, el borrador se guarda igual
+  ✓ V5.9.2 F02/F03 Analizar un repositorio público sugiere tecnologías del catálogo con su fuente (PyMongo → MongoDB)
+  ✓ V5.9.3 F12 Analizar no guarda nada ni agrega tecnologías por su cuenta
+  ✓ V5.9.4 F05 Volver a analizar el mismo repositorio no duplica sugerencias
+  ✓ V5.9.5 §11.1 Lo que el estudiante aceptó del análisis queda con su procedencia («sugerida: …»)
+  ✓ V5.9.6 Enlace inválido en su campo; otro proveedor, privado o inexistente se explican sin inventar; solo estudiantes
+  ✓ V5.9.7 F06 Con la cuota de GitHub agotada el análisis es INCONCLUSIVE y no se borra nada de lo declarado
+
+BATCH V5-10/11 · «La usé» al día, PyMongo como señal, y FastAPI/Pytest no son Python
+  ✓ V5.10.1 F03 PyMongo sugiere MongoDB con su procedencia (señal del repositorio, no un servidor ni una persona)
+  ✓ V5.10.2 F04 Aceptar Python lo muestra enseguida como declarada y detectada, y deja de sugerirse
+  ✓ V5.11.1 F07 Registrar un alias exige confirmar que es la misma tecnología (FastAPI usa Python, no es Python)
+  ✓ V5.11.2 F08/F09 La tecnología nueva aparece en el catálogo con su área, y Python no gana un alias falso
+  ✓ V5.11.3 Decidir dos veces el mismo pedido no lo cambia (idempotente)
+  ✓ V5.11.4 F09 El aviso dice lo que pasó de verdad
+  ✓ V5.11.5 Un alias confirmado se agrega a la tecnología existente sin crear otra
+
+BATCH V5-12 · Lo que dices que usaste sale del proyecto; varios roles que describen, no prueban
+  ✓ V5.12.1 G01 Una tecnología que el proyecto no tiene se rechaza, nombrándola
+  ✓ V5.12.2 G04 Varios roles (Responsable + Base de Datos); el primero queda como principal
+  ✓ V5.12.3 Un rol fuera del catálogo controlado se rechaza
+  ✓ V5.12.4 G05 El rol no bloquea una tecnología del proyecto que de verdad usó
+
+BATCH V5-13 · Galería de la carrera: solo lo activo y visible; de 0 a 5 imágenes que no son evidencias
+  ✓ V5.13.1 G07 Un estudiante ve solo los activos en la comunidad o con enlace: ni borradores, ni privados, ni los de docentes
+  ✓ V5.13.2 G07 El docente de su alcance ve además los visibles a docentes; otro docente no
+  ✓ V5.13.3 G09 La galería no expone correos ni evidencias; 6 por página
+  ✓ V5.13.4 G08 La primera imagen queda como portada
+  ✓ V5.13.5 G08 Solo PNG/JPG/WEBP subidas por el dueño; otra persona no agrega imágenes
+  ✓ V5.13.6 G08 Hasta cinco imágenes: la sexta se rechaza
+  ✓ V5.13.7 Una sola portada; mover cambia el orden
+  ✓ V5.13.8 Al quitar la portada, la primera pasa a serlo y el orden se compacta
+  ✓ V5.13.9 G08 La portada de un proyecto de la comunidad la abre cualquiera con sesión; la de uno privado o en borrador, solo su dueño
+  ✓ V5.13.10 Los filtros por tecnología se aplican
+
+BATCH V5-14 · Cada contribución de la afinidad lleva a su fuente real, si quien mira puede abrirla
+  ✓ V5.14.1 H08 La contribución de una actividad enlaza a esa actividad, en la vista del docente
+  ✓ V5.14.2 H08 La de un proyecto visible a docentes enlaza al proyecto
+  ✓ V5.14.3 H08 Ni puntos, ni recursos, ni roles aparecen como fuente de afinidad
+  ✓ V5.14.4 Al estudiante, el mismo enlace lo lleva a su vista
+  ✓ V5.14.5 Un docente sin el estudiante en su alcance no ve el desglose ni sus fuentes
+  ✓ V5.14.6 El proyecto muestra sus puntos con el criterio, quién los otorgó y quién los aprobó
+  ✓ V5.14.7 Un docente fuera de alcance no ve los puntos del proyecto
+
+BATCH V5-15/16 · El resumen explica qué es cada cosa; las credenciales se informan con su fecha de consulta
+  ✓ V5.15.1 ND-02 §15.2 El resumen trae un aviso: participaciones como registro del responsable y credenciales informadas, no certificadas (con el aviso de V6 §10.4)
+  ✓ V5.15.2 La vista previa lleva el mismo aviso
+  ✓ V5.15.3 H04 El PDF lleva el aviso de fuentes y el descargo
+
+135 comprobaciones correctas, 0 fallidas

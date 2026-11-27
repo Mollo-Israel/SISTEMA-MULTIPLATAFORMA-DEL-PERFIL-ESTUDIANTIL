@@ -1,0 +1,176 @@
+
+Prueba integral del Objetivo 7 contra http://localhost:3020/api
+
+==============================================================================
+ PREPARACION · Escenario propio de la prueba
+==============================================================================
+
+Areas y catalogo
+  ✓ P.1 Tres areas academicas creadas para el escenario
+  ✓ P.2 El catalogo tiene taller, curso externo, recurso de apoyo y convocatoria
+
+Responsables de actividades
+  ✓ P.3 Director, sociedad cientifica y docente disponibles
+
+Estudiantes
+  ✓ P.4 Seis estudiantes registrados con perfil
+
+Actividades disponibles y casos limite
+  ✓ P.4b El curso y el recurso se incorporan al catálogo controlado (§61)
+  ✓ P.5 Seis actividades creadas, con sus casos limite
+  ✓ P.5b Y dos entradas del catálogo (§61)
+  ✓ P.6 La actividad de un solo cupo queda llena
+
+Perfiles de los estudiantes
+  ✓ P.7 S1 declara preferencia, mejora, proyecto e interes
+  ✓ P.8 S5 desactiva aparecer en sugerencias de companeros
+
+==============================================================================
+ RF18 · Consultar recomendaciones academicas
+==============================================================================
+
+Flujo basico de la Tabla 2.27
+  ✓ 18.1 El estudiante consulta sus recomendaciones
+  ✓ 18.2 Resultado: hay recomendaciones disponibles
+  ✓ 18.3 El total coincide con lo agrupado
+  ✓ 18.4 Ninguna recomendacion sin motivo
+  ✓ 18.5 INVARIANTE: el puntaje es exactamente la suma de sus motivos
+  ✓ 18.6 Cada grupo viene ordenado de mayor a menor relevancia
+  ✓ 18.7 Cada grupo tiene nombre y solo elementos de su tipo
+  ✓ 18.8 Cada tipo respeta su limite de elementos
+
+Los seis elementos que nombra RN-16
+  ✓ 18.9 Recomienda la actividad del area de preferencia
+  ✓ 18.10 Recomienda el curso externo, con su enlace
+  ✓ 18.11 Recomienda el recurso de apoyo, con su enlace
+  ✓ 18.12 Recomienda la convocatoria como oportunidad
+  ✓ 18.13 Propone el area de mejora como area de fortalecimiento
+  ✓ 18.14 Sugiere un posible companero de equipo
+
+Motivos (RN-16: a partir del perfil y de las afinidades)
+  ✓ 18.15 V3 §34 Un área de interés con prioridad 5 aporta 24 de los 40 puntos de interés
+  ✓ 18.15b El puntaje de una recomendación vive entre 0 y 100 (§60)
+  ✓ 18.15c INVARIANTE: los motivos suman exactamente el puntaje
+  ✓ 18.16 V3 §34 La afinidad no es un factor del ranking: no aparece como motivo
+  ✓ 18.17 Un interes en texto libre coincide con el titulo de la actividad
+  ✓ 18.18 El area de fortalecimiento explica que la declaro y que aun no tiene trayectoria
+  ✓ 18.19 El companero se sugiere por trayectoria compartida o complementaria
+  ✓ 18.20 Cada recomendacion trae el nombre de su tipo en español
+
+==============================================================================
+ RF18 · Exclusiones y privacidad
+==============================================================================
+
+Actividades que no se pueden aprovechar
+  ✓ 18.21 No recomienda una actividad cuya fecha ya paso
+  ✓ 18.22 No recomienda una actividad sin cupo confirmable
+  ✓ 18.23 No recomienda una actividad en borrador
+  ✓ 18.24 No recomienda algo de un area sin relacion con el perfil
+
+Privacidad de los companeros
+  ✓ 18.25 El estudiante no se sugiere a si mismo
+  ✓ 18.26 No sugiere a quien desactivo aparecer en sugerencias
+  ✓ 18.27 Ninguna tarjeta de companero incluye correo
+  ✓ 18.28 Los motivos de un companero solo nombran areas y habilidades (§62)
+
+Lo que el estudiante ya conoce
+  ✓ 18.29 El estudiante se inscribe en la actividad recomendada
+  ✓ 18.30 Ya inscrito, deja de recomendarse
+
+==============================================================================
+ RN-16 · Las recomendaciones no son obligatorias
+==============================================================================
+
+Detalle y estado
+  ✓ 18.31 El estudiante abre el detalle del elemento (Tabla 2.27, paso 7)
+  ✓ 18.32 Abrir el detalle la marca como vista (markAsViewed)
+  ✓ 18.33 El detalle repite los motivos
+
+Guardar y descartar
+  ✓ 18.34 La guarda, con la fecha de la decision
+  ✓ 18.35 Descarta otra
+
+La decision sobrevive a un nuevo calculo
+  ✓ 18.36 La descartada NO vuelve a proponerse
+  ✓ 18.37 La guardada sigue guardada
+  ✓ 18.38 Los conteos reflejan las decisiones
+
+Historial y deshacer
+  ✓ 18.39 El historial de guardadas la incluye
+  ✓ 18.40 El historial de descartadas la incluye
+  ✓ 18.41 Puede deshacer el descarte
+  ✓ 18.42 Restaurada, vuelve a la lista
+
+Un elemento que deja de estar disponible
+  ✓ 18.43 La recomendacion que dejo de aplicar se conserva, marcada como no vigente
+  ✓ 18.44 Su detalle avisa que el elemento ya no esta disponible
+
+==============================================================================
+ RF18 · Validaciones y permisos
+==============================================================================
+
+Estados admitidos
+  ✓ 18.45 No se puede devolver a "nueva" -> 400
+  ✓ 18.46 Un estado inexistente -> 400
+  ✓ 18.47 Fijar el puntaje a mano -> 400
+  ✓ 18.48 El historial solo admite guardadas o descartadas -> 400
+
+Identificadores
+  ✓ 18.49 Identificador mal formado -> 400
+  ✓ 18.50 Recomendacion inexistente -> 404
+
+Separacion entre estudiantes y roles
+  ✓ 18.51 La recomendacion de otro estudiante -> 404, sin revelar que existe
+  ✓ 18.52 Tampoco puede decidir sobre ella -> 404
+  ✓ 18.53 Un docente no tiene recomendaciones -> 403
+  ✓ 18.54 El director tampoco -> 403
+  ✓ 18.55 Sin sesion -> 401
+
+Reglas visibles
+  ✓ 18.56 Las reglas se consultan de solo lectura
+  ✓ 18.57 V6 §9.2 El reparto publicado son los cuatro componentes declarados (40/30/15/10), sin clics
+  ✓ 18.57b V3 §34 / V6 §9.1 Se publican los filtros duros, qué no cambia el orden y las prioridades de compañeros
+  ✓ 18.58 Tambien los limites y el puntaje minimo
+
+==============================================================================
+ RF18 · Flujos alternativos 2a y 3a
+==============================================================================
+
+2a · Informacion insuficiente en el perfil
+  ✓ 18.59 Un perfil sin informacion no recibe recomendaciones
+  ✓ 18.60 Sin grupos ni elementos
+  ✓ 18.61 El mensaje es el que define la Tabla 2.27
+
+3a · Perfil sin coincidencias
+  ✓ 18.62 Un perfil con informacion pero sin coincidencias recibe otro resultado
+  ✓ 18.63 Con su propio mensaje, distinto del anterior
+  ✓ 18.64 Los dos flujos alternativos no se confunden entre si
+
+==============================================================================
+ RF14 · Busqueda de companeros para invitar
+==============================================================================
+
+Consulta del estudiante
+  ✓ 18.65 El estudiante busca companeros (antes respondia 403)
+  ✓ 18.66 Encuentra al companero buscado por su apellido
+  ✓ 18.67 Tarjeta minima: solo identificador, nombre y semestre
+  ✓ 18.68 Sin correos en la respuesta
+
+Limites de la busqueda
+  ✓ 18.69 Un solo caracter -> 400
+  ✓ 18.70 Sin termino de busqueda -> 400
+  ✓ 18.71 Los comodines no listan a todos los estudiantes
+  ✓ 18.72 No se incluye a si mismo
+  ✓ 18.73 Un docente usa su propio directorio, no este -> 403
+
+La invitacion funciona con lo encontrado
+  ✓ 18.74 Invitar al companero encontrado funciona de punta a punta
+
+Aparecer en sugerencias es reversible
+  ✓ 18.75 El estudiante puede volver a activarla
+  ✓ 18.76 Reactivada, vuelve a aparecer como posible companera
+
+------------------------------------------------------------------------------
+  89 verificaciones OK · 0 fallos
+  El Objetivo 7 queda demostrado de punta a punta.
+

@@ -1,0 +1,191 @@
+
+Prueba integral del Objetivo 5 contra http://localhost:3020/api
+
+==============================================================================
+ PREPARACION · Actores del escenario
+==============================================================================
+
+Cuentas y alcances
+  ✓ P.1 Tres estudiantes registrados con perfil
+  ✓ P.2 Los perfiles quedan creados
+  ✓ P.3 Docente habilitado en 4o semestre
+  ✓ P.4 Docente habilitado solo en 2o semestre
+  ✓ P.5 Director de carrera disponible
+
+==============================================================================
+ RF13 · Gestionar proyecto del portafolio
+==============================================================================
+
+Registro del proyecto
+  ✓ 13.1 El estudiante crea un proyecto
+  ✓ 13.2 El proyecto queda a nombre del responsable
+  ✓ 13.3 La visibilidad se registra
+  ✓ 13.4 El estado se registra
+  ✓ 13.5 El area academica se registra
+  ✓ 13.6 Las tecnologias se registran
+  ✓ 13.7 Los enlaces de repositorio y demostracion se registran
+
+Persistencia y portafolio
+  ✓ 13.8 El proyecto aparece en el portafolio
+  ✓ 13.9 El portafolio lo marca como proyecto propio
+  ✓ 13.10 El detalle persiste tras releer
+
+Edicion
+  ✓ 13.11 El responsable edita su proyecto
+  ✓ 13.12 Las tecnologias editadas persisten
+  ✓ 13.13 El area editada persiste
+  ✓ 13.14 La visibilidad se puede cambiar
+
+Validaciones y permisos
+  ✓ 13.15 Otro estudiante NO edita un proyecto ajeno -> 403
+  ✓ 13.16 Titulo demasiado corto -> 400
+  ✓ 13.17 Enlace invalido -> 400
+  ✓ 13.18 Visibilidad inexistente -> 400
+  ✓ 13.19 Las tecnologias duplicadas se depuran
+  ✓ 13.20 El docente NO registra proyectos -> 403
+
+Evidencias del proyecto (almacenamiento real)
+  ✓ 13.21 El estudiante sube un archivo real
+  ✓ 13.22 Evidencia de archivo asociada al proyecto
+  ✓ 13.23 Evidencia de enlace asociada al proyecto
+  ✓ 13.24 Las evidencias quedan vinculadas al proyecto
+  ✓ 13.25 Un estudiante ajeno NO adjunta evidencia al proyecto -> 403
+
+==============================================================================
+ RF14 · Gestionar integrantes de proyecto
+==============================================================================
+
+Envio de la invitacion
+  ✓ 14.1 El responsable NO se invita a si mismo -> 400
+  ✓ 14.2 Invitacion sin rol propuesto -> 400
+  ✓ 14.3 El responsable invita a otro estudiante
+  ✓ 14.4 La invitacion nace PENDIENTE
+  ✓ 14.5 El rol propuesto queda registrado
+  ✓ 14.6 Invitacion pendiente duplicada -> 409
+  ✓ 14.7 Invitar a un perfil inexistente -> 400
+  ✓ 14.8 Un estudiante ajeno NO invita a un proyecto que no es suyo -> 403
+
+Antes de aceptar no hay pertenencia
+  ✓ 14.9 Con la invitacion pendiente el proyecto NO tiene integrantes
+  ✓ 14.10 El proyecto NO aparece en el portafolio del invitado mientras esta pendiente
+
+Consulta y respuesta del invitado
+  ✓ 14.11 El invitado ve su invitacion
+  ✓ 14.12 La invitacion muestra la informacion del proyecto
+  ✓ 14.13 La invitacion muestra el rol propuesto
+  ✓ 14.14 Otro estudiante NO acepta una invitacion ajena -> 403
+
+Rechazo: no genera pertenencia
+  ✓ 14.15 El invitado rechaza la invitacion
+  ✓ 14.16 Rechazar NO crea integrante
+  ✓ 14.17 El proyecto rechazado NO aparece en el portafolio de quien rechazo
+  ✓ 14.18 No se responde dos veces la misma invitacion -> 400
+
+Aceptacion: nace la pertenencia
+  ✓ 14.19 El invitado acepta
+  ✓ 14.20 Se crea el integrante al aceptar
+  ✓ 14.21 El rol propuesto queda persistido en la pertenencia
+  ✓ 14.22 El proyecto aparece en el portafolio del nuevo integrante
+  ✓ 14.23 Se distingue como proyecto colaborativo, no propio
+  ✓ 14.24 El portafolio muestra su rol
+  ✓ 14.25 No se invita a quien ya es integrante -> 409
+
+Gestion desde el proyecto
+  ✓ 14.26 El responsable ve sus invitaciones
+  ✓ 14.27 El responsable distingue aceptadas de rechazadas
+  ✓ 14.28 Un integrante NO gestiona las invitaciones del proyecto -> 403
+  ✓ 14.29 Un integrante NO cambia la visibilidad del proyecto -> 403
+
+==============================================================================
+ RF15 · Consultar portafolio de proyectos
+==============================================================================
+
+Portafolio del estudiante
+  ✓ 15.1 El responsable ve sus proyectos propios
+  ✓ 15.2 El integrante ve el proyecto colaborativo
+  ✓ 15.3 Quien rechazo la invitacion NO lo ve en su portafolio
+
+Consulta docente: proyecto visible dentro del alcance
+  ✓ 15.4 El docente consulta el portafolio institucional
+  ✓ 15.5 El portafolio informa que el alcance esta restringido
+  ✓ 15.6 El alcance corresponde a sus semestres habilitados
+  ✓ 15.7 El proyecto visible aparece en su portafolio institucional
+  ✓ 15.8 Solo trae proyectos de estudiantes de sus semestres
+  ✓ 15.9 El docente abre el detalle del proyecto
+  ✓ 15.10 El detalle incluye las tecnologias
+  ✓ 15.11 El docente ve los integrantes
+
+Filtros del portafolio institucional
+  ✓ 15.12 Filtro por tecnologia
+  ✓ 15.13 Filtro por estado
+  ✓ 15.14 Busqueda por nombre del estudiante
+  ✓ 15.15 Una busqueda sin coincidencias devuelve lista vacia, no error
+  ✓ 15.16 Filtro con area invalida -> 400
+
+Consulta docente: casos negativos
+  ✓ 15.17 Un docente de otro semestre NO ve el proyecto en su listado
+  ✓ 15.18 Tampoco accede escribiendo el ID directamente -> 403
+  ✓ 15.19 Un proyecto privado NO aparece para el docente
+  ✓ 15.20 El docente NO abre un proyecto privado -> 403
+  ✓ 15.21 Un proyecto de visibilidad "perfil" NO entra al portafolio docente
+  ✓ 15.22 Y su detalle tampoco es accesible para el docente -> 403
+  ✓ 15.23 Un estudiante ajeno NO abre el proyecto -> 403
+  ✓ 15.24 El director de carrera NO consulta el detalle individual (ningun RF se lo concede) -> 403
+
+Integracion con el perfil dinamico
+  ✓ 15.25 El perfil dinamico del integrante incluye el proyecto colaborativo
+  ✓ 15.26 El perfil de quien rechazo NO lo incluye
+  ✓ 15.27 La vista permitida del perfil oculta los proyectos privados
+
+Afinidad del integrante aceptado
+  ✓ 15.28 Aceptar la invitacion NO atribuye experiencia todavia (§33)
+  ✓ 15.28b El integrante confirma su propia contribucion (§33)
+  ✓ 15.28c V3 §22 Un proyecto activo tiene repositorio público comprobado: ya no puede quedar FLAGGED por un repositorio inexistente
+  ✓ 15.28d Confirmada la contribucion, el proyecto es suyo, pero FLAGGED vale 0 (§51.3)
+  ✓ 15.28e Y su afinidad se consulta igual, con el motivo visible en el desglose
+  ✓ 15.29 Una invitacion rechazada NO influye en la afinidad
+
+==============================================================================
+ RF16 · Registrar retroalimentacion sobre proyecto
+==============================================================================
+
+Registro por el docente autorizado
+  ✓ 16.1 Comentario vacio -> 400
+  ✓ 16.2 Comentario demasiado corto -> 400
+  ✓ 16.3 Comentario demasiado largo -> 400
+  ✓ 16.4 El docente registra retroalimentacion
+  ✓ 16.5 El comentario se guarda tal como se escribio
+  ✓ 16.6 La retroalimentacion persiste
+  ✓ 16.7 Queda asociada al docente que la escribio
+
+Visibilidad para los estudiantes del proyecto
+  ✓ 16.8 El estudiante responsable la ve
+  ✓ 16.9 El integrante aceptado tambien la ve
+  ✓ 16.10 El estudiante no puede editarla
+  ✓ 16.11 Un estudiante ajeno NO ve la retroalimentacion -> 403
+
+Casos negativos
+  ✓ 16.12 El estudiante NO registra retroalimentacion docente -> 403
+  ✓ 16.13 Un docente fuera de alcance NO comenta -> 403
+  ✓ 16.14 No se comenta un proyecto privado -> 403
+  ✓ 16.15 El director de carrera NO registra retroalimentacion -> 403
+
+Edicion de la propia retroalimentacion
+  ✓ 16.16 El docente edita su propio comentario
+  ✓ 16.17 Queda registrada la fecha de edicion
+  ✓ 16.18 Otro docente NO edita retroalimentacion ajena -> 403
+
+Varios docentes sobre el mismo proyecto
+  ✓ 16.19 Otro docente del mismo alcance tambien puede comentar
+  ✓ 16.20 El proyecto acumula la retroalimentacion de ambos docentes
+  ✓ 16.21 El estudiante sigue sin poder editar ninguna
+
+El estudiante se entera sin abrir cada proyecto
+  ✓ 16.22 El portafolio informa cuanta retroalimentacion tiene cada proyecto
+  ✓ 16.23 Un proyecto sin comentarios informa cero, no undefined
+  ✓ 16.24 El integrante aceptado tambien lo ve anunciado en su portafolio
+
+------------------------------------------------------------------------------
+  116 verificaciones OK · 0 fallos
+  El Objetivo 5 queda demostrado de punta a punta.
+

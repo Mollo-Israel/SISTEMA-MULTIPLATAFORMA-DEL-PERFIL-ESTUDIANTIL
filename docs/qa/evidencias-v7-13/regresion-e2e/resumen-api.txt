@@ -1,0 +1,24 @@
+e2e-v7 rc=1 380s :: 103 comprobaciones correctas, 7 fallidas
+e2e-v6 rc=0 62s :: 98 comprobaciones correctas, 0 fallidas
+e2e-v5 rc=0 49s :: 135 comprobaciones correctas, 0 fallidas
+e2e-v4-1 rc=1 37s :: 171 comprobaciones correctas, 2 fallidas
+e2e-v3-2 rc=1 92s :: 197 comprobaciones correctas, 10 fallidas
+e2e-v3 rc=1 55s :: 378 comprobaciones correctas, 1 fallidas
+e2e-v2 rc=0 19s :: 162 comprobaciones correctas, 0 fallidas
+e2e-qa rc=0 3s :: 68 comprobaciones correctas, 0 fallidas
+e2e-objectives-40 rc=0 10s ::   ✓ 2.4 Credenciales incorrectas -> 401
+e2e-objective-5 rc=0 6s :: 
+e2e-objective-6 rc=0 7s :: 
+e2e-objective-7 rc=0 8s :: 
+e2e-batch-1 rc=0 123s :: 
+e2e-batch-2 rc=0 5s :: 
+e2e-batch-3 rc=0 8s :: 
+e2e-batch-4 rc=0 4s :: 
+e2e-batch-5 rc=0 6s :: 
+e2e-batch-6 rc=1 8s :: 
+e2e-batch-7 rc=0 7s :: 
+e2e-batch-8 rc=0 7s :: 
+e2e-batch-9 rc=0 8s :: 
+e2e-batch-10 rc=0 3s :: 
+e2e-batch-11 rc=0 5s :: 
+FIN

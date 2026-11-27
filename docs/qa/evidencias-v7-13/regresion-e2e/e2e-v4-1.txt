@@ -1,0 +1,204 @@
+Afinia V4.1 — verificación del contrato contra la API
+
+BATCH V4.1-1 · Aula o lugar con contenido reconocible (A41-004)
+  ✓ V41.1.1 B03 «Aula 201» se acepta y se guarda igual
+  ✓ V41.1.1 B03 «Laboratorio B-12» se acepta y se guarda igual
+  ✓ V41.1.1 B03 «Auditorio Principal» se acepta y se guarda igual
+  ✓ V41.1.1 B03 «Torre Académica, piso 4» se acepta y se guarda igual
+  ✓ V41.1.1 B03 «Salón Ñandú» se acepta y se guarda igual
+  ✓ V41.1.2 B04 «123123» se rechaza con el error en su campo
+  ✓ V41.1.2 B04 «!@#$%^&» se rechaza con el error en su campo
+  ✓ V41.1.2 B04 «____» se rechaza con el error en su campo
+  ✓ V41.1.2 B04 Solo espacios no se guarda como lugar
+  ✓ V41.1.2 B04 «12-34» se rechaza con el error en su campo
+  ✓ V41.1.3 B04 La misma regla al editar: «0000» se rechaza
+  ✓ V41.1.4 B03 Y una corrección válida se guarda
+  ✓ V41.1.5 Una actividad virtual no necesita aula (la regla no la afecta)
+
+BATCH V4.1-2 · Habilidades al editar, charla general, responsable al publicar y hasta 5 imágenes
+  ✓ V41.2.1 B05 A41-005 El listado de gestión trae las habilidades con su área (de ahí se hidrata la edición)
+  ✓ V41.2.2 B05 Editar otro campo no borra áreas ni habilidades
+  ✓ V41.2.3 B07 La misma habilidad no queda dos veces
+  ✓ V41.2.4 B06 V41-01 Una charla general se publica con su área y sin inventar una habilidad
+  ✓ V41.2.5 Pero al menos un área sigue siendo obligatoria
+  ✓ V41.2.6 B10 A41-007 Administración guarda un borrador sin responsable
+  ✓ V41.2.7 A41-007 Publicarlo sin responsable se rechaza en el campo del responsable
+  ✓ V41.2.8 A41-007 Con responsable se publica
+  ✓ V41.2.9 A41-007 Crear y publicar de una vez sin responsable sigue rechazándose
+  ✓ V41.2.10 B08 Sin imágenes: ni portada ni lista
+  ✓ V41.2.11 B08 Una imagen: es la portada (compatibilidad con imageUrl)
+  ✓ V41.2.12 B08 Tres imágenes en el orden elegido; la primera es la portada
+  ✓ V41.2.13 B08 Cinco imágenes se aceptan
+  ✓ V41.2.14 B08 Seis imágenes se rechazan en su campo
+  ✓ V41.2.15 B08 Cambiar la portada reordena sin perder imágenes
+  ✓ V41.2.16 B08 Quitar una imagen conserva las demás
+  ✓ V41.2.17 B08 Un cliente antiguo (solo imageFileId) cambia la portada sin borrar el resto
+  ✓ V41.2.18 B08 No se usa como imagen un archivo de otra persona
+  ✓ V41.2.19 B08 La segunda imagen de un borrador no se sirve a un estudiante
+  ✓ V41.2.20 B08 Publicada, cualquiera con sesión ve todas sus imágenes
+
+BATCH V4.1-3 · Borradores privados, bandeja de Dirección, operación del responsable, fechas y duplicar
+  ✓ V41.3.1 23.3 A41-008 El docente asignado no ve ni puede publicar el borrador de Administración
+  ✓ V41.3.2 B11 Publicada, el docente responsable la recibe en su gestión
+  ✓ V41.3.3 B11 A41-009 El responsable asignado no cambia el contenido material
+  ✓ V41.3.4 B11 Pero sí opera: cierra y reabre inscripciones
+  ✓ V41.3.5 B11 No la cancela ni la reenvía a revisión (la creó una autoridad)
+  ✓ V41.3.6 B12 El borrador del docente no lo ve Dirección (ni gestión, ni bandeja, ni por URL)
+  ✓ V41.3.7 B12 A41-008 Enviada, está en la bandeja de Dirección y no en su gestión («no es suya»)
+  ✓ V41.3.8 23.4 Aprobada: Dirección la gestiona, el autor sigue siendo el docente y él ya no edita el contenido
+  ✓ V41.3.9 B13 Los candidatos docentes traen sus semestres
+  ✓ V41.3.10 B13 Semestres 3.º y 5.º con docentes que los cubren: se publica
+  ✓ V41.3.11 B13 Un semestre que ningún docente cubre (7.º) se rechaza nombrándolo
+  ✓ V41.3.12 B13 «Toda la carrera» con un docente que no la cubre se rechaza
+  ✓ V41.3.13 B13 Con Dirección entre los responsables, toda la carrera es válida
+  ✓ V41.3.14 B13 Como borrador se guarda; se valida al publicar
+  ✓ V41.3.15 23.5 Publicar una actividad nueva con inicio ayer se rechaza en el campo de fecha
+  ✓ V41.3.16 23.5 El borrador con fecha pasada se guarda, pero no se publica sin corregirla
+  ✓ V41.3.17 23.5 Un borrador sin fecha se guarda
+  ✓ V41.3.18 B14 Reabrir una actividad que ya empezó se niega y pide corregir la fecha
+  ✓ V41.3.19 B15 Reabrir con el cupo completo se niega y pide ampliarlo
+  ✓ V41.3.20 B15 Ampliado el cupo, se reabre
+  ✓ V41.3.21 B16 Duplicar una finalizada crea un borrador nuevo sin fechas ni participantes; la original no cambia
+  ✓ V41.3.22 B16 La copia conserva áreas y habilidades
+
+BATCH V4.1-4 · Regularización tras FINISHED, Cerrar asistencia y corrección excepcional con reconciliación
+  ✓ V41.4.1 Durante el evento y sin constancia, el responsable corrige un error propio
+  ✓ V41.4.2 B18 Sin constancia automática (V5 §7), durante el evento el responsable aún corrige su error
+  ✓ V41.4.3 B19 La asistencia no se cierra antes de que termine la actividad
+  ✓ V41.4.4 B17 23.5 Terminada la actividad, el responsable registra una participación pendiente
+  ✓ V41.4.5 B18 (V7.1 §6.1) Tras FINISHED y con la lista abierta, el responsable todavía corrige; consolida el cierre
+  ✓ V41.4.6 B19 El responsable cierra la asistencia (Administración no: es operación del responsable)
+  ✓ V41.4.7 B19 Con el acta cerrada ya no se registra asistencia ordinaria
+  ✓ V41.4.8 B19 El historial se preserva tras cerrar
+  ✓ V41.4.9 B18 La corrección excepcional es de Dirección o Administración y exige un motivo
+  ✓ V41.4.10 B18 Dirección corrige aunque el acta esté cerrada
+  ✓ V41.4.11 La constancia de esa participación deja de estar vigente
+  ✓ V41.4.12 Los puntos se revierten con un movimiento auditable (no se borran)
+  ✓ V41.4.13 La corrección queda en la auditoría con antes, después y motivo
+  ✓ V41.4.14 Volver a confirmar restituye los puntos una sola vez
+  ✓ V41.4.15 En una actividad cancelada no se registra asistencia
+  ✓ V41.4.16 Un estudiante nunca confirma su propia asistencia
+
+BATCH V4.1-5 · Validación de recursos, propuesta del docente con revisión de Dirección y «Para ti»
+  ✓ V41.5.1 B20 A41-014 «123456» como título, «!!!!» como quién publica y una URL inválida se rechazan, cada uno en su campo
+  ✓ V41.5.2 B20 La misma regla al editar
+  ✓ V41.5.3 B21 Una URL que ya está en el catálogo se sigue rechazando
+  ✓ V41.5.4 V5 D06 El docente solo propone para sus semestres (403)
+  ✓ V41.5.5 A41-014 El docente propone un recurso y queda pendiente de Dirección
+  ✓ V41.5.6 Pendiente, no aparece en la Biblioteca
+  ✓ V41.5.7 Otro docente no edita la propuesta ajena
+  ✓ V41.5.8 §9.4 Está en la bandeja de Dirección (y el docente no ve la bandeja)
+  ✓ V41.5.9 Observar exige explicar qué corregir
+  ✓ V41.5.10 Corregida, vuelve a la bandeja
+  ✓ V41.5.11 Dirección la aprueba
+  ✓ V41.5.12 Aprobada, la ve el estudiante de su semestre (3.º) y no el de otro (5.º)
+  ✓ V41.5.13 Aprobada, el docente ya no la cambia: los ajustes los hace Dirección
+  ✓ V41.5.14 El docente no retira recursos del catálogo
+  ✓ V41.5.15 B23 «Para ti» trae un recurso del área que le interesa, con el motivo
+  ✓ V41.5.16 B23 Y uno de una tecnología que quiere mejorar, diciéndolo así
+  ✓ V41.5.17 B23 Un recurso sin relación con lo declarado no aparece en «Para ti»
+  ✓ V41.5.18 B22 Guardar un recurso como favorito no lo vuelve «para ti» (no es señal del recomendador)
+
+BATCH V4.1-6 · «Me interesa» como señal explícita y reversible; Guardar y favoritos sin efecto; motivos claros
+  ✓ V41.6.1 B25 A41-015 Los motivos distinguen «Coincide con tus intereses» y «Coincide con lo que quieres mejorar»
+  ✓ V41.6.2 V6 §9.2 «Me interesa» en otra actividad del área ya no cambia el puntaje (sustituye B24)
+  ✓ V41.6.3 La actividad marcada no se recomienda a sí misma por esa señal
+  ✓ V41.6.4 B24 Quitar «Me interesa» quita la señal (reversible)
+  ✓ V41.6.5 B24 «Me interesa» no reescribe lo declarado en el perfil
+  ✓ V41.6.6 A.9 «Guardar» una recomendación no cambia el puntaje de lo parecido
+  ✓ V41.6.7 V6 §9.1 El reparto publicado ya no nombra «Me interesa» ni «Guardar» y dice que no cambian el orden
+  ✓ V41.6.8 §8 Nadie llega a 100 por una sola coincidencia
+
+BATCH V4.1-7 · Criterios sin puntos libres, extras de temporada y propuestas docentes revisadas por Dirección
+  ✓ V41.7.1 A41-017 Ya no se crean retos ni recompensas (410); lo histórico se sigue consultando
+  ✓ V41.7.2 §9.2 Puntos escritos a mano en la actividad se rechazan, con el error en su campo
+  ✓ V41.7.3 El docente ve solo criterios vigentes elegibles (participación o proyecto), sin extras de temporada
+  ✓ V41.7.4 §9.3 Al elegir un criterio, los puntos son los del criterio
+  ✓ V41.7.5 §9.2 Un criterio con otros puntos que los suyos se rechaza
+  ✓ V41.7.6 §9.3 Un extra de temporada exige vigencia, y que termine después de empezar
+  ✓ V41.7.7 §9.1 Dirección crea un extra de temporada; un estudiante no crea criterios
+  ✓ V41.7.8 §9.3 El extra vigente suma una vez, aparte, en el área de la actividad
+  ✓ V41.7.9 §9.6 Recalcular no vuelve a dar el extra (una recompensa por hecho)
+  ✓ V41.7.10 §9.3 Un proyecto solo declarado no se propone
+  ✓ V41.7.11 §9.3 El estudiante no se premia; otro docente fuera de alcance no propone; motivo y criterio válidos
+  ✓ V41.7.12 §9.6 La propuesta queda pendiente y no se duplica
+  ✓ V41.7.13 §9.4 Dirección ve proyecto, estudiante, respaldo y motivo; otro docente no ve propuestas ajenas
+  ✓ V41.7.14 §9.3 El docente no aprueba lo suyo; rechazar exige motivo
+  ✓ V41.7.15 §9.3 Al aprobar, los puntos del criterio entran al historial con su origen
+  ✓ V41.7.16 §9.6 Una propuesta decidida no se vuelve a decidir ni a proponer
+  ✓ V41.7.17 Propuesta y decisión quedan en la auditoría
+  ✓ V41.7.18 §9.5 El docente ve los puntos de sus semestres; otro docente no; el estudiante no ve la tabla
+  ✓ V41.7.19 §9.5 Consultar puntos de otros queda auditado
+  ✓ V41.7.20 A41-027 El estudiante ve su saldo, igual a la suma de su historial
+
+BATCH V4.1-8 · Estado de validación aparte del respaldo, revisión con prueba externa y proveedores sin promesas
+  ✓ V41.8.1 §6.2 V7.1 Fuente oficial individual con titular y código: el resultado queda, pero la revisión de Dirección sigue pendiente (dos ejes)
+  ✓ V41.8.2 B29 Un QR/URL que abre el curso general no es AUTO_VERIFIED: queda para revisión
+  ✓ V41.8.3 B30 23.9 V7.1 Verificador oficial con otro titular: FLAGGED con su motivo, y el rechazo queda para Dirección
+  ✓ V41.8.4 La credencial rechazada no se borra: queda registrada y señalada
+  ✓ V41.8.5 B31 V7.1 Proveedor caído: comprobación inconclusa (no falso) y revisión pendiente; página ilegible: revisión, nunca CORROBORATED
+  ✓ V41.8.6 §6.3 Huawei/Cisco/Credly no se dan por integrados: se dice y no se verifica solo
+  ✓ V41.8.7 §6.3 SSRF: una URL a la red interna se bloquea y nunca verifica
+  ✓ V41.8.8 B32 23.9 «Parece genuino» sin fuente externa no verifica; la prueba es obligatoria e independiente del propio enlace
+  ✓ V41.8.9 B32 La revisión sin fuente externa queda registrada como INCONCLUSIVE, sin CORROBORATED
+  ✓ V41.8.10 §6.2 Con prueba externa independiente: MANUALLY_VERIFIED y CORROBORATED
+  ✓ V41.8.11 §6.2 V7.1 D01 Rechazo con contradicción documentada: REJECTED y FLAGGED. Decide Dirección; ni Administración ni el docente
+  ✓ V41.8.12 A.8 La auditoría guarda decisión, método, prueba y el rol de quien decidió
+
+BATCH V4.1-9 · Borrador sin repositorio, edición también activo, una tecnología por área y reconfirmación
+  ✓ V41.9.1 B33 23.2 Un borrador individual sin repositorio se guarda
+  ✓ V41.9.2 B33 §10.3 Título, descripción y repositorio del borrador se editan y quedan guardados
+  ✓ V41.9.3 B33 23.2 Publicar está bloqueado con una lista de verificación explicable
+  ✓ V41.9.4 §10.2 Dos áreas y tecnología solo de una: la lista nombra el área sin tecnología
+  ✓ V41.9.5 §10.2 El borrador se sigue guardando incompleto: la regla solo bloquea al activar
+  ✓ V41.9.6 §10.2 Con una tecnología por área, ese requisito se cumple
+  ✓ V41.9.7 §10.2 Cumplida la lista, se activa; activar no lo vuelve CORROBORATED por sí solo
+  ✓ V41.9.8 §10.3 Un proyecto activo se puede editar (título)
+  ✓ V41.9.9 §10.2 Activo, no puede quedar un área sin tecnología
+  ✓ V41.9.10 §10.3 Quitar una tecnología que un integrante confirmó le pide reconfirmar, y queda en la bitácora
+  ✓ V41.9.11 §10.3 Sin downgrade destructivo: el proyecto sigue activo mientras reconfirma
+  ✓ V41.9.12 §10.3 Cambiar el repositorio vuelve a comprobarlo (lo detectado antes no respalda al nuevo)
+  ✓ V41.9.13 B40 Un integrante no edita el proyecto del responsable
+
+BATCH V4.1-10 · Sugerencias con procedencia, tecnología no catalogada, repo ajeno y CORROBORATED que exige fuente independiente
+  ✗ V41.10.1 B34 §11.2 FastAPI aparece como sugerencia con su procedencia (requirements.txt); nada se agrega solo -> [["Python","requirements.txt"],["PostgreSQL","requirements.txt (psycopg2-binary)"]]
+  ✗ V41.10.2 §11.3 Aceptarla la vuelve SU afirmación con área y procedencia, sin CORROBORATED por un clic -> {"t":"declared"}
+  ✓ V41.10.3 §11.2 Una sugerencia descartada no se vuelve a proponer
+  ✓ V41.10.4 §11.4 «Tecnología no catalogada» se pide a Administración, una vez, y no se crea sola
+  ✓ V41.10.5 §11.4 Administración ve el pedido y decide; rechazar exige motivo; el estudiante no administra pedidos
+  ✓ V41.10.6 §12 23.7 Repositorio + manifiesto + captura: SUPPORTED, no CORROBORATED (readiness ≠ corroborado), con la razón
+  ✓ V41.10.7 §12 Señal técnica + otra persona que confirmó su contribución: CORROBORATED
+  ✓ V41.10.8 §11.2 Una URL con /tree/rama se guarda como la raíz del repositorio
+  ✓ V41.10.9 B35 23.6 Repo público ajeno: se ven las señales, pero no se le atribuyen (SUPPORTED, con la razón)
+  ✓ V41.10.10 §11.1 404 y límite de consultas se diagnostican sin concluir «privado» ni «falso»
+  ✓ V41.10.11 §12 Administración obtiene el informe antes/después sin aplicar; el estudiante no puede
+
+BATCH V4.1-11 · Equipo de 4: excluir a uno del proyecto con motivo, sin tocar el equipo; confirmación individual
+  ✓ V41.11.1 23.8 Excluir a un integrante del equipo exige un motivo
+  ✓ V41.11.2 Solo se excluye a integrantes de ese equipo
+  ✓ V41.11.3 B36 23.8 De 4, se invita a los 2 candidatos que quedan (sin el responsable ni el excluido)
+  ✓ V41.11.4 B36 El excluido sigue en el equipo original
+  ✓ V41.11.5 §13 El historial guarda quién excluyó, a quién y por qué
+  ✓ V41.11.6 §13 Aviso respetuoso al excluido: su equipo no cambia y no se le expone el motivo como acusación
+  ✓ V41.11.7 B37 El creador no confirma por los demás: la contribución de cada uno sigue pendiente
+  ✓ V41.11.8 §13 Si uno discrepa, la activación queda bloqueada (no se vota por mayoría)
+  ✓ V41.11.9 B36 Excluir a un integrante que viene del equipo exige motivo y no lo saca del equipo
+  ✓ V41.11.10 B37 Resuelta la discrepancia con una exclusión justificada, se activa con quienes confirmaron
+  ✓ V41.11.11 B40 Un integrante no excluye a otros
+
+BATCH V4.1-12 · Un borrador nunca se publica; el perfil público y el enlace respetan la visibilidad
+  ✓ V41.12.1 §14 Un borrador no aparece en el perfil público aunque ya tenga visibilidad «perfil»
+  ✓ V41.12.2 §14 Activo con «perfil» sí aparece; un activo privado no
+  ✓ V41.12.3 §14 «Público por enlace» se abre sin sesión cuando está activo; un borrador con enlace no se ve
+  ✓ V41.12.4 §16 El resumen público no expone correo, código universitario ni identificadores internos
+  ✓ V41.12.5 B40 Sin sesión: 401; otro estudiante no abre un proyecto privado
+
+BATCH V4.1-13 · El currículo y la afinidad heredan el respaldo honesto; nada entra solo
+  ✓ V41.13.1 A41-029 Un proyecto SUPPORTED (solo con captura) no se ofrece al currículo verificado
+  ✓ V41.13.2 B38 Y pedirlo por id se rechaza: el currículo no afirma lo que no está corroborado
+  ✓ V41.13.3 A41-028 Ni un proyecto SUPPORTED ni un interés declarado suman afinidad
+  ✓ V41.13.4 §17.2 La trayectoria muestra el proyecto con su nivel real y no mezcla puntos con respaldo
+
+171 comprobaciones correctas, 2 fallidas
+  - V41.10.1 B34 §11.2 FastAPI aparece como sugerencia con su procedencia (requirements.txt); nada se agrega solo -> [["Python","requirements.txt"],["PostgreSQL","requirements.txt (psycopg2-binary)"]]
+  - V41.10.2 §11.3 Aceptarla la vuelve SU afirmación con área y procedencia, sin CORROBORATED por un clic -> {"t":"declared"}

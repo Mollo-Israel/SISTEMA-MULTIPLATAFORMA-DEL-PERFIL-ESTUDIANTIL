@@ -1,0 +1,129 @@
+Afinia V6 — verificación del contrato contra la API
+
+BATCH V6-1 · Cada responsable cubre sus semestres; ninguno queda sin responsable
+  ✓ V6.1.1 Caso B Carlos + María cubren 1..8; cada uno queda asignado solo a lo suyo
+  ✓ V6.1.2 ACT-02 Quitar a María de una publicada 1..8 se rechaza nombrando 5.º–8.º, sin guardar a medias
+  ✓ V6.1.3 ACT-03 Si dos cubren el 4.º, quitar a uno conserva el 4.º
+  ✓ V6.1.4 ACT-05 Agregar el 8.º a una actividad que solo cubre Carlos se rechaza
+  ✓ V6.1.5 Agregar un semestre que Carlos sí cubre se le asigna
+  ✓ V6.1.6 Caso F Asignar a Carlos el 8.º por API es 403 estable (RESPONSIBLE_SCOPE_EXCEEDED), también en borrador
+  ✓ V6.1.7 No se asigna un semestre que no está en la audiencia
+  ✓ V6.1.8 ACT-04 Con Dirección la audiencia puede ser 1..8, y Carlos sigue asignado solo a 1..4
+  ✓ V6.1.9 §3.4 La asignación por responsable se guarda tal cual y editar la recupera
+  ✓ V6.1.10 Regla 9 Cada responsable ve solo a los inscritos de sus semestres
+  ✓ V6.1.11 ADM-06 Carlos no confirma a un estudiante de 6.º (403); al de 3.º sí
+  ✓ V6.1.12 Dirección, como responsable, no tiene ese límite
+  ✓ V6.1.13 §3.4 «Toda la carrera» con solo docentes no se publica (no se finge cobertura)
+  ✓ V6.1.14 ACT-01 El docente creador queda asignado a su audiencia y no agrega el 8.º (403)
+  ✓ V6.1.15 La creación registra en la auditoría quién cubre qué
+
+BATCH V6-3 · La copia no hereda semestres ajenos ni la historia de la original
+  ✓ V6.3.1 V6-SCOPE-02 Carlos duplica: nuevo borrador suyo, solo con sus semestres (1.º–4.º)
+  ✓ V6.3.2 La copia avisa qué semestres se quitaron
+  ✓ V6.3.3 Sin inscripciones ni aprobación de la original; responsable = quien duplica (sin María)
+  ✓ V6.3.4 Dirección duplica y conserva la audiencia (sin aviso)
+  ✓ V6.3.5 §3.5 Sin semestres en común: borrador sin semestres y mensaje para completarlos (no 400/403)
+  ✓ V6.3.6 Sin elegir semestres no se envía a revisión (no sería «toda la carrera» de un docente)
+  ✓ V6.3.7 Elegidos sus semestres, se envía a revisión
+  ✓ V6.3.8 La duplicación y su aviso quedan en la auditoría
+  ✓ V6.3.9 §3.6 El responsable ve el detalle con su semestre asignado y sigue sin poder editar (403)
+
+BATCH V6-4 · Cuatro combinaciones de cupo × admisión; externas con la misma política
+  ✓ V6.4.1 ADM-01 Sin límite y abierta: admitida al instante, no «presente»
+  ✓ V6.4.2 Sin límite y por aprobación: queda pendiente
+  ✓ V6.4.3 ADM-02 Cupo 2 y abierta con 3 solicitudes simultáneas: 2 admitidas por orden, 1 «cupo agotado», sin sobrerreserva
+  ✓ V6.4.4 El aviso explica la regla usada para el cupo
+  ✓ V6.4.5 El estudiante ve «0 de 2 plazas» y que la admisión es abierta
+  ✓ V6.4.6 Al liberarse una plaza, la siguiente solicitud la toma por orden
+  ✓ V6.4.7 Con límite y por aprobación: pendientes; el responsable admite hasta el cupo y no más
+  ✓ V6.4.8 §4.2 Ninguna admisión cuenta como asistencia en la trayectoria
+  ✓ V6.4.9 V6-ACT-03 Una externa guarda cupo y admisión; su plaza la confirma el proveedor (nunca automática)
+
+BATCH V6-6 · El docente nace con los semestres que dicta; el correo no se inventa
+  ✓ V6.6.1 V6-USER-03 Al crear un docente se guardan los semestres que dicta (ordenados)
+  ✓ V6.6.2 El alta registra en la auditoría los semestres asignados
+  ✓ V6.6.3 Un docente sin carga se crea igual, sin ningún semestre (pendiente de configuración)
+  ✓ V6.6.4 Los semestres que dicta solo valen para un docente (400 en su campo)
+  ✓ V6.6.5 Un semestre fuera de 1..8 se rechaza
+  ✓ V6.6.6 §5.4 Un correo repetido se rechaza (409) y no crea otra cuenta
+
+BATCH V6-7 · Cada integrante confirma lo suyo; un rol anterior en texto libre ya no da 400
+  ✓ V6.7.1 PRO-01 Reproducción: reenviar el rol libre «Desarrollador Backend» era el 400 VALIDATION_ERROR (error en el campo roles)
+  ✓ V6.7.2 PRO-02 La API entrega el rol traducido al catálogo (Backend) y avisa del anterior
+  ✓ V6.7.3 PRO-03 Con lo que muestra el formulario, Luis guarda su contribución (2xx)
+  ✓ V6.7.4 A Ana: Backend + Responsable con dos tecnologías, persistido
+  ✓ V6.7.5 B/C Luis conserva la suya (también con la misma tecnología que Ana): no son exclusivas
+  ✓ V6.7.6 E Una tecnología que el proyecto no tiene se rechaza
+  ✓ V6.7.7 F Intentar escribir la contribución de otra integrante se rechaza y no la toca
+  ✓ V6.7.8 G Con la invitación pendiente no se confirma contribución
+  ✓ V6.7.9 PRO-04 Aceptar una invitación con rol libre anterior deja el rol del catálogo (Tester → QA)
+  ✓ V6.7.10 H Al recargar, roles y tecnologías son los guardados
+  ✓ V6.7.11a El proyecto con las tres contribuciones confirmadas se activa
+  ✓ V6.7.11 D Quitar del proyecto una tecnología que Luis confirmó le pide reconfirmar (con aviso)
+
+BATCH V6-8 · La evidencia de un proyecto no pasa por OCR; activar pide evidencia o demo, no galería
+  ✓ V6.8.1 PRO-06 Con solo imágenes de galería no se activa: falta evidencia o demo
+  ✓ V6.8.2 PRO-05 V6-PROJ-03 La captura del proyecto queda registrada sin OCR ni extracción: «declarada», sin texto leído
+  ✓ V6.8.3 PRO-07 Con evidencia privada se activa; la demo es opcional
+  ✓ V6.8.4 PRO-08 Con una demo accesible se activa sin captura privada
+
+BATCH V6-9 · La imagen se abre como imagen; la demo pide https; evidencia acotada
+  ✓ V6.9.1 V6-PROJ-06 La imagen de evidencia llega con Content-Type image/png y en línea (ya no como archivo sin tipo)
+  ✓ V6.9.2 Con nosniff y CSP sandbox: el navegador no la reinterpreta ni ejecuta nada
+  ✓ V6.9.3 Otro estudiante no la obtiene (403/404) y sin sesión tampoco (401)
+  ✓ V6.9.4 V6-PROJ-05 Una demo http:// o con usuario y contraseña se rechaza en su campo; https:// se acepta
+  ✓ V6.9.5 §7.6 El sexto archivo de evidencia se rechaza (máximo 5)
+  ✓ V6.9.6 §7.6 Hasta 8 enlaces de evidencia; el noveno se rechaza
+
+BATCH V6-10 · La galería nombra solo a quien aceptó, con sus roles; el enlace público no da el repositorio
+  ✓ V6.10.1 V6-PROJ-07 Sin aceptar, la integrante no aparece por nombre en la galería
+  ✓ V6.10.2 Al aceptar, la galería muestra su nombre y sus roles confirmados (no solo «1 integrante»)
+  ✓ V6.10.3 Quien no integra el proyecto no decide sobre nombres ajenos (403)
+  ✓ V6.10.4 Retirar el permiso la quita de la galería al instante
+  ✓ V6.10.5 §7.5 La tarjeta de la galería no expone el repositorio
+  ✓ V6.10.6 §7.5 El enlace público tampoco entrega el repositorio
+
+BATCH V6-11 · La foto es opcional y solo sale en el perfil compartido si su dueño lo decide
+  ✓ V6.11.1 V6-PROFILE-02 El estudiante sube su foto y la ve (PNG, con su tipo)
+  ✓ V6.11.2 No vale como foto un archivo de otra persona ni un PDF
+  ✓ V6.11.3 §8.3 Por omisión la foto no es pública: ni figura en el perfil compartido ni se sirve (404)
+  ✓ V6.11.4 Con «Mi foto» activa, el perfil compartido la muestra (sin sesión, sin caché)
+  ✓ V6.11.5 Con el perfil compartido desactivado, la foto deja de servirse (no hay atajo por URL)
+  ✓ V6.11.6 Quitar la foto vuelve al avatar en todas partes
+
+BATCH V6-12 · El orden sale de lo declarado en el perfil; los clics no lo reescriben
+  ✓ V6.12.1 §9.5 Solo interés, solo mejora e interés + mejora se explican con palabras distintas
+  ✓ V6.12.2 §9.2 El interés pesa más que la mejora, y ambas juntas más que cada una
+  ✓ V6.12.3 §9.3 Los motivos no muestran prioridades, puntos ni certezas
+  ✓ V6.12.4 §9.5 Diez clics a «Guardar», un «Me interesa» y un descarte no cambian el puntaje de lo parecido
+  ✓ V6.12.5 Ni la afinidad ni lo que cuenta en la trayectoria cambian por esos clics
+  ✓ V6.12.6 «Guardadas» lista lo guardado (acceso rápido)
+  ✓ V6.12.7 Las reglas publicadas ya no tienen «Me interesa» ni «No me interesa» y dicen qué no cuenta
+  ✓ V6.12.8 Las recomendaciones guardan la versión nueva de las reglas (trazable)
+
+BATCH V6-13 · Buscar solo entre quienes aceptaron; «Para ti» en Equipos con el porqué
+  ✓ V6.13.1 CONTACT Solo aparecen quienes aceptaron ser encontrados y tienen perfil compartido; nunca uno mismo
+  ✓ V6.13.2 La búsqueda no devuelve correos
+  ✓ V6.13.3 Con menos de 3 letras no busca (no sirve para listar la carrera)
+  ✓ V6.13.4 Como mucho 10 resultados
+  ✓ V6.13.5 Desde la búsqueda se solicita contacto; queda pendiente, no se agrega solo
+  ✓ V6.13.6 TEAM-01 «Para ti» muestra la necesidad que encaja, diciendo por qué (área y tecnología que te interesan)
+  ✓ V6.13.7 El porqué va en palabras, sin cifras internas
+  ✓ V6.13.8 No se sugiere a quien no encaja ni a la dueña de la necesidad
+  ✓ V6.13.9 Postular la saca de «Para ti» y no te mete en el equipo: decide la dueña
+
+BATCH V6-14 · La asistencia queda en la trayectoria, sin insignia ni «certificado»
+  ✓ V6.14.1 ADM-08 Confirmar la asistencia no otorga «Primera participación» ni ofrece insignias por asistir
+  ✓ V6.14.2 Los puntos de la participación siguen
+  ✓ V6.14.3 La participación queda en la trayectoria (historial)
+  ✓ V6.14.4 ADM-07 Y no aparece como certificado ni constancia recibida
+
+BATCH V6-15 · Participar no es un documento; el resumen lo separa y lo dice
+  ✓ V6.15.1 V6-TRAJ-01 Las secciones separan participaciones (sin documento), proyectos, credenciales externas y certificados institucionales
+  ✓ V6.15.2 §10.4 El aviso del resumen es el texto del contrato
+
+BATCH V6-16 · Solo Administración consulta el correo, y nunca ve secretos
+  ✓ V6.16.1 §12.1 Estudiante, docente, Dirección y Sociedad reciben 403 en el correo (ver y probar)
+  ✓ V6.16.2 Administración consulta el estado sin que se devuelva ninguna contraseña ni secreto
+
+98 comprobaciones correctas, 0 fallidas

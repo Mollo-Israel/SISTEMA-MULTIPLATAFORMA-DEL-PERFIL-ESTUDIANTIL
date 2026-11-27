@@ -1,0 +1,112 @@
+BATCH 8 — Colaboración contra http://localhost:3020/api
+
+§43 · Un identificador opaco, y un QR que solo lleva una URL
+  ✓ B8.1 El estudiante consulta su enlace compartible
+  ✓ B8.2 El identificador es opaco: ni correo, ni código, ni UUID (§43)
+  ✓ B8.3 Y el enlace no lleva dentro ningún identificador interno ni el correo
+
+El QR se genera, se dibuja y se vuelve a leer
+  ✓ B8.4 El código QR es legible por un lector real
+  ✓ B8.5 Y contiene ÚNICAMENTE la URL del perfil compartible (§43)
+
+§43 · El identificador se puede rotar
+  ✓ B8.6 El estudiante rota su identificador
+  ✓ B8.7 Y el nuevo es distinto del anterior
+  ✓ B8.8 Los QR impresos con el anterior dejan de funcionar -> 404
+
+§44 · Nada se expone por omisión
+  ✓ B8.9 Un perfil sin publicar responde 404, no «existe pero está cerrado» (§44)
+
+El estudiante publica su perfil
+  ✓ B8.10 Activa el perfil compartible y dos campos
+  ✓ B8.11 Ahora el enlace responde
+  ✓ B8.12 El nombre se muestra siempre: sin él no identifica a nadie
+  ✓ B8.13 La biografía, porque la activó
+  ✓ B8.14 Y sus áreas, porque las activó
+
+Lo que NO activó no aparece
+  ✓ B8.15 Las habilidades no aparecen: no activó esa casilla (§44)
+  ✓ B8.16 Tampoco sus proyectos
+  ✓ B8.17 Ni los puntajes: «áreas» y «afinidades» son casillas distintas (§44)
+
+Lo que §44 prohíbe exponer nunca aparece
+  ✓ B8.18 Ningún correo institucional (§44)
+  ✓ B8.19 Ningún identificador interno (§44)
+  ✓ B8.20 Ni tokens ni archivos (§44)
+
+§106 · Un proyecto privado no sale por activar una casilla
+  ✓ B8.21 El estudiante registra tres proyectos con visibilidades distintas
+  ✓ B8.22 El marcado como visible en el perfil aparece
+  ✓ B8.23 El privado NO aparece (§106)
+  ✓ B8.24 Y «visible para docentes» tampoco: es otra decisión (§106)
+
+§45 · El QR no establece contacto
+
+Escanear lleva al perfil, nada más
+  ✓ B8.25 Consultar el perfil compartible no creó ningún contacto (§45)
+
+El contacto nace de una solicitud
+  ✓ B8.26 Nadie se envía una solicitud a sí mismo -> 400
+  ✓ B8.27 Bruno envía una solicitud tras escanear
+  ✓ B8.28 Insistir no crea una segunda solicitud -> 409
+  ✓ B8.29 Ana la ve entre las pendientes
+  ✓ B8.30 Sin revelar el correo de quien la envió (§44)
+
+Solo el destinatario decide
+  ✓ B8.31 Un tercero no puede responderla, y ni siquiera sabe que existe -> 404
+  ✓ B8.32 Ana la acepta y el contacto queda establecido (§45)
+  ✓ B8.33 Los dos se ven en su lista: una sola fila, sin lados que se desincronicen
+
+V2 §57 · El chat interno está retirado
+
+Las rutas responden 410 con un motivo, no 404
+  ✓ B8.34 Listar, abrir, leer y escribir conversaciones -> 410 CHAT_RETIRED (§57)
+  ✓ B8.35 El motivo orienta a los canales de contacto (§59)
+  ✓ B8.36 Sin sesión sigue pidiendo autenticación
+
+La colaboración sigue: contactos
+  ✓ B8.37 Bruno y Ana siguen siendo contactos sin necesidad de chat
+
+§46 y §47 · Un equipo se forma cubriendo huecos
+  ✓ B8.45 Ana declara qué le falta al equipo (§46)
+  ✓ B8.46 Con habilidades requeridas y áreas preferidas (§46)
+
+§47 · Candidatos, con su motivo
+  ✓ B8.47 El responsable pide candidatos
+  ✓ B8.48 Bruno aparece: cubre una de las habilidades que faltan
+  ✓ B8.49 Y la primera razón es la cobertura de habilidades (§47)
+  ✓ B8.50 Que nunca pasa del 50 % que le concede §47
+  ✓ B8.51 INVARIANTE: los motivos suman el puntaje
+  ✓ B8.52 Quien declaró no tener margen queda fuera del requisito de disponibilidad (§47)
+  ✓ B8.53 Y quien desactivó aparecer en sugerencias tampoco (§44, §62)
+  ✓ B8.54 El propio responsable no se sugiere a sí mismo
+
+§47 · Sugerir no es invitar
+  ✓ B8.55 Aparecer entre los candidatos NO le envió ninguna invitación (§47)
+
+§46 · El equipo
+  ✓ B8.56 Ana crea el equipo
+  ✓ B8.57 Solo el responsable invita -> 403
+  ✓ B8.58 Ana invita a Bruno
+  ✓ B8.59 Bruno la ve, con el objetivo del equipo
+  ✓ B8.60 La acepta y entra al equipo
+
+§93 · Lo que muestra la pantalla de equipos
+  ✓ B8.61 El equipo aparece en su lista
+  ✓ B8.62 Con su objetivo y las habilidades requeridas (§93)
+  ✓ B8.63 Lo cubierto y lo que falta (§93)
+  ✓ B8.64 Y las vacantes: 3 de máximo, 2 dentro (§93)
+  ✓ B8.65 Sin «ranking de mejores estudiantes» (§93)
+
+V2 §57 · Un equipo ya no abre conversación
+  ✓ B8.66 Aceptar la invitación no abre chat: la ruta está retirada (§57)
+  ✓ B8.67 El equipo existe igual: la colaboración no depende del chat
+
+El cupo se respeta al aceptar, no solo al invitar
+  ✓ B8.68 Ana invita a una tercera persona
+  ✓ B8.69 Entra, y el equipo llega a su máximo de 3
+  ✓ B8.70 Con el equipo lleno, invitar a alguien más -> 409 (§46)
+
+------------------------------------------------------------------------------
+  63 verificaciones OK · 0 fallos
+  El BATCH 8 queda demostrado de punta a punta.

@@ -1,0 +1,91 @@
+BATCH 4 — Actividades contra http://localhost:3020/api
+
+§22 · El docente gestiona actividades académicas dentro de su alcance
+
+Crear dentro del alcance
+  ✓ B4.1 El docente crea una actividad académica en su semestre
+  ✓ B4.2 El alcance por semestre queda registrado (§22)
+  ✓ B4.3 Queda como responsable, no solo como creador (§22)
+
+El alcance es un límite, no una etiqueta
+  ✓ B4.4 No puede dirigirla a un semestre fuera de su alcance -> 403
+  ✓ B4.5 Tampoco si mezcla uno suyo con uno ajeno -> 403
+  ✓ B4.6 Las extracurriculares son de la sociedad científica -> 403
+  ✓ B4.7 Un docente sin semestres habilitados no gestiona nada -> 403
+
+Gestionar lo ajeno
+  ✓ B4.8 El director crea una actividad de carrera
+  ✓ B4.9 Una actividad de carrera no declara semestres: es de toda la carrera
+  ✓ B4.10 Un docente NO gestiona una actividad de toda la carrera -> 403
+  ✓ B4.11 Un docente de otro semestre tampoco la gestiona -> 403
+  ✓ B4.12 V3.2 §25 Otro docente del mismo semestre la consulta, pero no la gestiona
+  ✓ B4.13 No puede ampliar el alcance hasta abarcar semestres ajenos -> 403
+
+§22 · Máquina de estados explícita
+
+Transiciones válidas
+  ✓ B4.14 De borrador a inscripciones abiertas
+  ✓ B4.15 Se cierran las inscripciones
+  ✓ B4.16 Se pueden reabrir: cerrar y reabrir es una decisión ordinaria
+
+Transiciones que no existen
+  ✓ B4.17 De inscripciones abiertas NO se vuelve a borrador -> 400
+  ✓ B4.18 El rechazo dice exactamente qué transición no existe
+
+Estados finales
+  ✓ B4.19 Una actividad se puede cancelar
+  ✓ B4.20 Una actividad cancelada ya no cambia de estado -> 400
+
+Ventana de fechas (§22)
+  ✓ B4.21 El fin no puede ser anterior al inicio -> 400
+
+§73.3 · La actividad declara qué habilidades trabaja
+  ✓ B4.22 Se crea declarando habilidades
+  ✓ B4.23 El detalle publica las habilidades declaradas
+  ✓ B4.24 Una habilidad que no existe se rechaza -> 400
+  ✓ B4.25 Se pueden cambiar las habilidades
+  ✓ B4.26 El cambio reemplaza, no acumula
+
+§23 · Intención, inscripción y experiencia son cosas distintas
+
+El estudiante se inscribe
+  ✓ B4.27 Manifiesta interés
+  ✓ B4.28 Se inscribe
+
+Inscribirse no es haber ido (§23)
+
+El estudiante se da de baja
+  ✓ B4.29 Puede darse de baja antes de que le confirmen (§23)
+  ✓ B4.30 Y volver a inscribirse después
+
+Solo el responsable confirma (§23)
+  ✓ B4.31 Un docente fuera del alcance no confirma -> 403
+  ✓ B4.32 Un estudiante no se confirma a sí mismo -> 403
+  ✓ B4.33 El docente responsable sí confirma
+
+Confirmar sí es experiencia
+  ✓ B4.34 La participación confirmada sí alimenta la afinidad (§23)
+  ✓ B4.35 Ya confirmada, el estudiante no puede borrar su experiencia -> 400
+
+Queda constancia de quién confirmó (§23)
+  ✓ B4.36 La confirmación queda auditada con su autor
+
+§24 y §55 · Una constancia respalda la participación, no la repite
+  ✓ B4.37 El responsable ve el registro del estudiante
+  ✓ B4.38 V5 La dirección ya no emite una constancia desde Afinia
+  ✓ B4.39 La participación queda registrada en su inscripción, sin constancia (§24, V5 §7)
+  ✓ B4.40 La constancia NO vuelve a sumar lo que la participación ya aportó (§24, §55)
+  ✓ B4.41 La participación aparece en el desglose: trazabilidad (§24)
+  ✓ B4.42 Con cero puntos, que es exactamente lo que significa «respalda, no suma»
+  ✓ B4.43 INVARIANTE: la suma del desglose sigue siendo el puntaje crudo del área (§52)
+
+§23 · Interés e inscripción no son experiencia
+  ✓ B4.44 Se publica una actividad en un área aislada
+  ✓ B4.45 Manifestar interés no suma afinidad: es intención (§23)
+  ✓ B4.46 Inscribirse tampoco: sigue sin haber ido (§23)
+  ✓ B4.47 El director confirma la participación
+  ✓ B4.48 Confirmar sí suma: ahí hubo experiencia (§23)
+
+------------------------------------------------------------------------------
+  48 verificaciones OK · 0 fallos
+  El BATCH 4 queda demostrado de punta a punta.

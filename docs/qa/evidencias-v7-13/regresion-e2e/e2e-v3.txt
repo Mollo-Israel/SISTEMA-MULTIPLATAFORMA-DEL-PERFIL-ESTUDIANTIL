@@ -1,0 +1,425 @@
+Afinia V3.1 — verificación contra la API
+
+BATCH 2 · Importación de docentes y alcance académico
+  ✓ V3.2.1 §7.1 El padrón de docentes se previsualiza en su propio circuito
+  ✓ V3.2.2 §7.1 Fila válida → NEW con sus semestres autorizados
+  ✓ V3.2.3 §7.1 Un semestre fuera de 1 a 8 → INVALID con motivo
+  ✓ V3.2.4 §7 Un docente con código EST- → INVALID (prefijo del rol)
+  ✓ V3.2.5 §7 Un correo que pertenece a un estudiante → CONFLICT
+  ✓ V3.2.6 §7.1 Un código repetido dentro del archivo → CONFLICT
+  ✓ V3.2.7 Un lote de docentes no se aplica por la ruta de estudiantes
+  ✓ V3.2.8 §7.1 Aplicar crea la cuenta docente
+  ✓ V3.2.9 §7.1 Idempotente: un lote aplicado no se vuelve a aplicar
+  ✓ V3.2.10 §7 La cuenta nace docente, pendiente de activación y con su código DOC-
+  ✓ V3.2.11 §8.2 Sus semestres autorizados quedan como alcance docente
+  ✓ V3.2.12 §7.1 Reimportar lo mismo → UNCHANGED
+  ✓ V3.2.13 §7.1 Cambiar semestres → UPDATE que lo explica
+  ✓ V3.2.14 §8.2 La actualización reemplaza los semestres habilitados
+  ✗ V3.2.15 El historial de docentes solo muestra lotes de docentes -> 2 lotes
+  ✓ V3.2.16 §7.1 El padrón de estudiantes acepta current_semester
+  ✓ V3.2.17 §8 Sin arrastre, el docente de 1º no ve a un estudiante de 3º
+  ✓ V3.2.18 §8.1 Administración fija el arrastre; se normaliza sin el semestre actual
+  ✓ V3.2.19 §8.1 Con arrastre a 1º, el docente de 1º ya puede acompañarlo
+  ✓ V3.2.20 §8.1 Y aparece en su listado de estudiantes
+  ✓ V3.2.20b §8.1 Semestres de arrastre repetidos → 400
+  ✓ V3.2.21 §8.1 El estudiante no edita su propio alcance
+  ✓ V3.2.22 §8.1 El arrastre solo aplica a estudiantes
+  ✓ V3.2.23 §8.2 Usuarios filtra los docentes para configurar sus semestres
+
+BATCH 4 · Sugerencia dinámica, etiquetas y área → habilidades
+  ✓ V3.4.1 §9 Se crea un área con etiquetas
+  ✓ V3.4.2 §9.4 Las etiquetas se normalizan (minúsculas, espacios)
+  ✓ V3.4.3 §9.4 Advierte las etiquetas demasiado generales
+  ✓ V3.4.4 §9.4 Muestra qué áreas ya usan cada etiqueta
+  ✓ V3.4.5 §9.4 Al editar, el área no choca consigo misma
+  ✓ V3.4.6 §9.4 Una etiqueta repetida en la misma área se bloquea
+  ✓ V3.4.7 El análisis de etiquetas es de Administración
+  ✓ V3.4.8 §9.2 Se registra una habilidad en esa área
+  ✓ V3.4.9 §9.3 Una tecnología nueva hereda la sugerencia de una ya clasificada (catálogo dinámico)
+  ✓ V3.4.10 §74 Guardarla en un área incoherente no pasa en silencio: pide confirmación
+  ✓ V3.4.11 §9.3 Con un motivo explícito sí se guarda (y se audita)
+  ✓ V3.4.12 §67 Una habilidad de un área no elegida → 400 «pertenece a otra área»
+  ✓ V3.4.13 §4 Con el área de la habilidad elegida, se publica
+
+BATCH 5 · Mi perfil por pestañas y avatar de catálogo
+  ✓ V3.5.1 §11.2 El estudiante elige un avatar del catálogo
+  ✓ V3.5.2 §11.2 Nada fuera del catálogo: ni URLs ni claves inventadas
+  ✓ V3.5.3 §11.2 Puede quitarlo
+  ✓ V3.5.4 §11.1 Cada pestaña guarda lo suyo: cambiar «Sobre mí» no toca la disponibilidad
+  ✓ V3.5.5 §6.1 El semestre sigue siendo institucional (400)
+
+BATCH 6 · Internas y externas, multiárea, revisión por actor y responsable
+  ✓ V3.6.1 §12.1 Una oportunidad toca varias áreas; la primera es la principal
+  ✓ V3.6.2 §12.2 Dirección crea internas académicas sin revisión (NOT_REQUIRED)
+  ✓ V3.6.3 §4 Una habilidad de un área no elegida → 400 en su campo
+  ✓ V3.6.4 §12.1 Una externa exige proveedor y enlace oficial (errores por campo)
+  ✓ V3.6.5 §12.1 El docente propone una externa con proveedor y credencial esperada
+  ✓ V3.6.6 §17 Los dominios del emisor se guardan normalizados
+  ✓ V3.6.7 §12.2 Lo que propone el docente (también externas) pasa por Dirección
+  ✓ V3.6.8 §49 Un dominio inválido → 400
+  ✓ V3.6.9 §12.2 La Sociedad propone externas complementarias que revisa Dirección
+  ✓ V3.6.10 §6.5 Administración debe nombrar un responsable académico
+  ✓ V3.6.11 §12.2 El responsable de una académica es docente o Dirección
+  ✓ V3.6.12 §12.2 Administración publica sin revisión y conserva al responsable real
+  ✓ V3.6.13 V3.2 §17 Dirección reasigna el responsable; el docente no
+  ✓ V3.6.14 §12 Se filtran las externas
+  ✓ V3.6.15 §12.1 Filtrar por un área encuentra las oportunidades que la tienen como secundaria
+  ✓ V3.6.16 §12 El estudiante ve un único universo: origen y áreas de cada oportunidad
+
+BATCH 7 · Sin evidencia del estudiante, política de resultado y constancia automática
+  ✓ V3.7.1 §14 La oportunidad declara qué genera al terminar (la asistencia queda en la trayectoria)
+  ✓ V3.7.2 §13.1 Nunca se pide al estudiante evidencia de asistencia (el flag se ignora)
+  ✓ V3.7.3 §14 Una externa no emite constancia interna (su resultado es la credencial)
+  ✓ V3.7.4 §13 El estudiante se inscribe
+  ✓ V3.7.5 §65 La inscripción queda auditada (ACTIVITY_REGISTERED)
+  ✓ V3.7.6 §13.1 El estudiante no sube evidencia de que fue a una actividad
+  ✓ V3.7.7 §13 El responsable confirma la participación
+  ✓ V3.7.8 §14.1 Confirmar la asistencia no emite una constancia (V5 §1.2)
+  ✓ V3.7.9 §38 Tampoco se emite pidiéndola a mano (V5 §7.2)
+  ✓ V3.7.10 §14.1 La corrección a ausente funciona sin constancias de por medio
+  ✓ V3.7.11 Y volver a confirmar tampoco emite una constancia nueva
+  ✓ V3.7.12 §14 Sin política de constancia, confirmar no emite constancia
+  ✓ V3.7.13 §14.2 Una interna puede conducir a una credencial de un tercero (con su proveedor)
+
+BATCH 8 · Aceptación, elegibilidad, credencial histórica y referencia de validación
+  ✓ V3.8.1 §12 Se crea la oportunidad externa del proveedor
+  ✓ V3.8.2 §15 El estudiante se registra (REGISTERED)
+  ✓ V3.8.3 §15 En una externa no se «confirma asistencia»: se registra la aceptación
+  ✓ V3.8.4 §15 El responsable registra que el proveedor lo aceptó (ACCEPTED)
+  ✓ V3.8.5 §65 La aceptación queda auditada (EXTERNAL_OPPORTUNITY_ACCEPTED)
+  ✓ V3.8.6 §12 La aceptación ocupa cupo: con cupo 1, no entra un segundo
+  ✓ V3.8.7 Aceptado, el estudiante ya no se da de baja por su cuenta
+  ✓ V3.8.8 §15 ACCEPTED ≠ CREDENTIAL_EARNED: mientras no termine, no habilita adjuntar
+  ✓ V3.8.9 §15 La oportunidad en curso no aparece en «Adjuntar credencial»
+  ✓ V3.8.10 §15 Y la API lo rechaza aunque se envíe el id a mano
+  ✓ V3.8.11 §15 En una interna, aceptar es admitir la solicitud (no la aceptación de un proveedor ni la asistencia)
+  ✓ V3.8.12 §17 Un estudiante no ve la referencia de validación -> 403
+  ✓ V3.8.13 §17 Un docente que no responde por la oportunidad no la edita -> 403
+  ✓ V3.8.14 §17 El patrón del código no admite expresiones libres (sin ReDoS)
+  ✓ V3.8.15 §17 Solo una oportunidad que espera credencial lleva referencia
+  ✓ V3.8.16 §17 El responsable sube el certificado de ejemplo
+  ✓ V3.8.17 §27 No puede enlazar como ejemplo un archivo de otra persona
+  ✓ V3.8.18 §17 Referencia: curso esperado, patrón, ejemplo, y los dominios y proveedor de la oportunidad
+  ✓ V3.8.19 §65 La referencia queda auditada
+  ✓ V3.8.20 §17 El responsable abre el ejemplo
+  ✓ V3.8.21 §17 Un estudiante no puede bajar el ejemplo (no es una plantilla para imitar)
+  ✓ V3.8.22 El responsable da por finalizada la oportunidad
+  ✓ V3.8.23 §15 Terminada y aceptado: aparece en «Adjuntar credencial» (EVIDENCE_ELIGIBLE)
+  ✓ V3.8.24 §15 Se registra que la evidencia quedó habilitada (punto de notificación para B16)
+  ✓ V3.8.25 §15 A quien no fue aceptado no le aparece
+  ✓ V3.8.26 §15 Ni puede adjuntar una credencial a esa oportunidad
+  ✓ V3.8.27 §15 Adjunta la credencial de la oportunidad (source = opportunity)
+  ✓ V3.8.28 §65 Auditada (EXTERNAL_CREDENTIAL_CREATED)
+  ✓ V3.8.29 Una sola credencial por oportunidad
+  ✓ V3.8.30 Ya adjunta, deja de aparecer en el selector
+  ✓ V3.8.31 §5.6 La procedencia se ve: de qué oportunidad viene (sin datos internos de la oportunidad)
+  ✓ V3.8.32 §16 El origen no se cambia editando la credencial
+  ✓ V3.8.33 §16 Una credencial histórica no exige oportunidad previa (source = historical_external)
+  ✓ V3.8.34 §15 Aceptado en una que ya terminó: elegible de inmediato
+  ✓ V3.8.35 §15 Y queda registrado el aviso de evidencia habilitada
+  ✓ V3.8.36 §14.2 Una interna que conduce a una credencial también la habilita al confirmar y terminar
+
+BATCH 9 · Validación escalonada: fuente oficial, QR, insignias, FLAGGED y revisión excepcional
+  ✓ V3.9.1 §18.2 V7.1 URL oficial que identifica la credencial y nombra al estudiante: VERIFIED_MATCH como hallazgo, pendiente de Dirección
+  ✓ V3.9.2 §18.6 La IA no interviene en el nivel: respaldo determinista
+  ✓ V3.9.3 §19 V4.1 B30 V7.1 La página oficial de otra persona contradice (FLAGGED) y queda para la decisión de Dirección
+  ✓ V3.9.4 §20 Página que requiere JavaScript o emisor desconocido: «responde, sin prueba legible», nunca corrobora
+  ✓ V3.9.5 (control) Una URL de Cisco fuera de sus dominios no puede corroborar
+  ✓ V3.9.6 §18.2 Proveedor caído: UNREACHABLE e INCONCLUSIVE, no «falso»
+  ✓ V3.9.7 §19 URL a un dominio que no es del emisor declarado: FLAGGED (no se borra)
+  ✓ V3.9.8 §19 La credencial FLAGGED sigue registrada
+  ✓ V3.9.9 §49 SSRF: la metadata de la nube no se consulta y la credencial queda señalada
+  ✓ V3.9.10 §18.1/§49 El QR se lee y su URL pasa por la misma protección SSRF (red interna bloqueada)
+  ✓ V3.9.11 §19 V7.1 QR a la verificación oficial que coincide: hallazgo favorable, pendiente de Dirección
+  ✓ V3.9.12 §18.1/§48 Sin QR no falla: archivo legible y coherente queda SUPPORTED (respaldo parcial)
+  ✓ V3.9.13 §18.3 V7.1 Open Badge 2.0 hosted del emisor con destinatario propio: hallazgo favorable, pendiente de Dirección
+  ✓ V3.9.14 §18.3 Insignia de otra persona: FLAGGED
+  ✓ V3.9.15 §17 Código que no sigue el patrón del proveedor: FLAGGED
+  ✓ V3.9.16 §19 El documento es de otro curso y otro emisor que la oportunidad: FLAGGED
+  ✓ V3.9.17 §19 Sin URL, el documento coincide con la oportunidad: SUPPORTED, no CORROBORATED
+  ✓ V3.9.18 §16 V7.1 Histórica: fases técnicas «no aplica» y directo a revisión de Dirección
+  ✓ V3.9.19 §16 Una credencial de oportunidad ya llega pedida: no hay que pedirla
+  ✓ V3.9.20 §16 Y la API no crea un segundo pedido
+  ✓ V3.9.21 §16 Un docente ajeno no ve el documento del estudiante
+  ✓ V3.9.22 V7.1 Ya está pedida: no se pide dos veces
+  ✓ V3.9.23 Y la vista no ofrece pedirla otra vez
+  ✓ V3.9.24 §6.5 V4.1 Revisan Dirección y, como excepción auditada, Administración; ni docente ni estudiante
+  ✓ V3.9.25 §16 V7.1 Dirección ve la solicitud con su origen y sin procesamiento técnico
+  ✓ V3.9.26 §16 Con la revisión pedida, Dirección abre el documento
+  ✓ V3.9.27 §16 Decidir exige explicar cómo se comprobó
+  ✓ V3.9.28 §16 La revisión excepcional es la única vía para corroborar una histórica sin verificador
+  ✓ V3.9.29 §65 Queda auditada (EXTERNAL_CREDENTIAL_MANUAL_REVIEWED)
+  ✓ V3.9.30 §19 V7.1 Si cambia lo declarado, la revisión anterior queda archivada y se reenvía a Dirección
+  ✓ V3.9.31 Administración puede revalidar lo procesado con una versión anterior del validador
+
+BATCH 10 · Borrador incompleto, requisitos para activar, multiárea, TEAM y enlace público
+  ✓ V3.10.1 §21 Un borrador se guarda incompleto
+  ✓ V3.10.2 §22 La lista de requisitos dice qué falta
+  ✓ V3.10.3 §22 Activar sin cumplir los requisitos → 400 con lo que falta
+  ✓ V3.10.4 §22 Crear como ACTIVE sin requisitos no deja nada a medias
+  ✓ V3.10.5 §21.2 Un proyecto toca varias áreas, con tecnologías de cada una
+  ✓ V3.10.6 §4 Una tecnología de otra área se rechaza
+  ✓ V3.10.7 §22 Un enlace que no es de repositorio no sirve
+  ✓ V3.10.8 §22 Un repositorio privado no sirve
+  ✓ V3.10.9 §22 Uno que no existe tampoco
+  ✓ V3.10.10 §22 Repositorio público comprobado
+  ✓ V3.10.11 §22 Una invitación sin responder bloquea la activación
+  ✓ V3.10.12 §22 Aceptar no basta: el integrante confirma su contribución
+  ✓ V3.10.13 §22 Confirmada, solo falta la evidencia de funcionamiento
+  ✓ V3.10.14 §22.1 Con una evidencia del funcionamiento, cumple todo
+  ✓ V3.10.15 §22 Pasa a ACTIVE
+  ✓ V3.10.16 §39/§65 La activación queda en la bitácora y en la auditoría
+  ✓ V3.10.17 §22 Un proyecto activo no puede quedarse sin áreas
+  ✓ V3.10.18 El camino completo de un estudiante deja el proyecto activo
+  ✓ V3.10.19 §40 PUBLIC_LINK genera un enlace secreto
+  ✓ V3.10.20 §40 Cualquiera con el enlace ve el resumen, sin iniciar sesión
+  ✓ V3.10.21 §40 El resumen no expone integrantes, archivos, bitácora ni auditoría
+  ✓ V3.10.22 §40 Un enlace inventado no lleva a nada
+  ✓ V3.10.23 §40 Al cambiar la visibilidad, el enlace deja de funcionar
+  ✓ V3.10.24 Solo el responsable vincula el proyecto a un equipo
+  ✓ V3.10.25 §40 PRIVATE: alguien del equipo que no es integrante del proyecto no lo ve
+  ✓ V3.10.26 §40 TEAM: el equipo vinculado sí lo ve
+  ✓ V3.10.27 Nadie vincula el proyecto de otra persona
+  ✓ V3.10.28 §21.1 Solo se vincula un equipo del que se forma parte
+
+BATCH 11 · Dependencias leídas de los manifiestos, ETag, cuota, reintentos y demo
+  ✓ V3.11.1 §24.1 Repositorio público, con su raíz y manifiestos controlados
+  ✓ V3.11.2 §24.3 package.json contiene «react» → React corroborada, con su origen
+  ✓ V3.11.3 §24.3 «@nestjs/core» → NestJS
+  ✓ V3.11.4 §24.3 «pg» → señal de PostgreSQL
+  ✓ V3.11.5 §24.3 docker-compose con servicio postgres → señal adicional de PostgreSQL
+  ✓ V3.11.6 §29 Redis sin rastro queda DECLARADA, no falsa
+  ✓ V3.11.7 §24.4 Lo encontrado y no declarado se informa sin añadirlo
+  ✓ V3.11.8 §24.1 Último push y README
+  ✓ V3.11.9 §24.3 requirements.txt: «fastapi» → FastAPI y «psycopg2-binary» → PostgreSQL
+  ✓ V3.11.10 §24.6 Dentro del plazo, la respuesta guardada evita volver a preguntar
+  ✓ V3.11.11 El responsable pide volver a comprobar
+  ✓ V3.11.12 §24.6 Al volver a preguntar se manda el ETag (If-None-Match)
+  ✓ V3.11.13 §24.6 Sin cambios (304), se reutiliza lo guardado sin gastar cuota
+  ✓ V3.11.14 §24.6 Cuota agotada: queda «sin comprobar», avisa y no bloquea
+  ✓ V3.11.15 §24.6 Un fallo pasajero se reintenta y se recupera
+  ✓ V3.11.16 §26 Demo: accesible, título, HTTPS y metadata pública
+  ✓ V3.11.17 §26 De una demo no se deduce backend ni base de datos
+
+BATCH 12 · Roles controlados, «usar uno de mis equipos», confirmación y corrección
+  ✓ V3.12.1 §30.1 El rol propuesto sale de un catálogo controlado
+  ✓ V3.12.2 §31 Se crea el proyecto con uno de mis equipos
+  ✓ V3.12.3 §31 Se precargan los integrantes del equipo como invitaciones (sin el responsable)
+  ✓ V3.12.4 §31 La bitácora conserva que las invitaciones salieron del equipo
+  ✓ V3.12.5 Repetirlo no duplica invitaciones
+  ✓ V3.12.6 Solo el responsable invita al equipo
+  ✓ V3.12.7 §30 Mientras no respondan, no se activa
+  ✓ V3.12.8 §30 Aceptar no basta: cada uno confirma su contribución
+  ✓ V3.12.9 §30.1 Al confirmar, el rol también es del catálogo
+  ✓ V3.12.10 §30 Pedir una corrección exige explicar qué
+  ✓ V3.12.11 §30 El integrante pide corregir lo que le propusieron; queda sin confirmar
+  ✓ V3.12.12 §39 La corrección queda en la bitácora
+  ✓ V3.12.13 El responsable edita su contribución directamente
+  ✓ V3.12.14 §30 Con una corrección pendiente, el proyecto no se activa
+  ✓ V3.12.15 §30 Cuando todos confirman, se activa
+
+BATCH 13 · CORROBORATED técnico + independiente, estado por tecnología y revisión docente
+  ✓ V3.13.1 §24.4 React: corroborada por manifiesto
+  ✓ V3.13.2 §29 Redis sin rastro: DECLARADA, no falsa ni restada
+  ✓ V3.13.3 §24.4 TypeScript: corroborada por los lenguajes del repositorio
+  ✓ V3.13.4 §28 Repositorio + corroboración técnica, sin señal independiente: SUPPORTED
+  ✓ V3.13.5 §28 V4.1 §12 Una captura no es fuente independiente: sigue SUPPORTED y lo explica
+  ✓ V3.13.6 §25 La explicación nombra la tecnología respaldada
+  ✓ V3.13.7 §28 Sin repositorio, una evidencia no basta: DECLARED
+  ✓ V3.13.8 §28 Repositorio + contexto, sin corroboración técnica: SUPPORTED, no CORROBORATED
+  ✓ V3.13.9 §29 El estudiante no confirma sus propias tecnologías
+  ✓ V3.13.10 §8.2 Un docente fuera de su alcance no puede
+  ✓ V3.13.11 §29 Confirmar exige retroalimentación específica
+  ✓ V3.13.12 §29 El docente autorizado confirma Redis: CORROBORATED_BY_ACADEMIC_REVIEW
+  ✓ V3.13.13 §28 Con retroalimentación docente: REVIEWED (no es aprobación oficial)
+  ✓ V3.13.14 La confirmación queda como retroalimentación visible para el equipo
+  ✓ V3.13.15 Solo se confirma una tecnología declarada en el proyecto
+  ✓ V3.13.16 Administración recalcula el respaldo con las reglas vigentes, en tandas
+  ✓ V3.13.17 Solo administración
+
+BATCH 14 · Afinidad V4: solo trayectoria corroborada, habilidades respaldadas sin porcentaje
+  ✓ V3.14.1 §35 El motor vigente es la versión 4 o posterior (V3.2: 5)
+  ✓ V3.14.2 §35.1 Un proyecto DRAFT no puntúa, aunque esté corroborado
+  ✓ V3.14.3 §35.3/§37 SUPPORTED no suma afinidad, pero sí respaldo
+  ✓ V3.14.4 §35.3 CORROBORATED + tecnología confirmada y corroborada: 18
+  ✓ V3.14.5 §35.1 Una tecnología solo declarada en el proyecto no puntúa
+  ✓ V3.14.6 §35.3 REVIEWED: 22
+  ✓ V3.14.7 §35.4 Una credencial sin corroborar no suma afinidad
+  ✓ V3.14.8 §35.4 CORROBORATED: 15
+  ✓ V3.14.9 §35.2 Una participación confirmada puntúa en todas las áreas de la actividad
+  ✓ V3.14.10 §36 Habilidad respaldada con su origen (proyecto)
+  ✓ V3.14.11 §36 La credencial corroborada respalda su tecnología
+  ✓ V3.14.12 §36 La tecnología solo declarada en el proyecto no figura como respaldada por él
+  ✓ V3.14.13 §36 Sin porcentaje ni puntaje de dominio por habilidad
+
+BATCH 15 · Ranking 40/30/15/10/5 sin afinidad, «No me interesa» y guardar
+  ✓ V3.15.1 §34 / V6 §9.2 Reparto publicado: 40 / 30 / 15 / 10 (sin el 5 % de clics)
+  ✓ V3.15.2 §34 Interés explícito 40 y tecnología de interés 15
+  ✓ V3.15.3 §34 Área de mejora 30
+  ✓ V3.15.4 §34 La afinidad no es factor de ninguna recomendación
+  ✓ V3.15.5 Los motivos suman el puntaje y cada uno explica por qué se muestra
+  ✓ V3.15.6 §34.1 «No me interesa»
+  ✓ V3.15.7 §34.1 Queda registrado RECOMMENDATION_DISMISSED
+  ✓ V3.15.8 §34.1 No modifica los intereses del perfil
+  ✓ V3.15.9 Lo descartado no vuelve a proponerse
+  ✓ V3.15.10 V6 §9.2 Descartar ya no baja lo parecido: el orden sale solo de lo declarado
+  ✓ V3.15.11 Lo no parecido no se ve afectado
+  ✓ V3.15.12 §34 Guardar algo parecido ya no suma (V4.1: no es señal del recomendador)
+
+BATCH 16 · Centro de notificaciones: eventos, leído/no leído, dedupe y recordatorios
+  ✓ V3.16.1 §33 PARTICIPATION_CONFIRMED llega al estudiante, no leída, con enlace
+  ✓ V3.16.2 §33.1 La misma alerta no se repite (dedupe_key)
+  ✓ V3.16.3 Nadie marca ni ve una notificación ajena -> 404
+  ✓ V3.16.4 La bandeja de otro no la incluye
+  ✓ V3.16.5 Marcar como leída baja el contador
+  ✓ V3.16.6 Filtro de no leídas
+  ✓ V3.16.7 La vuelta de recordatorios corre (cada media hora sola)
+  ✓ V3.16.8 §33.1 Inscrito: aviso el día antes, una sola vez aunque la vuelta corra dos veces
+  ✓ V3.16.9 §33.1 Y otro unas horas antes
+  ✓ V3.16.10 Nada para lo que falta mucho
+  ✓ V3.16.11 §33.1 Interesado: un solo aviso, con menos frecuencia
+  ✓ V3.16.12 §33 TEAM_INVITATION
+  ✓ V3.16.13 Invitación a proyecto
+  ✓ V3.16.14 §33 / V3.2 §47 PROJECT_CONFIRMATION_REQUIRED al aceptar
+  ✓ V3.16.15 §33 PROJECT_CONTRIBUTION_CHANGED
+  ✓ V3.16.16 §33 TEACHER_FEEDBACK_RECEIVED al responsable y a los integrantes
+  ✓ V3.16.17 Marcar todas como leídas
+
+BATCH 17 · Necesidad → semestres → áreas/skills → cupos → postulación → aceptar/rechazar → equipo
+  ✓ V3.17.1 §55 Una habilidad de otra área se rechaza
+  ✓ V3.17.2 Semestres fuera de rango se rechazan
+  ✓ V3.17.3 §55 Necesidad con semestres objetivo, áreas, skills y cupos
+  ✓ V3.17.4 La ve quien cursa un semestre objetivo, con sus cupos
+  ✓ V3.17.5 §55 No la ve quien está en otro semestre
+  ✓ V3.17.6 Ni puede postular cambiando el id a mano -> 404
+  ✓ V3.17.7 El responsable no postula a su propia necesidad
+  ✓ V3.17.8 §31 Postula
+  ✓ V3.17.9 No se postula dos veces
+  ✓ V3.17.10 §55 Sin abuso de texto libre: presentación de hasta 300
+  ✓ V3.17.11 §33 TEAM_APPLICATION al responsable por cada una
+  ✓ V3.17.12 Otro estudiante no ve las postulaciones
+  ✓ V3.17.13 Ni decide sobre ellas -> 404
+  ✓ V3.17.14 El responsable ve quién, su semestre y qué cubre, sin ranking
+  ✓ V3.17.15 §55 Rechazar exige un motivo
+  ✓ V3.17.16 §55 Solo motivos predefinidos
+  ✓ V3.17.17 «Otro motivo» pide un comentario breve
+  ✓ V3.17.18 Rechaza con motivo y comentario opcional
+  ✓ V3.17.19 §33 TEAM_APPLICATION_REJECTED con el motivo
+  ✓ V3.17.20 Un rechazo no se reabre insistiendo
+  ✓ V3.17.21 §31 Aceptar constituye el equipo si no existía
+  ✓ V3.17.22 §33 TEAM_APPLICATION_ACCEPTED
+  ✓ V3.17.23 Entra al equipo y baja el cupo
+  ✓ V3.17.24 Con los cupos llenos la necesidad se cierra
+  ✓ V3.17.25 Y quien esperaba recibe «equipo completo», no silencio
+  ✓ V3.17.26 Una necesidad cerrada no recibe postulaciones
+  ✓ V3.17.27 Sin semestres objetivo la ve y postula cualquiera
+  ✓ V3.17.28 Retirar permite volver a postular, sin filas nuevas
+  ✓ V3.17.29 §56 Las sugerencias solo traen semestres elegibles
+  ✓ V3.17.30 §31 El equipo formado por postulaciones se usa en un proyecto: precarga sus integrantes
+  ✓ V3.17.31 §32 Sin chat: la mensajería sigue retirada (410)
+
+BATCH 18 · Mi trayectoria con niveles y currículo en dos niveles: secciones → ítems elegibles
+  ✓ V3.18.0 Preparación: proyecto corroborado, certificado institucional registrado y credencial declarada
+  ✓ V3.18.1 §42 Distingue Declarado, Con respaldo, Corroborado, Revisado e Inconcluso
+  ✓ V3.18.2 El proyecto revisado por un docente aparece como tal y es elegible para el currículo
+  ✓ V3.18.3 El borrador sigue en la trayectoria como inconcluso, explicado
+  ✓ V3.18.4 La inscripción sin confirmar dice qué le falta
+  ✓ V3.18.5 La participación confirmada está corroborada por el responsable
+  ✓ V3.18.6 La credencial sin corroborar sigue en la trayectoria, sin ofrecerse al currículo
+  ✓ V3.18.7 §42 Incluye constancias y feedback docente
+  ✓ V3.18.8 §42 Y la evolución de afinidad y respaldo
+  ✓ V3.18.9 La trayectoria es del estudiante: otro rol no la pide
+  ✓ V3.18.10 §43.1 / V6 §10.4 Paso 1: las nueve secciones, en orden y con lo que es cada una
+  ✓ V3.18.11 §43.3 Proyectos: solo el activo y corroborado; el borrador queda fuera con su motivo
+  ✓ V3.18.12 §43.1 Actividades internas confirmadas, separadas en académicas y extracurriculares
+  ✓ V3.18.13 §44 La inscripción sin confirmar no se ofrece
+  ✓ V3.18.14 §44 El documento se indica en la misma actividad, con su emisor real
+  ✓ V3.18.15 §45 Una credencial no corroborada no se ofrece: no prueba que terminaste
+  ✓ V3.18.16 §43.2 Paso 2: entra solo el ítem marcado
+  ✓ V3.18.17 La constancia de una actividad no marcada sigue como constancia
+  ✓ V3.18.18 §43.4 El orden elegido se respeta
+  ✓ V3.18.19 §44 Si la actividad ya está, su constancia no se duplica como otra experiencia
+  ✓ V3.18.20 §43.3 Pedir una credencial no corroborada por id se rechaza
+  ✓ V3.18.21 Y un borrador también
+  ✓ V3.18.22 Ni el proyecto de otra persona metiendo su id
+  ✓ V3.18.23 Una sección inventada en la selección se rechaza
+  ✓ V3.18.24 Sin lista, entran todos los elegibles con su nivel
+  ✓ V3.18.25 §43.4 El PDF sale de la misma selección
+  ✓ V3.18.26 §43.6 / V6 §10.4 Con el aviso del resumen
+  ✓ V3.18.27 Y sin lo que no se marcó
+
+BATCH 19 · Puntos por hechos controlados, idempotentes y sin tocar la afinidad
+  ✓ V3.19.1 §57 Marcar intereses o declarar un certificado no da puntos
+  ✓ V3.19.2 §57 Un borrador no da puntos, aunque se le suban varias capturas
+  ✓ V3.19.3 V4.1 §9.3 Activo y corroborado: el estudiante no se da puntos por su proyecto
+  ✓ V3.19.4 Idempotente: consultar o sumar archivos no repite puntos
+  ✓ V3.19.5 §32/§57 Aceptar contactos no da puntos: no se puede acumular aceptándose entre amigos
+  ✓ V3.19.6 V5 §10 Una colaboración aceptada (equipo) ya no suma: es una familia retirada
+  ✓ V3.19.7 §57 Y los puntos no mueven la afinidad ni el respaldo
+  ✓ V3.19.8 §57 El desglose de afinidad no menciona puntos ni insignias
+  ✓ V3.19.9 Los criterios se administran y se consultan
+  ✓ V3.19.10 Las insignias muestran si se obtuvieron y su avance
+
+BATCH 20 · Inicio por actor, analítica de Dirección con evolución y sin datos de más
+  ✓ V3.20.1 §54 El Inicio de Administración cuenta cuentas por rol
+  ✓ V3.20.2 Y dice lo que requiere atención
+  ✓ V3.20.3 Del correo solo el modo: ni credenciales ni correos de personas
+  ✓ V3.20.4 Dirección no ve el Inicio de Administración
+  ✓ V3.20.4 un estudiante no ve el Inicio de Administración
+  ✓ V3.20.5 §52 El Inicio de Dirección muestra lo pendiente
+  ✓ V3.20.6 Una propuesta enviada aparece en lo pendiente
+  ✓ V3.20.7 un docente no ve lo pendiente de Dirección
+  ✓ V3.20.7 la Sociedad no ve lo pendiente de Dirección
+  ✓ V3.20.7 un estudiante no ve lo pendiente de Dirección
+  ✓ V3.20.8 §52 Analítica trae la evolución por área y mes
+  ✓ V3.20.9 §65 Cada fila respeta el tamaño mínimo de grupo o se suprime con su motivo
+  ✓ V3.20.10 Agregada por mes: sin identificadores de estudiantes
+  ✓ V3.20.11 Un docente no ve la analítica de la carrera
+  ✓ V3.20.12 §51 El resumen del panel docente responde dentro de su alcance
+  ✓ V3.20.13 §53 Las métricas de la Sociedad traen periodo, categoría y área para filtrar
+  ✓ V3.20.14 Y ningún dato de perfiles
+
+BATCH 22 · La app del estudiante: avisos, actividades con pestañas, trayectoria y equipos
+  ✓ V3.22.1 §60 La pestaña Avisos tiene su contador
+  ✓ V3.22.2 Cada aviso trae título, texto, enlace y estado de lectura
+  ✓ V3.22.3 El enlace lleva a una sección que la app sabe abrir (Actividades)
+  ✓ V3.22.4 «Para ti» recibe grupos con ítems, motivo y estado
+  ✓ V3.22.5 «Historial» se arma con las inscripciones confirmadas
+  ✓ V3.22.6 §42 Mi trayectoria en la app: niveles y la actividad confirmada
+  ✓ V3.22.7 §55 La app ve la necesidad con cupos, semestres y su postulación
+  ✓ V3.22.8 Postula desde la app y la ve en «Mis postulaciones»
+  ✓ V3.22.9 Y puede retirarla
+
+BATCH 23 · El listado del estudiante llega por páginas, con lo próximo primero
+  ✓ V3.23.1 Con limit responde { items, total, limit, offset }
+  ✓ V3.23.2 Lo más próximo primero
+  ✓ V3.23.3 El estudiante no ve borradores
+  ✓ V3.23.4 offset avanza por la lista sin cambiar el total
+  ✓ V3.23.5 Un % en la búsqueda se busca como texto, no como comodín
+  ✓ V3.23.6 «Interesadas» e «Inscritas» salen del servidor
+  ✓ V3.23.7 Cada ítem trae su propia inscripción
+  ✓ V3.23.8 Se rechaza limit 0
+  ✓ V3.23.8 Se rechaza limit 101
+  ✓ V3.23.8 Se rechaza offset negativo
+  ✓ V3.23.8 Se rechaza mine inventado
+  ✓ V3.23.9 Sin limit, la lista completa de siempre (compatibilidad)
+  ✓ V3.23.10 «Las mías» son solo las propias
+
+BATCH 24 · Cada hecho de §65 deja su evento de auditoría, sin secretos
+  ✓ V3.24.1 §65 PROJECT_CREATED queda en la auditoría del proyecto
+  ✓ V3.24.1 §65 MEMBER_INVITED queda en la auditoría del proyecto
+  ✓ V3.24.1 §65 MEMBER_ACCEPTED queda en la auditoría del proyecto
+  ✓ V3.24.1 §65 PROJECT_EVIDENCE_ADDED queda en la auditoría del proyecto
+  ✓ V3.24.1 §65 CONTRIBUTION_CONFIRMED queda en la auditoría del proyecto
+  ✓ V3.24.1 §65 REPOSITORY_CHECKED queda en la auditoría del proyecto
+  ✓ V3.24.1 §65 PROJECT_BACKING_CHANGED queda en la auditoría del proyecto
+  ✓ V3.24.1 §65 FEEDBACK_ADDED queda en la auditoría del proyecto
+  ✓ V3.24.2 §65 AFFINITY_RECALCULATED, sin puntajes en la metadata
+  ✓ V3.24.3 §65 CONTACT_ACCEPTED, con quien aceptó
+  ✓ V3.24.4 §65 TEAM_APPLICATION_CREATED, sin el texto de la presentación
+  ✓ V3.24.5 §65 TEAM_MEMBER_ACCEPTED al aceptar una postulación
+  ✓ V3.24.6 §65 CURRICULUM_EXPORTED: qué secciones, nunca el contenido
+  ✓ V3.24.7 La auditoría no la ve un estudiante
+
+378 comprobaciones correctas, 1 fallidas
+  - V3.2.15 El historial de docentes solo muestra lotes de docentes -> 2 lotes

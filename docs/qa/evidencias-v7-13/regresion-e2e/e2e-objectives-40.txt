@@ -1,0 +1,322 @@
+
+Prueba integral del 40% contra http://localhost:3020/api
+
+══════════════════════════════════════════════════════════════════════════════
+ OBJETIVO 1 — Gestion de usuarios, autenticacion, roles y control de acceso
+══════════════════════════════════════════════════════════════════════════════
+
+RF01 · Provisionamiento de cuentas (ya no existe registro publico)
+  ✓ 1.1 El registro publico ya no existe -> 404
+  ✓ 1.2 El administrador provisiona una cuenta -> 201
+  ✓ 1.3 La cuenta nace en PENDING_ACTIVATION
+  ✓ 1.4 La respuesta no expone el hash de contrasena
+  ✓ 1.5 Una cuenta provisionada no puede iniciar sesion -> 401
+  ✓ 1.6 Correo duplicado -> 409
+  ✓ 1.7 Correo no institucional -> 400
+  ✓ 1.8 Solo el administrador provisiona cuentas -> 401/403
+
+RF02 · Activacion de cuenta
+  ✓ 1.9 El alta NO le entrega el código de activación al administrador
+  ✓ 1.9b La invitación llega al correo institucional del titular
+  ✓ 1.10 Token de activacion invalido -> 400
+  ✓ 1.11 Contrasena que incumple la politica -> 400
+  ✓ 1.12 Activacion valida -> 200
+  ✓ 1.13 El token de activacion sirve una sola vez -> 400
+  ✓ 1.14 Pedir activacion de un correo inexistente responde igual (no enumera cuentas)
+
+RF2 · Gestion de sesion
+  ✓ 2.1 Login de estudiante devuelve token
+  ✓ 2.2 /auth/me identifica al usuario y su rol
+  ✓ 2.3 Sin token -> 401
+  ✓ 2.4 Credenciales incorrectas -> 401
+  ✓ 2.5 Estudiante NO accede a /users -> 403
+  ✓ 2.6 Estudiante NO accede a reportes de direccion -> 403
+  ✓ 2.7 Token con rol manipulado -> 401 (firma invalida)
+
+RF3 · Usuarios institucionales, roles y estados
+  ✓ 3.1 Admin crea Docente
+  ✓ 3.2 Admin crea Director de carrera
+  ✓ 3.3 Admin crea Sociedad cientifica
+  ✓ 3.4 No se puede crear otro ADMIN por este endpoint -> 400
+  ✓ 3.5 El administrador tambien provisiona estudiantes (§9.2)
+  ✓ 3.6 Busqueda de usuarios por apellido
+  ✓ 3.7 Busqueda de usuarios por correo
+  ✓ 3.8 Admin edita datos del usuario
+  ✓ 3.9 Admin configura semestres habilitados del docente
+  ✓ 3.10 Los semestres habilitados persisten
+  ✓ 3.11 Semestre fuera de rango -> 400
+  ✓ 3.12 Solo el rol docente admite semestres -> 400
+  ✓ 3.13 El listado muestra los semestres habilitados del docente
+  ✓ 3.14 El docente puede iniciar sesion mientras esta activo
+  ✓ 3.15 Admin suspende la cuenta
+  ✓ 3.16 Usuario desactivado NO puede iniciar sesion -> 401
+  ✓ 3.17 Usuario desactivado pierde acceso aun con su token vigente -> 401
+  ✓ 3.18 Admin reactiva la cuenta
+  ✓ 3.19 Tras reactivar, el acceso vuelve a funcionar iniciando sesion de nuevo
+
+RF4 · Catalogos y configuracion
+  ✓ 4.1 Admin crea area academica
+  ✓ 4.2 Admin edita area academica
+  ✓ 4.3 Admin da de baja un area
+  ✓ 4.4 Un area de baja deja de ofrecerse a los demas roles
+  ✓ 4.5 El administrador si ve las areas de baja
+  ✓ 4.6 Admin crea habilidad
+  ✓ 4.7 Admin da de baja una habilidad
+  ✓ 4.8 Admin define criterio de gamificacion (persistente)
+  ✓ 4.9 El criterio queda almacenado y listable
+  ✓ 4.10 El estudiante NO administra criterios -> 403
+
+══════════════════════════════════════════════════════════════════════════════
+ OBJETIVO 2 — Gestion del perfil estudiantil dinamico
+══════════════════════════════════════════════════════════════════════════════
+
+Creacion y datos declarativos del perfil
+  ✓ 2.1 El estudiante crea su perfil
+  ✓ 2.2 El administrador fija el semestre (§17.1)
+  ✓ 2.2b El semestre queda registrado
+  ✓ 2.3 Perfil duplicado -> 409
+  ✓ 2.4 Semestre fuera de rango (1-8) -> 400
+  ✓ 2.4b El estudiante NO puede cambiar su propio semestre (§17.1) -> 400
+  ✓ 2.5 Registra areas de interes con prioridad
+  ✓ 2.6 Prioridad fuera de rango -> 400
+  ✓ 2.7 Area inexistente -> 400
+  ✓ 2.8 Registra tecnologías de interés (V2 §21)
+  ✓ 2.9 Tipo de interés no válido -> 400
+
+Consulta, edicion y persistencia
+  ✓ 2.10 El estudiante consulta su perfil
+  ✓ 2.11 El estudiante edita su perfil
+  ✓ 2.12 Los cambios persisten tras releer
+  ✓ 2.13 Las areas donde desea mejorar persisten
+
+Completitud del perfil
+  ✓ 2.14 La completitud llega a 100% con los cinco elementos
+  ✓ 2.15 El perfil deja de estar incompleto
+
+Resumen dinamico integrado
+  ✓ 2.16 El estudiante consulta su resumen dinamico
+  ✓ 2.17 El resumen integra las areas de interes
+  ✓ 2.18 El resumen integra las tecnologías de interés (V2 §21)
+  ✓ 2.19 El resumen integra las areas de mejora
+  ✓ 2.20 El resumen incluye la seccion de proyectos
+  ✓ 2.21 El resumen incluye la seccion de actividades
+  ✓ 2.22 El resumen incluye certificados externos
+  ✓ 2.23 El resumen incluye constancias internas
+  ✓ 2.24 El resumen incluye areas de afinidad
+  ✓ 2.25 Las secciones sin datos llegan vacias (sin informacion inventada)
+  ✓ 2.26 Lo declarado no produce afinidad: sin trayectoria respaldada no hay áreas (V2 §45.1)
+
+Privacidad y alcance de consulta
+  ✓ 2.27 El resumen no expone credenciales
+  ✓ 2.28 El docente consulta el directorio de estudiantes
+  ✓ 2.29 El directorio informa que el alcance esta restringido
+  ✓ 2.30 El alcance corresponde a los semestres habilitados
+  ✓ 2.31 El directorio solo trae estudiantes de los semestres habilitados
+  ✓ 2.32 El estudiante del 5o semestre si aparece para el docente
+  ✓ 2.33 El estudiante del 7o semestre NO aparece para el docente
+  ✓ 2.34 El docente abre el perfil permitido dentro de su alcance
+  ✓ 2.35 La vista permitida NO incluye constancias internas
+  ✓ 2.36 La vista permitida NO expone el correo
+  ✓ 2.37 El docente NO abre un perfil fuera de sus semestres -> 403
+  ✓ 2.38 Tampoco accede a la afinidad de ese estudiante -> 403
+  ✓ 2.39 El director ve la cohorte completa (sin restriccion)
+  ✓ 2.40 El director si accede a cualquier perfil
+  ✓ 2.41 Un estudiante NO consulta el perfil de otro -> 403
+  ✓ 2.42 Un docente sin semestres habilitados no ve ningun estudiante
+  ✓ 2.43 Y tampoco puede abrir un perfil -> 403
+
+══════════════════════════════════════════════════════════════════════════════
+ OBJETIVO 3 — Gestion de actividades academicas y extracurriculares
+══════════════════════════════════════════════════════════════════════════════
+
+Responsable de cada tipo de actividad
+  ✓ 3.1 El director crea una actividad academica
+  ✓ 3.2 La actividad nace como borrador
+  ✓ 3.3 La sociedad cientifica NO publica actividades academicas -> 403
+  ✓ 3.4 La sociedad cientifica crea una extracurricular
+  ✓ 3.5 El director NO publica actividades extracurriculares -> 403
+  ✓ 3.6 El docente SI publica actividades academicas en su alcance (§22)
+  ✓ 3.6b El docente NO dirige una actividad a semestres fuera de su alcance -> 403
+  ✓ 3.6c El docente NO publica extracurriculares: son de la sociedad -> 403
+  ✓ 3.7 El estudiante NO publica actividades -> 403
+
+Edicion, publicacion y estados
+  ✓ 3.8 El director edita su actividad
+  ✓ 3.9 El estudiante NO ve la actividad en borrador
+  ✓ 3.10 No se puede inscribir en un borrador
+  ✓ 3.11 El director publica la actividad
+  ✓ 3.12 El panel del responsable lista sus actividades
+  ✓ 3.13 V3.2 §26 El panel del director incluye la extracurricular aprobada, para seguimiento
+  ✓ 3.14 La sociedad NO edita una actividad academica -> 403
+
+Consulta, filtros e inscripcion del estudiante
+  ✓ 3.15 El estudiante ve la actividad publicada
+  ✓ 3.16 Filtro por tipo de actividad
+  ✓ 3.17 Filtro por categoria (del catalogo administrable)
+  ✓ 3.18 Filtro por area academica
+  ✓ 3.19 El estudiante abre el detalle de la actividad
+  ✓ 3.20 El detalle indica que aun no esta inscrito
+  ✓ 3.21 El detalle indica que admite inscripcion
+  ✓ 3.22 El detalle informa los cupos disponibles
+  ✓ 3.23 El estudiante marca interes
+  ✓ 3.24 Interes duplicado -> 400
+  ✓ 3.25 El estudiante se inscribe (solicitud pendiente)
+  ✓ 3.26 Inscripcion duplicada -> 400
+  ✓ 3.27 El detalle refleja el estado de inscripcion del estudiante
+  ✓ 3.28 "Mis actividades" lista la inscripcion
+
+Estados que bloquean la inscripcion
+  ✓ 3.29 Actividad cerrada -> 400 al inscribirse
+  ✓ 3.30 El mensaje explica que las inscripciones estan cerradas
+  ✓ 3.31 Actividad con fecha pasada -> 400
+  ✓ 3.32 Actividad cancelada -> 400
+  ✓ 3.33 Actividad inexistente -> 404
+
+══════════════════════════════════════════════════════════════════════════════
+ OBJETIVO 4 — Gestion de participacion y evidencias
+══════════════════════════════════════════════════════════════════════════════
+
+RF10 · Registro de asistencia y participacion
+  ✓ 4.1 El responsable consulta los participantes
+  ✓ 4.2 El estudiante inscrito aparece en la lista
+  ✓ 4.3 La lista trae el nombre del estudiante, no solo su identificador
+  ✓ 4.4 El docente NO consulta participantes -> 403
+  ✓ 4.5 El estudiante NO consulta participantes -> 403
+  ✓ 4.6 El docente NO registra participacion -> 403
+  ✓ 4.7 La sociedad NO registra participacion en una actividad academica -> 403
+  ✓ 4.8 El estudiante NO confirma su propia participacion -> 403
+  ✓ 4.9 El director registra la participacion como CONFIRMADA
+  ✓ 4.10 No se registra participacion de quien no se inscribio -> 404
+  ✓ 4.11 El perfil dinamico refleja la participacion confirmada
+  ✓ 4.12 La afinidad se recalculo con la participacion confirmada
+  ✓ 4.13 Se confirma un segundo participante (cupo 2)
+  ✓ 4.14 Con el cupo lleno no se admite a otro, y sin admisión no hay asistencia -> 409
+  ✓ 4.15 Se registra una ausencia
+
+RF11 · Evidencias con subida real de archivos
+  ✓ 4.16 El estudiante sube un archivo real (PDF)
+  ✓ 4.17 La subida devuelve un identificador, no una URL reenviable (§27)
+  ✓ 4.18 Se detecta el tipo por la firma real del archivo
+  ✓ 4.19 Se conserva el tamano del archivo
+  ✓ 4.20 La subida calcula la huella SHA-256 del contenido (§28)
+  ✓ 4.22 La evidencia con archivo queda registrada
+  ✓ 4.22b La evidencia publica la ruta de descarga del archivo
+  ✓ 4.22c Conocer la URL NO permite descargar sin sesion -> 401
+  ✓ 4.23 Su titular si lo descarga, y el contenido coincide
+  ✓ 4.24 Otro estudiante NO descarga el archivo ajeno
+  ✓ 4.23 Formato no permitido -> 400
+  ✓ 4.23b Un archivo que miente sobre su tipo se rechaza por su firma (§27.3) -> 400
+  ✓ 4.24 Archivo mayor al maximo (10 MB, §27.3) -> rechazado
+  ✓ 4.25 Subida sin sesion -> 401
+  ✓ 4.26 V3 §13.1 Una actividad no pide evidencia de asistencia al estudiante -> 400
+  ✓ 4.27 Los metadatos del archivo los resuelve el servidor, no el cliente (§27.2)
+  ✓ 4.28 Evidencia de enlace asociada a un area
+  ✓ 4.29 Evidencia de tipo archivo sin storedFileId -> 400
+  ✓ 4.30 Evidencia de tipo enlace sin externalUrl -> 400
+  ✓ 4.31 No se adjunta evidencia de una actividad ajena -> 400
+  ✓ 4.32 El estudiante lista sus evidencias
+  ✓ 4.33 No se elimina la evidencia de otro estudiante -> 403
+
+Certificados externos
+  ✓ 4.34 El estudiante registra un certificado externo con archivo
+  ✓ 4.35 El archivo del certificado queda vinculado
+  ✓ 4.36 El certificado guarda su area academica
+  ✓ 4.37 Fecha de emision futura -> 400
+  ✓ 4.38 El estudiante edita su certificado
+  ✓ 4.39 El estudiante lista sus certificados
+  ✓ 4.40 Otro rol NO registra certificados del estudiante -> 403
+
+RF12 · Constancia interna autorizada
+  ✓ 4.41 El director consulta los participantes elegibles
+  ✓ 4.42 V5 §1.2 Confirmar la asistencia ya no emite una constancia
+  ✓ 4.43 La sociedad cientifica NO emite constancias -> 403
+  ✓ 4.44 El docente NO emite constancias -> 403
+  ✓ 4.45 El estudiante NO emite constancias -> 403
+  ✓ 4.46 Sin participacion confirmada NO se emite constancia -> 400
+  ✓ 4.47 Sin registro en la actividad -> 400
+  ✓ 4.48 V5 §7.2 Tampoco Dirección emite una constancia desde Afinia
+  ✓ 4.49 No se creó ninguna constancia para esa participación
+  ✓ 4.50 Pedirla otra vez tampoco la emite
+  ✓ 4.51 El listado de asistentes sigue sin constancia para el estudiante
+  ✓ 4.52 El estudiante consulta sus documentos registrados
+
+Integracion final en el perfil dinamico
+  ✓ 4.53 El perfil dinamico incluye la sección de documentos registrados
+  ✓ 4.54 El perfil dinamico muestra el certificado externo
+  ✓ 4.55 El perfil dinamico muestra las evidencias
+  ✓ 4.56 El perfil dinamico muestra la participacion confirmada
+  ✓ 4.57 Las areas de afinidad integran toda la trayectoria
+  ✓ 4.58 La vista permitida sigue sin exponer las constancias internas
+
+══════════════════════════════════════════════════════════════════════════════
+ CIERRE FINAL — RF4 · RF5 · RF8 · RF12
+══════════════════════════════════════════════════════════════════════════════
+
+RF4 · Catálogo administrable de categorías de actividad
+  ✓ 5.1 El catálogo de categorías es consultable
+  ✓ 5.2 La migración conservó las 14 categorías originales
+  ✓ 5.3 Las categorías conservan su código y su tipo aplicable
+  ✓ 5.4 El administrador crea una categoría
+  ✓ 5.5 Código de categoría duplicado -> 409
+  ✓ 5.6 Nombre de categoría duplicado -> 409
+  ✓ 5.7 Código con formato inválido -> 400
+  ✓ 5.8 El administrador edita la categoría
+  ✓ 5.9 El estudiante NO administra categorías -> 403
+  ✓ 5.10 Se publica una actividad con la categoría nueva
+  ✓ 5.11 La actividad devuelve la categoría del catálogo, no un enum
+  ✓ 5.12 Categoría que no aplica al tipo de actividad -> 400
+  ✓ 5.13 Categoría inexistente -> 400
+  ✓ 5.14 El administrador da de baja la categoría
+  ✓ 5.15 El sistema informa cuántas actividades la usan
+  ✓ 5.16 La actividad existente conserva su categoría dada de baja
+  ✓ 5.17 No se publica una actividad nueva con categoría dada de baja -> 400
+  ✓ 5.18 La categoría dada de baja deja de ofrecerse a los demás roles
+
+RF5 · Intereses en texto libre y áreas de preferencia
+  ✓ 5.19 El estudiante consulta sus intereses
+  ✓ 5.20 El estudiante agrega un interés en texto libre
+  ✓ 5.21 El interés se guarda tal como se escribió
+  ✓ 5.22 Un segundo interés, sin descripción, también se acepta
+  ✓ 5.23 Interés duplicado (sin distinguir mayúsculas) -> 409
+  ✓ 5.24 Interés vacío -> 400
+  ✓ 5.25 Interés demasiado largo -> 400
+  ✓ 5.26 El estudiante edita su interés
+  ✓ 5.27 No se edita el interés de otro estudiante
+  ✓ 5.28 El listado devuelve los dos intereses vigentes
+  ✓ 5.29 Las áreas de preferencia se registran aparte
+  ✓ 5.30 El perfil dinámico muestra los intereses en texto libre
+  ✓ 5.31 El perfil dinámico muestra las áreas de preferencia por separado
+  ✓ 5.32 Son dos estructuras distintas: texto libre frente a área con prioridad
+  ✓ 5.33 El estudiante elimina un interés
+  ✓ 5.34 El interés eliminado desaparece del listado
+
+RF8 · Filtros por categoría, área, modalidad y fecha
+  ✓ 5.35 Actividad virtual de referencia creada
+  ✓ 5.36 Actividad presencial de referencia creada
+  ✓ 5.37 Filtro por modalidad
+  ✓ 5.38 El filtro de modalidad devuelve la actividad esperada
+  ✓ 5.39 Filtro por fecha desde
+  ✓ 5.40 El filtro desde excluye lo anterior al rango
+  ✓ 5.41 Filtro por fecha hasta
+  ✓ 5.42 Rango de un solo día incluye la actividad de ese día
+  ✓ 5.43 Filtros combinados (categoría + área + modalidad + fecha)
+  ✓ 5.44 Rango de fechas invertido -> 400
+  ✓ 5.45 Fecha con formato inválido -> 400
+  ✓ 5.46 Modalidad inexistente -> 400
+  ✓ 5.47 Una combinación sin coincidencias devuelve lista vacía, no error
+  ✓ 5.48 Al limpiar los filtros vuelve la oferta completa
+
+RF12 · Regla de actividad autorizada
+  ✓ 5.49 Actividad en borrador -> no autorizada -> 400
+  ✓ 5.50 Actividad cancelada -> no autorizada -> 400
+  ✓ 5.51 Un borrador no tiene asistencia registrada (lista vacía)
+  ✓ 5.52 La sociedad confirma la participación en su actividad
+  ✓ 5.53 V5 El director tampoco emite una constancia sobre una extracurricular
+  ✓ 5.54 Pedirla otra vez tampoco la emite
+  ✓ 5.55 V2 §30 V5: la sociedad, aun siendo responsable, tampoco la emite
+  ✓ 5.56 El perfil dinámico no muestra constancias que Afinia no emitió
+
+──────────────────────────────────────────────────────────────────────────────
+  249 verificaciones OK · 0 fallos
+  Los cuatro objetivos del 40% quedan demostrados de punta a punta.
+

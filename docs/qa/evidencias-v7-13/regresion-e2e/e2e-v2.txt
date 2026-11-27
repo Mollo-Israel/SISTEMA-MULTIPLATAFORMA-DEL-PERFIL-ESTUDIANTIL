@@ -1,0 +1,189 @@
+Afinia V2 — verificación contra la API
+
+BATCH 2 · Identidad, sesión y correo
+  ✓ V2.2.1 §12 Alta manual sin código universitario -> 400 en ese campo
+  ✓ V2.2.2 §19 La invitación informa el estado del intento (QUEUED/SENT_TO_SMTP/FAILED)
+  ✓ V2.2.3 §12 El código universitario no se puede dejar vacío al editar
+  ✓ V2.2.3b §12 Toda cuenta lleva código: un docente sin código -> 400 en ese campo
+  ✓ V2.2.3c §12 El prefijo depende del rol: un docente con EST- -> 400 y pide DOC-
+  ✓ V2.2.3d §12 Formato PREFIJO-XXXXXXX: «DOC-12» -> 400
+  ✓ V2.2.3e §12 Se guarda en mayúsculas y el docente no lleva semestre
+  ✓ V2.2.3f La Sociedad científica indica su semestre al crearse -> 400 sin él
+  ✓ V2.2.3g La Sociedad científica se crea con su semestre y un código EST-
+  ✓ V2.2.3h El código es único entre todas las cuentas, no solo entre estudiantes -> 409
+  ✓ V2.2.3i El listado muestra el código y el semestre de cada cuenta
+  ✓ V2.2.4 §18 Login web devuelve el access token
+  ✓ V2.2.5 §18 En la web el refresh token NO viaja en el cuerpo
+  ✓ V2.2.6 §18 Va en una cookie HttpOnly, SameSite, limitada a /api/auth
+  ✓ V2.2.7 §18 Con la cookie se renueva y la cookie rota
+  ✓ V2.2.8 §18 F5 en medio de la renovación: la cookie anterior sirve y rota
+  ✓ V2.2.8b §18 Tras renovar con la cookie nueva, la anterior ya no sirve (rotación)
+  ✓ V2.2.9 §18 Logout revoca la sesión y borra la cookie
+  ✓ V2.2.10 §18 Tras logout la cookie no renueva
+  ✓ V2.2.11 §18 Sin la cabecera (móvil) el refresh token va en el cuerpo
+  ✓ V2.2.12 §18 Renovar sin token ni cookie -> 401
+  ✓ V2.2.13 §17 La contraseña no puede contener el código universitario
+  ✓ V2.2.14 §17 Ni el correo institucional
+  ✓ V2.2.15 §17 Más de 128 caracteres -> 400
+
+BATCH 3 · Bienvenida guiada, intereses por tecnología, sin nivel autodeclarado
+  ✓ V2.3.1 §20.2 Una cuenta nueva tiene pendientes los 4 obligatorios
+  ✓ V2.3.2 §20.2 La bienvenida muestra semestre y código para confirmarlos
+  ✓ V2.3.3 §20.2 No se puede terminar sin lo obligatorio, y dice qué falta
+  ✓ V2.3.4 §20.1 El paso «habilidades» ya no existe
+  ✓ V2.3.5 §20.2 Paso 1: confirma sus datos institucionales
+  ✓ V2.3.6 §22 El nivel autodeclarado se retiró -> 410
+  ✓ V2.3.7 §21 Solo «me interesa» o «quiero mejorar»
+  ✓ V2.3.8 §21 Tecnologías de interés y de mejora, sin duplicados
+  ✓ V2.3.9 §21 Declarar tecnologías no cambia la afinidad
+  ✓ V2.3.10 §21 El resumen trae las tecnologías de interés
+  ✓ V2.3.11 §22 «skills» son las respaldadas, sin nivel autodeclarado
+  ✓ V2.3.12 §20.2 Elegir «prefiero no decirlo» cuenta como decisión de disponibilidad
+  ✓ V2.3.13 §20.2 Paso 4: privacidad básica revisada
+  ✓ V2.3.14 §20 Con lo obligatorio, la bienvenida termina (cuestionario opcional)
+  ✓ V2.3.15 §20.2 Basta un interés por tecnología (sin áreas)
+  ✓ V2.3.16 §6.1 El estudiante no puede cambiar su semestre
+
+BATCH 4 · Catálogos: alias, clasificación semántica y nombres únicos
+  ✓ V2.4.1 V3.2 §10.5 «React Native» coincide con la habilidad del catálogo: Desarrollo Móvil
+  ✓ V2.4.2 V3.2 §10.6 Guardar en Web algo relacionado con una habilidad de Móvil pide confirmar
+  ✓ V2.4.3 V3.2 §10.6 Sin reglas duras: con un motivo, el administrador decide
+  ✓ V2.4.4 §23.3 Para una tecnología nueva, se sugiere el área por su etiqueta (palabra completa)
+  ✓ V2.4.5 §23.3 Guardarla en otra área pide confirmar con motivo, y dice cuál se sugería
+  ✓ V2.4.6 §23.3 Con motivo, el administrador decide
+  ✓ V2.4.7 §23.3 Y la decisión queda auditada con su motivo
+  ✓ V2.4.8 §23.2 La habilidad guarda sus alias
+  ✓ V2.4.9 §23.2 Un alias no puede ser el nombre de otra habilidad
+  ✓ V2.4.10 §23.4 Nombres técnicos reales (C++, C#, .NET, Node.js, CI/CD) se aceptan
+  ✓ V2.4.11 §23.1 El nombre de un área es único sin importar mayúsculas ni espacios
+  ✓ V2.4.12 §23.2 Una habilidad sin área no existe
+
+BATCH 5 · Docente y Sociedad proponen, Dirección decide
+  ✓ V2.5.1 §28 El docente no elige semestres fuera de su alcance
+  ✓ V2.5.2 §27.3 El docente no publica sin aprobación
+  ✓ V2.5.3 §27.3 Nace en borrador, pendiente de enviar a revisión
+  ✓ V2.5.4 §31.2 V4.1 Lleva su regla de puntos, con los puntos del criterio elegido
+  ✓ V2.5.5 §27.6 Sin aprobación no se abre
+  ✓ V2.5.6 §27.3 Se envía a Dirección
+  ✓ V2.5.7 §27 En revisión no cambia su contenido
+  ✓ V2.5.8 §27 Dirección la ve entre las pendientes
+  ✓ V2.5.9 §27.3 El docente no aprueba su propia actividad
+  ✓ V2.5.10 §6.5 La administración no aprueba actividades
+  ✓ V2.5.11 §27.3 Observar exige decir qué cambiar
+  ✓ V2.5.12 §27.3 OBSERVED conserva la observación
+  ✓ V2.5.13 §27.3 Observada se puede editar
+  ✓ V2.5.14 §27.3 Y reenviar
+  ✓ V2.5.15 §27.3 Dirección aprueba
+  ✓ V2.5.16 §27.6 Aprobada, el docente la publica
+  ✓ V2.5.17 §88.12 La aprobación tiene historia completa
+  ✓ V2.5.18 §27 Publicada, su contenido no cambia sin Dirección
+  ✓ V2.5.19 §69 La aprobación queda auditada
+  ✓ V2.5.20 §27.3 REJECTED no se publica ni se reutiliza
+  ✓ V2.5.21 §27.4 La Sociedad no crea académicas
+  ✓ V2.5.22 §27.4 Sus extracurriculares pasan por Dirección
+  ✓ V2.5.23 §27.5 Dirección publica sin segunda autoridad
+  ✓ V2.5.24 §6.5 La administración no confirma participación
+  ✓ V2.5.25 §29 El responsable confirma
+  ✓ V2.5.26 §31.2 V4.1 La participación da los puntos del criterio que eligió la actividad, aprobado por Dirección
+  ✓ V2.5.27 §30 V5 El responsable ya no emite una constancia desde Afinia
+  ✓ V2.5.28 §6.5 La administración no otorga constancias
+  ✓ V2.5.29 §30 Sin constancias habilitadas en la actividad, no se emiten
+  ✓ V2.5.30 §31.2 Puntos en rango y solo hechos permitidos
+  ✓ V2.5.31 §80 Ninguna respuesta de actividades expone el hash de contraseña
+
+BATCH 7 · El certificado declara sus tecnologías; solo con respaldo cuentan
+  ✓ V2.7.1 §41 Se registra un certificado con sus tecnologías
+  ✓ V2.7.2 §41 El listado trae las tecnologías
+  ✓ V2.7.3 §41 Solo tecnologías del catálogo, sin repetir
+  ✓ V2.7.4 §41 §22 Un certificado solo declarado no respalda tecnologías
+  ✓ V2.7.5 §41 V7.1 M08 Corroborada, sus tecnologías cuentan como respaldadas con su procedencia; con respaldo solo automático, no
+  ✓ V2.7.6 §41 Editar reemplaza la lista de tecnologías
+
+BATCH 8 · La IA es opcional y no decide; los nombres de equipo se moderan por reglas
+  ✓ V2.8.1 §84 Con AI_PROVIDER=none el sistema arranca y declara la IA apagada
+  ✓ V2.8.2 §84 Pedir ayuda sin proveedor responde «no disponible», sin error ni registro
+  ✓ V2.8.3 §43.2 Cada tarea tiene sus roles; la moderación no se pide desde fuera
+  ✓ V2.8.4 §43.2 Una tarea fuera de la lista se rechaza
+  ✓ V2.8.5 §23.3 Lo que una regla resuelve no necesita IA, ni siquiera apagada
+  ✓ V2.8.6 §43 Sin inconsistencias registradas, la explicación la da la regla
+  ✓ V2.8.7 §43 La IA no abre puertas: el proyecto ajeno sigue cerrado
+  ✓ V2.8.8 §43.3 No se acepta una sugerencia inexistente o ajena
+  ✓ V2.8.9 §43.3 El registro de ejecuciones es de soporte (solo Administración)
+  ✓ V2.8.10 §43.4 El registro de soporte muestra metadatos, no contenido
+  ✓ V2.8.11 §44 Reglas: términos prohibidos (también con números o letras sueltas), contacto, longitud, caracteres, repeticiones
+  ✓ V2.8.12 §44 Sin falsos positivos: «Computación» no choca con un término prohibido
+  ✓ V2.8.13 §23.4 Nombres técnicos con signos válidos se aceptan
+  ✓ V2.8.14 §44 Renombrar vuelve a moderar, y solo lo hace el responsable
+  ✓ V2.8.15 §69 Cada rechazo queda en la auditoría con la regla, sin el nombre
+
+BATCH 10 · Recomendaciones: 35 interés · 25 mejora · 20 orientación · 10 afinidad · 10 contexto
+  ✓ V2.10.1 V3 §34 Interés explícito de prioridad 1: 40 puntos
+  ✓ V2.10.2 V3 §34 Área de mejora: 30 puntos
+  ✓ V2.10.3 §53 Tecnología de interés que la actividad trabaja: suma interés, con su motivo
+  ✓ V2.10.4 §53 Tecnología a mejorar: suma en «mejora»
+  ✓ V2.10.5 §54 Filtro duro: una actividad de otro semestre no se recomienda
+  ✓ V2.10.6 §54 Sin refuerzos fuera de la regla
+  ✓ V2.10.7 §53 Los motivos suman exactamente el puntaje, siempre ≤ 100
+  ✓ V2.10.8 V3 §34 El área confirmada desde la orientación aporta 10
+  ✓ V2.10.9 V3 §34 / V6 §9.2 Las reglas publicadas: 40/30/15/10 (sin el 5 % de clics)
+
+BATCH 11 · Sin chat; cada uno comparte sus canales y anota a sus contactos
+  ✓ V2.11.1 §57 Las rutas de chat responden 410 Gone
+  ✓ V2.11.2 §59 Cada canal valida su formato y se rechaza lo inseguro
+  ✓ V2.11.3 §59 Se normalizan y cada uno da un único enlace seguro
+  ✓ V2.11.4 §59 Un canal por tipo
+  ✓ V2.11.5 §59 Un contacto aceptado ve todos los canales que compartió el otro
+  ✓ V2.11.6 §56 Quien no es contacto no los ve
+  ✓ V2.11.7 §59 El correo institucional no se expone por omisión
+  ✓ V2.11.8 §56 Alias, contexto y canal preferido; solo entre contactos y con un canal que el otro comparte
+  ✓ V2.11.9 §56 La nota es personal: Ana no ve cómo la anotó Beto
+  ✓ V2.11.10 §58 En el perfil público solo aparecen los canales marcados como públicos
+  ✓ V2.11.11 §56 Deshecho el contacto, sus canales dejan de verse
+  ✓ V2.11.12 §59 Todos los canales son opcionales y se pueden quitar
+
+BATCH 12 · CV: plantillas, secciones nuevas, presentación aprobada y descargo
+  ✓ V2.12.1 §61.1 Se pueden elegir insignias y contacto autorizado
+  ✓ V2.12.2 §61.2 Hay tres plantillas estáticas
+  ✓ V2.12.3 §61.4 / V3 §43.6 El descargo es el texto exacto de la especificación
+  ✓ V2.12.4 §61.3 Una presentación propia reemplaza la biografía, sin aprobación aparte
+  ✓ V2.12.5 §61.1 El contacto son los canales que compartió; el correo institucional no entra
+  ✓ V2.12.6 §60 Sin presentación propia se usa la biografía
+  ✓ V2.12.7 §61 Las tres plantillas generan un PDF
+  ✓ V2.12.8 §61.4 El descargo va dentro del PDF en todas las plantillas
+  ✓ V2.12.9 §61.2 Las plantillas cambian tipografía y color, no el contenido
+  ✓ V2.12.10 §61 La presentación y el contacto llegan al PDF, con caracteres escapados
+  ✓ V2.12.11 §61.3 Un texto atribuido a una sugerencia no aceptada no se exporta
+  ✓ V2.12.12 §61.2 Largo máximo y solo plantillas existentes
+  ✓ V2.12.13 La descarga por enlace sigue funcionando, también con plantilla
+  ✓ V2.12.14 §61 El CV es solo del estudiante
+
+BATCH 13 · Panel académico por semestre, recursos consultados y métricas de sociedad
+  ✓ V2.13.1 §62 El panel docente se agrupa por semestre y solo con los suyos
+  ✓ V2.13.2 §62 Con estudiantes, perfiles activos, participación, proyectos visibles y necesidades de equipo
+  ✓ V2.13.3 §62 La suma por semestre cuadra con el total del alcance
+  ✓ V2.13.4 §28 Sin semestres habilitados, el panel no muestra a nadie
+  ✓ V2.13.5 §63 Dirección ve los recursos más consultados (personas que los abrieron)
+  ✓ V2.13.6 §63 Las tendencias de la carrera son de Dirección
+  ✓ V2.13.7 §64 Inscritos, confirmados, ausentes y quiénes volvieron
+  ✓ V2.13.8 §64 Métricas comparables por categoría
+  ✓ V2.13.9 §64 Solo sobre sus actividades
+
+BATCH 14 · Centro de ayuda, accesos por actor y auditoría
+  ✓ V2.14.1 §65 La ayuda se abre sin sesión (activar, recuperar)
+  ✓ V2.14.2 §62 §77 El docente ve las necesidades de equipo de sus semestres, y solo esas
+  ✓ V2.14.3 §28 Sin alcance no ve ninguna; un estudiante no entra
+  ✓ V2.14.4 §62 Sin correos en la vista del docente
+  ✓ V2.14.5 §77 La auditoría es de la Administración
+  ✓ V2.14.6 §69 Sin datos sensibles en la auditoría
+  ✓ V2.14.7 §77 La Administración gestiona recursos; un docente solo propone (pendiente; V4.1)
+
+BATCH 15 · Móvil solo para estudiantes, aplicado por la API
+  ✓ V2.15.1 §67 El estudiante inicia sesión en la app móvil
+  ✓ V2.15.2 §67 Un docente no obtiene sesión desde la app móvil
+  ✓ V2.15.3 §67 El mensaje lo orienta a la web
+  ✓ V2.15.4 §67 Tampoco la Administración
+  ✓ V2.15.5 §67 Desde la web el docente entra con normalidad
+  ✓ V2.15.6 §67 Una sesión de personal no se renueva desde el móvil
+  ✓ V2.15.7 §67 Y esa misma sesión sigue sirviendo en la web
+
+162 comprobaciones correctas, 0 fallidas

@@ -1,0 +1,89 @@
+BATCH 5 — Proyectos contra http://localhost:3020/api
+
+§32 · Un proyecto nace declarado y nada más
+  ✓ B5.1 El estudiante crea un proyecto sin aprobación previa
+  ✓ B5.2 Crear un proyecto por sí solo deja DECLARED (§32)
+  ✓ B5.3 El sistema explica por qué está en ese nivel
+
+§41 · La bitácora empieza en el minuto uno
+  ✓ B5.4 El alta queda registrada en la bitácora (§41)
+  ✓ B5.5 Con su autor
+
+§33 y §34 · Nadie atribuye experiencia a otra persona
+
+Invitación y aceptación
+  ✓ B5.6 El responsable invita a un compañero
+  ✓ B5.7 El invitado ve la invitación
+  ✓ B5.8 La acepta
+
+Aceptar no es haber hecho
+  ✓ B5.9 Aceptar NO atribuye experiencia todavía (§33)
+  ✓ B5.10 Su contribución figura como no confirmada
+
+El responsable propone; no atribuye
+  ✓ B5.11 El responsable propone una contribución
+  ✓ B5.12 La propuesta sigue sin confirmar: la escribió otra persona (§33)
+  ✓ B5.13 Y sigue sin contar para su perfil
+
+§34 · Las tecnologías del integrante son las suyas
+  ✓ B5.14 Quien no es integrante no confirma nada -> 404
+  ✓ B5.15 El integrante confirma su contribución
+  ✓ B5.16 Queda marcada como confirmada por él
+  ✓ B5.17 Declara UNA tecnología, no las cuatro del proyecto (§34)
+  ✓ B5.17b V3 §22 Con repositorio, tecnologías, integrantes confirmados y evidencia, se activa
+  ✓ B5.18 Confirmada, el proyecto sí alimenta su afinidad (§33)
+
+Volver a proponer retira la confirmación
+  ✓ B5.19 Editar lo que ya confirmó exige que vuelva a revisarlo (§33)
+
+§35 · La evidencia es de quien la aporta
+  ✓ B5.20 El integrante sube un archivo
+  ✓ B5.21 Y la adjunta al proyecto
+  ✓ B5.22 La evidencia queda a su nombre, no al del creador (§35)
+  ✓ B5.23 La evidencia figura en el desglose de quien la aportó (§35)
+  ✓ B5.23b Y NO en el del creador del proyecto (§35)
+  ✓ B5.24 La afinidad del creador NO cambia por una evidencia ajena (§35)
+  ✓ B5.24b Ni la del propio integrante: una evidencia respalda, no es un proyecto más (§55)
+
+§27 · El archivo sigue teniendo dueño
+  ✓ B5.25 No se puede adjuntar el archivo de otra persona -> 403
+  ✓ B5.26 Una evidencia de archivo sin storedFileId -> 400
+
+§36 · El respaldo se deriva, no se declara
+  ✓ B5.27 Con integrante aceptado y evidencia sube de DECLARED (§36)
+  ✓ B5.28 Y dice que es por el integrante aceptado
+  ✓ B5.29 Y por la evidencia
+
+§37 y §39 · Repositorio y demo son opcionales
+  ✓ B5.30 Un proyecto sin repositorio se crea igual (§37)
+  ✓ B5.31 No hay nada que comprobar, y eso no lo penaliza
+  ✓ B5.32 Se queda en DECLARED, que es lo correcto
+
+§31 · La demo se comprueba con las mismas protecciones
+  ✓ B5.33 Una demo que apunta al bucle local se rechaza (§31)
+  ✓ B5.34 Y el proyecto queda marcado, no eliminado (§36)
+
+§38 · Lo detectado no afirma dominio
+  ✓ B5.35 La respuesta declara qué significa «detectado» (§38)
+
+§40 y §41 · Retroalimentación docente y bitácora
+  ✓ B5.36 El docente registra retroalimentación
+  ✓ B5.37 Con retroalimentación el proyecto pasa a REVIEWED (§36, §40)
+  ✓ B5.38 La bitácora registra la invitación (§41)
+  ✓ B5.39 Y la aceptación
+  ✓ B5.40 Y la confirmación de contribución
+  ✓ B5.41 Y la evidencia añadida
+  ✓ B5.42 Y la retroalimentación
+  ✓ B5.43 Y cada cambio de nivel de respaldo
+  ✓ B5.44 Ningún evento guarda secretos en su metadato (§41)
+
+La bitácora es de quien puede ver el proyecto
+  ✓ B5.45 Un estudiante ajeno no la consulta
+
+§40 · La retroalimentación no es una nota
+  ✓ B5.46 El autor cambia la visibilidad
+  ✓ B5.47 El cambio de visibilidad queda en la bitácora (§41)
+
+------------------------------------------------------------------------------
+  50 verificaciones OK · 0 fallos
+  El BATCH 5 queda demostrado de punta a punta.

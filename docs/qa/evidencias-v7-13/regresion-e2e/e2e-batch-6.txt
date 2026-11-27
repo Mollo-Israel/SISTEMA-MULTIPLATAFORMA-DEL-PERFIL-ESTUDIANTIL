@@ -1,0 +1,76 @@
+Afinidad V3 contra http://localhost:3020/api
+
+§45.1 · Intereses, áreas de mejora y tecnologías de interés no suman afinidad
+  ✓ B6.1 Un interés declarado no produce afinidad, sea cual sea su prioridad (§45.1)
+  ✓ B6.2 Un área de mejora tampoco (§45.1)
+  ✓ B6.3 Sin trayectoria respaldada, el estado lo dice
+  ✓ B6.4 La escala es directa sobre 100 (§47)
+  ✓ B6.5 El motor vigente es la versión 4 o posterior (V3.1 §35; V3.2 la lleva a 5)
+
+§47.1 · Solo la participación confirmada cuenta: 10, con rendimientos y tope de 25
+  ✓ B6.6 Inscribirse no suma afinidad (§29)
+  ✓ B6.7 El docente responsable confirma
+  ✓ B6.8 Una participación confirmada vale 10 (§47.1)
+  ✓ B6.9 Y aporta 8 de respaldo; confirmar ya no emite una constancia (§49, V5 §7)
+  ✓ B6.10 La 2.ª vale el 70 % y la 3.ª el 50 %: 10 + 7 + 5 = 22 (§47.1)
+  ✓ B6.11 El respaldo sigue su escala sin constancias automáticas, bajo el tope de 20 (§49)
+  ✓ B6.12 El desglose registra el multiplicador de cada señal (§51)
+  ✓ B6.13 Y cuadra: base x multiplicador = puntos finales
+  ✓ B6.14 La 4.ª vale el 30 %: 22 + 3 = 25 (§47.1)
+  ✓ B6.15 Y ahí se detiene: el tope de actividades es 25 (§47.1)
+  ✓ B6.16 El desglose suma exactamente el puntaje del área (§51)
+
+§50 · Un documento institucional respalda; no vuelve a contar
+  ✓ B6.17 El responsable registra el certificado que emitió la institución
+  ✓ B6.18 La afinidad NO cambia: la participación ya se contó (§46, §50)
+  ✓ B6.19 El respaldo sube y se detiene en el tope de 20 de actividades (§49)
+  ✓ B6.20 El documento figura en el desglose con cero de afinidad
+
+§47.2 y §48 · El proyecto puntúa por respaldo, en las áreas de las tecnologías del integrante
+  ✓ B6.21 El estudiante registra un proyecto
+  ✓ B6.22 Un proyecto vacío (DECLARED) no suma afinidad ni respaldo (§36, §47.2)
+  ✓ B6.23 Con una evidencia sube a SUPPORTED (§36)
+  ✓ B6.24 Sin tecnologías confirmadas por el integrante, el proyecto no suma afinidad (§48)
+  ✓ B6.25 V4 §35.1 Un borrador no es trayectoria: tampoco suma respaldo
+  ✓ B6.25b §28 V4.1 §12 Activo, con la tecnología corroborada y una demo accesible (fuente independiente): CORROBORATED
+  ✓ B6.25c V4 §35.3 Sin tecnologías confirmadas por el integrante no suma afinidad; su respaldo sí cuenta (15)
+  ✓ B6.26 El responsable confirma las tecnologías que usó (§34)
+  ✓ B6.27 V4 §35.3 Ahora el proyecto CORROBORATED suma 18 en esa área
+  ✓ B6.28 Tres evidencias más no multiplican el proyecto (§38)
+  ✓ B6.29 Las cuatro evidencias figuran en «no contribuye», con su motivo
+
+§48 · Cada integrante, en las áreas de SUS tecnologías
+  ✓ B6.30 Aceptar no atribuye experiencia por sí solo: falta confirmar su contribución (§33)
+  ✓ B6.31 V5-20 Una tecnología ajena al proyecto se rechaza: no suma, y no se le reparten las del proyecto
+  ✓ B6.31b V4 §35.3 Suma en el área de la tecnología que confirmó y está corroborada
+  ✓ B6.32 Y al responsable no se le atribuye la tecnología del compañero (§34)
+
+§47.3 y §49 · El certificado declarado no suma; respaldo alto exige dos familias
+  ✓ B6.33 Participaciones y su constancia acreditan UNA familia, no dos (§49, §50)
+  ✓ B6.34 Con una sola familia el respaldo no es alto
+  ✓ B6.35 El estudiante adjunta un certificado
+  ✓ B6.36 Un certificado DECLARED no suma afinidad ni respaldo (§47.3, §49)
+  ✓ B6.37 SUPPORT_SCORE 0–100 y SUPPORT_LEVEL LOW/MEDIUM/HIGH (§49)
+  ✓ B6.38 Cortes de §49: 0–24 bajo, 25–59 medio
+
+§45 y §51 · El mismo dato da el mismo número, y se puede explicar
+  ✓ B6.39 Recalcular sin cambiar nada da exactamente el mismo resultado (§45)
+  ✓ B6.40 Cada contribución lleva familia, motivo, base, multiplicador y respaldo (§51)
+  ✓ B6.41 Y la versión del motor que la produjo (§51)
+  ✓ B6.42 El interés declarado figura como «no contribuye» con su motivo (§45.1)
+  ✓ B6.43 El motor publica versión 4 o posterior y máximo 100
+  ✓ B6.44 Topes por familia 25 / 50 / 25 y 0 para lo declarado (§47)
+  ✓ B6.45 Multiplicadores de §47
+  ✓ B6.46 Los pesos almacenados son los de §47 y lo declarado vale 0
+
+§81 · La historia V2 no se sobrescribe
+  ✗ B6.47 El historial conserva instantáneas V2 junto a las V3, cada una con su versión -> [7]
+
+§52 · Cuando cambia la regla, no basta con esperar al estudiante
+  ✓ B6.48 Un estudiante no puede recalcular el padrón -> 403
+  ✓ B6.49 Un docente tampoco -> 403
+  ✓ B6.50 El administrador sí, y el motor informa cuántos puso al día
+
+------------------------------------------------------------------------------
+  52 verificaciones OK · 1 fallos
+  · B6.47 El historial conserva instantáneas V2 junto a las V3, cada una con su versión -> [7]

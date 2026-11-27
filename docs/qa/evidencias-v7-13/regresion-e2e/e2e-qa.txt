@@ -1,0 +1,85 @@
+Correcciones de QA — verificación contra la API
+
+Activación · el código solo llega al correo del estudiante
+  ✓ QA.1 El administrador da de alta al estudiante con su semestre
+  ✓ QA.2 La respuesta del alta no trae token, enlace ni código
+  ✓ QA.3 Solo trae el estado de la invitación
+  ✓ QA.4 El listado muestra el semestre asignado en el alta
+  ✓ QA.5 Ni el listado expone el código
+  ✓ QA.6 El correo trae enlace y código de 6 dígitos
+  ✓ QA.7 El enlace abre la pantalla de activación con el token puesto
+  ✓ QA.8 El enlace se comprueba antes de pedir la contraseña
+  ✓ QA.9 Y el correo se muestra enmascarado
+  ✓ QA.10 La invitación dura 48 horas (V2 §15.3)
+  ✓ QA.11 Un código equivocado se rechaza
+  ✓ QA.11b Con 9 intentos fallidos el enlace sigue vivo
+  ✓ QA.12 Tras 10 intentos fallidos, ni el código correcto sirve
+
+Reenvío · espera entre envíos y activación con código
+  ✓ QA.13 Pedir otro correo responde igual exista o no la cuenta
+  ✓ QA.14 E indica cuánto esperar antes de volver a pedirlo
+  ✓ QA.15 El administrador tampoco puede reenviar en ráfaga -> 429
+  ✓ QA.16 Solo se aceptan correos institucionales
+  ✓ QA.17 Se activa con correo + código, sin el enlace
+  ✓ QA.18 Después, el enlace dice que ya se usó
+  ✓ QA.19 Y ya puede iniciar sesión
+
+Recuperar contraseña · ahora sí llega un correo
+  ✓ QA.20 La solicitud se acepta
+  ✓ QA.21 El correo de recuperación llega con enlace y código
+  ✓ QA.22 La contraseña se cambia con el código
+  ✓ QA.23 Y se entra con la nueva
+
+Formularios · cada error en su campo
+  ✓ QA.24 Estudiante sin semestre: error en el campo «semestre»
+  ✓ QA.24b Ni sin código universitario (V2 §12): error en ese campo
+  ✓ QA.24c El código universitario es único
+  ✓ QA.25 Varios errores a la vez: uno por campo
+  ✓ QA.26 Área: nombre con números o símbolos -> error en «nombre»
+  ✓ QA.27 Área: etiquetas obligatorias
+  ✓ QA.28 Área: la descripción es opcional
+  ✓ QA.29 Área: recibe un código automático si no se da
+  ✓ QA.30 Área: código repetido -> error en «código»
+  ✓ QA.31 Habilidad: el área es obligatoria
+  ✓ QA.32 Habilidad con área: se crea con código
+  ✓ QA.33 Categoría: nombre y código inválidos, cada uno en su campo
+  ✓ QA.34 Criterio: puntos con letras -> error en «puntos»
+
+Bienvenida · por pasos, sin saltarse lo mínimo
+  ✓ QA.35 Una cuenta nueva empieza con la bienvenida pendiente
+  ✓ QA.36 El semestre ya viene del alta: el perfil no queda incompleto por eso
+  ✓ QA.37 No se puede dar por terminada sin perfil ni intereses
+  ✓ QA.38 Paso 1: crea su perfil (reclama el que dejó el alta)
+  ✓ QA.39 El paso queda guardado para retomarlo
+  ✓ QA.40 Sin confirmar datos, disponibilidad y privacidad todavía no termina (V2 §20.2)
+  ✓ QA.41 Un interés se puede quitar (reemplazo completo)
+  ✓ QA.42 Con lo obligatorio de la V2, la bienvenida termina
+  ✓ QA.43 Y queda marcada como completada
+
+Cuestionario · cambia según las áreas declaradas
+  ✓ QA.44 El cuestionario carga (ya no aparece «0 preguntas»)
+  ✓ QA.45 Con áreas declaradas aparecen preguntas propias de esas áreas
+  ✓ QA.45b Y dice en qué áreas se basa
+  ✓ QA.46 No hace falta responderlo entero
+  ✓ QA.47 Respuestas parciales (el mínimo) se aceptan
+  ✓ QA.48 Por debajo del mínimo se pide responder algo más
+  ✓ QA.49 Se puede volver a hacer cuando quiera
+
+Gamificación · los criterios mandan y los docentes premian
+  ✓ QA.50 Cada hecho tiene su criterio general activo
+  ✓ QA.51 Un segundo criterio general del mismo hecho se rechaza: o se edita, o se limita a un área
+  ✓ QA.52 No se puede premiar algo que §66 excluye (autodeclarado)
+  ✓ QA.53 Un extra limitado a un área sí se permite
+  ✓ QA.54 V4.1 El docente ya no crea retos con sus puntos (410)
+  ✓ QA.55 V4.1 Ni premia a mano a un estudiante (410)
+  ✓ QA.56 Una propuesta sobre un estudiante fuera de su alcance no prospera
+  ✓ QA.59 Ve los puntos de su alcance y de nadie más
+  ✓ QA.60 El estudiante ve su saldo
+  ✓ QA.61 Y sus puntos de la semana, el mes y el año
+  ✓ QA.62 V4.1 Ya no se ofrecen recompensas (410)
+  ✓ QA.64 V4.1 Ni se canjean puntos (410)
+  ✓ QA.66 El saldo no cambia
+  ✓ QA.67 Un estudiante no resuelve canjes históricos
+  ✓ QA.70 La pantalla aclara que los puntos no cambian la afinidad
+
+68 comprobaciones correctas, 0 fallidas

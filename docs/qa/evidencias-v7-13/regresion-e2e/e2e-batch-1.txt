@@ -1,0 +1,114 @@
+BATCH 1 — Identidad y seguridad · http://localhost:3020/api
+
+RF01 · Importación de padrón institucional
+
+Previsualización: los cinco veredictos
+  ✓ B1.1 La previsualización responde
+  ✓ B1.2 Dos filas válidas se marcan como NEW
+  ✓ B1.3 Tres filas defectuosas se marcan como INVALID
+  ✓ B1.4 El rechazo explica el motivo fila por fila
+  ✓ B1.5 Un correo fuera del dominio institucional se rechaza (§11)
+
+La previsualización no escribe nada
+  ✓ B1.6 Previsualizar NO crea cuentas
+
+Aplicar
+  ✓ B1.7 Aplicar responde
+  ✓ B1.8 Se crean exactamente las dos cuentas válidas
+  ✓ B1.9 La cuenta importada existe
+  ✓ B1.10 Nace en PENDING_ACTIVATION, no utilizable
+  ✓ B1.11 El padrón produce estudiantes
+
+Idempotencia (§10.1)
+  ✓ B1.12 Reimportar el mismo archivo no cambia nada: UNCHANGED
+  ✓ B1.13 Aplicar la reimportación no duplica cuentas
+
+Actualización segura (§10.2)
+  ✓ B1.14 Un semestre distinto se marca como UPDATE
+  ✓ B1.15 La cuenta sigue existiendo tras actualizar
+
+Conflicto de identidad (§10.1)
+  ✓ B1.16 Un correo ya asignado a otro código es CONFLICT, no se resuelve solo
+  ✓ B1.17 Un código repetido dentro del propio archivo es CONFLICT
+
+Ausencia no desactiva (§10.3)
+  ✓ B1.18 Una cuenta ausente del archivo nuevo NO se desactiva
+
+Auditoría del lote (§10.4)
+  ✓ B1.19 El historial de importaciones queda registrado
+  ✓ B1.20 El detalle conserva las cinco filas con su veredicto
+
+Solo el administrador importa
+  ✓ B1.21 Un estudiante NO puede importar padrón -> 403
+
+RF02 · Activación de cuenta
+
+El enlace llega al buzón del titular, no al administrador
+  ✓ B2.1 La importación envió la invitación al correo institucional
+  ✓ B2.2 Reenviar enseguida se frena: evita llenar el buzón y caer en spam -> 429
+
+Un token nuevo invalida el anterior (§12)
+    … esperando 120 s, la pausa antispam entre envíos
+  ✓ B2.2b Pasada la pausa, el reenvío funciona y no le entrega el código al administrador
+  ✓ B2.2c El reenvío emite un token distinto
+  ✓ B2.3 El token anterior queda revocado, y se dice por qué -> 400
+
+Política de contraseña (§13)
+  ✓ B2.4 Menos de 12 caracteres -> 400
+  ✓ B2.5 La contraseña no puede contener el correo -> 400
+
+Activación válida
+  ✓ B2.6 Activación con token válido -> 200
+  ✓ B2.7 El token usado no vuelve a servir -> 400
+  ✓ B2.8 Tras activar, la cuenta inicia sesión
+  ✓ B2.9 El login entrega también un refresh token (§14)
+  ✓ B2.10 No se reenvía activación de una cuenta ya activada -> 400
+
+No se pueden enumerar cuentas (§12)
+  ✓ B2.11 La respuesta es idéntica exista o no la cuenta
+
+RF03 · Sesiones revocables y refresh rotatorio
+
+Rotación
+  ✓ B3.1 El refresh entrega un access token nuevo
+  ✓ B3.2 El refresh token rota en cada uso
+  ✓ B3.3 Recarga en medio de la renovación: el token recién reemplazado sirve y emite otro
+  ✓ B3.3e F5 repetido (varias renovaciones perdidas seguidas): la sesión sigue viva
+  ✓ B3.3c Tras una renovación normal con el token nuevo, el anterior ya no sirve -> 401
+  ✓ B3.3d Dos renovaciones simultáneas con el mismo token: las dos responden 200
+  ✓ B3.3b El access token renovado identifica al mismo usuario
+
+Revocación
+  ✓ B3.4 El usuario ve sus sesiones abiertas
+  ✓ B3.5 Cerrar sesión responde 200
+  ✓ B3.6 Tras cerrar sesión, su refresh token no sirve -> 401
+
+Cambiar la contraseña cierra todas las sesiones (§14)
+  ✓ B3.7 Se solicita el restablecimiento
+  ✓ B3.8 El administrador suspende la cuenta
+  ✓ B3.9 Suspender revoca las sesiones abiertas de inmediato -> 401
+  ✓ B3.10 Una cuenta suspendida no inicia sesión -> 401
+  ✓ B3.11 Reactivar devuelve el acceso
+
+§68 · Alcance académico del docente en los reportes
+
+Docente sin semestres habilitados
+  ✓ B4.1 El endpoint responde
+  ✓ B4.2 Un docente sin semestres NO recibe el conteo de la carrera
+  ✓ B4.3 Tampoco recibe la lista nominal de estudiantes incompletos
+  ✓ B4.4 Ni el mapa de afinidad de la carrera
+
+Docente con un semestre habilitado
+  ✓ B4.5 El endpoint responde
+  ✓ B4.6 El reporte declara los semestres a los que se limita
+  ✓ B4.7 El director sí ve el agregado de toda la carrera
+  ✓ B4.8 El docente nunca ve más estudiantes que el total de la carrera
+
+§83 · Descarga de archivos autorizada
+  ✓ B5.1 Sin sesión, la descarga se rechaza antes de mirar el archivo -> 401
+  ✓ B5.2 Un intento de recorrido de rutas no alcanza nada fuera del almacén
+
+------------------------------------------------------------------------------
+  59 verificaciones OK · 0 fallos
+  El BATCH 1 queda demostrado de punta a punta.
+

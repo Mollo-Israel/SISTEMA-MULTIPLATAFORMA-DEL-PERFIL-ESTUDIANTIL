@@ -1,0 +1,93 @@
+BATCH 9 — Gamificación y resumen contra http://localhost:3020/api
+
+§66 · Se reconoce lo que hiciste, no lo que declaraste
+
+Punto de partida
+  ✓ B9.1 Un perfil recién creado no tiene puntos
+
+Lo que §66 excluye
+  ✓ B9.2 Declarar intereses y habilidades NO da puntos (§66)
+  ✓ B9.3 El estudiante registra un proyecto
+  ✓ B9.4 Un proyecto recién registrado tampoco: es un proyecto vacío (§66)
+  ✓ B9.5 Y adjunta un certificado
+  ✓ B9.6 Adjuntar un certificado es una autodeclaración: no da puntos (§66)
+
+Lo que §66 sí admite
+  ✓ B9.7 El docente confirma su participación
+  ✓ B9.8 Una participación confirmada sí da puntos (§66)
+  ✓ B9.9 Con su evento y su motivo legible
+
+El primer proyecto respaldado
+  ✓ B9.10a V3 §57 Mientras es borrador, subirle evidencias no da puntos
+  ✓ B9.10b V3 §21 Con tecnología y evidencia, el proyecto se activa
+  ✓ B9.10 V4.1 §9.3 El estudiante no se da puntos por respaldar su propio proyecto
+  ✓ B9.11 V4.1 Solo los diez de la participación confirmada por un responsable
+
+§66 · Correr esto dos veces da lo mismo que correrlo una
+  ✓ B9.12 Tres sincronizaciones más no cambian el total (§66)
+  ✓ B9.13 Ni el número de eventos
+  ✓ B9.14 No hay dos eventos que reconozcan el mismo hecho
+
+El «primer proyecto respaldado» es uno, no uno por proyecto
+  ✓ B9.15 V4.1 Un segundo proyecto respaldado tampoco da puntos solo
+
+§66 · Los puntos nunca alimentan la afinidad
+  ✓ B9.15b V3 §57 Aceptar un contacto ya no da puntos
+  ✓ B9.16 V5 §10 Una colaboración aceptada ya no da puntos (familia retirada)
+  ✓ B9.17 Y NO cambia la afinidad: nunca puntos → afinidad (§66)
+  ✓ B9.18 Los puntos no aparecen como señal en el desglose de afinidad (§66)
+  ✓ B9.19 La pantalla lo dice, no solo el código
+
+§66 · Insignias por hechos, no por acumular
+  ✓ B9.20 El catálogo de insignias está publicado
+  ✓ B9.21 V6 §10.3 La primera participación ya no se premia con insignia (no se ofrece ni se otorga)
+  ✓ B9.22 V6 La participación confirmada sigue sumando sus puntos
+  ✓ B9.23 V6 §10.3 Tampoco hay insignia por cinco participaciones
+  ✓ B9.24 V6 §10.3 Ninguna insignia del catálogo depende de asistir
+
+Cuatro participaciones más
+  ✓ B9.25 V6 §10.3 Al llegar a cinco participaciones tampoco se otorga insignia
+  ✓ B9.26 Con cinco eventos, uno por participación
+
+§66 · Sin ranking público obligatorio
+  ✓ B9.27 No existe forma de consultar los puntos de otra persona (§66)
+  ✓ B9.28 Ni tabla de posiciones en la respuesta propia
+
+§67 · El estudiante decide qué entra en su resumen
+  ✓ B9.29 Las secciones disponibles se consultan
+  ✓ B9.30 Las de §67, insignias y contacto (V2 §61.1) y el paso 1 de V3 §43.1
+  ✓ B9.31 Y la advertencia obligatoria viaja con ellas (§67)
+
+Solo lo elegido
+  ✓ B9.32 Un resumen con solo los datos básicos
+  ✓ B9.33 No incluye lo que no se pidió (§67)
+  ✓ B9.34 Los datos básicos siempre están: un resumen sin nombre no es de nadie
+  ✓ B9.35 Con todo marcado, los proyectos sin corroborar no se afirman: quedan fuera con su motivo (V3 §43.3)
+  ✓ B9.36 Y sus cinco actividades confirmadas
+  ✓ B9.37 Afinidad y respaldo, porque se marcaron las dos secciones (§67)
+
+§105 · El archivo del certificado no viaja en el resumen
+  ✓ B9.38 Solo la metadata del certificado, nunca el archivo (§105)
+
+§67 · Exportable a PDF, y legible de verdad
+  ✓ B9.39 El estudiante descarga su resumen en PDF
+  ✓ B9.40 Con el tipo de contenido correcto
+  ✓ B9.41 Y como descarga, con nombre de archivo
+  ✓ B9.42 El archivo es un PDF de verdad
+
+Se vuelve a leer con el extractor del BATCH 3
+  ✓ B9.43 Del PDF se puede extraer su texto
+  ✓ B9.44 Contiene el título del documento
+  ✓ B9.45 Y el nombre del estudiante
+  ✓ B9.46 La advertencia obligatoria va DENTRO del documento (§67)
+
+Lo no elegido tampoco sale en el papel
+  ✓ B9.47 Un PDF de solo datos básicos no lleva los proyectos (§67)
+  ✓ B9.48 Pero la advertencia sí: no es opcional (§67)
+
+Cada quien descarga el suyo
+  ✓ B9.49 Un docente no tiene resumen de trayectoria que descargar
+
+------------------------------------------------------------------------------
+  52 verificaciones OK · 0 fallos
+  El BATCH 9 queda demostrado de punta a punta.

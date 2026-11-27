@@ -1,0 +1,252 @@
+Afinia V3.2 — verificación del cierre final contra la API
+
+BATCH 1 · Importación parcial, historial limpio y grilla de usuarios
+  ✗ V32.1.1 Hay 200 estudiantes reales para el padrón de prueba -> 142
+  ✓ V32.1.2 §7.3 De 210 filas, exactamente las 10 nuevas son NEW
+  ✓ V32.1.3 §7.3 Las 200 existentes se clasifican, ninguna se crea dos veces
+  ✓ V32.1.4 §7.3 Aplicar crea las 10 cuentas nuevas
+  ✓ V32.1.5 §7.3 El resultado trae el resumen completo (nuevas, actualizadas, sin cambios, conflicto, inválidas)
+  ✓ V32.1.6 §7.3 El resumen cuadra con la previsualización
+  ✓ V32.1.7 §7.3 Correo existente con otro código es CONFLICT; la otra fila sigue NEW
+  ✓ V32.1.8 §7.3 La aplicación parcial crea la válida y omite el conflicto
+  ✓ V32.1.9 §7.3 La cuenta válida existe después de aplicar
+  ✓ V32.1.10 §7.6 Fila con una columna menos → INVALID que lo explica
+  ✓ V32.1.11 §7.6 Fila con una columna de más → INVALID, sin correr los valores
+  ✓ V32.1.12 §7.6 Correo repetido dentro del archivo → CONFLICT
+  ✓ V32.1.13 §7.6 Código repetido dentro del archivo → CONFLICT
+  ✓ V32.1.14 §7.6 Un CSV que no es UTF-8 se rechaza con un mensaje claro
+  ✓ V32.1.15 §7.6 El padrón de docentes también detecta la columna faltante
+  ✓ V32.1.16 §7.5 Una previsualización no aparece en el historial
+  ✓ V32.1.17 §7.5 Descartar borra el lote: ya no existe
+  ✓ V32.1.18 §7.5 El historial solo contiene lotes aplicados o fallidos
+  ✓ V32.1.19 §7.5 El lote aplicado sí queda en el historial
+  ✓ V32.1.20 §7.5 El mismo archivo se puede volver a subir después de descartarlo
+  ✓ V32.1.21 §7.5 Previsualizar no genera evento de auditoría
+  ✓ V32.1.22 §7.5 Aplicar sí queda auditado (IMPORT_APPLIED)
+  ✓ V32.1.23 §6.2 El listado de usuarios busca también por código universitario
+  ✓ V32.1.24 §8.6 Una cuenta pendiente muestra cuándo expira su invitación
+  ✓ V32.1.25 Un estudiante NO ve el historial de importaciones -> 403
+
+BATCH 2 · Activación: cuenta activa, espera real y vencimiento visible
+  ✓ V32.2.1 §8.3 Pedir activación de una cuenta ACTIVE responde ALREADY_ACTIVE
+  ✓ V32.2.2 §8.3 No afirma un envío y orienta a iniciar sesión o recuperar
+  ✓ V32.2.3 §8.3 No se registra una solicitud de activación (no hubo token ni correo)
+  ✓ V32.2.4 §8.3 La cuenta activa sigue entrando con su contraseña
+  ✓ V32.2.5 Alta de una cuenta pendiente
+  ✓ V32.2.6 §8.4 Una cuenta pendiente recibe la respuesta genérica con la espera
+  ✓ V32.2.7 §8.4 Volver a pedir no reinicia la cuenta atrás: informa lo que realmente queda
+  ✓ V32.2.8 §12 Un correo inexistente recibe la misma respuesta que uno pendiente
+  ✓ V32.2.9 §8.4 La espera también corre para correos inexistentes (no delata cuentas)
+  ✓ V32.2.10 §8.6 El administrador ve cuándo se envió y que expira en 48 h
+  ✓ V32.2.11 §8.1 Una cuenta suspendida no se delata ni se reactiva por esta vía
+  ✓ V32.2.12 §8.4 Recuperar contraseña sigue con respuesta genérica y espera real
+
+BATCH 3 · Taxonomía: aws ya no va a Redes, skills multiárea y tags semánticos
+  ✓ V32.3.1 §10.1 Existe el área «Computación en la nube» con vocabulario propio
+  ✓ V32.3.2 §10.3 Las etiquetas de Redes ya no copian habilidades ni la palabra que confundía al sugeridor
+  ✓ V32.3.3 §10.2 AWS es una habilidad de Computación en la nube, con su alias
+  ✗ V32.3.4 §11.1 Linux: principal Redes, secundarias Ciberseguridad y Nube -> {"id":"7b1414a8-c0d6-42fd-a8e1-0721ddc44222","name":"Administración Linux","code":"administracion_linux","aliases":["Linux"],"academicAreaId":"6c3f2935-b220-4ae9-b2ca-b9ba5ec6e5fa","isActive":true,"createdAt":"2026-11-27
+  ✓ V32.3.5 §10.5 El bug: alias «aws» sugiere Computación en la nube, no Redes
+  ✓ V32.3.6 §10.5 Prioridad 1: el alias exacto de una habilidad existente
+  ✓ V32.3.7 §10.5 Prioridad 2: la etiqueta exacta del área (palabra completa)
+  ✓ V32.3.8 §10.5 Prioridad 3: la relación con una habilidad ya clasificada
+  ✓ V32.3.9 §10.5 Sin subcadena bruta: «AS» y una palabra que contiene «aws» no sugieren nada
+  ✓ V32.3.10 §10.6 Sin sugerencia fuerte se guarda donde el administrador diga
+  ✓ V32.3.11 §10.4 Un nombre que ya es alias de otra habilidad es la misma: no se crea dos veces
+  ✓ V32.3.12 §11.2 Se guardan las secundarias sin repetir ni incluir la principal
+  ✓ V32.3.13 §11 El catálogo devuelve las áreas secundarias
+  ✓ V32.3.14 §11 Editar reemplaza las áreas secundarias
+  ✓ V32.3.15 §11 Un área secundaria que no existe se rechaza en su campo
+  ✓ V32.3.16 §11.5 La sugerencia usa la principal de la relacionada; la secundaria no reparte
+  ✓ V32.3.17 §10.6 Avisa que la etiqueta «postgresql» ya es una habilidad
+  ✗ V32.3.19 §11.3 Linux se acepta en un proyecto de Ciberseguridad (su área secundaria) -> status 400 {"code":"VALIDATION_ERROR","message":"«Administración Linux» pertenece a otra área. Elige su área o quítala.","fields":{"skillIds":["«Administración Linux» pertenece a otra área. Elige su área o quítala."]},"requestId":"
+  ✓ V32.3.20 §11.3 Pero no en un área que no es ni su principal ni una secundaria
+  ✓ V32.3.18 Un docente no crea habilidades -> 403
+
+BATCH 4 · Actividad multiárea: edición transaccional y contexto área + habilidad
+  ✓ V32.4.1 Se crea una actividad con un área y una habilidad
+  ✓ V32.4.2 C6 Editar con 3 áreas ya no devuelve 500
+  ✓ V32.4.3 C6 Las 3 áreas quedan guardadas y la primera es la principal
+  ✓ V32.4.4 C7 Las 3 habilidades persisten al editar (y el resto de cambios también)
+  ✓ V32.4.5a §4 Quitar un área que todavía tiene habilidades elegidas se rechaza en su campo
+  ✓ V32.4.5 C6 Quitar un área (con sus habilidades) vuelve a funcionar
+  ✓ V32.4.6 Una edición inválida no cambia nada: ni el título ni las áreas
+  ✓ V32.4.7 §11.4 Sin indicar contexto, Python se trabaja en su área principal (IA)
+  ✗ V32.4.8 §11.4 Se puede indicar que Python se trabaja en Desarrollo Web (su secundaria) -> null
+  ✗ V32.4.9 §11.4 El contexto se conserva al editar otra cosa -> [{"id":"a19e2dea-e621-4d7b-99a0-71e7425cc882","activityId":"0192de52-2d70-4c72-9448-6dec99629d3a","skillId":"b244229f-1c6e-4afb-9ea0-a188a584e788","academicAreaId":"356251f5-dfa7-4d12-9742-a60ab13edc3c","createdAt":"2026
+  ✓ V32.4.10 §11.4 Un contexto en un área a la que la habilidad no pertenece → 400 en su campo
+  ✓ V32.4.11 §11.4 Si se quita el área del contexto, la habilidad vuelve a su área principal
+  ✓ V32.4.12 §11.4 Al crear, cada habilidad guarda el área en que se trabaja
+  ✓ V32.4.13 Cambiar la categoría persiste (la relación cargada ya no pisa el cambio)
+
+BATCH 5 · Formulario completo, responsables y contactos, modalidad, cancelación y ciclo de vida
+  ✓ V32.5.1 §6.4 Un título solo de símbolos se rechaza en su campo
+  ✓ V32.5.2 §38 La fecha final debe ser posterior a la inicial (error en endAt)
+  ✓ V32.5.3 §21.1 Un borrador puede quedar incompleto
+  ✓ V32.5.4 §18–§19 Publicarlo incompleto se rechaza, campo por campo (la habilidad ya no es obligatoria, V4.1)
+  ✓ V32.5.5 §18.1 Virtual exige el enlace de la reunión
+  ✓ V32.5.6 §18.1 Virtual guarda el enlace y oculta el aula
+  ✓ V32.5.7 §18.1 Híbrida pide aula y enlace
+  ✓ V32.5.8 §18.1 Presencial no guarda enlace de reunión
+  ✓ V32.5.9 §18.2 Se guardan varios enlaces de apoyo
+  ✓ V32.5.10 §18.2 Un enlace que no es https se rechaza
+  ✓ V32.5.11 §20 Las palabras de búsqueda salen de áreas, habilidades y alias (sin escribirlas)
+  ✓ V32.5.12 §16 Creador, responsables (1..N) y principal quedan separados
+  ✓ V32.5.13 §16 Un responsable gestiona la actividad aunque no la creó (opera su estado; V4.1)
+  ✓ V32.5.14 §17 El docente es el responsable de lo suyo: no nombra a otros
+  ✓ V32.5.15 §16 El docente suma como contacto a un estudiante de su alcance
+  ✓ V32.5.16 §16 Un estudiante fuera de su alcance no puede ser contacto
+  ✓ V32.5.17 §16 Solo un docente asigna a un estudiante como contacto
+  ✓ V32.5.18 §16 El estudiante contacto no gestiona nada -> 403
+  ✓ V32.5.19 §6.3 El buscador de contactos solo ofrece estudiantes del alcance del docente
+  ✓ V32.5.20 §17 La Sociedad solo puede nombrar responsables de la Sociedad
+  ✓ V32.5.21 Un estudiante no consulta candidatos -> 403
+  ✓ V32.5.22 §28 Se ofrecen PARTICIPATION_ONLY e INSTITUTION_ISSUED_CERTIFICATE
+  ✓ V32.5.23 §28 La opción histórica ya no se ofrece
+  ✓ V32.5.24 §29 Una externa no elige resultado: siempre espera la credencial del proveedor
+  ✓ V32.5.25 §18.3 Una imagen subida queda como ilustración de la actividad
+  ✓ V32.5.26 §18.3 Publicada, un estudiante puede ver su imagen
+  ✓ V32.5.27 §18.3 No se usa como imagen un archivo de otra persona
+  ✓ V32.5.28 §21.6 Cancelar sin motivo se rechaza
+  ✓ V32.5.29 §21.6 / §37 El estudiante ve el motivo de la cancelación
+  ✓ V32.5.30 §21.6 La cancelación queda auditada con su motivo
+  ✓ V32.5.31 §38 (C11) Editar no corre la hora: se conserva el instante
+  ✓ V32.5.32 §21.4 Lo que ya empezó cierra sus inscripciones solo (CLOSED)
+  ✓ V32.5.33 §21.5 Lo que ya terminó queda FINISHED solo
+  ✓ V32.5.34 §21.4 Cerrada, no acepta inscripciones
+
+BATCH 6 · Revisión y propiedad: borradores privados, cancelar envío y aprobada sin cambios del creador
+  ✓ V32.6.1 El docente crea un borrador
+  ✓ V32.6.2 §24.1 Otro docente del mismo semestre no ve el borrador (ni en listas ni por URL)
+  ✓ V32.6.3 §24.1 Tampoco lo edita cambiando el id en la petición
+  ✓ V32.6.4 §24.1 Dirección no lo ve antes del envío
+  ✓ V32.6.5 §24.1 Administración tampoco, en la vista operativa
+  ✓ V32.6.6 §24.1 Un estudiante nunca ve un borrador
+  ✓ V32.6.7 §25 Está en «Mis actividades» de quien lo creó
+  ✓ V32.6.8 §23 Se envía a revisión
+  ✓ V32.6.9 §24.5 Enviada, aparece en la bandeja de Dirección
+  ✓ V32.6.10 §47 Dirección recibe ACTIVITY_REVIEW_SUBMITTED
+  ✓ V32.6.11 §23.1 Otro docente no retira un envío ajeno
+  ✓ V32.6.12 §23.1 «Cancelar envío» la devuelve a borrador para corregir
+  ✓ V32.6.13 §23.1 Sale de la bandeja y vuelve a ser privada
+  ✓ V32.6.14 §23.1 Sin envío pendiente no hay nada que retirar
+  ✓ V32.6.15 §23.1 La historia registra el retiro
+  ✓ V32.6.16 §47 Quien la propuso recibe ACTIVITY_REVIEW_OBSERVED
+  ✓ V32.6.17 §23.2 Observada, el creador corrige
+  ✓ V32.6.18 §47 Y ACTIVITY_APPROVED al aprobarse
+  ✓ V32.6.19 §23.3 (C10) Aprobada, el creador no cambia campos materiales
+  ✓ V32.6.20 §23.3 Pero sí la publica y sigue gestionándola
+  ✓ V32.6.21 §23.3 Dirección sí puede ajustarla
+  ✓ V32.6.22 §26 Cada cambio queda auditado
+  ✓ V32.6.23 §25 «Actividades de la carrera» la muestra; «Mis actividades» y la participación, no
+  ✓ V32.6.24 §24.6 Publicada, la ve el estudiante
+  ✓ V32.6.25 §24.2 El borrador de un integrante no lo ve otro
+  ✓ V32.6.26 §26 Dirección da seguimiento a lo aprobado (académico y extracurricular)
+  ✓ V32.6.27 §24.3 El borrador de Dirección no aparece a Administración ni a docentes
+  ✓ V32.6.28 §24.4 El borrador de Administración no lo ve Dirección ni su responsable hasta publicarse (V4.1)
+
+BATCH 7 · Tarjeta y detalle: imagen, fechas, áreas, habilidades, personas y enlaces
+  ✓ V32.7.1 Se publica una actividad con todo lo que muestra la tarjeta
+  ✓ V32.7.2 §37 El listado trae imagen, fin, enlace de reunión y el primer enlace útil
+  ✓ V32.7.3 §37 Y las áreas y habilidades con su nombre, para resumirlas («+2»)
+  ✓ V32.7.4 §37 El detalle nombra a los responsables (sin exponer su correo)
+  ✓ V32.7.5 V2 §80 El estudiante sigue recibiendo la vista mínima
+  ✓ V32.7.6 §16 El responsable la tiene en «Mis actividades», con sus responsables
+
+BATCH 7 · Participantes: la lista que ve el responsable
+  ✓ V32.7.7 §64 El responsable ve a los 12 inscritos (la web los pagina de a 10)
+  ✓ V32.7.8 §64 Cada fila trae nombre y estado, sin datos de más
+
+BATCH 8 · Certificado emitido por la institución: emisor real, entrega a confirmados, sin autoría de Afinia
+  ✓ V32.8.1 §28.3 Publicar con certificado institucional exige nombrar al emisor real
+  ✓ V32.8.2 §28.3 La actividad guarda el emisor real del certificado
+  ✓ V32.8.3 §28.3 Confirmar no fabrica un certificado: lo entrega el responsable
+  ✓ V32.8.4 Otro docente no lista los confirmados de una actividad ajena (aunque conozca el id)
+  ✓ V32.8.5 §28.3 El responsable ve a los confirmados que pueden recibirlo
+  ✓ V32.8.5b V7.1 DOC-03 El certificado no se entrega antes de que la actividad termine
+  ✓ V32.8.6 §28.3 No se entrega a quien no tiene la participación confirmada
+  ✓ V32.8.7 Otro docente no entrega certificados de una actividad ajena
+  ✓ V32.8.8 §28.3 El responsable entrega el certificado al confirmado
+  ✓ V32.8.9 §28.3 El estudiante lo recibe con el emisor real, su código y el archivo
+  ✓ V32.8.10 §28.3 Solo su titular (y quien lo entregó) descarga el certificado
+  ✓ V32.8.11 §47 El estudiante recibe el aviso de su certificado
+  ✓ V32.8.12 §28.3 La trayectoria lo muestra como emitido por la institución, no por Afinia
+  ✓ V32.8.13 §28.3 V7.1 Cambiar lo entregado exige motivo; con motivo actualiza el código, sin duplicar
+  ✓ V32.8.14 §6.5 Administración no entrega documentos académicos
+
+BATCH 19 · Currículo selectivo: el certificado institucional va en la línea de su actividad
+  ✓ V32.19.1 §54 En los ítems elegibles, la actividad dice que tiene certificado y quién lo emite
+  ✓ V32.19.2 §54 La vista previa lo pone en la línea de la actividad y no lo repite como constancia aparte
+  ✓ V32.19.3 §42 En la trayectoria figura como certificado del emisor real
+  ✓ V32.19.4 §54 El PDF sale de la misma selección, con el emisor real
+  ✓ V32.19.5 §54 Quien no tiene la participación confirmada no la mete en su currículo con el id
+
+BATCH 9 · Biblioteca: buscar, filtrar por área o habilidad, abrir y guardar; sin afinidad
+  ✓ V32.9.1 §35 Un recurso guarda varias áreas (la principal primero), sus habilidades y una imagen
+  ✓ V32.9.2 §35.1 El estudiante lo busca y ve tipo, áreas, habilidades e imagen
+  ✓ V32.9.3 §35 Un recurso no tiene fechas, inscripción ni cupo
+  ✓ V32.9.4 §35.1 Se filtra por cualquiera de sus áreas y por habilidad
+  ✓ V32.9.5 §6.3 Los filtros ofrecen solo áreas con recursos, acotadas
+  ✓ V32.9.6 §35.1 Guardar como favorito (idempotente) y verlo en «Mis favoritos»
+  ✓ V32.9.7 §35.3 Guardar un recurso no aporta afinidad
+  ✓ V32.9.8 §35.1 Y quitarlo
+  ✓ V32.9.9 Solo el estudiante guarda favoritos -> 403
+  ✓ V32.9.10 §61 Un recurso retirado sale de la Biblioteca
+
+BATCH 10 · Favoritos con peso bajo, «Me interesa» sin modelo y guardar algo que ya pasó
+  ✓ V32.10.1 Sin favoritos, la actividad del área de interés se recomienda sin esa señal
+  ✓ V32.10.2 Un recurso guardado como favorito ya no suma al recomendador (V4.1)
+  ✓ V32.10.3 El puntaje no cambia por guardar favoritos (V4.1)
+  ✓ V32.10.4 §35.2 Por sí solo, un favorito no crea una recomendación
+  ✓ V32.10.5 §36 «Me interesa» no aporta afinidad
+  ✓ V32.10.6 §36 «Me interesa» no crea recomendaciones por sí solo (V4.1: solo suma a lo que ya coincide con lo declarado)
+  ✓ V32.10.7 §36 Una actividad que ya terminó se puede guardar
+  ✓ V32.10.8 §36 Pero no inscribirse
+
+BATCH 11 · Proyecto: cada tecnología guarda el área en que se usó
+  ✗ V32.11.1 §11.4 Python se registra como usado en Desarrollo Web (indicado) y React en su área -> null
+  ✓ V32.11.2 §11.4 Sin indicarlo, se deduce su área principal (IA)
+  ✓ V32.11.3 §11.4 Un contexto en un área ajena a la tecnología se rechaza en su campo
+  ✗ V32.11.4 §11.4 Editar otra cosa conserva el contexto -> status 400
+  ✗ V32.11.5 §11.4 Si se quita el área del contexto, vuelve a su área principal -> status 400
+
+BATCH 14 · Credencial externa histórica con áreas y contexto por tecnología
+  ✗ V32.14.1 §33 La credencial histórica guarda varias áreas (la primera es la principal) -> status 400 {"skillContexts":["«Python» no pertenece al área indicada para ella. Elige una de sus áreas entre las seleccionadas."]}
+  ✗ V32.14.2 §50.1 Cada tecnología guarda el área en que se acredita -> null
+  ✓ V32.14.3 §33 Con áreas declaradas, una tecnología de otra área se rechaza en su campo
+  ✓ V32.14.4 Compatibilidad: con solo `academicAreaId` sigue funcionando y deduce el contexto
+
+BATCH 15 · Afinidad V5: la experiencia suma en el área de su contexto, nunca por etiquetas
+  ✓ V32.15.1 El motor vigente aplica el contexto explícito (versión 5 o posterior; V7.1 D04 = 6)
+  ✓ V32.15.2 §11.5 La tecnología corroborada suma en el área de su contexto (Interfaces Web)
+  ✓ V32.15.3 §11.5 Y no en su área principal: no se reparte por todas sus áreas posibles
+  ✓ V32.15.4 §12.3 Una credencial sin área no se asigna por coincidencia de texto con el nombre del área
+  ✓ V32.15.5 §12.3 Ni etiquetas ni texto aportan afinidad
+
+BATCH 16-18 · «Mis actividades» vs «Actividades de la carrera», y auditoría legible
+  ✓ V32.16.1 §25 Otro docente la ve en «Actividades de la carrera» y no en «Mis actividades»
+  ✓ V32.16.2 §62 Verla no la vuelve suya: no la edita cambiando el id
+  ✓ V32.16.3 §25 Sigue en «Mis actividades» de quien la creó
+  ✓ V32.18.1 §59 Solo Administración consulta la auditoría (docente y Dirección -> 403)
+  ✓ V32.18.2 §59 Los filtros ofrecen módulos y acciones en palabras, no códigos
+  ✓ V32.18.3 §59 Cada evento trae actor, módulo, acción, fecha y resultado, de a 10
+  ✓ V32.18.4 §59 El filtro por módulo funciona
+  ✓ V32.18.5 §59 El filtro por actor encuentra lo que hizo esa persona
+  ✓ V32.18.6 §59 El filtro por resultado funciona
+  ✓ V32.18.7 §59 El filtro por fechas funciona (hora de Bolivia)
+  ✓ V32.18.8 §59 El detalle no expone contraseñas, tokens ni códigos
+  ✓ V32.18.9 §59 Los eventos automáticos figuran con actor «Sistema»
+  ✓ V32.18.10 §60 El diagnóstico de correo no está al alcance de otros roles
+  ✓ V32.18.11 §60 Ni en desarrollo devuelve la contraseña SMTP
+
+197 comprobaciones correctas, 10 fallidas
+  - V32.1.1 Hay 200 estudiantes reales para el padrón de prueba -> 142
+  - V32.3.4 §11.1 Linux: principal Redes, secundarias Ciberseguridad y Nube -> {"id":"7b1414a8-c0d6-42fd-a8e1-0721ddc44222","name":"Administración Linux","code":"administracion_linux","aliases":["Linux"],"academicAreaId":"6c3f2935-b220-4ae9-b2ca-b9ba5ec6e5fa","isActive":true,"createdAt":"2026-11-27
+  - V32.3.19 §11.3 Linux se acepta en un proyecto de Ciberseguridad (su área secundaria) -> status 400 {"code":"VALIDATION_ERROR","message":"«Administración Linux» pertenece a otra área. Elige su área o quítala.","fields":{"skillIds":["«Administración Linux» pertenece a otra área. Elige su área o quítala."]},"requestId":"
+  - V32.4.8 §11.4 Se puede indicar que Python se trabaja en Desarrollo Web (su secundaria) -> null
+  - V32.4.9 §11.4 El contexto se conserva al editar otra cosa -> [{"id":"a19e2dea-e621-4d7b-99a0-71e7425cc882","activityId":"0192de52-2d70-4c72-9448-6dec99629d3a","skillId":"b244229f-1c6e-4afb-9ea0-a188a584e788","academicAreaId":"356251f5-dfa7-4d12-9742-a60ab13edc3c","createdAt":"2026
+  - V32.11.1 §11.4 Python se registra como usado en Desarrollo Web (indicado) y React en su área -> null
+  - V32.11.4 §11.4 Editar otra cosa conserva el contexto -> status 400
+  - V32.11.5 §11.4 Si se quita el área del contexto, vuelve a su área principal -> status 400
+  - V32.14.1 §33 La credencial histórica guarda varias áreas (la primera es la principal) -> status 400 {"skillContexts":["«Python» no pertenece al área indicada para ella. Elige una de sus áreas entre las seleccionadas."]}
+  - V32.14.2 §50.1 Cada tecnología guarda el área en que se acredita -> null

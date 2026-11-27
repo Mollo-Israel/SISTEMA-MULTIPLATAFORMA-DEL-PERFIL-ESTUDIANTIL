@@ -1,0 +1,97 @@
+BATCH 3 — Storage y validación contra http://localhost:3020/api
+
+§27 · El archivo tiene dueño y su tipo se decide por su firma
+
+§27.2 · Metadatos que produce el servidor
+  ✓ B3.1 El estudiante sube un PDF
+  ✓ B3.2 La subida devuelve un identificador, no una URL reenviable (§27)
+  ✓ B3.3 Se calcula el SHA-256 del contenido (§28)
+  ✓ B3.4 El tipo se detecta del contenido
+  ✓ B3.5 Se conserva el tamaño real
+  ✓ B3.6 El nombre en disco no viene del cliente
+
+§27.3 · Firma real frente a tipo declarado
+  ✓ B3.7 Un archivo que miente sobre su tipo se rechaza por su firma -> 400
+  ✓ B3.8 Un PNG válido se acepta
+  ✓ B3.9 Un PNG declarado como PDF se rechaza: el contenido manda -> 400
+  ✓ B3.10 Un archivo vacío se rechaza -> 400
+  ✓ B3.11 Subir sin sesión -> 401
+
+El archivo solo lo adjunta quien lo subió
+  ✓ B3.12 Otro estudiante NO puede adjuntar mi archivo (§27) -> 403
+  ✓ B3.13 Un identificador de archivo inventado -> 404
+
+§28 · El mismo archivo no cuenta dos veces
+  ✓ B3.14 Dos subidas del mismo contenido comparten huella
+  ✓ B3.15 La primera subida NO es duplicado de nada
+  ✓ B3.16 La segunda apunta a la primera como original
+  ✓ B3.17 El mismo contenido de otra persona no se marca como duplicado
+
+§29 y §30 · Qué dice el documento y cuánto respalda
+
+PDF legible cuyo nombre coincide
+  ✓ B3.18 Se registra el certificado con su archivo
+  ✓ B3.19 La validación queda encolada al crear el certificado (§76)
+  ✓ B3.20 El worker la procesa
+  ✓ B3.21 El texto sale del PDF, sin necesidad de OCR (§29, paso 1)
+  ✓ B3.22 Se extrae el nombre del titular
+  ✓ B3.23 Se extrae el emisor
+  ✓ B3.24 Se extrae la fecha de emisión y se normaliza a ISO
+  ✓ B3.25 Se extrae el identificador de credencial
+  ✓ B3.26 Se extrae la URL de verificación de la anotación del PDF
+  ✓ B3.27 El nombre del papel corresponde al titular (§30)
+  ✓ B3.28 Documento legible y coherente -> SUPPORTED (§30)
+  ✓ B3.29 La respuesta declara que no se afirma autenticidad legal (§30)
+
+PDF de otra persona
+  ✓ B3.30 Un nombre que no corresponde se marca MISMATCH (§30)
+  ✓ B3.31 V3 §19 Con el nombre equivocado queda FLAGGED (no suma), por legible que sea
+
+Documento ilegible
+  ✓ B3.32 Sin texto legible el resultado es INCONCLUSIVE, no un fallo (§29)
+  ✓ B3.33 El recurso NO se elimina por ser ilegible (§29)
+  ✓ B3.34 Sin nombre leído se dice UNKNOWN, no MISMATCH (§30)
+
+§28 · El duplicado se reconoce
+  ✓ B3.35 La validación reconoce que el contenido ya se había aportado (§28)
+
+§31 · Comprobar enlaces sin convertirse en un escáner de la red
+  ✓ B3.36 El sistema se niega a consultar: localhost por nombre (rechazado al validar la entrada)
+  ✓ B3.37 El sistema se niega a consultar: bucle local IPv4
+  ✓ B3.38 El sistema se niega a consultar: bucle local IPv6
+  ✓ B3.39 El sistema se niega a consultar: IPv4 mapeada en IPv6
+  ✓ B3.40 El sistema se niega a consultar: rango privado 10/8
+  ✓ B3.41 El sistema se niega a consultar: rango privado 172.16/12
+  ✓ B3.42 El sistema se niega a consultar: rango privado 192.168/16
+  ✓ B3.43 El sistema se niega a consultar: metadata de nube
+  ✓ B3.44 El sistema se niega a consultar: rango de operador
+  ✓ B3.45 El sistema se niega a consultar: bucle local en decimal (rechazado al validar la entrada)
+  ✓ B3.46 El sistema se niega a consultar: bucle local abreviado (rechazado al validar la entrada)
+  ✓ B3.47 El sistema se niega a consultar: IPv6 privada
+  ✓ B3.48 El sistema se niega a consultar: dominio .local
+
+Un dominio que no existe está caído, no bloqueado
+  ✓ B3.49 Un servidor ausente es UNAVAILABLE, no BLOCKED (§31)
+  ✓ B3.50 Sin enlace comprobable ni documento, el respaldo se queda en DECLARED
+
+§76 · La cola sobrevive y no procesa dos veces
+
+Estado de la cola
+  ✓ B3.51 El administrador consulta la cola
+  ✓ B3.52 La cola informa de cada estado de §76
+  ✓ B3.53 Ninguna validación quedó en FAILED
+
+Encolar es idempotente
+  ✓ B3.54 Cada recurso tiene un solo trabajo, no uno por intento
+
+Nada queda a medias
+  ✓ B3.55 Procesada la cola, no queda trabajo pendiente
+  ✓ B3.56 Ningún trabajo queda atrapado en PROCESSING
+
+El veredicto es del titular
+  ✓ B3.57 Otro estudiante no consulta un veredicto ajeno -> 404
+  ✓ B3.58 Un docente no administra la cola -> 403
+
+------------------------------------------------------------------------------
+  58 verificaciones OK · 0 fallos
+  El BATCH 3 queda demostrado de punta a punta.

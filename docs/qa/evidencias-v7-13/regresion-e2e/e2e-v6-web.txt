@@ -1,0 +1,88 @@
+Afinia V6 — la web con un navegador real
+
+BATCH V6-2 · Cada responsable con sus semestres; «Toda la carrera» explícita
+  ✓ V6W.2.1 Caso B Al editar, cada docente muestra solo sus semestres y su asignación guardada
+  ✓ V6W.2.2 §3.4 Con solo docentes, «Toda la carrera» no se puede marcar (no se finge cobertura)
+  ✓ V6W.2.3 El público final es la suma de lo asignado (solo lectura)
+  ✓ V6W.2.4 ACT-02 Quitar a María avisa que 5.º–8.º quedan sin responsable
+  ✓ V6W.2.5 Regla 5 En una publicada se pide confirmar antes de dejar fuera 5.º–8.º
+  ✓ V6W.2.6 Cancelar no guarda nada
+  ✓ V6W.2.6b Confirmado, se guarda lo que muestra el formulario: Carlos 1.º–3.º, María 5.º–8.º
+  ✓ V6W.2.7 Caso A Al elegir a Carlos se ofrecen solo 1.º–4.º (como Área → Tecnologías)
+  ✓ V6W.2.8 Caso E Con Dirección se puede elegir «Toda la carrera» y Dirección atiende todo el público
+  ✓ V6W.2.9 Con «Semestres específicos» = 2.º, Carlos solo puede atender el 2.º
+  ✓ V6W.2.10 Sin errores de JavaScript en la página
+
+BATCH V6-3 · El responsable de una actividad ajena la consulta sin editarla
+  ✓ V6W.3.1 §3.6 En «Mis actividades» hay «Ver detalles» y no «Editar» en la actividad ajena
+  ✓ V6W.3.2 El detalle dice su semestre asignado, cupo, admisión y modalidad
+  ✓ V6W.3.3 Es de solo lectura (sin campos editables)
+  ✓ V6W.3.4 Se cierra con Escape (modal accesible)
+  ✓ V6W.3.5 Sin errores de JavaScript en la página
+
+BATCH V6-4 · Externas con selector de admisión; la tarjeta dice la regla del cupo
+  ✓ V6W.4.1 V6-ACT-03 El formulario de Externas tiene el selector de Admisión
+  ✓ V6W.4.2 En una externa se explica que la plaza la confirma el proveedor
+  ✓ V6W.4.3 Abierta con cupo: «por orden de solicitud hasta llenar el cupo»
+  ✓ V6W.4.4 Por aprobación: las solicitudes quedan pendientes
+  ✓ V6W.4.5 Sin errores de JavaScript en el formulario
+  ✓ V6W.4.6 La tarjeta dice «20 de 20 plazas libres · Admisión abierta, por orden de solicitud»
+  ✓ V6W.4.7 Sin errores de JavaScript en la oferta del estudiante
+
+BATCH V6-5 · No se pierde lo escrito; los listados muestran lo vigente
+  ✓ V6W.5.1 §4.4 Abrir el formulario y salir sin cambios no pregunta nada
+  ✓ V6W.5.2 Con cambios, el menú pregunta con el diálogo propio: «Continuar editando» / «Descartar cambios y salir»
+  ✓ V6W.5.3 «Continuar editando» se queda en el formulario con lo escrito
+  ✓ V6W.5.4 Cambiar de pestaña con cambios pregunta
+  ✓ V6W.5.5 «Descartar cambios y salir» cambia de pestaña
+  ✓ V6W.5.6 Tras descartar, el formulario vuelve vacío (no rehidrata lo descartado)
+  ✓ V6W.5.7 Sin errores de JavaScript
+  ✓ V6W.5.8 §5.1 Áreas: la dada de baja no aparece en «Vigentes»; «Dadas de baja» la trae (V7.1 §4.1)
+  ✓ V6W.5.9 Categorías: igual, vigentes por omisión
+  ✓ V6W.5.11 §5.2 «Apellidos por separar» se muestra solo si hay (hay 13)
+  ✓ V6W.5.10 Usuarios: la suspendida no está en «Activas»; está en «Suspendidas» (V7.1 §4.1)
+  ✓ V6W.5.11b Con una búsqueda sin apellidos por separar, el botón no aparece
+  ✓ V6W.5.12 Sin errores de JavaScript en los listados
+
+BATCH V6-6 · Parte local + dominio del rol, con vista previa; docente con sus semestres
+  ✓ V6W.6.1 V6-USER-02 Estudiante: se escribe la parte local y la vista previa muestra @est.univalle.edu (en minúsculas)
+  ✓ V6W.6.2 Docente: el mismo nombre de usuario pasa a @univalle.edu
+  ✓ V6W.6.3 Sociedad: no se asume dominio; se escribe el correo completo
+  ✓ V6W.6.4 V6-USER-03 El alta del docente guarda el correo de la vista previa y sus semestres (2.º y 4.º)
+  ✓ V6W.6.5 Sin errores de JavaScript
+
+BATCH V6-7 · Luis guarda su contribución aunque su rol venga de antes del catálogo
+  ✓ V6W.7.1 V6-PROJ-01 El formulario avisa del rol anterior y lo marca con su equivalente del catálogo (Backend)
+  ✓ V6W.7.2 PRO-03 «Confirmar mi contribución» responde 200 (ya no 400 VALIDATION_ERROR) y queda Backend
+  ✓ V6W.7.3 Sin errores de JavaScript
+
+BATCH V6-11 · El QR vive en Mi perfil → Visibilidad; la vista previa es la del visitante
+  ✓ V6W.11.1 V6-PROFILE-01 Colaboración ya no repite «Mi enlace y QR»: Contactos y Equipos
+  ✓ V6W.11.2 §8.1 El marcador antiguo lleva a Mi perfil → Visibilidad
+  ✓ V6W.11.3 §8.2 En Visibilidad están el QR y «Así verán mi perfil», sin la descripción que no publicó
+  ✓ V6W.11.4 Al publicarla, la vista previa la muestra: es la misma respuesta pública
+  ✓ V6W.11.5 Sin errores de JavaScript
+
+BATCH V6-12 · Para ti / Todas / Inscritas / Guardadas / Historial; sin «Más sugerencias»
+  ✓ V6W.12.1 V6-REC-01 Las pestañas son Para ti, Todas, Inscritas, Guardadas e Historial (sin «Interesadas»)
+  ✓ V6W.12.2 «Para ti» no ofrece «No me interesa» ni «Más sugerencias» y no muestra puntos
+  ✓ V6W.12.3 Las tarjetas ya no tienen «Me interesa»; queda «Guardar»
+  ✓ V6W.12.4 V6-REC-02 «Más sugerencias» lleva a Actividades → Para ti
+  ✓ V6W.12.5 Sin errores de JavaScript
+
+BATCH V6-13 · Buscar a alguien en Contactos y «Para ti» en Equipos
+  ✓ V6W.13.1 CONTACT En Contactos se busca por nombre y se ofrece «Solicitar contacto» (sin correos)
+  ✓ V6W.13.2 TEAM-01 Equipos tiene su sección «Para ti»
+  ✓ V6W.13.3 Sin errores de JavaScript
+
+BATCH V6-15 · La misma explicación de los estados en trayectoria, proyectos y credenciales
+  ✓ V6W.15.1 HIST-02 Trayectoria, proyectos y credenciales explican «Con respaldo» igual (y que no es un certificado)
+  ✓ V6W.15.2 V6-CERT-02 La pestaña se llama «Certificados institucionales recibidos»
+  ✓ V6W.15.3 Sin errores de JavaScript
+
+BATCH V6-16 · El menú no muestra «Correo»; la ruta la abre solo Administración
+  ✓ V6W.16.1 El menú de Administración ya no tiene «Correo (configuración técnica)»
+  ✓ V6W.16.2 Administración la abre escribiendo la ruta
+  ✓ V6W.16.3 Un estudiante que escribe la ruta no llega a la pantalla
+
+63 comprobaciones correctas, 0 fallidas

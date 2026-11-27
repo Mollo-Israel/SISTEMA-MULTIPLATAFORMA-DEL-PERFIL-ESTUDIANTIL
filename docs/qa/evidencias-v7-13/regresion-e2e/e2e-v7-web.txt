@@ -1,0 +1,106 @@
+Afinia V7.1 — verificación en el navegador (http://localhost:5180)
+
+BATCH V7-1 · Selector de un solo estado, en la URL, que vuelve a la página 1
+  ✓ W7.1.1 Por omisión «Activas»: ni la suspendida ni la pendiente
+  ✓ W7.1.2 F01 «Suspendidas» muestra solo la suspendida y queda en la URL junto a la búsqueda
+  ✓ W7.1.3 F05 Los dos filtros se conservan al recargar y al volver atrás
+  ✓ W7.1.4 F02 «Pendientes de activación» no confunde pendiente con suspendida
+  ✓ W7.1.5 F04 10 filas en la página 1, 1 en la 2; al cambiar el filtro vuelve a la página 1
+  ✓ W7.1.6 Un enlace con ?status=pending_activation llega con solo las pendientes
+  ✓ W7.1.7 F03 Áreas «Dadas de baja» trae la retirada; al cambiar de pestaña el filtro sigue en la URL
+  ✓ W7.1.8 Actividades: «Estado de la actividad» y «Revisión» separados, combinados y conservados al recargar
+  ✓ W7.1.9 Sin errores de JavaScript
+
+BATCH V7-2 · Aprobar publica y abre; Admin consulta en solo lectura; corregir con la lista abierta
+  ✓ W7.2.1 A03 Dirección aprueba en su bandeja: el aviso dice «aprobada y publicada» y queda con inscripciones abiertas
+  ✓ W7.2.2 Sin errores de JavaScript en la bandeja de Dirección
+  ✓ W7.2.3 A01 Administración ve la propuesta en «En revisión»: marcada solo lectura, sin editar ni cambiar estado; solo «Ver detalles»
+  ✓ W7.2.4 Sin errores de JavaScript en la gestión de Administración
+  ✓ W7.2.5 A10 Finalizada con la lista abierta: el responsable todavía ve «Marcar ausente» (no «Consolidada»)
+  ✓ W7.2.6 Sin errores de JavaScript en la asistencia del docente
+
+BATCH V7-3 · Formulario de credencial vinculada en solo lectura, tres fases y certificado modelo de Dirección
+  ✓ W7.3.1 C03 Al elegir la oportunidad, nombre, emisor y áreas se muestran en solo lectura; enlace y código van plegados
+  ✓ W7.3.2 C06 Sin archivo, el error aparece en el campo y no se envía nada
+  ✓ W7.3.3 C01 §5.4 La histórica muestra arriba la revisión pendiente y, desplegadas, sus fases «no aplica» (sin checks ficticios)
+  ✓ W7.3.4 Sin errores de JavaScript en «Mis credenciales»
+  ✓ W7.3.5 C26 Dirección abre «Certificado modelo» de una oportunidad finalizada: ve el vigente y debe indicar un motivo
+  ✓ W7.3.6 Sin errores de JavaScript en la gestión de Dirección
+  ✓ W7.3.7 C27 El docente responsable no tiene la acción del certificado modelo
+
+BATCH V7-4 · Bandeja de Dirección: todas las presentadas, decide solo Dirección, observar y reenviar
+  ✓ W7.4.1 D01 C24 Administración ve la credencial en la bandeja, sin poder decidir (solo lectura)
+  ✓ W7.4.2 Sin errores de JavaScript en la bandeja de Administración
+  ✓ W7.4.3 §5.3 Dirección ve la pendiente con sus fases y la observa con su motivo
+  ✓ W7.4.4 La observada pasa a la pestaña «Observadas»
+  ✓ W7.4.5 Sin errores de JavaScript en la bandeja de Dirección
+  ✓ W7.4.6 C21 El estudiante ve arriba que fue observada y, en el detalle, qué corregir
+  ✓ W7.4.7 Sin errores de JavaScript en «Mis credenciales»
+
+BATCH V7-5 · Certificado institucional: pendiente explicado, «Entregado» y abrir lo recibido con la sesión
+  ✓ W7.5.1 I03 El certificado general sin archivo muestra qué falta (no se fabrica ningún documento)
+  ✓ W7.5.2 I05 Lo ya entregado muestra «Entregado» con su fecha, no el botón de entregar
+  ✓ W7.5.3 Sin errores de JavaScript en la entrega del responsable
+  ✓ W7.5.4 I06 DOC-04 «Ver certificado» abre el PDF con la sesión del estudiante (ya no es un enlace suelto)
+  ✓ W7.5.5 Sin errores de JavaScript en los certificados recibidos
+
+BATCH V7-6 · Sin «Registros verificables» ni «Verificar»; los enlaces viejos no muestran nada
+  ✓ W7.6.1 V01 V02 La landing no enlaza «Verificar»; un enlace /verificar viejo muestra un aviso neutro, sin datos
+  ✓ W7.6.2 V01 Dirección no tiene «Registros verificables» en el menú ni por URL directa
+  ✓ W7.6.3 Sin errores de JavaScript
+  ✓ W7.6.4 V01 Administración no tiene «Registros verificables» en el menú
+
+BATCH V7-7 · La lista para activar muestra la falta concreta; las evidencias no tienen «Abrir»
+  ✓ W7.7.1 P01 PROY-01 La fila «Cada área con al menos una tecnología» aparece en rojo con el área que falta
+  ✓ W7.7.2 P11 PROY-07 Las evidencias del proyecto se listan sin el enlace «Abrir»
+  ✓ W7.7.3 Sin errores de JavaScript en Proyectos
+
+BATCH V7-8 · Afinidad explicada en palabras, detalle técnico aparte e intereses sin «prioridad N»
+  ✓ W7.8.1 PERF-05 «Cómo se calcula» explica en palabras qué suma, qué no, cuándo baja y qué significa el tope
+  ✓ W7.8.2 PERF-05 Las ponderaciones técnicas quedan en «Detalle técnico», cerrado y después de la explicación
+  ✓ W7.8.3 La explicación no muestra prioridades numéricas
+  ✓ W7.8.4 Sin errores de JavaScript en Afinidad
+  ✓ W7.8.7 PERF-07 El chip de tecnología respaldada dice de dónde viene, en palabras
+  ✓ W7.8.5 PERF-08 El docente ve el interés del estudiante como «mucho», sin «prioridad 1»
+  ✓ W7.8.6 Sin errores de JavaScript en Estudiantes del docente
+
+BATCH V7-9 · Biblioteca por publicador y Proyectos de la carrera por responsable, en el navegador
+  ✓ W7.9.1 B01 «Publicado por» se elige escribiendo el nombre sin tildes y con coma; filtra y cada tarjeta dice quién lo publicó
+  ✓ W7.9.2 B01 Sin coincidencias se dice «Nadie con ese nombre.» y no se lista a nadie
+  ✓ W7.9.3 B01 Se combina con «Mis favoritos» y «Limpiar» quita el publicador sin cambiar de pestaña
+  ✓ W7.9.4 Sin errores de JavaScript en Biblioteca
+  ✓ W7.9.5 B02 «Responsable» filtra los proyectos de quien los lleva y «Limpiar» restaura todos los filtros
+  ✓ W7.9.6 Sin errores de JavaScript en Proyectos de la carrera
+
+BATCH V7-10 · Contactos por nombre y apellidos, solicitud desde el perfil del QR y equipos en cuatro vistas
+  ✓ W7.10.1 T01/T03 Sin formulario de identificador: «quispe, ana» encuentra a Ána Quíspe y se le solicita contacto
+  ✓ W7.10.2 T03 Mi perfil → Visibilidad conserva el QR y el enlace compartible
+  ✓ W7.10.3 T04 Desde el perfil abierto por el enlace o QR se solicita contacto; no agrega solo y en el propio perfil no se ofrece
+  ✓ W7.10.4 Sin sesión el perfil compartible se ve, pero sin acciones autenticadas
+  ✓ W7.10.5 T09 Equipos: «Para ti / Todas / Mis necesidades / Mis equipos», 10 por página
+  ✓ W7.10.6 Sin errores de JavaScript en Colaboración y en el perfil compartible
+
+BATCH V7-11 · Inicio de Administración: tarjetas con «Detalles», destinos filtrados, menú por subtítulos
+  ✓ W7.11.1 §3 El Inicio muestra las tarjetas con «Detalles» (no «Ir»), «Cuentas por rol» y ya no la tarjeta Correo
+  ✓ W7.11.2 H14 «Detalles» se abre con el teclado, el foco queda dentro, no ofrece acciones; Escape cierra y el foco vuelve al botón
+  ✓ W7.11.3 H02 «Ir a cuentas sin activar» abre Usuarios filtrado solo a las pendientes de activación
+  ✓ W7.11.4 H03 La fila Docente / Sin activar abre su detalle y lleva a Usuarios con el rol y el estado
+  ✓ W7.11.5 A11 «Observadas» lleva a la revisión de credenciales en esa pestaña, en solo lectura para Administración
+  ✓ W7.11.6 §3.3/H11 Menú con Identidad, Catálogos, Gestión y Seguimiento, sin Registros verificables ni Correo; /admin/mail sigue por URL
+  ✓ W7.11.7 H13 Una tarjeta o un detalle que fallan lo dicen con «Reintentar», sin mostrar ceros; las demás tarjetas siguen
+  ✓ W7.11.8 Sin errores de JavaScript en el Inicio de Administración
+  ✓ W7.11.9 H14 En el teléfono el detalle entra en la pantalla, sin desplazamiento lateral, y se cierra
+
+BATCH V7-12 · Inicio de Dirección: tarjetas con «Detalles», destinos con filtro y alcance propio
+  ✓ W7.12.1 §13 El Inicio de Dirección muestra sus diez tarjetas con «Detalles» (no «Ir»), sin tarjetas de Administración
+  ✓ W7.12.2 H12/H14 «Actividades por aprobar» se abre con el teclado, lista la propuesta con quién la propone, no decide nada; Escape devuelve el foco
+  ✓ W7.12.3 §13 «Ir a Aprobaciones» abre la bandeja filtrada por el tipo elegido en el modal
+  ✓ W7.12.4 D01 «Credenciales en revisión» cuenta las pendientes y lleva a la pestaña elegida, donde Dirección decide
+  ✓ W7.12.5 §13 Una participación abre Participaciones con su actividad ya elegida, y se conserva al recargar
+  ✓ W7.12.6 §13 «Cómo va la carrera»: una fila por pestaña de Analítica, sin fechas inventadas, y cada una abre su pestaña
+  ✓ W7.12.7 H13 Una tarjeta o un detalle de Dirección que fallan lo dicen con «Reintentar», sin ceros; las demás siguen
+  ✓ W7.12.8 Sin errores de JavaScript en el Inicio de Dirección
+  ✓ W7.12.9 H12 Administración no entra al Inicio de Dirección: reutilizar el componente no le da sus tarjetas
+  ✓ W7.12.10 H14 En el teléfono el detalle de Dirección entra en la pantalla, sin desplazamiento lateral, y se cierra
+
+79 comprobaciones correctas, 0 fallidas

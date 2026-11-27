@@ -1,0 +1,10 @@
+
+Requested 1 shards, but it cannot be higher than the number of flows (0). Will use 1 shards instead.
+
+Waiting for flows to complete...
+[Passed] 00-bienvenida (1m 2s)
+[Passed] 01-login-actividad-perfil (1m 44s)
+[Passed] 02-proyectos-qr (50s)
+
+3/3 Flows Passed in 3m 36s
+

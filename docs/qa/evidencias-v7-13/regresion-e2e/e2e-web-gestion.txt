@@ -1,0 +1,73 @@
+Afinia — pantallas de gestión con un navegador real
+
+WG-1 · Portada pública: menú, secciones, roles, preguntas y llamadas a la acción
+  ✓ WG.1.1 La portada pública carga con su título principal
+  ✓ WG.1.2 Cada enlace del menú lleva a su sección
+  ✓ WG.1.3 Las pestañas de roles cambian el contenido (Estudiante, Docente, Dirección, Sociedad)
+  ✓ WG.1.4 Las preguntas frecuentes se despliegan y se pliegan
+  ✓ WG.1.5 Los contadores llegan a su valor al aparecer en pantalla
+  ✓ WG.1.6 «Conocer la plataforma» y la flecha bajan a las secciones
+  ✓ WG.1.7 «Activar mi cuenta» e «Iniciar sesión» llevan a sus pantallas
+  ✓ WG.1.8 Sin errores de JavaScript en la portada
+  ✓ WG.1.9 Con movimiento reducido la portada funciona sin animaciones
+  ✓ WG.1.10 En el teléfono, el menú se despliega y sus botones funcionan
+  ✓ WG.1.11 Con sesión, «Ir a mi panel» lleva al inicio del rol
+
+WG-2 · Inicio de sesión: el formulario explica cada error antes de llamar a la API
+  ✓ WG.2.1 Correo vacío, con espacios, con dos «@», incompleto o no institucional: cada uno con su mensaje
+  ✓ WG.2.2 El ojo muestra y vuelve a ocultar la contraseña
+  ✓ WG.2.3 Los enlaces de recuperar contraseña y volver al inicio funcionan
+
+WG-3 · Pedidos de tecnologías: nueva con su área, alias confirmado o rechazo con motivo
+  ✓ WG.3.1 Los pedidos nuevos aparecen «Por decidir» con quién los pidió y dónde se detectaron
+  ✓ WG.3.2 Cada decisión se habilita solo con lo que necesita (área, confirmación o motivo)
+  ✓ WG.3.3 La pantalla registra la tecnología nueva, el alias confirmado y el rechazo con su motivo
+  ✓ WG.3.4 Los filtros muestran las agregadas (con su tipo) y las rechazadas (con su motivo)
+
+WG-4 · Autonomía docente: conceder, ver lo hecho sin revisión y revocar con motivo
+  ✓ WG.4.1 Sin docente ni motivo, el formulario lo dice en cada campo
+  ✓ WG.4.2 Dirección concede autonomía en recursos y en puntos desde la pantalla
+  ✓ WG.4.3 El docente con autonomía aparece como «ya la tiene» en ese módulo
+  ✓ WG.4.4 El historial muestra lo que el docente publicó y otorgó con su autonomía, filtrado por docente
+  ✓ WG.4.5 Revocar pide motivo, avisa y la revocación queda a la vista
+
+WG-5 · Recursos: Dirección revisa propuestas, incorpora, edita, busca, retira y repone
+  ✓ WG.5.1 Dirección aprueba, observa y rechaza propuestas; observar y rechazar exigen comentario
+  ✓ WG.5.2 Incorporar exige área y semestres; el recurso queda para el 8.º semestre con su tipo
+  ✓ WG.5.3 La búsqueda filtra; editar guarda el cambio (toda la carrera); retirar pide confirmación y se puede reponer
+  ✓ WG.5.4 Sin errores de JavaScript en el catálogo de Dirección
+  ✓ WG.5.5 El docente ve la observación, corrige su propuesta (vuelve a revisión) y envía otra
+  ✓ WG.5.6 Con autonomía, el docente publica directo en la Biblioteca
+
+WG-6 · Puntos: el docente propone por proyecto o por recurso; Dirección aprueba o rechaza con motivo
+  ✓ WG.6.1 El formulario pide proyecto, criterio, recurso, estudiante y motivo; el docente propone por proyecto y por recurso
+  ✓ WG.6.2 El docente filtra por periodo, busca al estudiante y abre su historial
+  ✓ WG.6.3 Dirección rechaza con motivo y aprueba; los filtros muestran cada decisión y los puntos entran al historial
+
+WG-7 · Docente: busca proyectos de su alcance, confirma una tecnología y deja retroalimentación
+  ✓ WG.7.1 Los filtros (estado, semestre, tecnología y texto) encuentran el proyecto y «Limpiar» los quita
+  ✓ WG.7.2 Confirmar una tecnología declarada exige una retroalimentación específica
+  ✓ WG.7.3 La retroalimentación exige 10 caracteres, se publica con confirmación y se puede editar
+  ✓ WG.7.4 El enlace directo a un proyecto lo abre (llegada desde la afinidad)
+
+WG-8 · Estudiante: progreso y resumen, evidencias, perfil y canales de contacto
+  ✓ WG.8.1 El estudiante recorre su progreso, elige plantilla, previsualiza y descarga su resumen en PDF
+    (se cerró edge://downloads-hub/, que Edge abrió por su cuenta)
+  ✓ WG.8.2 Evidencias y credenciales se buscan y se eliminan solo tras confirmar
+  ✓ WG.8.3 El perfil rechaza una foto que no es imagen, guarda la foto, la biografía y la disponibilidad
+  ✓ WG.8.4 Colaboración: copia y cambia el enlace público, guarda canales (rechaza un enlace sin https) y pide contacto
+  ✓ WG.8.5 Quien recibe la solicitud la ve en Colaboración
+
+WG-9 · Proyectos: imágenes, aporte propio, bitácora y la galería «Proyectos de la carrera»
+  ✓ WG.9.1 Las imágenes rechazan otros formatos; se agregan, se ordenan, una pasa a portada y se quitan
+  ✓ WG.9.2 El estudiante confirma su aporte con roles y acepta mostrarse en la galería
+  ✓ WG.9.3 Sin errores de JavaScript en los proyectos del estudiante
+  ✓ WG.9.4 La galería filtra, avisa cuando no hay resultados y muestra el detalle con su carrusel de imágenes
+
+WG-10 · Docente: filtra la oferta por tipo, categoría y responsable, guarda favoritas y abre el detalle
+  ✓ WG.10.1 El docente filtra por tipo, categoría y responsable, guarda una favorita, la ve sola, abre su detalle y la quita
+
+WG-11 · Dirección: elige una actividad, ve quién asistió, busca y revisa los documentos registrados
+  ✓ WG.11.1 Dirección ve la asistencia confirmada de una actividad, busca estudiantes y vuelve a la lista
+
+47 comprobaciones correctas, 0 fallidas

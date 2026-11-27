@@ -1,0 +1,5 @@
+e2e-v7-web rc=0 151s :: 79 comprobaciones correctas, 0 fallidas
+e2e-v6-web rc=0 107s :: 63 comprobaciones correctas, 0 fallidas
+e2e-web-gestion rc=0 134s :: 47 comprobaciones correctas, 0 fallidas
+e2e-web rc=0 143s :: 106 comprobaciones correctas, 0 fallidas
+FIN

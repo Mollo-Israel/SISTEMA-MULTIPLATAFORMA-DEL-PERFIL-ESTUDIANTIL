@@ -1,0 +1,91 @@
+BATCH 11 — Hardening contra http://localhost:3020/api
+
+§103 · Una sola forma de error para toda la API
+  ✓ B11.1 Una petición mal formada responde 400
+  ✓ B11.2 Con `code` y `message` (§103)
+  ✓ B11.3 Y `details` con lo que falló, campo por campo (§103)
+  ✓ B11.4 Y el `requestId` para poder rastrearlo (§103)
+
+Los mensajes van en español
+  ✓ B11.5 Ningún mensaje de validación llega en inglés
+  ✓ B11.6 Incluido el rechazo de un campo que no existe
+
+Cada estado tiene su código
+  ✓ B11.7 Sin sesión -> 401 UNAUTHENTICATED
+  ✓ B11.8 Sin permiso -> 403 FORBIDDEN
+  ✓ B11.9 Inexistente -> 404 NOT_FOUND
+
+§103 · Sin trazas ni detalles internos
+  ✓ B11.10 Ninguna respuesta de error incluye una traza (§103)
+  ✓ B11.11 Ni el nombre de una tabla, columna o restricción
+
+§102 · Cada petición se puede rastrear
+  ✓ B11.12 Toda respuesta trae su identificador de petición (§102)
+  ✓ B11.13 Y es distinto en cada una
+
+Se respeta el que envía el cliente
+  ✓ B11.14 Un identificador entrante se conserva: la traza cruza servicios
+  ✓ B11.15 Uno con caracteres fuera del alfabeto se descarta y se genera otro (§102)
+  ✓ B11.15b Y uno desmedido se recorta: no se registra una línea de 400 caracteres
+
+§84 · Cabeceras, CORS y límites de cuerpo
+  ✓ B11.16 `X-Content-Type-Options: nosniff` (§84)
+  ✓ B11.17 HSTS presente (§84)
+  ✓ B11.18 Sin `X-Powered-By`: no se anuncia con qué está hecho
+
+§84 · CORS explícito
+  ✓ B11.19 Un origen no autorizado no recibe permiso (§84)
+
+§84 · Límite de cuerpo
+  ✓ B11.20 Un cuerpo desmedido se rechaza en vez de procesarse (§84)
+
+§83 · Conocer la URL no basta para descargar
+  ✓ B11.21 El estudiante sube un archivo
+  ✓ B11.22 Y la adjunta a una evidencia suya
+  ✓ B11.23 La evidencia publica una URL de descarga
+
+La URL sola no abre nada
+  ✓ B11.24 Sin sesión, la descarga se niega (§83)
+  ✓ B11.25 Con sesión ajena, tampoco: la autorización mira de quién es (§83)
+  ✓ B11.26 Su dueño sí la descarga
+
+§86 · Al borrar no quedan huérfanos
+  ✓ B11.27 El estudiante borra su evidencia
+  ✓ B11.28 Y el archivo deja de ser accesible (§86)
+
+§136 · Los archivos que nadie llegó a adjuntar no se quedan para siempre
+  ✓ B11.41 Hay un archivo adjuntado y otro recién subido
+
+La limpieza es una tarea de mantenimiento
+  ✓ B11.42 Un estudiante no puede lanzarla (§136)
+  ✓ B11.43 La administración sí, y dice cuántos quitó
+
+Y no se lleva por delante lo que todavía se está usando
+  ✓ B11.44 El archivo en curso sigue ahí: la gracia lo protege (§136)
+  ✓ B11.45 Y el archivo adjuntado tampoco se tocó
+
+§84 · Lo que se guarda como enlace tiene que ser un enlace
+  ✓ B11.39 Los cuatro se rechazan, incluido el enlace sin esquema (§84)
+  ✓ B11.40 Y un https normal se acepta
+
+§84 · Cerrar sesión revoca de verdad
+  ✓ B11.29 Inicia sesión y obtiene sus dos tokens
+  ✓ B11.30 El token de acceso funciona
+  ✓ B11.31 Tras cerrar sesión, el token de refresco ya no sirve (§14)
+
+§85 · Borrar una cuenta con historial destruiría su trayectoria
+
+Lo normal es dar de baja
+  ✓ B11.32 Un DELETE da de baja: el estado pasa a inactivo (§85)
+  ✓ B11.33 Y la cuenta ya no puede entrar
+  ✓ B11.34 Pero la cuenta sigue existiendo, con su historial (§85)
+
+El borrado real solo para cuentas sin historial
+  ✓ B11.35 Una cuenta con perfil estudiantil NO se borra -> 409 (§85)
+  ✓ B11.36 Y se explica qué hacer en su lugar
+  ✓ B11.37 El perfil del estudiante quedó intacto
+  ✓ B11.38 Una cuenta sin perfil sí se borra, bajo esa condición (§85)
+
+------------------------------------------------------------------------------
+  46 verificaciones OK · 0 fallos
+  El BATCH 11 queda demostrado de punta a punta.

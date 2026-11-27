@@ -1,0 +1,114 @@
+[Nest] 9820  - 27/11/2026, 11:14:17 a. m.    WARN [SecurityConfig] WEB_ORIGINS incluye «*»: se acepta cualquier origen, sin credenciales.
+[Nest] 9820  - 27/11/2026, 11:14:17 a. m.    WARN [Environment] STORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.
+[Nest] 9820  - 27/11/2026, 11:14:17 a. m.    WARN [Environment] STORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.
+[Nest] 9820  - 27/11/2026, 11:14:17 a. m.    WARN [Environment] STORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.
+[Nest] 9820  - 27/11/2026, 11:14:17 a. m.    WARN [Environment] STORAGE_DRIVER=local en producción: si el disco del servidor no es persistente, los archivos se pierden al publicar. Use STORAGE_DRIVER=r2 o un volumen.
+📦 report is created on: C:\Talleres I\SISTEMA MULTIPLATAFORMA DEL PERFIL ESTUDIANTIL\pruebas\11-seguridad\reporte\reporte-seguridad.html
+
+ PASS  test/seguridad/api.spec.ts (22.034 s)
+  Pruebas de seguridad de la API (afinia_test)
+    PS-AUT · Autenticación y cuentas
+      √ PS-AUT-01 las contraseñas se guardan con bcrypt (costo ≥ 10) y nunca en texto plano (7 ms)
+      √ PS-AUT-02 el inicio de sesión responde igual si la contraseña es incorrecta o si la cuenta no existe (85 ms)
+      √ PS-AUT-03 al suspender una cuenta, su token vigente y su sesión dejan de valer de inmediato y el cambio queda auditado (332 ms)
+      √ PS-AUT-04 la aplicación móvil solo admite cuentas de estudiantes (158 ms)
+      √ PS-AUT-05 no existe un registro público de cuentas (9 ms)
+      √ PS-AUT-06 ni siquiera Administración puede crear otra cuenta de administrador desde la API (10 ms)
+      √ PS-AUT-07 la política de contraseñas se aplica también al restablecerla (3 ms)
+    PS-SES · Sesiones y tokens
+      √ PS-SES-01 el token de renovación se guarda solo como huella SHA-256 (84 ms)
+      √ PS-SES-02 cada renovación entrega un token nuevo y el anterior deja de servir al vencer la gracia (2720 ms)
+      √ PS-SES-03 cerrar sesión revoca el token de renovación (131 ms)
+      √ PS-SES-04 «cerrar todas las sesiones» revoca cada sesión abierta y queda auditado (197 ms)
+      √ PS-SES-05 un token alterado para suplantar a otra cuenta se rechaza (7 ms)
+      √ PS-SES-06 un token sin firma (algoritmo «none») se rechaza (3 ms)
+      √ PS-SES-07 un token firmado con otra clave se rechaza (4 ms)
+      √ PS-SES-08 un token vencido se rechaza aunque la firma sea válida (4 ms)
+      √ PS-SES-09 el rol escrito dentro de un token válido no otorga permisos: se lee de la base (17 ms)
+      √ PS-SES-10 la web recibe la renovación en una cookie HttpOnly limitada a /api/auth, nunca en el cuerpo (95 ms)
+    PS-ACC · Control de acceso
+      √ PS-ACC-01 un estudiante no accede a la gestión de cuentas ni puede elevar su propio rol (20 ms)
+      √ PS-ACC-02 Docente, Dirección y Sociedad Científica no acceden a la gestión de cuentas (373 ms)
+      √ PS-ACC-03 un estudiante no modifica el proyecto de otra persona (19 ms)
+      √ PS-ACC-04 el borrador privado de otro estudiante no es visible (24 ms)
+      √ PS-ACC-05 los campos no permitidos se rechazan (asignación masiva) (21 ms)
+      √ PS-ACC-06 un identificador mal formado se rechaza sin provocar un error interno (12 ms)
+    PS-INY · Inyección y validación de entradas
+      √ PS-INY-01 una inyección SQL en la búsqueda se trata como texto: ' OR '1'='1 (27 ms)
+      √ PS-INY-01 una inyección SQL en la búsqueda se trata como texto: %' OR 1=1 -- (18 ms)
+      √ PS-INY-01 una inyección SQL en la búsqueda se trata como texto: x'); DROP TABLE users; -- (17 ms)
+      √ PS-INY-02 una inyección en el inicio de sesión se rechaza por validación, sin error interno (5 ms)
+      √ PS-INY-03 el HTML escrito por un usuario se guarda como texto y se devuelve como JSON (236 ms)
+      √ PS-INY-04 un cuerpo JSON mal formado se rechaza sin exponer detalles internos (8 ms)
+      √ PS-INY-05 una ruta de archivo con recorrido de directorios no sale del almacenamiento (20 ms)
+    PS-ARC · Archivos y evidencias
+      √ PS-ARC-01 un ejecutable con extensión .pdf se rechaza por su contenido real (15 ms)
+      √ PS-ARC-02 un SVG o un HTML con código se rechazan aunque se declaren como imagen (22 ms)
+      √ PS-ARC-03 un archivo cuyo tipo declarado no coincide con su contenido se rechaza (7 ms)
+      √ PS-ARC-04 un archivo de más de 10 MB se rechaza (39 ms)
+      √ PS-ARC-05 un archivo vacío se rechaza (8 ms)
+      √ PS-ARC-06 el nombre enviado por el usuario no decide dónde se guarda el archivo (45 ms)
+      √ PS-ARC-07 la evidencia la descarga su titular con cabeceras seguras; otra cuenta recibe lo mismo que si no existiera (241 ms)
+      √ PS-ARC-08 un archivo subido que no pertenece a ninguna evidencia no se entrega, ni siquiera a quien lo subió (35 ms)
+    PS-ABU · Abuso de los flujos de cuenta
+      √ PS-ABU-01 la activación y la recuperación solo atienden correos institucionales (18 ms)
+      √ PS-ABU-02 pedir de nuevo la activación respeta la espera entre reenvíos y no duplica correos (20 ms)
+      √ PS-ABU-03 el código de 6 dígitos se anula tras 10 intentos fallidos: después ni el código correcto sirve (118 ms)
+      √ PS-ABU-04 enlaces y códigos se guardan como huellas, y pedir uno nuevo anula el anterior (26 ms)
+    PS-AUD · Auditoría
+      √ PS-AUD-01 un estudiante no puede consultar, alterar ni borrar la auditoría (10 ms)
+      √ PS-AUD-02 los cambios de cuenta y el cierre de sesiones quedan con actor y fecha (2 ms)
+    PS-PRI · Privacidad del perfil
+      √ PS-PRI-01 el perfil compartible está desactivado por defecto y responde como si no existiera (12 ms)
+      √ PS-PRI-02 publicado, no expone el correo ni el código universitario; al rotar el enlace, el anterior deja de funcionar (90 ms)
+      √ PS-PRI-03 la búsqueda de compañeros nunca devuelve correos (9 ms)
+
+ PASS  test/seguridad/reglas.spec.ts
+  PS-CON · Política de contraseñas
+    √ PS-CON-01 se rechaza una contraseña con menos de 12 caracteres (1 ms)
+    √ PS-CON-02 se rechaza una contraseña sin mayúsculas
+    √ PS-CON-03 se rechaza una contraseña sin minúsculas (1 ms)
+    √ PS-CON-04 se rechaza una contraseña sin números
+    √ PS-CON-05 se rechaza una contraseña sin símbolos
+    √ PS-CON-06 se rechaza una contraseña con espacios
+    √ PS-CON-07 se rechaza una contraseña que contiene el correo
+    √ PS-CON-08 se rechaza una contraseña que contiene el código universitario (1 ms)
+    √ PS-CON-09 se acepta una contraseña que cumple la política
+  PS-CFG · Arranque seguro en producción
+    √ PS-CFG-01 sin secreto de firma, o con el valor de ejemplo, la API no arranca en producción (13 ms)
+    √ PS-CFG-02 el secreto de renovación debe ser propio y distinto del de acceso (2 ms)
+    √ PS-CFG-03 en producción CORS exige una lista explícita de orígenes (1 ms)
+    √ PS-CFG-04 una configuración de producción incompleta o insegura detiene el arranque (4 ms)
+  PS-SSRF · Verificador de enlaces frente a solicitudes a recursos internos
+    √ PS-SSRF-01 se bloquea: servicio de metadatos de la nube (1 ms)
+    √ PS-SSRF-02 se bloquea: bucle local por nombre
+    √ PS-SSRF-03 se bloquea: bucle local por dirección (1 ms)
+    √ PS-SSRF-04 se bloquea: red privada 10.0.0.0/8
+    √ PS-SSRF-05 se bloquea: red privada 192.168.0.0/16
+    √ PS-SSRF-06 se bloquea: red privada 172.16.0.0/12 (1 ms)
+    √ PS-SSRF-07 se bloquea: bucle local en IPv6 (1 ms)
+    √ PS-SSRF-08 se bloquea: IPv4 escondida en IPv6
+    √ PS-SSRF-09 se bloquea: esquema file:// (1 ms)
+    √ PS-SSRF-10 se bloquea: credenciales incrustadas en la dirección
+    redirección hacia una dirección interna
+      √ PS-SSRF-11 una redirección hacia el servicio de metadatos se bloquea en el segundo salto (14 ms)
+
+ PASS  test/seguridad/http.spec.ts
+  Pruebas de seguridad HTTP con el perfil de producción
+    PS-CFG · Configuración expuesta
+      √ PS-CFG-05 las respuestas llevan las cabeceras de seguridad y no revelan la tecnología del servidor (22 ms)
+      √ PS-CFG-06 CORS solo autoriza el origen de la aplicación web (6 ms)
+      √ PS-CFG-07 la documentación interactiva (Swagger) no se publica en producción (27 ms)
+      √ PS-CFG-08 los errores tienen una forma única, con identificador y sin detalles internos (18 ms)
+      √ PS-CFG-09 un cuerpo JSON de más de 256 KB se rechaza antes de procesarse (5 ms)
+      √ PS-CFG-10 en producción la cookie de sesión de la web solo viaja por HTTPS (122 ms)
+    PS-ABU · Limitación de intentos (valores de producción)
+      √ PS-ABU-05 tras 10 intentos de inicio de sesión en un minuto, la misma dirección recibe 429 (754 ms)
+      √ PS-ABU-06 tras 5 solicitudes de activación o recuperación en un minuto, la misma dirección recibe 429 (21 ms)
+
+Test Suites: 3 passed, 3 total
+Tests:       79 passed, 79 total
+Snapshots:   0 total
+Time:        26.203 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

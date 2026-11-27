@@ -1,0 +1,7 @@
+# Artefactos pesados de la corrida V7-13: se conservan en esta PC, no se versionan.
+playwright/reporte/
+playwright/resultados/
+playwright/capturas/
+maestro/2026-*/
+newman/reporte-newman.html
+seguridad/*/

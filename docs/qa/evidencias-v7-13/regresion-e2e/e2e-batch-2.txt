@@ -1,0 +1,118 @@
+BATCH 2 — Perfil y onboarding contra http://localhost:3020/api
+
+§17 · El estudiante edita lo suyo, no lo institucional
+
+Alta del perfil
+  ✓ B2.1 El estudiante crea su perfil
+  ✓ B2.2 El perfil nace con el semestre que fijó la administración en el alta
+
+§17.1 · Lo institucional no lo toca el estudiante
+  ✓ B2.3 El estudiante NO puede declarar su semestre -> 400
+  ✓ B2.4 Tampoco su código universitario -> 400
+  ✓ B2.5 Ni por el endpoint del administrador -> 403
+
+El administrador sí
+  ✓ B2.6 El administrador fija semestre y código
+  ✓ B2.7 El semestre queda registrado
+  ✓ B2.8 Un semestre fuera de 1-8 se rechaza -> 400
+
+§17.2 · Lo propio sí lo edita
+  ✓ B2.9 Edita biografía, disponibilidad y preferencias
+  ✓ B2.10 La disponibilidad persiste (§17.2)
+  ✓ B2.11 Las preferencias de colaboración persisten
+  ✓ B2.12 Una disponibilidad inventada se rechaza -> 400
+
+§16 · Cuestionario Inicial de Orientación Académica
+
+El cuestionario
+  ✓ B2.13 El estudiante obtiene el cuestionario
+  ✓ B2.14 Tiene entre 10 y 15 preguntas, como exige §16
+  ✓ B2.15 Todas son de selección simple o múltiple
+  ✓ B2.16 Ninguna pregunta se queda sin opciones
+  ✓ B2.17 El cuestionario declara su versión
+  ✓ B2.18 Sin sesión no se obtiene -> 401
+  ✓ B2.19 El cuestionario es del estudiante: un docente no entra -> 403
+
+Respuestas inválidas
+  ✓ B2.20 Un cuestionario a medias se rechaza -> 400
+  ✓ B2.21 Una opción inventada se rechaza -> 400
+  ✓ B2.22 Una pregunta inventada se rechaza -> 400
+  ✓ B2.23 Marcar más opciones de las permitidas se rechaza -> 400
+  ✓ B2.24 Dos respuestas en una pregunta simple se rechazan -> 400
+
+Respuesta válida
+  ✓ B2.25 El cuestionario se registra
+  ✓ B2.26 Queda pendiente de confirmación
+  ✓ B2.27 Produce áreas sugeridas
+  ✓ B2.28 Las sugerencias vienen de mayor a menor afinidad aparente
+  ✓ B2.29 Se guarda con qué versión del cuestionario se respondió (§16)
+
+Responder NO crea intereses (§16)
+  ✓ B2.30 Tras responder, el estudiante sigue sin intereses: solo la confirmación los crea
+  ✓ B2.31 El sistema sabe que falta confirmar
+  ✓ B2.32 Se guardaron todas las respuestas, no solo el resultado (§16)
+
+§16 y §18 · Solo la confirmación crea intereses
+
+No se puede confirmar lo que no se sugirió
+  ✓ B2.33 Confirmar un área que el cuestionario no sugirió se rechaza -> 400
+
+Confirmación válida
+  ✓ B2.34 La confirmación se acepta
+  ✓ B2.35 Se incorporan exactamente las áreas elegidas
+  ✓ B2.36 Ahora sí existen intereses efectivos
+  ✓ B2.37 Quedan marcados como venidos del cuestionario (§18)
+  ✓ B2.37b Entran con prioridad válida, la más sugerida primero (§18)
+
+Repetir la confirmación
+  ✓ B2.38 Un cuestionario ya confirmado no se confirma dos veces -> 400
+
+El cuestionario puede repetirse (§16)
+  ✓ B2.39 Se puede volver a responder
+  ✓ B2.40 El historial conserva la pasada anterior, no la pisa
+  ✓ B2.41 La anterior queda marcada como sustituida
+  ✓ B2.42 Una pasada sustituida ya no se confirma -> 400
+  ✓ B2.43 «Ninguna de estas» es una respuesta válida y cierra el cuestionario
+
+El cuestionario es privado
+  ✓ B2.44 Otro estudiante no puede confirmar un cuestionario ajeno -> 404
+
+§21 (V2 §22) · Sin nivel autodeclarado: intereses por tecnología y respaldo aparte
+  ✓ B2.45 Hay catálogo de habilidades
+
+V2 §22 · El nivel autodeclarado ya no se acepta
+  ✓ B2.46 Declarar un nivel responde 410 (retirado por la V2)
+  ✓ B2.47 En su lugar se declara interés por la tecnología
+  ✓ B2.48 Un tipo inventado se rechaza -> 400
+
+V2 §21 · Lo declarado no se confunde con lo respaldado
+  ✓ B2.49 El resumen incluye la tecnología de interés
+  ✓ B2.50 Las tecnologías del resumen no traen nivel autodeclarado
+  ✓ B2.51 Interesarse por una tecnología no la vuelve «respaldada»
+  ✓ B2.52 El estudiante registra un proyecto con esa tecnología
+  ✓ B2.53 Un proyecto solo declarado (DECLARED) no respalda tecnologías (V2 §36)
+
+§20 · Un área de mejora vale 0 puntos de afinidad
+  ✓ B2.56 Declarar un área de mejora no mueve el puntaje de afinidad (§20)
+  ✓ B2.57 Pero el área sí queda registrada como objetivo personal
+
+§44 · El estudiante decide qué comparte
+
+Por defecto no se comparte nada
+  ✓ B2.58 El estudiante consulta su configuración
+  ✓ B2.59 El perfil compartible nace desactivado: compartir es una decisión
+  ✓ B2.60 Ningún campo se comparte por omisión
+
+Cambiar la configuración
+  ✓ B2.61 Activa su perfil compartible y elige campos
+  ✓ B2.62 Los campos elegidos quedan activos
+  ✓ B2.63 Los que no eligió siguen apagados
+
+Lo que nunca se comparte
+  ✓ B2.64 No existe forma de activar el correo institucional ni los archivos -> 400
+  ✓ B2.65 El sistema declara explícitamente qué queda siempre fuera
+  ✓ B2.66 La privacidad es del estudiante: un docente no la consulta -> 403
+
+------------------------------------------------------------------------------
+  65 verificaciones OK · 0 fallos
+  El BATCH 2 queda demostrado de punta a punta.
